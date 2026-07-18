@@ -54,6 +54,7 @@ class StockRequestController extends Controller
             'direction' => ['required_if:type,adjustment', 'nullable', new Enum(AdjustmentDirection::class)],
             'quantity' => ['required', 'numeric', 'gt:0'],
             'reason_id' => ['required', 'exists:reasons,id'],
+            'unit_cost' => ['nullable', 'required_if:direction,increase', 'numeric', 'min:0'],
             'note' => ['nullable', 'string'],
         ]);
 
@@ -66,6 +67,7 @@ class StockRequestController extends Controller
             requestedBy: $request->user(),
             targetWarehouse: isset($data['target_warehouse_id']) ? Warehouse::findOrFail($data['target_warehouse_id']) : null,
             direction: isset($data['direction']) ? AdjustmentDirection::from($data['direction']) : null,
+            unitCost: $data['unit_cost'] ?? null,
             note: $data['note'] ?? null,
         );
 

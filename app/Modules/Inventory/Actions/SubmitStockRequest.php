@@ -24,6 +24,7 @@ class SubmitStockRequest
         User $requestedBy,
         ?Warehouse $targetWarehouse = null,
         ?AdjustmentDirection $direction = null,
+        ?string $unitCost = null,
         ?string $note = null,
     ): StockRequest {
         if (! $product->type->isStocked()) {
@@ -38,7 +39,11 @@ class SubmitStockRequest
             throw new InvalidArgumentException('direction is required for an adjustment request.');
         }
 
-        return DB::transaction(function () use ($type, $product, $warehouse, $quantity, $reason, $requestedBy, $targetWarehouse, $direction, $note) {
+        if ($type === StockRequestType::Adjustment && $direction === AdjustmentDirection::Increase && $unitCost === null) {
+            throw new InvalidArgumentException('unitCost is required for an increase-direction adjustment request.');
+        }
+
+        return DB::transaction(function () use ($type, $product, $warehouse, $quantity, $reason, $requestedBy, $targetWarehouse, $direction, $unitCost, $note) {
             $request = StockRequest::create([
                 'type' => $type,
                 'product_id' => $product->id,
@@ -47,6 +52,7 @@ class SubmitStockRequest
                 'direction' => $direction,
                 'quantity' => $quantity,
                 'reason_id' => $reason->id,
+                'unit_cost' => $unitCost,
                 'note' => $note,
             ]);
 

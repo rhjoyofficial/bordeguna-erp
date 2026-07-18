@@ -36,6 +36,7 @@ class StockRequest extends Model
         'direction',
         'quantity',
         'reason_id',
+        'unit_cost',
         'note',
         'resulting_movement_id',
         'resulting_transfer_id',
@@ -47,6 +48,7 @@ class StockRequest extends Model
             'type' => StockRequestType::class,
             'direction' => AdjustmentDirection::class,
             'quantity' => 'decimal:4',
+            'unit_cost' => 'decimal:4',
         ];
     }
 

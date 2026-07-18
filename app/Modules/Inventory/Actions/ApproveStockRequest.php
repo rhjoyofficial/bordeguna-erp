@@ -51,6 +51,7 @@ class ApproveStockRequest
                     reason: $request->reason,
                     performedBy: $requester,
                     note: $note,
+                    unitCost: $request->unit_cost,
                 )])->flatten();
 
                 $request->update(['resulting_movement_id' => $movements->first()?->id]);

@@ -114,6 +114,48 @@ it('lets Staff submit an adjustment request that stays pending until Manager app
     expect($this->product->fresh()->currentStockQuantity())->toBe('80');
 });
 
+it('lets Staff submit an increase-direction adjustment request with a unit cost that lands as a new batch on approval', function () {
+    $this->actingAs($this->staff)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->post(route('inventory.stock-requests.store'), [
+            'type' => StockRequestType::Adjustment->value,
+            'product_id' => $this->product->id,
+            'warehouse_id' => $this->warehouse->id,
+            'direction' => AdjustmentDirection::Increase->value,
+            'quantity' => '15',
+            'reason_id' => $this->reason->id,
+            'unit_cost' => '12.50',
+        ])
+        ->assertRedirect();
+
+    $request = StockRequest::sole();
+    expect((string) $request->unit_cost)->toBe('12.5000');
+
+    $this->actingAs($this->manager)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->post(route('inventory.stock-requests.approve', $request))
+        ->assertRedirect();
+
+    expect($request->fresh()->approvalRequest->status->value)->toBe('approved');
+    expect($this->product->fresh()->currentStockQuantity())->toBe('115');
+});
+
+it('rejects an increase-direction adjustment request without a unit cost', function () {
+    $this->actingAs($this->staff)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->post(route('inventory.stock-requests.store'), [
+            'type' => StockRequestType::Adjustment->value,
+            'product_id' => $this->product->id,
+            'warehouse_id' => $this->warehouse->id,
+            'direction' => AdjustmentDirection::Increase->value,
+            'quantity' => '15',
+            'reason_id' => $this->reason->id,
+        ])
+        ->assertInvalid(['unit_cost']);
+
+    expect(StockRequest::count())->toBe(0);
+});
+
 it('leaves stock untouched when a Manager rejects a request', function () {
     $this->actingAs($this->staff)
         ->withSession(['current_business_id' => $this->business->id])

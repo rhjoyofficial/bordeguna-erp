@@ -328,6 +328,7 @@ function RequestAdjustmentForm({
         direction: 'decrease',
         quantity: '',
         reason_id: '',
+        unit_cost: '',
         note: '',
     });
 
@@ -398,6 +399,13 @@ function RequestAdjustmentForm({
                 <Input value={data.quantity} onChange={(e) => setData('quantity', e.target.value)} />
                 <InputError message={errors.quantity} />
             </div>
+            {data.type === 'adjustment' && data.direction === 'increase' && (
+                <div className="grid gap-2">
+                    <Label>Unit cost</Label>
+                    <Input value={data.unit_cost} onChange={(e) => setData('unit_cost', e.target.value)} />
+                    <InputError message={errors.unit_cost} />
+                </div>
+            )}
             <ReasonSelect reasons={reasons} value={data.reason_id} onChange={(v) => setData('reason_id', v)} error={errors.reason_id} />
             <div className="col-span-full grid gap-2">
                 <Label>Note (optional)</Label>
