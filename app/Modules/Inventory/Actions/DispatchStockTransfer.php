@@ -1,0 +1,81 @@
+<?php
+
+namespace App\Modules\Inventory\Actions;
+
+use App\Models\User;
+use App\Modules\Foundation\Models\Reason;
+use App\Modules\Inventory\Actions\Concerns\ConsumesFifoStock;
+use App\Modules\Inventory\Enums\MovementDirection;
+use App\Modules\Inventory\Enums\MovementReason;
+use App\Modules\Inventory\Enums\TransferStatus;
+use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\StockTransfer;
+use App\Modules\Inventory\Models\Warehouse;
+use DomainException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
+
+/**
+ * Dispatches stock out of the source warehouse and puts it "in transit" —
+ * it does not yet exist as receivable stock at the destination. A source
+ * batch's cost/expiry is preserved on the eventual destination batch, but
+ * that batch isn't created until ReceiveStockTransfer confirms arrival.
+ */
+class DispatchStockTransfer
+{
+    use ConsumesFifoStock;
+
+    public function handle(
+        Product $product,
+        Warehouse $source,
+        Warehouse $target,
+        string $quantity,
+        Reason $reason,
+        User $performedBy,
+        ?string $note = null,
+    ): StockTransfer {
+        if ($source->id === $target->id) {
+            throw new InvalidArgumentException('Cannot transfer a product to the same warehouse.');
+        }
+
+        if (! $product->type->isStocked()) {
+            throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
+        }
+
+        return DB::transaction(function () use ($product, $source, $target, $quantity, $reason, $performedBy, $note) {
+            $transferGroupId = (string) Str::uuid();
+            $consumed = $this->consumeFifo($product, $source, $quantity);
+
+            foreach ($consumed as $portion) {
+                StockMovement::create([
+                    'product_id' => $product->id,
+                    'warehouse_id' => $source->id,
+                    'batch_id' => $portion['batch']->id,
+                    'direction' => MovementDirection::Out,
+                    'reason' => MovementReason::Transfer,
+                    'reason_id' => $reason->id,
+                    'quantity' => $portion['quantity'],
+                    'unit_cost' => $portion['batch']->unit_cost,
+                    'transfer_group_id' => $transferGroupId,
+                    'performed_by' => $performedBy->id,
+                    'note' => $note,
+                ]);
+            }
+
+            return StockTransfer::create([
+                'transfer_group_id' => $transferGroupId,
+                'product_id' => $product->id,
+                'source_warehouse_id' => $source->id,
+                'target_warehouse_id' => $target->id,
+                'quantity' => $quantity,
+                'reason_id' => $reason->id,
+                'note' => $note,
+                'status' => TransferStatus::InTransit,
+                'dispatched_by' => $performedBy->id,
+                'dispatched_at' => now(),
+            ]);
+        });
+    }
+}

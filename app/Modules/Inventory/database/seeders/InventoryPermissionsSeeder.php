@@ -50,8 +50,10 @@ class InventoryPermissionsSeeder extends Seeder
             foreach (self::ROLE_PERMISSIONS as $roleName => $permissions) {
                 $role = Role::where('business_id', $business->id)->where('name', $roleName)->first();
 
+                // givePermissionTo is additive — syncPermissions would wipe out
+                // whatever other modules' permission seeders already granted this role.
                 if ($role) {
-                    $role->syncPermissions($permissions);
+                    $role->givePermissionTo($permissions);
                 }
             }
         }

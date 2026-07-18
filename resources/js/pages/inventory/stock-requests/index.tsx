@@ -4,17 +4,24 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 
+interface ApprovalRequest {
+    status: 'pending' | 'approved' | 'rejected';
+    requested_by: { name: string };
+    reviewed_by: { name: string } | null;
+    review_note: string | null;
+}
+
 interface StockRequestRow {
     id: number;
     type: 'adjustment' | 'transfer';
     direction: 'increase' | 'decrease' | null;
     quantity: string;
-    reason_note: string;
-    status: 'pending' | 'approved' | 'rejected';
+    reason: { name: string };
+    note: string | null;
     product: { name: string; sku: string };
     warehouse: { name: string };
     target_warehouse: { name: string } | null;
-    requested_by: { name: string };
+    approval_request: ApprovalRequest;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -22,7 +29,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Stock requests', href: '/inventory/stock-requests' },
 ];
 
-const statusVariant: Record<StockRequestRow['status'], 'secondary' | 'default' | 'destructive'> = {
+const statusVariant: Record<ApprovalRequest['status'], 'secondary' | 'default' | 'destructive'> = {
     pending: 'secondary',
     approved: 'default',
     rejected: 'destructive',
@@ -70,15 +77,18 @@ export default function StockRequestsIndex({ requests }: { requests: StockReques
                                     {request.target_warehouse && ` → ${request.target_warehouse.name}`}
                                 </td>
                                 <td className="py-2">{request.quantity}</td>
-                                <td className="py-2 text-muted-foreground">{request.requested_by.name}</td>
-                                <td className="py-2 max-w-xs text-muted-foreground">{request.reason_note}</td>
+                                <td className="py-2 text-muted-foreground">{request.approval_request.requested_by.name}</td>
+                                <td className="py-2 max-w-xs text-muted-foreground">
+                                    {request.reason.name}
+                                    {request.note && <div className="text-xs">{request.note}</div>}
+                                </td>
                                 <td className="py-2">
-                                    <Badge variant={statusVariant[request.status]} className="capitalize">
-                                        {request.status}
+                                    <Badge variant={statusVariant[request.approval_request.status]} className="capitalize">
+                                        {request.approval_request.status}
                                     </Badge>
                                 </td>
                                 <td className="py-2 text-right whitespace-nowrap">
-                                    {request.status === 'pending' && (
+                                    {request.approval_request.status === 'pending' && (
                                         <>
                                             <Button variant="ghost" size="sm" onClick={() => approve(request)}>
                                                 Approve

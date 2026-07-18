@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Modules\Inventory\Http\Controllers;
+namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Inventory\Models\Supplier;
+use App\Modules\Purchasing\Models\Supplier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,7 +13,7 @@ class SupplierController extends Controller
 {
     public function index(): Response
     {
-        return Inertia::render('inventory/suppliers/index', [
+        return Inertia::render('purchasing/suppliers/index', [
             'suppliers' => Supplier::orderBy('name')->get(),
         ]);
     }
@@ -49,6 +49,7 @@ class SupplierController extends Controller
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string'],
+            'payment_terms' => ['nullable', 'string', 'max:255'],
         ]);
     }
 }

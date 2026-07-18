@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Actions;
 
 use App\Models\User;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Models\Product;
@@ -26,8 +27,9 @@ class ApplyStockAdjustment
         Warehouse $warehouse,
         AdjustmentDirection $direction,
         string $quantity,
+        Reason $reason,
         User $performedBy,
-        string $note,
+        ?string $note = null,
         ?string $unitCost = null,
     ): mixed {
         if ($direction === AdjustmentDirection::Increase) {
@@ -43,6 +45,7 @@ class ApplyStockAdjustment
                 performedBy: $performedBy,
                 note: $note,
                 reason: MovementReason::Adjustment,
+                reasonId: $reason->id,
             );
         }
 
@@ -53,6 +56,7 @@ class ApplyStockAdjustment
             performedBy: $performedBy,
             note: $note,
             reason: MovementReason::Adjustment,
+            reasonId: $reason->id,
         );
     }
 }

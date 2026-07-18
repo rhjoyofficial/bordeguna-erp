@@ -2,14 +2,17 @@
 
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\ApplyStockAdjustment;
-use App\Modules\Inventory\Actions\ApplyStockTransfer;
+use App\Modules\Inventory\Actions\DispatchStockTransfer;
+use App\Modules\Inventory\Actions\ReceiveStockTransfer;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Actions\RecordStockOut;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
+use App\Modules\Inventory\Enums\TransferStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
@@ -43,6 +46,15 @@ function createProduct(Business $business, ProductType $type = ProductType::RawM
 function createWarehouse(Business $business, string $code = 'MAIN'): Warehouse
 {
     return Warehouse::create(['business_id' => $business->id, 'name' => 'Warehouse '.$code, 'code' => $code]);
+}
+
+function createReason(Business $business, string $context = 'inventory.stock_adjustment'): Reason
+{
+    return Reason::create([
+        'business_id' => $business->id,
+        'context' => $context,
+        'name' => 'Test reason',
+    ]);
 }
 
 beforeEach(function () {
@@ -110,53 +122,103 @@ it('throws when consuming more stock than is available, without partial consumpt
     expect($this->product->currentStockQuantity())->toBe('10');
 });
 
-it('applies a direct increase adjustment as a new batch', function () {
-    app(ApplyStockAdjustment::class)->handle(
+it('applies a direct increase adjustment as a new batch, tagged with its reason', function () {
+    $reason = createReason($this->business);
+
+    $movement = app(ApplyStockAdjustment::class)->handle(
         product: $this->product,
         warehouse: $this->warehouse,
         direction: AdjustmentDirection::Increase,
         quantity: '15',
+        reason: $reason,
         performedBy: $this->user,
-        note: 'stock count correction',
         unitCost: '8',
     );
 
     expect($this->product->currentStockQuantity())->toBe('15');
+    expect($movement->reason_id)->toBe($reason->id);
 });
 
 it('applies a direct decrease adjustment by consuming stock', function () {
     app(RecordStockIn::class)->handle($this->product, $this->warehouse, '20', '10', $this->user);
+    $reason = createReason($this->business);
 
-    app(ApplyStockAdjustment::class)->handle(
+    $movements = app(ApplyStockAdjustment::class)->handle(
         product: $this->product,
         warehouse: $this->warehouse,
         direction: AdjustmentDirection::Decrease,
         quantity: '5',
+        reason: $reason,
         performedBy: $this->user,
-        note: 'damaged goods',
     );
 
     expect($this->product->currentStockQuantity())->toBe('15');
+    expect($movements->first()->reason_id)->toBe($reason->id);
 });
 
-it('transfers stock between warehouses, pairing both legs with the same transfer_group_id', function () {
+it('dispatches a transfer into an in-transit state without moving destination stock yet', function () {
     $target = createWarehouse($this->business, 'SECOND');
     app(RecordStockIn::class)->handle($this->product, $this->warehouse, '40', '10', $this->user);
+    $reason = createReason($this->business, 'inventory.stock_transfer');
 
-    $movements = app(ApplyStockTransfer::class)->handle(
+    $transfer = app(DispatchStockTransfer::class)->handle(
         product: $this->product,
         source: $this->warehouse,
         target: $target,
         quantity: '15',
+        reason: $reason,
         performedBy: $this->user,
     );
 
-    expect($movements)->toHaveCount(2);
-    expect($movements->pluck('transfer_group_id')->unique())->toHaveCount(1);
+    expect($transfer->status)->toBe(TransferStatus::InTransit);
 
     $sourceQty = StockBatch::where('warehouse_id', $this->warehouse->id)->sum('current_quantity');
     $targetQty = StockBatch::where('warehouse_id', $target->id)->sum('current_quantity');
 
+    // Source is already debited — the stock has left — but nothing exists at
+    // the destination until ReceiveStockTransfer confirms arrival.
     expect((string) $sourceQty)->toBe('25');
+    expect((string) $targetQty)->toBe('0');
+});
+
+it('lands stock at the destination only once a transfer is received', function () {
+    $target = createWarehouse($this->business, 'SECOND');
+    app(RecordStockIn::class)->handle($this->product, $this->warehouse, '40', '10', $this->user);
+    $reason = createReason($this->business, 'inventory.stock_transfer');
+
+    $transfer = app(DispatchStockTransfer::class)->handle(
+        product: $this->product,
+        source: $this->warehouse,
+        target: $target,
+        quantity: '15',
+        reason: $reason,
+        performedBy: $this->user,
+    );
+
+    $movements = app(ReceiveStockTransfer::class)->handle($transfer, $this->user);
+
+    expect($movements)->toHaveCount(1);
+    expect($transfer->fresh()->status)->toBe(TransferStatus::Received);
+
+    $targetQty = StockBatch::where('warehouse_id', $target->id)->sum('current_quantity');
     expect((string) $targetQty)->toBe('15');
 });
+
+it('refuses to receive a transfer that was already received', function () {
+    $target = createWarehouse($this->business, 'SECOND');
+    app(RecordStockIn::class)->handle($this->product, $this->warehouse, '40', '10', $this->user);
+    $reason = createReason($this->business, 'inventory.stock_transfer');
+
+    $transfer = app(DispatchStockTransfer::class)->handle(
+        product: $this->product,
+        source: $this->warehouse,
+        target: $target,
+        quantity: '15',
+        reason: $reason,
+        performedBy: $this->user,
+    );
+
+    app(ReceiveStockTransfer::class)->handle($transfer, $this->user);
+
+    app(ReceiveStockTransfer::class)->handle($transfer->fresh(), $this->user);
+})->throws(RuntimeException::class);

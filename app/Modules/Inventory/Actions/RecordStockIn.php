@@ -25,12 +25,13 @@ class RecordStockIn
         ?string $expiryDate = null,
         ?string $note = null,
         MovementReason $reason = MovementReason::Receipt,
+        ?int $reasonId = null,
     ): StockMovement {
         if (! $product->type->isStocked()) {
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
         }
 
-        return DB::transaction(function () use ($product, $warehouse, $quantity, $unitCost, $performedBy, $batchNumber, $expiryDate, $note, $reason) {
+        return DB::transaction(function () use ($product, $warehouse, $quantity, $unitCost, $performedBy, $batchNumber, $expiryDate, $note, $reason, $reasonId) {
             $batch = StockBatch::create([
                 'product_id' => $product->id,
                 'warehouse_id' => $warehouse->id,
@@ -48,6 +49,7 @@ class RecordStockIn
                 'batch_id' => $batch->id,
                 'direction' => MovementDirection::In,
                 'reason' => $reason,
+                'reason_id' => $reasonId,
                 'quantity' => $quantity,
                 'unit_cost' => $unitCost,
                 'performed_by' => $performedBy->id,

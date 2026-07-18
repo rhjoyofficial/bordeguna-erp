@@ -3,8 +3,9 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Actions\RejectApprovable;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Actions\ApproveStockRequest;
-use App\Modules\Inventory\Actions\RejectStockRequest;
 use App\Modules\Inventory\Actions\SubmitStockRequest;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\StockRequestType;
@@ -23,11 +24,21 @@ class StockRequestController extends Controller
     {
         $this->authorize('inventory.stock.approve');
 
+        $requests = StockRequest::with([
+            'product:id,name,sku',
+            'warehouse:id,name',
+            'targetWarehouse:id,name',
+            'reason:id,name',
+            'approvalRequest.requestedBy:id,name',
+            'approvalRequest.reviewedBy:id,name',
+        ])
+            ->latest()
+            ->get()
+            ->sortByDesc(fn (StockRequest $r) => $r->approvalRequest->isPending())
+            ->values();
+
         return Inertia::render('inventory/stock-requests/index', [
-            'requests' => StockRequest::with(['product:id,name,sku', 'warehouse:id,name', 'targetWarehouse:id,name', 'requestedBy:id,name'])
-                ->orderByRaw("status = 'pending' desc")
-                ->latest()
-                ->get(),
+            'requests' => $requests,
         ]);
     }
 
@@ -42,7 +53,8 @@ class StockRequestController extends Controller
             'target_warehouse_id' => ['required_if:type,transfer', 'nullable', 'exists:warehouses,id', 'different:warehouse_id'],
             'direction' => ['required_if:type,adjustment', 'nullable', new Enum(AdjustmentDirection::class)],
             'quantity' => ['required', 'numeric', 'gt:0'],
-            'reason_note' => ['required', 'string'],
+            'reason_id' => ['required', 'exists:reasons,id'],
+            'note' => ['nullable', 'string'],
         ]);
 
         $action->handle(
@@ -50,10 +62,11 @@ class StockRequestController extends Controller
             product: Product::findOrFail($data['product_id']),
             warehouse: Warehouse::findOrFail($data['warehouse_id']),
             quantity: $data['quantity'],
-            reasonNote: $data['reason_note'],
+            reason: Reason::findOrFail($data['reason_id']),
             requestedBy: $request->user(),
             targetWarehouse: isset($data['target_warehouse_id']) ? Warehouse::findOrFail($data['target_warehouse_id']) : null,
             direction: isset($data['direction']) ? AdjustmentDirection::from($data['direction']) : null,
+            note: $data['note'] ?? null,
         );
 
         return back();
@@ -68,7 +81,7 @@ class StockRequestController extends Controller
         return back();
     }
 
-    public function reject(Request $request, StockRequest $stockRequest, RejectStockRequest $action): RedirectResponse
+    public function reject(Request $request, StockRequest $stockRequest, RejectApprovable $action): RedirectResponse
     {
         $this->authorize('inventory.stock.approve');
 

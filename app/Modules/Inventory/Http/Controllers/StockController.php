@@ -3,14 +3,18 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Actions\ApplyStockAdjustment;
-use App\Modules\Inventory\Actions\ApplyStockTransfer;
+use App\Modules\Inventory\Actions\DispatchStockTransfer;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Actions\RecordStockOut;
+use App\Modules\Inventory\Actions\ReceiveStockTransfer;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\StockBatchStatus;
+use App\Modules\Inventory\Enums\TransferStatus;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
+use App\Modules\Inventory\Models\StockTransfer;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,7 +37,10 @@ class StockController extends Controller
             'stock' => $stockByProductWarehouse,
             'products' => Product::stocked()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'sku']),
             'warehouses' => Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'adjustment_reasons' => Reason::active()->forContext('inventory.stock_adjustment')->orderBy('name')->get(['id', 'name']),
+            'transfer_reasons' => Reason::active()->forContext('inventory.stock_transfer')->orderBy('name')->get(['id', 'name']),
             'can_adjust_directly' => $request->user()->can('inventory.stock.adjust'),
+            'in_transit_count' => StockTransfer::where('status', TransferStatus::InTransit)->count(),
         ]);
     }
 
@@ -93,7 +100,8 @@ class StockController extends Controller
             'direction' => ['required', new Enum(AdjustmentDirection::class)],
             'quantity' => ['required', 'numeric', 'gt:0'],
             'unit_cost' => ['nullable', 'required_if:direction,increase', 'numeric', 'min:0'],
-            'note' => ['required', 'string'],
+            'reason_id' => ['required', 'exists:reasons,id'],
+            'note' => ['nullable', 'string'],
         ]);
 
         $action->handle(
@@ -101,15 +109,16 @@ class StockController extends Controller
             warehouse: Warehouse::findOrFail($data['warehouse_id']),
             direction: AdjustmentDirection::from($data['direction']),
             quantity: $data['quantity'],
+            reason: Reason::findOrFail($data['reason_id']),
             performedBy: $request->user(),
-            note: $data['note'],
+            note: $data['note'] ?? null,
             unitCost: $data['unit_cost'] ?? null,
         );
 
         return back();
     }
 
-    public function storeTransfer(Request $request, ApplyStockTransfer $action): RedirectResponse
+    public function storeTransfer(Request $request, DispatchStockTransfer $action): RedirectResponse
     {
         $this->authorize('inventory.stock.adjust');
 
@@ -118,6 +127,7 @@ class StockController extends Controller
             'warehouse_id' => ['required', 'exists:warehouses,id'],
             'target_warehouse_id' => ['required', 'exists:warehouses,id', 'different:warehouse_id'],
             'quantity' => ['required', 'numeric', 'gt:0'],
+            'reason_id' => ['required', 'exists:reasons,id'],
             'note' => ['nullable', 'string'],
         ]);
 
@@ -126,9 +136,36 @@ class StockController extends Controller
             source: Warehouse::findOrFail($data['warehouse_id']),
             target: Warehouse::findOrFail($data['target_warehouse_id']),
             quantity: $data['quantity'],
+            reason: Reason::findOrFail($data['reason_id']),
             performedBy: $request->user(),
             note: $data['note'] ?? null,
         );
+
+        return back();
+    }
+
+    public function transfersIndex(): Response
+    {
+        return Inertia::render('inventory/stock/transfers', [
+            'transfers' => StockTransfer::with([
+                'product:id,name,sku',
+                'sourceWarehouse:id,name',
+                'targetWarehouse:id,name',
+                'reason:id,name',
+                'dispatchedBy:id,name',
+                'receivedBy:id,name',
+            ])
+                ->latest('dispatched_at')
+                ->get(),
+            'can_receive' => request()->user()->can('inventory.stock.adjust'),
+        ]);
+    }
+
+    public function receiveTransfer(Request $request, StockTransfer $stockTransfer, ReceiveStockTransfer $action): RedirectResponse
+    {
+        $this->authorize('inventory.stock.adjust');
+
+        $action->handle($stockTransfer, $request->user());
 
         return back();
     }

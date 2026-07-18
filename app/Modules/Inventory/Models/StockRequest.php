@@ -2,11 +2,11 @@
 
 namespace App\Modules\Inventory\Models;
 
+use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
-use App\Modules\Inventory\Enums\StockRequestStatus;
 use App\Modules\Inventory\Enums\StockRequestType;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,13 +15,17 @@ use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * The approval queue for adjustment/transfer requests submitted by users
- * without direct-adjust permission. Approving one creates the actual
- * StockMovement(s) via Inventory\Actions — this model never touches stock
- * itself, it only tracks the request lifecycle.
+ * without direct-adjust permission. Approving one dispatches/applies the
+ * actual stock change via Inventory\Actions — this model never touches
+ * stock itself, it only tracks the domain fields of the request. The
+ * approval lifecycle itself (status/requested_by/reviewed_by) lives on the
+ * paired ApprovalRequest, see the Approvable concern.
  */
 class StockRequest extends Model
 {
-    use BelongsToBusiness, HasFactory, LogsActivity;
+    use Approvable, BelongsToBusiness, HasFactory, LogsActivity;
+
+    protected $with = ['approvalRequest'];
 
     protected $fillable = [
         'business_id',
@@ -31,12 +35,10 @@ class StockRequest extends Model
         'target_warehouse_id',
         'direction',
         'quantity',
-        'reason_note',
-        'status',
-        'requested_by',
-        'reviewed_by',
-        'reviewed_at',
+        'reason_id',
+        'note',
         'resulting_movement_id',
+        'resulting_transfer_id',
     ];
 
     protected function casts(): array
@@ -44,16 +46,14 @@ class StockRequest extends Model
         return [
             'type' => StockRequestType::class,
             'direction' => AdjustmentDirection::class,
-            'status' => StockRequestStatus::class,
             'quantity' => 'decimal:4',
-            'reviewed_at' => 'datetime',
         ];
     }
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['type', 'product_id', 'warehouse_id', 'target_warehouse_id', 'direction', 'quantity', 'status'])
+            ->logOnly(['type', 'product_id', 'warehouse_id', 'target_warehouse_id', 'direction', 'quantity'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -73,18 +73,18 @@ class StockRequest extends Model
         return $this->belongsTo(Warehouse::class, 'target_warehouse_id');
     }
 
-    public function requestedBy(): BelongsTo
+    public function reason(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'requested_by');
-    }
-
-    public function reviewedBy(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'reviewed_by');
+        return $this->belongsTo(Reason::class);
     }
 
     public function resultingMovement(): BelongsTo
     {
         return $this->belongsTo(StockMovement::class, 'resulting_movement_id');
+    }
+
+    public function resultingTransfer(): BelongsTo
+    {
+        return $this->belongsTo(StockTransfer::class, 'resulting_transfer_id');
     }
 }

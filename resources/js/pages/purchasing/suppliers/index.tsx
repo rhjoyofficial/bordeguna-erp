@@ -13,12 +13,13 @@ interface Supplier {
     contact_name: string | null;
     phone: string | null;
     email: string | null;
+    payment_terms: string | null;
     is_active: boolean;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Suppliers', href: '/inventory/suppliers' },
+    { title: 'Purchasing', href: '/purchasing/purchase-orders' },
+    { title: 'Suppliers', href: '/purchasing/suppliers' },
 ];
 
 export default function SuppliersIndex({ suppliers }: { suppliers: Supplier[] }) {
@@ -27,22 +28,23 @@ export default function SuppliersIndex({ suppliers }: { suppliers: Supplier[] })
         contact_name: '',
         phone: '',
         email: '',
+        payment_terms: '',
     });
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        post(route('inventory.suppliers.store'), { onSuccess: () => reset() });
+        post(route('purchasing.suppliers.store'), { onSuccess: () => reset() });
     };
 
     const destroy = (supplier: Supplier) => {
-        router.delete(route('inventory.suppliers.destroy', supplier.id));
+        router.delete(route('purchasing.suppliers.destroy', supplier.id));
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Suppliers" />
             <div className="flex flex-col gap-6 p-4">
-                <form onSubmit={submit} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <form onSubmit={submit} className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                     <div className="grid gap-2">
                         <Label htmlFor="name">Name</Label>
                         <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
@@ -61,7 +63,16 @@ export default function SuppliersIndex({ suppliers }: { suppliers: Supplier[] })
                         <Input id="email" type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} />
                         <InputError message={errors.email} />
                     </div>
-                    <Button disabled={processing} className="col-span-2 w-fit sm:col-span-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="payment_terms">Payment terms</Label>
+                        <Input
+                            id="payment_terms"
+                            placeholder="e.g. Net 30"
+                            value={data.payment_terms}
+                            onChange={(e) => setData('payment_terms', e.target.value)}
+                        />
+                    </div>
+                    <Button disabled={processing} className="col-span-2 w-fit sm:col-span-5">
                         Add supplier
                     </Button>
                 </form>
@@ -73,6 +84,7 @@ export default function SuppliersIndex({ suppliers }: { suppliers: Supplier[] })
                             <th className="py-2">Contact</th>
                             <th className="py-2">Phone</th>
                             <th className="py-2">Email</th>
+                            <th className="py-2">Terms</th>
                             <th className="py-2 text-right">Actions</th>
                         </tr>
                     </thead>
@@ -83,6 +95,7 @@ export default function SuppliersIndex({ suppliers }: { suppliers: Supplier[] })
                                 <td className="py-2 text-muted-foreground">{supplier.contact_name ?? '—'}</td>
                                 <td className="py-2 text-muted-foreground">{supplier.phone ?? '—'}</td>
                                 <td className="py-2 text-muted-foreground">{supplier.email ?? '—'}</td>
+                                <td className="py-2 text-muted-foreground">{supplier.payment_terms ?? '—'}</td>
                                 <td className="py-2 text-right">
                                     <Button variant="ghost" size="sm" onClick={() => destroy(supplier)}>
                                         Deactivate
@@ -92,7 +105,7 @@ export default function SuppliersIndex({ suppliers }: { suppliers: Supplier[] })
                         ))}
                         {suppliers.length === 0 && (
                             <tr>
-                                <td colSpan={5} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={6} className="py-4 text-center text-muted-foreground">
                                     No suppliers yet.
                                 </td>
                             </tr>

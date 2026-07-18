@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Modules\Inventory\Enums;
+namespace App\Modules\Foundation\Enums;
 
-enum StockRequestStatus: string
+enum ApprovalStatus: string
 {
     case Pending = 'pending';
     case Approved = 'approved';

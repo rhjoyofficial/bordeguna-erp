@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Inventory\Models;
+namespace App\Modules\Purchasing\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,6 +17,7 @@ class Supplier extends Model
         'phone',
         'email',
         'address',
+        'payment_terms',
         'is_active',
     ];
 

@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
 use App\Models\User;
@@ -30,6 +31,7 @@ class StockMovement extends Model
         'batch_id',
         'direction',
         'reason',
+        'reason_id',
         'quantity',
         'unit_cost',
         'transfer_group_id',
@@ -68,6 +70,11 @@ class StockMovement extends Model
     public function batch(): BelongsTo
     {
         return $this->belongsTo(StockBatch::class, 'batch_id');
+    }
+
+    public function reason(): BelongsTo
+    {
+        return $this->belongsTo(Reason::class);
     }
 
     public function performedBy(): BelongsTo

@@ -27,12 +27,13 @@ class RecordStockOut
         User $performedBy,
         ?string $note = null,
         MovementReason $reason = MovementReason::Usage,
+        ?int $reasonId = null,
     ): Collection {
         if (! $product->type->isStocked()) {
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
         }
 
-        return DB::transaction(function () use ($product, $warehouse, $quantity, $performedBy, $note, $reason) {
+        return DB::transaction(function () use ($product, $warehouse, $quantity, $performedBy, $note, $reason, $reasonId) {
             $consumed = $this->consumeFifo($product, $warehouse, $quantity);
 
             return $consumed->map(fn ($portion) => StockMovement::create([
@@ -41,6 +42,7 @@ class RecordStockOut
                 'batch_id' => $portion['batch']->id,
                 'direction' => MovementDirection::Out,
                 'reason' => $reason,
+                'reason_id' => $reasonId,
                 'quantity' => $portion['quantity'],
                 'unit_cost' => $portion['batch']->unit_cost,
                 'performed_by' => $performedBy->id,

@@ -55,8 +55,13 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Suppliers',
-        url: '/inventory/suppliers',
+        url: '/purchasing/suppliers',
         icon: Truck,
+    },
+    {
+        title: 'Purchase orders',
+        url: '/purchasing/purchase-orders',
+        icon: ClipboardList,
     },
 ];
 
