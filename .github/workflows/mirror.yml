@@ -1,0 +1,20 @@
+name: Mirror to another repo
+
+on:
+  push:
+    branches: [main]   # trigger on pushes to main (adjust as needed)
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repo (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push mirror to destination repo
+        run: |
+          git remote add destination https://x-access-token:${{ secrets.MIRROR_TOKEN }}@github.com/bordeguna-HQ/ERP.git
+          git push destination --all --force
+          git push destination --tags --force
