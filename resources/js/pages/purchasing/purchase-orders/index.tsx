@@ -1,6 +1,7 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -85,34 +86,24 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="grid gap-2">
                     <Label>Supplier</Label>
-                    <select
-                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    <SearchableSelect
                         value={data.supplier_id}
-                        onChange={(e) => setData('supplier_id', e.target.value)}
-                    >
-                        <option value="">Select supplier</option>
-                        {suppliers.map((s) => (
-                            <option key={s.id} value={s.id}>
-                                {s.name}
-                            </option>
-                        ))}
-                    </select>
+                        onChange={(v) => setData('supplier_id', v)}
+                        options={suppliers.map((s) => ({ value: String(s.id), label: s.name }))}
+                        placeholder="Select supplier"
+                        searchPlaceholder="Search suppliers…"
+                    />
                     <InputError message={errors.supplier_id} />
                 </div>
                 <div className="grid gap-2">
                     <Label>Receiving warehouse</Label>
-                    <select
-                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    <SearchableSelect
                         value={data.warehouse_id}
-                        onChange={(e) => setData('warehouse_id', e.target.value)}
-                    >
-                        <option value="">Select warehouse</option>
-                        {warehouses.map((w) => (
-                            <option key={w.id} value={w.id}>
-                                {w.name}
-                            </option>
-                        ))}
-                    </select>
+                        onChange={(v) => setData('warehouse_id', v)}
+                        options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+                        placeholder="Select warehouse"
+                        searchPlaceholder="Search warehouses…"
+                    />
                     <InputError message={errors.warehouse_id} />
                 </div>
                 <div className="grid gap-2">
@@ -130,18 +121,13 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
                 {data.lines.map((line, index) => (
                     <div key={index} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[2fr_1fr_1fr_auto]">
                         <div className="grid gap-1">
-                            <select
-                                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            <SearchableSelect
                                 value={line.product_id}
-                                onChange={(e) => updateLine(index, { product_id: e.target.value })}
-                            >
-                                <option value="">Select product</option>
-                                {products.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                        {p.sku ? `${p.sku} — ${p.name}` : p.name}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={(v) => updateLine(index, { product_id: v })}
+                                options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} — ${p.name}` : p.name }))}
+                                placeholder="Select product"
+                                searchPlaceholder="Search products…"
+                            />
                             <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
                         </div>
                         <div className="grid gap-1">
