@@ -24,6 +24,8 @@ class StockRequestController extends Controller
     {
         $this->authorize('inventory.stock.approve');
 
+        $filters = ['status' => $request->string('status')->toString()];
+
         $requests = StockRequest::with([
             'product:id,name,sku',
             'warehouse:id,name',
@@ -32,13 +34,17 @@ class StockRequestController extends Controller
             'approvalRequest.requestedBy:id,name',
             'approvalRequest.reviewedBy:id,name',
         ])
+            ->when(
+                $filters['status'],
+                fn ($query, $status) => $query->whereHas('approvalRequest', fn ($q) => $q->where('status', $status))
+            )
             ->latest()
-            ->get()
-            ->sortByDesc(fn (StockRequest $r) => $r->approvalRequest->isPending())
-            ->values();
+            ->paginate(15)
+            ->withQueryString();
 
         return Inertia::render('inventory/stock-requests/index', [
             'requests' => $requests,
+            'filters' => $filters,
         ]);
     }
 

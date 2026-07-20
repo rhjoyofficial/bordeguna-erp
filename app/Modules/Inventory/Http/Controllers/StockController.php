@@ -144,20 +144,27 @@ class StockController extends Controller
         return back()->with('success', 'Stock transfer dispatched.');
     }
 
-    public function transfersIndex(): Response
+    public function transfersIndex(Request $request): Response
     {
+        $filters = ['status' => $request->string('status')->toString()];
+
+        $transfers = StockTransfer::with([
+            'product:id,name,sku',
+            'sourceWarehouse:id,name',
+            'targetWarehouse:id,name',
+            'reason:id,name',
+            'dispatchedBy:id,name',
+            'receivedBy:id,name',
+        ])
+            ->when($filters['status'], fn ($query, $status) => $query->where('status', $status))
+            ->latest('dispatched_at')
+            ->paginate(15)
+            ->withQueryString();
+
         return Inertia::render('inventory/stock/transfers', [
-            'transfers' => StockTransfer::with([
-                'product:id,name,sku',
-                'sourceWarehouse:id,name',
-                'targetWarehouse:id,name',
-                'reason:id,name',
-                'dispatchedBy:id,name',
-                'receivedBy:id,name',
-            ])
-                ->latest('dispatched_at')
-                ->get(),
-            'can_receive' => request()->user()->can('inventory.stock.adjust'),
+            'transfers' => $transfers,
+            'filters' => $filters,
+            'can_receive' => $request->user()->can('inventory.stock.adjust'),
         ]);
     }
 

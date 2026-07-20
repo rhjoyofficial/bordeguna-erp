@@ -1,8 +1,13 @@
+import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
+import { Pagination } from '@/components/data-table/pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router } from '@inertiajs/react';
+
+const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
 interface TransferRow {
     id: number;
@@ -30,7 +35,17 @@ const statusVariant: Record<TransferRow['status'], 'secondary' | 'default'> = {
     received: 'default',
 };
 
-export default function StockTransfersIndex({ transfers, can_receive }: { transfers: TransferRow[]; can_receive: boolean }) {
+export default function StockTransfersIndex({
+    transfers,
+    can_receive,
+    filters: initialFilters,
+}: {
+    transfers: Paginated<TransferRow>;
+    can_receive: boolean;
+    filters: { status: string };
+}) {
+    const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/inventory/stock/transfers', initialFilters);
+
     const receive = (transfer: TransferRow) => {
         router.post(route('inventory.stock.transfers.receive', transfer.id));
     };
@@ -43,6 +58,17 @@ export default function StockTransfersIndex({ transfers, can_receive }: { transf
                     Stock dispatched from a source warehouse sits here until someone confirms it arrived — it does not count as destination
                     stock until received.
                 </p>
+
+                <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
+                    <FilterField label="Status" htmlFor="filter-status">
+                        <select id="filter-status" className={selectClass} value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                            <option value="">All statuses</option>
+                            <option value="in_transit">In transit</option>
+                            <option value="received">Received</option>
+                        </select>
+                    </FilterField>
+                </FilterBar>
+
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
@@ -56,7 +82,7 @@ export default function StockTransfersIndex({ transfers, can_receive }: { transf
                         </tr>
                     </thead>
                     <tbody>
-                        {transfers.map((transfer) => (
+                        {transfers.data.map((transfer) => (
                             <tr key={transfer.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b align-top">
                                 <td className="py-2">
                                     {transfer.product.name} <span className="text-muted-foreground">({transfer.product.sku})</span>
@@ -87,15 +113,17 @@ export default function StockTransfersIndex({ transfers, can_receive }: { transf
                                 </td>
                             </tr>
                         ))}
-                        {transfers.length === 0 && (
+                        {transfers.data.length === 0 && (
                             <tr>
                                 <td colSpan={7} className="py-4 text-center text-muted-foreground">
-                                    No transfers yet.
+                                    {hasActiveFilters ? 'No transfers match this filter.' : 'No transfers yet.'}
                                 </td>
                             </tr>
                         )}
                     </tbody>
                 </table>
+
+                <Pagination meta={transfers} />
             </div>
         </AppLayout>
     );

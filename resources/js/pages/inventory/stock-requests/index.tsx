@@ -1,9 +1,14 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
+import { Pagination } from '@/components/data-table/pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router } from '@inertiajs/react';
+
+const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
 interface ApprovalRequest {
     status: 'pending' | 'approved' | 'rejected';
@@ -36,7 +41,15 @@ const statusVariant: Record<ApprovalRequest['status'], 'secondary' | 'default' |
     rejected: 'destructive',
 };
 
-export default function StockRequestsIndex({ requests }: { requests: StockRequestRow[] }) {
+export default function StockRequestsIndex({
+    requests,
+    filters: initialFilters,
+}: {
+    requests: Paginated<StockRequestRow>;
+    filters: { status: string };
+}) {
+    const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/inventory/stock-requests', initialFilters);
+
     const approve = (request: StockRequestRow) => {
         router.post(route('inventory.stock-requests.approve', request.id));
     };
@@ -49,6 +62,17 @@ export default function StockRequestsIndex({ requests }: { requests: StockReques
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Stock requests" />
             <div className="flex flex-col gap-4 p-4">
+                <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
+                    <FilterField label="Status" htmlFor="filter-status">
+                        <select id="filter-status" className={selectClass} value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                            <option value="">All statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                    </FilterField>
+                </FilterBar>
+
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
@@ -63,7 +87,7 @@ export default function StockRequestsIndex({ requests }: { requests: StockReques
                         </tr>
                     </thead>
                     <tbody>
-                        {requests.map((request) => (
+                        {requests.data.map((request) => (
                             <tr key={request.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b align-top">
                                 <td className="py-2 capitalize">
                                     {request.type}
@@ -113,15 +137,17 @@ export default function StockRequestsIndex({ requests }: { requests: StockReques
                                 </td>
                             </tr>
                         ))}
-                        {requests.length === 0 && (
+                        {requests.data.length === 0 && (
                             <tr>
                                 <td colSpan={8} className="py-4 text-center text-muted-foreground">
-                                    No stock requests yet.
+                                    {hasActiveFilters ? 'No stock requests match this filter.' : 'No stock requests yet.'}
                                 </td>
                             </tr>
                         )}
                     </tbody>
                 </table>
+
+                <Pagination meta={requests} />
             </div>
         </AppLayout>
     );
