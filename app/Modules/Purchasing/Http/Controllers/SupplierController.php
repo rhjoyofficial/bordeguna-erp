@@ -24,21 +24,21 @@ class SupplierController extends Controller
 
         Supplier::create($data + ['is_active' => true]);
 
-        return back();
+        return back()->with('success', 'Supplier created.');
     }
 
     public function update(Request $request, Supplier $supplier): RedirectResponse
     {
         $supplier->update($this->validated($request));
 
-        return back();
+        return back()->with('success', 'Supplier updated.');
     }
 
     public function destroy(Supplier $supplier): RedirectResponse
     {
         $supplier->update(['is_active' => false]);
 
-        return back();
+        return back()->with('success', 'Supplier deactivated.');
     }
 
     private function validated(Request $request): array

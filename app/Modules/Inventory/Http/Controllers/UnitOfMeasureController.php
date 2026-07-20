@@ -28,7 +28,7 @@ class UnitOfMeasureController extends Controller
 
         UnitOfMeasure::create($data);
 
-        return back();
+        return back()->with('success', 'Unit created.');
     }
 
     public function update(Request $request, UnitOfMeasure $unit): RedirectResponse
@@ -40,7 +40,7 @@ class UnitOfMeasureController extends Controller
 
         $unit->update($data);
 
-        return back();
+        return back()->with('success', 'Unit updated.');
     }
 
     public function destroy(UnitOfMeasure $unit): RedirectResponse
@@ -51,6 +51,6 @@ class UnitOfMeasureController extends Controller
 
         $unit->delete();
 
-        return back();
+        return back()->with('success', 'Unit deleted.');
     }
 }

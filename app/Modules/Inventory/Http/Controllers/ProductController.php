@@ -49,7 +49,7 @@ class ProductController extends Controller
 
         Product::create($data + ['is_active' => true]);
 
-        return back();
+        return back()->with('success', 'Product created.');
     }
 
     public function update(Request $request, Product $product): RedirectResponse
@@ -58,14 +58,14 @@ class ProductController extends Controller
 
         $product->update($data);
 
-        return back();
+        return back()->with('success', 'Product updated.');
     }
 
     public function destroy(Product $product): RedirectResponse
     {
         $product->update(['is_active' => false]);
 
-        return back();
+        return back()->with('success', 'Product deactivated.');
     }
 
     private function validated(Request $request, ?Product $product = null): array

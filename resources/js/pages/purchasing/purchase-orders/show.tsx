@@ -1,3 +1,4 @@
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -133,10 +134,7 @@ export default function PurchaseOrderShow({
     ];
 
     const approve = () => router.post(route('purchasing.purchase-orders.approve', order.id));
-    const reject = () => {
-        const review_note = window.prompt('Reason for rejecting (optional):') ?? '';
-        router.post(route('purchasing.purchase-orders.reject', order.id), { review_note });
-    };
+    const reject = (review_note: string) => router.post(route('purchasing.purchase-orders.reject', order.id), { review_note });
     const cancel = () => router.post(route('purchasing.purchase-orders.cancel', order.id));
     const setPaymentStatus = (payment_status: string) =>
         router.post(route('purchasing.purchase-orders.payment-status', order.id), { payment_status });
@@ -167,9 +165,21 @@ export default function PurchaseOrderShow({
                         <Button size="sm" onClick={approve}>
                             Approve
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={reject}>
-                            Reject
-                        </Button>
+                        <ConfirmDialog
+                            trigger={
+                                <Button size="sm" variant="ghost">
+                                    Reject
+                                </Button>
+                            }
+                            title={`Reject ${order.po_number}`}
+                            description="The purchase order will be marked rejected. This cannot be undone."
+                            confirmLabel="Reject order"
+                            destructive
+                            withNote
+                            noteLabel="Reason for rejecting (optional)"
+                            notePlaceholder="Add a note for the creator…"
+                            onConfirm={reject}
+                        />
                     </div>
                 )}
 
@@ -203,9 +213,19 @@ export default function PurchaseOrderShow({
 
                 <div className="flex flex-wrap gap-2">
                     {order.status === 'open' && can_approve && (
-                        <Button size="sm" variant="ghost" onClick={cancel}>
-                            Cancel order
-                        </Button>
+                        <ConfirmDialog
+                            trigger={
+                                <Button size="sm" variant="ghost">
+                                    Cancel order
+                                </Button>
+                            }
+                            title={`Cancel ${order.po_number}`}
+                            description="Cancelling stops any further goods receipt against this order. This cannot be undone."
+                            confirmLabel="Cancel order"
+                            cancelLabel="Keep order"
+                            destructive
+                            onConfirm={() => cancel()}
+                        />
                     )}
                     {can_update_payment && order.approval_request.status === 'approved' && (
                         <div className="flex items-center gap-2">

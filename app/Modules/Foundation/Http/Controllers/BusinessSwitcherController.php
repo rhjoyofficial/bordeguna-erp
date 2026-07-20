@@ -41,6 +41,6 @@ class BusinessSwitcherController extends Controller
 
         $request->session()->put('current_business_id', $business->id);
 
-        return redirect()->route('dashboard');
+        return redirect()->route('dashboard')->with('success', "Switched to {$business->name}.");
     }
 }

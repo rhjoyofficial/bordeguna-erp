@@ -1,3 +1,4 @@
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -40,8 +41,7 @@ export default function StockRequestsIndex({ requests }: { requests: StockReques
         router.post(route('inventory.stock-requests.approve', request.id));
     };
 
-    const reject = (request: StockRequestRow) => {
-        const review_note = window.prompt('Reason for rejecting (optional):') ?? '';
+    const reject = (request: StockRequestRow, review_note: string) => {
         router.post(route('inventory.stock-requests.reject', request.id), { review_note });
     };
 
@@ -93,9 +93,21 @@ export default function StockRequestsIndex({ requests }: { requests: StockReques
                                             <Button variant="ghost" size="sm" onClick={() => approve(request)}>
                                                 Approve
                                             </Button>
-                                            <Button variant="ghost" size="sm" onClick={() => reject(request)}>
-                                                Reject
-                                            </Button>
+                                            <ConfirmDialog
+                                                trigger={
+                                                    <Button variant="ghost" size="sm">
+                                                        Reject
+                                                    </Button>
+                                                }
+                                                title="Reject stock request"
+                                                description={`${request.product.name} — ${request.quantity} at ${request.warehouse.name}. This cannot be undone.`}
+                                                confirmLabel="Reject request"
+                                                destructive
+                                                withNote
+                                                noteLabel="Reason for rejecting (optional)"
+                                                notePlaceholder="Add a note for the requester…"
+                                                onConfirm={(note) => reject(request, note)}
+                                            />
                                         </>
                                     )}
                                 </td>

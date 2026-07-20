@@ -28,7 +28,7 @@ class WarehouseController extends Controller
 
         Warehouse::create($data + ['is_active' => true]);
 
-        return back();
+        return back()->with('success', 'Warehouse created.');
     }
 
     public function update(Request $request, Warehouse $warehouse): RedirectResponse
@@ -41,7 +41,7 @@ class WarehouseController extends Controller
 
         $warehouse->update($data);
 
-        return back();
+        return back()->with('success', 'Warehouse updated.');
     }
 
     public function destroy(Warehouse $warehouse): RedirectResponse
@@ -56,6 +56,6 @@ class WarehouseController extends Controller
 
         $warehouse->delete();
 
-        return back();
+        return back()->with('success', 'Warehouse deleted.');
     }
 }

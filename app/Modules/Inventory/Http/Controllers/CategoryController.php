@@ -28,7 +28,7 @@ class CategoryController extends Controller
             'slug' => Str::slug($data['name']),
         ]);
 
-        return back();
+        return back()->with('success', 'Category created.');
     }
 
     public function update(Request $request, Category $category): RedirectResponse
@@ -40,13 +40,13 @@ class CategoryController extends Controller
             'slug' => Str::slug($data['name']),
         ]);
 
-        return back();
+        return back()->with('success', 'Category updated.');
     }
 
     public function destroy(Category $category): RedirectResponse
     {
         $category->delete();
 
-        return back();
+        return back()->with('success', 'Category deleted.');
     }
 }

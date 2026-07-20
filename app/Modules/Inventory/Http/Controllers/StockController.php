@@ -67,7 +67,7 @@ class StockController extends Controller
             note: $data['note'] ?? null,
         );
 
-        return back();
+        return back()->with('success', 'Stock receipt recorded.');
     }
 
     public function storeUsage(Request $request, RecordStockOut $action): RedirectResponse
@@ -87,7 +87,7 @@ class StockController extends Controller
             note: $data['note'] ?? null,
         );
 
-        return back();
+        return back()->with('success', 'Stock usage recorded.');
     }
 
     public function storeAdjustment(Request $request, ApplyStockAdjustment $action): RedirectResponse
@@ -115,7 +115,7 @@ class StockController extends Controller
             unitCost: $data['unit_cost'] ?? null,
         );
 
-        return back();
+        return back()->with('success', 'Stock adjustment saved.');
     }
 
     public function storeTransfer(Request $request, DispatchStockTransfer $action): RedirectResponse
@@ -141,7 +141,7 @@ class StockController extends Controller
             note: $data['note'] ?? null,
         );
 
-        return back();
+        return back()->with('success', 'Stock transfer dispatched.');
     }
 
     public function transfersIndex(): Response
@@ -167,6 +167,6 @@ class StockController extends Controller
 
         $action->handle($stockTransfer, $request->user());
 
-        return back();
+        return back()->with('success', 'Transfer received into stock.');
     }
 }

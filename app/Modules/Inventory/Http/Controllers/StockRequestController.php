@@ -71,7 +71,7 @@ class StockRequestController extends Controller
             note: $data['note'] ?? null,
         );
 
-        return back();
+        return back()->with('success', 'Stock request submitted.');
     }
 
     public function approve(Request $request, StockRequest $stockRequest, ApproveStockRequest $action): RedirectResponse
@@ -80,7 +80,7 @@ class StockRequestController extends Controller
 
         $action->handle($stockRequest, $request->user());
 
-        return back();
+        return back()->with('success', 'Stock request approved.');
     }
 
     public function reject(Request $request, StockRequest $stockRequest, RejectApprovable $action): RedirectResponse
@@ -91,6 +91,6 @@ class StockRequestController extends Controller
 
         $action->handle($stockRequest, $request->user(), $data['review_note'] ?? null);
 
-        return back();
+        return back()->with('success', 'Stock request rejected.');
     }
 }

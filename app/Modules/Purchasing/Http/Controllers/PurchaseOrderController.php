@@ -92,7 +92,7 @@ class PurchaseOrderController extends Controller
             note: $data['note'] ?? null,
         );
 
-        return redirect()->route('purchasing.purchase-orders.show', $order);
+        return redirect()->route('purchasing.purchase-orders.show', $order)->with('success', "Purchase order {$order->po_number} created.");
     }
 
     public function approve(Request $request, PurchaseOrder $purchaseOrder, ApprovePurchaseOrder $action): RedirectResponse
@@ -101,7 +101,7 @@ class PurchaseOrderController extends Controller
 
         $action->handle($purchaseOrder, $request->user());
 
-        return back();
+        return back()->with('success', 'Purchase order approved.');
     }
 
     public function reject(Request $request, PurchaseOrder $purchaseOrder, RejectApprovable $action): RedirectResponse
@@ -112,7 +112,7 @@ class PurchaseOrderController extends Controller
 
         $action->handle($purchaseOrder, $request->user(), $data['review_note'] ?? null);
 
-        return back();
+        return back()->with('success', 'Purchase order rejected.');
     }
 
     public function cancel(PurchaseOrder $purchaseOrder, CancelPurchaseOrder $action): RedirectResponse
@@ -121,7 +121,7 @@ class PurchaseOrderController extends Controller
 
         $action->handle($purchaseOrder);
 
-        return back();
+        return back()->with('success', 'Purchase order cancelled.');
     }
 
     public function updatePaymentStatus(Request $request, PurchaseOrder $purchaseOrder, UpdatePurchaseOrderPaymentStatus $action): RedirectResponse
@@ -132,7 +132,7 @@ class PurchaseOrderController extends Controller
 
         $action->handle($purchaseOrder, PaymentStatus::from($data['payment_status']));
 
-        return back();
+        return back()->with('success', 'Payment status updated.');
     }
 
     public function receive(Request $request, PurchaseOrder $purchaseOrder, RecordGoodsReceipt $action): RedirectResponse
@@ -158,6 +158,6 @@ class PurchaseOrderController extends Controller
 
         $action->handle($purchaseOrder, $lineReceipts, $request->user(), $data['note'] ?? null);
 
-        return back();
+        return back()->with('success', 'Goods receipt recorded.');
     }
 }
