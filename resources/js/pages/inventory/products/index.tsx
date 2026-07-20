@@ -1,12 +1,17 @@
+import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
+import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
+
+const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Product {
     id: number;
@@ -42,7 +47,19 @@ const PRODUCT_TYPES = [
     { value: 'service', label: 'Service' },
 ];
 
-export default function ProductsIndex({ products, categories, units }: { products: Product[]; categories: Option[]; units: UnitOption[] }) {
+export default function ProductsIndex({
+    products,
+    categories,
+    units,
+    filters: initialFilters,
+}: {
+    products: Paginated<Product>;
+    categories: Option[];
+    units: UnitOption[];
+    filters: { search: string; type: string; category_id: string };
+}) {
+    const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/inventory/products', initialFilters);
+
     const { data, setData, post, errors, processing, reset } = useForm({
         sku: '',
         name: '',
@@ -138,6 +155,42 @@ export default function ProductsIndex({ products, categories, units }: { product
                     </Button>
                 </form>
 
+                <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
+                    <FilterField label="Search" htmlFor="filter-search" className="min-w-56 flex-1">
+                        <Input
+                            id="filter-search"
+                            value={filters.search}
+                            onChange={(e) => setFilter('search', e.target.value)}
+                            placeholder="Search SKU or name…"
+                        />
+                    </FilterField>
+                    <FilterField label="Type" htmlFor="filter-type">
+                        <select id="filter-type" className={selectClass} value={filters.type} onChange={(e) => setFilter('type', e.target.value)}>
+                            <option value="">All types</option>
+                            {PRODUCT_TYPES.map((t) => (
+                                <option key={t.value} value={t.value}>
+                                    {t.label}
+                                </option>
+                            ))}
+                        </select>
+                    </FilterField>
+                    <FilterField label="Category" htmlFor="filter-category">
+                        <select
+                            id="filter-category"
+                            className={selectClass}
+                            value={filters.category_id}
+                            onChange={(e) => setFilter('category_id', e.target.value)}
+                        >
+                            <option value="">All categories</option>
+                            {categories.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
+                    </FilterField>
+                </FilterBar>
+
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
@@ -151,7 +204,7 @@ export default function ProductsIndex({ products, categories, units }: { product
                         </tr>
                     </thead>
                     <tbody>
-                        {products.map((product) => (
+                        {products.data.map((product) => (
                             <tr key={product.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2 font-mono text-xs">{product.sku}</td>
                                 <td className="py-2">
@@ -184,15 +237,17 @@ export default function ProductsIndex({ products, categories, units }: { product
                                 </td>
                             </tr>
                         ))}
-                        {products.length === 0 && (
+                        {products.data.length === 0 && (
                             <tr>
                                 <td colSpan={7} className="py-4 text-center text-muted-foreground">
-                                    No products yet.
+                                    {hasActiveFilters ? 'No products match these filters.' : 'No products yet.'}
                                 </td>
                             </tr>
                         )}
                     </tbody>
                 </table>
+
+                <Pagination meta={products} />
             </div>
         </AppLayout>
     );

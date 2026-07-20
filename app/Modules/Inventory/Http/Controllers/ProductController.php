@@ -17,12 +17,25 @@ use Inertia\Response;
 
 class ProductController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $products = Product::with(['category', 'unitOfMeasure'])
+        $filters = [
+            'search' => $request->string('search')->toString(),
+            'type' => $request->string('type')->toString(),
+            'category_id' => $request->string('category_id')->toString(),
+        ];
+
+        $products = Product::query()
+            ->with(['category', 'unitOfMeasure'])
+            ->when($filters['search'], fn ($query, $search) => $query->where(
+                fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")
+            ))
+            ->when($filters['type'], fn ($query, $type) => $query->where('type', $type))
+            ->when($filters['category_id'], fn ($query, $categoryId) => $query->where('category_id', $categoryId))
             ->orderBy('name')
-            ->get()
-            ->map(fn (Product $product) => [
+            ->paginate(15)
+            ->withQueryString()
+            ->through(fn (Product $product) => [
                 'id' => $product->id,
                 'sku' => $product->sku,
                 'name' => $product->name,
@@ -40,6 +53,7 @@ class ProductController extends Controller
             'products' => $products,
             'categories' => Category::orderBy('name')->get(['id', 'name']),
             'units' => UnitOfMeasure::orderBy('name')->get(['id', 'name', 'abbreviation']),
+            'filters' => $filters,
         ]);
     }
 

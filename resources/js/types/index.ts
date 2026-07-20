@@ -21,6 +21,26 @@ export interface NavItem {
     isActive?: boolean;
 }
 
+export interface PaginationLink {
+    url: string | null;
+    label: string;
+    active: boolean;
+}
+
+// Shape of a Laravel LengthAwarePaginator serialized to Inertia (via ->through()).
+export interface Paginated<T> {
+    data: T[];
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    from: number | null;
+    to: number | null;
+    total: number;
+    prev_page_url: string | null;
+    next_page_url: string | null;
+    links: PaginationLink[];
+}
+
 export interface SharedData {
     name: string;
     quote: { message: string; author: string };
