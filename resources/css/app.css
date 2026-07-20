@@ -80,30 +80,36 @@
   Bor De Guna brand theme. Primary is the deep leaf green from the logo
   (#37940B / #61AD3B family), tuned per mode for WCAG AA contrast:
   light mode uses a deep green with white text (~5.4:1), dark mode a
-  brighter green with near-black text (~8:1). Neutrals carry a barely-
-  visible green tint so dense tables stay calm while the whole UI still
-  reads "Bor De Guna". Accent presets (html[data-accent=...]) override
-  only the identity variables below — see the blocks after .dark.
+  brighter green with near-black text (~8:1).
+
+  Neutral SURFACES carry a deliberate, visible green tint (no pure
+  #fff / #000 anywhere) so the page background itself reads "Bor De Guna"
+  in every mode — while lightness stays high (light) / low (dark) enough
+  that dense ERP tables remain calm and all body/muted text keeps WCAG AA
+  contrast. Cards sit a step brighter (light) / lighter (dark) than the
+  page so they lift off the tinted background. Accent presets
+  (html[data-accent=...]) override only the green identity variables —
+  the tinted neutrals below are shared by every accent.
 */
 :root {
-    --background: hsl(0, 0%, 100%);
-    --foreground: hsl(110, 12%, 8%);
-    --card: hsl(0, 0%, 100%);
-    --card-foreground: hsl(110, 12%, 8%);
-    --popover: hsl(0, 0%, 100%);
-    --popover-foreground: hsl(110, 12%, 8%);
+    --background: hsl(110, 32%, 96.5%);
+    --foreground: hsl(115, 16%, 9%);
+    --card: hsl(110, 44%, 99%);
+    --card-foreground: hsl(115, 16%, 9%);
+    --popover: hsl(110, 44%, 99%);
+    --popover-foreground: hsl(115, 16%, 9%);
     --primary: hsl(103, 72%, 26%);
-    --primary-foreground: hsl(0, 0%, 100%);
-    --secondary: hsl(100, 14%, 95.5%);
-    --secondary-foreground: hsl(110, 15%, 12%);
-    --muted: hsl(100, 12%, 95.5%);
-    --muted-foreground: hsl(110, 6%, 42%);
-    --accent: hsl(100, 18%, 93%);
-    --accent-foreground: hsl(110, 15%, 12%);
+    --primary-foreground: hsl(110, 40%, 99%);
+    --secondary: hsl(106, 24%, 92%);
+    --secondary-foreground: hsl(110, 18%, 12%);
+    --muted: hsl(108, 26%, 93.5%);
+    --muted-foreground: hsl(110, 9%, 39%);
+    --accent: hsl(106, 32%, 90%);
+    --accent-foreground: hsl(110, 18%, 12%);
     --destructive: hsl(0, 74%, 46%);
     --destructive-foreground: hsl(0, 0%, 100%);
-    --border: hsl(100, 8%, 91%);
-    --input: hsl(100, 8%, 87%);
+    --border: hsl(106, 18%, 87.5%);
+    --input: hsl(106, 18%, 83.5%);
     --ring: hsl(103, 72%, 30%);
     --chart-1: hsl(103, 62%, 33%);
     --chart-2: hsl(174, 55%, 34%);
@@ -111,48 +117,48 @@
     --chart-4: hsl(215, 45%, 48%);
     --chart-5: hsl(20, 55%, 46%);
     --radius: 0.5rem;
-    --sidebar-background: hsl(100, 14%, 97.5%);
-    --sidebar-foreground: hsl(110, 8%, 28%);
+    --sidebar-background: hsl(108, 30%, 94.5%);
+    --sidebar-foreground: hsl(110, 10%, 26%);
     --sidebar-primary: hsl(103, 72%, 26%);
-    --sidebar-primary-foreground: hsl(0, 0%, 100%);
-    --sidebar-accent: hsl(100, 16%, 92.5%);
-    --sidebar-accent-foreground: hsl(110, 20%, 16%);
-    --sidebar-border: hsl(100, 8%, 90%);
+    --sidebar-primary-foreground: hsl(110, 40%, 99%);
+    --sidebar-accent: hsl(106, 32%, 88.5%);
+    --sidebar-accent-foreground: hsl(110, 22%, 16%);
+    --sidebar-border: hsl(106, 18%, 86.5%);
     --sidebar-ring: hsl(103, 72%, 30%);
 }
 
 .dark {
-    --background: hsl(120, 6%, 4.5%);
-    --foreground: hsl(100, 8%, 96%);
-    --card: hsl(120, 6%, 4.5%);
-    --card-foreground: hsl(100, 8%, 96%);
-    --popover: hsl(120, 6%, 4.5%);
-    --popover-foreground: hsl(100, 8%, 96%);
+    --background: hsl(122, 16%, 7%);
+    --foreground: hsl(105, 10%, 95%);
+    --card: hsl(122, 14%, 9.5%);
+    --card-foreground: hsl(105, 10%, 95%);
+    --popover: hsl(122, 14%, 9.5%);
+    --popover-foreground: hsl(105, 10%, 95%);
     --primary: hsl(101, 52%, 55%);
     --primary-foreground: hsl(110, 70%, 6%);
-    --secondary: hsl(115, 6%, 14%);
-    --secondary-foreground: hsl(100, 8%, 96%);
-    --muted: hsl(115, 6%, 8%);
-    --muted-foreground: hsl(100, 5%, 63%);
-    --accent: hsl(115, 6%, 14%);
-    --accent-foreground: hsl(100, 8%, 96%);
+    --secondary: hsl(120, 11%, 15%);
+    --secondary-foreground: hsl(105, 10%, 95%);
+    --muted: hsl(120, 13%, 11%);
+    --muted-foreground: hsl(105, 8%, 64%);
+    --accent: hsl(120, 11%, 15.5%);
+    --accent-foreground: hsl(105, 10%, 95%);
     --destructive: hsl(0, 74%, 58%);
     --destructive-foreground: hsl(0, 0%, 100%);
-    --border: hsl(115, 6%, 14.5%);
-    --input: hsl(115, 6%, 14.5%);
+    --border: hsl(120, 12%, 16%);
+    --input: hsl(120, 12%, 17%);
     --ring: hsl(101, 52%, 50%);
     --chart-1: hsl(101, 55%, 52%);
     --chart-2: hsl(174, 50%, 45%);
     --chart-3: hsl(40, 80%, 55%);
     --chart-4: hsl(215, 55%, 60%);
     --chart-5: hsl(20, 60%, 55%);
-    --sidebar-background: hsl(120, 6%, 6.5%);
-    --sidebar-foreground: hsl(100, 6%, 80%);
+    --sidebar-background: hsl(122, 17%, 9%);
+    --sidebar-foreground: hsl(105, 8%, 82%);
     --sidebar-primary: hsl(101, 52%, 55%);
     --sidebar-primary-foreground: hsl(110, 70%, 6%);
-    --sidebar-accent: hsl(115, 6%, 15%);
-    --sidebar-accent-foreground: hsl(100, 8%, 95%);
-    --sidebar-border: hsl(115, 6%, 15%);
+    --sidebar-accent: hsl(120, 12%, 16.5%);
+    --sidebar-accent-foreground: hsl(105, 10%, 95%);
+    --sidebar-border: hsl(120, 12%, 16.5%);
     --sidebar-ring: hsl(101, 52%, 50%);
 }
 
