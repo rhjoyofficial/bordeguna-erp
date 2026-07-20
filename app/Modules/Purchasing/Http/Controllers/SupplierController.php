@@ -11,10 +11,28 @@ use Inertia\Response;
 
 class SupplierController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $filters = [
+            'search' => $request->string('search')->toString(),
+            'status' => $request->string('status')->toString(),
+        ];
+
+        $suppliers = Supplier::query()
+            ->when($filters['search'], fn ($query, $search) => $query->where(
+                fn ($q) => $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('contact_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+            ))
+            ->when($filters['status'] === 'active', fn ($query) => $query->where('is_active', true))
+            ->when($filters['status'] === 'inactive', fn ($query) => $query->where('is_active', false))
+            ->orderBy('name')
+            ->paginate(15)
+            ->withQueryString();
+
         return Inertia::render('purchasing/suppliers/index', [
-            'suppliers' => Supplier::orderBy('name')->get(),
+            'suppliers' => $suppliers,
+            'filters' => $filters,
         ]);
     }
 

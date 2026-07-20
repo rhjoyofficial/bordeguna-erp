@@ -22,12 +22,20 @@ use Inertia\Response;
 
 class PurchaseOrderController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $filters = [
+            'search' => $request->string('search')->toString(),
+            'status' => $request->string('status')->toString(),
+        ];
+
         $orders = PurchaseOrder::with(['supplier:id,name', 'warehouse:id,name', 'approvalRequest'])
             ->withSum('lines as total_ordered', 'quantity_ordered')
+            ->when($filters['search'], fn ($query, $search) => $query->where('po_number', 'like', "%{$search}%"))
+            ->when($filters['status'], fn ($query, $status) => $query->where('status', $status))
             ->latest()
-            ->get();
+            ->paginate(15)
+            ->withQueryString();
 
         return Inertia::render('purchasing/purchase-orders/index', [
             'orders' => $orders,
@@ -35,6 +43,7 @@ class PurchaseOrderController extends Controller
             'warehouses' => Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'products' => Product::where('is_active', true)->orderBy('name')->get(['id', 'name', 'sku']),
             'can_create' => request()->user()->can('purchasing.po.create'),
+            'filters' => $filters,
         ]);
     }
 

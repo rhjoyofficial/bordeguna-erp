@@ -1,12 +1,17 @@
+import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
+import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
+
+const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Option {
     id: number;
@@ -178,17 +183,41 @@ export default function PurchaseOrdersIndex({
     warehouses,
     products,
     can_create,
+    filters: initialFilters,
 }: {
-    orders: OrderRow[];
+    orders: Paginated<OrderRow>;
     suppliers: Option[];
     warehouses: Option[];
     products: Option[];
     can_create: boolean;
+    filters: { search: string; status: string };
 }) {
+    const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/purchasing/purchase-orders', initialFilters);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Purchase orders" />
             <div className="flex flex-col gap-6 p-4">
+                <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
+                    <FilterField label="Search PO #" htmlFor="filter-search" className="min-w-56 flex-1">
+                        <Input
+                            id="filter-search"
+                            value={filters.search}
+                            onChange={(e) => setFilter('search', e.target.value)}
+                            placeholder="Search purchase order number…"
+                        />
+                    </FilterField>
+                    <FilterField label="Status" htmlFor="filter-status">
+                        <select id="filter-status" className={selectClass} value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                            <option value="">All statuses</option>
+                            <option value="open">Open</option>
+                            <option value="partially_received">Partially received</option>
+                            <option value="received">Received</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </FilterField>
+                </FilterBar>
+
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
@@ -202,7 +231,7 @@ export default function PurchaseOrdersIndex({
                         </tr>
                     </thead>
                     <tbody>
-                        {orders.map((order) => (
+                        {orders.data.map((order) => (
                             <tr key={order.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2">
                                     <Link href={route('purchasing.purchase-orders.show', order.id)} className="underline">
@@ -225,15 +254,17 @@ export default function PurchaseOrdersIndex({
                                 <td className="py-2 text-muted-foreground capitalize">{order.payment_status.replace('_', ' ')}</td>
                             </tr>
                         ))}
-                        {orders.length === 0 && (
+                        {orders.data.length === 0 && (
                             <tr>
                                 <td colSpan={7} className="py-4 text-center text-muted-foreground">
-                                    No purchase orders yet.
+                                    {hasActiveFilters ? 'No purchase orders match these filters.' : 'No purchase orders yet.'}
                                 </td>
                             </tr>
                         )}
                     </tbody>
                 </table>
+
+                <Pagination meta={orders} />
 
                 {can_create && <CreateOrderForm suppliers={suppliers} warehouses={warehouses} products={products} />}
             </div>

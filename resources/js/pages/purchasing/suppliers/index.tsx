@@ -1,11 +1,17 @@
+import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
+import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
+
+const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Supplier {
     id: number;
@@ -22,7 +28,15 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Suppliers', href: '/purchasing/suppliers' },
 ];
 
-export default function SuppliersIndex({ suppliers }: { suppliers: Supplier[] }) {
+export default function SuppliersIndex({
+    suppliers,
+    filters: initialFilters,
+}: {
+    suppliers: Paginated<Supplier>;
+    filters: { search: string; status: string };
+}) {
+    const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/purchasing/suppliers', initialFilters);
+
     const { data, setData, post, errors, processing, reset } = useForm({
         name: '',
         contact_name: '',
@@ -77,6 +91,24 @@ export default function SuppliersIndex({ suppliers }: { suppliers: Supplier[] })
                     </Button>
                 </form>
 
+                <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
+                    <FilterField label="Search" htmlFor="filter-search" className="min-w-56 flex-1">
+                        <Input
+                            id="filter-search"
+                            value={filters.search}
+                            onChange={(e) => setFilter('search', e.target.value)}
+                            placeholder="Search name, contact or email…"
+                        />
+                    </FilterField>
+                    <FilterField label="Status" htmlFor="filter-status">
+                        <select id="filter-status" className={selectClass} value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                            <option value="">All statuses</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </FilterField>
+                </FilterBar>
+
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
@@ -89,29 +121,40 @@ export default function SuppliersIndex({ suppliers }: { suppliers: Supplier[] })
                         </tr>
                     </thead>
                     <tbody>
-                        {suppliers.map((supplier) => (
+                        {suppliers.data.map((supplier) => (
                             <tr key={supplier.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                <td className="py-2">{supplier.name}</td>
+                                <td className="py-2">
+                                    {supplier.name}
+                                    {!supplier.is_active && (
+                                        <Badge variant="secondary" className="ml-2">
+                                            Inactive
+                                        </Badge>
+                                    )}
+                                </td>
                                 <td className="py-2 text-muted-foreground">{supplier.contact_name ?? '—'}</td>
                                 <td className="py-2 text-muted-foreground">{supplier.phone ?? '—'}</td>
                                 <td className="py-2 text-muted-foreground">{supplier.email ?? '—'}</td>
                                 <td className="py-2 text-muted-foreground">{supplier.payment_terms ?? '—'}</td>
                                 <td className="py-2 text-right">
-                                    <Button variant="ghost" size="sm" onClick={() => destroy(supplier)}>
-                                        Deactivate
-                                    </Button>
+                                    {supplier.is_active && (
+                                        <Button variant="ghost" size="sm" onClick={() => destroy(supplier)}>
+                                            Deactivate
+                                        </Button>
+                                    )}
                                 </td>
                             </tr>
                         ))}
-                        {suppliers.length === 0 && (
+                        {suppliers.data.length === 0 && (
                             <tr>
                                 <td colSpan={6} className="py-4 text-center text-muted-foreground">
-                                    No suppliers yet.
+                                    {hasActiveFilters ? 'No suppliers match these filters.' : 'No suppliers yet.'}
                                 </td>
                             </tr>
                         )}
                     </tbody>
                 </table>
+
+                <Pagination meta={suppliers} />
             </div>
         </AppLayout>
     );
