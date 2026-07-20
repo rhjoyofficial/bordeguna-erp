@@ -26,12 +26,23 @@ class StockController extends Controller
 {
     public function index(Request $request): Response
     {
+        $filters = [
+            'search' => $request->string('search')->toString(),
+            'warehouse_id' => $request->string('warehouse_id')->toString(),
+        ];
+
         $stockByProductWarehouse = StockBatch::query()
             ->where('status', StockBatchStatus::Active)
+            ->when($filters['search'], fn ($query, $search) => $query->whereHas(
+                'product',
+                fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")
+            ))
+            ->when($filters['warehouse_id'], fn ($query, $warehouseId) => $query->where('warehouse_id', $warehouseId))
             ->selectRaw('product_id, warehouse_id, SUM(current_quantity) as quantity')
             ->groupBy('product_id', 'warehouse_id')
             ->with(['product:id,name,sku,low_stock_threshold', 'warehouse:id,name'])
-            ->get();
+            ->paginate(20)
+            ->withQueryString();
 
         return Inertia::render('inventory/stock/index', [
             'stock' => $stockByProductWarehouse,
@@ -41,6 +52,7 @@ class StockController extends Controller
             'transfer_reasons' => Reason::active()->forContext('inventory.stock_transfer')->orderBy('name')->get(['id', 'name']),
             'can_adjust_directly' => $request->user()->can('inventory.stock.adjust'),
             'in_transit_count' => StockTransfer::where('status', TransferStatus::InTransit)->count(),
+            'filters' => $filters,
         ]);
     }
 

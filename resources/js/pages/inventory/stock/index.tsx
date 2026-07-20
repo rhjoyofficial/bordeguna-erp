@@ -1,11 +1,17 @@
+import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
+import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
+
+const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
 interface StockRow {
     product_id: number;
@@ -47,33 +53,23 @@ function ProductWarehouseSelects({
         <>
             <div className="grid gap-2">
                 <Label>Product</Label>
-                <select
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                <SearchableSelect
                     value={productId}
-                    onChange={(e) => onProductChange(e.target.value)}
-                >
-                    <option value="">Select product</option>
-                    {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                            {p.sku ? `${p.sku} — ${p.name}` : p.name}
-                        </option>
-                    ))}
-                </select>
+                    onChange={onProductChange}
+                    options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} — ${p.name}` : p.name }))}
+                    placeholder="Select product"
+                    searchPlaceholder="Search products…"
+                />
             </div>
             <div className="grid gap-2">
                 <Label>{warehouseLabel}</Label>
-                <select
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                <SearchableSelect
                     value={warehouseId}
-                    onChange={(e) => onWarehouseChange(e.target.value)}
-                >
-                    <option value="">Select warehouse</option>
-                    {warehouses.map((w) => (
-                        <option key={w.id} value={w.id}>
-                            {w.name}
-                        </option>
-                    ))}
-                </select>
+                    onChange={onWarehouseChange}
+                    options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+                    placeholder="Select warehouse"
+                    searchPlaceholder="Search warehouses…"
+                />
             </div>
         </>
     );
@@ -427,15 +423,19 @@ export default function StockIndex({
     transfer_reasons,
     can_adjust_directly,
     in_transit_count,
+    filters: initialFilters,
 }: {
-    stock: StockRow[];
+    stock: Paginated<StockRow>;
     products: Option[];
     warehouses: Option[];
     adjustment_reasons: Option[];
     transfer_reasons: Option[];
     can_adjust_directly: boolean;
     in_transit_count: number;
+    filters: { search: string; warehouse_id: string };
 }) {
+    const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/inventory/stock', initialFilters);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Stock" />
@@ -446,6 +446,33 @@ export default function StockIndex({
                         In-transit transfers{in_transit_count > 0 ? ` (${in_transit_count})` : ''}
                     </Link>
                 </div>
+
+                <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
+                    <FilterField label="Search" htmlFor="filter-search" className="min-w-56 flex-1">
+                        <Input
+                            id="filter-search"
+                            value={filters.search}
+                            onChange={(e) => setFilter('search', e.target.value)}
+                            placeholder="Search product SKU or name…"
+                        />
+                    </FilterField>
+                    <FilterField label="Warehouse" htmlFor="filter-warehouse">
+                        <select
+                            id="filter-warehouse"
+                            className={selectClass}
+                            value={filters.warehouse_id}
+                            onChange={(e) => setFilter('warehouse_id', e.target.value)}
+                        >
+                            <option value="">All warehouses</option>
+                            {warehouses.map((w) => (
+                                <option key={w.id} value={w.id}>
+                                    {w.name}
+                                </option>
+                            ))}
+                        </select>
+                    </FilterField>
+                </FilterBar>
+
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
@@ -455,7 +482,7 @@ export default function StockIndex({
                         </tr>
                     </thead>
                     <tbody>
-                        {stock.map((row) => (
+                        {stock.data.map((row) => (
                             <tr key={`${row.product_id}-${row.warehouse_id}`} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2">
                                     {row.product.name} <span className="text-muted-foreground">({row.product.sku})</span>
@@ -464,15 +491,17 @@ export default function StockIndex({
                                 <td className="py-2">{row.quantity}</td>
                             </tr>
                         ))}
-                        {stock.length === 0 && (
+                        {stock.data.length === 0 && (
                             <tr>
                                 <td colSpan={3} className="py-4 text-center text-muted-foreground">
-                                    No stock recorded yet.
+                                    {hasActiveFilters ? 'No stock matches these filters.' : 'No stock recorded yet.'}
                                 </td>
                             </tr>
                         )}
                     </tbody>
                 </table>
+
+                <Pagination meta={stock} />
 
                 <div className="grid gap-4 lg:grid-cols-2">
                     <ReceiptForm products={products} warehouses={warehouses} />
