@@ -3,6 +3,9 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Actions\DeleteAttachment;
+use App\Modules\Foundation\Actions\StoreAttachment;
+use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\Department;
 use App\Modules\Foundation\Models\Designation;
 use App\Modules\Foundation\Models\Office;
@@ -11,6 +14,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\CreateEmployee;
 use App\Modules\Hrm\Actions\SeparateEmployee;
 use App\Modules\Hrm\Actions\TransferEmployee;
+use App\Modules\Hrm\Enums\EmployeeDocumentType;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
 use App\Modules\Hrm\Enums\SeparationType;
@@ -112,6 +116,7 @@ class EmployeeController extends Controller
                 'office:id,name', 'department:id,name', 'section:id,name', 'designation:id,name',
                 'supervisor:id,first_name,last_name,employee_code',
             ]),
+            'attachments' => fn ($query) => $query->latest('id')->with('uploadedBy:id,name'),
         ]);
 
         $businessId = app(BusinessContext::class)->id();
@@ -145,6 +150,20 @@ class EmployeeController extends Controller
                     'effective_from' => $assignment->effective_from?->toDateString(),
                     'effective_to' => $assignment->effective_to?->toDateString(),
                 ]),
+                // Documents (EMP-04) over the Phase 0 Attachment Engine. Viewing
+                // the files themselves goes through attachments.show, which
+                // enforces the Employee's canAccessAttachments gate on top of
+                // the business scope.
+                'documents' => $employee->attachments->map(fn (Attachment $document) => [
+                    'id' => $document->id,
+                    'category' => EmployeeDocumentType::tryFrom($document->collection ?? '')?->label() ?? 'Other',
+                    'original_name' => $document->original_name,
+                    'size' => $document->size,
+                    'expires_at' => $document->expires_at?->toDateString(),
+                    'is_expired' => $document->isExpired(),
+                    'uploaded_by' => $document->uploadedBy?->name,
+                    'url' => $document->url(),
+                ]),
             ],
             'transitionable_statuses' => collect($employee->transitionableStatuses())
                 ->map(fn (EmployeeStatus $status) => ['value' => $status->value, 'label' => $status->label()]),
@@ -172,6 +191,8 @@ class EmployeeController extends Controller
             'supervisors' => Employee::whereHas('assignments', fn ($query) => $query->active()->where('is_primary', true))
                 ->where('id', '!=', $employee->id)->orderBy('first_name')->orderBy('last_name')->get()
                 ->map(fn (Employee $candidate) => ['id' => $candidate->id, 'name' => $candidate->fullName().' ('.$candidate->employee_code.')']),
+            'document_types' => collect(EmployeeDocumentType::cases())
+                ->map(fn (EmployeeDocumentType $type) => ['value' => $type->value, 'label' => $type->label()]),
         ]);
     }
 
@@ -252,5 +273,45 @@ class EmployeeController extends Controller
         ]);
 
         return back()->with('success', "{$employee->fullName()} reassigned.");
+    }
+
+    public function uploadDocument(Request $request, Employee $employee, StoreAttachment $action): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+
+        $data = $request->validate([
+            'category' => ['required', new Enum(EmployeeDocumentType::class)],
+            'file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'expires_at' => ['nullable', 'date'],
+        ]);
+
+        $action->handle(
+            attachable: $employee,
+            file: $request->file('file'),
+            collection: $data['category'],
+            uploadedBy: $request->user(),
+            expiresAt: $data['expires_at'] ?? null,
+        );
+
+        return back()->with('success', 'Document uploaded.');
+    }
+
+    public function destroyDocument(Employee $employee, Attachment $attachment, DeleteAttachment $action): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+
+        // The file must belong to this employee — never let one employee's URL
+        // delete another's document (or a logo).
+        abort_unless(
+            $attachment->attachable_type === $employee->getMorphClass()
+                && $attachment->attachable_id === $employee->id,
+            404,
+        );
+
+        $action->handle($attachment);
+
+        return back()->with('success', 'Document removed.');
     }
 }

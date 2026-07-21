@@ -3,6 +3,8 @@
 namespace App\Modules\Hrm\Models;
 
 use App\Models\User;
+use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
 use App\Modules\Hrm\Enums\SeparationType;
@@ -19,9 +21,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * need access. Not business-scoped — belonging is expressed through
  * effective-dated assignments.
  */
-class Employee extends Model
+class Employee extends Model implements ControlsAttachmentAccess
 {
-    use HasFactory, LogsActivity;
+    use HasAttachments, HasFactory, LogsActivity;
 
     protected $fillable = [
         'employee_code',
@@ -105,5 +107,17 @@ class Employee extends Model
     public function fullName(): string
     {
         return trim("{$this->first_name} {$this->last_name}");
+    }
+
+    /**
+     * An employee's documents can hold sensitive personal data (NID, bank),
+     * so viewing them needs more than being in the right business: only HR
+     * (whoever may manage employees) or the employee themselves (their linked
+     * User) may read them. Self-access exists for Employee Self-Service.
+     */
+    public function canAccessAttachments(User $user): bool
+    {
+        return $user->can('hrm.employees.manage')
+            || ($this->user_id !== null && $this->user_id === $user->id);
     }
 }

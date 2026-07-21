@@ -28,8 +28,9 @@ class StoreAttachment
         ?User $uploadedBy = null,
         bool $singleton = false,
         string $disk = 'local',
+        ?string $expiresAt = null,
     ): Attachment {
-        return DB::transaction(function () use ($attachable, $file, $collection, $uploadedBy, $singleton, $disk) {
+        return DB::transaction(function () use ($attachable, $file, $collection, $uploadedBy, $singleton, $disk, $expiresAt) {
             if ($singleton) {
                 $attachable->attachments()->where('collection', $collection)->get()
                     ->each(fn (Attachment $existing) => $this->deleteAttachment->handle($existing));
@@ -51,6 +52,7 @@ class StoreAttachment
                 'original_name' => $file->getClientOriginalName(),
                 'mime_type' => $file->getClientMimeType(),
                 'size' => $file->getSize(),
+                'expires_at' => $expiresAt,
                 'uploaded_by' => $uploadedBy?->id,
             ]);
         });

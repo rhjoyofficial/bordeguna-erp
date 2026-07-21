@@ -45,6 +45,17 @@ interface Assignment {
     effective_to: string | null;
 }
 
+interface Document {
+    id: number;
+    category: string;
+    original_name: string;
+    size: number;
+    expires_at: string | null;
+    is_expired: boolean;
+    uploaded_by: string | null;
+    url: string;
+}
+
 interface EmployeeDetail {
     id: number;
     employee_code: string;
@@ -61,6 +72,7 @@ interface EmployeeDetail {
     joining_date: string | null;
     user: { name: string; email: string } | null;
     assignments: Assignment[];
+    documents: Document[];
 }
 
 interface ShowProps {
@@ -72,6 +84,7 @@ interface ShowProps {
     offices_tree: OfficeNode[];
     designations: NamedOption[];
     supervisors: NamedOption[];
+    document_types: Option[];
 }
 
 const statusVariant: Record<string, 'secondary' | 'default' | 'outline' | 'destructive'> = {
@@ -304,6 +317,143 @@ function TransferDialog({
     );
 }
 
+function formatBytes(size: number): string {
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(0)} KB`;
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function UploadDocumentDialog({ employeeId, documentTypes }: { employeeId: number; documentTypes: Option[] }) {
+    const [open, setOpen] = useState(false);
+    const [category, setCategory] = useState(documentTypes[0]?.value ?? '');
+    const [file, setFile] = useState<File | null>(null);
+    const [expiresAt, setExpiresAt] = useState('');
+
+    const submit = () => {
+        if (!file) return;
+        router.post(
+            route('hrm.employees.documents.store', employeeId),
+            { category, file, expires_at: expiresAt === '' ? null : expiresAt },
+            {
+                forceFormData: true,
+                preserveScroll: true,
+                onSuccess: () => {
+                    setOpen(false);
+                    setFile(null);
+                    setExpiresAt('');
+                },
+            },
+        );
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                    Add document
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Upload document</DialogTitle>
+                    <DialogDescription>
+                        Personal documents are private: only HR and the employee themselves can open them. Accepted: PDF or image, up to 5 MB.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="category">Type</Label>
+                        <select id="category" className={selectClass} value={category} onChange={(e) => setCategory(e.target.value)}>
+                            {documentTypes.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="file">File</Label>
+                        <Input
+                            id="file"
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp"
+                            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                        />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="expires_at">Expiry date (optional)</Label>
+                        <Input id="expires_at" type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button onClick={submit} disabled={category === '' || !file}>
+                        Upload
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function DocumentsCard({ employeeId, documents, documentTypes }: { employeeId: number; documents: Document[]; documentTypes: Option[] }) {
+    const remove = (document: Document) =>
+        router.delete(route('hrm.employees.documents.destroy', [employeeId, document.id]), { preserveScroll: true });
+
+    return (
+        <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-medium">Documents</h3>
+                <UploadDocumentDialog employeeId={employeeId} documentTypes={documentTypes} />
+            </div>
+            {documents.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No documents yet.</p>
+            ) : (
+                <table className="w-full min-w-[42rem] text-sm">
+                    <thead>
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                            <th className="py-2">Type</th>
+                            <th className="py-2">File</th>
+                            <th className="py-2">Expiry</th>
+                            <th className="py-2">Uploaded by</th>
+                            <th className="py-2 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {documents.map((document) => (
+                            <tr key={document.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                <td className="py-2">{document.category}</td>
+                                <td className="py-2">
+                                    <a href={document.url} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                                        {document.original_name}
+                                    </a>
+                                    <span className="ml-2 text-xs text-muted-foreground">{formatBytes(document.size)}</span>
+                                </td>
+                                <td className="py-2 text-muted-foreground">
+                                    {document.expires_at ?? '—'}
+                                    {document.is_expired && (
+                                        <Badge variant="destructive" className="ml-2">
+                                            Expired
+                                        </Badge>
+                                    )}
+                                </td>
+                                <td className="py-2 text-muted-foreground">{document.uploaded_by ?? '—'}</td>
+                                <td className="py-2 text-right">
+                                    <Button variant="ghost" size="sm" onClick={() => remove(document)}>
+                                        Remove
+                                    </Button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
+        </div>
+    );
+}
+
 export default function EmployeeShow({
     employee,
     transitionable_statuses,
@@ -313,6 +463,7 @@ export default function EmployeeShow({
     offices_tree,
     designations,
     supervisors,
+    document_types,
 }: ShowProps) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employees', href: '/hrm/employees' },
@@ -403,6 +554,8 @@ export default function EmployeeShow({
                         </tbody>
                     </table>
                 </div>
+
+                <DocumentsCard employeeId={employee.id} documents={employee.documents} documentTypes={document_types} />
             </div>
         </AppLayout>
     );

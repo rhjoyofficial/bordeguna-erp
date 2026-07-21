@@ -30,6 +30,7 @@ class Attachment extends Model
         'original_name',
         'mime_type',
         'size',
+        'expires_at',
         'uploaded_by',
     ];
 
@@ -37,7 +38,13 @@ class Attachment extends Model
     {
         return [
             'size' => 'integer',
+            'expires_at' => 'date',
         ];
+    }
+
+    public function isExpired(): bool
+    {
+        return $this->expires_at !== null && $this->expires_at->isPast();
     }
 
     public function attachable(): MorphTo
