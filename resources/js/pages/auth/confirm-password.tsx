@@ -4,6 +4,7 @@ import { LoaderCircle } from 'lucide-react';
 import { FormEventHandler } from 'react';
 
 import InputError from '@/components/input-error';
+import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,16 +24,15 @@ export default function ConfirmPassword() {
     };
 
     return (
-        <AuthLayout
-            title="Confirm your password"
-            description="This is a secure area of the application. Please confirm your password before continuing."
-        >
+        <AuthLayout title="Confirm secure access" description="For sensitive actions, re-enter your password before we continue.">
             <Head title="Confirm password" />
 
             <form onSubmit={submit}>
                 <div className="space-y-6">
                     <div className="grid gap-2">
-                        <Label htmlFor="password">Password</Label>
+                        <Label htmlFor="password" className="text-sm font-medium">
+                            Password
+                        </Label>
                         <Input
                             id="password"
                             type="password"
@@ -42,17 +42,25 @@ export default function ConfirmPassword() {
                             value={data.password}
                             autoFocus
                             onChange={(e) => setData('password', e.target.value)}
+                            className="bg-background/80 h-12 rounded-xl"
                         />
 
                         <InputError message={errors.password} />
                     </div>
 
                     <div className="flex items-center">
-                        <Button className="w-full" disabled={processing}>
+                        <Button size="lg" className="h-12 w-full rounded-xl text-sm font-semibold" disabled={processing}>
                             {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
                             Confirm password
                         </Button>
                     </div>
+
+                    <p className="text-muted-foreground text-center text-sm">
+                        Need a different account?{' '}
+                        <TextLink href={route('logout')} method="post" className="text-primary font-medium no-underline hover:underline">
+                            Log out
+                        </TextLink>
+                    </p>
                 </div>
             </form>
         </AuthLayout>
