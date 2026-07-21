@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
 use App\Modules\Foundation\database\seeders\FoundationSeeder;
 use App\Modules\Inventory\database\seeders\InventoryDemoDataSeeder;
 use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
@@ -26,6 +27,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call(FoundationSeeder::class);
+        $this->call(FoundationPermissionsSeeder::class);
         $this->call(InventoryPermissionsSeeder::class);
         $this->call(PurchasingPermissionsSeeder::class);
         $this->call(InventoryReasonsSeeder::class);

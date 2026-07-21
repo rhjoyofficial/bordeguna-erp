@@ -2,7 +2,6 @@
 
 use App\Http\Controllers\ApprovalInboxController;
 use App\Http\Controllers\DashboardController;
-use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -15,10 +14,10 @@ Route::middleware(['auth', 'business'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('approvals', [ApprovalInboxController::class, 'index'])->name('approvals.index');
-
-    Route::get('businesses/switch', [BusinessSwitcherController::class, 'index'])->name('businesses.switch');
-    Route::post('businesses/switch', [BusinessSwitcherController::class, 'store'])->name('businesses.switch.store');
 });
+
+// Business switching + team management routes live in the Foundation module
+// (app/Modules/Foundation/routes/web.php), loaded by FoundationServiceProvider.
 
 require __DIR__ . '/settings.php';
 require __DIR__ . '/auth.php';

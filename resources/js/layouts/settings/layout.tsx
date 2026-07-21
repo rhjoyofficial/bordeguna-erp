@@ -2,34 +2,20 @@ import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { type NavItem } from '@/types';
-import { Link } from '@inertiajs/react';
-
-const sidebarNavItems: NavItem[] = [
-    {
-        title: 'Profile',
-        url: '/settings/profile',
-        icon: null,
-    },
-    {
-        title: 'Password',
-        url: '/settings/password',
-        icon: null,
-    },
-    {
-        title: 'Appearance',
-        url: '/settings/appearance',
-        icon: null,
-    },
-    {
-        title: 'Reasons',
-        url: '/settings/reasons',
-        icon: null,
-    },
-];
+import { type NavItem, type SharedData } from '@/types';
+import { Link, usePage } from '@inertiajs/react';
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
+    const { canManageUsers } = usePage<SharedData>().props;
     const currentPath = window.location.pathname;
+
+    const sidebarNavItems: NavItem[] = [
+        { title: 'Profile', url: '/settings/profile', icon: null },
+        { title: 'Password', url: '/settings/password', icon: null },
+        { title: 'Appearance', url: '/settings/appearance', icon: null },
+        { title: 'Reasons', url: '/settings/reasons', icon: null },
+        ...(canManageUsers ? [{ title: 'Team', url: '/settings/team', icon: null }] : []),
+    ];
 
     return (
         <div className="px-4 py-6">

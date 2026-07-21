@@ -9,23 +9,22 @@ class RegistrationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_registration_screen_can_be_rendered()
+    public function test_public_registration_is_disabled()
     {
-        $response = $this->get('/register');
+        // Multi-tenant ERP: users are provisioned by an Owner via Settings > Team,
+        // never self-registered. The register routes are removed; the app's
+        // fallback sends a guest hitting the old URL to login, and no account
+        // can be created through it.
+        $this->get('/register')->assertRedirect('/login');
 
-        $response->assertStatus(200);
-    }
-
-    public function test_new_users_can_register()
-    {
-        $response = $this->post('/register', [
+        $this->post('/register', [
             'name' => 'Test User',
             'email' => 'test@example.com',
             'password' => 'password',
             'password_confirmation' => 'password',
         ]);
 
-        $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
+        $this->assertGuest();
+        $this->assertDatabaseMissing('users', ['email' => 'test@example.com']);
     }
 }

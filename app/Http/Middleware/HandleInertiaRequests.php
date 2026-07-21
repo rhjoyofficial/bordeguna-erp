@@ -54,6 +54,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'pendingApprovalsCount' => fn () => $this->canReviewApprovals($request) ? $this->pendingApprovalsCount() : 0,
             'canReviewApprovals' => fn () => $this->canReviewApprovals($request),
+            'canManageUsers' => fn () => (bool) $request->user()?->can('foundation.users.manage'),
         ]);
     }
 

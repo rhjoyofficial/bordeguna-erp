@@ -49,6 +49,7 @@ export interface SharedData {
     flash: { success?: string | null; error?: string | null };
     pendingApprovalsCount: number;
     canReviewApprovals: boolean;
+    canManageUsers: boolean;
     [key: string]: unknown;
 }
 

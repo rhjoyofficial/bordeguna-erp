@@ -111,13 +111,6 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                         Log in
                     </Button>
                 </div>
-
-                <div className="text-muted-foreground text-center text-sm">
-                    Don't have an account?{' '}
-                    <TextLink href={route('register')} className="text-primary font-medium no-underline hover:underline" tabIndex={5}>
-                        Sign up
-                    </TextLink>
-                </div>
             </form>
         </AuthLayout>
     );
