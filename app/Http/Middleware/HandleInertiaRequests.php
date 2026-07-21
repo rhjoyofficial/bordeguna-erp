@@ -56,6 +56,7 @@ class HandleInertiaRequests extends Middleware
             'canReviewApprovals' => fn () => $this->canReviewApprovals($request),
             'canManageUsers' => fn () => (bool) $request->user()?->can('foundation.users.manage'),
             'canManageOrganization' => fn () => (bool) $request->user()?->can('foundation.organization.manage'),
+            'canManageEmployees' => fn () => (bool) $request->user()?->can('hrm.employees.manage'),
         ]);
     }
 

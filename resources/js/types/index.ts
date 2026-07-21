@@ -51,6 +51,7 @@ export interface SharedData {
     canReviewApprovals: boolean;
     canManageUsers: boolean;
     canManageOrganization: boolean;
+    canManageEmployees: boolean;
     [key: string]: unknown;
 }
 
