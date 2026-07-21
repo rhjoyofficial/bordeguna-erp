@@ -7,7 +7,10 @@ use App\Modules\Foundation\Models\Designation;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\CreateEmployee;
+use App\Modules\Hrm\Actions\SeparateEmployee;
+use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
+use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use Illuminate\Http\RedirectResponse;
@@ -114,6 +117,9 @@ class EmployeeController extends Controller
                 'name' => $employee->fullName(),
                 'employment_type' => $employee->employment_type->label(),
                 'status' => $employee->status->value,
+                'separation_type' => $employee->separation_type?->label(),
+                'separation_date' => $employee->separation_date?->toDateString(),
+                'separation_reason' => $employee->separation_reason,
                 'personal_email' => $employee->personal_email,
                 'phone' => $employee->phone,
                 'national_id' => $employee->national_id,
@@ -131,6 +137,52 @@ class EmployeeController extends Controller
                     'effective_to' => $assignment->effective_to?->toDateString(),
                 ]),
             ],
+            'transitionable_statuses' => collect($employee->transitionableStatuses())
+                ->map(fn (EmployeeStatus $status) => ['value' => $status->value, 'label' => $status->label()]),
+            'can_separate' => $employee->canSeparate(),
+            'separation_types' => collect(SeparationType::cases())
+                ->map(fn (SeparationType $type) => ['value' => $type->value, 'label' => $type->label()]),
         ]);
+    }
+
+    public function status(Request $request, Employee $employee): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+
+        $allowed = collect($employee->transitionableStatuses())->map(fn (EmployeeStatus $status) => $status->value);
+
+        $data = $request->validate([
+            'status' => ['required', Rule::in($allowed)],
+        ]);
+
+        $employee->update(['status' => $data['status']]);
+
+        return back()->with('success', 'Employee status updated.');
+    }
+
+    public function separate(Request $request, Employee $employee, SeparateEmployee $action): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+
+        if (! $employee->canSeparate()) {
+            return back()->with('error', 'This employee is already separated.');
+        }
+
+        $data = $request->validate([
+            'separation_type' => ['required', new Enum(SeparationType::class)],
+            'separation_date' => ['required', 'date'],
+            'separation_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $action->handle(
+            employee: $employee,
+            type: SeparationType::from($data['separation_type']),
+            date: $data['separation_date'],
+            reason: $data['separation_reason'] ?? null,
+        );
+
+        return back()->with('success', "{$employee->fullName()} separated.");
     }
 }

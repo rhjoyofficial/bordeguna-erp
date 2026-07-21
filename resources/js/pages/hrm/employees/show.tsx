@@ -1,7 +1,26 @@
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
+
+interface Option {
+    value: string;
+    label: string;
+}
 
 interface Assignment {
     id: number;
@@ -20,6 +39,9 @@ interface EmployeeDetail {
     name: string;
     employment_type: string;
     status: string;
+    separation_type: string | null;
+    separation_date: string | null;
+    separation_reason: string | null;
     personal_email: string | null;
     phone: string | null;
     national_id: string | null;
@@ -27,6 +49,13 @@ interface EmployeeDetail {
     joining_date: string | null;
     user: { name: string; email: string } | null;
     assignments: Assignment[];
+}
+
+interface ShowProps {
+    employee: EmployeeDetail;
+    transitionable_statuses: Option[];
+    can_separate: boolean;
+    separation_types: Option[];
 }
 
 const statusVariant: Record<string, 'secondary' | 'default' | 'outline' | 'destructive'> = {
@@ -37,6 +66,8 @@ const statusVariant: Record<string, 'secondary' | 'default' | 'outline' | 'destr
     separated: 'destructive',
 };
 
+const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+
 function Field({ label, value }: { label: string; value: string | null }) {
     return (
         <div>
@@ -46,27 +77,114 @@ function Field({ label, value }: { label: string; value: string | null }) {
     );
 }
 
-export default function EmployeeShow({ employee }: { employee: EmployeeDetail }) {
+function SeparateDialog({ employeeId, separationTypes }: { employeeId: number; separationTypes: Option[] }) {
+    const [open, setOpen] = useState(false);
+    const [type, setType] = useState(separationTypes[0]?.value ?? '');
+    const [date, setDate] = useState('');
+    const [reason, setReason] = useState('');
+
+    const submit = () => {
+        router.post(
+            route('hrm.employees.separate', employeeId),
+            { separation_type: type, separation_date: date, separation_reason: reason },
+            { preserveScroll: true, onSuccess: () => setOpen(false) },
+        );
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="ghost" size="sm">
+                    Separate
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Separate employee</DialogTitle>
+                    <DialogDescription>
+                        Records how and when they left, ends their assignments, and disables any ERP login. This cannot be undone.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="separation_type">Type</Label>
+                        <select id="separation_type" className={selectClass} value={type} onChange={(e) => setType(e.target.value)}>
+                            {separationTypes.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="separation_date">Last working date</Label>
+                        <Input id="separation_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="separation_reason">Reason (optional)</Label>
+                        <textarea
+                            id="separation_reason"
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            className="border-input bg-background focus-visible:ring-ring min-h-20 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button variant="destructive" onClick={submit} disabled={type === '' || date === ''}>
+                        Separate
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+export default function EmployeeShow({ employee, transitionable_statuses, can_separate, separation_types }: ShowProps) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employees', href: '/hrm/employees' },
         { title: employee.employee_code, href: `/hrm/employees/${employee.id}` },
     ];
 
+    const setStatus = (status: string) => router.patch(route('hrm.employees.status', employee.id), { status }, { preserveScroll: true });
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={employee.name} />
             <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">{employee.name}</h2>
                         <p className="text-sm text-muted-foreground">
                             {employee.employee_code} · {employee.employment_type}
                         </p>
                     </div>
-                    <Badge variant={statusVariant[employee.status] ?? 'secondary'} className="capitalize">
-                        {employee.status.replace('_', ' ')}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={statusVariant[employee.status] ?? 'secondary'} className="capitalize">
+                            {employee.status.replace('_', ' ')}
+                        </Badge>
+                        {transitionable_statuses.map((target) => (
+                            <Button key={target.value} variant="outline" size="sm" onClick={() => setStatus(target.value)}>
+                                {target.value === 'active' ? 'Set active' : `Set ${target.label.toLowerCase()}`}
+                            </Button>
+                        ))}
+                        {can_separate && <SeparateDialog employeeId={employee.id} separationTypes={separation_types} />}
+                    </div>
                 </div>
+
+                {employee.status === 'separated' && (
+                    <div className="border-destructive/40 rounded-xl border bg-destructive/5 p-4">
+                        <h3 className="mb-3 text-sm font-medium text-destructive">Separation</h3>
+                        <dl className="grid gap-4 sm:grid-cols-3">
+                            <Field label="Type" value={employee.separation_type} />
+                            <Field label="Last working date" value={employee.separation_date} />
+                            <Field label="Reason" value={employee.separation_reason} />
+                        </dl>
+                    </div>
+                )}
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Details</h3>

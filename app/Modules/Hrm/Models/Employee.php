@@ -5,6 +5,7 @@ namespace App\Modules\Hrm\Models;
 use App\Models\User;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
+use App\Modules\Hrm\Enums\SeparationType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,6 +30,9 @@ class Employee extends Model
         'last_name',
         'employment_type',
         'status',
+        'separation_type',
+        'separation_date',
+        'separation_reason',
         'personal_email',
         'phone',
         'national_id',
@@ -41,6 +45,8 @@ class Employee extends Model
         return [
             'employment_type' => EmploymentType::class,
             'status' => EmployeeStatus::class,
+            'separation_type' => SeparationType::class,
+            'separation_date' => 'date',
             'date_of_birth' => 'date',
             'joining_date' => 'date',
         ];
@@ -49,9 +55,30 @@ class Employee extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['first_name', 'last_name', 'employment_type', 'status', 'user_id'])
+            ->logOnly(['first_name', 'last_name', 'employment_type', 'status', 'separation_type', 'user_id'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
+    }
+
+    /**
+     * Lifecycle state machine (EMP-06). Separation is handled by its own action
+     * (it carries a type/date/reason and side effects), so it's not listed here.
+     *
+     * @return array<int, EmployeeStatus>
+     */
+    public function transitionableStatuses(): array
+    {
+        return match ($this->status) {
+            EmployeeStatus::Draft => [EmployeeStatus::Active],
+            EmployeeStatus::Active => [EmployeeStatus::OnLeave, EmployeeStatus::Suspended],
+            EmployeeStatus::OnLeave, EmployeeStatus::Suspended => [EmployeeStatus::Active],
+            EmployeeStatus::Separated => [],
+        };
+    }
+
+    public function canSeparate(): bool
+    {
+        return $this->status !== EmployeeStatus::Separated;
     }
 
     public function user(): BelongsTo
