@@ -2,6 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Models\ApprovalRequest;
+use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -49,6 +52,24 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
             ],
+            'pendingApprovalsCount' => fn () => $this->canReviewApprovals($request) ? $this->pendingApprovalsCount() : 0,
+            'canReviewApprovals' => fn () => $this->canReviewApprovals($request),
         ]);
+    }
+
+    private function canReviewApprovals(Request $request): bool
+    {
+        $user = $request->user();
+
+        if (! $user || ! app(BusinessContext::class)->hasBusiness()) {
+            return false;
+        }
+
+        return $user->can('inventory.stock.approve') || $user->can('purchasing.po.approve');
+    }
+
+    private function pendingApprovalsCount(): int
+    {
+        return ApprovalRequest::where('status', ApprovalStatus::Pending)->count();
     }
 }

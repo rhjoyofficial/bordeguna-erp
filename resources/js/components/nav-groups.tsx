@@ -76,6 +76,11 @@ function NavGroupSection({ group, activeUrl }: { group: NavGroup; activeUrl: str
                                         <Link href={item.url} prefetch>
                                             {item.icon && <item.icon />}
                                             <span>{item.title}</span>
+                                            {!!item.badge && (
+                                                <span className="bg-primary text-primary-foreground ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-medium">
+                                                    {item.badge}
+                                                </span>
+                                            )}
                                         </Link>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>

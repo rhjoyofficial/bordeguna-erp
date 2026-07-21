@@ -19,6 +19,7 @@ export interface NavItem {
     url: string;
     icon?: LucideIcon | null;
     isActive?: boolean;
+    badge?: number;
 }
 
 export interface PaginationLink {
@@ -46,6 +47,8 @@ export interface SharedData {
     quote: { message: string; author: string };
     auth: Auth;
     flash: { success?: string | null; error?: string | null };
+    pendingApprovalsCount: number;
+    canReviewApprovals: boolean;
     [key: string]: unknown;
 }
 
