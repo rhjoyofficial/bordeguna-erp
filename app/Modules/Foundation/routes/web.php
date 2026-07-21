@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
+use App\Modules\Foundation\Http\Controllers\OrganizationController;
 use App\Modules\Foundation\Http\Controllers\RoleManagementController;
 use App\Modules\Foundation\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
@@ -21,6 +22,31 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     Route::post('settings/roles', [RoleManagementController::class, 'store'])->name('roles.store');
     Route::put('settings/roles/{role}', [RoleManagementController::class, 'update'])->name('roles.update');
     Route::delete('settings/roles/{role}', [RoleManagementController::class, 'destroy'])->name('roles.destroy');
+
+    // Organization structure — Office → Department → Section tree + Designations.
+    // Gated by foundation.organization.manage; all units are business-scoped so
+    // route binding confines them to the current business automatically.
+    Route::get('settings/organization', [OrganizationController::class, 'index'])->name('organization.index');
+
+    Route::post('settings/organization/offices', [OrganizationController::class, 'storeOffice'])->name('organization.offices.store');
+    Route::put('settings/organization/offices/{office}', [OrganizationController::class, 'updateOffice'])->name('organization.offices.update');
+    Route::patch('settings/organization/offices/{office}/toggle', [OrganizationController::class, 'toggleOffice'])->name('organization.offices.toggle');
+    Route::delete('settings/organization/offices/{office}', [OrganizationController::class, 'destroyOffice'])->name('organization.offices.destroy');
+
+    Route::post('settings/organization/departments', [OrganizationController::class, 'storeDepartment'])->name('organization.departments.store');
+    Route::put('settings/organization/departments/{department}', [OrganizationController::class, 'updateDepartment'])->name('organization.departments.update');
+    Route::patch('settings/organization/departments/{department}/toggle', [OrganizationController::class, 'toggleDepartment'])->name('organization.departments.toggle');
+    Route::delete('settings/organization/departments/{department}', [OrganizationController::class, 'destroyDepartment'])->name('organization.departments.destroy');
+
+    Route::post('settings/organization/sections', [OrganizationController::class, 'storeSection'])->name('organization.sections.store');
+    Route::put('settings/organization/sections/{section}', [OrganizationController::class, 'updateSection'])->name('organization.sections.update');
+    Route::patch('settings/organization/sections/{section}/toggle', [OrganizationController::class, 'toggleSection'])->name('organization.sections.toggle');
+    Route::delete('settings/organization/sections/{section}', [OrganizationController::class, 'destroySection'])->name('organization.sections.destroy');
+
+    Route::post('settings/organization/designations', [OrganizationController::class, 'storeDesignation'])->name('organization.designations.store');
+    Route::put('settings/organization/designations/{designation}', [OrganizationController::class, 'updateDesignation'])->name('organization.designations.update');
+    Route::patch('settings/organization/designations/{designation}/toggle', [OrganizationController::class, 'toggleDesignation'])->name('organization.designations.toggle');
+    Route::delete('settings/organization/designations/{designation}', [OrganizationController::class, 'destroyDesignation'])->name('organization.designations.destroy');
 
     Route::get('businesses/switch', [BusinessSwitcherController::class, 'index'])->name('businesses.switch');
     Route::post('businesses/switch', [BusinessSwitcherController::class, 'store'])->name('businesses.switch.store');

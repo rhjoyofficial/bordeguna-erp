@@ -17,10 +17,13 @@ use Spatie\Permission\Models\Role;
 class FoundationPermissionsSeeder extends Seeder
 {
     private const ROLE_PERMISSIONS = [
-        // Managing who belongs to a business, and who holds which role, is an
-        // Owner-level responsibility — Managers/Staff do not administer access.
+        // Managing who belongs to a business, who holds which role, and the
+        // organization structure are Owner-level responsibilities. They are
+        // separate permissions so an HR-style role can later be granted org
+        // management without user-access management.
         'Owner' => [
             'foundation.users.manage',
+            'foundation.organization.manage',
         ],
     ];
 

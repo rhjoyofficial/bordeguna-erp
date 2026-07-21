@@ -50,6 +50,7 @@ export interface SharedData {
     pendingApprovalsCount: number;
     canReviewApprovals: boolean;
     canManageUsers: boolean;
+    canManageOrganization: boolean;
     [key: string]: unknown;
 }
 

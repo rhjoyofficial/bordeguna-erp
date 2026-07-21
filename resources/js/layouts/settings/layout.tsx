@@ -6,7 +6,7 @@ import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
-    const { canManageUsers } = usePage<SharedData>().props;
+    const { canManageUsers, canManageOrganization } = usePage<SharedData>().props;
     const currentPath = window.location.pathname;
 
     const sidebarNavItems: NavItem[] = [
@@ -20,6 +20,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                   { title: 'Roles', url: '/settings/roles', icon: null },
               ]
             : []),
+        ...(canManageOrganization ? [{ title: 'Organization', url: '/settings/organization', icon: null }] : []),
     ];
 
     return (
