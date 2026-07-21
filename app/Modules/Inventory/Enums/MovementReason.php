@@ -8,4 +8,5 @@ enum MovementReason: string
     case Usage = 'usage';
     case Adjustment = 'adjustment';
     case Transfer = 'transfer';
+    case PurchaseReturn = 'purchase_return';
 }

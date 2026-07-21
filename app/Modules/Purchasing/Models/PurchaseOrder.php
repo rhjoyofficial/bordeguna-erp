@@ -83,9 +83,25 @@ class PurchaseOrder extends Model
         return $this->hasMany(GoodsReceipt::class);
     }
 
+    public function returns(): HasMany
+    {
+        return $this->hasMany(PurchaseReturn::class);
+    }
+
     public function isReceivable(): bool
     {
         return $this->approvalRequest->status === ApprovalStatus::Approved
             && in_array($this->status, [PurchaseOrderStatus::Open, PurchaseOrderStatus::PartiallyReceived], true);
+    }
+
+    /**
+     * True once every line's received quantity has been fully returned (or
+     * nothing was ever received) — the gate CancelPurchaseOrder uses to allow
+     * cancelling a partially/fully received order once it's genuinely being
+     * abandoned rather than left in limbo.
+     */
+    public function hasNoOutstandingReceivedStock(): bool
+    {
+        return $this->lines->every(fn (PurchaseOrderLine $line) => (float) $line->quantityReturnable() <= 0.0);
     }
 }

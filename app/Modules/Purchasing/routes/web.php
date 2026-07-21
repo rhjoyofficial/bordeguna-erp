@@ -24,4 +24,5 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     Route::post('purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])->name('purchase-orders.cancel');
     Route::post('purchase-orders/{purchaseOrder}/payment-status', [PurchaseOrderController::class, 'updatePaymentStatus'])->name('purchase-orders.payment-status');
     Route::post('purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
+    Route::post('purchase-orders/{purchaseOrder}/returns', [PurchaseOrderController::class, 'returnGoods'])->name('purchase-orders.returns.store');
 });

@@ -7,17 +7,23 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use RuntimeException;
 
 /**
- * Only an untouched Open PO can be cancelled outright — once anything has
- * been received against it, cancelling would leave received stock with no
- * clean paper trail. A partially-received PO that's genuinely being
- * abandoned needs a return flow instead (not built yet).
+ * An untouched Open PO cancels outright. A PO with receipts against it only
+ * cancels once every received unit has been returned (RecordPurchaseReturn)
+ * — otherwise cancelling would leave received stock with no clean paper
+ * trail back to a live order.
  */
 class CancelPurchaseOrder
 {
     public function handle(PurchaseOrder $order): PurchaseOrder
     {
-        if ($order->status !== PurchaseOrderStatus::Open) {
-            throw new RuntimeException("Purchase order #{$order->id} can only be cancelled while Open (no goods received yet).");
+        if ($order->status === PurchaseOrderStatus::Cancelled) {
+            throw new RuntimeException("Purchase order #{$order->id} is already cancelled.");
+        }
+
+        $order->loadMissing('lines');
+
+        if ($order->status !== PurchaseOrderStatus::Open && ! $order->hasNoOutstandingReceivedStock()) {
+            throw new RuntimeException("Purchase order #{$order->id} still has received stock on hand — return it before cancelling.");
         }
 
         $order->update(['status' => PurchaseOrderStatus::Cancelled]);

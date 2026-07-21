@@ -14,6 +14,7 @@ interface Line {
     product: { id: number; name: string; sku: string; type: 'raw_material' | 'finished_good' | 'service' };
     quantity_ordered: string;
     quantity_received: string;
+    quantity_returned: string;
     unit_cost: string;
 }
 
@@ -23,6 +24,14 @@ interface Receipt {
     received_at: string;
     note: string | null;
     lines: { id: number; quantity_received: string; purchase_order_line: { id: number; product: { name: string; sku: string } } }[];
+}
+
+interface Return {
+    id: number;
+    returned_by: { name: string };
+    returned_at: string;
+    note: string | null;
+    lines: { id: number; quantity_returned: string; purchase_order_line: { id: number; product: { name: string; sku: string } } }[];
 }
 
 interface Order {
@@ -43,6 +52,7 @@ interface Order {
     };
     lines: Line[];
     goods_receipts: Receipt[];
+    returns: Return[];
 }
 
 const statusVariant: Record<Order['status'], 'secondary' | 'default' | 'outline' | 'destructive'> = {
@@ -62,25 +72,47 @@ function remaining(line: Line): number {
     return Math.max(0, parseFloat(line.quantity_ordered) - parseFloat(line.quantity_received));
 }
 
+function returnable(line: Line): number {
+    return Math.max(0, parseFloat(line.quantity_received) - parseFloat(line.quantity_returned));
+}
+
 function ReceiveGoodsForm({ order }: { order: Order }) {
     const receivableLines = order.lines.filter((line) => remaining(line) > 0);
-    const { data, setData, post, errors, processing, reset } = useForm<{
+    const { data, setData, post, errors, processing, reset, transform } = useForm<{
         note: string;
         lines: { purchase_order_line_id: number; quantity: string }[];
     }>({
         note: '',
-        lines: receivableLines.map((line) => ({ purchase_order_line_id: line.id, quantity: String(remaining(line)) })),
+        lines: [],
     });
+
+    // Untouched lines default to the full remaining quantity — computed here
+    // (not pre-seeded into `lines`) so it always reflects the current order
+    // prop rather than whatever it was when this component first mounted.
+    transform((formData) => ({
+        ...formData,
+        lines: receivableLines.map((line) => ({
+            purchase_order_line_id: line.id,
+            quantity: formData.lines.find((entry) => entry.purchase_order_line_id === line.id)?.quantity ?? String(remaining(line)),
+        })),
+    }));
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         post(route('purchasing.purchase-orders.receive', order.id), { onSuccess: () => reset() });
     };
 
+    // Upserts rather than only mapping existing entries — this component can
+    // stay mounted (returning null) from before anything was receivable, so
+    // useForm's initial `lines` must not be relied on to already contain a
+    // row for every current line.
     const updateQuantity = (lineId: number, quantity: string) => {
+        const exists = data.lines.some((entry) => entry.purchase_order_line_id === lineId);
         setData(
             'lines',
-            data.lines.map((entry) => (entry.purchase_order_line_id === lineId ? { ...entry, quantity } : entry)),
+            exists
+                ? data.lines.map((entry) => (entry.purchase_order_line_id === lineId ? { ...entry, quantity } : entry))
+                : [...data.lines, { purchase_order_line_id: lineId, quantity }],
         );
     };
 
@@ -101,7 +133,10 @@ function ReceiveGoodsForm({ order }: { order: Order }) {
                             {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>{' '}
                             <span className="text-xs text-muted-foreground">remaining {remaining(line)}</span>
                         </span>
-                        <Input value={entry?.quantity ?? ''} onChange={(e) => updateQuantity(line.id, e.target.value)} />
+                        <Input
+                            value={entry?.quantity ?? String(remaining(line))}
+                            onChange={(e) => updateQuantity(line.id, e.target.value)}
+                        />
                     </div>
                 );
             })}
@@ -117,16 +152,90 @@ function ReceiveGoodsForm({ order }: { order: Order }) {
     );
 }
 
+function ReturnGoodsForm({ order }: { order: Order }) {
+    const returnableLines = order.lines.filter((line) => returnable(line) > 0);
+    const { data, setData, post, errors, processing, reset, transform } = useForm<{
+        note: string;
+        lines: { purchase_order_line_id: number; quantity: string }[];
+    }>({
+        note: '',
+        lines: [],
+    });
+
+    // Untouched lines default to 0 (skipped) — computed here rather than
+    // pre-seeded into `lines`, since this component can stay mounted from
+    // before anything was returnable and must not rely on stale defaults
+    // captured at that earlier mount.
+    transform((formData) => ({
+        ...formData,
+        lines: returnableLines.map((line) => ({
+            purchase_order_line_id: line.id,
+            quantity: formData.lines.find((entry) => entry.purchase_order_line_id === line.id)?.quantity ?? '0',
+        })),
+    }));
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(route('purchasing.purchase-orders.returns.store', order.id), { onSuccess: () => reset() });
+    };
+
+    const updateQuantity = (lineId: number, quantity: string) => {
+        const exists = data.lines.some((entry) => entry.purchase_order_line_id === lineId);
+        setData(
+            'lines',
+            exists
+                ? data.lines.map((entry) => (entry.purchase_order_line_id === lineId ? { ...entry, quantity } : entry))
+                : [...data.lines, { purchase_order_line_id: lineId, quantity }],
+        );
+    };
+
+    if (returnableLines.length === 0) {
+        return null;
+    }
+
+    return (
+        <form onSubmit={submit} className="flex flex-col gap-3 rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+            <h3 className="font-medium">Return goods</h3>
+            <p className="text-sm text-muted-foreground">Reverses stock for whatever quantity is entered — leave a line at 0 to skip it.</p>
+            {returnableLines.map((line) => {
+                const entry = data.lines.find((e) => e.purchase_order_line_id === line.id);
+
+                return (
+                    <div key={line.id} className="grid grid-cols-[2fr_1fr] items-center gap-2">
+                        <span>
+                            {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>{' '}
+                            <span className="text-xs text-muted-foreground">returnable {returnable(line)}</span>
+                        </span>
+                        <Input value={entry?.quantity ?? '0'} onChange={(e) => updateQuantity(line.id, e.target.value)} />
+                    </div>
+                );
+            })}
+            <InputError message={errors.lines} />
+            <div className="grid gap-2">
+                <Label>Note (optional)</Label>
+                <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
+            </div>
+            <Button disabled={processing} variant="outline" className="w-fit">
+                Record return
+            </Button>
+        </form>
+    );
+}
+
 export default function PurchaseOrderShow({
     order,
     can_approve,
     can_receive,
     can_update_payment,
+    can_return,
+    can_cancel,
 }: {
     order: Order;
     can_approve: boolean;
     can_receive: boolean;
     can_update_payment: boolean;
+    can_return: boolean;
+    can_cancel: boolean;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchase orders', href: '/purchasing/purchase-orders' },
@@ -193,6 +302,7 @@ export default function PurchaseOrderShow({
                             <th className="py-2">Product</th>
                             <th className="py-2">Ordered</th>
                             <th className="py-2">Received</th>
+                            <th className="py-2">Returned</th>
                             <th className="py-2">Unit cost</th>
                         </tr>
                     </thead>
@@ -205,6 +315,7 @@ export default function PurchaseOrderShow({
                                 </td>
                                 <td className="py-2">{line.quantity_ordered}</td>
                                 <td className="py-2">{line.quantity_received}</td>
+                                <td className="py-2 text-muted-foreground">{line.quantity_returned}</td>
                                 <td className="py-2 text-muted-foreground">{line.unit_cost}</td>
                             </tr>
                         ))}
@@ -212,7 +323,7 @@ export default function PurchaseOrderShow({
                 </table>
 
                 <div className="flex flex-wrap gap-2">
-                    {order.status === 'open' && can_approve && (
+                    {can_cancel && (
                         <ConfirmDialog
                             trigger={
                                 <Button size="sm" variant="ghost">
@@ -259,6 +370,33 @@ export default function PurchaseOrderShow({
                                         <li key={line.id}>
                                             {line.purchase_order_line.product.name} ({line.purchase_order_line.product.sku}) —{' '}
                                             {line.quantity_received}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {can_return && order.status !== 'cancelled' && <ReturnGoodsForm order={order} />}
+
+                {order.returns.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                        <h3 className="font-medium">Return history</h3>
+                        {order.returns.map((purchaseReturn) => (
+                            <div
+                                key={purchaseReturn.id}
+                                className="rounded-xl border border-sidebar-border/70 p-3 text-sm dark:border-sidebar-border"
+                            >
+                                <p className="text-muted-foreground">
+                                    {purchaseReturn.returned_by.name} — {purchaseReturn.returned_at}
+                                    {purchaseReturn.note && ` — ${purchaseReturn.note}`}
+                                </p>
+                                <ul className="mt-1 list-disc pl-5">
+                                    {purchaseReturn.lines.map((line) => (
+                                        <li key={line.id}>
+                                            {line.purchase_order_line.product.name} ({line.purchase_order_line.product.sku}) —{' '}
+                                            {line.quantity_returned}
                                         </li>
                                     ))}
                                 </ul>

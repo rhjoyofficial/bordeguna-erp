@@ -166,6 +166,7 @@ it('refuses to cancel a purchase order that already has receipts against it', fu
         createdBy: $this->manager,
     );
     $order->update(['status' => PurchaseOrderStatus::PartiallyReceived]);
+    $order->lines->first()->update(['quantity_received' => '4']);
 
-    app(CancelPurchaseOrder::class)->handle($order->fresh());
+    app(CancelPurchaseOrder::class)->handle($order->fresh(['lines']));
 })->throws(RuntimeException::class);

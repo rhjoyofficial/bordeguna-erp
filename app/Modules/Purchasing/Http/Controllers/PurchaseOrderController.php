@@ -10,8 +10,10 @@ use App\Modules\Purchasing\Actions\ApprovePurchaseOrder;
 use App\Modules\Purchasing\Actions\CancelPurchaseOrder;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
+use App\Modules\Purchasing\Actions\RecordPurchaseReturn;
 use App\Modules\Purchasing\Actions\UpdatePurchaseOrderPaymentStatus;
 use App\Modules\Purchasing\Enums\PaymentStatus;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
 use Illuminate\Http\RedirectResponse;
@@ -59,15 +61,23 @@ class PurchaseOrderController extends Controller
             'goodsReceipts.receivedBy:id,name',
             'goodsReceipts.lines.purchaseOrderLine:id,product_id',
             'goodsReceipts.lines.purchaseOrderLine.product:id,name,sku',
+            'returns.returnedBy:id,name',
+            'returns.lines.purchaseOrderLine:id,product_id',
+            'returns.lines.purchaseOrderLine.product:id,name,sku',
         ]);
 
         $user = request()->user();
+        $canApprove = $user->can('purchasing.po.approve');
 
         return Inertia::render('purchasing/purchase-orders/show', [
             'order' => $purchaseOrder,
-            'can_approve' => $user->can('purchasing.po.approve'),
+            'can_approve' => $canApprove,
             'can_receive' => $user->can('purchasing.receipt.record'),
             'can_update_payment' => $user->can('purchasing.payment.update'),
+            'can_return' => $canApprove,
+            'can_cancel' => $canApprove
+                && $purchaseOrder->status !== PurchaseOrderStatus::Cancelled
+                && ($purchaseOrder->status === PurchaseOrderStatus::Open || $purchaseOrder->hasNoOutstandingReceivedStock()),
         ]);
     }
 
@@ -168,5 +178,31 @@ class PurchaseOrderController extends Controller
         $action->handle($purchaseOrder, $lineReceipts, $request->user(), $data['note'] ?? null);
 
         return back()->with('success', 'Goods receipt recorded.');
+    }
+
+    public function returnGoods(Request $request, PurchaseOrder $purchaseOrder, RecordPurchaseReturn $action): RedirectResponse
+    {
+        $this->authorize('purchasing.po.approve');
+
+        $data = $request->validate([
+            'note' => ['nullable', 'string'],
+            'lines' => ['required', 'array', 'min:1'],
+            'lines.*.purchase_order_line_id' => ['required', 'exists:purchase_order_lines,id'],
+            'lines.*.quantity' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $purchaseOrder->load('lines');
+
+        $lineReturns = collect($data['lines'])
+            ->map(fn (array $entry) => [
+                'line' => $purchaseOrder->lines->firstWhere('id', $entry['purchase_order_line_id']),
+                'quantity' => $entry['quantity'],
+            ])
+            ->filter(fn (array $entry) => $entry['line'] !== null)
+            ->all();
+
+        $action->handle($purchaseOrder, $lineReturns, $request->user(), $data['note'] ?? null);
+
+        return back()->with('success', 'Purchase return recorded.');
     }
 }

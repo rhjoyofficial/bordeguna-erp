@@ -18,6 +18,7 @@ class PurchaseOrderLine extends Model
         'product_id',
         'quantity_ordered',
         'quantity_received',
+        'quantity_returned',
         'unit_cost',
     ];
 
@@ -26,6 +27,7 @@ class PurchaseOrderLine extends Model
         return [
             'quantity_ordered' => 'decimal:4',
             'quantity_received' => 'decimal:4',
+            'quantity_returned' => 'decimal:4',
             'unit_cost' => 'decimal:4',
         ];
     }
@@ -43,5 +45,15 @@ class PurchaseOrderLine extends Model
     public function quantityRemaining(): string
     {
         return (string) ((float) $this->quantity_ordered - (float) $this->quantity_received);
+    }
+
+    /**
+     * Net received-and-not-yet-returned quantity — the ceiling on how much
+     * more can be returned, and what must reach zero before the owning
+     * order can be cancelled after receiving anything.
+     */
+    public function quantityReturnable(): string
+    {
+        return (string) ((float) $this->quantity_received - (float) $this->quantity_returned);
     }
 }
