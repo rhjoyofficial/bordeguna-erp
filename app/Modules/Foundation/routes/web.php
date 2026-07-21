@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
+use App\Modules\Foundation\Http\Controllers\RoleManagementController;
 use App\Modules\Foundation\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
 
@@ -13,6 +14,13 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     Route::put('settings/team/{user}', [UserManagementController::class, 'update'])->name('users.update');
     Route::patch('settings/team/{user}/toggle-active', [UserManagementController::class, 'toggleActive'])->name('users.toggle-active');
     Route::delete('settings/team/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
+
+    // Role & permission management — same admin permission as team management.
+    // {role} is checked against the current business in the controller.
+    Route::get('settings/roles', [RoleManagementController::class, 'index'])->name('roles.index');
+    Route::post('settings/roles', [RoleManagementController::class, 'store'])->name('roles.store');
+    Route::put('settings/roles/{role}', [RoleManagementController::class, 'update'])->name('roles.update');
+    Route::delete('settings/roles/{role}', [RoleManagementController::class, 'destroy'])->name('roles.destroy');
 
     Route::get('businesses/switch', [BusinessSwitcherController::class, 'index'])->name('businesses.switch');
     Route::post('businesses/switch', [BusinessSwitcherController::class, 'store'])->name('businesses.switch.store');

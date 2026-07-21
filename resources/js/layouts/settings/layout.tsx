@@ -14,7 +14,12 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         { title: 'Password', url: '/settings/password', icon: null },
         { title: 'Appearance', url: '/settings/appearance', icon: null },
         { title: 'Reasons', url: '/settings/reasons', icon: null },
-        ...(canManageUsers ? [{ title: 'Team', url: '/settings/team', icon: null }] : []),
+        ...(canManageUsers
+            ? [
+                  { title: 'Team', url: '/settings/team', icon: null },
+                  { title: 'Roles', url: '/settings/roles', icon: null },
+              ]
+            : []),
     ];
 
     return (
