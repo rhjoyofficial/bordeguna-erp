@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Foundation\Http\Controllers\BusinessSettingsController;
 use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
 use App\Modules\Foundation\Http\Controllers\OrganizationController;
 use App\Modules\Foundation\Http\Controllers\RoleManagementController;
@@ -22,6 +23,11 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     Route::post('settings/roles', [RoleManagementController::class, 'store'])->name('roles.store');
     Route::put('settings/roles/{role}', [RoleManagementController::class, 'update'])->name('roles.update');
     Route::delete('settings/roles/{role}', [RoleManagementController::class, 'destroy'])->name('roles.destroy');
+
+    // Company profile for the current business (name, contact, currency,
+    // timezone, fiscal year). Same admin permission as organization structure.
+    Route::get('settings/business', [BusinessSettingsController::class, 'edit'])->name('business.edit');
+    Route::patch('settings/business', [BusinessSettingsController::class, 'update'])->name('business.update');
 
     // Organization structure — Office → Department → Section tree + Designations.
     // Gated by foundation.organization.manage; all units are business-scoped so

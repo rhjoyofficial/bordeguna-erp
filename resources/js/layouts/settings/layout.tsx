@@ -20,7 +20,12 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                   { title: 'Roles', url: '/settings/roles', icon: null },
               ]
             : []),
-        ...(canManageOrganization ? [{ title: 'Organization', url: '/settings/organization', icon: null }] : []),
+        ...(canManageOrganization
+            ? [
+                  { title: 'Business', url: '/settings/business', icon: null },
+                  { title: 'Organization', url: '/settings/organization', icon: null },
+              ]
+            : []),
     ];
 
     return (

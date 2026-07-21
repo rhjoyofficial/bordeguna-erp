@@ -13,6 +13,13 @@ class Business extends Model
 
     protected $fillable = [
         'name',
+        'legal_name',
+        'address',
+        'phone',
+        'email',
+        'currency',
+        'timezone',
+        'fiscal_year_start_month',
         'slug',
         'is_active',
     ];
@@ -21,6 +28,7 @@ class Business extends Model
     {
         return [
             'is_active' => 'boolean',
+            'fiscal_year_start_month' => 'integer',
         ];
     }
 
