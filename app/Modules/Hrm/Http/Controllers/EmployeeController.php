@@ -3,11 +3,14 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Models\Department;
 use App\Modules\Foundation\Models\Designation;
 use App\Modules\Foundation\Models\Office;
+use App\Modules\Foundation\Models\Section;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\CreateEmployee;
 use App\Modules\Hrm\Actions\SeparateEmployee;
+use App\Modules\Hrm\Actions\TransferEmployee;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
 use App\Modules\Hrm\Enums\SeparationType;
@@ -107,8 +110,11 @@ class EmployeeController extends Controller
             'user:id,name,email',
             'assignments' => fn ($query) => $query->latest('effective_from')->with([
                 'office:id,name', 'department:id,name', 'section:id,name', 'designation:id,name',
+                'supervisor:id,first_name,last_name,employee_code',
             ]),
         ]);
+
+        $businessId = app(BusinessContext::class)->id();
 
         return Inertia::render('hrm/employees/show', [
             'employee' => [
@@ -133,6 +139,9 @@ class EmployeeController extends Controller
                     'department' => $assignment->department?->name,
                     'section' => $assignment->section?->name,
                     'designation' => $assignment->designation?->name,
+                    'supervisor' => $assignment->supervisor
+                        ? $assignment->supervisor->fullName().' ('.$assignment->supervisor->employee_code.')'
+                        : null,
                     'effective_from' => $assignment->effective_from?->toDateString(),
                     'effective_to' => $assignment->effective_to?->toDateString(),
                 ]),
@@ -142,6 +151,27 @@ class EmployeeController extends Controller
             'can_separate' => $employee->canSeparate(),
             'separation_types' => collect(SeparationType::cases())
                 ->map(fn (SeparationType $type) => ['value' => $type->value, 'label' => $type->label()]),
+            // Reassignment form data: the org tree, job titles, and colleagues
+            // who could be a supervisor. Only meaningful while still employed.
+            'can_transfer' => $employee->status !== EmployeeStatus::Separated,
+            'offices_tree' => Office::where('is_active', true)
+                ->with([
+                    'departments' => fn ($query) => $query->where('is_active', true)->orderBy('name')
+                        ->with(['sections' => fn ($q) => $q->where('is_active', true)->orderBy('name')]),
+                ])->orderBy('name')->get()
+                ->map(fn (Office $office) => [
+                    'id' => $office->id,
+                    'name' => $office->name,
+                    'departments' => $office->departments->map(fn (Department $department) => [
+                        'id' => $department->id,
+                        'name' => $department->name,
+                        'sections' => $department->sections->map(fn (Section $section) => ['id' => $section->id, 'name' => $section->name]),
+                    ]),
+                ]),
+            'designations' => Designation::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'supervisors' => Employee::whereHas('assignments', fn ($query) => $query->active()->where('is_primary', true))
+                ->where('id', '!=', $employee->id)->orderBy('first_name')->orderBy('last_name')->get()
+                ->map(fn (Employee $candidate) => ['id' => $candidate->id, 'name' => $candidate->fullName().' ('.$candidate->employee_code.')']),
         ]);
     }
 
@@ -184,5 +214,43 @@ class EmployeeController extends Controller
         );
 
         return back()->with('success', "{$employee->fullName()} separated.");
+    }
+
+    public function transfer(Request $request, Employee $employee, TransferEmployee $action): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+
+        if ($employee->status === EmployeeStatus::Separated) {
+            return back()->with('error', 'A separated employee cannot be reassigned.');
+        }
+
+        $current = $employee->currentAssignment();
+        if (! $current) {
+            return back()->with('error', 'This employee has no active assignment to reassign.');
+        }
+
+        $businessId = app(BusinessContext::class)->id();
+        $eligibleSupervisors = Employee::whereHas('assignments', fn ($query) => $query->active()->where('is_primary', true))
+            ->where('id', '!=', $employee->id)->pluck('id')->all();
+
+        $data = $request->validate([
+            'effective_from' => ['required', 'date', 'after_or_equal:'.$current->effective_from->toDateString()],
+            'office_id' => ['nullable', Rule::exists('offices', 'id')->where('business_id', $businessId)],
+            'department_id' => ['nullable', Rule::exists('departments', 'id')->where('office_id', $request->integer('office_id'))],
+            'section_id' => ['nullable', Rule::exists('sections', 'id')->where('department_id', $request->integer('department_id'))],
+            'designation_id' => ['nullable', Rule::exists('designations', 'id')->where('business_id', $businessId)],
+            'supervisor_id' => ['nullable', Rule::in($eligibleSupervisors)],
+        ]);
+
+        $action->handle($employee, $current, $data['effective_from'], [
+            'office_id' => $data['office_id'] ?? null,
+            'department_id' => $data['department_id'] ?? null,
+            'section_id' => $data['section_id'] ?? null,
+            'designation_id' => $data['designation_id'] ?? null,
+            'supervisor_id' => $data['supervisor_id'] ?? null,
+        ]);
+
+        return back()->with('success', "{$employee->fullName()} reassigned.");
     }
 }

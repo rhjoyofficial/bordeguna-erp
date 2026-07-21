@@ -22,6 +22,17 @@ interface Option {
     label: string;
 }
 
+interface NamedOption {
+    id: number;
+    name: string;
+}
+
+interface OfficeNode {
+    id: number;
+    name: string;
+    departments: { id: number; name: string; sections: NamedOption[] }[];
+}
+
 interface Assignment {
     id: number;
     is_primary: boolean;
@@ -29,6 +40,7 @@ interface Assignment {
     department: string | null;
     section: string | null;
     designation: string | null;
+    supervisor: string | null;
     effective_from: string | null;
     effective_to: string | null;
 }
@@ -56,6 +68,10 @@ interface ShowProps {
     transitionable_statuses: Option[];
     can_separate: boolean;
     separation_types: Option[];
+    can_transfer: boolean;
+    offices_tree: OfficeNode[];
+    designations: NamedOption[];
+    supervisors: NamedOption[];
 }
 
 const statusVariant: Record<string, 'secondary' | 'default' | 'outline' | 'destructive'> = {
@@ -143,7 +159,161 @@ function SeparateDialog({ employeeId, separationTypes }: { employeeId: number; s
     );
 }
 
-export default function EmployeeShow({ employee, transitionable_statuses, can_separate, separation_types }: ShowProps) {
+function TransferDialog({
+    employeeId,
+    offices,
+    designations,
+    supervisors,
+}: {
+    employeeId: number;
+    offices: OfficeNode[];
+    designations: NamedOption[];
+    supervisors: NamedOption[];
+}) {
+    const [open, setOpen] = useState(false);
+    const [effectiveFrom, setEffectiveFrom] = useState('');
+    const [officeId, setOfficeId] = useState('');
+    const [departmentId, setDepartmentId] = useState('');
+    const [sectionId, setSectionId] = useState('');
+    const [designationId, setDesignationId] = useState('');
+    const [supervisorId, setSupervisorId] = useState('');
+
+    const departments = offices.find((office) => String(office.id) === officeId)?.departments ?? [];
+    const sections = departments.find((department) => String(department.id) === departmentId)?.sections ?? [];
+
+    const changeOffice = (value: string) => {
+        setOfficeId(value);
+        setDepartmentId('');
+        setSectionId('');
+    };
+    const changeDepartment = (value: string) => {
+        setDepartmentId(value);
+        setSectionId('');
+    };
+
+    const submit = () => {
+        const asId = (value: string) => (value === '' ? null : Number(value));
+        router.post(
+            route('hrm.employees.transfer', employeeId),
+            {
+                effective_from: effectiveFrom,
+                office_id: asId(officeId),
+                department_id: asId(departmentId),
+                section_id: asId(sectionId),
+                designation_id: asId(designationId),
+                supervisor_id: asId(supervisorId),
+            },
+            { preserveScroll: true, onSuccess: () => setOpen(false) },
+        );
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                    Reassign
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Reassign employee</DialogTitle>
+                    <DialogDescription>
+                        Opens a new placement from the effective date and ends the current one. The previous placement is kept in the assignment
+                        history.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="effective_from">Effective from</Label>
+                        <Input id="effective_from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-2">
+                            <Label htmlFor="office_id">Office</Label>
+                            <select id="office_id" className={selectClass} value={officeId} onChange={(e) => changeOffice(e.target.value)}>
+                                <option value="">— None —</option>
+                                {offices.map((office) => (
+                                    <option key={office.id} value={office.id}>
+                                        {office.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="department_id">Department</Label>
+                            <select
+                                id="department_id"
+                                className={selectClass}
+                                value={departmentId}
+                                onChange={(e) => changeDepartment(e.target.value)}
+                                disabled={officeId === ''}
+                            >
+                                <option value="">— None —</option>
+                                {departments.map((department) => (
+                                    <option key={department.id} value={department.id}>
+                                        {department.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="section_id">Section</Label>
+                            <select id="section_id" className={selectClass} value={sectionId} onChange={(e) => setSectionId(e.target.value)} disabled={departmentId === ''}>
+                                <option value="">— None —</option>
+                                {sections.map((section) => (
+                                    <option key={section.id} value={section.id}>
+                                        {section.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="designation_id">Designation</Label>
+                            <select id="designation_id" className={selectClass} value={designationId} onChange={(e) => setDesignationId(e.target.value)}>
+                                <option value="">— None —</option>
+                                {designations.map((designation) => (
+                                    <option key={designation.id} value={designation.id}>
+                                        {designation.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="supervisor_id">Supervisor</Label>
+                        <select id="supervisor_id" className={selectClass} value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)}>
+                            <option value="">— None —</option>
+                            {supervisors.map((supervisor) => (
+                                <option key={supervisor.id} value={supervisor.id}>
+                                    {supervisor.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button onClick={submit} disabled={effectiveFrom === ''}>
+                        Reassign
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+export default function EmployeeShow({
+    employee,
+    transitionable_statuses,
+    can_separate,
+    separation_types,
+    can_transfer,
+    offices_tree,
+    designations,
+    supervisors,
+}: ShowProps) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employees', href: '/hrm/employees' },
         { title: employee.employee_code, href: `/hrm/employees/${employee.id}` },
@@ -171,6 +341,9 @@ export default function EmployeeShow({ employee, transitionable_statuses, can_se
                                 {target.value === 'active' ? 'Set active' : `Set ${target.label.toLowerCase()}`}
                             </Button>
                         ))}
+                        {can_transfer && (
+                            <TransferDialog employeeId={employee.id} offices={offices_tree} designations={designations} supervisors={supervisors} />
+                        )}
                         {can_separate && <SeparateDialog employeeId={employee.id} separationTypes={separation_types} />}
                     </div>
                 </div>
@@ -198,15 +371,16 @@ export default function EmployeeShow({ employee, transitionable_statuses, can_se
                     </dl>
                 </div>
 
-                <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">Assignments</h3>
-                    <table className="w-full text-sm">
+                <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
+                    <h3 className="mb-3 text-sm font-medium">Assignment history</h3>
+                    <table className="w-full min-w-[46rem] text-sm">
                         <thead>
                             <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
                                 <th className="py-2">Office</th>
                                 <th className="py-2">Department</th>
                                 <th className="py-2">Section</th>
                                 <th className="py-2">Designation</th>
+                                <th className="py-2">Supervisor</th>
                                 <th className="py-2">From</th>
                                 <th className="py-2">To</th>
                             </tr>
@@ -221,6 +395,7 @@ export default function EmployeeShow({ employee, transitionable_statuses, can_se
                                     <td className="py-2 text-muted-foreground">{assignment.department ?? '—'}</td>
                                     <td className="py-2 text-muted-foreground">{assignment.section ?? '—'}</td>
                                     <td className="py-2 text-muted-foreground">{assignment.designation ?? '—'}</td>
+                                    <td className="py-2 text-muted-foreground">{assignment.supervisor ?? '—'}</td>
                                     <td className="py-2 text-muted-foreground">{assignment.effective_from ?? '—'}</td>
                                     <td className="py-2 text-muted-foreground">{assignment.effective_to ?? 'Current'}</td>
                                 </tr>

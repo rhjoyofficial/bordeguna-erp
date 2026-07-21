@@ -1,0 +1,37 @@
+<?php
+
+namespace App\Modules\Hrm\Actions;
+
+use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\EmployeeAssignment;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Reassigns an employee to a new placement effective from a date, using the
+ * effective-dated close-old-open-new pattern (ORG-07): the current assignment
+ * is ended and a fresh primary one is opened. History is never overwritten, so
+ * "where did this person sit on date X" stays answerable.
+ */
+class TransferEmployee
+{
+    /**
+     * @param  array<string, int|null>  $placement  office_id/department_id/section_id/designation_id/supervisor_id
+     */
+    public function handle(Employee $employee, EmployeeAssignment $current, string $effectiveFrom, array $placement): EmployeeAssignment
+    {
+        return DB::transaction(function () use ($employee, $current, $effectiveFrom, $placement) {
+            $current->update(['effective_to' => $effectiveFrom]);
+
+            return $employee->assignments()->create([
+                'office_id' => $placement['office_id'] ?? null,
+                'department_id' => $placement['department_id'] ?? null,
+                'section_id' => $placement['section_id'] ?? null,
+                'designation_id' => $placement['designation_id'] ?? null,
+                'supervisor_id' => $placement['supervisor_id'] ?? null,
+                'is_primary' => true,
+                'effective_from' => $effectiveFrom,
+                'effective_to' => null,
+            ]);
+        });
+    }
+}

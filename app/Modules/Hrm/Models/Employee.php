@@ -96,7 +96,10 @@ class Employee extends Model
      */
     public function currentAssignment(): ?EmployeeAssignment
     {
-        return $this->assignments()->where('is_primary', true)->active()->latest('effective_from')->first();
+        // Newest wins if a transfer leaves the old and new assignment overlapping
+        // on the transfer date itself.
+        return $this->assignments()->where('is_primary', true)->active()
+            ->orderByDesc('effective_from')->orderByDesc('id')->first();
     }
 
     public function fullName(): string
