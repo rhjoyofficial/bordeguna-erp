@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Actions;
 
 use App\Models\User;
+use App\Modules\Foundation\Actions\NotifyApprovers;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\StockRequestType;
@@ -43,7 +44,7 @@ class SubmitStockRequest
             throw new InvalidArgumentException('unitCost is required for an increase-direction adjustment request.');
         }
 
-        return DB::transaction(function () use ($type, $product, $warehouse, $quantity, $reason, $requestedBy, $targetWarehouse, $direction, $unitCost, $note) {
+        $request = DB::transaction(function () use ($type, $product, $warehouse, $quantity, $reason, $requestedBy, $targetWarehouse, $direction, $unitCost, $note) {
             $request = StockRequest::create([
                 'type' => $type,
                 'product_id' => $product->id,
@@ -60,5 +61,15 @@ class SubmitStockRequest
 
             return $request;
         });
+
+        // A stock request always lands pending — tell whoever can approve here.
+        app(NotifyApprovers::class)->handle(
+            businessId: $request->business_id,
+            permission: 'inventory.stock.approve',
+            summary: "Stock {$type->value} of {$quantity} × {$product->name} at {$warehouse->name}",
+            excludeUserId: $requestedBy->id,
+        );
+
+        return $request;
     }
 }

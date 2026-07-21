@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Actions;
 
 use App\Models\User;
+use App\Modules\Foundation\Actions\NotifyApprovers;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -27,7 +28,7 @@ class CreatePurchaseOrder
             throw new InvalidArgumentException('A purchase order needs at least one line item.');
         }
 
-        return DB::transaction(function () use ($supplier, $warehouse, $lines, $createdBy, $expectedDate, $note) {
+        $order = DB::transaction(function () use ($supplier, $warehouse, $lines, $createdBy, $expectedDate, $note) {
             $poNumber = sprintf('PO-%06d', PurchaseOrder::count() + 1);
 
             $order = PurchaseOrder::create([
@@ -56,5 +57,17 @@ class CreatePurchaseOrder
 
             return $order->fresh(['lines', 'approvalRequest']);
         });
+
+        // Only notify when it actually needs review — a self-approved PO doesn't.
+        if ($order->approvalRequest->isPending()) {
+            app(NotifyApprovers::class)->handle(
+                businessId: $order->business_id,
+                permission: 'purchasing.po.approve',
+                summary: "Purchase order {$order->po_number} for {$supplier->name}",
+                excludeUserId: $createdBy->id,
+            );
+        }
+
+        return $order;
     }
 }
