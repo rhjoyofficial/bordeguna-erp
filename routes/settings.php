@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
+use App\Http\Controllers\Settings\ReasonController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -18,4 +19,11 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/appearance', function () {
         return Inertia::render('settings/appearance');
     })->name('appearance');
+});
+
+Route::middleware(['auth', 'business'])->group(function () {
+    Route::get('settings/reasons', [ReasonController::class, 'index'])->name('reasons.index');
+    Route::post('settings/reasons', [ReasonController::class, 'store'])->name('reasons.store');
+    Route::put('settings/reasons/{reason}', [ReasonController::class, 'update'])->name('reasons.update');
+    Route::patch('settings/reasons/{reason}/toggle-active', [ReasonController::class, 'toggleActive'])->name('reasons.toggle-active');
 });
