@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Foundation\Http\Controllers\AttachmentController;
 use App\Modules\Foundation\Http\Controllers\BusinessSettingsController;
 use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
 use App\Modules\Foundation\Http\Controllers\OrganizationController;
@@ -28,6 +29,12 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     // timezone, fiscal year). Same admin permission as organization structure.
     Route::get('settings/business', [BusinessSettingsController::class, 'edit'])->name('business.edit');
     Route::patch('settings/business', [BusinessSettingsController::class, 'update'])->name('business.update');
+    Route::post('settings/business/logo', [BusinessSettingsController::class, 'uploadLogo'])->name('business.logo.store');
+    Route::delete('settings/business/logo', [BusinessSettingsController::class, 'deleteLogo'])->name('business.logo.destroy');
+
+    // Streams a stored attachment inline; the binding is business-scoped so a
+    // file from another business 404s.
+    Route::get('attachments/{attachment}', [AttachmentController::class, 'show'])->name('attachments.show');
 
     // Organization structure — Office → Department → Section tree + Designations.
     // Gated by foundation.organization.manage; all units are business-scoped so

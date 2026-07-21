@@ -3,6 +3,8 @@
 namespace App\Modules\Foundation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Actions\DeleteAttachment;
+use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\RedirectResponse;
@@ -28,11 +30,13 @@ class BusinessSettingsController extends Controller
         $this->authorize('foundation.organization.manage');
 
         $business = Business::findOrFail(app(BusinessContext::class)->id());
+        $logo = $business->attachmentInCollection('logo');
 
         return Inertia::render('settings/business', [
             'business' => $business->only([
                 'id', 'name', 'legal_name', 'address', 'phone', 'email', 'currency', 'timezone', 'fiscal_year_start_month',
             ]),
+            'logo_url' => $logo?->url(),
             'currencies' => self::CURRENCIES,
             'timezones' => self::TIMEZONES,
         ]);
@@ -59,4 +63,40 @@ class BusinessSettingsController extends Controller
 
         return back()->with('success', 'Business settings saved.');
     }
+
+    public function uploadLogo(Request $request, StoreAttachment $storeAttachment): RedirectResponse
+    {
+        $this->authorize('foundation.organization.manage');
+
+        $request->validate([
+            'logo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        $business = Business::findOrFail(app(BusinessContext::class)->id());
+
+        $storeAttachment->handle(
+            attachable: $business,
+            file: $request->file('logo'),
+            collection: 'logo',
+            uploadedBy: $request->user(),
+            singleton: true,
+        );
+
+        return back()->with('success', 'Logo updated.');
+    }
+
+    public function deleteLogo(DeleteAttachment $deleteAttachment): RedirectResponse
+    {
+        $this->authorize('foundation.organization.manage');
+
+        $business = Business::findOrFail(app(BusinessContext::class)->id());
+        $logo = $business->attachmentInCollection('logo');
+
+        if ($logo) {
+            $deleteAttachment->handle($logo);
+        }
+
+        return back()->with('success', 'Logo removed.');
+    }
 }
+
