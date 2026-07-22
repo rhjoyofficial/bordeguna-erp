@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
+use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\SelfServiceController;
 use App\Modules\Hrm\Http\Controllers\ShiftController;
 use Illuminate\Support\Facades\Route;
@@ -33,4 +34,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::put('shifts/{shift}', [ShiftController::class, 'update'])->name('shifts.update');
     Route::patch('shifts/{shift}/toggle', [ShiftController::class, 'toggle'])->name('shifts.toggle');
     Route::delete('shifts/{shift}', [ShiftController::class, 'destroy'])->name('shifts.destroy');
+
+    // Scheduling — named/versioned holiday calendars (SCH-06/07) + their holidays.
+    Route::get('calendars', [HolidayCalendarController::class, 'index'])->name('calendars.index');
+    Route::post('calendars', [HolidayCalendarController::class, 'store'])->name('calendars.store');
+    Route::put('calendars/{calendar}', [HolidayCalendarController::class, 'update'])->name('calendars.update');
+    Route::patch('calendars/{calendar}/toggle', [HolidayCalendarController::class, 'toggle'])->name('calendars.toggle');
+    Route::delete('calendars/{calendar}', [HolidayCalendarController::class, 'destroy'])->name('calendars.destroy');
+    Route::post('calendars/{calendar}/holidays', [HolidayCalendarController::class, 'storeHoliday'])->name('calendars.holidays.store');
+    Route::delete('calendars/{calendar}/holidays/{holiday}', [HolidayCalendarController::class, 'destroyHoliday'])->name('calendars.holidays.destroy');
 });
