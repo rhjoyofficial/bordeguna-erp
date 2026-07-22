@@ -14,9 +14,11 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\CreateEmployee;
 use App\Modules\Hrm\Actions\SeparateEmployee;
 use App\Modules\Hrm\Actions\TransferEmployee;
+use App\Modules\Hrm\Actions\UpdateEmployee;
 use App\Modules\Hrm\Enums\EmployeeDocumentType;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
+use App\Modules\Hrm\Enums\MfsProvider;
 use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
@@ -133,9 +135,24 @@ class EmployeeController extends Controller
                 'separation_reason' => $employee->separation_reason,
                 'personal_email' => $employee->personal_email,
                 'phone' => $employee->phone,
+                'present_address' => $employee->present_address,
+                'permanent_address' => $employee->permanent_address,
                 'national_id' => $employee->national_id,
+                'birth_certificate_no' => $employee->birth_certificate_no,
                 'date_of_birth' => $employee->date_of_birth?->toDateString(),
                 'joining_date' => $employee->joining_date?->toDateString(),
+                'confirmation_date' => $employee->confirmation_date?->toDateString(),
+                'contract_end_date' => $employee->contract_end_date?->toDateString(),
+                'emergency_contact_name' => $employee->emergency_contact_name,
+                'emergency_contact_phone' => $employee->emergency_contact_phone,
+                'emergency_contact_relationship' => $employee->emergency_contact_relationship,
+                'bank_account_name' => $employee->bank_account_name,
+                'bank_account_number' => $employee->bank_account_number,
+                'bank_name' => $employee->bank_name,
+                'bank_branch' => $employee->bank_branch,
+                'bank_routing_number' => $employee->bank_routing_number,
+                'mfs_provider' => $employee->mfs_provider?->label(),
+                'mfs_account_number' => $employee->mfs_account_number,
                 'user' => $employee->user ? ['name' => $employee->user->name, 'email' => $employee->user->email] : null,
                 'assignments' => $employee->assignments->map(fn (EmployeeAssignment $assignment) => [
                     'id' => $assignment->id,
@@ -194,6 +211,88 @@ class EmployeeController extends Controller
             'document_types' => collect(EmployeeDocumentType::cases())
                 ->map(fn (EmployeeDocumentType $type) => ['value' => $type->value, 'label' => $type->label()]),
         ]);
+    }
+
+    public function edit(Employee $employee): Response
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+
+        return Inertia::render('hrm/employees/edit', [
+            'employee' => array_merge(
+                ['id' => $employee->id, 'employee_code' => $employee->employee_code, 'name' => $employee->fullName()],
+                collect(Employee::EDITABLE_FIELDS)->mapWithKeys(fn (string $field) => [
+                    $field => $this->fieldValue($employee, $field),
+                ])->all(),
+            ),
+            'employment_types' => collect(EmploymentType::cases())
+                ->map(fn (EmploymentType $type) => ['value' => $type->value, 'label' => $type->label()]),
+            'mfs_providers' => collect(MfsProvider::cases())
+                ->map(fn (MfsProvider $provider) => ['value' => $provider->value, 'label' => $provider->label()]),
+        ]);
+    }
+
+    public function update(Request $request, Employee $employee, UpdateEmployee $action): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+
+        $data = $request->validate($this->masterFieldRules());
+
+        $action->handle($employee, $data);
+
+        return redirect()->route('hrm.employees.show', $employee)->with('success', 'Employee details updated.');
+    }
+
+    /**
+     * Validation for the EMP-04 master fields. Extracted so the future generic
+     * Change Request flow can validate a self-service Employee Update Request
+     * against the exact same rules the HR edit form uses.
+     *
+     * @return array<string, mixed>
+     */
+    private function masterFieldRules(): array
+    {
+        return [
+            'first_name' => ['required', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
+            'employment_type' => ['required', new Enum(EmploymentType::class)],
+            'personal_email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'present_address' => ['nullable', 'string', 'max:1000'],
+            'permanent_address' => ['nullable', 'string', 'max:1000'],
+            'national_id' => ['nullable', 'string', 'max:100'],
+            'birth_certificate_no' => ['nullable', 'string', 'max:100'],
+            'date_of_birth' => ['nullable', 'date', 'before:today'],
+            'joining_date' => ['nullable', 'date'],
+            'confirmation_date' => ['nullable', 'date'],
+            'contract_end_date' => ['nullable', 'date'],
+            'emergency_contact_name' => ['nullable', 'string', 'max:255'],
+            'emergency_contact_phone' => ['nullable', 'string', 'max:50'],
+            'emergency_contact_relationship' => ['nullable', 'string', 'max:100'],
+            'bank_account_name' => ['nullable', 'string', 'max:255'],
+            'bank_account_number' => ['nullable', 'string', 'max:100'],
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'bank_branch' => ['nullable', 'string', 'max:255'],
+            'bank_routing_number' => ['nullable', 'string', 'max:100'],
+            'mfs_provider' => ['nullable', new Enum(MfsProvider::class)],
+            'mfs_account_number' => ['nullable', 'string', 'max:50'],
+        ];
+    }
+
+    /**
+     * Serialise one editable field for the edit form: enums as their string
+     * value, dates as Y-m-d, everything else as-is.
+     */
+    private function fieldValue(Employee $employee, string $field): mixed
+    {
+        $value = $employee->{$field};
+
+        return match (true) {
+            $value instanceof \BackedEnum => $value->value,
+            $value instanceof \DateTimeInterface => $value->format('Y-m-d'),
+            default => $value,
+        };
     }
 
     public function status(Request $request, Employee $employee): RedirectResponse

@@ -7,6 +7,7 @@ use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
+use App\Modules\Hrm\Enums\MfsProvider;
 use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Support\SelfScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -38,9 +39,44 @@ class Employee extends Model implements ControlsAttachmentAccess
         'separation_reason',
         'personal_email',
         'phone',
+        'present_address',
+        'permanent_address',
         'national_id',
+        'birth_certificate_no',
         'date_of_birth',
         'joining_date',
+        'emergency_contact_name',
+        'emergency_contact_phone',
+        'emergency_contact_relationship',
+        'confirmation_date',
+        'contract_end_date',
+        'bank_account_name',
+        'bank_account_number',
+        'bank_name',
+        'bank_branch',
+        'bank_routing_number',
+        'mfs_provider',
+        'mfs_account_number',
+    ];
+
+    /**
+     * The EMP-04 master fields an HR user may edit through the employee edit
+     * form (identity is immutable: employee_code, user_id, status, separation
+     * and the effective-dated assignment are changed through their own
+     * dedicated flows, not this list). This is the single source of truth for
+     * "what counts as editable master data" — the future generic Change Request
+     * flow validates a self-service request against exactly this set.
+     *
+     * @var list<string>
+     */
+    public const EDITABLE_FIELDS = [
+        'first_name', 'last_name', 'employment_type',
+        'personal_email', 'phone', 'present_address', 'permanent_address',
+        'national_id', 'birth_certificate_no', 'date_of_birth',
+        'joining_date', 'confirmation_date', 'contract_end_date',
+        'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
+        'bank_account_name', 'bank_account_number', 'bank_name', 'bank_branch', 'bank_routing_number',
+        'mfs_provider', 'mfs_account_number',
     ];
 
     protected function casts(): array
@@ -49,16 +85,24 @@ class Employee extends Model implements ControlsAttachmentAccess
             'employment_type' => EmploymentType::class,
             'status' => EmployeeStatus::class,
             'separation_type' => SeparationType::class,
+            'mfs_provider' => MfsProvider::class,
             'separation_date' => 'date',
             'date_of_birth' => 'date',
             'joining_date' => 'date',
+            'confirmation_date' => 'date',
+            'contract_end_date' => 'date',
         ];
     }
 
     public function getActivitylogOptions(): LogOptions
     {
+        // Full audit history over every master field HR can change, plus the
+        // lifecycle fields driven by their own flows. Sensitive raw values
+        // (NID, bank, MFS) are logged too — a changed bank account is exactly
+        // the trail you want — so encryption-at-rest of the activity log is a
+        // W4 (PII) follow-up, tracked centrally rather than by dropping fields.
         return LogOptions::defaults()
-            ->logOnly(['first_name', 'last_name', 'employment_type', 'status', 'separation_type', 'user_id'])
+            ->logOnly([...self::EDITABLE_FIELDS, 'status', 'separation_type', 'user_id'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

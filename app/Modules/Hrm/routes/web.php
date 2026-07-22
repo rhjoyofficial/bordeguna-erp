@@ -15,6 +15,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::get('employees/create', [EmployeeController::class, 'create'])->name('employees.create');
     Route::post('employees', [EmployeeController::class, 'store'])->name('employees.store');
     Route::get('employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
+    Route::get('employees/{employee}/edit', [EmployeeController::class, 'edit'])->name('employees.edit');
+    Route::patch('employees/{employee}', [EmployeeController::class, 'update'])->name('employees.update');
     Route::patch('employees/{employee}/status', [EmployeeController::class, 'status'])->name('employees.status');
     Route::post('employees/{employee}/separation', [EmployeeController::class, 'separate'])->name('employees.separate');
     Route::post('employees/{employee}/transfer', [EmployeeController::class, 'transfer'])->name('employees.transfer');

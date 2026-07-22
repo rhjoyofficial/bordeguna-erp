@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
 interface Option {
@@ -67,9 +67,24 @@ interface EmployeeDetail {
     separation_reason: string | null;
     personal_email: string | null;
     phone: string | null;
+    present_address: string | null;
+    permanent_address: string | null;
     national_id: string | null;
+    birth_certificate_no: string | null;
     date_of_birth: string | null;
     joining_date: string | null;
+    confirmation_date: string | null;
+    contract_end_date: string | null;
+    emergency_contact_name: string | null;
+    emergency_contact_phone: string | null;
+    emergency_contact_relationship: string | null;
+    bank_account_name: string | null;
+    bank_account_number: string | null;
+    bank_name: string | null;
+    bank_branch: string | null;
+    bank_routing_number: string | null;
+    mfs_provider: string | null;
+    mfs_account_number: string | null;
     user: { name: string; email: string } | null;
     assignments: Assignment[];
     documents: Document[];
@@ -492,6 +507,9 @@ export default function EmployeeShow({
                                 {target.value === 'active' ? 'Set active' : `Set ${target.label.toLowerCase()}`}
                             </Button>
                         ))}
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={route('hrm.employees.edit', employee.id)}>Edit</Link>
+                        </Button>
                         {can_transfer && (
                             <TransferDialog employeeId={employee.id} offices={offices_tree} designations={designations} supervisors={supervisors} />
                         )}
@@ -515,10 +533,37 @@ export default function EmployeeShow({
                     <dl className="grid gap-4 sm:grid-cols-3">
                         <Field label="Personal email" value={employee.personal_email} />
                         <Field label="Phone" value={employee.phone} />
-                        <Field label="National ID" value={employee.national_id} />
-                        <Field label="Date of birth" value={employee.date_of_birth} />
-                        <Field label="Joining date" value={employee.joining_date} />
                         <Field label="ERP login" value={employee.user ? employee.user.email : 'Not linked'} />
+                        <Field label="National ID" value={employee.national_id} />
+                        <Field label="Birth certificate no." value={employee.birth_certificate_no} />
+                        <Field label="Date of birth" value={employee.date_of_birth} />
+                        <Field label="Present address" value={employee.present_address} />
+                        <Field label="Permanent address" value={employee.permanent_address} />
+                        <Field label="Joining date" value={employee.joining_date} />
+                        <Field label="Confirmation date" value={employee.confirmation_date} />
+                        <Field label="Contract end date" value={employee.contract_end_date} />
+                    </dl>
+                </div>
+
+                <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
+                    <h3 className="mb-3 text-sm font-medium">Emergency contact</h3>
+                    <dl className="grid gap-4 sm:grid-cols-3">
+                        <Field label="Name" value={employee.emergency_contact_name} />
+                        <Field label="Phone" value={employee.emergency_contact_phone} />
+                        <Field label="Relationship" value={employee.emergency_contact_relationship} />
+                    </dl>
+                </div>
+
+                <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
+                    <h3 className="mb-3 text-sm font-medium">Bank & Mobile Financial Service</h3>
+                    <dl className="grid gap-4 sm:grid-cols-3">
+                        <Field label="Account name" value={employee.bank_account_name} />
+                        <Field label="Account number" value={employee.bank_account_number} />
+                        <Field label="Bank name" value={employee.bank_name} />
+                        <Field label="Branch" value={employee.bank_branch} />
+                        <Field label="Routing number" value={employee.bank_routing_number} />
+                        <Field label="MFS provider" value={employee.mfs_provider} />
+                        <Field label="MFS account number" value={employee.mfs_account_number} />
                     </dl>
                 </div>
 
