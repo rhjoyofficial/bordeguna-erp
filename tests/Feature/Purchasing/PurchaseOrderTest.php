@@ -170,3 +170,31 @@ it('refuses to cancel a purchase order that already has receipts against it', fu
 
     app(CancelPurchaseOrder::class)->handle($order->fresh(['lines']));
 })->throws(RuntimeException::class);
+
+it('runs a purchase order through the seeded approval workflow', function () {
+    // Seed the business's default workflows, then confirm a real PO now runs
+    // through the configurable engine (workflow attached, single stage) and
+    // still approves exactly as before — the "migrate without rewrites" proof.
+    app(\App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder::class)->run();
+
+    $order = app(CreatePurchaseOrder::class)->handle(
+        supplier: $this->supplier,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->product, 'quantity' => '10', 'unit_cost' => '5']],
+        createdBy: $this->staff, // Staff can't approve → stays pending
+    );
+
+    $request = $order->approvalRequest;
+    expect($request->workflow_id)->not->toBeNull();
+    expect($request->workflow->key)->toBe('purchase_order');
+    expect($request->current_stage)->toBe(1);
+    expect($request->status->value)->toBe('pending');
+
+    $this->actingAs($this->manager)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->post(route('purchasing.purchase-orders.approve', $order))
+        ->assertRedirect();
+
+    expect($order->fresh()->approvalRequest->status->value)->toBe('approved');
+    expect($order->approvalRequest->decisions()->count())->toBe(1);
+});
