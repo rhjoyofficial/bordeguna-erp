@@ -98,8 +98,7 @@ it('lists pending stock requests and purchase orders together for an approver', 
     $response->assertOk();
     $response->assertInertia(fn ($page) => $page
         ->component('approvals/index')
-        ->where('counts.stock_requests', 1)
-        ->where('counts.purchase_orders', 1)
+        ->has('counts', 2) // one group per type present
         ->has('requests', 2)
     );
 });

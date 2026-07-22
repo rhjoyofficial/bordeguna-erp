@@ -9,6 +9,7 @@ interface ApprovalRow {
     id: number;
     type: string;
     summary: string;
+    stage: string | null;
     requested_by: string | null;
     requested_at: string;
     approve_url: string | null;
@@ -17,7 +18,7 @@ interface ApprovalRow {
 
 interface ApprovalsIndexProps {
     requests: ApprovalRow[];
-    counts: { stock_requests: number; purchase_orders: number };
+    counts: { label: string; count: number }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Approvals', href: '/approvals' }];
@@ -39,9 +40,17 @@ export default function ApprovalsIndex({ requests, counts }: ApprovalsIndexProps
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Approvals" />
             <div className="flex flex-col gap-4 p-4">
-                <div className="flex items-center gap-2">
-                    <Badge variant="secondary">{counts.stock_requests} stock requests</Badge>
-                    <Badge variant="secondary">{counts.purchase_orders} purchase orders</Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                    {counts.length === 0 ? (
+                        <Badge variant="secondary">0 pending</Badge>
+                    ) : (
+                        counts.map((entry) => (
+                            <Badge key={entry.label} variant="secondary">
+                                {entry.count} {entry.label.toLowerCase()}
+                                {entry.count === 1 ? '' : 's'}
+                            </Badge>
+                        ))
+                    )}
                 </div>
 
                 <table className="w-full text-sm">
@@ -59,6 +68,7 @@ export default function ApprovalsIndex({ requests, counts }: ApprovalsIndexProps
                             <tr key={`${row.type}-${row.id}`} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2">
                                     <Badge variant="outline">{row.type}</Badge>
+                                    {row.stage && <span className="ml-2 text-xs text-muted-foreground">{row.stage}</span>}
                                 </td>
                                 <td className="py-2">{row.summary}</td>
                                 <td className="py-2 text-muted-foreground">{row.requested_by}</td>

@@ -3,6 +3,7 @@
 use App\Modules\Foundation\Http\Controllers\AttachmentController;
 use App\Modules\Foundation\Http\Controllers\BusinessSettingsController;
 use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
+use App\Modules\Foundation\Http\Controllers\ChangeRequestController;
 use App\Modules\Foundation\Http\Controllers\OrganizationController;
 use App\Modules\Foundation\Http\Controllers\RoleManagementController;
 use App\Modules\Foundation\Http\Controllers\UserManagementController;
@@ -63,4 +64,10 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
 
     Route::get('businesses/switch', [BusinessSwitcherController::class, 'index'])->name('businesses.switch');
     Route::post('businesses/switch', [BusinessSwitcherController::class, 'store'])->name('businesses.switch.store');
+
+    // Generic, workflow-driven approve/reject for change requests. The
+    // {changeRequest} binding is business-scoped; the current stage decides who
+    // may act (canBeActionedBy) inside the controller.
+    Route::post('change-requests/{changeRequest}/approve', [ChangeRequestController::class, 'approve'])->name('change-requests.approve');
+    Route::post('change-requests/{changeRequest}/reject', [ChangeRequestController::class, 'reject'])->name('change-requests.reject');
 });

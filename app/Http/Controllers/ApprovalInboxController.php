@@ -2,54 +2,42 @@
 
 namespace App\Http\Controllers;
 
-use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
+use App\Modules\Foundation\Models\ChangeRequest;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Support\ApprovalInbox;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * The common approval inbox (IBOS's "Approval" screen): one page listing
- * every pending ApprovalRequest across modules. Deliberately does not
- * duplicate approve/reject logic — each row links back to the owning
- * module's existing approve/reject routes (StockRequestController,
- * PurchaseOrderController), so a future third consumer type only needs to
- * add a case to present() here, not a new approval pipeline.
+ * The common approval inbox: one page listing every pending request the current
+ * user may act on, across modules. Actionability (and the stage-aware "who")
+ * comes from ApprovalInbox so this screen and the sidebar badge never disagree.
+ * Each row links back to the owning approve/reject route — the two legacy types
+ * to their module routes, change requests to the generic workflow endpoint — so
+ * a new consumer only adds a case to present().
  */
 class ApprovalInboxController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, ApprovalInbox $inbox): Response
     {
         $user = $request->user();
+        $actionable = $inbox->pendingActionableFor($user);
 
-        $canApproveInventory = $user->can('inventory.stock.approve');
-        $canApprovePurchasing = $user->can('purchasing.po.approve');
+        // Legacy approvers may always open the inbox; anyone else only once they
+        // actually have something to act on (mirrors canReviewApprovals).
+        $canReviewLegacy = $user->can('inventory.stock.approve') || $user->can('purchasing.po.approve');
+        abort_unless($actionable->isNotEmpty() || $canReviewLegacy, 403);
 
-        abort_unless($canApproveInventory || $canApprovePurchasing, 403);
-
-        $requests = ApprovalRequest::query()
-            ->where('status', ApprovalStatus::Pending)
-            ->when(! $canApproveInventory, fn ($query) => $query->where('approvable_type', PurchaseOrder::class))
-            ->when(! $canApprovePurchasing, fn ($query) => $query->where('approvable_type', StockRequest::class))
-            ->with([
-                'requestedBy:id,name',
-                'approvable' => fn ($morphTo) => $morphTo->morphWith([
-                    StockRequest::class => ['product:id,name,sku', 'warehouse:id,name', 'targetWarehouse:id,name'],
-                    PurchaseOrder::class => ['supplier:id,name', 'lines'],
-                ]),
-            ])
-            ->latest()
-            ->get()
-            ->map(fn (ApprovalRequest $approvalRequest) => $this->present($approvalRequest));
+        $requests = $actionable->map(fn (ApprovalRequest $approvalRequest) => $this->present($approvalRequest));
 
         return Inertia::render('approvals/index', [
-            'requests' => $requests,
-            'counts' => [
-                'stock_requests' => $requests->where('type', 'Stock request')->count(),
-                'purchase_orders' => $requests->where('type', 'Purchase order')->count(),
-            ],
+            'requests' => $requests->values(),
+            'counts' => $requests->groupBy('type')
+                ->map(fn ($rows, $type) => ['label' => $type, 'count' => $rows->count()])
+                ->values(),
         ]);
     }
 
@@ -61,6 +49,8 @@ class ApprovalInboxController extends Controller
             'id' => $approvalRequest->id,
             'requested_by' => $approvalRequest->requestedBy?->name,
             'requested_at' => $approvalRequest->created_at->diffForHumans(),
+            // For multi-stage requests, which stage it's waiting on.
+            'stage' => $approvalRequest->totalStages() > 1 ? $approvalRequest->currentStage()?->name : null,
         ];
 
         if ($approvable instanceof StockRequest) {
@@ -86,6 +76,18 @@ class ApprovalInboxController extends Controller
                 'summary' => "{$approvable->po_number} — {$approvable->supplier->name} — {$total}",
                 'approve_url' => route('purchasing.purchase-orders.approve', $approvable),
                 'reject_url' => route('purchasing.purchase-orders.reject', $approvable),
+            ];
+        }
+
+        if ($approvable instanceof ChangeRequest) {
+            $detail = collect($approvable->describedChanges())->map(fn ($value, $label) => "{$label}: {$value}")->implode(', ');
+
+            return [
+                ...$shared,
+                'type' => 'Change request',
+                'summary' => $approvable->summaryLine().($detail !== '' ? " ({$detail})" : ''),
+                'approve_url' => route('change-requests.approve', $approvable),
+                'reject_url' => route('change-requests.reject', $approvable),
             ];
         }
 

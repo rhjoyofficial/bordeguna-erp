@@ -2,10 +2,9 @@
 
 namespace App\Http\Middleware;
 
-use App\Modules\Foundation\Enums\ApprovalStatus;
-use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\Employee;
+use App\Support\ApprovalInbox;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -53,7 +52,7 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
             ],
-            'pendingApprovalsCount' => fn () => $this->canReviewApprovals($request) ? $this->pendingApprovalsCount() : 0,
+            'pendingApprovalsCount' => fn () => $this->actionableApprovalsCount($request),
             'canReviewApprovals' => fn () => $this->canReviewApprovals($request),
             'canManageUsers' => fn () => (bool) $request->user()?->can('foundation.users.manage'),
             'canManageOrganization' => fn () => (bool) $request->user()?->can('foundation.organization.manage'),
@@ -74,11 +73,21 @@ class HandleInertiaRequests extends Middleware
             return false;
         }
 
-        return $user->can('inventory.stock.approve') || $user->can('purchasing.po.approve');
+        // Legacy approvers keep the nav even at zero pending; anyone else sees it
+        // once they actually have something to act on (a change-request stage).
+        return $user->can('inventory.stock.approve')
+            || $user->can('purchasing.po.approve')
+            || $this->actionableApprovalsCount($request) > 0;
     }
 
-    private function pendingApprovalsCount(): int
+    private function actionableApprovalsCount(Request $request): int
     {
-        return ApprovalRequest::where('status', ApprovalStatus::Pending)->count();
+        $user = $request->user();
+
+        if (! $user || ! app(BusinessContext::class)->hasBusiness()) {
+            return 0;
+        }
+
+        return app(ApprovalInbox::class)->countFor($user);
     }
 }
