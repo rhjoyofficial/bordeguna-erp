@@ -3,11 +3,11 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Boxes, CheckSquare, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
+import { Boxes, CalendarClock, CheckSquare, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
-    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, hasEmployeeProfile } = usePage<SharedData>().props;
+    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, canManageScheduling, hasEmployeeProfile } = usePage<SharedData>().props;
 
     const navGroups: NavGroup[] = [
         {
@@ -45,6 +45,14 @@ export function AppSidebar() {
                   {
                       label: 'People',
                       items: [{ title: 'Employees', url: '/hrm/employees', icon: Users }],
+                  },
+              ]
+            : []),
+        ...(canManageScheduling
+            ? [
+                  {
+                      label: 'Scheduling',
+                      items: [{ title: 'Shifts', url: '/hrm/shifts', icon: CalendarClock }],
                   },
               ]
             : []),

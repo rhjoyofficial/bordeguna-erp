@@ -16,6 +16,7 @@ class HrmPermissionsSeeder extends Seeder
     private const ROLE_PERMISSIONS = [
         'Owner' => [
             'hrm.employees.manage',
+            'hrm.scheduling.manage',
         ],
     ];
 
