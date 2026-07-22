@@ -237,47 +237,11 @@ class EmployeeController extends Controller
         $this->authorize('hrm.employees.manage');
         abort_unless($employee->assignments()->exists(), 404);
 
-        $data = $request->validate($this->masterFieldRules());
+        $data = $request->validate(Employee::masterFieldRules());
 
         $action->handle($employee, $data);
 
         return redirect()->route('hrm.employees.show', $employee)->with('success', 'Employee details updated.');
-    }
-
-    /**
-     * Validation for the EMP-04 master fields. Extracted so the future generic
-     * Change Request flow can validate a self-service Employee Update Request
-     * against the exact same rules the HR edit form uses.
-     *
-     * @return array<string, mixed>
-     */
-    private function masterFieldRules(): array
-    {
-        return [
-            'first_name' => ['required', 'string', 'max:255'],
-            'last_name' => ['required', 'string', 'max:255'],
-            'employment_type' => ['required', new Enum(EmploymentType::class)],
-            'personal_email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:50'],
-            'present_address' => ['nullable', 'string', 'max:1000'],
-            'permanent_address' => ['nullable', 'string', 'max:1000'],
-            'national_id' => ['nullable', 'string', 'max:100'],
-            'birth_certificate_no' => ['nullable', 'string', 'max:100'],
-            'date_of_birth' => ['nullable', 'date', 'before:today'],
-            'joining_date' => ['nullable', 'date'],
-            'confirmation_date' => ['nullable', 'date'],
-            'contract_end_date' => ['nullable', 'date'],
-            'emergency_contact_name' => ['nullable', 'string', 'max:255'],
-            'emergency_contact_phone' => ['nullable', 'string', 'max:50'],
-            'emergency_contact_relationship' => ['nullable', 'string', 'max:100'],
-            'bank_account_name' => ['nullable', 'string', 'max:255'],
-            'bank_account_number' => ['nullable', 'string', 'max:100'],
-            'bank_name' => ['nullable', 'string', 'max:255'],
-            'bank_branch' => ['nullable', 'string', 'max:255'],
-            'bank_routing_number' => ['nullable', 'string', 'max:100'],
-            'mfs_provider' => ['nullable', new Enum(MfsProvider::class)],
-            'mfs_account_number' => ['nullable', 'string', 'max:50'],
-        ];
     }
 
     /**

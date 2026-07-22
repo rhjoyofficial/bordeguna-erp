@@ -3,11 +3,17 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Actions\SubmitChangeRequest;
 use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Foundation\Models\ChangeRequest;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Enums\EmployeeDocumentType;
+use App\Modules\Hrm\Enums\MfsProvider;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Support\EmployeeChangeRequestPolicy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -92,6 +98,95 @@ class SelfServiceController extends Controller
                     'url' => $document->url(),
                 ]),
             ],
+            // ESS is read-only: to change master data the employee submits an
+            // approval-gated request. These describe the requestable groups (with
+            // current values) and the employee's own past/pending requests.
+            'requestable' => collect(EmployeeChangeRequestPolicy::descriptors())->map(fn (array $group) => [
+                'key' => $group['key'],
+                'label' => $group['label'],
+                'fields' => collect($group['fields'])->map(fn (array $field) => [
+                    'name' => $field['name'],
+                    'label' => $field['label'],
+                    'value' => $this->rawValue($employee, $field['name']),
+                ]),
+            ]),
+            'mfs_providers' => collect(MfsProvider::cases())
+                ->map(fn (MfsProvider $provider) => ['value' => $provider->value, 'label' => $provider->label()]),
+            'change_requests' => $this->changeRequestsFor($employee),
         ]);
+    }
+
+    public function requestChange(Request $request, SubmitChangeRequest $submit): RedirectResponse
+    {
+        $employee = Employee::forUser($request->user());
+
+        if ($employee === null) {
+            return redirect()->route('dashboard')
+                ->with('error', 'Your account is not linked to an employee record.');
+        }
+
+        $group = $request->validate(['group' => ['required', Rule::in(EmployeeChangeRequestPolicy::groupKeys())]])['group'];
+        $data = $request->validate(EmployeeChangeRequestPolicy::rulesFor($group));
+
+        // Only the fields that actually differ from the current record become
+        // the proposed change set.
+        $changes = [];
+        foreach ($data as $field => $value) {
+            $new = ($value === '' || $value === null) ? null : (string) $value;
+            if ($this->rawValue($employee, $field) !== $new) {
+                $changes[$field] = $new;
+            }
+        }
+
+        if ($changes === []) {
+            return back()->with('error', 'Nothing changed — no request submitted.');
+        }
+
+        $submit->handle(
+            subject: $employee,
+            changes: $changes,
+            workflowKey: EmployeeChangeRequestPolicy::workflowFor($group),
+            requestedBy: $request->user(),
+            businessId: app(BusinessContext::class)->id(),
+        );
+
+        return back()->with('success', 'Update request submitted for approval.');
+    }
+
+    /**
+     * The employee's own change requests in the current business, newest first.
+     */
+    private function changeRequestsFor(Employee $employee): \Illuminate\Support\Collection
+    {
+        return ChangeRequest::where('subject_type', $employee->getMorphClass())
+            ->where('subject_id', $employee->id)
+            ->with(['approvalRequest.workflow.stages', 'subject'])
+            ->latest()
+            ->get()
+            ->map(function (ChangeRequest $changeRequest) {
+                $approval = $changeRequest->approvalRequest;
+                $pendingMultiStage = $approval?->isPending() && $approval->totalStages() > 1;
+
+                return [
+                    'id' => $changeRequest->id,
+                    'summary' => collect($changeRequest->describedChanges())
+                        ->map(fn ($value, $label) => "{$label}: {$value}")->implode(', '),
+                    'status' => $approval?->status->value ?? 'pending',
+                    'stage' => $pendingMultiStage ? $approval->currentStage()?->name : null,
+                    'requested_at' => $changeRequest->created_at->diffForHumans(),
+                ];
+            });
+    }
+
+    private function rawValue(Employee $employee, string $field): ?string
+    {
+        $value = $employee->{$field};
+
+        return match (true) {
+            $value === null => null,
+            $value instanceof \BackedEnum => $value->value,
+            $value instanceof \DateTimeInterface => $value->format('Y-m-d'),
+            default => (string) $value,
+        };
     }
 }

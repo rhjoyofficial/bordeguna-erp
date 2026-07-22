@@ -1,7 +1,21 @@
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface Placement {
     office: string | null;
@@ -51,8 +65,36 @@ interface Profile {
     documents: Document[];
 }
 
+interface RequestableField {
+    name: string;
+    label: string;
+    value: string | null;
+}
+
+interface RequestableGroup {
+    key: string;
+    label: string;
+    fields: RequestableField[];
+}
+
+interface Option {
+    value: string;
+    label: string;
+}
+
+interface ChangeRequestRow {
+    id: number;
+    summary: string;
+    status: string;
+    stage: string | null;
+    requested_at: string;
+}
+
 interface ShowProps {
     employee: Profile;
+    requestable: RequestableGroup[];
+    mfs_providers: Option[];
+    change_requests: ChangeRequestRow[];
 }
 
 const statusVariant: Record<string, 'secondary' | 'default' | 'outline' | 'destructive'> = {
@@ -63,7 +105,14 @@ const statusVariant: Record<string, 'secondary' | 'default' | 'outline' | 'destr
     separated: 'destructive',
 };
 
+const requestStatusVariant: Record<string, 'secondary' | 'default' | 'destructive'> = {
+    pending: 'secondary',
+    approved: 'default',
+    rejected: 'destructive',
+};
+
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'My profile', href: '/hrm/my-profile' }];
+const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
 function Field({ label, value }: { label: string; value: string | null }) {
     return (
@@ -80,7 +129,74 @@ function formatBytes(size: number): string {
     return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function MyProfile({ employee }: ShowProps) {
+function RequestUpdateDialog({ group, mfsProviders }: { group: RequestableGroup; mfsProviders: Option[] }) {
+    const [open, setOpen] = useState(false);
+    const [values, setValues] = useState<Record<string, string>>(() =>
+        Object.fromEntries(group.fields.map((field) => [field.name, field.value ?? ''])),
+    );
+
+    const submit = () => {
+        router.post(
+            route('hrm.my-profile.change-requests.store'),
+            { group: group.key, ...values },
+            { preserveScroll: true, onSuccess: () => setOpen(false) },
+        );
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                    Request update
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Request update — {group.label}</DialogTitle>
+                    <DialogDescription>
+                        Your request is sent for approval; the change is applied only once approved. Nothing changes immediately.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid max-h-[60vh] gap-4 overflow-y-auto">
+                    {group.fields.map((field) => (
+                        <div key={field.name} className="grid gap-2">
+                            <Label htmlFor={field.name}>{field.label}</Label>
+                            {field.name === 'mfs_provider' ? (
+                                <select
+                                    id={field.name}
+                                    className={selectClass}
+                                    value={values[field.name]}
+                                    onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
+                                >
+                                    <option value="">— None —</option>
+                                    {mfsProviders.map((provider) => (
+                                        <option key={provider.value} value={provider.value}>
+                                            {provider.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <Input
+                                    id={field.name}
+                                    value={values[field.name]}
+                                    onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
+                                />
+                            )}
+                        </div>
+                    ))}
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button onClick={submit}>Submit request</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+export default function MyProfile({ employee, requestable, mfs_providers, change_requests }: ShowProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="My profile" />
@@ -98,15 +214,31 @@ export default function MyProfile({ employee }: ShowProps) {
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">Personal details</h3>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-medium">Contact & emergency details</h3>
+                        {requestable
+                            .filter((group) => group.key === 'personal')
+                            .map((group) => (
+                                <RequestUpdateDialog key={group.key} group={group} mfsProviders={mfs_providers} />
+                            ))}
+                    </div>
                     <dl className="grid gap-4 sm:grid-cols-3">
                         <Field label="Personal email" value={employee.personal_email} />
                         <Field label="Phone" value={employee.phone} />
+                        <Field label="Present address" value={employee.present_address} />
+                        <Field label="Permanent address" value={employee.permanent_address} />
+                        <Field label="Emergency contact name" value={employee.emergency_contact_name} />
+                        <Field label="Emergency contact phone" value={employee.emergency_contact_phone} />
+                        <Field label="Emergency contact relationship" value={employee.emergency_contact_relationship} />
+                    </dl>
+                </div>
+
+                <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
+                    <h3 className="mb-3 text-sm font-medium">Identity</h3>
+                    <dl className="grid gap-4 sm:grid-cols-3">
                         <Field label="National ID" value={employee.national_id} />
                         <Field label="Birth certificate no." value={employee.birth_certificate_no} />
                         <Field label="Date of birth" value={employee.date_of_birth} />
-                        <Field label="Present address" value={employee.present_address} />
-                        <Field label="Permanent address" value={employee.permanent_address} />
                         <Field label="Joining date" value={employee.joining_date} />
                         <Field label="Confirmation date" value={employee.confirmation_date} />
                         <Field label="Contract end date" value={employee.contract_end_date} />
@@ -114,16 +246,14 @@ export default function MyProfile({ employee }: ShowProps) {
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">Emergency contact</h3>
-                    <dl className="grid gap-4 sm:grid-cols-3">
-                        <Field label="Name" value={employee.emergency_contact_name} />
-                        <Field label="Phone" value={employee.emergency_contact_phone} />
-                        <Field label="Relationship" value={employee.emergency_contact_relationship} />
-                    </dl>
-                </div>
-
-                <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">Bank & Mobile Financial Service</h3>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-medium">Bank & Mobile Financial Service</h3>
+                        {requestable
+                            .filter((group) => group.key === 'bank')
+                            .map((group) => (
+                                <RequestUpdateDialog key={group.key} group={group} mfsProviders={mfs_providers} />
+                            ))}
+                    </div>
                     <dl className="grid gap-4 sm:grid-cols-3">
                         <Field label="Account name" value={employee.bank_account_name} />
                         <Field label="Account number" value={employee.bank_account_number} />
@@ -148,6 +278,37 @@ export default function MyProfile({ employee }: ShowProps) {
                         </dl>
                     ) : (
                         <p className="text-sm text-muted-foreground">No current placement in this business.</p>
+                    )}
+                </div>
+
+                <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
+                    <h3 className="mb-3 text-sm font-medium">My update requests</h3>
+                    {change_requests.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No update requests yet.</p>
+                    ) : (
+                        <table className="w-full min-w-[36rem] text-sm">
+                            <thead>
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                    <th className="py-2">Requested change</th>
+                                    <th className="py-2">Status</th>
+                                    <th className="py-2">When</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {change_requests.map((row) => (
+                                    <tr key={row.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                        <td className="py-2">{row.summary}</td>
+                                        <td className="py-2">
+                                            <Badge variant={requestStatusVariant[row.status] ?? 'secondary'} className="capitalize">
+                                                {row.status}
+                                            </Badge>
+                                            {row.stage && <span className="ml-2 text-xs text-muted-foreground">at {row.stage}</span>}
+                                        </td>
+                                        <td className="py-2 text-muted-foreground">{row.requested_at}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     )}
                 </div>
 
