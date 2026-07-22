@@ -8,6 +8,7 @@ use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
 use App\Modules\Hrm\Enums\SeparationType;
+use App\Modules\Hrm\Support\SelfScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -88,6 +89,17 @@ class Employee extends Model implements ControlsAttachmentAccess
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * The (central) employee record linked to a given user, if any — the entry
+     * point for Employee Self-Service ("my profile"). Not business-scoped: an
+     * employee is central, so this resolves across whatever business the user is
+     * currently working in.
+     */
+    public static function forUser(User $user): ?self
+    {
+        return static::where('user_id', $user->id)->first();
+    }
+
     public function assignments(): HasMany
     {
         return $this->hasMany(EmployeeAssignment::class);
@@ -113,11 +125,12 @@ class Employee extends Model implements ControlsAttachmentAccess
      * An employee's documents can hold sensitive personal data (NID, bank),
      * so viewing them needs more than being in the right business: only HR
      * (whoever may manage employees) or the employee themselves (their linked
-     * User) may read them. Self-access exists for Employee Self-Service.
+     * User) may read them. This is the same owner-or-permitted rule ESS uses
+     * everywhere — delegated to the P3 self-scope primitive so it stays in one
+     * place (see SelfScope).
      */
     public function canAccessAttachments(User $user): bool
     {
-        return $user->can('hrm.employees.manage')
-            || ($this->user_id !== null && $this->user_id === $user->id);
+        return SelfScope::allows($user, $this, 'hrm.employees.manage');
     }
 }

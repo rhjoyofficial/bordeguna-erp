@@ -3,11 +3,11 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Boxes, CheckSquare, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, Users, Warehouse } from 'lucide-react';
+import { Boxes, CheckSquare, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
-    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees } = usePage<SharedData>().props;
+    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, hasEmployeeProfile } = usePage<SharedData>().props;
 
     const navGroups: NavGroup[] = [
         {
@@ -17,6 +17,7 @@ export function AppSidebar() {
                 ...(canReviewApprovals
                     ? [{ title: 'Approvals', url: '/approvals', icon: CheckSquare, badge: pendingApprovalsCount }]
                     : []),
+                ...(hasEmployeeProfile ? [{ title: 'My profile', url: '/hrm/my-profile', icon: UserCircle }] : []),
                 { title: 'Switch business', url: '/businesses/switch', icon: Repeat },
             ],
         },

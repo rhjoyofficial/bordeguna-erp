@@ -52,6 +52,7 @@ export interface SharedData {
     canManageUsers: boolean;
     canManageOrganization: boolean;
     canManageEmployees: boolean;
+    hasEmployeeProfile: boolean;
     [key: string]: unknown;
 }
 

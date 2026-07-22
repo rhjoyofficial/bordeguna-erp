@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Models\Employee;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -57,6 +58,11 @@ class HandleInertiaRequests extends Middleware
             'canManageUsers' => fn () => (bool) $request->user()?->can('foundation.users.manage'),
             'canManageOrganization' => fn () => (bool) $request->user()?->can('foundation.organization.manage'),
             'canManageEmployees' => fn () => (bool) $request->user()?->can('hrm.employees.manage'),
+            // Self-scope (P3): whether the signed-in user has their own employee
+            // record, so the "My profile" self-service link can show. Distinct
+            // from canManageEmployees — an employee who isn't HR still has one.
+            'hasEmployeeProfile' => fn () => $request->user() !== null
+                && Employee::where('user_id', $request->user()->id)->exists(),
         ]);
     }
 

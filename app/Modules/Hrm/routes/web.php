@@ -1,9 +1,14 @@
 <?php
 
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
+use App\Modules\Hrm\Http\Controllers\SelfServiceController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->group(function () {
+    // Employee Self-Service — a user's own record. No hrm.employees.manage
+    // gate: access is self-scope (P3), resolved from the signed-in user.
+    Route::get('my-profile', [SelfServiceController::class, 'show'])->name('my-profile');
+
     // Each action authorizes hrm.employees.manage internally; {employee} is a
     // central record, confined to the current business in the controller.
     Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
