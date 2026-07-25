@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -32,6 +33,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
 
     protected $fillable = [
         'employee_code',
+        'biometric_enroll_id',
         'user_id',
         'first_name',
         'last_name',
@@ -73,7 +75,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
      * @var list<string>
      */
     public const EDITABLE_FIELDS = [
-        'first_name', 'last_name', 'employment_type',
+        'first_name', 'last_name', 'employment_type', 'biometric_enroll_id',
         'personal_email', 'phone', 'present_address', 'permanent_address',
         'national_id', 'birth_certificate_no', 'date_of_birth',
         'joining_date', 'confirmation_date', 'contract_end_date',
@@ -191,6 +193,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         'first_name' => 'First name',
         'last_name' => 'Last name',
         'employment_type' => 'Employment type',
+        'biometric_enroll_id' => 'Biometric enroll ID',
         'personal_email' => 'Personal email',
         'phone' => 'Phone',
         'present_address' => 'Present address',
@@ -219,12 +222,19 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
      *
      * @return array<string, mixed>
      */
-    public static function masterFieldRules(): array
+    public static function masterFieldRules(?self $employee = null): array
     {
         return [
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'employment_type' => ['required', new Enum(EmploymentType::class)],
+            // The biometric device's Enroll ID (ATT-02). Unique across the whole
+            // employee master: two people sharing one enroll ID would silently
+            // merge their imported attendance.
+            'biometric_enroll_id' => [
+                'nullable', 'string', 'max:50',
+                Rule::unique('employees', 'biometric_enroll_id')->ignore($employee?->id),
+            ],
             'personal_email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'present_address' => ['nullable', 'string', 'max:1000'],

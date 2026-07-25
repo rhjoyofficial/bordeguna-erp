@@ -39,6 +39,10 @@ class OrganizationController extends Controller
             'name' => $office->name,
             'code' => $office->code,
             'is_active' => $office->is_active,
+            'geofence_latitude' => $office->geofence_latitude,
+            'geofence_longitude' => $office->geofence_longitude,
+            'geofence_radius_meters' => $office->geofence_radius_meters,
+            'geofence_enforced' => $office->geofence_enforced,
             'departments' => $office->departments->map(fn (Department $department) => [
                 'id' => $department->id,
                 'name' => $department->name,
@@ -87,6 +91,40 @@ class OrganizationController extends Controller
         $office->update($data);
 
         return back()->with('success', 'Office updated.');
+    }
+
+    /**
+     * The office's optional clock-in geofence (ATT-05). Kept separate from the
+     * rename form because it is an attendance concern, not part of naming an
+     * office — and because switching enforcement on is a decision with a
+     * visible consequence for every employee who clocks in there.
+     */
+    public function updateOfficeGeofence(Request $request, Office $office): RedirectResponse
+    {
+        $this->authorize('foundation.organization.manage');
+
+        $data = $request->validate([
+            'geofence_latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'geofence_longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'geofence_radius_meters' => ['nullable', 'integer', 'min:10', 'max:100000'],
+            'geofence_enforced' => ['required', 'boolean'],
+        ]);
+
+        // Enforcing an unconfigured fence would flag every punch for review, so
+        // refuse the combination outright rather than let HR discover it later.
+        if ($data['geofence_enforced'] && (
+            $data['geofence_latitude'] === null
+            || $data['geofence_longitude'] === null
+            || $data['geofence_radius_meters'] === null
+        )) {
+            return back()->withErrors([
+                'geofence_enforced' => 'Set the location and radius before enforcing the geofence.',
+            ]);
+        }
+
+        $office->update($data);
+
+        return back()->with('success', 'Geofence updated.');
     }
 
     public function toggleOffice(Office $office): RedirectResponse

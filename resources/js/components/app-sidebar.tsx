@@ -3,11 +3,12 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Boxes, CalendarClock, CalendarDays, CalendarRange, CheckSquare, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
+import { Boxes, CalendarClock, CalendarDays, CalendarRange, CheckSquare, FileUp, Fingerprint, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
-    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, canManageScheduling, hasEmployeeProfile } = usePage<SharedData>().props;
+    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, canManageScheduling, canManageAttendance, hasEmployeeProfile } =
+        usePage<SharedData>().props;
 
     const navGroups: NavGroup[] = [
         {
@@ -18,6 +19,7 @@ export function AppSidebar() {
                     ? [{ title: 'Approvals', url: '/approvals', icon: CheckSquare, badge: pendingApprovalsCount }]
                     : []),
                 ...(hasEmployeeProfile ? [{ title: 'My profile', url: '/hrm/my-profile', icon: UserCircle }] : []),
+                ...(hasEmployeeProfile ? [{ title: 'Clock in/out', url: '/hrm/clock', icon: Fingerprint }] : []),
                 { title: 'Switch business', url: '/businesses/switch', icon: Repeat },
             ],
         },
@@ -56,6 +58,17 @@ export function AppSidebar() {
                           { title: 'Schedules', url: '/hrm/schedules', icon: CalendarRange },
                           { title: 'Shifts', url: '/hrm/shifts', icon: CalendarClock },
                           { title: 'Calendars', url: '/hrm/calendars', icon: CalendarDays },
+                      ],
+                  },
+              ]
+            : []),
+        ...(canManageAttendance
+            ? [
+                  {
+                      label: 'Attendance',
+                      items: [
+                          { title: 'Punch log', url: '/hrm/attendance', icon: Fingerprint },
+                          { title: 'Import', url: '/hrm/attendance/import', icon: FileUp },
                       ],
                   },
               ]

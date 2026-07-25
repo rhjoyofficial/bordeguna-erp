@@ -237,7 +237,7 @@ class EmployeeController extends Controller
         $this->authorize('hrm.employees.manage');
         abort_unless($employee->assignments()->exists(), 404);
 
-        $data = $request->validate(Employee::masterFieldRules());
+        $data = $request->validate(Employee::masterFieldRules($employee));
 
         $action->handle($employee, $data);
 

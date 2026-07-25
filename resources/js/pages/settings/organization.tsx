@@ -31,6 +31,10 @@ interface OfficeUnit {
     code: string | null;
     is_active: boolean;
     departments: DepartmentUnit[];
+    geofence_latitude: string | null;
+    geofence_longitude: string | null;
+    geofence_radius_meters: number | null;
+    geofence_enforced: boolean;
 }
 
 interface Designation {
@@ -45,6 +49,64 @@ interface OrganizationProps {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Organization', href: '/settings/organization' }];
+
+/**
+ * Optional clock-in geofence per office (ATT-05). Enforcement is opt-in, and a
+ * punch outside the radius is always accepted and flagged for review — never
+ * rejected — so switching this on adds review work, it does not block anyone.
+ */
+function GeofenceRow({ office }: { office: OfficeUnit }) {
+    const [latitude, setLatitude] = useState(office.geofence_latitude ?? '');
+    const [longitude, setLongitude] = useState(office.geofence_longitude ?? '');
+    const [radius, setRadius] = useState(office.geofence_radius_meters ? String(office.geofence_radius_meters) : '');
+    const [enforced, setEnforced] = useState(office.geofence_enforced);
+
+    const save = () => {
+        router.put(
+            route('organization.offices.geofence', office.id),
+            {
+                geofence_latitude: latitude === '' ? null : Number(latitude),
+                geofence_longitude: longitude === '' ? null : Number(longitude),
+                geofence_radius_meters: radius === '' ? null : Number(radius),
+                geofence_enforced: enforced,
+            },
+            { ...visitOptions, onError, onSuccess: () => toast.success('Geofence updated.') },
+        );
+    };
+
+    const useMyLocation = () => {
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition((position) => {
+            setLatitude(String(position.coords.latitude));
+            setLongitude(String(position.coords.longitude));
+        });
+    };
+
+    return (
+        <div className="border-sidebar-border/70 dark:border-sidebar-border grid gap-3 border-b py-3 last:border-b-0 sm:grid-cols-[1fr_auto]">
+            <div className="grid gap-2">
+                <div className="text-sm font-medium">{office.name}</div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Input className="w-36" placeholder="Latitude" value={latitude} onChange={(e) => setLatitude(e.target.value)} />
+                    <Input className="w-36" placeholder="Longitude" value={longitude} onChange={(e) => setLongitude(e.target.value)} />
+                    <Input className="w-28" placeholder="Radius (m)" value={radius} onChange={(e) => setRadius(e.target.value)} />
+                    <Button variant="ghost" size="sm" onClick={useMyLocation}>
+                        Use my location
+                    </Button>
+                    <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={enforced} onChange={(e) => setEnforced(e.target.checked)} />
+                        Enforce
+                    </label>
+                </div>
+            </div>
+            <div className="flex items-start">
+                <Button size="sm" variant="outline" onClick={save}>
+                    Save
+                </Button>
+            </div>
+        </div>
+    );
+}
 
 // Keep the tree open across the Inertia round-trip after every mutation.
 const visitOptions = { preserveState: true, preserveScroll: true } as const;
@@ -324,6 +386,23 @@ export default function Organization({ offices, designations }: OrganizationProp
                             )}
                         </div>
                     </section>
+
+                    {offices.length > 0 && (
+                        <section className="space-y-3">
+                            <div>
+                                <h3 className="text-sm font-medium">Clock-in geofence</h3>
+                                <p className="text-sm text-muted-foreground">
+                                    Optional. When enforced, a self-service clock-in from outside the radius is still accepted and flagged for review —
+                                    it is never rejected.
+                                </p>
+                            </div>
+                            <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border px-3">
+                                {offices.map((office) => (
+                                    <GeofenceRow key={office.id} office={office} />
+                                ))}
+                            </div>
+                        </section>
+                    )}
 
                     <section className="space-y-3">
                         <h3 className="text-sm font-medium">Designations</h3>

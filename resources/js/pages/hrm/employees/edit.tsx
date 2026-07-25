@@ -21,6 +21,7 @@ interface EditableEmployee {
     first_name: string | null;
     last_name: string | null;
     employment_type: string | null;
+    biometric_enroll_id: string | null;
     personal_email: string | null;
     phone: string | null;
     present_address: string | null;
@@ -54,7 +55,7 @@ const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text
 type FormData = Omit<EditableEmployee, 'id' | 'employee_code' | 'name'>;
 
 const FIELD_KEYS: (keyof FormData)[] = [
-    'first_name', 'last_name', 'employment_type', 'personal_email', 'phone',
+    'first_name', 'last_name', 'employment_type', 'biometric_enroll_id', 'personal_email', 'phone',
     'present_address', 'permanent_address', 'national_id', 'birth_certificate_no',
     'date_of_birth', 'joining_date', 'confirmation_date', 'contract_end_date',
     'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
@@ -120,6 +121,10 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                             </select>
                             <InputError message={errors.employment_type} />
                         </div>
+                        {/* The attendance device's Enroll ID — imported punches are
+                            matched on this, so an employee without one is invisible
+                            to the biometric import. */}
+                        <Text field="biometric_enroll_id" label="Biometric enroll ID" />
                         <Text field="national_id" label="National ID" />
                         <Text field="birth_certificate_no" label="Birth certificate no." />
                         <Text field="date_of_birth" label="Date of birth" type="date" />

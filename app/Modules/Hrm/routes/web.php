@@ -1,5 +1,8 @@
 <?php
 
+use App\Modules\Hrm\Http\Controllers\AttendanceClockController;
+use App\Modules\Hrm\Http\Controllers\AttendanceImportController;
+use App\Modules\Hrm\Http\Controllers\AttendancePunchController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\ScheduleController;
@@ -51,4 +54,16 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('schedules', [ScheduleController::class, 'store'])->name('schedules.store');
     Route::patch('schedules/{assignment}/end', [ScheduleController::class, 'end'])->name('schedules.end');
     Route::delete('schedules/{assignment}', [ScheduleController::class, 'destroy'])->name('schedules.destroy');
+
+    // Employee self-service clock-in (ATT-01). Self-scope like My Profile — no
+    // hrm.attendance.manage gate; the employee is resolved from the signed-in user.
+    Route::get('clock', [AttendanceClockController::class, 'show'])->name('clock');
+    Route::post('clock', [AttendanceClockController::class, 'store'])->name('clock.store');
+
+    // Attendance capture (ATT-01/03/08). The punch log has no edit or delete
+    // route by design — raw punches are immutable.
+    Route::get('attendance', [AttendancePunchController::class, 'index'])->name('attendance.index');
+    Route::post('attendance', [AttendancePunchController::class, 'store'])->name('attendance.store');
+    Route::get('attendance/import', [AttendanceImportController::class, 'index'])->name('attendance.import.index');
+    Route::post('attendance/import', [AttendanceImportController::class, 'store'])->name('attendance.import.store');
 });

@@ -46,6 +46,7 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     Route::put('settings/organization/offices/{office}', [OrganizationController::class, 'updateOffice'])->name('organization.offices.update');
     Route::patch('settings/organization/offices/{office}/toggle', [OrganizationController::class, 'toggleOffice'])->name('organization.offices.toggle');
     Route::delete('settings/organization/offices/{office}', [OrganizationController::class, 'destroyOffice'])->name('organization.offices.destroy');
+    Route::put('settings/organization/offices/{office}/geofence', [OrganizationController::class, 'updateOfficeGeofence'])->name('organization.offices.geofence');
 
     Route::post('settings/organization/departments', [OrganizationController::class, 'storeDepartment'])->name('organization.departments.store');
     Route::put('settings/organization/departments/{department}', [OrganizationController::class, 'updateDepartment'])->name('organization.departments.update');

@@ -16,12 +16,22 @@ class Office extends Model
         'name',
         'code',
         'is_active',
+        // Optional clock-in geofence (ATT-05). Enforcement is off unless an
+        // office opts in; outside-the-fence punches are flagged, never rejected.
+        'geofence_latitude',
+        'geofence_longitude',
+        'geofence_radius_meters',
+        'geofence_enforced',
     ];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'geofence_latitude' => 'decimal:7',
+            'geofence_longitude' => 'decimal:7',
+            'geofence_radius_meters' => 'integer',
+            'geofence_enforced' => 'boolean',
         ];
     }
 

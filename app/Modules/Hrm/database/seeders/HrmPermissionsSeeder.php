@@ -17,6 +17,7 @@ class HrmPermissionsSeeder extends Seeder
         'Owner' => [
             'hrm.employees.manage',
             'hrm.scheduling.manage',
+            'hrm.attendance.manage',
         ],
     ];
 
