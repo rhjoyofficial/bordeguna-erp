@@ -64,6 +64,8 @@ class HandleInertiaRequests extends Middleware
             // Management read. Department Managers hold neither.
             'canAccessSalary' => fn () => (bool) ($request->user()?->can('hrm.salary.manage')
                 || $request->user()?->can('hrm.salary.view')),
+            // WFL-04: who may generate a payroll run.
+            'canManagePayroll' => fn () => (bool) $request->user()?->can('hrm.payroll.manage'),
             // Self-scope (P3): whether the signed-in user has their own employee
             // record, so the "My profile" self-service link can show. Distinct
             // from canManageEmployees — an employee who isn't HR still has one.

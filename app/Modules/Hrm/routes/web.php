@@ -7,6 +7,7 @@ use App\Modules\Hrm\Http\Controllers\AttendancePunchController;
 use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
 use App\Modules\Hrm\Http\Controllers\LeaveController;
+use App\Modules\Hrm\Http\Controllers\PayrollController;
 use App\Modules\Hrm\Http\Controllers\SalaryController;
 use App\Modules\Hrm\Http\Controllers\SelfLeaveController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
@@ -121,4 +122,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('salary-components', [SalaryController::class, 'storeComponent'])->name('salary.components.store');
     Route::put('salary-components/{component}', [SalaryController::class, 'updateComponent'])->name('salary.components.update');
     Route::patch('salary-components/{component}/toggle', [SalaryController::class, 'toggleComponent'])->name('salary.components.toggle');
+
+    // Payroll calculation (PAY-01..13). The WFL-02 lifecycle beyond
+    // Draft/Calculated arrives in Phase 3c.
+    Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
+    Route::post('payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');
 });
