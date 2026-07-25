@@ -3,7 +3,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, FileUp, Fingerprint, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
+import { Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, FileUp, Fingerprint, PenSquare, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
@@ -69,6 +69,7 @@ export function AppSidebar() {
                       items: [
                           { title: 'Daily attendance', url: '/hrm/attendance/daily', icon: CalendarCheck },
                           { title: 'Punch log', url: '/hrm/attendance', icon: Fingerprint },
+                          { title: 'Corrections', url: '/hrm/attendance/corrections', icon: PenSquare },
                           { title: 'Import', url: '/hrm/attendance/import', icon: FileUp },
                       ],
                   },

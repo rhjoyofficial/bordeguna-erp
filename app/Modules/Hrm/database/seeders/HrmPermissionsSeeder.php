@@ -18,6 +18,13 @@ class HrmPermissionsSeeder extends Seeder
             'hrm.employees.manage',
             'hrm.scheduling.manage',
             'hrm.attendance.manage',
+            'hrm.attendance.approve',
+        ],
+        // COR-03's first correction stage. Held separately from
+        // hrm.attendance.manage so a Manager can approve their team's
+        // corrections without gaining HR's full attendance administration.
+        'Manager' => [
+            'hrm.attendance.approve',
         ],
     ];
 

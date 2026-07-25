@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Hrm\Http\Controllers\AttendanceClockController;
+use App\Modules\Hrm\Http\Controllers\AttendanceCorrectionController;
 use App\Modules\Hrm\Http\Controllers\AttendanceImportController;
 use App\Modules\Hrm\Http\Controllers\AttendancePunchController;
 use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
@@ -60,6 +61,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // hrm.attendance.manage gate; the employee is resolved from the signed-in user.
     Route::get('clock', [AttendanceClockController::class, 'show'])->name('clock');
     Route::post('clock', [AttendanceClockController::class, 'store'])->name('clock.store');
+    Route::post('clock/corrections', [AttendanceClockController::class, 'requestCorrection'])->name('clock.corrections.store');
 
     // Attendance capture (ATT-01/03/08). The punch log has no edit or delete
     // route by design — raw punches are immutable.
@@ -73,4 +75,17 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::get('attendance/daily', [DailyAttendanceController::class, 'index'])->name('attendance.daily.index');
     Route::post('attendance/daily/process', [DailyAttendanceController::class, 'process'])->name('attendance.daily.process');
     Route::post('attendance/daily/finalize', [DailyAttendanceController::class, 'finalize'])->name('attendance.daily.finalize');
+
+    // Corrections (COR-01..06). Approve/reject are their own endpoints because a
+    // correction is its own approvable type with its own applier — the raw
+    // punches it adjusts are never edited.
+    Route::get('attendance/corrections', [AttendanceCorrectionController::class, 'index'])->name('attendance.corrections.index');
+    Route::get('attendance/corrections/punches', [AttendanceCorrectionController::class, 'punches'])->name('attendance.corrections.punches');
+    Route::post('attendance/corrections', [AttendanceCorrectionController::class, 'store'])->name('attendance.corrections.store');
+    Route::post('attendance/corrections/{correction}/approve', [AttendanceCorrectionController::class, 'approve'])->name('attendance.corrections.approve');
+    Route::post('attendance/corrections/{correction}/reject', [AttendanceCorrectionController::class, 'reject'])->name('attendance.corrections.reject');
+
+    // Period locks (COR-05) — the deadline COR-02 hangs on.
+    Route::post('attendance/period-locks', [AttendanceCorrectionController::class, 'lock'])->name('attendance.locks.store');
+    Route::patch('attendance/period-locks/{lock}/unlock', [AttendanceCorrectionController::class, 'unlock'])->name('attendance.locks.unlock');
 });

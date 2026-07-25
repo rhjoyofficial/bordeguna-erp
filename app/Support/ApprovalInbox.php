@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
+use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use Illuminate\Support\Collection;
@@ -38,6 +39,7 @@ class ApprovalInbox
                     StockRequest::class => ['product:id,name,sku', 'warehouse:id,name', 'targetWarehouse:id,name'],
                     PurchaseOrder::class => ['supplier:id,name', 'lines'],
                     ChangeRequest::class => ['subject', 'requestedBy:id,name'],
+                    AttendanceCorrection::class => ['employee:id,employee_code,first_name,last_name', 'punch:id,punched_at'],
                 ]),
             ])
             ->latest()

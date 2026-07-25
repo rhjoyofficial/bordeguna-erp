@@ -18,6 +18,13 @@ enum PunchSource: string
     case Web = 'web';
     case Mobile = 'mobile';
     case Manual = 'manual';
+    /**
+     * Not a captured punch at all — a punch supplied by an approved correction
+     * (ATT-03: corrections are separate records). It never reaches the
+     * attendance_punches table; the processing pipeline merges it in when it
+     * gathers the day, so the raw capture stays untouched.
+     */
+    case Correction = 'correction';
 
     public function label(): string
     {
@@ -27,6 +34,7 @@ enum PunchSource: string
             self::Web => 'Web clock-in',
             self::Mobile => 'Mobile clock-in',
             self::Manual => 'Manual entry',
+            self::Correction => 'Approved correction',
         };
     }
 

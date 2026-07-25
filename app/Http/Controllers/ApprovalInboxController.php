@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
+use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Support\ApprovalInbox;
@@ -88,6 +89,16 @@ class ApprovalInboxController extends Controller
                 'summary' => $approvable->summaryLine().($detail !== '' ? " ({$detail})" : ''),
                 'approve_url' => route('change-requests.approve', $approvable),
                 'reject_url' => route('change-requests.reject', $approvable),
+            ];
+        }
+
+        if ($approvable instanceof AttendanceCorrection) {
+            return [
+                ...$shared,
+                'type' => 'Attendance correction',
+                'summary' => $approvable->summaryLine().' — '.$approvable->reason,
+                'approve_url' => route('hrm.attendance.corrections.approve', $approvable),
+                'reject_url' => route('hrm.attendance.corrections.reject', $approvable),
             ];
         }
 

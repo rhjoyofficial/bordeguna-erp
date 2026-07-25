@@ -6,6 +6,9 @@ use App\Modules\Hrm\Attendance\Data\DayContext;
 use App\Modules\Hrm\Attendance\Data\PunchRecord;
 use App\Modules\Hrm\Attendance\Data\ShiftSpec;
 use App\Modules\Hrm\Attendance\Policy\PolicyConfig;
+use App\Modules\Hrm\Enums\CorrectionType;
+use App\Modules\Hrm\Enums\PunchSource;
+use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\AttendancePolicy;
 use App\Modules\Hrm\Models\AttendancePunch;
 use App\Modules\Hrm\Models\DailyAttendance;
@@ -75,7 +78,7 @@ class DayContextBuilder
             $to = $spec->end->copy()->addMinutes($spec->crossMidnightWindowMinutes);
         }
 
-        return AttendancePunch::where('employee_id', $employee->id)
+        $punches = AttendancePunch::where('employee_id', $employee->id)
             ->whereBetween('punched_at', [$from, $to])
             ->orderBy('punched_at')
             ->orderBy('id')
@@ -86,6 +89,65 @@ class DayContextBuilder
                 $punch->direction,
                 $punch->source,
             ))
+            ->all();
+
+        return $this->applyCorrections($employee, $date, $punches);
+    }
+
+    /**
+     * Folds approved corrections into the day's punches (ATT-03 / COR-01).
+     *
+     * This is the whole integration: corrections are resolved while *gathering*,
+     * so the engine downstream sees an ordinary list of punches and needs no
+     * concept of a correction at all. An approved missing-out punch simply
+     * closes its pair on the next run, which is how a POL-07 payroll hold
+     * clears — by the day genuinely no longer being incomplete, rather than by
+     * anything overriding the status.
+     *
+     * The raw rows are never touched; the merge happens in memory.
+     *
+     * @param  array<int, PunchRecord>  $punches
+     * @return array<int, PunchRecord>
+     */
+    private function applyCorrections(Employee $employee, Carbon $date, array $punches): array
+    {
+        $corrections = AttendanceCorrection::forDay($employee->id, $date)
+            ->applied()
+            ->orderBy('id')
+            ->get();
+
+        if ($corrections->isEmpty()) {
+            return $punches;
+        }
+
+        $keyed = collect($punches)->keyBy(fn (PunchRecord $punch) => $punch->id);
+
+        foreach ($corrections as $correction) {
+            match ($correction->type) {
+                CorrectionType::IgnorePunch => $keyed->forget($correction->punch_id),
+                CorrectionType::AmendPunch => $keyed->has($correction->punch_id)
+                    ? $keyed->put($correction->punch_id, new PunchRecord(
+                        $correction->punch_id,
+                        $correction->corrected_at,
+                        $correction->direction ?? $keyed->get($correction->punch_id)->direction,
+                        PunchSource::Correction,
+                    ))
+                    : null,
+                // Negative ids keep an added punch distinguishable from a real
+                // one and collision-free against the punch table.
+                CorrectionType::AddPunch => $keyed->put(-$correction->id, new PunchRecord(
+                    -$correction->id,
+                    $correction->corrected_at,
+                    $correction->direction,
+                    PunchSource::Correction,
+                )),
+            };
+        }
+
+        return $keyed
+            ->filter()
+            ->sortBy(fn (PunchRecord $punch) => $punch->at->getTimestamp())
+            ->values()
             ->all();
     }
 
