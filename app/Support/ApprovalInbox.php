@@ -9,6 +9,8 @@ use App\Modules\Foundation\Models\ChangeRequest;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\LeaveRequest;
 use App\Modules\Hrm\Models\Movement;
+use App\Modules\Hrm\Models\PayrollRun;
+use App\Modules\Hrm\Models\PayrollUnlockRequest;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use Illuminate\Support\Collection;
@@ -44,6 +46,8 @@ class ApprovalInbox
                     AttendanceCorrection::class => ['employee:id,employee_code,first_name,last_name', 'punch:id,punched_at'],
                     LeaveRequest::class => ['employee:id,employee_code,first_name,last_name', 'leaveType:id,name'],
                     Movement::class => ['employee:id,employee_code,first_name,last_name'],
+                    PayrollRun::class => ['period'],
+                    PayrollUnlockRequest::class => ['run.period'],
                 ]),
             ])
             ->latest()

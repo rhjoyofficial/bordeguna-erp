@@ -1,5 +1,15 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -32,29 +42,197 @@ interface Payslip {
     lines: Line[];
 }
 
+interface ValidationRow {
+    employee_id: number;
+    employee: string;
+    employee_code: string;
+    issues: string[];
+}
+
+interface UnlockRequest {
+    id: number;
+    reason: string;
+    is_emergency_override: boolean;
+    override_reason: string | null;
+    is_applied: boolean;
+    status: string;
+    stage: string | null;
+    requested_by: string | null;
+}
+
+interface Run {
+    id: number;
+    version: number;
+    status: string;
+    status_label: string;
+    employee_count: number;
+    blocked_count: number;
+    total_earnings: number;
+    total_deductions: number;
+    total_net: number;
+    calculated_at: string | null;
+    calculated_by: string | null;
+    approved_at: string | null;
+    approved_by: string | null;
+    is_rerunnable: boolean;
+    is_reopenable: boolean;
+    closed_reason: string | null;
+    queue_state: string | null;
+    failure_message: string | null;
+    validation_report: { issue_count: number; checked: number; employees: ValidationRow[] } | null;
+    awaiting_approval: boolean;
+    approval_stage: string | null;
+    unlock_requests: UnlockRequest[];
+}
+
 interface Props {
     year: number;
     month: number;
     period: { id: number; label: string; start_date: string; end_date: string; divisor_days: number } | null;
-    run: {
-        id: number;
-        version: number;
-        status: string;
-        employee_count: number;
-        blocked_count: number;
-        total_earnings: number;
-        total_deductions: number;
-        total_net: number;
-        calculated_at: string | null;
-        calculated_by: string | null;
-        is_rerunnable: boolean;
-    } | null;
+    run: Run | null;
     payslips: Payslip[];
     periods: { year: number; month: number; label: string }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Payroll', href: '/hrm/payroll' }];
 const money = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * A lifecycle step that needs a stated reason — reopening, cancelling, or
+ * requesting an unlock. Each of these changes what somebody gets paid, so none
+ * of them is a bare button.
+ */
+function ReasonDialog({ label, title, description, routeName, runId, destructive }: {
+    label: string;
+    title: string;
+    description: string;
+    routeName: string;
+    runId: number;
+    destructive?: boolean;
+}) {
+    const [open, setOpen] = useState(false);
+    const [reason, setReason] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm" variant={destructive ? 'outline' : 'secondary'}>
+                    {label}
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                    <DialogDescription>{description}</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-2">
+                    <Label htmlFor="reason">Reason</Label>
+                    <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+                    {errors.reason && <p className="text-xs text-destructive">{errors.reason}</p>}
+                    {errors.status && <p className="text-xs text-destructive">{errors.status}</p>}
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button
+                        disabled={reason.trim() === ''}
+                        onClick={() =>
+                            router.post(
+                                route(routeName, runId),
+                                { reason },
+                                {
+                                    preserveScroll: true,
+                                    onError: (e: Record<string, string>) => setErrors(e),
+                                    onSuccess: () => {
+                                        setOpen(false);
+                                        setErrors({});
+                                        setReason('');
+                                    },
+                                },
+                            )
+                        }
+                    >
+                        Confirm
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/**
+ * The WFL-02 lifecycle, offering only the transitions the run's current state
+ * actually permits.
+ */
+function LifecycleActions({ run }: { run: Run }) {
+    const post = (routeName: string) => router.post(route(routeName, run.id), {}, { preserveScroll: true });
+
+    return (
+        <div className="flex flex-wrap items-center gap-3">
+            {run.status === 'calculated' && (
+                <>
+                    <Button size="sm" onClick={() => post('hrm.payroll.review')} disabled={run.blocked_count > 0}>
+                        Review &amp; send for approval
+                    </Button>
+                    {run.blocked_count > 0 && (
+                        <span className="text-xs text-destructive">Resolve the blocked lines first.</span>
+                    )}
+                </>
+            )}
+            {run.awaiting_approval && (
+                <>
+                    <Button size="sm" onClick={() => post('hrm.payroll.approve')}>
+                        Approve
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => post('hrm.payroll.reject')}>
+                        Reject
+                    </Button>
+                </>
+            )}
+            {run.status === 'approved' && (
+                <Button size="sm" onClick={() => post('hrm.payroll.disburse')}>
+                    Mark disbursed
+                </Button>
+            )}
+            {run.status === 'disbursed' && (
+                <Button size="sm" onClick={() => post('hrm.payroll.lock')}>
+                    Lock
+                </Button>
+            )}
+            {run.is_reopenable && (
+                <ReasonDialog
+                    label="Reopen"
+                    title="Reopen this payroll"
+                    description="A new version is created and this one is superseded. Its figures are kept exactly as they are."
+                    routeName="hrm.payroll.reopen"
+                    runId={run.id}
+                />
+            )}
+            {run.status === 'locked' && (
+                <ReasonDialog
+                    label="Request unlock"
+                    title="Request to reopen a locked payroll"
+                    description="This needs HR Head, Finance and Management approval in turn. The locked figures are never altered — an approved unlock opens a new version."
+                    routeName="hrm.payroll.unlock.store"
+                    runId={run.id}
+                    destructive
+                />
+            )}
+            {(run.status === 'draft' || run.status === 'calculated') && (
+                <ReasonDialog
+                    label="Cancel"
+                    title="Cancel this payroll"
+                    description="The run is closed with your reason and can no longer be calculated."
+                    routeName="hrm.payroll.cancel"
+                    runId={run.id}
+                    destructive
+                />
+            )}
+        </div>
+    );
+}
 
 export default function PayrollIndex({ year, month, period, run, payslips, periods }: Props) {
     const [expanded, setExpanded] = useState<number | null>(null);
@@ -148,16 +326,82 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
                 )}
 
                 {run && (
-                    <p className="text-xs text-muted-foreground">
-                        Version {run.version} · {run.status}
-                        {run.calculated_at && ` · calculated ${run.calculated_at}`}
-                        {run.calculated_by && ` by ${run.calculated_by}`}
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Badge variant={run.status === 'locked' || run.status === 'approved' ? 'default' : 'secondary'}>{run.status_label}</Badge>
+                        <span className="text-xs text-muted-foreground">
+                            Version {run.version}
+                            {run.calculated_at && ` · calculated ${run.calculated_at}`}
+                            {run.calculated_by && ` by ${run.calculated_by}`}
+                            {run.approved_at && ` · approved ${run.approved_at} by ${run.approved_by}`}
+                        </span>
                         {run.blocked_count > 0 && (
-                            <span className="ml-2 text-destructive">
+                            <span className="text-xs text-destructive">
                                 {run.blocked_count} line{run.blocked_count === 1 ? '' : 's'} blocked
                             </span>
                         )}
-                    </p>
+                        {run.awaiting_approval && (
+                            <Badge variant="outline">Awaiting approval{run.approval_stage ? ` — ${run.approval_stage}` : ''}</Badge>
+                        )}
+                    </div>
+                )}
+
+                {run?.closed_reason && <p className="text-xs text-muted-foreground">{run.closed_reason}</p>}
+                {run?.failure_message && <p className="text-sm text-destructive">Calculation failed: {run.failure_message}</p>}
+
+                {run && run.validation_report && run.validation_report.issue_count > 0 && (
+                    <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
+                        <h3 className="text-sm font-medium text-destructive">
+                            {run.validation_report.issue_count} issue{run.validation_report.issue_count === 1 ? '' : 's'} must be fixed before payroll can
+                            run
+                        </h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            Nothing was calculated. All problems are listed together so they can be cleared in one pass, then recalculated.
+                            {payslips.length > 0 && ' The payslips below are from the last successful calculation and do not reflect these issues.'}
+                        </p>
+                        <table className="mt-3 w-full min-w-[36rem] text-sm">
+                            <tbody>
+                                {run.validation_report.employees.map((row) => (
+                                    <tr key={row.employee_id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                        <td className="py-2 align-top">
+                                            {row.employee}
+                                            <span className="ml-2 text-xs text-muted-foreground">{row.employee_code}</span>
+                                        </td>
+                                        <td className="py-2">
+                                            <ul className="ml-4 list-disc space-y-1 text-xs text-muted-foreground">
+                                                {row.issues.map((issue, i) => (
+                                                    <li key={i}>{issue}</li>
+                                                ))}
+                                            </ul>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {run && <LifecycleActions run={run} />}
+
+                {run && run.unlock_requests.length > 0 && (
+                    <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
+                        <h3 className="mb-2 text-sm font-medium">Unlock requests</h3>
+                        {run.unlock_requests.map((u) => (
+                            <div key={u.id} className="border-sidebar-border/40 border-b py-2 text-xs last:border-b-0">
+                                <span className="text-muted-foreground">{u.reason}</span>
+                                {u.is_emergency_override && (
+                                    <Badge variant="outline" className="ml-2">
+                                        Emergency override
+                                    </Badge>
+                                )}
+                                {u.override_reason && <span className="ml-2 text-destructive">{u.override_reason}</span>}
+                                <Badge variant={u.is_applied ? 'default' : 'secondary'} className="ml-2">
+                                    {u.is_applied ? 'applied' : u.status}
+                                </Badge>
+                                {u.stage && !u.is_applied && <span className="ml-2 text-muted-foreground">at {u.stage}</span>}
+                                {u.requested_by && <span className="ml-2 text-muted-foreground">· {u.requested_by}</span>}
+                            </div>
+                        ))}
+                    </div>
                 )}
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">

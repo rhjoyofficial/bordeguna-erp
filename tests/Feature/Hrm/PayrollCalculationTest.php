@@ -4,17 +4,21 @@ use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Actions\AssignSchedule;
 use App\Modules\Hrm\Actions\CalculatePayroll;
 use App\Modules\Hrm\Actions\SaveSalaryStructure;
 use App\Modules\Hrm\database\seeders\SalaryComponentSeeder;
 use App\Modules\Hrm\Enums\AttendanceConsequence;
 use App\Modules\Hrm\Enums\AttendanceStatus;
+use App\Modules\Hrm\Enums\ScheduleScope;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
+use App\Modules\Hrm\Models\HolidayCalendar;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\SalaryComponent;
+use App\Modules\Hrm\Models\Shift;
 use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -47,11 +51,29 @@ beforeEach(function () {
         'first_name' => 'Karim', 'last_name' => 'Ahmed',
         'employment_type' => 'permanent', 'status' => 'active',
         'joining_date' => '2025-01-01',
+        // WFL-03 requires payment details before a payroll may calculate.
+        'bank_account_number' => '1234567890',
     ]);
     EmployeeAssignment::create([
         'employee_id' => $this->employee->id,
         'office_id' => $this->office->id,
         'is_primary' => true,
+        'effective_from' => '2025-01-01',
+    ]);
+
+    // WFL-03 also requires a shift and calendar, since without one there is no
+    // way to say which days were working days.
+    $shift = Shift::create([
+        'name' => 'General', 'start_time' => '09:00', 'end_time' => '18:00',
+        'grace_minutes' => 15, 'break_minutes' => 60, 'is_overnight' => false,
+    ]);
+    $calendar = HolidayCalendar::create([
+        'name' => 'Bangladesh', 'year' => 2026, 'weekly_off_days' => [5], 'is_default' => true,
+    ]);
+    app(AssignSchedule::class)->handle(ScheduleScope::Business, null, [
+        'schedule_type' => 'fixed',
+        'shift_id' => $shift->id,
+        'holiday_calendar_id' => $calendar->id,
         'effective_from' => '2025-01-01',
     ]);
 
@@ -224,16 +246,19 @@ it('is unaffected by a salary revision dated after the period', function () {
 
 // --- Blocking and re-runs --------------------------------------------------------
 
-it('blocks an employee whose missing punch is unresolved', function () {
+it('refuses to calculate at all while a missing punch is unresolved', function () {
     pay13Attendance();
     attendanceDay('2026-07-22', AttendanceStatus::MissingPunch, ['holds_payroll' => true]);
 
     $run = app(CalculatePayroll::class)->handle($this->period);
-    $payslip = $run->payslips()->sole();
 
-    expect($payslip->is_blocked)->toBeTrue();
-    expect($run->blocked_count)->toBe(1);
-    expect(implode(' ', $payslip->block_reasons))->toContain('missing punch');
+    // WFL-03 catches this before any calculation begins, which is stricter than
+    // PAY-09's per-payslip block and stops HR reviewing figures that were never
+    // going to be payable.
+    expect($run->hasValidationIssues())->toBeTrue();
+    expect($run->payslips()->count())->toBe(0);
+    expect(implode(' ', collect($run->validation_report['employees'])->pluck('issues')->flatten()->all()))
+        ->toContain('unresolved');
 });
 
 it('replaces the payslips when a draft run is recalculated', function () {
@@ -260,14 +285,15 @@ it('totals the run across its payslips', function () {
     expect((float) $run->total_earnings)->toBe(50000.00);
     expect((float) $run->total_deductions)->toBe(1666.67);
     expect((float) $run->total_net)->toBe(48333.33);
-    expect($run->status)->toBe(PayrollRun::STATUS_CALCULATED);
+    expect($run->status)->toBe(\App\Modules\Hrm\Enums\PayrollStatus::Calculated);
 });
 
-it('produces an empty payslip for an employee with no salary structure', function () {
+it('refuses to calculate anyone while one employee has no salary structure', function () {
     $other = Employee::create([
         'employee_code' => 'BDG-000002',
         'first_name' => 'Rahim', 'last_name' => 'Test',
         'employment_type' => 'permanent', 'status' => 'active',
+        'bank_account_number' => '999',
     ]);
     EmployeeAssignment::create([
         'employee_id' => $other->id, 'office_id' => $this->office->id,
@@ -275,12 +301,13 @@ it('produces an empty payslip for an employee with no salary structure', functio
     ]);
 
     $run = app(CalculatePayroll::class)->handle($this->period);
-    $payslip = $run->payslips()->where('employee_id', $other->id)->sole();
 
-    // Blocked rather than paid zero — WFL-03 requires a salary structure before
-    // calculation, and silently paying nothing would look like a real answer.
-    expect($payslip->is_blocked)->toBeTrue();
-    expect(implode(' ', $payslip->block_reasons))->toContain('No salary structure');
+    // WFL-03 gates the whole run, not the one line. Half a payroll is worse
+    // than none, because somebody will pay from it.
+    expect($run->hasValidationIssues())->toBeTrue();
+    expect($run->payslips()->count())->toBe(0);
+    expect(implode(' ', collect($run->validation_report['employees'])->pluck('issues')->flatten()->all()))
+        ->toContain('No salary structure');
 });
 
 it('does not leak payroll across businesses', function () {

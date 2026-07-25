@@ -127,4 +127,20 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // Draft/Calculated arrives in Phase 3c.
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
     Route::post('payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');
+    Route::get('payroll/{run}/progress', [PayrollController::class, 'progress'])->name('payroll.progress');
+
+    // WFL-02 lifecycle. Approve/reject go through the shared workflow engine,
+    // so these endpoints authorise by stage rather than by permission.
+    Route::post('payroll/{run}/review', [PayrollController::class, 'review'])->name('payroll.review');
+    Route::post('payroll/{run}/approve', [PayrollController::class, 'approve'])->name('payroll.approve');
+    Route::post('payroll/{run}/reject', [PayrollController::class, 'reject'])->name('payroll.reject');
+    Route::post('payroll/{run}/disburse', [PayrollController::class, 'disburse'])->name('payroll.disburse');
+    Route::post('payroll/{run}/lock', [PayrollController::class, 'lock'])->name('payroll.lock');
+    Route::post('payroll/{run}/reopen', [PayrollController::class, 'reopen'])->name('payroll.reopen');
+    Route::post('payroll/{run}/cancel', [PayrollController::class, 'cancel'])->name('payroll.cancel');
+
+    // WFL-08 unlock: HR Head → Finance → Management, or a Super Admin override.
+    Route::post('payroll/{run}/unlock-requests', [PayrollController::class, 'requestUnlock'])->name('payroll.unlock.store');
+    Route::post('payroll-unlock-requests/{unlock}/approve', [PayrollController::class, 'approveUnlock'])->name('payroll.unlock.approve');
+    Route::post('payroll-unlock-requests/{unlock}/reject', [PayrollController::class, 'rejectUnlock'])->name('payroll.unlock.reject');
 });
