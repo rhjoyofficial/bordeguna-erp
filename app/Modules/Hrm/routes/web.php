@@ -6,6 +6,8 @@ use App\Modules\Hrm\Http\Controllers\AttendanceImportController;
 use App\Modules\Hrm\Http\Controllers\AttendancePunchController;
 use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
+use App\Modules\Hrm\Http\Controllers\LeaveController;
+use App\Modules\Hrm\Http\Controllers\SelfLeaveController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\ScheduleController;
 use App\Modules\Hrm\Http\Controllers\SelfServiceController;
@@ -88,4 +90,24 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // Period locks (COR-05) — the deadline COR-02 hangs on.
     Route::post('attendance/period-locks', [AttendanceCorrectionController::class, 'lock'])->name('attendance.locks.store');
     Route::patch('attendance/period-locks/{lock}/unlock', [AttendanceCorrectionController::class, 'unlock'])->name('attendance.locks.unlock');
+
+    // Employee self-service leave and movement — self-scope, no manage gate.
+    Route::get('my-leave', [SelfLeaveController::class, 'show'])->name('my-leave');
+    Route::post('my-leave/requests', [SelfLeaveController::class, 'storeLeave'])->name('my-leave.requests.store');
+    Route::post('my-leave/movements', [SelfLeaveController::class, 'storeMovement'])->name('my-leave.movements.store');
+
+    // Leave & movement administration (LEV-01..07, POL-09/10).
+    Route::get('leave', [LeaveController::class, 'index'])->name('leave.index');
+    Route::post('leave', [LeaveController::class, 'store'])->name('leave.store');
+    Route::post('leave/{leaveRequest}/approve', [LeaveController::class, 'approve'])->name('leave.approve');
+    Route::post('leave/{leaveRequest}/reject', [LeaveController::class, 'reject'])->name('leave.reject');
+    Route::post('leave/quota', [LeaveController::class, 'grantQuota'])->name('leave.quota');
+
+    Route::post('movements', [LeaveController::class, 'storeMovement'])->name('movements.store');
+    Route::post('movements/{movement}/approve', [LeaveController::class, 'approveMovement'])->name('movements.approve');
+    Route::post('movements/{movement}/reject', [LeaveController::class, 'rejectMovement'])->name('movements.reject');
+
+    // Corrections C6b/C6d — preview and commit share one computation.
+    Route::get('leave/year-end', [LeaveController::class, 'yearEnd'])->name('leave.year-end');
+    Route::post('leave/year-end', [LeaveController::class, 'runYearEnd'])->name('leave.year-end.run');
 });

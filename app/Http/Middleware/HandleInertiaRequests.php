@@ -59,6 +59,7 @@ class HandleInertiaRequests extends Middleware
             'canManageEmployees' => fn () => (bool) $request->user()?->can('hrm.employees.manage'),
             'canManageScheduling' => fn () => (bool) $request->user()?->can('hrm.scheduling.manage'),
             'canManageAttendance' => fn () => (bool) $request->user()?->can('hrm.attendance.manage'),
+            'canManageLeave' => fn () => (bool) $request->user()?->can('hrm.leave.manage'),
             // Self-scope (P3): whether the signed-in user has their own employee
             // record, so the "My profile" self-service link can show. Distinct
             // from canManageEmployees — an employee who isn't HR still has one.

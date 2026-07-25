@@ -13,6 +13,8 @@ use App\Modules\Hrm\Models\AttendancePolicy;
 use App\Modules\Hrm\Models\AttendancePunch;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\LeaveRequest;
+use App\Modules\Hrm\Models\Movement;
 use App\Modules\Hrm\Models\ScheduleAssignment;
 use App\Modules\Hrm\Support\ScheduleResolver;
 use Illuminate\Support\Carbon;
@@ -55,7 +57,38 @@ class DayContextBuilder
             // still see hours worked.
             policy: $policy?->toConfig() ?? PolicyConfig::fromArray([]),
             priorOccurrences: DailyAttendance::priorOccurrences($employee->id, $date),
+            hasApprovedLeave: $this->hasApprovedLeave($employee, $date),
+            hasApprovedMovement: $this->hasApprovedMovement($employee, $date, holidayWork: false),
+            hasApprovedHolidayWork: $this->hasApprovedMovement($employee, $date, holidayWork: true),
         );
+    }
+
+    /**
+     * An applied leave request covering this date (LEV-06 already removed the
+     * holidays and weekly offs, so `covered_dates` is exactly the charged set).
+     */
+    private function hasApprovedLeave(Employee $employee, Carbon $date): bool
+    {
+        return LeaveRequest::where('employee_id', $employee->id)
+            ->applied()
+            ->whereDate('start_date', '<=', $date->toDateString())
+            ->whereDate('end_date', '>=', $date->toDateString())
+            ->get()
+            ->contains(fn (LeaveRequest $request) => $request->covers($date));
+    }
+
+    /**
+     * POL-10 movements make an ordinary day count as present; POL-09 holiday
+     * work authorisations let a non-working day be credited. Same record, read
+     * for two different questions the engine asks separately.
+     */
+    private function hasApprovedMovement(Employee $employee, Carbon $date, bool $holidayWork): bool
+    {
+        return Movement::where('employee_id', $employee->id)
+            ->applied()
+            ->onDate($date)
+            ->get()
+            ->contains(fn (Movement $movement) => $movement->type->authorisesHolidayWork() === $holidayWork);
     }
 
     /**

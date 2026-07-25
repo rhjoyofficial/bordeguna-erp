@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
 use App\Modules\Hrm\Models\AttendanceCorrection;
+use App\Modules\Hrm\Models\LeaveRequest;
+use App\Modules\Hrm\Models\Movement;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Support\ApprovalInbox;
@@ -99,6 +101,30 @@ class ApprovalInboxController extends Controller
                 'summary' => $approvable->summaryLine().' — '.$approvable->reason,
                 'approve_url' => route('hrm.attendance.corrections.approve', $approvable),
                 'reject_url' => route('hrm.attendance.corrections.reject', $approvable),
+            ];
+        }
+
+        if ($approvable instanceof LeaveRequest) {
+            $unpaid = (float) $approvable->unpaid_days > 0
+                ? sprintf(' — %s day(s) unpaid, no balance left', $approvable->unpaid_days)
+                : '';
+
+            return [
+                ...$shared,
+                'type' => 'Leave request',
+                'summary' => $approvable->summaryLine().$unpaid,
+                'approve_url' => route('hrm.leave.approve', $approvable),
+                'reject_url' => route('hrm.leave.reject', $approvable),
+            ];
+        }
+
+        if ($approvable instanceof Movement) {
+            return [
+                ...$shared,
+                'type' => 'Movement',
+                'summary' => $approvable->summaryLine().' — '.$approvable->reason,
+                'approve_url' => route('hrm.movements.approve', $approvable),
+                'reject_url' => route('hrm.movements.reject', $approvable),
             ];
         }
 

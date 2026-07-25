@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Providers;
 
+use App\Modules\Hrm\Console\Commands\RunLeaveYearEnd;
 use Illuminate\Support\ServiceProvider;
 
 class HrmServiceProvider extends ServiceProvider
@@ -10,5 +11,9 @@ class HrmServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([RunLeaveYearEnd::class]);
+        }
     }
 }
