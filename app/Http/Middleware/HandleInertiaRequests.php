@@ -60,6 +60,10 @@ class HandleInertiaRequests extends Middleware
             'canManageScheduling' => fn () => (bool) $request->user()?->can('hrm.scheduling.manage'),
             'canManageAttendance' => fn () => (bool) $request->user()?->can('hrm.attendance.manage'),
             'canManageLeave' => fn () => (bool) $request->user()?->can('hrm.leave.manage'),
+            // Correction C5 / ACL-02: Payroll HR manage, Finance and authorised
+            // Management read. Department Managers hold neither.
+            'canAccessSalary' => fn () => (bool) ($request->user()?->can('hrm.salary.manage')
+                || $request->user()?->can('hrm.salary.view')),
             // Self-scope (P3): whether the signed-in user has their own employee
             // record, so the "My profile" self-service link can show. Distinct
             // from canManageEmployees — an employee who isn't HR still has one.

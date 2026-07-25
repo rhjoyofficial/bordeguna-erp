@@ -21,6 +21,12 @@ class HrmPermissionsSeeder extends Seeder
             'hrm.attendance.approve',
             'hrm.leave.manage',
             'hrm.leave.approve',
+            // Correction C5 / ACL-02: salary is visible to the employee
+            // themselves, Payroll HR, Finance and authorised Management —
+            // explicitly NOT to Department Managers. `manage` sets structures,
+            // `view` is read-only for Finance and Management.
+            'hrm.salary.manage',
+            'hrm.salary.view',
         ],
         // COR-03's first correction stage. Held separately from
         // hrm.attendance.manage so a Manager can approve their team's
@@ -29,6 +35,14 @@ class HrmPermissionsSeeder extends Seeder
             'hrm.attendance.approve',
             // LEV-05's first stage and POL-10's manager confirmation.
             'hrm.leave.approve',
+            // Note: a Manager deliberately gets NO salary permission.
+            // Correction C5 (ACL-02) excludes Department Managers from seeing
+            // their team's salary amounts.
+        ],
+        // Seeded by HrmChangeRequestWorkflowSeeder for the bank-change stage;
+        // C5 also grants Finance read access to salary.
+        'Finance' => [
+            'hrm.salary.view',
         ],
     ];
 

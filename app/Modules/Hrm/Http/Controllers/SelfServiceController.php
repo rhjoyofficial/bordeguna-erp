@@ -49,7 +49,24 @@ class SelfServiceController extends Controller
             'supervisor:id,first_name,last_name,employee_code',
         ]);
 
+        // Correction C5 / ACL-02 lists the employee themselves among the four
+        // parties who may see salary — their own only. Read-only: changing pay
+        // is a Payroll workflow, never self-service.
+        $structure = \App\Modules\Hrm\Models\SalaryStructure::activeFor($employee->id);
+        $breakdown = $structure?->breakdown();
+
         return Inertia::render('hrm/my-profile/show', [
+            'salary' => $breakdown === null ? null : [
+                'effective_from' => \Illuminate\Support\Carbon::parse($structure->effective_from)->toDateString(),
+                'basic' => $breakdown->basic,
+                'gross' => $breakdown->gross,
+                'lines' => collect($breakdown->lines)->map(fn ($line) => [
+                    'name' => $line->name,
+                    'type' => $line->type->value,
+                    'amount' => $line->amount,
+                    'formula' => $line->formula,
+                ]),
+            ],
             'employee' => [
                 'employee_code' => $employee->employee_code,
                 'name' => $employee->fullName(),

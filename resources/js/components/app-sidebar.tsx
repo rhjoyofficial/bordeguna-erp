@@ -3,11 +3,11 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, FileUp, Fingerprint, Palmtree, PenSquare, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
+import { Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, FileUp, Fingerprint, Palmtree, PenSquare, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
-    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, canManageScheduling, canManageAttendance, canManageLeave, hasEmployeeProfile } =
+    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, canManageScheduling, canManageAttendance, canManageLeave, canAccessSalary, hasEmployeeProfile } =
         usePage<SharedData>().props;
 
     const navGroups: NavGroup[] = [
@@ -81,6 +81,14 @@ export function AppSidebar() {
                   {
                       label: 'Leave',
                       items: [{ title: 'Leave & movement', url: '/hrm/leave', icon: Palmtree }],
+                  },
+              ]
+            : []),
+        ...(canAccessSalary
+            ? [
+                  {
+                      label: 'Payroll',
+                      items: [{ title: 'Salary structures', url: '/hrm/salary', icon: Wallet }],
                   },
               ]
             : []),

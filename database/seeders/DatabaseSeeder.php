@@ -12,6 +12,7 @@ use App\Modules\Hrm\database\seeders\BangladeshHolidayCalendarSeeder;
 use App\Modules\Hrm\database\seeders\HrmChangeRequestWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\LeaveTypeSeeder;
 use App\Modules\Hrm\database\seeders\LeaveWorkflowSeeder;
+use App\Modules\Hrm\database\seeders\SalaryComponentSeeder;
 use App\Modules\Hrm\database\seeders\HrmPermissionsSeeder;
 use App\Modules\Inventory\database\seeders\InventoryDemoDataSeeder;
 use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
@@ -46,6 +47,7 @@ class DatabaseSeeder extends Seeder
         $this->call(AttendanceCorrectionWorkflowSeeder::class);
         $this->call(LeaveTypeSeeder::class);
         $this->call(LeaveWorkflowSeeder::class);
+        $this->call(SalaryComponentSeeder::class);
         $this->call(InventoryReasonsSeeder::class);
         $this->call(InventoryDemoDataSeeder::class);
     }

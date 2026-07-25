@@ -55,6 +55,7 @@ export interface SharedData {
     canManageScheduling: boolean;
     canManageAttendance: boolean;
     canManageLeave: boolean;
+    canAccessSalary: boolean;
     hasEmployeeProfile: boolean;
     [key: string]: unknown;
 }

@@ -7,6 +7,7 @@ use App\Modules\Hrm\Http\Controllers\AttendancePunchController;
 use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
 use App\Modules\Hrm\Http\Controllers\LeaveController;
+use App\Modules\Hrm\Http\Controllers\SalaryController;
 use App\Modules\Hrm\Http\Controllers\SelfLeaveController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\ScheduleController;
@@ -110,4 +111,14 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // Corrections C6b/C6d — preview and commit share one computation.
     Route::get('leave/year-end', [LeaveController::class, 'yearEnd'])->name('leave.year-end');
     Route::post('leave/year-end', [LeaveController::class, 'runYearEnd'])->name('leave.year-end.run');
+
+    // Salary structure (SAL-01..06, C3, C7c). Read is gated by
+    // hrm.salary.manage OR hrm.salary.view per Correction C5 / ACL-02; writes
+    // need manage. Department Managers hold neither.
+    Route::get('salary', [SalaryController::class, 'index'])->name('salary.index');
+    Route::get('salary/{employee}', [SalaryController::class, 'show'])->name('salary.show');
+    Route::post('salary/{employee}', [SalaryController::class, 'store'])->name('salary.store');
+    Route::post('salary-components', [SalaryController::class, 'storeComponent'])->name('salary.components.store');
+    Route::put('salary-components/{component}', [SalaryController::class, 'updateComponent'])->name('salary.components.update');
+    Route::patch('salary-components/{component}/toggle', [SalaryController::class, 'toggleComponent'])->name('salary.components.toggle');
 });

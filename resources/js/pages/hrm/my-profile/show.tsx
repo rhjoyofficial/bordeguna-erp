@@ -90,11 +90,27 @@ interface ChangeRequestRow {
     requested_at: string;
 }
 
+interface SalaryLine {
+    name: string;
+    type: string;
+    amount: number;
+    formula: string;
+}
+
+interface Salary {
+    effective_from: string;
+    basic: number;
+    gross: number;
+    lines: SalaryLine[];
+}
+
 interface ShowProps {
     employee: Profile;
     requestable: RequestableGroup[];
     mfs_providers: Option[];
     change_requests: ChangeRequestRow[];
+    /** ACL-02 lists the employee themselves among those who may see salary — their own only. */
+    salary: Salary | null;
 }
 
 const statusVariant: Record<string, 'secondary' | 'default' | 'outline' | 'destructive'> = {
@@ -196,7 +212,9 @@ function RequestUpdateDialog({ group, mfsProviders }: { group: RequestableGroup;
     );
 }
 
-export default function MyProfile({ employee, requestable, mfs_providers, change_requests }: ShowProps) {
+export default function MyProfile({ employee, requestable, mfs_providers, change_requests, salary }: ShowProps) {
+    const money = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="My profile" />
@@ -280,6 +298,32 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                         <p className="text-sm text-muted-foreground">No current placement in this business.</p>
                     )}
                 </div>
+
+                {salary !== null && (
+                    <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
+                        <h3 className="mb-1 text-sm font-medium">My salary</h3>
+                        <p className="mb-3 text-xs text-muted-foreground">
+                            In effect since {salary.effective_from}. These are your contractual figures — what a month actually pays also depends on
+                            attendance, leave and any adjustments, and appears on your payslip.
+                        </p>
+                        <table className="w-full min-w-[28rem] text-sm">
+                            <tbody>
+                                {salary.lines
+                                    .filter((l) => l.type === 'earning')
+                                    .map((l) => (
+                                        <tr key={l.name} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                            <td className="py-2">{l.name}</td>
+                                            <td className="py-2 text-right">{money(l.amount)}</td>
+                                        </tr>
+                                    ))}
+                                <tr className="font-medium">
+                                    <td className="py-2">Gross</td>
+                                    <td className="py-2 text-right">{money(salary.gross)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                )}
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">My update requests</h3>
