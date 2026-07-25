@@ -2,6 +2,7 @@
 
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
+use App\Modules\Hrm\Http\Controllers\ScheduleController;
 use App\Modules\Hrm\Http\Controllers\SelfServiceController;
 use App\Modules\Hrm\Http\Controllers\ShiftController;
 use Illuminate\Support\Facades\Route;
@@ -43,4 +44,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::delete('calendars/{calendar}', [HolidayCalendarController::class, 'destroy'])->name('calendars.destroy');
     Route::post('calendars/{calendar}/holidays', [HolidayCalendarController::class, 'storeHoliday'])->name('calendars.holidays.store');
     Route::delete('calendars/{calendar}/holidays/{holiday}', [HolidayCalendarController::class, 'destroyHoliday'])->name('calendars.holidays.destroy');
+
+    // Scheduling — binding shifts/calendars to groups and individuals (SCH-01/06/07)
+    // and the resulting roster. {schedule} is business-scoped.
+    Route::get('schedules', [ScheduleController::class, 'index'])->name('schedules.index');
+    Route::post('schedules', [ScheduleController::class, 'store'])->name('schedules.store');
+    Route::patch('schedules/{assignment}/end', [ScheduleController::class, 'end'])->name('schedules.end');
+    Route::delete('schedules/{assignment}', [ScheduleController::class, 'destroy'])->name('schedules.destroy');
 });
