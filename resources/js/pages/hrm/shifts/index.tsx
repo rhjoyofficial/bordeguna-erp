@@ -25,6 +25,7 @@ interface Shift {
     end_time: string;
     grace_minutes: number;
     break_minutes: number;
+    break_policy: string | null;
     minimum_payable_hours: string | null;
     late_threshold_minutes: number | null;
     early_leave_threshold_minutes: number | null;
@@ -35,7 +36,10 @@ interface Shift {
 
 interface IndexProps {
     shifts: Shift[];
+    break_policies: { value: string; label: string }[];
 }
+
+const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Shifts', href: '/hrm/shifts' }];
 
@@ -45,6 +49,7 @@ type FormState = {
     end_time: string;
     grace_minutes: string;
     break_minutes: string;
+    break_policy: string;
     minimum_payable_hours: string;
     late_threshold_minutes: string;
     early_leave_threshold_minutes: string;
@@ -59,6 +64,7 @@ function blankForm(): FormState {
         end_time: '18:00',
         grace_minutes: '15',
         break_minutes: '60',
+        break_policy: 'fixed_deduction',
         minimum_payable_hours: '',
         late_threshold_minutes: '',
         early_leave_threshold_minutes: '',
@@ -75,6 +81,7 @@ function formFrom(shift: Shift): FormState {
         end_time: shift.end_time,
         grace_minutes: str(shift.grace_minutes),
         break_minutes: str(shift.break_minutes),
+        break_policy: shift.break_policy ?? 'fixed_deduction',
         minimum_payable_hours: str(shift.minimum_payable_hours),
         late_threshold_minutes: str(shift.late_threshold_minutes),
         early_leave_threshold_minutes: str(shift.early_leave_threshold_minutes),
@@ -83,7 +90,7 @@ function formFrom(shift: Shift): FormState {
     };
 }
 
-function ShiftDialog({ shift, trigger }: { shift?: Shift; trigger: React.ReactNode }) {
+function ShiftDialog({ shift, trigger, breakPolicies }: { shift?: Shift; trigger: React.ReactNode; breakPolicies: { value: string; label: string }[] }) {
     const [open, setOpen] = useState(false);
     const [form, setForm] = useState<FormState>(() => (shift ? formFrom(shift) : blankForm()));
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -99,6 +106,7 @@ function ShiftDialog({ shift, trigger }: { shift?: Shift; trigger: React.ReactNo
             end_time: form.end_time,
             grace_minutes: Number(form.grace_minutes || 0),
             break_minutes: Number(form.break_minutes || 0),
+            break_policy: form.break_policy,
             minimum_payable_hours: numberOrNull(form.minimum_payable_hours),
             late_threshold_minutes: numberOrNull(form.late_threshold_minutes),
             early_leave_threshold_minutes: numberOrNull(form.early_leave_threshold_minutes),
@@ -162,6 +170,22 @@ function ShiftDialog({ shift, trigger }: { shift?: Shift; trigger: React.ReactNo
                         <NumberField field="minimum_payable_hours" label="Min payable hours" />
                         <NumberField field="late_threshold_minutes" label="Late threshold (min)" />
                         <NumberField field="early_leave_threshold_minutes" label="Early-leave threshold (min)" />
+                        <div className="grid gap-2 sm:col-span-2">
+                            <Label htmlFor="break_policy">Break treatment</Label>
+                            <select
+                                id="break_policy"
+                                className={selectClass}
+                                value={form.break_policy}
+                                onChange={(e) => set('break_policy', e.target.value)}
+                            >
+                                {breakPolicies.map((policy) => (
+                                    <option key={policy.value} value={policy.value}>
+                                        {policy.label}
+                                    </option>
+                                ))}
+                            </select>
+                            {errors.break_policy && <p className="text-xs text-destructive">{errors.break_policy}</p>}
+                        </div>
                     </div>
                     <label className="flex items-center gap-2 text-sm">
                         <input type="checkbox" checked={form.is_overnight} onChange={(e) => set('is_overnight', e.target.checked)} />
@@ -182,14 +206,14 @@ function ShiftDialog({ shift, trigger }: { shift?: Shift; trigger: React.ReactNo
     );
 }
 
-export default function ShiftsIndex({ shifts }: IndexProps) {
+export default function ShiftsIndex({ shifts, break_policies }: IndexProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Shifts" />
             <div className="flex flex-col gap-4 p-4">
                 <div className="flex items-center justify-between gap-3">
                     <h2 className="text-lg font-medium">Shifts</h2>
-                    <ShiftDialog trigger={<Button size="sm">New shift</Button>} />
+                    <ShiftDialog breakPolicies={break_policies} trigger={<Button size="sm">New shift</Button>} />
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
@@ -231,6 +255,7 @@ export default function ShiftsIndex({ shifts }: IndexProps) {
                                         <td className="py-2 text-right whitespace-nowrap">
                                             <ShiftDialog
                                                 shift={shift}
+                                                breakPolicies={break_policies}
                                                 trigger={
                                                     <Button variant="ghost" size="sm">
                                                         Edit

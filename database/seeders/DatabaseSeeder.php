@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
 use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
 use App\Modules\Foundation\database\seeders\FoundationSeeder;
+use App\Modules\Hrm\database\seeders\AttendancePolicySeeder;
 use App\Modules\Hrm\database\seeders\BangladeshHolidayCalendarSeeder;
 use App\Modules\Hrm\database\seeders\HrmChangeRequestWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\HrmPermissionsSeeder;
@@ -38,6 +39,7 @@ class DatabaseSeeder extends Seeder
         $this->call(ApprovalWorkflowSeeder::class);
         $this->call(HrmChangeRequestWorkflowSeeder::class);
         $this->call(BangladeshHolidayCalendarSeeder::class);
+        $this->call(AttendancePolicySeeder::class);
         $this->call(InventoryReasonsSeeder::class);
         $this->call(InventoryDemoDataSeeder::class);
     }

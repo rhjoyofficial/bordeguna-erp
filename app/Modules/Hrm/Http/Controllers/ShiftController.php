@@ -27,6 +27,11 @@ class ShiftController extends Controller
 
         return Inertia::render('hrm/shifts/index', [
             'shifts' => $shifts,
+            'break_policies' => collect(\App\Modules\Hrm\Enums\BreakPolicy::cases())
+                ->map(fn (\App\Modules\Hrm\Enums\BreakPolicy $policy) => [
+                    'value' => $policy->value,
+                    'label' => $policy->label(),
+                ]),
         ]);
     }
 
@@ -82,6 +87,11 @@ class ShiftController extends Controller
             'end_time' => ['required', 'date_format:H:i'],
             'grace_minutes' => ['required', 'integer', 'min:0', 'max:1440'],
             'break_minutes' => ['required', 'integer', 'min:0', 'max:1440'],
+            // POL-08: how break time is treated varies by shift, so the choice
+            // lives here rather than in the processing engine. Optional — an
+            // omitted value keeps the column default, so this stays additive
+            // for anything already creating shifts without it.
+            'break_policy' => ['sometimes', 'required', new \Illuminate\Validation\Rules\Enum(\App\Modules\Hrm\Enums\BreakPolicy::class)],
             'minimum_payable_hours' => ['nullable', 'numeric', 'min:0', 'max:24'],
             'late_threshold_minutes' => ['nullable', 'integer', 'min:0', 'max:1440'],
             'early_leave_threshold_minutes' => ['nullable', 'integer', 'min:0', 'max:1440'],
@@ -112,6 +122,7 @@ class ShiftController extends Controller
             'end_time' => $shift->timeValue('end_time'),
             'grace_minutes' => $shift->grace_minutes,
             'break_minutes' => $shift->break_minutes,
+            'break_policy' => $shift->break_policy?->value,
             'minimum_payable_hours' => $shift->minimum_payable_hours,
             'late_threshold_minutes' => $shift->late_threshold_minutes,
             'early_leave_threshold_minutes' => $shift->early_leave_threshold_minutes,

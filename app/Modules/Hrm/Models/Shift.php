@@ -25,6 +25,7 @@ class Shift extends Model
         'end_time',
         'grace_minutes',
         'break_minutes',
+        'break_policy',
         'minimum_payable_hours',
         'late_threshold_minutes',
         'early_leave_threshold_minutes',
@@ -38,6 +39,7 @@ class Shift extends Model
         return [
             'grace_minutes' => 'integer',
             'break_minutes' => 'integer',
+            'break_policy' => \App\Modules\Hrm\Enums\BreakPolicy::class,
             'minimum_payable_hours' => 'decimal:2',
             'late_threshold_minutes' => 'integer',
             'early_leave_threshold_minutes' => 'integer',
@@ -51,7 +53,7 @@ class Shift extends Model
     {
         return LogOptions::defaults()
             ->logOnly([
-                'name', 'start_time', 'end_time', 'grace_minutes', 'break_minutes',
+                'name', 'start_time', 'end_time', 'grace_minutes', 'break_minutes', 'break_policy',
                 'minimum_payable_hours', 'late_threshold_minutes', 'early_leave_threshold_minutes',
                 'is_overnight', 'cross_midnight_window_minutes', 'is_active',
             ])

@@ -1,0 +1,143 @@
+<?php
+
+namespace App\Modules\Hrm\Attendance\Stages;
+
+use App\Modules\Hrm\Attendance\Contracts\AttendanceStage;
+use App\Modules\Hrm\Attendance\Data\AttendanceComputation;
+use App\Modules\Hrm\Enums\AttendanceStatus;
+
+/**
+ * Stage 7 — lateness, early departure and the half-day rules (POL-02/04/05).
+ *
+ * Only runs on a day that resolved to Present: there is no such thing as a late
+ * absence, and a missing punch is a blocked day rather than a punctual one.
+ *
+ * Note that being late does not consume any "free" grace here. POL-03's real
+ * policy counts arrivals from 09:00:01 — including those inside the 15-minute
+ * grace — and merely excuses the first few. So lateness is measured from the
+ * shift start, and forgiveness is entirely the occurrence ladder's job in
+ * stage 8. Treating grace as "not late" would silently discard the counter the
+ * policy is built on.
+ */
+class ApplyGraceAndThresholds implements AttendanceStage
+{
+    public function handle(AttendanceComputation $computation): AttendanceComputation
+    {
+        if ($computation->status !== AttendanceStatus::Present) {
+            return $computation;
+        }
+
+        $context = $computation->context;
+        $shift = $context->shift;
+
+        if (! $context->judgesPunctuality() || $shift === null) {
+            return $computation->note('Schedule is not judged on punctuality, so only hours worked matter.');
+        }
+
+        $computation = $this->applyLateness($computation, $shift);
+        $computation = $this->applyEarlyDeparture($computation, $shift);
+
+        return $this->applyHalfDay($computation);
+    }
+
+    private function applyLateness(AttendanceComputation $computation, $shift): AttendanceComputation
+    {
+        $firstIn = $computation->firstIn;
+
+        if ($firstIn === null || $firstIn->lte($shift->start)) {
+            return $computation;
+        }
+
+        $lateMinutes = (int) ceil($shift->start->diffInSeconds($firstIn) / 60);
+
+        return $computation
+            ->with(['lateMinutes' => $lateMinutes, 'status' => AttendanceStatus::Late])
+            ->note(sprintf(
+                'Arrived %s, %d minute%s after the %s start of %s.',
+                $firstIn->format('H:i:s'),
+                $lateMinutes,
+                $lateMinutes === 1 ? '' : 's',
+                $shift->name,
+                $shift->start->format('H:i'),
+            ));
+    }
+
+    private function applyEarlyDeparture(AttendanceComputation $computation, $shift): AttendanceComputation
+    {
+        $lastOut = $computation->lastOut;
+
+        if ($lastOut === null || $lastOut->gte($shift->end)) {
+            return $computation;
+        }
+
+        $earlyMinutes = (int) ceil($lastOut->diffInSeconds($shift->end) / 60);
+        $grace = $computation->context->policy->earlyLeaveGraceMinutes;
+
+        $computation = $computation->with(['earlyLeaveMinutes' => $earlyMinutes]);
+
+        if ($earlyMinutes <= $grace) {
+            return $computation->note(sprintf(
+                'Left %d minute%s early, within the %d minute grace.',
+                $earlyMinutes,
+                $earlyMinutes === 1 ? '' : 's',
+                $grace,
+            ));
+        }
+
+        // POL-04: an approved early departure carries no deduction. Approval
+        // arrives with movements in Phase 2c, so for now it is flagged for a
+        // human rather than silently penalised.
+        return $computation
+            ->flag('early_departure')
+            ->flag('needs_review')
+            ->note(sprintf(
+                'Left %s, %d minutes before the shift end of %s — beyond the %d minute grace (POL-04).',
+                $lastOut->format('H:i:s'),
+                $earlyMinutes,
+                $shift->end->format('H:i'),
+                $grace,
+            ));
+    }
+
+    /**
+     * POL-05 answered "Configurable", so the half-day boundary is policy data:
+     * either too few hours worked, or an arrival past a configured cutoff.
+     */
+    private function applyHalfDay(AttendanceComputation $computation): AttendanceComputation
+    {
+        $policy = $computation->context->policy;
+        $hours = $computation->payableMinutes / 60;
+
+        if ($hours <= $policy->halfDayMaximumHours) {
+            return $computation
+                ->with(['status' => AttendanceStatus::HalfDay])
+                ->note(sprintf(
+                    'Payable %s is at or below the half-day maximum of %s hours.',
+                    number_format($hours, 2),
+                    number_format($policy->halfDayMaximumHours, 2),
+                ));
+        }
+
+        if ($policy->halfDayArrivalAfterMinutes !== null
+            && $computation->lateMinutes > $policy->halfDayArrivalAfterMinutes) {
+            return $computation
+                ->with(['status' => AttendanceStatus::HalfDay])
+                ->note(sprintf(
+                    'Arrived more than %d minutes late, which the policy treats as a half day.',
+                    $policy->halfDayArrivalAfterMinutes,
+                ));
+        }
+
+        if ($hours < $policy->fullDayMinimumHours) {
+            return $computation
+                ->flag('short_day')
+                ->note(sprintf(
+                    'Payable %s is under the full-day minimum of %s hours.',
+                    number_format($hours, 2),
+                    number_format($policy->fullDayMinimumHours, 2),
+                ));
+        }
+
+        return $computation;
+    }
+}

@@ -3,6 +3,7 @@
 use App\Modules\Hrm\Http\Controllers\AttendanceClockController;
 use App\Modules\Hrm\Http\Controllers\AttendanceImportController;
 use App\Modules\Hrm\Http\Controllers\AttendancePunchController;
+use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\ScheduleController;
@@ -66,4 +67,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('attendance', [AttendancePunchController::class, 'store'])->name('attendance.store');
     Route::get('attendance/import', [AttendanceImportController::class, 'index'])->name('attendance.import.index');
     Route::post('attendance/import', [AttendanceImportController::class, 'store'])->name('attendance.import.store');
+
+    // Processed attendance (POL-02..12). Derived and recalculable, unlike the
+    // punches beneath it; finalising is the POL-06 human review step.
+    Route::get('attendance/daily', [DailyAttendanceController::class, 'index'])->name('attendance.daily.index');
+    Route::post('attendance/daily/process', [DailyAttendanceController::class, 'process'])->name('attendance.daily.process');
+    Route::post('attendance/daily/finalize', [DailyAttendanceController::class, 'finalize'])->name('attendance.daily.finalize');
 });
