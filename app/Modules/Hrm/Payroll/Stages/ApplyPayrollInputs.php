@@ -41,8 +41,11 @@ class ApplyPayrollInputs implements PayrollStage
             label: $input->label,
             type: $input->type,
             amount: round($input->amount, 2),
-            quantity: null,
-            rate: null,
+            // Carried through rather than dropped: a loan installment is one of
+            // a counted series, and PAY-13 asks for the quantity and rate behind
+            // an amount. A bonus or adjustment supplies neither and stays null.
+            quantity: $input->quantity,
+            rate: $input->rate,
             formula: $input->note ?? number_format($input->amount, 2),
             source: $input->source,
         );

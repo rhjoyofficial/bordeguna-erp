@@ -26,6 +26,7 @@ class TransitionPayrollRun
     public function __construct(
         private readonly NotifyStageApprovers $notify,
         private readonly PostPayrollRecoveries $recoveries,
+        private readonly PostLoanRepayments $loanRepayments,
     ) {}
 
     /**
@@ -95,8 +96,16 @@ class TransitionPayrollRun
             'disbursed_by' => $user->id,
         ]);
 
-        // PAY-11 / C8c: disbursement is the first moment a recovery deduction is
-        // real money, so it is also the first moment the balance may shrink.
+        // Disbursement is the first moment any of these deductions is real
+        // money, so it is the only moment a balance may shrink. Both ledgers are
+        // posted here for the same reason: a run recalculated before this point
+        // must always see the balances it started with.
+        //
+        // ADJ-07 loans first, then PAY-11's carry-forward. The order is
+        // immaterial — each reads its own payslip lines and neither derives
+        // anything from the other — but keeping it fixed makes a ledger read in
+        // a predictable sequence.
+        $this->loanRepayments->handle($run);
         $this->recoveries->handle($run);
 
         return $run->fresh();

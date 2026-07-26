@@ -33,6 +33,10 @@ class PayrollInputWorkflowSeeder extends Seeder
         'bonus_award' => 'Bonus approval',
         'payroll_adjustment' => 'Payroll adjustment approval',
         'salary_revision' => 'Salary revision approval',
+        // ADJ-07's first ticked item. A loan is money leaving the company, so
+        // the preparer/approver split matters here for the same reason it does
+        // on an adjustment.
+        'loan' => 'Loan and advance approval',
     ];
 
     public function run(): void

@@ -3,7 +3,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Banknote, Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileUp, Fingerprint, Palmtree, PenSquare, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
+import { Banknote, Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileUp, Fingerprint, HandCoins, Palmtree, PenSquare, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
@@ -94,6 +94,7 @@ export function AppSidebar() {
                           ...(canManagePayroll
                               ? [
                                     { title: 'Payroll inputs', url: '/hrm/payroll-inputs', icon: Coins },
+                                    { title: 'Loans & advances', url: '/hrm/loans', icon: HandCoins },
                                     { title: 'Payroll runs', url: '/hrm/payroll', icon: Banknote },
                                 ]
                               : []),

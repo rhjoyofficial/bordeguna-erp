@@ -7,6 +7,7 @@ use App\Modules\Hrm\Http\Controllers\AttendancePunchController;
 use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
 use App\Modules\Hrm\Http\Controllers\LeaveController;
+use App\Modules\Hrm\Http\Controllers\LoanController;
 use App\Modules\Hrm\Http\Controllers\PayrollController;
 use App\Modules\Hrm\Http\Controllers\PayrollInputController;
 use App\Modules\Hrm\Http\Controllers\SalaryController;
@@ -151,6 +152,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('payroll-adjustments', [PayrollInputController::class, 'storeAdjustment'])->name('adjustments.store');
     Route::post('payroll-adjustments/{adjustment}/approve', [PayrollInputController::class, 'approveAdjustment'])->name('adjustments.approve');
     Route::post('payroll-adjustments/{adjustment}/reject', [PayrollInputController::class, 'rejectAdjustment'])->name('adjustments.reject');
+
+    // Loans and salary advances (ADJ-07). Approval disburses — before that a
+    // loan owes nothing, so payroll deducts nothing.
+    Route::get('loans', [LoanController::class, 'index'])->name('loans.index');
+    Route::get('loans/preview', [LoanController::class, 'preview'])->name('loans.preview');
+    Route::post('loans', [LoanController::class, 'store'])->name('loans.store');
+    Route::post('loans/{loan}/approve', [LoanController::class, 'approve'])->name('loans.approve');
+    Route::post('loans/{loan}/reject', [LoanController::class, 'reject'])->name('loans.reject');
+    Route::post('loans/{loan}/settle', [LoanController::class, 'settle'])->name('loans.settle');
 
     // PAY-11's manual resolution: carry a shortfall forward, then recalculate.
     Route::post('payslips/{payslip}/carry-forward', [PayrollInputController::class, 'carryForward'])->name('payslips.carry-forward');

@@ -7,6 +7,7 @@ use App\Modules\Hrm\Models\BonusAward;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\LeaveRequest;
+use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\OvertimeAssignment;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollPeriod;
@@ -57,8 +58,7 @@ class PayrollContextBuilder
             // the attendance engine entirely out of payroll's reach.
             overtimeHours: $this->overtimeHours($employee, $spec->start, $spec->end),
             allowances: $this->bonuses($employee, $period),
-            // ADJ-07's loans arrive in Phase 3e; the seam stays open.
-            loanInstallments: [],
+            loanInstallments: $this->loanInstallments($employee, $period),
             adjustments: $this->adjustments($employee, $period),
             config: $config,
             joiningDate: $employee->joining_date?->toDateString(),
@@ -159,6 +159,69 @@ class PayrollContextBuilder
                 source: "bonus_award:{$award->id}",
             ))
             ->all();
+    }
+
+    /**
+     * The loan installments due this payroll month (ADJ-07).
+     *
+     * **This method must never read a balance the current run has already
+     * changed, and it does not.** A repayment is posted to the loan ledger only
+     * when a run is *disbursed*, so every recalculation of an open run sees the
+     * same outstanding figure and produces the same deduction. That is what
+     * keeps loan recovery non-circular: the amount deducted is the scheduled
+     * installment, a fixed number decided when the loan was disbursed — never
+     * something derived from the net it is about to reduce.
+     *
+     * It is also why nothing here tries to be affordable. Capping an installment
+     * at what the payslip can bear would make the deduction depend on the net
+     * and the net depend on the deduction. Instead the installment stands, and
+     * if it takes the net below zero PAY-11 blocks the payslip for a human —
+     * which is a decision, not a silent adjustment.
+     *
+     * @return array<int, PayrollInput>
+     */
+    private function loanInstallments(Employee $employee, PayrollPeriod $period): array
+    {
+        $loans = Loan::with('installments')
+            ->forEmployee($employee->id)
+            ->recoverable()
+            ->applied()
+            ->get();
+
+        $inputs = [];
+
+        foreach ($loans as $loan) {
+            $installment = $loan->installmentDueIn((int) $period->year, (int) $period->month);
+
+            if ($installment === null) {
+                continue;
+            }
+
+            $outstanding = $loan->outstanding();
+            $remainingAfter = round(max(0, $outstanding - (float) $installment->amount), 2);
+
+            $inputs[] = PayrollInput::deduction(
+                code: 'loan_repayment',
+                label: $loan->type->deductionLabel(),
+                amount: (float) $installment->amount,
+                // PAY-13's explainability requirement, applied to the question a
+                // borrower actually asks: which loan, how far through, and how
+                // much is left after this.
+                note: sprintf(
+                    '%s %s — installment %d of %d; %s outstanding after this.',
+                    $loan->type->label(),
+                    $loan->reference,
+                    $installment->sequence,
+                    $loan->installment_count,
+                    number_format($remainingAfter, 2),
+                ),
+                source: "loan_installment:{$installment->id}",
+                quantity: (float) $installment->sequence,
+                rate: (float) $installment->amount,
+            );
+        }
+
+        return $inputs;
     }
 
     /**

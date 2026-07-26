@@ -7,6 +7,7 @@ use App\Modules\Foundation\Models\ChangeRequest;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\BonusAward;
 use App\Modules\Hrm\Models\LeaveRequest;
+use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\Movement;
 use App\Modules\Hrm\Models\OvertimeAssignment;
 use App\Modules\Hrm\Models\PayrollAdjustment;
@@ -157,6 +158,16 @@ class ApprovalInboxController extends Controller
                 'summary' => $approvable->summaryLine(),
                 'approve_url' => route('hrm.payroll.unlock.approve', $approvable),
                 'reject_url' => route('hrm.payroll.unlock.reject', $approvable),
+            ];
+        }
+
+        if ($approvable instanceof Loan) {
+            return [
+                ...$shared,
+                'type' => 'Loan / advance',
+                'summary' => $approvable->summaryLine().' — '.$approvable->reason,
+                'approve_url' => route('hrm.loans.approve', $approvable),
+                'reject_url' => route('hrm.loans.reject', $approvable),
             ];
         }
 

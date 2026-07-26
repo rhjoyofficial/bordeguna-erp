@@ -26,6 +26,16 @@ final readonly class PayrollInput
         public SalaryComponentType $type,
         public ?string $note = null,
         public string $source = 'input',
+        /**
+         * Optional provenance for an input that is one of a counted series —
+         * a loan installment is "3 of 12" at a stated rate, and PAY-13 asks for
+         * the quantity and rate behind every amount, not just the amount.
+         *
+         * Null for a bonus or an adjustment, which are single sums with nothing
+         * to count.
+         */
+        public ?float $quantity = null,
+        public ?float $rate = null,
     ) {}
 
     public static function earning(string $code, string $label, float $amount, ?string $note = null, string $source = 'input'): self
@@ -33,9 +43,16 @@ final readonly class PayrollInput
         return new self($code, $label, abs($amount), SalaryComponentType::Earning, $note, $source);
     }
 
-    public static function deduction(string $code, string $label, float $amount, ?string $note = null, string $source = 'input'): self
-    {
-        return new self($code, $label, abs($amount), SalaryComponentType::Deduction, $note, $source);
+    public static function deduction(
+        string $code,
+        string $label,
+        float $amount,
+        ?string $note = null,
+        string $source = 'input',
+        ?float $quantity = null,
+        ?float $rate = null,
+    ): self {
+        return new self($code, $label, abs($amount), SalaryComponentType::Deduction, $note, $source, $quantity, $rate);
     }
 
     public function isEarning(): bool
