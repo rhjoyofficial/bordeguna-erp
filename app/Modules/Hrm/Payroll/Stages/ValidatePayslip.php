@@ -13,11 +13,13 @@ use App\Modules\Hrm\Payroll\Data\PayrollComputation;
  * the day was worth, and PAY-11 refuses to pay a negative net automatically —
  * both are deliberate stops for a human, not errors.
  *
- * PAY-11's carry-forward balance is **not** implemented here: the questionnaire
- * ticks the block and the manual resolution but never states how a negative
- * balance is recovered, so inventing a recovery schedule would be exactly the
- * kind of assumption this project has avoided. The block is real; the recovery
- * rule stays an open decision.
+ * PAY-11's carry-forward balance was settled by Correction C8c, and deliberately
+ * **not** by adding a rule here. The block stays exactly as it was: this stage
+ * still refuses a negative net and still hands the decision to a human. What
+ * changed is what a human can then decide — carrying the shortfall forward posts
+ * a balance-ledger entry, and the resulting credit arrives on the next
+ * calculation as an ordinary input, like every other money movement payroll does
+ * not itself author. The engine gained no knowledge of balances.
  */
 class ValidatePayslip implements PayrollStage
 {

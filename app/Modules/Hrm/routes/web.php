@@ -8,7 +8,9 @@ use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
 use App\Modules\Hrm\Http\Controllers\LeaveController;
 use App\Modules\Hrm\Http\Controllers\PayrollController;
+use App\Modules\Hrm\Http\Controllers\PayrollInputController;
 use App\Modules\Hrm\Http\Controllers\SalaryController;
+use App\Modules\Hrm\Http\Controllers\SalaryRevisionController;
 use App\Modules\Hrm\Http\Controllers\SelfLeaveController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\ScheduleController;
@@ -122,6 +124,36 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('salary-components', [SalaryController::class, 'storeComponent'])->name('salary.components.store');
     Route::put('salary-components/{component}', [SalaryController::class, 'updateComponent'])->name('salary.components.update');
     Route::patch('salary-components/{component}/toggle', [SalaryController::class, 'toggleComponent'])->name('salary.components.toggle');
+
+    // Increments (ADJ-06) and the arrears SAL-05 produces. Read is gated by
+    // hrm.salary.manage OR hrm.salary.view per C5/ACL-02, like every salary
+    // screen; approve/reject authorise by workflow stage instead.
+    Route::get('salary-revisions', [SalaryRevisionController::class, 'index'])->name('revisions.index');
+    Route::post('salary-revisions', [SalaryRevisionController::class, 'store'])->name('revisions.store');
+    Route::post('salary-revisions/{revision}/approve', [SalaryRevisionController::class, 'approve'])->name('revisions.approve');
+    Route::post('salary-revisions/{revision}/reject', [SalaryRevisionController::class, 'reject'])->name('revisions.reject');
+
+    // Payroll inputs — the money the salary structure does not describe:
+    // overtime (ADJ-01..04), bonus (ADJ-05), adjustments (ADJ-08/09) and the
+    // PAY-11 carry-forward balance. Each write authorises hrm.payroll.manage;
+    // each approval authorises by workflow stage.
+    Route::get('payroll-inputs', [PayrollInputController::class, 'index'])->name('payroll.inputs.index');
+
+    Route::post('overtime', [PayrollInputController::class, 'storeOvertime'])->name('overtime.store');
+    Route::post('overtime/{overtime}/approve', [PayrollInputController::class, 'approveOvertime'])->name('overtime.approve');
+    Route::post('overtime/{overtime}/reject', [PayrollInputController::class, 'rejectOvertime'])->name('overtime.reject');
+
+    Route::post('bonus-events', [PayrollInputController::class, 'storeBonusEvent'])->name('bonus.events.store');
+    Route::post('bonus-events/{event}/awards', [PayrollInputController::class, 'awardBonus'])->name('bonus.awards.store');
+    Route::post('bonus-awards/{award}/approve', [PayrollInputController::class, 'approveBonus'])->name('bonus.awards.approve');
+    Route::post('bonus-awards/{award}/reject', [PayrollInputController::class, 'rejectBonus'])->name('bonus.awards.reject');
+
+    Route::post('payroll-adjustments', [PayrollInputController::class, 'storeAdjustment'])->name('adjustments.store');
+    Route::post('payroll-adjustments/{adjustment}/approve', [PayrollInputController::class, 'approveAdjustment'])->name('adjustments.approve');
+    Route::post('payroll-adjustments/{adjustment}/reject', [PayrollInputController::class, 'rejectAdjustment'])->name('adjustments.reject');
+
+    // PAY-11's manual resolution: carry a shortfall forward, then recalculate.
+    Route::post('payslips/{payslip}/carry-forward', [PayrollInputController::class, 'carryForward'])->name('payslips.carry-forward');
 
     // Payroll calculation (PAY-01..13). The WFL-02 lifecycle beyond
     // Draft/Calculated arrives in Phase 3c.

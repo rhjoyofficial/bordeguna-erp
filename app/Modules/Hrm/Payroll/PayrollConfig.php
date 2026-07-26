@@ -28,6 +28,12 @@ final readonly class PayrollConfig
         /** ADJ-03. */
         public int $overtimeMinimumMinutes,
         public int $overtimeRoundingMinutes,
+        /**
+         * ADJ-03's daily ceiling. Enforced when an assignment is raised rather
+         * than in the engine, because only a per-day record can be measured
+         * against a per-day limit — the engine sees a whole period at once.
+         */
+        public float $overtimeDailyMaxHours,
         public float $overtimeMonthlyMaxHours,
         /** PAY-03: absence is deducted from Gross. */
         public string $absenceRateBase,
@@ -40,6 +46,7 @@ final readonly class PayrollConfig
         float $overtimeMultiplier = 1.0,
         int $overtimeMinimumMinutes = 30,
         int $overtimeRoundingMinutes = 30,
+        float $overtimeDailyMaxHours = 4,
         float $overtimeMonthlyMaxHours = 60,
         string $absenceRateBase = 'gross',
     ): self {
@@ -50,6 +57,7 @@ final readonly class PayrollConfig
             $overtimeMultiplier,
             $overtimeMinimumMinutes,
             $overtimeRoundingMinutes,
+            $overtimeDailyMaxHours,
             $overtimeMonthlyMaxHours,
             $absenceRateBase,
         );
@@ -67,6 +75,7 @@ final readonly class PayrollConfig
             overtimeMultiplier: (float) ($config['overtime_multiplier'] ?? 1.0),
             overtimeMinimumMinutes: (int) ($config['overtime_minimum_minutes'] ?? 30),
             overtimeRoundingMinutes: (int) ($config['overtime_rounding_minutes'] ?? 30),
+            overtimeDailyMaxHours: (float) ($config['overtime_daily_max_hours'] ?? 4),
             overtimeMonthlyMaxHours: (float) ($config['overtime_monthly_max_hours'] ?? 60),
             absenceRateBase: $config['absence_rate_base'] ?? 'gross',
         );
@@ -84,6 +93,7 @@ final readonly class PayrollConfig
             'overtime_multiplier' => $this->overtimeMultiplier,
             'overtime_minimum_minutes' => $this->overtimeMinimumMinutes,
             'overtime_rounding_minutes' => $this->overtimeRoundingMinutes,
+            'overtime_daily_max_hours' => $this->overtimeDailyMaxHours,
             'overtime_monthly_max_hours' => $this->overtimeMonthlyMaxHours,
             'absence_rate_base' => $this->absenceRateBase,
         ];

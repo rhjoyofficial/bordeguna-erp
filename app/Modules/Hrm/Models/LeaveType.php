@@ -20,6 +20,13 @@ class LeaveType extends Model
 {
     use BelongsToBusiness, HasFactory, LogsActivity;
 
+    /**
+     * Where ADJ-04's holiday-overtime credit lands (Correction C8b). Named as a
+     * constant because payroll posts to it by code — a rename in HR's screen
+     * must not silently detach the credit from its destination.
+     */
+    public const COMPENSATORY = 'compensatory';
+
     protected $fillable = [
         'business_id',
         'name',

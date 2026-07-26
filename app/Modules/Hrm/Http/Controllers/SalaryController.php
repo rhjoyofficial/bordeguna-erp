@@ -102,6 +102,8 @@ class SalaryController extends Controller
         $validated = $request->validate([
             'effective_from' => ['required', 'date'],
             'reason' => ['nullable', 'string', 'max:255'],
+            // ADJ-01 / Correction C8d — who may be assigned overtime at all.
+            'overtime_eligible' => ['nullable', 'boolean'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.salary_component_id' => [
                 'required', 'integer',
@@ -110,7 +112,13 @@ class SalaryController extends Controller
             'lines.*.value' => ['required', 'numeric', 'min:0'],
         ]);
 
-        $action->handle($employee, $validated['effective_from'], $validated['lines'], $validated['reason'] ?? null);
+        $action->handle(
+            $employee,
+            $validated['effective_from'],
+            $validated['lines'],
+            $validated['reason'] ?? null,
+            (bool) ($validated['overtime_eligible'] ?? false),
+        );
 
         return back()->with('success', 'Salary structure saved.');
     }
@@ -237,6 +245,7 @@ class SalaryController extends Controller
             // same thing made a scheduled increment invisible.
             'is_current' => $currentId !== null && $structure->id === $currentId,
             'is_future' => $from->gt(Carbon::today()),
+            'overtime_eligible' => (bool) $structure->overtime_eligible,
             'reason' => $structure->reason,
             'created_by' => $structure->creator?->name,
             'basic' => $breakdown->basic,

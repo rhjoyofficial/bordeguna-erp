@@ -38,6 +38,18 @@ class ApplyOvertime implements PayrollStage
             return $computation;
         }
 
+        // ADJ-01 / Correction C8d. Assignments are already refused for an
+        // ineligible employee, so reaching this is unusual — an eligibility flag
+        // turned off after the fact. Saying so beats paying quietly or dropping
+        // the hours without a word.
+        if (! $context->overtimeEligible) {
+            return $computation->note(sprintf(
+                '%s hour%s of overtime were recorded but not paid: this employee is not overtime-eligible on the salary structure in force (ADJ-01).',
+                self::trim($hours),
+                $hours == 1.0 ? '' : 's',
+            ));
+        }
+
         $minutes = $hours * 60;
 
         // ADJ-03: a stint shorter than the eligible minimum earns nothing.

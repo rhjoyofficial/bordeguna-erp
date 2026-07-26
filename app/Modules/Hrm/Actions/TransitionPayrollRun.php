@@ -23,7 +23,10 @@ use Illuminate\Validation\ValidationException;
  */
 class TransitionPayrollRun
 {
-    public function __construct(private readonly NotifyStageApprovers $notify) {}
+    public function __construct(
+        private readonly NotifyStageApprovers $notify,
+        private readonly PostPayrollRecoveries $recoveries,
+    ) {}
 
     /**
      * @throws ValidationException
@@ -91,6 +94,10 @@ class TransitionPayrollRun
             'disbursed_at' => now(),
             'disbursed_by' => $user->id,
         ]);
+
+        // PAY-11 / C8c: disbursement is the first moment a recovery deduction is
+        // real money, so it is also the first moment the balance may shrink.
+        $this->recoveries->handle($run);
 
         return $run->fresh();
     }

@@ -31,15 +31,20 @@ class SaveSalaryStructure
      *
      * @throws ValidationException
      */
-    public function handle(Employee $employee, string $effectiveFrom, array $lines, ?string $reason = null): SalaryStructure
-    {
+    public function handle(
+        Employee $employee,
+        string $effectiveFrom,
+        array $lines,
+        ?string $reason = null,
+        bool $overtimeEligible = false,
+    ): SalaryStructure {
         $from = Carbon::parse($effectiveFrom)->startOfDay();
 
         $businessId = $this->owningBusinessId($employee);
         $this->guardLines($lines);
         $this->guardLaterStructure($employee, $from);
 
-        return DB::transaction(function () use ($employee, $from, $lines, $reason, $businessId) {
+        return DB::transaction(function () use ($employee, $from, $lines, $reason, $businessId, $overtimeEligible) {
             $current = SalaryStructure::withoutGlobalScope(BusinessScope::class)
                 ->where('employee_id', $employee->id)
                 ->activeOn($from)
@@ -64,6 +69,11 @@ class SaveSalaryStructure
                 'employee_id' => $employee->id,
                 'effective_from' => $from,
                 'effective_to' => null,
+                // ADJ-01 through Correction C8d — eligibility rides on the
+                // structure so it is effective-dated like every other salary
+                // fact, and a historical recalculation uses the eligibility
+                // that was actually in force rather than today's.
+                'overtime_eligible' => $overtimeEligible,
                 'reason' => $reason,
                 'created_by' => Auth::id(),
             ]);

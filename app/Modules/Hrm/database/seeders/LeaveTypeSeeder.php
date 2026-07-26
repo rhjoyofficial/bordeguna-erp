@@ -60,6 +60,21 @@ class LeaveTypeSeeder extends Seeder
                 'allows_half_day' => true, 'can_carry_forward' => false, 'can_encash' => false,
             ],
             [
+                /**
+                 * ADJ-04 via Correction C8b — where holiday overtime is
+                 * compensated.
+                 *
+                 * No annual quota: this balance is *earned* by working a
+                 * holiday, never granted. It neither carries forward nor
+                 * encashes, deliberately: ADJ-04 declined every pay multiple, so
+                 * turning the credit into a year-end cash liability would
+                 * reintroduce by the back door exactly what it refused.
+                 */
+                'code' => 'compensatory', 'name' => 'Compensatory Leave',
+                'annual_quota' => 0, 'is_paid' => true, 'deducts_balance' => true,
+                'allows_half_day' => true, 'can_carry_forward' => false, 'can_encash' => false,
+            ],
+            [
                 'code' => 'special', 'name' => 'Special Leave',
                 'annual_quota' => 0, 'is_paid' => true, 'deducts_balance' => false,
                 'allows_half_day' => true, 'can_carry_forward' => false, 'can_encash' => false,

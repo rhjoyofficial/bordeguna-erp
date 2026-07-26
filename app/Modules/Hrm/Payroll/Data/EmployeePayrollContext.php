@@ -35,6 +35,12 @@ final readonly class EmployeePayrollContext
         public PayrollConfig $config,
         public ?string $joiningDate = null,
         public ?string $separationDate = null,
+        /**
+         * ADJ-01 via Correction C8d. Carried into the snapshot rather than
+         * checked at the point of request alone, so a payslip can *say* why
+         * overtime went unpaid instead of leaving a silent absence.
+         */
+        public bool $overtimeEligible = true,
     ) {}
 
     /**

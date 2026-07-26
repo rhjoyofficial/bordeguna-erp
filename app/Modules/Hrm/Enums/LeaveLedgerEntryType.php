@@ -14,6 +14,13 @@ enum LeaveLedgerEntryType: string
 {
     case Grant = 'grant';
     case CarryForward = 'carry_forward';
+    /**
+     * ADJ-04 via Correction C8b — balance *earned* by working a holiday rather
+     * than granted by policy. Its own case because the ledger's whole purpose is
+     * to explain a balance, and filing this under "annual quota granted" would
+     * misdescribe both where the day came from and why it cannot be encashed.
+     */
+    case CompensatoryCredit = 'compensatory_credit';
     case Taken = 'taken';
     case Lapse = 'lapse';
     case Encashment = 'encashment';
@@ -24,6 +31,7 @@ enum LeaveLedgerEntryType: string
         return match ($this) {
             self::Grant => 'Annual quota granted',
             self::CarryForward => 'Carried forward',
+            self::CompensatoryCredit => 'Earned by working a holiday',
             self::Taken => 'Leave taken',
             self::Lapse => 'Lapsed above the carry-forward cap',
             self::Encashment => 'Encashed',
@@ -38,6 +46,6 @@ enum LeaveLedgerEntryType: string
      */
     public function isCredit(): bool
     {
-        return in_array($this, [self::Grant, self::CarryForward], true);
+        return in_array($this, [self::Grant, self::CarryForward, self::CompensatoryCredit], true);
     }
 }

@@ -34,6 +34,7 @@ interface Structure {
     effective_to: string | null;
     is_current: boolean;
     is_future: boolean;
+    overtime_eligible: boolean;
     reason: string | null;
     created_by: string | null;
     basic: number;
@@ -67,6 +68,9 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
     const [open, setOpen] = useState(false);
     const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
     const [reason, setReason] = useState('');
+    // ADJ-01: who may be assigned overtime at all. Carried forward from the
+    // current structure so a routine revision does not silently revoke it.
+    const [overtimeEligible, setOvertimeEligible] = useState(current?.overtime_eligible ?? false);
     // Seeded from the current structure so a revision starts from today's
     // figures rather than a blank form.
     const [values, setValues] = useState<Record<number, string>>(() => {
@@ -90,7 +94,7 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
     const submit = () => {
         router.post(
             route('hrm.salary.store', employeeId),
-            { effective_from: effectiveFrom, reason: reason || null, lines: lines() },
+            { effective_from: effectiveFrom, reason: reason || null, overtime_eligible: overtimeEligible, lines: lines() },
             {
                 preserveScroll: true,
                 onError: (e: Record<string, string>) => setErrors(e),
@@ -164,6 +168,22 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
                             calculated by payroll each month.
                         </p>
                     </div>
+
+                    <label className="flex items-start gap-2 text-sm">
+                        <input
+                            type="checkbox"
+                            className="mt-1"
+                            checked={overtimeEligible}
+                            onChange={(e) => setOvertimeEligible(e.target.checked)}
+                        />
+                        <span>
+                            Eligible for overtime
+                            <span className="block text-xs text-muted-foreground">
+                                Overtime may only be assigned to an eligible employee. Held here rather than on the employee record so it is
+                                effective-dated with the rest of their salary.
+                            </span>
+                        </span>
+                    </label>
 
                     {errors.lines && <p className="text-xs text-destructive">{errors.lines}</p>}
                 </div>

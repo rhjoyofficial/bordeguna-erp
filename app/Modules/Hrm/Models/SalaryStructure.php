@@ -34,6 +34,7 @@ class SalaryStructure extends Model
         'employee_id',
         'effective_from',
         'effective_to',
+        'overtime_eligible',
         'reason',
         'created_by',
     ];
@@ -43,13 +44,14 @@ class SalaryStructure extends Model
         return [
             'effective_from' => 'date',
             'effective_to' => 'date',
+            'overtime_eligible' => 'boolean',
         ];
     }
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['employee_id', 'effective_from', 'effective_to', 'reason'])
+            ->logOnly(['employee_id', 'effective_from', 'effective_to', 'overtime_eligible', 'reason'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

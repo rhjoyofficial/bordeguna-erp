@@ -5,10 +5,14 @@ namespace App\Http\Controllers;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
 use App\Modules\Hrm\Models\AttendanceCorrection;
+use App\Modules\Hrm\Models\BonusAward;
 use App\Modules\Hrm\Models\LeaveRequest;
 use App\Modules\Hrm\Models\Movement;
+use App\Modules\Hrm\Models\OvertimeAssignment;
+use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\PayrollUnlockRequest;
+use App\Modules\Hrm\Models\SalaryRevision;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Support\ApprovalInbox;
@@ -153,6 +157,46 @@ class ApprovalInboxController extends Controller
                 'summary' => $approvable->summaryLine(),
                 'approve_url' => route('hrm.payroll.unlock.approve', $approvable),
                 'reject_url' => route('hrm.payroll.unlock.reject', $approvable),
+            ];
+        }
+
+        if ($approvable instanceof OvertimeAssignment) {
+            return [
+                ...$shared,
+                'type' => 'Overtime',
+                'summary' => $approvable->summaryLine().' — '.$approvable->reason,
+                'approve_url' => route('hrm.overtime.approve', $approvable),
+                'reject_url' => route('hrm.overtime.reject', $approvable),
+            ];
+        }
+
+        if ($approvable instanceof BonusAward) {
+            return [
+                ...$shared,
+                'type' => 'Bonus',
+                'summary' => $approvable->summaryLine().($approvable->basis_note ? " ({$approvable->basis_note})" : ''),
+                'approve_url' => route('hrm.bonus.awards.approve', $approvable),
+                'reject_url' => route('hrm.bonus.awards.reject', $approvable),
+            ];
+        }
+
+        if ($approvable instanceof PayrollAdjustment) {
+            return [
+                ...$shared,
+                'type' => 'Payroll adjustment',
+                'summary' => $approvable->summaryLine().' — '.$approvable->reason,
+                'approve_url' => route('hrm.adjustments.approve', $approvable),
+                'reject_url' => route('hrm.adjustments.reject', $approvable),
+            ];
+        }
+
+        if ($approvable instanceof SalaryRevision) {
+            return [
+                ...$shared,
+                'type' => 'Salary revision',
+                'summary' => $approvable->summaryLine().' — '.$approvable->reason,
+                'approve_url' => route('hrm.revisions.approve', $approvable),
+                'reject_url' => route('hrm.revisions.reject', $approvable),
             ];
         }
 
