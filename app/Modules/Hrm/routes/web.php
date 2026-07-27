@@ -13,6 +13,7 @@ use App\Modules\Hrm\Http\Controllers\LoanController;
 use App\Modules\Hrm\Http\Controllers\PayrollController;
 use App\Modules\Hrm\Http\Controllers\PayrollInputController;
 use App\Modules\Hrm\Http\Controllers\PayslipController;
+use App\Modules\Hrm\Http\Controllers\ReportController;
 use App\Modules\Hrm\Http\Controllers\SalaryController;
 use App\Modules\Hrm\Http\Controllers\SalaryRevisionController;
 use App\Modules\Hrm\Http\Controllers\ScheduleController;
@@ -211,4 +212,17 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('payroll/{run}/unlock-requests', [PayrollController::class, 'requestUnlock'])->name('payroll.unlock.store');
     Route::post('payroll-unlock-requests/{unlock}/approve', [PayrollController::class, 'approveUnlock'])->name('payroll.unlock.approve');
     Route::post('payroll-unlock-requests/{unlock}/reject', [PayrollController::class, 'rejectUnlock'])->name('payroll.unlock.reject');
+
+    // Reporting (W3, RPT-01/02/03). One set of routes for every report — the
+    // {report} key resolves through the ReportRegistry, which applies both the
+    // declared permission and Correction C10d's ACL-02 rule. A report the user
+    // may not run 404s rather than 403s, so the key list gives nothing away.
+    //
+    // `run` is a GET because a report is a link people bookmark, share and
+    // re-open; it changes nothing on the server beyond the activity-log entry
+    // that records who read what.
+    Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
+    Route::get('reports/downloads/{file}', [ReportController::class, 'download'])->name('reports.download');
+    Route::get('reports/{report}', [ReportController::class, 'show'])->name('reports.show');
+    Route::get('reports/{report}/run', [ReportController::class, 'run'])->name('reports.run');
 });

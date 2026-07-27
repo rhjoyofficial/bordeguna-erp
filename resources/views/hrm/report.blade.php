@@ -1,0 +1,190 @@
+{{--
+    The one template behind BOTH the PDF and the print-friendly view (RPT-03).
+
+    "Print-friendly" is not a fourth file format — it is this same document
+    served to the browser for its own print dialog. Rendering both from one
+    template is what stops the printed page and the PDF from disagreeing,
+    which they otherwise will, quietly, about exactly the figure someone is
+    checking.
+
+    Written as plain tables with simple CSS because dompdf is not a browser:
+    flexbox and grid are not laid out. The same lesson the payslip template
+    learned in 3f applies here unchanged.
+
+    $dataset  ReportDataset — columns, rows (iterated ONCE), meta, totals
+    $print    bool — true when served to a browser, false when drawn by dompdf
+--}}
+<style>
+    @page { margin: 14mm 10mm 16mm 10mm; }
+
+    body {
+        font-family: "DejaVu Sans", sans-serif;
+        font-size: 9px;
+        color: #1f2937;
+        margin: 0;
+    }
+
+    h1 { font-size: 15px; margin: 0 0 2px; }
+
+    .subtitle { font-size: 10px; color: #4b5563; margin: 0 0 8px; }
+
+    .business { font-size: 11px; font-weight: bold; color: #111827; margin: 0 0 1px; }
+
+    .filters {
+        margin: 0 0 10px;
+        padding: 5px 7px;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        font-size: 8.5px;
+        color: #374151;
+    }
+
+    .filters span { margin-right: 14px; white-space: nowrap; }
+    .filters strong { color: #111827; }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    thead th {
+        background: #eef2f7;
+        border: 1px solid #d1d5db;
+        padding: 4px 5px;
+        font-size: 8.5px;
+        text-align: left;
+        font-weight: bold;
+    }
+
+    tbody td {
+        border: 1px solid #e5e7eb;
+        padding: 3px 5px;
+        font-size: 8.5px;
+    }
+
+    tbody tr:nth-child(even) td { background: #fafafa; }
+
+    tfoot td {
+        border: 1px solid #d1d5db;
+        padding: 4px 5px;
+        font-size: 8.5px;
+        font-weight: bold;
+        background: #eef2f7;
+    }
+
+    .right { text-align: right; }
+    .center { text-align: center; }
+    .left { text-align: left; }
+
+    .empty {
+        padding: 18px;
+        text-align: center;
+        color: #6b7280;
+        border: 1px solid #e5e7eb;
+        font-size: 9px;
+    }
+
+    {{-- Fixed, so dompdf repeats it on every page. A provenance stamp that
+         marks only the first page tells you nothing about page 7, which is
+         the page that gets photocopied. --}}
+    .stamp {
+        position: fixed;
+        bottom: -11mm;
+        left: 0;
+        width: 100%;
+        text-align: center;
+        font-size: 7.5px;
+        color: #6b7280;
+    }
+
+    .unlocked { color: #b45309; font-weight: bold; }
+
+    @media print {
+        .no-print { display: none; }
+        .stamp { position: fixed; bottom: 0; }
+    }
+
+    .no-print {
+        margin: 0 0 12px;
+        padding: 8px;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        font-size: 11px;
+    }
+</style>
+
+@if ($print)
+    <div class="no-print">
+        <button onclick="window.print()">Print this report</button>
+        &nbsp; This is the print view. It is the same document the PDF export produces.
+    </div>
+@endif
+
+@if ($dataset->meta->businessName)
+    <div class="business">{{ $dataset->meta->businessName }}</div>
+@endif
+
+<h1>{{ $dataset->meta->title }}</h1>
+
+@if ($dataset->meta->subtitle)
+    <p class="subtitle">{{ $dataset->meta->subtitle }}</p>
+@endif
+
+@if (count($dataset->meta->filters) > 0)
+    <div class="filters">
+        @foreach ($dataset->meta->filters as $label => $value)
+            <span><strong>{{ $label }}:</strong> {{ $value }}</span>
+        @endforeach
+    </div>
+@endif
+
+@php
+    // The single pass. $rows is a LazyCollection and may be a database cursor,
+    // so it is walked once here and never again — including by the "is it
+    // empty?" check below, which is why that is a counter and not ->isEmpty().
+    $rendered = 0;
+@endphp
+
+<table>
+    <thead>
+        <tr>
+            @foreach ($dataset->columns as $column)
+                <th class="{{ $column->type->align() }}">{{ $column->label }}</th>
+            @endforeach
+        </tr>
+    </thead>
+    <tbody>
+        @foreach ($dataset->rows as $row)
+            @php $rendered++; @endphp
+            <tr>
+                @foreach ($dataset->columns as $column)
+                    <td class="{{ $column->type->align() }}">{{ \App\Modules\Hrm\Reporting\ReportValue::forDisplay($row[$column->key] ?? null, $column->type) }}</td>
+                @endforeach
+            </tr>
+        @endforeach
+    </tbody>
+    {{-- <tfoot> is written after <tbody> — valid HTML5, and it matters here:
+         the sums are accumulated BY the loop above, so the markup must be
+         generated after it has run or the totals print as zeros. Keeping it in
+         the same table is what keeps the columns aligned; a second table would
+         size its columns independently. --}}
+    @if ($dataset->hasTotals())
+        <tfoot>
+            <tr>
+                @foreach ($dataset->columns as $index => $column)
+                    <td class="{{ $index === 0 ? 'left' : $column->type->align() }}">{{ $index === 0 ? $dataset->totals->label() : \App\Modules\Hrm\Reporting\ReportValue::forDisplay($dataset->totals->get($column->key), $column->type) }}</td>
+                @endforeach
+            </tr>
+        </tfoot>
+    @endif
+</table>
+
+@if ($rendered === 0)
+    <div class="empty">
+        No rows matched these filters. This is an answer, not a failure — the report ran and found nothing.
+    </div>
+@endif
+
+<div class="stamp">
+    {{ $dataset->meta->stamp() }}
+    @if ($dataset->meta->lockNote)
+        <br><span class="unlocked">{{ $dataset->meta->lockNote }}</span>
+    @endif
+</div>

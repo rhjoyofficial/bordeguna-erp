@@ -3,7 +3,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Banknote, Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileUp, Fingerprint, HandCoins, Palmtree, PenSquare, ReceiptText, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
+import { Banknote, Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileBarChart, FileUp, Fingerprint, HandCoins, Palmtree, PenSquare, ReceiptText, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
@@ -100,6 +100,18 @@ export function AppSidebar() {
                                 ]
                               : []),
                       ],
+                  },
+              ]
+            : []),
+        // Reporting (W3). Shown to anyone who can reach at least one report;
+        // the list itself is filtered per user server-side by ReportRegistry,
+        // which also re-applies ACL-02 — so a Department Manager sees the
+        // section, and no payroll report inside it.
+        ...(canManageAttendance || canAccessSalary
+            ? [
+                  {
+                      label: 'Reporting',
+                      items: [{ title: 'Reports', url: '/hrm/reports', icon: FileBarChart }],
                   },
               ]
             : []),
