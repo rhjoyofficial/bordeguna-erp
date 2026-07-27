@@ -3,7 +3,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Banknote, Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileUp, Fingerprint, HandCoins, Palmtree, PenSquare, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
+import { Banknote, Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileUp, Fingerprint, HandCoins, Palmtree, PenSquare, ReceiptText, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
@@ -21,6 +21,7 @@ export function AppSidebar() {
                 ...(hasEmployeeProfile ? [{ title: 'My profile', url: '/hrm/my-profile', icon: UserCircle }] : []),
                 ...(hasEmployeeProfile ? [{ title: 'Clock in/out', url: '/hrm/clock', icon: Fingerprint }] : []),
                 ...(hasEmployeeProfile ? [{ title: 'My leave', url: '/hrm/my-leave', icon: Palmtree }] : []),
+                ...(hasEmployeeProfile ? [{ title: 'My payslips', url: '/hrm/my-payslips', icon: ReceiptText }] : []),
                 { title: 'Switch business', url: '/businesses/switch', icon: Repeat },
             ],
         },

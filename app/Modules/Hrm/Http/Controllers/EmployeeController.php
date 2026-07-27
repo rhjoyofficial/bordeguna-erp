@@ -19,6 +19,7 @@ use App\Modules\Hrm\Enums\EmployeeDocumentType;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
 use App\Modules\Hrm\Enums\MfsProvider;
+use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
@@ -153,6 +154,7 @@ class EmployeeController extends Controller
                 'bank_routing_number' => $employee->bank_routing_number,
                 'mfs_provider' => $employee->mfs_provider?->label(),
                 'mfs_account_number' => $employee->mfs_account_number,
+                'salary_payment_method' => $employee->salary_payment_method?->label(),
                 'user' => $employee->user ? ['name' => $employee->user->name, 'email' => $employee->user->email] : null,
                 'assignments' => $employee->assignments->map(fn (EmployeeAssignment $assignment) => [
                     'id' => $assignment->id,
@@ -229,6 +231,9 @@ class EmployeeController extends Controller
                 ->map(fn (EmploymentType $type) => ['value' => $type->value, 'label' => $type->label()]),
             'mfs_providers' => collect(MfsProvider::cases())
                 ->map(fn (MfsProvider $provider) => ['value' => $provider->value, 'label' => $provider->label()]),
+            // SAL-08: the method varies per employee, and payroll validation
+            // needs it to know which account details it should be insisting on.
+            'payment_methods' => SalaryPaymentMethod::options(),
         ]);
     }
 

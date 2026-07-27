@@ -196,6 +196,13 @@ function LifecycleActions({ run }: { run: Run }) {
                     Mark disbursed
                 </Button>
             )}
+            {(run.status === 'disbursed' || run.status === 'locked' || run.status === 'approved') && (
+                <a href={route('hrm.payroll.disbursement', run.id)}>
+                    <Button size="sm" variant="outline">
+                        Disbursement &amp; payslips
+                    </Button>
+                </a>
+            )}
             {run.status === 'disbursed' && (
                 <Button size="sm" onClick={() => post('hrm.payroll.lock')}>
                     Lock

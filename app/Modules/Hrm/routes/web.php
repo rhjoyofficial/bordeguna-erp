@@ -5,16 +5,18 @@ use App\Modules\Hrm\Http\Controllers\AttendanceCorrectionController;
 use App\Modules\Hrm\Http\Controllers\AttendanceImportController;
 use App\Modules\Hrm\Http\Controllers\AttendancePunchController;
 use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
+use App\Modules\Hrm\Http\Controllers\DisbursementController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
+use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\LeaveController;
 use App\Modules\Hrm\Http\Controllers\LoanController;
 use App\Modules\Hrm\Http\Controllers\PayrollController;
 use App\Modules\Hrm\Http\Controllers\PayrollInputController;
+use App\Modules\Hrm\Http\Controllers\PayslipController;
 use App\Modules\Hrm\Http\Controllers\SalaryController;
 use App\Modules\Hrm\Http\Controllers\SalaryRevisionController;
-use App\Modules\Hrm\Http\Controllers\SelfLeaveController;
-use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\ScheduleController;
+use App\Modules\Hrm\Http\Controllers\SelfLeaveController;
 use App\Modules\Hrm\Http\Controllers\SelfServiceController;
 use App\Modules\Hrm\Http\Controllers\ShiftController;
 use Illuminate\Support\Facades\Route;
@@ -180,6 +182,30 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('payroll/{run}/lock', [PayrollController::class, 'lock'])->name('payroll.lock');
     Route::post('payroll/{run}/reopen', [PayrollController::class, 'reopen'])->name('payroll.reopen');
     Route::post('payroll/{run}/cancel', [PayrollController::class, 'cancel'])->name('payroll.cancel');
+
+    // Payslips (DIS-03/04). Read is self-scope OR hrm.payroll.manage, decided in
+    // the controller — Department Managers hold neither, per Correction C5.
+    Route::get('my-payslips', [PayslipController::class, 'mine'])->name('my-payslips');
+    Route::get('payslips/{payslip}', [PayslipController::class, 'show'])->name('payslips.show');
+    Route::get('payslips/{payslip}/pdf', [PayslipController::class, 'pdf'])->name('payslips.pdf');
+    Route::post('payslips/{payslip}/email', [PayslipController::class, 'email'])->name('payslips.email');
+    Route::post('payroll/{run}/email-payslips', [PayslipController::class, 'emailRun'])->name('payroll.email-payslips');
+
+    // Disbursement (DIS-01/02/05/06). Everything here follows the Disbursed
+    // transition — it records the money actually moving, and what happens when
+    // it does not. Each action authorises hrm.payroll.manage.
+    Route::get('payroll/{run}/disbursement', [DisbursementController::class, 'index'])->name('payroll.disbursement');
+    Route::post('payroll/{run}/batches', [DisbursementController::class, 'storeBatches'])->name('payroll.batches.store');
+    Route::get('payroll/{run}/accounting-export', [DisbursementController::class, 'exportAccounting'])->name('payroll.accounting-export');
+
+    Route::post('disbursement-batches/{batch}/confirm', [DisbursementController::class, 'confirmBatch'])->name('batches.confirm');
+    Route::post('disbursement-batches/{batch}/fail', [DisbursementController::class, 'failBatch'])->name('batches.fail');
+    Route::post('disbursement-batches/{batch}/advice', [DisbursementController::class, 'uploadAdvice'])->name('batches.advice');
+    Route::get('disbursement-batches/{batch}/register', [DisbursementController::class, 'exportRegister'])->name('batches.register');
+
+    Route::post('payslips/{payslip}/payments', [DisbursementController::class, 'storePayment'])->name('payslips.payments.store');
+    Route::post('payslips/{payslip}/payments/fail', [DisbursementController::class, 'failPayment'])->name('payslips.payments.fail');
+    Route::post('payslip-payments/{payment}/reverse', [DisbursementController::class, 'reversePayment'])->name('payslips.payments.reverse');
 
     // WFL-08 unlock: HR Head → Finance → Management, or a Super Admin override.
     Route::post('payroll/{run}/unlock-requests', [PayrollController::class, 'requestUnlock'])->name('payroll.unlock.store');

@@ -10,6 +10,7 @@ use App\Modules\Hrm\Actions\UpdateEmployee;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
 use App\Modules\Hrm\Enums\MfsProvider;
+use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Support\SelfScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -62,6 +63,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         'bank_routing_number',
         'mfs_provider',
         'mfs_account_number',
+        'salary_payment_method',
     ];
 
     /**
@@ -81,7 +83,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         'joining_date', 'confirmation_date', 'contract_end_date',
         'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
         'bank_account_name', 'bank_account_number', 'bank_name', 'bank_branch', 'bank_routing_number',
-        'mfs_provider', 'mfs_account_number',
+        'mfs_provider', 'mfs_account_number', 'salary_payment_method',
     ];
 
     protected function casts(): array
@@ -91,6 +93,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
             'status' => EmployeeStatus::class,
             'separation_type' => SeparationType::class,
             'mfs_provider' => MfsProvider::class,
+            'salary_payment_method' => SalaryPaymentMethod::class,
             'separation_date' => 'date',
             'date_of_birth' => 'date',
             'joining_date' => 'date',
@@ -214,6 +217,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         'bank_routing_number' => 'Bank routing number',
         'mfs_provider' => 'MFS provider',
         'mfs_account_number' => 'MFS account number',
+        'salary_payment_method' => 'Salary payment method',
     ];
 
     /**
@@ -255,6 +259,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
             'bank_routing_number' => ['nullable', 'string', 'max:100'],
             'mfs_provider' => ['nullable', new Enum(MfsProvider::class)],
             'mfs_account_number' => ['nullable', 'string', 'max:50'],
+            'salary_payment_method' => ['nullable', new Enum(SalaryPaymentMethod::class)],
         ];
     }
 

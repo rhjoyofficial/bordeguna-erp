@@ -7,12 +7,14 @@ use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\Payslip;
+use App\Modules\Hrm\Payroll\Data\EmployeePayrollContext;
 use App\Modules\Hrm\Payroll\Data\PayslipLineData;
 use App\Modules\Hrm\Payroll\Data\PayslipOutcome;
 use App\Modules\Hrm\Payroll\PayrollConfig;
 use App\Modules\Hrm\Payroll\PayrollContextBuilder;
 use App\Modules\Hrm\Payroll\PayrollEngine;
 use App\Modules\Hrm\Support\PayrollProgress;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -79,7 +81,7 @@ class CalculatePayroll
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, Employee>  $employees
+     * @param  Collection<int, Employee>  $employees
      * @param  array<string, mixed>  $report
      */
     private function calculate(PayrollRun $run, PayrollPeriod $period, PayrollConfig $config, $employees, array $report): PayrollRun
@@ -98,7 +100,7 @@ class CalculatePayroll
                 $context = $this->builder->build($employee, $period, $config);
                 $outcome = $this->engine->process($context);
 
-                $this->store($run, $employee, $outcome, $period);
+                $this->store($run, $employee, $outcome, $period, $context);
 
                 $earnings += $outcome->totalEarnings;
                 $deductions += $outcome->totalDeductions;
@@ -154,8 +156,13 @@ class CalculatePayroll
         ]);
     }
 
-    private function store(PayrollRun $run, Employee $employee, PayslipOutcome $outcome, PayrollPeriod $period): void
-    {
+    private function store(
+        PayrollRun $run,
+        Employee $employee,
+        PayslipOutcome $outcome,
+        PayrollPeriod $period,
+        EmployeePayrollContext $context,
+    ): void {
         $payslip = $run->payslips()->create([
             'employee_id' => $employee->id,
             'gross_salary' => $outcome->grossSalary,
@@ -166,7 +173,19 @@ class CalculatePayroll
             'block_reasons' => $outcome->blockReasons,
             // The engine's own derivation, stored rather than re-derivable —
             // after a revision, recomputing would answer for today's rules.
-            'calculation' => $outcome->toArray(),
+            //
+            // The attendance summary DIS-03 puts on a payslip is composed in
+            // here rather than emitted by the engine. Those are the facts the
+            // engine was *given*, not figures it produced, and adding them to
+            // `PayslipOutcome` would widen an engine contract that has not
+            // changed shape in seven slices for the sake of a printout. Stored
+            // alongside the derivation for the PAY-12 reason everything else
+            // here is stored: a payslip must still show the attendance it was
+            // actually paid on after the days have been corrected.
+            'calculation' => [
+                ...$outcome->toArray(),
+                'attendance' => $context->attendance->toArray(),
+            ],
             'salary_structure_id' => $this->builder->structureFor($employee, $period)?->id,
         ]);
 

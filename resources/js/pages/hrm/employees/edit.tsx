@@ -42,12 +42,14 @@ interface EditableEmployee {
     bank_routing_number: string | null;
     mfs_provider: string | null;
     mfs_account_number: string | null;
+    salary_payment_method: string | null;
 }
 
 interface EditProps {
     employee: EditableEmployee;
     employment_types: Option[];
     mfs_providers: Option[];
+    payment_methods: Option[];
 }
 
 const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
@@ -60,10 +62,10 @@ const FIELD_KEYS: (keyof FormData)[] = [
     'date_of_birth', 'joining_date', 'confirmation_date', 'contract_end_date',
     'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
     'bank_account_name', 'bank_account_number', 'bank_name', 'bank_branch', 'bank_routing_number',
-    'mfs_provider', 'mfs_account_number',
+    'mfs_provider', 'mfs_account_number', 'salary_payment_method',
 ];
 
-export default function EmployeeEdit({ employee, employment_types, mfs_providers }: EditProps) {
+export default function EmployeeEdit({ employee, employment_types, mfs_providers, payment_methods }: EditProps) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employees', href: '/hrm/employees' },
         { title: employee.employee_code, href: `/hrm/employees/${employee.id}` },
@@ -191,6 +193,33 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                             <InputError message={errors.mfs_provider} />
                         </div>
                         <Text field="mfs_account_number" label="Account number" />
+                    </div>
+                </section>
+
+                <section className="grid gap-4">
+                    <h3 className="text-sm font-medium">Salary payment</h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-2">
+                            <Label htmlFor="salary_payment_method">How this employee is paid</Label>
+                            <select
+                                id="salary_payment_method"
+                                className={selectClass}
+                                value={data.salary_payment_method ?? ''}
+                                onChange={(e) => setData('salary_payment_method', e.target.value)}
+                            >
+                                <option value="">— Not stated —</option>
+                                {payment_methods.map((method) => (
+                                    <option key={method.value} value={method.value}>
+                                        {method.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <InputError message={errors.salary_payment_method} />
+                            <p className="text-xs text-muted-foreground">
+                                Payroll checks the account details this method actually needs, and disbursement groups the payslips by it — cash never
+                                mixes with a bank transfer.
+                            </p>
+                        </div>
                     </div>
                 </section>
 

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Actions;
 
+use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\PayrollPeriod;
@@ -117,20 +118,48 @@ class ValidatePayrollRun
             );
         }
 
-        if ($this->missingPaymentDetails($employee)) {
-            $issues[] = 'No bank account or mobile financial service details recorded.';
+        $payment = $this->paymentIssue($employee);
+
+        if ($payment !== null) {
+            $issues[] = $payment;
         }
 
         return $issues;
     }
 
     /**
-     * SAL-08 allows bank, MFS, cash or cheque, so this only complains when the
-     * employee has neither electronic route recorded — cash and cheque need no
-     * stored details.
+     * Whether this employee can actually be paid (SAL-08).
+     *
+     * Once the employee's own payment method is recorded, this asks the right
+     * question rather than a blanket one: a bank transfer needs an account
+     * number and an MFS payment needs an MFS number, while cash and cheque are
+     * handed over in person and need nothing stored. Demanding an account from
+     * someone paid in cash would block a payroll over a rule nobody stated.
+     *
+     * With no method recorded there is nothing to be specific about, so the
+     * original check stands — an employee with neither electronic route on file
+     * and no stated method cannot be paid by any means the system can see.
      */
-    private function missingPaymentDetails(Employee $employee): bool
+    private function paymentIssue(Employee $employee): ?string
     {
-        return blank($employee->bank_account_number) && blank($employee->mfs_account_number);
+        $method = $employee->salary_payment_method;
+
+        if ($method === null) {
+            return blank($employee->bank_account_number) && blank($employee->mfs_account_number)
+                ? 'No bank account or mobile financial service details recorded.'
+                : null;
+        }
+
+        if (! $method->needsStoredAccount()) {
+            return null;
+        }
+
+        $missing = $method === SalaryPaymentMethod::BankTransfer
+            ? blank($employee->bank_account_number)
+            : blank($employee->mfs_account_number);
+
+        return $missing
+            ? sprintf('Paid by %s, but no account details are recorded for it.', $method->label())
+            : null;
     }
 }
