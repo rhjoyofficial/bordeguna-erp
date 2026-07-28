@@ -24,6 +24,8 @@ interface Widget {
     delta_percent: string | null;
     delta_label: string | null;
     note: string | null;
+    /** C11b: the figure describes a state the system has not caught up with. */
+    stale: boolean;
     drilldown_report: string | null;
     drilldown_parameters: Record<string, string | number>;
 }
@@ -157,10 +159,30 @@ export default function HrmDashboard({ widgets, filters, offices, departments, d
 
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                             {groupWidgets.map((widget) => (
-                                <div key={widget.key} className="flex flex-col gap-2 rounded-lg border p-4">
-                                    <p className="text-muted-foreground text-xs font-medium">{widget.title}</p>
+                                <div
+                                    key={widget.key}
+                                    className={`flex flex-col gap-2 rounded-lg border p-4 ${widget.stale ? 'border-dashed' : ''}`}
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className="text-muted-foreground text-xs font-medium">{widget.title}</p>
+                                        {/*
+                                          C11b. The marker is visual and sits beside the title, because a
+                                          caveat nobody notices is not honesty. A dashed border and this
+                                          badge say "not settled" before anybody reads the note below.
+                                        */}
+                                        {widget.stale && (
+                                            <span
+                                                className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+                                                title="These figures are only as current as the last attendance processing."
+                                            >
+                                                Not current
+                                            </span>
+                                        )}
+                                    </div>
 
-                                    <p className="text-2xl font-semibold tabular-nums">{widget.display}</p>
+                                    <p className={`text-2xl font-semibold tabular-nums ${widget.stale ? 'text-muted-foreground' : ''}`}>
+                                        {widget.display}
+                                    </p>
 
                                     {widget.delta_display && (
                                         <p className="text-xs">

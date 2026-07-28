@@ -71,6 +71,7 @@ abstract class ReportBackedWidget implements DashboardWidget
             value: $this->report->countRows(new ReportParameters($parameters)),
             type: ReportColumnType::Integer,
             note: $this->note($filters),
+            stale: $this->isStale($filters),
             drilldownReport: $this->report->key(),
             drilldownParameters: $parameters,
         );
@@ -83,5 +84,15 @@ abstract class ReportBackedWidget implements DashboardWidget
     protected function note(DashboardFilters $filters): ?string
     {
         return null;
+    }
+
+    /**
+     * Whether this figure describes a state the system has not caught up with.
+     * Default false: a widget over settled data is not stale, and claiming
+     * otherwise would make the marker meaningless on the tiles that need it.
+     */
+    protected function isStale(DashboardFilters $filters): bool
+    {
+        return false;
     }
 }

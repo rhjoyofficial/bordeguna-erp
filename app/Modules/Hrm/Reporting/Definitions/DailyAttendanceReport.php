@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Reporting\Definitions;
 
+use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Models\AttendancePeriodLock;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Reporting\Concerns\CountsRows;
@@ -68,6 +69,19 @@ class DailyAttendanceReport implements ReportDefinition
             ReportParameter::date('date', 'Date', default: now()->toDateString()),
             ReportParameter::office(),
             ReportParameter::department(),
+            // Added for RPT-04b so the present/absent/late tiles can be
+            // report-backed (C11a): the tile counts this report with a status
+            // chosen, and the drill-down opens the same rows. Without it the
+            // tiles would be aggregates of their own and the "show me these"
+            // link would return more rows than the number that offered it.
+            ReportParameter::select('status', 'Status', [
+                ['value' => 'all', 'label' => 'Every status'],
+                ['value' => 'present', 'label' => 'Present (any worked day)'],
+                ['value' => 'late', 'label' => 'Late arrival'],
+                ['value' => 'absent', 'label' => 'Absent'],
+                ['value' => 'on_leave', 'label' => 'On leave'],
+                ['value' => 'missing_punch', 'label' => 'Missing punch'],
+            ], default: 'all'),
         ];
     }
 
@@ -156,6 +170,37 @@ class DailyAttendanceReport implements ReportDefinition
      * a transferred employee's whole history under their new department, and
      * the error would be invisible: every row would look plausible.
      */
+    /**
+     * ⚠⚠ **"Late" is `late_minutes > 0`, NOT `status === Late`** — the same rule
+     * `AttendanceExceptionReport` follows, and for the same reason 2b's
+     * `ApplyOccurrencePolicy` bug taught it: a late arrival that also produced a
+     * short day resolves to `HalfDay`, and a status filter would drop the person
+     * who arrived at 11am from the count of who was late.
+     *
+     * ⚠ **"Present" is every worked day, not the `Present` status.** POL-02 keeps
+     * the status and its consequence apart, so Late, HalfDay and FieldDuty are
+     * all days somebody was at work. Counting only the `Present` status would
+     * report a smaller workforce than turned up, and the daily figures would
+     * stop adding to the headcount.
+     */
+    private function filterByStatus(Builder $query, string $status): Builder
+    {
+        if ($status === 'late') {
+            return $query->where('daily_attendances.late_minutes', '>', 0);
+        }
+
+        if ($status === 'present') {
+            $worked = array_map(
+                fn (AttendanceStatus $s) => $s->value,
+                array_filter(AttendanceStatus::cases(), fn (AttendanceStatus $s) => $s->isWorkedDay()),
+            );
+
+            return $query->whereIn('daily_attendances.status', $worked);
+        }
+
+        return $query->where('daily_attendances.status', $status);
+    }
+
     private function query(ReportParameters $parameters): Builder
     {
         $date = ($parameters->date('date') ?? now())->toDateString();
@@ -174,6 +219,10 @@ class DailyAttendanceReport implements ReportDefinition
             ->leftJoin('offices', 'offices.id', '=', 'employee_assignments.office_id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_assignments.department_id')
             ->when($parameters->date('date'), fn (Builder $q, $d) => $q->onDate($d))
+            ->when(
+                ($parameters->string('status') ?? 'all') !== 'all',
+                fn (Builder $q) => $this->filterByStatus($q, (string) $parameters->string('status')),
+            )
             ->when(
                 $parameters->int('office_id'),
                 fn (Builder $q, int $id) => $q->where('employee_assignments.office_id', $id),

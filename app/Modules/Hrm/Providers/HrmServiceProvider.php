@@ -5,8 +5,12 @@ namespace App\Modules\Hrm\Providers;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Console\Commands\RunLeaveYearEnd;
 use App\Modules\Hrm\Dashboard\DashboardRegistry;
+use App\Modules\Hrm\Dashboard\Widgets\AbsentTodayWidget;
+use App\Modules\Hrm\Dashboard\Widgets\EmployeesOnLeaveWidget;
+use App\Modules\Hrm\Dashboard\Widgets\LateTodayWidget;
 use App\Modules\Hrm\Dashboard\Widgets\MissingPunchesWidget;
 use App\Modules\Hrm\Dashboard\Widgets\PayrollStatusWidget;
+use App\Modules\Hrm\Dashboard\Widgets\PresentTodayWidget;
 use App\Modules\Hrm\Reporting\Definitions\AbsenceAndLeaveReport;
 use App\Modules\Hrm\Reporting\Definitions\AttendanceExceptionReport;
 use App\Modules\Hrm\Reporting\Definitions\CostAllocationReport;
@@ -70,7 +74,18 @@ class HrmServiceProvider extends ServiceProvider
      * be the first step back towards the monolith RPT-04 exists to avoid.
      */
     private const WIDGETS = [
+        // RPT-04 #1 and #4 — the day's attendance. The first three are only as
+        // current as the last ProcessAttendance run and say so (C11b); the
+        // fourth reads the leave register and is correct regardless.
+        PresentTodayWidget::class,
+        AbsentTodayWidget::class,
+        LateTodayWidget::class,
+        EmployeesOnLeaveWidget::class,
+
+        // RPT-04 #2.
         MissingPunchesWidget::class,
+
+        // RPT-04 #5.
         PayrollStatusWidget::class,
     ];
 

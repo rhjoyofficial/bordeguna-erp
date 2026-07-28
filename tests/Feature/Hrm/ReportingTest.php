@@ -490,8 +490,10 @@ it('renders the parameter screen with the definition driving the form', function
         ->assertInertia(fn ($page) => $page
             ->component('hrm/reports/show')
             ->where('report.key', 'attendance_daily')
-            // date + office + department, and the four RPT-03 formats.
-            ->has('parameters', 3)
+            // date + office + department + status, and the four RPT-03 formats.
+            // `status` was added in RPT-04b so the present/absent/late tiles
+            // could be backed by this report rather than re-deriving its query.
+            ->has('parameters', 4)
             ->has('formats', 4)
             ->has('columns'));
 });

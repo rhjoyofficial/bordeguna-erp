@@ -48,6 +48,22 @@ class MissingPunchesWidget extends ReportBackedWidget
         return 'Days with a punch missing, which hold payroll until an approved correction resolves them (POL-07).';
     }
 
+    /**
+     * ⚠ Added after the live check: this tile had no note at all, and it is
+     * every bit as dependent on `ProcessAttendance` as the present/absent/late
+     * ones — a missing punch is a *processed* verdict about a day, so an
+     * unprocessed month simply shows nothing wrong.
+     *
+     * It does not use `AttendanceFreshness`, which answers about a single date;
+     * a month has no one "as at" moment. So it states the dependency plainly
+     * instead, which is what C11b asks for: honest about processing status
+     * rather than implying a currency it does not have.
+     */
+    protected function note(DashboardFilters $filters): ?string
+    {
+        return 'Counts days that have been processed. A month not yet processed shows nothing outstanding.';
+    }
+
     protected function reportParameters(DashboardFilters $filters): array
     {
         return array_filter([

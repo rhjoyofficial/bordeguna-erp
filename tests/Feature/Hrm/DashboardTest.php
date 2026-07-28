@@ -317,7 +317,9 @@ it('renders the dashboard with its widgets grouped and filters echoed back', fun
             ->component('hrm/dashboard')
             ->where('filters.department_id', $this->production->id)
             ->where('department_locked', false)
-            ->has('widgets', 2));
+            // Six after RPT-04b: present, absent, late, on leave, missing
+            // punches, payroll status.
+            ->has('widgets', 6));
 });
 
 it('answers about the month it was asked for, not the one that has finished', function () {

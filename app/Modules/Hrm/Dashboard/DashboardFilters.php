@@ -23,10 +23,37 @@ use Illuminate\Support\Carbon;
  */
 final class DashboardFilters
 {
+    /**
+     * Per-request memo for values several widgets would otherwise each compute.
+     *
+     * ⚠⚠ **It lives here, on an object built once per request, and NOT in a
+     * method-level `static`.** That was the first implementation and it was
+     * wrong in a way tests exposed immediately and production would have
+     * exposed slowly: a `static` inside a method persists for the life of the
+     * *process*, so under Octane or a queue worker one request's freshness —
+     * including a scoped manager's unprocessed count — would be served to the
+     * next, and it would never expire. Tying the memo to the filters ties it to
+     * exactly the lifetime it should have.
+     *
+     * @var array<string, mixed>
+     */
+    private array $memo = [];
+
     private function __construct(
         public readonly ReportParameters $parameters,
         public readonly ReportScope $scope,
     ) {}
+
+    /**
+     * @template T
+     *
+     * @param  \Closure(): T  $resolve
+     * @return T
+     */
+    public function remember(string $key, \Closure $resolve): mixed
+    {
+        return $this->memo[$key] ??= $resolve();
+    }
 
     /**
      * @param  array<string, mixed>  $values

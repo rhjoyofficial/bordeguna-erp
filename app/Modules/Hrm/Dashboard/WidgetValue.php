@@ -47,6 +47,15 @@ final class WidgetValue
         public readonly ?string $deltaLabel = null,
         /** Freshness, provisionality, or why a comparison is absent. */
         public readonly ?string $note = null,
+        /**
+         * ⚠ The figure describes a state the system has not caught up with —
+         * attendance not yet processed, or punches recorded since it was.
+         * Surfaced as a flag rather than left inside `note` so the page can mark
+         * the tile *before* anybody reads the small print. Correction C11b asked
+         * the dashboard to be honest about processing status; a caveat nobody
+         * notices is not honesty, it is cover.
+         */
+        public readonly bool $stale = false,
         public readonly ?string $drilldownReport = null,
         public readonly array $drilldownParameters = [],
     ) {}
@@ -65,6 +74,7 @@ final class WidgetValue
             'delta_percent' => $this->deltaPercent,
             'delta_label' => $this->deltaLabel,
             'note' => $this->note,
+            'stale' => $this->stale,
             'drilldown_report' => $this->drilldownReport,
             'drilldown_parameters' => $this->drilldownParameters,
         ];
