@@ -97,6 +97,26 @@ interface ReportDefinition
     public function estimatedRows(ReportParameters $parameters): int;
 
     /**
+     * Exactly how many rows this run produces.
+     *
+     * ⚠ **Distinct from `estimatedRows()` on purpose, and the distinction is
+     * the whole reason this method exists.** An estimate is allowed to be
+     * approximate because it only ever picks which of two correct paths runs.
+     * A dashboard KPI is *displayed*, so an approximation there is simply a
+     * wrong number on a screen somebody makes decisions from.
+     *
+     * Correction C11a: a dashboard tile that is really "how many rows would
+     * that report return" derives its figure from here, so the tile and the
+     * report it drills into **cannot disagree**. A test asserts exactly that.
+     *
+     * Most definitions answer both questions with the same count, which is
+     * fine — the point is that the *contract* differs, so a definition whose
+     * estimate is deliberately cheap (a grouped report returning 0, say) has
+     * somewhere honest to put the real figure.
+     */
+    public function countRows(ReportParameters $parameters): int;
+
+    /**
      * Title, subtitle and the lock state, if this report's data has one.
      */
     public function meta(ReportParameters $parameters): ReportMeta;

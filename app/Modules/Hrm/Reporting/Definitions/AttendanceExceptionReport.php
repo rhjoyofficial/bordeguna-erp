@@ -5,6 +5,7 @@ namespace App\Modules\Hrm\Reporting\Definitions;
 use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Models\AttendancePeriodLock;
 use App\Modules\Hrm\Models\DailyAttendance;
+use App\Modules\Hrm\Reporting\Concerns\CountsRows;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportMeta;
@@ -35,6 +36,8 @@ use Illuminate\Support\LazyCollection;
  */
 class AttendanceExceptionReport implements ReportDefinition
 {
+    use CountsRows;
+
     public function key(): string
     {
         return 'attendance_exceptions';

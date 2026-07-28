@@ -37,4 +37,26 @@ return [
         'variance_threshold' => (float) env('HRM_REPORT_VARIANCE_THRESHOLD', 0),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Dashboard (RPT-04)
+    |--------------------------------------------------------------------------
+    |
+    | Correction C11e: a dashboard is the first page everybody opens and several
+    | of its tiles aggregate a month of attendance, on shared hosting. So a
+    | widget's figure may be cached — but each widget declares its own tolerance,
+    | because the right answer differs per tile and the widget is where the data
+    | is understood. This is only the default they fall back to; a widget that
+    | must be live (pending approvals) returns 0 and is computed every time.
+    |
+    | ⚠ The cache key includes the resolved ReportScope, not merely the filters.
+    | Two users with different department scopes must never share an entry —
+    | that would undo C10d without anybody editing C10d.
+    |
+    */
+
+    'dashboard' => [
+        'cache_seconds' => (int) env('HRM_DASHBOARD_CACHE_SECONDS', 60),
+    ],
+
 ];

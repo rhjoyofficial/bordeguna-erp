@@ -8,6 +8,7 @@ use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
 use App\Modules\Hrm\Http\Controllers\DisbursementController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
+use App\Modules\Hrm\Http\Controllers\HrmDashboardController;
 use App\Modules\Hrm\Http\Controllers\LeaveController;
 use App\Modules\Hrm\Http\Controllers\LoanController;
 use App\Modules\Hrm\Http\Controllers\PayrollController;
@@ -225,4 +226,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::get('reports/downloads/{file}', [ReportController::class, 'download'])->name('reports.download');
     Route::get('reports/{report}', [ReportController::class, 'show'])->name('reports.show');
     Route::get('reports/{report}/run', [ReportController::class, 'run'])->name('reports.run');
+
+    // RPT-04. Deliberately a separate route and controller from `reports`, not a
+    // tab inside it: report generation and dashboard rendering are separate
+    // concerns that share only the query layer. No permission middleware here —
+    // the registry filters widget by widget, so a user with only attendance
+    // rights still gets a dashboard, just a shorter one.
+    Route::get('dashboard', [HrmDashboardController::class, 'index'])->name('dashboard');
 });

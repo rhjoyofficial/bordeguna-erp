@@ -3,6 +3,7 @@
 namespace App\Modules\Hrm\Reporting\Definitions;
 
 use App\Modules\Hrm\Models\OvertimeAssignment;
+use App\Modules\Hrm\Reporting\Concerns\CountsRows;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportMeta;
@@ -40,6 +41,8 @@ use Illuminate\Support\LazyCollection;
  */
 class OvertimeReport implements ReportDefinition
 {
+    use CountsRows;
+
     public function key(): string
     {
         return 'attendance_overtime';

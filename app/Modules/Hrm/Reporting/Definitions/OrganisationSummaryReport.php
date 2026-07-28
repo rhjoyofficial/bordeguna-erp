@@ -131,6 +131,21 @@ class OrganisationSummaryReport implements ReportDefinition
         return 0;
     }
 
+    /**
+     * ⚠ **This report must NOT use the `CountsRows` trait**, and this method is
+     * why. Its estimate is deliberately 0 — a lie that is safe because C10e only
+     * uses it to pick between two correct paths. A dashboard tile *displays* its
+     * number (C11a), so delegating here would report a confident zero.
+     *
+     * Counting a `GROUP BY` needs the grouped query wrapped in a subquery; that
+     * is the cost the estimate exists to avoid, and it is worth paying exactly
+     * once, here, when somebody actually wants the figure.
+     */
+    public function countRows(ReportParameters $parameters): int
+    {
+        return DB::query()->fromSub($this->query($parameters)->toBase(), 'groups')->count();
+    }
+
     public function meta(ReportParameters $parameters): ReportMeta
     {
         $month = $parameters->month();

@@ -178,6 +178,16 @@ class CostAllocationReport implements ReportDefinition
         return 0;
     }
 
+    /**
+     * ⚠ Implemented rather than inherited from `CountsRows`, for the same reason
+     * as `OrganisationSummaryReport`: the estimate above is deliberately 0, and
+     * a dashboard tile that delegated to it would display that zero.
+     */
+    public function countRows(ReportParameters $parameters): int
+    {
+        return DB::query()->fromSub($this->query($parameters)->toBase(), 'groups')->count();
+    }
+
     public function meta(ReportParameters $parameters): ReportMeta
     {
         $run = $this->run($parameters);

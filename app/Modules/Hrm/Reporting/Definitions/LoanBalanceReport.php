@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Reporting\Definitions;
 
 use App\Modules\Hrm\Enums\LoanInstallmentStatus;
 use App\Modules\Hrm\Models\Loan;
+use App\Modules\Hrm\Reporting\Concerns\CountsRows;
 use App\Modules\Hrm\Reporting\Concerns\ResolvesAssignments;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
@@ -39,7 +40,7 @@ use Illuminate\Support\LazyCollection;
  */
 class LoanBalanceReport implements ReportDefinition
 {
-    use ResolvesAssignments;
+    use CountsRows, ResolvesAssignments;
 
     public function key(): string
     {

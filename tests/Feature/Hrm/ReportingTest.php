@@ -447,6 +447,11 @@ it('withholds an attendance report that declares no department parameter from a 
             return 0;
         }
 
+        public function countRows(ReportParameters $parameters): int
+        {
+            return 0;
+        }
+
         public function meta(ReportParameters $parameters): ReportMeta
         {
             return new ReportMeta(title: 'Unscopable');

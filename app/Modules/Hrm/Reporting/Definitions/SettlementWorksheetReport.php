@@ -5,6 +5,7 @@ namespace App\Modules\Hrm\Reporting\Definitions;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Reporting\Concerns\CountsRows;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportMeta;
@@ -48,6 +49,8 @@ use Illuminate\Support\LazyCollection;
  */
 class SettlementWorksheetReport implements ReportDefinition
 {
+    use CountsRows;
+
     public function __construct(
         private readonly BusinessContext $context,
     ) {}

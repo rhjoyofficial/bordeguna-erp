@@ -3,7 +3,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Banknote, Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileBarChart, FileUp, Fingerprint, HandCoins, Palmtree, PenSquare, ReceiptText, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
+import { Banknote, Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileBarChart, FileUp, Fingerprint, HandCoins, LayoutDashboard, Palmtree, PenSquare, ReceiptText, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
@@ -111,7 +111,15 @@ export function AppSidebar() {
             ? [
                   {
                       label: 'Reporting',
-                      items: [{ title: 'Reports', url: '/hrm/reports', icon: FileBarChart }],
+                      items: [
+                          // RPT-04. Same gate as Reports and for the same
+                          // reason: the widget list is filtered per user
+                          // server-side by DashboardRegistry, which re-applies
+                          // ACL-02 — so a Department Manager sees the section
+                          // and no payroll tile inside it.
+                          { title: 'HR dashboard', url: '/hrm/dashboard', icon: LayoutDashboard },
+                          { title: 'Reports', url: '/hrm/reports', icon: FileBarChart },
+                      ],
                   },
               ]
             : []),

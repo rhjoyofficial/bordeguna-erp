@@ -2,7 +2,11 @@
 
 namespace App\Modules\Hrm\Providers;
 
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Console\Commands\RunLeaveYearEnd;
+use App\Modules\Hrm\Dashboard\DashboardRegistry;
+use App\Modules\Hrm\Dashboard\Widgets\MissingPunchesWidget;
+use App\Modules\Hrm\Dashboard\Widgets\PayrollStatusWidget;
 use App\Modules\Hrm\Reporting\Definitions\AbsenceAndLeaveReport;
 use App\Modules\Hrm\Reporting\Definitions\AttendanceExceptionReport;
 use App\Modules\Hrm\Reporting\Definitions\CostAllocationReport;
@@ -57,10 +61,28 @@ class HrmServiceProvider extends ServiceProvider
         SettlementWorksheetReport::class,
     ];
 
+    /**
+     * Every dashboard widget the module offers (RPT-04).
+     *
+     * The same promise `REPORTS` makes: a tile is a class plus a line here.
+     * ⚠ It is a *separate* list on purpose — reports and the dashboard are
+     * separate concerns that share only the query layer, and a single list would
+     * be the first step back towards the monolith RPT-04 exists to avoid.
+     */
+    private const WIDGETS = [
+        MissingPunchesWidget::class,
+        PayrollStatusWidget::class,
+    ];
+
     public function register(): void
     {
         $this->app->singleton(ReportRegistry::class, fn ($app) => new ReportRegistry(
             array_map(fn (string $report) => $app->make($report), self::REPORTS),
+        ));
+
+        $this->app->singleton(DashboardRegistry::class, fn ($app) => new DashboardRegistry(
+            $app->make(BusinessContext::class),
+            array_map(fn (string $widget) => $app->make($widget), self::WIDGETS),
         ));
     }
 

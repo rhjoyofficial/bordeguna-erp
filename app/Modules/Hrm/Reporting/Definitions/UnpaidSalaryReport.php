@@ -6,6 +6,7 @@ use App\Modules\Hrm\Enums\PayslipPaymentStatus;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\Payslip;
+use App\Modules\Hrm\Reporting\Concerns\CountsRows;
 use App\Modules\Hrm\Reporting\Concerns\ResolvesAssignments;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
@@ -41,7 +42,7 @@ use Illuminate\Support\LazyCollection;
  */
 class UnpaidSalaryReport implements ReportDefinition
 {
-    use ResolvesAssignments;
+    use CountsRows, ResolvesAssignments;
 
     public function key(): string
     {

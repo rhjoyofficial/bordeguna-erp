@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Reporting\Definitions;
 
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\Payslip;
+use App\Modules\Hrm\Reporting\Concerns\CountsRows;
 use App\Modules\Hrm\Reporting\Concerns\ResolvesAssignments;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
@@ -49,7 +50,7 @@ use Illuminate\Support\LazyCollection;
  */
 class PayrollVarianceReport implements ReportDefinition
 {
-    use ResolvesAssignments;
+    use CountsRows, ResolvesAssignments;
 
     /** The pseudo-component under which each employee's net is compared. */
     private const NET = '__net';

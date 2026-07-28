@@ -5,6 +5,7 @@ namespace App\Modules\Hrm\Reporting\Definitions;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\Payslip;
+use App\Modules\Hrm\Reporting\Concerns\CountsRows;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportMeta;
@@ -39,6 +40,8 @@ use Illuminate\Support\LazyCollection;
  */
 class SalarySheetReport implements ReportDefinition
 {
+    use CountsRows;
+
     public function key(): string
     {
         return 'payroll_salary_sheet';
