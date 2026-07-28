@@ -125,15 +125,18 @@ class BorDeGunaAttendanceSeeder extends Seeder
      * attendance record says happened. Corrections in this system are events,
      * never rewrites.
      *
-     * ⚠⚠ **The bands are minutes after the shift start, not clock times.** That
-     * is what lets one policy serve every shift — but it means the boundaries
-     * shift with the shift. For the 09:00 office shift band 2 ends at 12:00
-     * exactly, as described. For the 08:30 Retail shift the same 180 minutes
-     * ends at **11:30**. Only the Assistant Sales Manager is affected (the two
-     * officers are field duty and not judged on punctuality), and only in the
-     * 11:30–12:00 window. **Worth confirming with Joy whether the rule is
-     * "three hours late" or "after 12:00 by the clock"** — the former is what is
-     * seeded, because it is what the engine expresses natively.
+     * ⚠⚠ **The bands are minutes after the shift start, not clock times — and
+     * Joy confirmed this explicitly on 2026-07-28:** *"the rule should be based
+     * on elapsed time after the scheduled shift start, not a fixed clock time.
+     * So the third band begins after three hours of lateness."*
+     *
+     * So the boundaries move with the shift, by design:
+     *
+     * - **Office (09:00 shift)** — over 180 minutes means after **12:00**.
+     * - **Retail (08:30 shift)** — over 180 minutes means after **11:30**.
+     *
+     * That is the property which lets one policy govern every shift Bor De Guna
+     * will ever open, including future outlets on hours nobody has chosen yet.
      *
      * @return array<string, mixed>
      */
