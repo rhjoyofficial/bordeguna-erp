@@ -54,6 +54,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         'emergency_contact_name',
         'emergency_contact_phone',
         'emergency_contact_relationship',
+        'blood_group',
         'confirmation_date',
         'contract_end_date',
         'bank_account_name',
@@ -82,6 +83,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         'national_id', 'birth_certificate_no', 'date_of_birth',
         'joining_date', 'confirmation_date', 'contract_end_date',
         'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
+        'blood_group',
         'bank_account_name', 'bank_account_number', 'bank_name', 'bank_branch', 'bank_routing_number',
         'mfs_provider', 'mfs_account_number', 'salary_payment_method',
     ];
@@ -210,6 +212,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         'emergency_contact_name' => 'Emergency contact name',
         'emergency_contact_phone' => 'Emergency contact phone',
         'emergency_contact_relationship' => 'Emergency contact relationship',
+        'blood_group' => 'Blood group',
         'bank_account_name' => 'Bank account name',
         'bank_account_number' => 'Bank account number',
         'bank_name' => 'Bank name',
@@ -252,6 +255,9 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
             'emergency_contact_name' => ['nullable', 'string', 'max:255'],
             'emergency_contact_phone' => ['nullable', 'string', 'max:50'],
             'emergency_contact_relationship' => ['nullable', 'string', 'max:100'],
+            // Free text rather than an enum: rare groups and local notations vary,
+            // and refusing a real blood group at data entry is worse than storing it.
+            'blood_group' => ['nullable', 'string', 'max:8'],
             'bank_account_name' => ['nullable', 'string', 'max:255'],
             'bank_account_number' => ['nullable', 'string', 'max:100'],
             'bank_name' => ['nullable', 'string', 'max:255'],

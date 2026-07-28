@@ -35,6 +35,7 @@ interface EditableEmployee {
     emergency_contact_name: string | null;
     emergency_contact_phone: string | null;
     emergency_contact_relationship: string | null;
+    blood_group: string | null;
     bank_account_name: string | null;
     bank_account_number: string | null;
     bank_name: string | null;
@@ -60,7 +61,7 @@ const FIELD_KEYS: (keyof FormData)[] = [
     'first_name', 'last_name', 'employment_type', 'biometric_enroll_id', 'personal_email', 'phone',
     'present_address', 'permanent_address', 'national_id', 'birth_certificate_no',
     'date_of_birth', 'joining_date', 'confirmation_date', 'contract_end_date',
-    'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
+    'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship', 'blood_group',
     'bank_account_name', 'bank_account_number', 'bank_name', 'bank_branch', 'bank_routing_number',
     'mfs_provider', 'mfs_account_number', 'salary_payment_method',
 ];
@@ -149,6 +150,7 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                         <Text field="emergency_contact_name" label="Name" />
                         <Text field="emergency_contact_phone" label="Phone" />
                         <Text field="emergency_contact_relationship" label="Relationship" />
+                        <Text field="blood_group" label="Blood group" />
                     </div>
                 </section>
 

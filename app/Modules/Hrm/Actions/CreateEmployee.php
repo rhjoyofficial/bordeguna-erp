@@ -51,9 +51,41 @@ class CreateEmployee
 
     /**
      * Immutable global sequence: BDG-000001, BDG-000002, … (EMP-02).
+     *
+     * ⚠⚠ **Derived from the highest existing code, NEVER from `count()`.** The
+     * original implementation was `Employee::count() + 1`, and real data proved
+     * it broken before a single production row existed: Bor De Guna's nine
+     * employees are numbered 1, 2, 10, 12, 16, 19, 20, 21, 22 — **twelve gaps**,
+     * left by people who have since left. After migrating those nine, a count of
+     * 9 would have issued **BDG-000010** to the next hire, which already belongs
+     * to somebody. Best case a unique-constraint failure that blocks hiring;
+     * worst case two people sharing the code that payroll, payslips and every
+     * report key on.
+     *
+     * **The gaps are meaningful and must never be refilled.** EMP-02 makes a
+     * code an immutable identity, and Joy confirmed codes are permanent — a
+     * departed employee's number stays theirs, because it is stamped on
+     * historical payslips and reports that must remain readable.
+     *
+     * ⚠ Deliberately reads **without global scopes**: the sequence is global
+     * across all businesses (`Employee` is central and has no `business_id`), so
+     * scoping the lookup would restart numbering inside each business and
+     * collide immediately.
+     *
+     * ⚠ Ordered lexically and parsed in PHP, matching `Loan::nextReference()`.
+     * The codes are zero-padded to six digits, so lexical order *is* numeric
+     * order — and a SQL `CAST(... AS INTEGER)` would not survive the move from
+     * SQLite (tests) to MySQL (production), where the cast type is spelled
+     * differently. The unique index on `employee_code` is the real guard.
      */
     private function nextCode(): string
     {
-        return sprintf('BDG-%06d', Employee::count() + 1);
+        $highest = Employee::withoutGlobalScopes()
+            ->orderByDesc('employee_code')
+            ->value('employee_code');
+
+        $next = $highest === null ? 1 : ((int) preg_replace('/\D/', '', $highest)) + 1;
+
+        return sprintf('BDG-%06d', $next);
     }
 }

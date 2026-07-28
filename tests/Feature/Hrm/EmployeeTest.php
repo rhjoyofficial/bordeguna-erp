@@ -62,6 +62,39 @@ it('assigns sequential global employee codes', function () {
     expect(Employee::orderBy('id')->pluck('employee_code')->all())->toBe(['BDG-000001', 'BDG-000002']);
 });
 
+it('continues the sequence past gaps left by departed employees', function () {
+    // ⚠⚠ THE REGRESSION THAT REAL DATA EXPOSED. The generator was
+    // `Employee::count() + 1`. Bor De Guna's nine real employees are numbered
+    // 1, 2, 10, 12, 16, 19, 20, 21, 22 — twelve gaps left by people who have
+    // left. A count of 9 would have issued BDG-000010 to the next hire, which
+    // already belongs to somebody: a unique-constraint failure that blocks
+    // hiring at best, two people sharing a payroll identity at worst.
+    //
+    // EMP-02 makes a code an immutable identity, so the gaps are meaningful and
+    // must never be refilled — a departed employee's number stays theirs,
+    // because it is stamped on payslips and reports that must remain readable.
+    foreach (['BDG-000001', 'BDG-000002', 'BDG-000010', 'BDG-000022'] as $code) {
+        Employee::create([
+            'employee_code' => $code, 'first_name' => 'Existing', 'last_name' => $code,
+            'employment_type' => 'permanent',
+        ]);
+    }
+
+    empOwner()->post(route('hrm.employees.store'), [
+        'first_name' => 'New', 'last_name' => 'Hire', 'employment_type' => 'permanent',
+    ])->assertRedirect();
+
+    // Highest + 1, never count + 1 — which would have produced BDG-000005.
+    expect(Employee::orderByDesc('id')->value('employee_code'))->toBe('BDG-000023');
+});
+
+it('runs in Bangladesh time so device punches and web clock-ins agree', function () {
+    // Correction C12. Under UTC the ZKTeco import stored the device's Dhaka
+    // wall-clock while ESS clock-in stored now() — six hours apart in the same
+    // column, so shift comparison and lateness were wrong for one of them.
+    expect(config('app.timezone'))->toBe('Asia/Dhaka');
+});
+
 it('lists an employee only in the business they are assigned to', function () {
     empOwner()->post(route('hrm.employees.store'), ['first_name' => 'Scoped', 'last_name' => 'Person', 'employment_type' => 'permanent'])->assertRedirect();
 
