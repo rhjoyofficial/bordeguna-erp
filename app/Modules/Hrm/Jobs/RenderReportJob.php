@@ -8,6 +8,7 @@ use App\Modules\Hrm\Mail\ReportReadyMail;
 use App\Modules\Hrm\Reporting\ReportParameters;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Hrm\Reporting\ReportRunner;
+use App\Modules\Hrm\Reporting\ReportScope;
 use App\Modules\Hrm\Reporting\WriterRegistry;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -70,7 +71,13 @@ class RenderReportJob implements ShouldQueue
         $definition = $reports->findOrFail($this->reportKey);
         $writer = $writers->findOrFail($this->format);
 
-        $dataset = $runner->run($definition, new ReportParameters($this->parameters), $user);
+        // C10d is re-applied here rather than trusted from the dispatch site.
+        // The controller already scoped these values, so this is belt and
+        // braces — but a queued render is exactly the path where an unscoped
+        // export would land in someone's inbox with nobody watching.
+        $parameters = new ReportParameters(ReportScope::for($user)->apply($this->parameters));
+
+        $dataset = $runner->run($definition, $parameters, $user);
         $temp = $writer->write($dataset);
 
         $filename = $runner->filename($definition, $writer->extension());

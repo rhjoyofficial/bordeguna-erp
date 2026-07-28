@@ -19,6 +19,8 @@ interface Parameter {
     options: Option[];
     help: string | null;
     default: string | number | boolean | null;
+    /** C10d: fixed by the user's own scope, so it is shown but not chooseable. */
+    locked?: boolean;
 }
 
 interface Column {
@@ -150,6 +152,15 @@ export default function ReportShow({ report, parameters, columns, formats, queue
                                         />
                                     )}
 
+                                    {parameter.type === 'month' && (
+                                        <Input
+                                            id={parameter.key}
+                                            type="month"
+                                            value={values[parameter.key] ?? ''}
+                                            onChange={(e) => set(parameter.key, e.target.value)}
+                                        />
+                                    )}
+
                                     {parameter.type === 'date_range' && (
                                         <div className="flex items-center gap-2">
                                             <Input
@@ -181,11 +192,12 @@ export default function ReportShow({ report, parameters, columns, formats, queue
                                     {['office', 'department', 'employee', 'payroll_run', 'period', 'select'].includes(parameter.type) && (
                                         <select
                                             id={parameter.key}
-                                            className="border-input bg-background h-9 rounded-md border px-3 text-sm"
+                                            className="border-input bg-background h-9 rounded-md border px-3 text-sm disabled:opacity-70"
+                                            disabled={parameter.locked}
                                             value={values[parameter.key] ?? ''}
                                             onChange={(e) => set(parameter.key, e.target.value)}
                                         >
-                                            <option value="">{parameter.required ? 'Select…' : 'All'}</option>
+                                            {!parameter.locked && <option value="">{parameter.required ? 'Select…' : 'All'}</option>}
                                             {parameter.options.map((option) => (
                                                 <option key={String(option.value)} value={String(option.value)}>
                                                     {option.label}

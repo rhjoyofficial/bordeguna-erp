@@ -15,8 +15,12 @@ use App\Modules\Hrm\Reporting\Definitions\DailyAttendanceReport;
 use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportParameters;
 use App\Modules\Hrm\Reporting\ReportRegistry;
+use App\Modules\Hrm\Reporting\ReportMeta;
+use App\Modules\Hrm\Reporting\ReportParameter;
 use App\Modules\Hrm\Reporting\ReportRunner;
+use App\Modules\Hrm\Reporting\ReportScope;
 use App\Modules\Hrm\Reporting\ReportValue;
+use Illuminate\Support\LazyCollection;
 use App\Modules\Hrm\Reporting\ReportColumnType;
 use App\Modules\Hrm\Reporting\Writers\CsvWriter;
 use App\Modules\Hrm\Reporting\Writers\PdfWriter;
@@ -64,6 +68,24 @@ beforeEach(function () {
     $this->office = Office::create(['name' => 'Head Office', 'is_active' => true]);
     $this->department = Department::create([
         'name' => 'Production', 'office_id' => $this->office->id, 'is_active' => true,
+    ]);
+
+    // ⚠ The manager is an employee too, and C10d needs them to be: their
+    // attendance reports are scoped to the department on their own assignment,
+    // so a manager the system cannot place is a manager it cannot scope. They
+    // carry no attendance row of their own, so no row-count assertion moves.
+    $this->managerEmployee = Employee::create([
+        'employee_code' => 'BDG-000009',
+        'first_name' => 'Nasrin', 'last_name' => 'Akter',
+        'employment_type' => 'permanent', 'status' => 'active',
+        'user_id' => $this->manager->id,
+    ]);
+
+    EmployeeAssignment::create([
+        'employee_id' => $this->managerEmployee->id,
+        'office_id' => $this->office->id,
+        'department_id' => $this->department->id,
+        'is_primary' => true, 'effective_from' => '2025-01-01',
     ]);
 
     $this->date = '2026-06-15';
@@ -299,6 +321,144 @@ it('withholds every payroll report from a department manager even when they hold
     expect($this->manager->can('hrm.payroll.manage'))->toBeTrue()
         ->and($available->keys()->all())->toContain('attendance_daily')
         ->and($available->keys()->all())->not->toContain('payroll_salary_sheet');
+});
+
+it('scopes a department manager\'s attendance report to their own department', function () {
+    // Correction C10d's second rule. W3a shipped only the first (no payroll for
+    // a department manager); this is the half that was missing, and the failure
+    // it prevents is silent — every row on an unscoped report looks correct.
+    $packaging = Department::create([
+        'name' => 'Packaging', 'office_id' => $this->office->id, 'is_active' => true,
+    ]);
+
+    $outsider = Employee::create([
+        'employee_code' => 'BDG-000050',
+        'first_name' => 'Jahid', 'last_name' => 'Hasan',
+        'employment_type' => 'permanent', 'status' => 'active',
+    ]);
+
+    EmployeeAssignment::create([
+        'employee_id' => $outsider->id, 'office_id' => $this->office->id,
+        'department_id' => $packaging->id, 'is_primary' => true, 'effective_from' => '2025-01-01',
+    ]);
+
+    DailyAttendance::create([
+        'business_id' => $this->business->id, 'employee_id' => $outsider->id,
+        'attendance_date' => $this->date, 'status' => AttendanceStatus::Present,
+        'worked_minutes' => 480, 'is_provisional' => false, 'holds_payroll' => false,
+    ]);
+
+    // The manager asks for Packaging explicitly. The scope overwrites the
+    // choice rather than merging with it — a filter a restricted user can still
+    // edit is not an access control.
+    $this->actingAs($this->manager)
+        ->get(route('hrm.reports.run', 'attendance_daily').'?date='.$this->date
+            .'&department_id='.$packaging->id.'&format=csv')
+        ->assertOk()
+        ->assertDownload();
+
+    $rows = iterator_to_array(
+        $this->runner->run(
+            $this->definition,
+            new ReportParameters(
+                ReportScope::for($this->manager)->apply(['date' => $this->date, 'department_id' => $packaging->id]),
+            ),
+            $this->manager,
+        )->rows,
+    );
+
+    expect(array_column($rows, 'employee_code'))
+        ->toBe(['BDG-000001', 'BDG-000002', 'BDG-000003'])
+        ->not->toContain('BDG-000050');
+
+    // And the owner, unrestricted, still gets exactly what they asked for.
+    expect(ReportScope::for($this->hr)->apply(['department_id' => $packaging->id]))
+        ->toBe(['department_id' => $packaging->id]);
+});
+
+it('withholds attendance reports entirely from a manager whose department cannot be resolved', function () {
+    // Fail closed. An unplaceable manager is the case where serving the report
+    // unscoped would hand a line manager the whole business.
+    $this->managerEmployee->assignments()->delete();
+
+    $registry = app(ReportRegistry::class);
+
+    expect($this->manager->can('hrm.attendance.manage'))->toBeTrue()
+        ->and($registry->availableTo($this->manager)->all())->toBe([]);
+
+    $this->actingAs($this->manager)
+        ->get(route('hrm.reports.show', 'attendance_daily'))
+        ->assertNotFound();
+});
+
+it('withholds an attendance report that declares no department parameter from a restricted manager', function () {
+    // The other fail-closed case: a report added later that simply forgets the
+    // parameter has nothing for the scope to bind to, so it must not be served
+    // rather than served whole.
+    $unscopable = new class implements ReportDefinition
+    {
+        public function key(): string
+        {
+            return 'attendance_unscopable';
+        }
+
+        public function name(): string
+        {
+            return 'Unscopable';
+        }
+
+        public function description(): string
+        {
+            return '';
+        }
+
+        public function group(): string
+        {
+            return 'Attendance';
+        }
+
+        public function permission(): string
+        {
+            return 'hrm.attendance.manage';
+        }
+
+        public function parameters(): array
+        {
+            return [ReportParameter::date('date', 'Date')];
+        }
+
+        public function columns(?ReportParameters $parameters = null): array
+        {
+            return [ReportColumn::text('x', 'X')];
+        }
+
+        public function totalColumns(?ReportParameters $parameters = null): array
+        {
+            return [];
+        }
+
+        public function rows(ReportParameters $parameters): LazyCollection
+        {
+            return LazyCollection::empty();
+        }
+
+        public function estimatedRows(ReportParameters $parameters): int
+        {
+            return 0;
+        }
+
+        public function meta(ReportParameters $parameters): ReportMeta
+        {
+            return new ReportMeta(title: 'Unscopable');
+        }
+    };
+
+    $registry = app(ReportRegistry::class);
+    $registry->register($unscopable);
+
+    expect($registry->canRun($this->manager, $unscopable))->toBeFalse()
+        // The owner is unrestricted, so the missing parameter costs them nothing.
+        ->and($registry->canRun($this->hr, $unscopable))->toBeTrue();
 });
 
 it('renders the report list grouped, with the payroll group absent for a manager', function () {

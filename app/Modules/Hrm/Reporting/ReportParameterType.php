@@ -19,6 +19,17 @@ enum ReportParameterType: string
     /** A from/to pair. The screen renders two inputs bound to one parameter. */
     case DateRange = 'date_range';
 
+    /**
+     * A calendar month, as `YYYY-MM`.
+     *
+     * Distinct from a date and from a payroll period, and both distinctions are
+     * real. A register asked for with a *date* invites "which day of the month
+     * did you mean"; a payroll period is C7b's 24th-to-23rd cycle, which is not
+     * a month at all. The attendance reports in RPT-01 are monthly in the
+     * calendar sense, so they say so.
+     */
+    case Month = 'month';
+
     /** A payroll period (C7b: 24th → 23rd), chosen from the ones that exist. */
     case Period = 'period';
 

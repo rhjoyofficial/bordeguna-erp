@@ -33,7 +33,7 @@ class ReportRunner
 
     public function run(ReportDefinition $definition, ReportParameters $parameters, ?User $user = null): ReportDataset
     {
-        $totals = new ReportTotals($definition->totalColumns());
+        $totals = new ReportTotals($definition->totalColumns($parameters));
 
         $rows = $definition->rows($parameters)->map(function (array $row) use ($totals) {
             $totals->add($row);
@@ -42,7 +42,10 @@ class ReportRunner
         });
 
         return new ReportDataset(
-            columns: $definition->columns(),
+            // Resolved once, here, and carried on the dataset — so a report
+            // whose columns depend on its parameters cannot have the writer and
+            // the row producer disagree about how many there are.
+            columns: $definition->columns($parameters),
             rows: $rows,
             meta: $this->meta($definition, $parameters, $user),
             totals: $totals,

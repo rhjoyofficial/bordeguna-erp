@@ -80,40 +80,49 @@ class ReportRegistry
             return false;
         }
 
+        $scope = ReportScope::for($user);
+
+        if (! $scope->restricted) {
+            return true;
+        }
+
         // ACL-02 / C5. A Manager holding a payroll permission through some
         // other grant still does not get a payroll report — the questionnaire's
         // rule is about the *data*, not about the permission that happens to
         // guard it.
-        if ($this->isMoneyReport($definition) && $this->isDepartmentManagerOnly($user)) {
+        if ($this->isMoneyReport($definition)) {
             return false;
         }
 
-        return true;
+        // C10d's other half, and both of these are fail-closed cases rather
+        // than conveniences. A manager with no department of their own cannot
+        // be scoped to one; a report that declares no department parameter has
+        // nothing for the scope to bind to. Serving either unscoped would hand
+        // a line manager the whole business, which is the exact outcome C10d
+        // exists to prevent — so the report is withheld instead.
+        return $scope->resolvable() && $this->acceptsDepartmentScope($definition);
+    }
+
+    /**
+     * The scope binds to the `department_id` parameter, so a report that does
+     * not declare one cannot be scoped. This is checked rather than assumed
+     * because the failure is silent: a new attendance report that simply
+     * forgets the parameter would otherwise be served whole to a manager, and
+     * every row on it would look perfectly plausible.
+     */
+    private function acceptsDepartmentScope(ReportDefinition $definition): bool
+    {
+        foreach ($definition->parameters() as $parameter) {
+            if ($parameter->key === 'department_id') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isMoneyReport(ReportDefinition $definition): bool
     {
         return $definition->group() === 'Payroll';
-    }
-
-    /**
-     * A Manager who is not also Owner, Finance or a Super Admin. Those
-     * legitimately see payroll; ACL-02's exclusion is aimed at the line manager
-     * who supervises people and has no business seeing what they earn.
-     *
-     * ⚠ Super Admin is the `is_super_admin` flag on the user, **not a role** —
-     * a `Gate::before` bypasses every permission check for them, so testing for
-     * a "Super Admin" role would silently never match and would strip the
-     * super admin of reports they are explicitly allowed.
-     */
-    private function isDepartmentManagerOnly(User $user): bool
-    {
-        if ($user->is_super_admin) {
-            return false;
-        }
-
-        return $user->hasRole('Manager')
-            && ! $user->hasAnyRole(['Owner', 'Finance'])
-            && ! $user->can('hrm.salary.view');
     }
 }

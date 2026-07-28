@@ -3,8 +3,11 @@
 namespace App\Modules\Hrm\Payroll\Disbursement;
 
 use App\Modules\Hrm\Models\PayrollRun;
-use App\Modules\Hrm\Models\Payslip;
-use Illuminate\Database\Eloquent\Collection;
+use App\Modules\Hrm\Reporting\Definitions\CostAllocationReport;
+use App\Modules\Hrm\Reporting\Definitions\PayrollLineDetailReport;
+use App\Modules\Hrm\Reporting\ReportParameters;
+use App\Modules\Hrm\Reporting\ReportRunner;
+use App\Modules\Hrm\Reporting\Writers\CsvWriter;
 
 /**
  * The DIS-05 accounting export.
@@ -21,8 +24,23 @@ use Illuminate\Database\Eloquent\Collection;
  *    ready for whoever posts it.
  *  - **detail** — every line of every payslip, with the office and department it
  *    belongs to. This is the auditable half: a summary figure nobody can drill
- *    into is not auditable, and the office/department columns are what a later
- *    business-wise cost posting will group on without any of this being redone.
+ *    into is not auditable.
+ *
+ * ⚠⚠ **W3c re-expressed both views as report definitions, and this class now
+ * produces nothing of its own.** The plan's reuse rule was "exactly one path
+ * from data to file", and 3f's hand-rolled `fputcsv` was a second one. The rows
+ * come from `PayrollLineDetailReport` and `CostAllocationReport`; this keeps
+ * only the DIS-05 route's filename and its reconciliation footer.
+ *
+ * **Moving it fixed a real defect that had shipped.** The old detail resolved
+ * each row's office and department through `$payslip->employee->currentAssignment()`
+ * — *today's* assignment. Re-running the export for a closed payroll after
+ * somebody transferred silently refiled their whole month's cost under the new
+ * department, and the file still footed. The definitions resolve the assignment
+ * as at the run's period end.
+ *
+ * The same two views are now also available from the reports screen in xlsx, PDF
+ * and print, which RPT-03 asked for and this class could never have offered.
  *
  * Only calculated figures are exported and none is recomputed here. A payroll
  * export that disagrees with the payslips it came from would be worse than none.
@@ -32,6 +50,13 @@ class AccountingExport
     public const SUMMARY = 'summary';
 
     public const DETAIL = 'detail';
+
+    public function __construct(
+        private readonly ReportRunner $runner,
+        private readonly CsvWriter $writer,
+        private readonly PayrollLineDetailReport $lineDetail,
+        private readonly CostAllocationReport $allocation,
+    ) {}
 
     public function filename(PayrollRun $run, string $mode): string
     {
@@ -49,46 +74,37 @@ class AccountingExport
     }
 
     /**
-     * One row per component across the whole run.
+     * One row per component across the whole run, plus the reconciliation block.
      */
     private function summary(PayrollRun $run): string
     {
+        $csv = $this->csv($this->allocation, [
+            'run_id' => $run->id,
+            // The whole-run grain: no office or department grouping, which is
+            // the journal-entry shape DIS-05 asks for.
+            'grain' => 'run',
+        ]);
+
+        // ⚠ The three run-level figures are appended rather than derived from
+        // the rows above, and that is the point of them: they come from the
+        // `payroll_runs` row, so the export **reconciles against the payroll
+        // screen** instead of merely agreeing with itself. A total computed from
+        // the same rows it sits under can never disagree, and therefore can
+        // never catch anything.
         $handle = fopen('php://temp', 'r+');
-        fputcsv($handle, ['Period', 'Run version', 'Component code', 'Component', 'Type', 'Employees', 'Amount']);
-
-        $groups = [];
-
-        foreach ($this->payslips($run) as $payslip) {
-            foreach ($payslip->lines as $line) {
-                $key = $line->type->value.'|'.$line->code;
-                $groups[$key] ??= ['label' => $line->label, 'code' => $line->code, 'type' => $line->type->value, 'count' => 0, 'amount' => 0.0];
-                $groups[$key]['count']++;
-                $groups[$key]['amount'] += (float) $line->amount;
-            }
-        }
-
-        ksort($groups);
-
-        foreach ($groups as $group) {
-            fputcsv($handle, [
-                $run->period?->label(),
-                $run->version,
-                $group['code'],
-                $group['label'],
-                ucfirst($group['type']),
-                $group['count'],
-                number_format($group['amount'], 2, '.', ''),
-            ]);
-        }
-
-        // The three run-level figures, so the export reconciles against the
-        // payroll screen without anyone adding up the rows above.
         fputcsv($handle, []);
-        fputcsv($handle, ['TOTALS', '', '', '', 'Earnings', $run->employee_count, number_format((float) $run->total_earnings, 2, '.', '')]);
-        fputcsv($handle, ['', '', '', '', 'Deductions', '', number_format((float) $run->total_deductions, 2, '.', '')]);
-        fputcsv($handle, ['', '', '', '', 'Net payable', '', number_format((float) $run->total_net, 2, '.', '')]);
+        // Six fields, matching the six columns the run-grain report emits — a
+        // reconciliation block that does not line up under its own report is
+        // read as a different table.
+        fputcsv($handle, ['TOTALS', '', 'Earnings', $run->employee_count, number_format((float) $run->total_earnings, 2, '.', ''), '']);
+        fputcsv($handle, ['', '', 'Deductions', '', number_format((float) $run->total_deductions, 2, '.', ''), '']);
+        fputcsv($handle, ['', '', 'Net payable', '', number_format((float) $run->total_net, 2, '.', ''), '']);
 
-        return $this->flush($handle);
+        rewind($handle);
+        $totals = (string) stream_get_contents($handle);
+        fclose($handle);
+
+        return $csv.$totals;
     }
 
     /**
@@ -96,56 +112,19 @@ class AccountingExport
      */
     private function detail(PayrollRun $run): string
     {
-        $handle = fopen('php://temp', 'r+');
-        fputcsv($handle, [
-            'Period', 'Run version', 'Employee code', 'Employee', 'Office', 'Department',
-            'Component code', 'Component', 'Type', 'Quantity', 'Rate', 'Amount', 'Basis', 'Source',
-        ]);
-
-        foreach ($this->payslips($run) as $payslip) {
-            $assignment = $payslip->employee?->currentAssignment();
-
-            foreach ($payslip->lines as $line) {
-                fputcsv($handle, [
-                    $run->period?->label(),
-                    $run->version,
-                    $payslip->employee?->employee_code,
-                    $payslip->employee?->fullName(),
-                    $assignment?->office?->name,
-                    $assignment?->department?->name,
-                    $line->code,
-                    $line->label,
-                    ucfirst($line->type->value),
-                    $line->quantity === null ? '' : (float) $line->quantity,
-                    $line->rate === null ? '' : number_format((float) $line->rate, 2, '.', ''),
-                    number_format((float) $line->amount, 2, '.', ''),
-                    // PAY-13's stored formula travels with the figure, so an
-                    // auditor never has to ask the system what a number meant.
-                    $line->formula,
-                    $line->source,
-                ]);
-            }
-        }
-
-        return $this->flush($handle);
+        return $this->csv($this->lineDetail, ['run_id' => $run->id]);
     }
 
     /**
-     * @return Collection<int, Payslip>
+     * @param  array<string, mixed>  $parameters
      */
-    private function payslips(PayrollRun $run)
+    private function csv(object $definition, array $parameters): string
     {
-        return $run->payslips()->with(['lines', 'employee'])->get();
-    }
+        $dataset = $this->runner->run($definition, new ReportParameters($parameters));
+        $path = $this->writer->write($dataset);
 
-    /**
-     * @param  resource  $handle
-     */
-    private function flush($handle): string
-    {
-        rewind($handle);
-        $csv = (string) stream_get_contents($handle);
-        fclose($handle);
+        $csv = (string) file_get_contents($path);
+        @unlink($path);
 
         return $csv;
     }

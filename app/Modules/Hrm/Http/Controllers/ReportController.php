@@ -16,10 +16,12 @@ use App\Modules\Hrm\Reporting\ReportParameters;
 use App\Modules\Hrm\Reporting\ReportParameterType;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Hrm\Reporting\ReportRunner;
+use App\Modules\Hrm\Reporting\ReportScope;
 use App\Modules\Hrm\Reporting\WriterRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
@@ -80,7 +82,7 @@ class ReportController extends Controller
                 'group' => $definition->group(),
             ],
             'parameters' => array_map(
-                fn (ReportParameter $p) => $this->presentParameter($p),
+                fn (ReportParameter $p) => $this->presentParameter($p, ReportScope::for($request->user())),
                 $definition->parameters(),
             ),
             'columns' => array_map(fn ($c) => $c->toArray(), $definition->columns()),
@@ -102,7 +104,13 @@ class ReportController extends Controller
         );
 
         $writer = $this->writers->findOrFail($validated['format']);
-        $parameters = $this->parameters($definition, $validated);
+        // C10d. A restricted manager's department is forced in before anything
+        // reads the bag — including the queued path below, which carries the
+        // scoped values into the job rather than re-deriving them there.
+        $parameters = $this->parameters(
+            $definition,
+            ReportScope::for($request->user())->apply($validated),
+        );
 
         activity('hrm.report')
             ->causedBy($request->user())
@@ -238,6 +246,7 @@ class ReportController extends Controller
             ReportParameterType::PayrollRun => $this->describeRun((int) $value),
             ReportParameterType::Period => PayrollPeriod::find($value)?->label(),
             ReportParameterType::Boolean => $value ? 'Yes' : 'No',
+            ReportParameterType::Month => Carbon::createFromFormat('Y-m-d', $value.'-01')->format('F Y'),
             default => (string) $value,
         };
     }
@@ -252,9 +261,26 @@ class ReportController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function presentParameter(ReportParameter $parameter): array
+    private function presentParameter(ReportParameter $parameter, ReportScope $scope): array
     {
         $presented = $parameter->toArray();
+
+        // A restricted manager is shown their own department, fixed. Offering a
+        // dropdown whose other entries are overwritten on submit would be worse
+        // than offering none: it reads as a choice and behaves as a lie.
+        if ($scope->restricted && $parameter->key === 'department_id') {
+            $department = Department::find($scope->departmentId);
+
+            return [
+                ...$presented,
+                'options' => $department === null
+                    ? []
+                    : [['value' => $department->id, 'label' => $department->name]],
+                'default' => $scope->departmentId,
+                'locked' => true,
+                'help' => 'Your reports cover your own department.',
+            ];
+        }
 
         // The framework supplies the option lists for the types that have a
         // fixed source, so a definition never queries for a dropdown.

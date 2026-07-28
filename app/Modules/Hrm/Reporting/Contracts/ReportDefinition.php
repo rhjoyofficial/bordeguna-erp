@@ -61,8 +61,25 @@ interface ReportDefinition
     /** @return array<int, ReportParameter> */
     public function parameters(): array;
 
-    /** @return array<int, ReportColumn> */
-    public function columns(): array;
+    /**
+     * The columns, which may depend on what the report was asked for.
+     *
+     * ⚠ **The parameters are optional because the screen asks before the user
+     * has chosen anything.** `null` means "describe yourself in general" — the
+     * column list shown beside the filters. A run always passes them.
+     *
+     * Most reports ignore the argument entirely. Two cannot: the monthly
+     * register's columns are the *days of the month it was asked for*, and the
+     * earnings/deductions breakdown's are the components that appear in the run.
+     * Both were forced by the data rather than chosen, so the shape belongs in
+     * the interface rather than in a workaround — a register that always
+     * printed 31 columns would show three empty ones every February, and a
+     * breakdown with fixed component columns would be wrong for any business
+     * that added one.
+     *
+     * @return array<int, ReportColumn>
+     */
+    public function columns(?ReportParameters $parameters = null): array;
 
     /**
      * @return LazyCollection<int, array<string, mixed>>
@@ -92,7 +109,11 @@ interface ReportDefinition
      * Accumulated during the single pass over `rows()` by the runner, so a
      * definition declares only *which* columns total.
      *
+     * Takes the parameters for the same reason `columns()` does: a report whose
+     * columns are decided by its input cannot declare in advance which of them
+     * total.
+     *
      * @return array<int, string>
      */
-    public function totalColumns(): array;
+    public function totalColumns(?ReportParameters $parameters = null): array;
 }

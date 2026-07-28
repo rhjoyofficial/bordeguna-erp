@@ -19,6 +19,22 @@ return [
 
     'reporting' => [
         'queue_threshold' => (int) env('HRM_REPORT_QUEUE_THRESHOLD', 5000),
+
+        /*
+        |----------------------------------------------------------------------
+        | Payroll variance threshold (Correction C10c)
+        |----------------------------------------------------------------------
+        |
+        | The smallest movement worth printing on the variance report, in taka.
+        | Seeded at 0 — show everything — because hiding rows is a decision the
+        | business should take deliberately rather than inherit from a default.
+        |
+        | It is data rather than code precisely so that raising it is a setting
+        | change and not a release: a payroll manager chasing a month of noise
+        | needs the answer that afternoon.
+        |
+        */
+        'variance_threshold' => (float) env('HRM_REPORT_VARIANCE_THRESHOLD', 0),
     ],
 
 ];

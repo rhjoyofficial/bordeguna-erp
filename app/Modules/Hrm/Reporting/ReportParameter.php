@@ -35,6 +35,11 @@ final class ReportParameter
         return new self($key, $label, ReportParameterType::DateRange, $required);
     }
 
+    public static function month(string $key = 'month', string $label = 'Month', bool $required = true, ?string $default = null): self
+    {
+        return new self($key, $label, ReportParameterType::Month, $required, default: $default ?? now()->format('Y-m'));
+    }
+
     public static function period(string $key = 'period_id', string $label = 'Payroll period', bool $required = true): self
     {
         return new self($key, $label, ReportParameterType::Period, $required);
@@ -92,6 +97,9 @@ final class ReportParameter
                 // as "no data" rather than "bad input".
                 "{$this->key}_to" => "{$presence}|date|after_or_equal:{$this->key}_from",
             ],
+            // Pinned to the format rather than left to `date`, which would
+            // happily accept "2026-07-15" and quietly discard the day.
+            ReportParameterType::Month => [$this->key => "{$presence}|date_format:Y-m"],
             ReportParameterType::Boolean => [$this->key => 'nullable|boolean'],
             ReportParameterType::Select => [$this->key => "{$presence}|string"],
             default => [$this->key => "{$presence}|integer"],

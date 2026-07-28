@@ -55,6 +55,22 @@ final class ReportParameters
         return $this->has($key) ? Carbon::parse((string) $this->values[$key]) : null;
     }
 
+    /**
+     * A `YYYY-MM` parameter as the first day of that month.
+     *
+     * Returns the *start*, so a caller that wants the whole month writes
+     * `month()` and `month()->endOfMonth()` rather than parsing anything. A
+     * report that reached for `Carbon::parse('2026-07')` itself would get the
+     * first of the month on some PHP builds and today's day-of-month on others,
+     * which is the kind of bug that only appears after the 28th.
+     */
+    public function month(string $key = 'month'): ?Carbon
+    {
+        return $this->has($key)
+            ? Carbon::createFromFormat('Y-m-d', $this->values[$key].'-01')->startOfDay()
+            : null;
+    }
+
     public function from(string $key = 'range'): ?Carbon
     {
         return $this->date("{$key}_from");

@@ -17,16 +17,46 @@ use Illuminate\Validation\ValidationException;
  * it actually saw — per §0.5, fail early and explain, rather than import a
  * file's worth of silently wrong data.
  *
- * The real sample export is still outstanding; when it arrives, lock its exact
- * headers by adding them to the alias lists below.
+ * **The ATT-02 sample arrived on 2026-07-28 and its headers are now locked in
+ * below** (`AllInOutData` from a ZKTeco K40, serial PAS4240900899, firmware
+ * 6.60):
+ *
+ *     Department | Name | No. | Date/Time | Location ID | ID Number | VerifyCode | CardNo
+ *
+ * Three things it settled, each of which had been guessed at:
+ *
+ *  1. **The enroll column is `No.`** and there is a *second*, different identity
+ *     column called `ID Number` — so "the id column" was never a single thing.
+ *  2. **`Date/Time` is one combined column** in `M/d/yyyy h:mm AM/PM` — US
+ *     month-first, which the ambiguous `d/m/Y` formats above it would otherwise
+ *     have been free to misread.
+ *  3. **There is no in/out status column at all.** The export is every punch in
+ *     one list with nothing saying which is which — which is exactly why ATT-06
+ *     did not tick "use the device status" and why `direction` is nullable.
+ *     `VerifyCode` is *how* the person identified (fingerprint, card, password),
+ *     not whether they were arriving or leaving.
+ *
+ * ⚠ **The sample is a binary `.xls` (BIFF8), and this parser reads CSV only.**
+ * Locking the headers does not by itself make that file importable — see the
+ * open item in `HRM-IMPLEMENTATION-PLAN.md`. Exporting the same report as CSV
+ * from ZKTime.Net works today; reading the binary directly needs a new
+ * dependency and therefore a decision, not an assumption.
  */
 class AttendanceCsvParser
 {
     /** @var array<int, string> */
     private const ENROLL_ALIASES = [
         'enrollid', 'enrollno', 'enrollmentid', 'employeeid', 'empid', 'userid',
+        // `no` is the K40 sample's own enroll column and is matched ahead of the
+        // generic fallbacks below, which is what keeps the two identity columns
+        // in that file from being confused for each other.
         'user', 'acno', 'ac', 'no', 'personid', 'personnelid', 'personnelnumber',
         'badgenumber', 'badgeid', 'id',
+        // ⚠ Last resort only. In the K40 sample `ID Number` sits *beside* `No.`
+        // and holds a different value, so it must never win while a real enroll
+        // column is present — matching it first would key every punch to the
+        // wrong identifier and still import cleanly.
+        'idnumber',
     ];
 
     /** @var array<int, string> */
@@ -44,13 +74,21 @@ class AttendanceCsvParser
     /** @var array<int, string> */
     private const STATUS_ALIASES = [
         'status', 'state', 'checktype', 'inout', 'verifystate', 'attstate',
-        'punchstate', 'type', 'verifycode',
+        'punchstate', 'type',
+        // ⚠ `verifycode` was here and has been REMOVED. The sample showed what
+        // it actually is: the verification *method* — 1 fingerprint, 3 password,
+        // 4 card. Read as a direction it turns "identified by fingerprint" into
+        // an arrival on every single row, which pairs punches wrongly and never
+        // once looks like a parsing error.
     ];
 
     /** @var array<int, string> */
     private const DEVICE_ALIASES = [
         'device', 'devicename', 'machine', 'machinenumber', 'terminal',
         'terminalid', 'sn', 'serialnumber', 'deviceserial',
+        // The K40 sample's own column. One physical device per location here,
+        // so this is the identifier a duplicate check should key on.
+        'locationid', 'location',
     ];
 
     /**
@@ -61,7 +99,15 @@ class AttendanceCsvParser
      * @var array<int, string>
      */
     private const DATETIME_FORMATS = [
+        // Unambiguous first: a four-digit year in front can only be read one way.
         'Y-m-d H:i:s', 'Y-m-d H:i', 'Y/m/d H:i:s', 'Y/m/d H:i',
+        // ⚠ The K40's own format, and it is placed **above** the `d/m/Y` group
+        // deliberately. A 12-hour clock with AM/PM is the tell for a US-style
+        // month-first date, and the file we have is month-first: read as
+        // day-first, `7/15/2026` is a nonsense month that rolls silently over
+        // into the following March rather than failing. Every date from the 1st
+        // to the 12th would have been quietly transposed.
+        'n/j/Y g:i:s A', 'n/j/Y g:i A', 'm/d/Y h:i:s A', 'm/d/Y h:i A',
         'd-m-Y H:i:s', 'd-m-Y H:i', 'd/m/Y H:i:s', 'd/m/Y H:i',
         'd.m.Y H:i:s', 'd.m.Y H:i', 'Y-m-d\TH:i:s',
     ];

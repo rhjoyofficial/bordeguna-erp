@@ -79,7 +79,7 @@ class SalarySheetReport implements ReportDefinition
         ];
     }
 
-    public function columns(): array
+    public function columns(?ReportParameters $parameters = null): array
     {
         return [
             ReportColumn::text('employee_code', 'Code', 12),
@@ -99,7 +99,7 @@ class SalarySheetReport implements ReportDefinition
         ];
     }
 
-    public function totalColumns(): array
+    public function totalColumns(?ReportParameters $parameters = null): array
     {
         return ['gross_salary', 'total_earnings', 'total_deductions', 'net'];
     }

@@ -68,7 +68,7 @@ class DailyAttendanceReport implements ReportDefinition
         ];
     }
 
-    public function columns(): array
+    public function columns(?ReportParameters $parameters = null): array
     {
         return [
             ReportColumn::text('employee_code', 'Code', 12),
@@ -90,7 +90,7 @@ class DailyAttendanceReport implements ReportDefinition
         ];
     }
 
-    public function totalColumns(): array
+    public function totalColumns(?ReportParameters $parameters = null): array
     {
         // Worked and late minutes total meaningfully across a day's workforce.
         // Nothing else here does — a sum of statuses is not a number.
