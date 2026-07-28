@@ -9,6 +9,7 @@ use App\Modules\Foundation\database\seeders\FoundationSeeder;
 use App\Modules\Hrm\database\seeders\AttendanceCorrectionWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\AttendancePolicySeeder;
 use App\Modules\Hrm\database\seeders\BangladeshHolidayCalendarSeeder;
+use App\Modules\Hrm\database\seeders\BorDeGunaAttendanceSeeder;
 use App\Modules\Hrm\database\seeders\BorDeGunaOrganisationSeeder;
 use App\Modules\Hrm\database\seeders\HrmChangeRequestWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\LeaveTypeSeeder;
@@ -67,6 +68,12 @@ class DatabaseSeeder extends Seeder
         $this->call(SalaryComponentSeeder::class);
         $this->call(PayrollWorkflowSeeder::class);
         $this->call(PayrollInputWorkflowSeeder::class);
+        // ⚠ After AttendancePolicySeeder, BangladeshHolidayCalendarSeeder and
+        // the shift/schedule tables exist: this replaces the generic POL-03
+        // example policy with Bor De Guna's real ladder, and binds their teams
+        // to their shifts.
+        $this->call(BorDeGunaAttendanceSeeder::class);
+
         $this->call(InventoryReasonsSeeder::class);
         $this->call(InventoryDemoDataSeeder::class);
     }

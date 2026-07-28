@@ -55,8 +55,26 @@ return [
     |
     */
 
+
     'dashboard' => [
         'cache_seconds' => (int) env('HRM_DASHBOARD_CACHE_SECONDS', 60),
     ],
+    /*
+    |--------------------------------------------------------------------------
+    | Go-live date
+    |--------------------------------------------------------------------------
+    |
+    | The date Bor De Guna's configuration takes effect. Schedule assignments
+    | are effective-dated, and the effective date decides which shift and which
+    | calendar a given day is judged against — so this is not cosmetic.
+    |
+    | Left null until the date is agreed, in which case provisioning uses today,
+    | which is harmless while no attendance exists. ⚠ Recommended: pick a 24th,
+    | so the first system payroll covers a whole 24th-to-23rd period and the
+    | parallel run compares like with like.
+    |
+    */
+
+    'go_live_date' => env('HRM_GO_LIVE_DATE'),
 
 ];
