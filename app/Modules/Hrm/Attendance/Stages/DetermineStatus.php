@@ -5,6 +5,7 @@ namespace App\Modules\Hrm\Attendance\Stages;
 use App\Modules\Hrm\Attendance\Contracts\AttendanceStage;
 use App\Modules\Hrm\Attendance\Data\AttendanceComputation;
 use App\Modules\Hrm\Enums\AttendanceStatus;
+use App\Modules\Hrm\Enums\ScheduleType;
 
 /**
  * Stage 6 — the baseline status of the day (POL-06/07/09/10).
@@ -48,6 +49,31 @@ class DetermineStatus implements AttendanceStage
         }
 
         if ($computation->hasOpenPair || $computation->lastOut === null) {
+            // ⚠⚠ Correction C13. POL-07's blocking Missing Punch presumes the
+            // employee comes back to the device — true for office staff, and
+            // false by design for field staff, who give fingerprint in the
+            // morning and finish from wherever the day took them.
+            //
+            // Left blanket, this rule blocks their payroll EVERY month and
+            // withholds the TA & DA they earn per day present, on days they
+            // genuinely worked. So where the schedule says no return is
+            // expected, one morning punch is read as "they came to work"
+            // rather than "something went wrong".
+            //
+            // ⚠ The status must remain a WORKED one, not merely un-blocked:
+            // `PayrollContextBuilder` counts Present, Late and FieldDuty toward
+            // `presentDays`, and that is the figure both proration and the
+            // per-present-day allowance are priced from.
+            if (! $context->requiresClosedPunchPair()) {
+                return $computation
+                    ->with([
+                        'status' => $context->scheduleType === ScheduleType::FieldDuty
+                            ? AttendanceStatus::FieldDuty
+                            : AttendanceStatus::Present,
+                    ])
+                    ->note('Single punch accepted: this schedule expects no return to the device (C13).');
+            }
+
             return $computation
                 ->with(['status' => AttendanceStatus::MissingPunch])
                 ->flag('payroll_hold')

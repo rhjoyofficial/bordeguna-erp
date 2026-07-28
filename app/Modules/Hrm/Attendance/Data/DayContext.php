@@ -63,6 +63,39 @@ final readonly class DayContext
         return ! in_array($this->scheduleType, [ScheduleType::Flexible, ScheduleType::FieldDuty], true);
     }
 
+    /**
+     * Whether a day must have a *closed* punch pair to count as worked.
+     *
+     * ⚠⚠ **Correction C13 (2026-07-28) — the rule real operations exposed.**
+     * POL-07 makes an unclosed pair a blocking Missing Punch, and that is right
+     * for office staff: somebody who clocked in and never out either forgot, or
+     * left without saying, and a human should look.
+     *
+     * **It is wrong for field staff, and wrongly in a way that compounds.** Bor
+     * De Guna's Retail Sales Officers give fingerprint at the office each
+     * morning and then go out for the day; they do not come back to the device.
+     * Under the blanket rule every one of their days becomes a Missing Punch,
+     * which holds payroll — so payroll would be blocked for those people *every
+     * single month*, needing roughly fifty approved corrections to clear. And
+     * because their TA & DA is paid per day present, a held day pays them
+     * nothing either.
+     *
+     * The pairing requirement quietly assumes the person returns to the device.
+     * Where the schedule says they will not, the assumption does not hold, and
+     * the honest reading of one morning punch is "they came to work" rather
+     * than "something went wrong".
+     *
+     * This is the same principle `judgesPunctuality()` already applies —
+     * flexible and field-duty staff are not judged on *when* they arrive —
+     * extended to *whether they closed the pair*. Both come from SCH-01 and
+     * POL-10 treating those schedules as measured by outcome rather than by
+     * the clock.
+     */
+    public function requiresClosedPunchPair(): bool
+    {
+        return ! in_array($this->scheduleType, [ScheduleType::Flexible, ScheduleType::FieldDuty], true);
+    }
+
     public function priorOccurrencesFor(string $windowKey): int
     {
         return $this->priorOccurrences[$windowKey] ?? 0;

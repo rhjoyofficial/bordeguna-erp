@@ -386,3 +386,63 @@ it('still reports hours when no policy is configured', function () {
     expect($outcome->workedMinutes)->toBe(540);
     expect($outcome->payableMinutes)->toBe(480);
 });
+
+// --- C13: field staff who never return to the device --------------------------
+
+it('accepts a single morning punch as a worked day for field duty', function () {
+    // ⚠⚠ The rule Bor De Guna's real operations forced. Their Retail Sales
+    // Officers give fingerprint at the office each morning and finish from the
+    // field — they never come back to the device. Under POL-07's blanket
+    // pairing rule every one of their days became a blocking Missing Punch, so
+    // payroll would have been held for them EVERY month, and the TA & DA they
+    // earn per day present would not have been paid on days they worked.
+    $outcome = engineRun(['2026-08-03 08:30:00'], ['schedule_type' => ScheduleType::FieldDuty]);
+
+    expect($outcome->status)->toBe(AttendanceStatus::FieldDuty)
+        ->and($outcome->holdsPayroll)->toBeFalse();
+});
+
+it('still blocks an unclosed pair for ordinary office staff', function () {
+    // The other half of C13, and the more important half: the exemption is
+    // scoped to schedules that expect no return. An office employee who clocked
+    // in and never out is exactly the case POL-07 exists for — somebody either
+    // forgot or left without saying, and a human must look.
+    $outcome = engineRun(['2026-08-03 09:00:00'], ['schedule_type' => ScheduleType::Fixed]);
+
+    expect($outcome->status)->toBe(AttendanceStatus::MissingPunch)
+        ->and($outcome->holdsPayroll)->toBeTrue();
+});
+
+it('counts a flexible schedule single punch as present rather than field duty', function () {
+    // Both schedules waive the closed-pair requirement, but they are not the
+    // same fact: a flexible employee working odd hours in the office has not
+    // been on field duty, and the status is what a payslip and a report will
+    // say about their day.
+    $outcome = engineRun(['2026-08-03 10:15:00'], ['schedule_type' => ScheduleType::Flexible]);
+
+    expect($outcome->status)->toBe(AttendanceStatus::Present)
+        ->and($outcome->holdsPayroll)->toBeFalse();
+});
+
+it('still proposes absent for a field duty employee who never punched at all', function () {
+    // C13 waives the *pairing* requirement, never the requirement to turn up.
+    // No punch is no evidence of work, and TA & DA is earned on days with
+    // check-in data — so this day must not become payable by accident.
+    $outcome = engineRun([], ['schedule_type' => ScheduleType::FieldDuty]);
+
+    expect($outcome->status)->toBe(AttendanceStatus::Absent)
+        ->and($outcome->isProvisional)->toBeTrue();
+});
+
+it('closes the pair normally when a field employee does return', function () {
+    // The waiver is a fallback, not a bypass: when both punches exist the day
+    // is measured from them as usual, so worked time stays real wherever it
+    // can be known.
+    $outcome = engineRun(
+        ['2026-08-03 08:30:00', '2026-08-03 18:00:00'],
+        ['schedule_type' => ScheduleType::FieldDuty],
+    );
+
+    expect($outcome->holdsPayroll)->toBeFalse()
+        ->and($outcome->workedMinutes)->toBeGreaterThan(0);
+});
