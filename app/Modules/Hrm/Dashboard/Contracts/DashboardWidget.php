@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Dashboard\Contracts;
 
+use App\Models\User;
 use App\Modules\Hrm\Dashboard\DashboardFilters;
 use App\Modules\Hrm\Dashboard\WidgetValue;
 
@@ -53,6 +54,23 @@ interface DashboardWidget
      * report run leaves, so the rule is if anything more important here.
      */
     public function permission(): string;
+
+    /**
+     * Whether this user may see the tile at all.
+     *
+     * Almost always "do they hold `permission()`", which `VisibleByPermission`
+     * answers once for everybody. It is a method rather than an assumption
+     * because **not every tile's visibility is a single permission**: approvals
+     * are cross-module and per-user, so "can this person review anything" is a
+     * question only `ApprovalInbox` can answer — and the sidebar already
+     * answers it that way.
+     *
+     * ⚠ **This does not replace the access rules in `DashboardRegistry`.** C10d
+     * and ACL-02 are applied there, on top of whatever this returns, precisely
+     * so a widget cannot grant itself an audience by overriding this. A widget
+     * may narrow who sees it; it may never widen.
+     */
+    public function isVisibleTo(User $user): bool;
 
     /**
      * How many seconds this figure may be stale (Correction C11e).

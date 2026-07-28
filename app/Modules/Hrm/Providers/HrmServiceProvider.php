@@ -10,7 +10,9 @@ use App\Modules\Hrm\Dashboard\Widgets\EmployeesOnLeaveWidget;
 use App\Modules\Hrm\Dashboard\Widgets\LateTodayWidget;
 use App\Modules\Hrm\Dashboard\Widgets\MissingPunchesWidget;
 use App\Modules\Hrm\Dashboard\Widgets\PayrollStatusWidget;
+use App\Modules\Hrm\Dashboard\Widgets\PendingApprovalsWidget;
 use App\Modules\Hrm\Dashboard\Widgets\PresentTodayWidget;
+use App\Modules\Hrm\Dashboard\Widgets\SalaryTotalWidget;
 use App\Modules\Hrm\Reporting\Definitions\AbsenceAndLeaveReport;
 use App\Modules\Hrm\Reporting\Definitions\AttendanceExceptionReport;
 use App\Modules\Hrm\Reporting\Definitions\CostAllocationReport;
@@ -85,8 +87,13 @@ class HrmServiceProvider extends ServiceProvider
         // RPT-04 #2.
         MissingPunchesWidget::class,
 
-        // RPT-04 #5.
+        // RPT-04 #3 — cross-module and per-user, so it sits in its own group
+        // and declines the C11e cache entirely.
+        PendingApprovalsWidget::class,
+
+        // RPT-04 #5 and #6.
         PayrollStatusWidget::class,
+        SalaryTotalWidget::class,
     ];
 
     public function register(): void

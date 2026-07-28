@@ -60,7 +60,10 @@ class DashboardRegistry
 
     public function canSee(User $user, DashboardWidget $widget): bool
     {
-        if (! $user->can($widget->permission())) {
+        // The widget's own answer, which for almost all of them is "do they hold
+        // the permission I declare". ⚠ Everything below is applied ON TOP and is
+        // not overridable — a widget may narrow its audience, never widen it.
+        if (! $widget->isVisibleTo($user)) {
             return false;
         }
 

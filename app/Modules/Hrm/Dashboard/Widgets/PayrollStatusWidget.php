@@ -2,10 +2,11 @@
 
 namespace App\Modules\Hrm\Dashboard\Widgets;
 
+use App\Modules\Hrm\Dashboard\Concerns\ResolvesPayrollRun;
+use App\Modules\Hrm\Dashboard\Concerns\VisibleByPermission;
 use App\Modules\Hrm\Dashboard\Contracts\DashboardWidget;
 use App\Modules\Hrm\Dashboard\DashboardFilters;
 use App\Modules\Hrm\Dashboard\WidgetValue;
-use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Reporting\ReportColumnType;
 
@@ -34,6 +35,8 @@ use App\Modules\Hrm\Reporting\ReportColumnType;
  */
 class PayrollStatusWidget implements DashboardWidget
 {
+    use ResolvesPayrollRun, VisibleByPermission;
+
     public function key(): string
     {
         return 'payroll_current_status';
@@ -109,24 +112,15 @@ class PayrollStatusWidget implements DashboardWidget
     /**
      * The live run for the period the dashboard is looking at.
      *
-     * ⚠ Cancelled runs are excluded, then the highest version wins. WFL-06's
-     * reopen path leaves the superseded version behind as Cancelled on purpose,
-     * and ordering by id alone would eventually surface it.
+     * ⚠ `month()`, not `asAt()`. A payroll run belongs to a period, and asking
+     * about August must not silently answer about July because August has not
+     * finished yet. The version rule lives in `ResolvesPayrollRun`, shared with
+     * the total tile so the two cannot pick different runs.
      */
     private function currentRun(DashboardFilters $filters): ?PayrollRun
     {
-        // ⚠ `month()`, not `asAt()`. A payroll run belongs to a period, and
-        // asking about August must not silently answer about July because
-        // August has not finished yet.
-        $asAt = $filters->month();
+        $month = $filters->month();
 
-        return PayrollRun::query()
-            ->with('period')
-            ->whereHas('period', fn ($q) => $q
-                ->where('year', $asAt->year)
-                ->where('month', $asAt->month))
-            ->where('status', '!=', PayrollStatus::Cancelled->value)
-            ->orderByDesc('version')
-            ->first();
+        return $this->runForPeriod($month->year, $month->month);
     }
 }

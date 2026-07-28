@@ -317,9 +317,11 @@ it('renders the dashboard with its widgets grouped and filters echoed back', fun
             ->component('hrm/dashboard')
             ->where('filters.department_id', $this->production->id)
             ->where('department_locked', false)
-            // Six after RPT-04b: present, absent, late, on leave, missing
-            // punches, payroll status.
-            ->has('widgets', 6));
+            // Seven after RPT-04c: present, absent, late, on leave, missing
+            // punches, payroll status, payroll total. The approvals tile is
+            // absent for this user — they hold no legacy approve permission and
+            // have nothing pending, which is the sidebar's own rule.
+            ->has('widgets', 7));
 });
 
 it('answers about the month it was asked for, not the one that has finished', function () {

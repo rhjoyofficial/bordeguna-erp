@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Dashboard\Widgets;
 
+use App\Modules\Hrm\Dashboard\Concerns\VisibleByPermission;
 use App\Modules\Hrm\Dashboard\Contracts\DashboardWidget;
 use App\Modules\Hrm\Dashboard\DashboardFilters;
 use App\Modules\Hrm\Dashboard\WidgetValue;
@@ -40,7 +41,7 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class EmployeesOnLeaveWidget implements DashboardWidget
 {
-    use ResolvesAssignments;
+    use ResolvesAssignments, VisibleByPermission;
 
     public function key(): string
     {

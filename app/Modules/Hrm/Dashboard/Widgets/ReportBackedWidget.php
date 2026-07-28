@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Dashboard\Widgets;
 
+use App\Modules\Hrm\Dashboard\Concerns\VisibleByPermission;
 use App\Modules\Hrm\Dashboard\Contracts\DashboardWidget;
 use App\Modules\Hrm\Dashboard\DashboardFilters;
 use App\Modules\Hrm\Dashboard\WidgetValue;
@@ -33,6 +34,8 @@ use App\Modules\Hrm\Reporting\ReportParameters;
  */
 abstract class ReportBackedWidget implements DashboardWidget
 {
+    use VisibleByPermission;
+
     public function __construct(
         protected readonly ReportDefinition $report,
     ) {}
