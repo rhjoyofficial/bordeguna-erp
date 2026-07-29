@@ -49,9 +49,10 @@ use Illuminate\Database\Seeder;
  * - **Date of birth.** C9b derives the payslip PDF password from employee code
  *   + DOB, so a protected payslip is **refused** for anyone without one. The
  *   portal view and the register are unaffected, so nobody is unpaid.
- * - **Employment type.** Recorded as `permanent` because the column requires a
- *   value; ⚠ **it is UNCONFIRMED for all nine** and must be corrected when the
- *   client answers. It drives confirmation dates, not money.
+ * - **Employment type.** ✅ **CONFIRMED by Joy 2026-07-29: every current
+ *   employee is `permanent` unless he explicitly changes an individual.** This
+ *   is now a standing policy rather than a placeholder, so the seeder asserts
+ *   it rather than apologising for it.
  * - **Leave and loan opening balances.** The hardest item on the checklist, and
  *   the one that is wrong forever if wrong at go-live. They arrive as ledger
  *   entries in W1 part two, never as stored totals.
@@ -69,6 +70,14 @@ class BorDeGunaEmployeeSeeder extends Seeder
      *
      * `ta_da` is the per-day rate for the two Retail Sales Officers
      * (Correction C14). ⚠ It is NOT part of gross and must never be added to it.
+     *
+     * ⚠⚠ `enroll` is the ZKTeco `No.` column and is **NOT YET SUPPLIED FOR
+     * ANYONE**. Until it is, the attendance backfill will match nobody. Add it
+     * as `'enroll' => '3'` per person and re-run; the seeder is idempotent and
+     * will not blank an ID entered by hand in the meantime.
+     *
+     * ℹ The device reports 12 enrolments against 9 employees, so the mapping
+     * must be read off the device rather than assumed from the employee codes.
      */
     private const EMPLOYEES = [
         ['code' => 'BDG-000001', 'first' => 'Chowdhury Md.', 'last' => 'Moin',
@@ -138,11 +147,24 @@ class BorDeGunaEmployeeSeeder extends Seeder
             $employee->fill([
                 'first_name' => $row['first'],
                 'last_name' => $row['last'],
-                // ⚠ UNCONFIRMED for all nine — see the class docblock.
+                // Confirmed standing policy (Joy, 2026-07-29).
                 'employment_type' => 'permanent',
                 'status' => 'active',
                 'joining_date' => $row['joined'],
             ]);
+
+            // ⚠⚠ THE FIELD THE ATTENDANCE BACKFILL MATCHES ON, and the single
+            // most failure-prone item in the whole migration. `enroll` is the
+            // ZKTeco device's `No.` column; if it does not match the device,
+            // that person's punches import as unmatched rows FOREVER — not as
+            // an error, just as a silently growing exception report.
+            //
+            // Deliberately only written when supplied, so a re-run cannot blank
+            // an ID somebody has since entered by hand on the employee screen.
+            if (($row['enroll'] ?? null) !== null) {
+                $employee->biometric_enroll_id = (string) $row['enroll'];
+            }
+
             $employee->save();
 
             $this->command?->line(sprintf('  %s  %s %s', $row['code'], $row['first'], $row['last']));
