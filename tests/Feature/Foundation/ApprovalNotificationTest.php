@@ -135,3 +135,49 @@ it('does not notify when a purchase order is self-approved on creation', functio
 
     Notification::assertNothingSent();
 });
+
+// =============================================================================
+// Roadmap A3 — the notification is queued, and queueing is done safely.
+//
+// Phase 0 shipped this synchronously, so a slow SMTP host delayed the user's
+// own submission rather than just the email.
+// =============================================================================
+
+it('queues the approval notification instead of sending it inline', function () {
+    $notification = new PendingApprovalNotification('something', 'https://example.test/approvals');
+
+    expect($notification)->toBeInstanceOf(Illuminate\Contracts\Queue\ShouldQueue::class);
+});
+
+it('waits for the surrounding transaction to commit before the worker sees it', function () {
+    // ⚠ THE ONE THAT MATTERS. Twelve of the twenty callers dispatch this from
+    // inside a DB::transaction. Without afterCommit a worker can send the email
+    // before the record commits — or after it has been rolled back, so an
+    // approver is told to review something that never existed. Synchronous
+    // sending could not do that; queueing introduces the race.
+    $notification = new PendingApprovalNotification('something', 'https://example.test/approvals');
+
+    expect($notification->afterCommit)->toBeTrue();
+});
+
+it('allows retries, because it holds no tenant-scoped state', function () {
+    // Unlike RenderReportJob (tries=1, restores BusinessContext by hand), this
+    // carries two plain strings and reads only the notifiable's name, so a
+    // retry is idempotent and a flapping mail server should not lose the mail.
+    $notification = new PendingApprovalNotification('something', 'https://example.test/approvals');
+
+    expect($notification->tries)->toBeGreaterThan(1);
+});
+
+it('still reaches exactly the right approvers once queued', function () {
+    // The recipient list is resolved at dispatch time, inside the correct
+    // permission team — queueing defers the send, never the resolution.
+    Notification::fake();
+
+    app(App\Modules\Foundation\Actions\NotifyApprovers::class)
+        ->handle($this->business->id, 'inventory.stock.approve', 'A stock request is pending', $this->submitter->id);
+
+    Notification::assertSentTo($this->approver, PendingApprovalNotification::class);
+    Notification::assertNotSentTo($this->submitter, PendingApprovalNotification::class);
+    Notification::assertNotSentTo($this->outsider, PendingApprovalNotification::class);
+});
