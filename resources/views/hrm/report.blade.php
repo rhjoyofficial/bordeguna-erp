@@ -84,6 +84,17 @@
     {{-- Fixed, so dompdf repeats it on every page. A provenance stamp that
          marks only the first page tells you nothing about page 7, which is
          the page that gets photocopied. --}}
+    /* A standing statement about how the report must be read (W2 / C16b).
+       Bordered rather than muted: this is not a footnote, it is the sentence
+       that stops "within 1 BDT" being mistaken for a pass. */
+    .report-note {
+        margin: 10px 0;
+        padding: 8px 10px;
+        border: 1px solid #9ca3af;
+        border-left: 4px solid #374151;
+        font-size: 10px;
+        line-height: 1.45;
+    }
     .stamp {
         position: fixed;
         bottom: -11mm;
@@ -180,6 +191,12 @@
     <div class="empty">
         No rows matched these filters. This is an answer, not a failure — the report ran and found nothing.
     </div>
+@endif
+
+@if ($dataset->meta->note)
+    {{-- Governs how the whole report must be read, so it is printed on every
+         copy rather than living in a docblock the signatories never see. --}}
+    <div class="report-note">{{ $dataset->meta->note }}</div>
 @endif
 
 <div class="stamp">

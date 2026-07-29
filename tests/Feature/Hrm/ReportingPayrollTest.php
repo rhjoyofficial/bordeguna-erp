@@ -526,7 +526,15 @@ it('registers fourteen of the fifteen reports, with only the bank advice missing
 
     expect($keys)->not->toContain('payroll_bank_advice')
         ->and($keys)->toContain('payroll_settlement_worksheet')
+        // W2's reconciliation is registered too (Correction C16). It is not one
+        // of the numbered fifteen — RPT-02 never asked for it; ROL-02 did, as
+        // the go-live acceptance artefact.
+        ->and($keys)->toContain('parallel_run_reconciliation')
         // Fourteen of the numbered fifteen, plus the accounting detail that
-        // AccountingExport was re-expressed onto.
-        ->and($keys)->toHaveCount(15);
+        // AccountingExport was re-expressed onto, plus W2's reconciliation.
+        //
+        // ⚠ The count is deliberate, not incidental: it is what stops a later
+        // slice quietly adding an invented bank format. Raise it only when you
+        // meant to add a report, and say which one here.
+        ->and($keys)->toHaveCount(16);
 });

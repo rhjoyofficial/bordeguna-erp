@@ -24,6 +24,7 @@ use App\Modules\Hrm\Reporting\Definitions\LoanBalanceReport;
 use App\Modules\Hrm\Reporting\Definitions\MonthlyAttendanceRegisterReport;
 use App\Modules\Hrm\Reporting\Definitions\OrganisationSummaryReport;
 use App\Modules\Hrm\Reporting\Definitions\OvertimeReport;
+use App\Modules\Hrm\Reporting\Definitions\ParallelRunReconciliationReport;
 use App\Modules\Hrm\Reporting\Definitions\PayrollLineDetailReport;
 use App\Modules\Hrm\Reporting\Definitions\PayrollVarianceReport;
 use App\Modules\Hrm\Reporting\Definitions\SalarySheetReport;
@@ -62,6 +63,10 @@ class HrmServiceProvider extends ServiceProvider
         CostAllocationReport::class,
         UnpaidSalaryReport::class,
         PayrollLineDetailReport::class,
+        // W2 — the ROL-04 go-live acceptance artefact. ⚠ It classifies
+        // differences and never approves them: ROL-03 allows 1 BDT only where
+        // decimal rounding is the actual cause (Correction C16b).
+        ParallelRunReconciliationReport::class,
         // ⚠ A worksheet, not a settlement. It computes no final figure — see
         // Correction C10b and the class docblock. The settlement engine itself
         // is a separate slice and is blocked on the leave-encashment rate.

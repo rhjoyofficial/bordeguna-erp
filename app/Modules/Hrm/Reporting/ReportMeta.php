@@ -40,6 +40,21 @@ final class ReportMeta
          */
         public readonly ?bool $periodLocked = null,
         public readonly ?string $lockNote = null,
+        /**
+         * A standing statement printed on every rendering of this report,
+         * independent of its data.
+         *
+         * Added for W2's reconciliation (Correction C16b), which must carry
+         * ROL-03's actual rule on the copy three people sign: one BDT is a
+         * ceiling on decimal rounding, not a tolerance band, and no difference
+         * caused by formula, attendance, leave or policy is acceptable at any
+         * size. A caveat that lives only in the class docblock is a caveat the
+         * signatories never see.
+         *
+         * ⚠ Distinct from `lockNote`, which describes this run's data. This
+         * describes how the report must be read.
+         */
+        public readonly ?string $note = null,
     ) {}
 
     public function generatedAtString(): string
@@ -79,6 +94,7 @@ final class ReportMeta
             'generated_at' => $this->generatedAtString(),
             'period_locked' => $this->periodLocked,
             'lock_note' => $this->lockNote,
+            'note' => $this->note,
             'stamp' => $this->stamp(),
         ];
     }
