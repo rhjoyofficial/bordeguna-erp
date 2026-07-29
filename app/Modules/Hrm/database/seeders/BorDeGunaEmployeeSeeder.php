@@ -208,7 +208,15 @@ class BorDeGunaEmployeeSeeder extends Seeder
             $structure = SalaryStructure::create([
                 'employee_id' => $employee->id,
                 'effective_from' => $row['joined'],
-                'note' => 'Migrated from the client employee list (W1).',
+                'reason' => 'Migrated from the client employee list (W1).',
+                // ⚠ `overtime_eligible` is deliberately left at its column
+                // default. ADJ-01 / Correction C8d makes it a per-structure,
+                // effective-dated flag, and WHO MAY EARN OVERTIME is a business
+                // decision nobody has stated for these nine. Setting it true
+                // here would quietly authorise overtime pay for the entire
+                // company; setting it false could withhold pay somebody is owed.
+                // It is one edit per employee on the salary screen once the
+                // client answers.
             ]);
         }
 
