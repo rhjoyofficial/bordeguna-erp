@@ -6,6 +6,7 @@ use App\Modules\Hrm\Enums\LeaveLedgerEntryType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\LeaveLedgerEntry;
 use App\Modules\Hrm\Models\LeaveType;
+use App\Modules\Hrm\Support\LeaveEntitlement;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 
@@ -21,18 +22,22 @@ use Illuminate\Support\Facades\Auth;
  * 2. **Pro-rata for anyone who joined during the leave year.**
  * 3. Earned/Annual continues to carry forward under C6's 2× cap.
  *
- * ⚠⚠ **DECISION 2 CHANGES LEV-02.** `GrantAnnualLeaveQuota`'s docblock states
- * the approved rule as "a full grant, not monthly accrual and **not prorated by
- * joining date**". Pro-rating mid-year joiners is a deliberate departure from
- * that, made knowingly. It is applied HERE, to the one-off opening balance, and
- * `GrantAnnualLeaveQuota` is left untouched — whether future years should also
- * prorate is a separate question that changes every year from now on, and it
- * has not been asked.
+ * ⚠⚠ **DECISION 2 REVISED LEV-02 PERMANENTLY.** The approved rule was "a full
+ * grant, not monthly accrual and **not prorated by joining date**". Joy changed
+ * it on 2026-07-29 — first for this migration, then, when asked, for **every
+ * year going forward**, so that a joiner is treated identically whether they
+ * arrived during the migration year or in 2029. `GrantAnnualLeaveQuota` was
+ * updated to match, and the rule itself now lives in `LeaveEntitlement` so the
+ * two cannot drift.
  *
  * ⚠ **This is encashable money.** Earned/Annual carries `can_encash`, so an
  * over-granted day is a real cash liability payable on separation. That is why
- * pro-rata rounds **down** to the nearest half day, why preview and commit
- * share one computation, and why nothing here is inferred.
+ * the rounding is **down**, why preview and commit share one computation, and
+ * why nothing here is inferred.
+ *
+ * ⚠ The entitlement rule itself lives in `LeaveEntitlement`, shared with
+ * `GrantAnnualLeaveQuota`, so the migration and every future annual grant
+ * cannot disagree about the same person.
  *
  * ⚠ **Preview and commit CANNOT disagree**, because `plan()` decides everything
  * and `commit()` posts exactly what `plan()` returned. That is C6's lesson from
@@ -84,9 +89,11 @@ class MigrateOpeningLeaveBalances
             foreach ($types as $type) {
                 $full = (float) $type->annual_quota;
 
-                $days = $joinedDuringYear
-                    ? $this->roundDownToHalf($full * $entitledDays / $daysInYear)
-                    : $full;
+                // ⚠ The rule lives in LeaveEntitlement, shared with
+                // GrantAnnualLeaveQuota. Two copies would eventually disagree
+                // about the same person's entitlement — silently, and in cash,
+                // because Earned/Annual is encashable.
+                $days = LeaveEntitlement::daysFor($full, $employee->joining_date, $year);
 
                 $rows[] = [
                     'employee_id' => $employee->id,
@@ -166,17 +173,4 @@ class MigrateOpeningLeaveBalances
         return ['posted' => $posted, 'skipped' => $skipped, 'total_days' => round($total, 2)];
     }
 
-    /**
-     * ⚠ Rounds DOWN, deliberately, and to a half day.
-     *
-     * Leave is taken in half days, so a balance of 8.37 is not a thing anybody
-     * can use. Down rather than nearest because Earned/Annual is encashable:
-     * an over-granted day becomes cash the company owes on separation, and the
-     * conservative direction is the one that does not quietly create a
-     * liability. The difference is at most half a day per person per type.
-     */
-    private function roundDownToHalf(float $days): float
-    {
-        return floor($days * 2) / 2;
-    }
 }
