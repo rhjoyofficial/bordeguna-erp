@@ -1,6 +1,7 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface BusinessOption {
     id: number;
@@ -21,12 +22,42 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function BusinessSwitcher({ businesses, current_business_id }: Props) {
-    const { post, processing } = useForm();
+    const [processing, setProcessing] = useState(false);
 
+    /**
+     * ⚠⚠ SWITCHING BUSINESS WAS COMPLETELY BROKEN UNTIL 2026-07-29. Read this
+     * before "simplifying" it back to useForm().
+     *
+     * It was written as:
+     *
+     *     const { post } = useForm();                       // no data
+     *     post(route('businesses.switch.store'), {
+     *         data: { business_id: businessId },            // not a visit option
+     *     } as never);
+     *
+     * `useForm().post(url, options)` sends the FORM'S OWN data — which was
+     * empty — and `options` carries visit callbacks, not a payload. So it
+     * POSTed `{}`, the controller's `business_id` validation rejected it, and
+     * the user was silently returned to the same page having apparently
+     * clicked nothing.
+     *
+     * ⚠ The `as never` cast is what hid it. TypeScript was correctly refusing
+     * that object and the cast suppressed a compiler error that was telling the
+     * truth — which is why `tsc` stayed clean while the feature did not work.
+     * **A cast that silences a type error is a claim that you know better than
+     * the compiler. Here, it wasn't true.**
+     *
+     * `router.post` takes the payload as its second argument, which is what was
+     * wanted all along.
+     */
     const selectBusiness = (businessId: number) => {
-        post(route('businesses.switch.store'), {
-            data: { business_id: businessId },
-        } as never);
+        setProcessing(true);
+
+        router.post(
+            route('businesses.switch.store'),
+            { business_id: businessId },
+            { onFinish: () => setProcessing(false) },
+        );
     };
 
     return (
