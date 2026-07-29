@@ -34,11 +34,29 @@ class DashboardController extends Controller
         ]);
     }
 
+    /**
+     * Total value of stock on hand, formatted for display.
+     *
+     * ⚠⚠ THE FORMATTING IS NOT COSMETIC — it is a driver-portability fix, and
+     * the THIRD instance of this shape on the project.
+     *
+     * `SUM(current_quantity * unit_cost)` multiplies two decimal columns, so
+     * MySQL returns `19200.00000000` (eight decimal places) where SQLite
+     * returns `19200`. The tile printed the raw string, so production showed
+     * "19200.00000000" to a user while every test passed.
+     *
+     * ⚠ Grouped to two decimals rather than lakh–crore: BDT lakh/crore
+     * formatting is deliberately unimplemented pending the W5 language
+     * decision, and it belongs in one place (`ReportValue::forDisplay`) when it
+     * arrives — not invented separately here.
+     */
     private function stockValue(): string
     {
-        return StockBatch::where('status', StockBatchStatus::Active)
+        $value = StockBatch::where('status', StockBatchStatus::Active)
             ->selectRaw('SUM(current_quantity * unit_cost) as value')
-            ->value('value') ?? '0';
+            ->value('value') ?? 0;
+
+        return number_format((float) $value, 2);
     }
 
     private function lowStockCount(): int

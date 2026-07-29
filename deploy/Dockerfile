@@ -21,6 +21,14 @@ COPY resources ./resources
 COPY public ./public
 COPY vite.config.js tsconfig.json components.json ./
 
+# ⚠ Vite inlines VITE_* variables AT BUILD TIME, and this stage has no .env.
+# Without this, `import.meta.env.VITE_APP_NAME` falls back to 'Laravel' and
+# every browser tab in production reads "Dashboard - Laravel". Setting it in the
+# runtime .env has no effect whatsoever — by then the value is already compiled
+# into the bundle.
+ARG VITE_APP_NAME="Bor De Guna ERP"
+ENV VITE_APP_NAME=${VITE_APP_NAME}
+
 # Ziggy's generated routes file is committed, but Vite still needs the PHP-side
 # aliases resolved at build time; everything it reads is copied above.
 RUN npm run build
