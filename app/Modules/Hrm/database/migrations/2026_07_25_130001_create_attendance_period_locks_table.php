@@ -36,7 +36,8 @@ return new class extends Migration
             $table->string('unlock_reason')->nullable();
             $table->timestamps();
 
-            $table->index(['business_id', 'period_start', 'period_end']);
+            // ⚠ Explicit name: generated is 65 chars, MySQL's limit is 64.
+            $table->index(['business_id', 'period_start', 'period_end'], 'att_period_locks_business_period_idx');
         });
     }
 

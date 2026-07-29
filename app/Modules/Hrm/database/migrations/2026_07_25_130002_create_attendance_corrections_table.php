@@ -48,7 +48,8 @@ return new class extends Migration
             $table->foreignId('applied_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
-            $table->index(['business_id', 'employee_id', 'attendance_date']);
+            // ⚠ Explicit name: generated is 68 chars, MySQL's limit is 64.
+            $table->index(['business_id', 'employee_id', 'attendance_date'], 'att_corrections_business_emp_date_idx');
         });
     }
 

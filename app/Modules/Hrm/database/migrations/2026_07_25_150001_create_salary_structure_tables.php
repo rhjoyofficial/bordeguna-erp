@@ -84,7 +84,10 @@ return new class extends Migration
             $table->decimal('value', 14, 4);
             $table->timestamps();
 
-            $table->unique(['salary_structure_id', 'salary_component_id']);
+            // ⚠ Explicit name: generated is 69 chars, MySQL's limit is 64. The
+            // CONSTRAINT is load-bearing (one line per component per structure);
+            // only the name changes.
+            $table->unique(['salary_structure_id', 'salary_component_id'], 'salary_structure_lines_structure_component_uniq');
         });
     }
 

@@ -60,7 +60,10 @@ return new class extends Migration
             $table->unique(['business_id', 'employee_id', 'attendance_date']);
             $table->index(['business_id', 'attendance_date']);
             // Drives the monthly occurrence counters in POL-03.
-            $table->index(['employee_id', 'grace_window_key', 'attendance_date']);
+            // ⚠ Explicit name: the generated one is 68 chars and MySQL caps
+            // identifiers at 64. SQLite has no such limit, which is why the
+            // entire suite passes and only production rejects it.
+            $table->index(['employee_id', 'grace_window_key', 'attendance_date'], 'daily_att_employee_window_date_idx');
         });
     }
 

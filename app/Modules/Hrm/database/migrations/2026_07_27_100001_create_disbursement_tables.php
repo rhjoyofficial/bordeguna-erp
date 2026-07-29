@@ -83,7 +83,8 @@ return new class extends Migration
             $table->foreignId('disbursement_batch_id')->constrained()->cascadeOnDelete();
             $table->foreignId('payslip_id')->constrained()->cascadeOnDelete();
 
-            $table->unique(['disbursement_batch_id', 'payslip_id']);
+            // ⚠ Explicit name: generated is 66 chars, MySQL's limit is 64.
+            $table->unique(['disbursement_batch_id', 'payslip_id'], 'disb_batch_payslip_batch_payslip_uniq');
             // A payslip belongs to at most one batch, so a second batch cannot
             // quietly pay the same person twice.
             $table->unique('payslip_id');
