@@ -154,6 +154,17 @@ docker compose exec app php artisan migrate --force
 means PHP never re-reads a changed file, so editing in place appears to do
 nothing at all. `docker compose up -d` after a build handles it.
 
+⚠ **If you ever see a 502 after a deploy, check nginx's upstream first.**
+`nginx.conf` resolves `app` through Docker's embedded DNS (`127.0.0.11`) via a
+variable upstream, precisely so a recreated app container's new bridge IP is
+picked up. Reverting that to a literal `fastcgi_pass app:9000` reintroduces a
+502 on every deploy that recreates `app`, curable only by restarting `web`.
+Diagnose with:
+
+```bash
+docker compose logs --tail=20 web | grep 'connect() failed'
+```
+
 ```bash
 docker compose logs -f app worker scheduler   # logs
 docker compose exec app php artisan down      # maintenance mode
