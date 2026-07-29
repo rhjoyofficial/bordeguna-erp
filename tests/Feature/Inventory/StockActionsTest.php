@@ -177,8 +177,11 @@ it('dispatches a transfer into an in-transit state without moving destination st
 
     // Source is already debited — the stock has left — but nothing exists at
     // the destination until ReceiveStockTransfer confirms arrival.
-    expect((string) $sourceQty)->toBe('25');
-    expect((string) $targetQty)->toBe('0');
+    // ⚠ Compared as numbers, not as exact strings. A raw sum() over a decimal
+    // column stringifies per driver — SQLite '25', MySQL '25.0000' — and this
+    // test is about how much stock is where, not how the driver spells it.
+    expect((float) $sourceQty)->toBe(25.0);
+    expect((float) $targetQty)->toBe(0.0);
 });
 
 it('lands stock at the destination only once a transfer is received', function () {
@@ -201,7 +204,8 @@ it('lands stock at the destination only once a transfer is received', function (
     expect($transfer->fresh()->status)->toBe(TransferStatus::Received);
 
     $targetQty = StockBatch::where('warehouse_id', $target->id)->sum('current_quantity');
-    expect((string) $targetQty)->toBe('15');
+    // Numeric for the same reason as above.
+    expect((float) $targetQty)->toBe(15.0);
 });
 
 it('refuses to receive a transfer that was already received', function () {
