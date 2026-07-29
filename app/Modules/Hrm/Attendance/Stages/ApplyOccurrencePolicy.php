@@ -70,6 +70,30 @@ class ApplyOccurrencePolicy implements AttendanceStage
             ->when(
                 $consequence !== AttendanceConsequence::None,
                 fn (AttendanceComputation $c) => $c->flag('late_consequence'),
+            )
+            // Correction C15b. A band the policy marks as exceptional is held
+            // back for HR before payroll may use the day.
+            //
+            // ⚠⚠ `needs_review` is not decoration: `AttendanceEngine` turns it
+            // into `isProvisional`, and `ValidatePayrollRun` gates a payroll run
+            // on `is_provisional` — which is the ONLY gate, since nothing in
+            // payroll reads `finalized_at`. Withholding finalisation alone
+            // would leave the day unfinalised and paid anyway, which is exactly
+            // what this correction exists to prevent.
+            //
+            // Bands 1 and 2 deduct too, once their free occurrences run out,
+            // and are deliberately NOT caught here: those are deterministic
+            // outcomes of a configured ladder, not judgement calls (Joy,
+            // 2026-07-29). Only a band flagged `requires_review` is held.
+            ->when(
+                $window->requiresReview,
+                fn (AttendanceComputation $c) => $c
+                    ->flag('exceptional_lateness')
+                    ->flag('needs_review')
+                    ->note(sprintf(
+                        '"%s" is an exceptional lateness band, so this day awaits HR review before payroll may use it.',
+                        $window->label,
+                    )),
             );
     }
 }

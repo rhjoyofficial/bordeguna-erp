@@ -446,3 +446,94 @@ it('closes the pair normally when a field employee does return', function () {
     expect($outcome->holdsPayroll)->toBeFalse()
         ->and($outcome->workedMinutes)->toBeGreaterThan(0);
 });
+
+// =============================================================================
+// Correction C15b — an exceptional lateness band is held for HR review.
+//
+// This is what gives C15b its effect. `is_provisional` is payroll's ONLY gate
+// (ValidatePayrollRun reads it; nothing in payroll reads finalized_at), so a
+// band that needs review must produce a provisional day, not merely an
+// unfinalised one.
+// =============================================================================
+
+/**
+ * Bor De Guna's real ladder: three bands, only the third exceptional. Bands 1
+ * and 2 deduct once their free occurrences are spent and are deliberately NOT
+ * held for review.
+ */
+function bandedPolicy(): array
+{
+    return [
+        ...AttendancePolicySeeder::defaultConfig(),
+        'grace_windows' => [
+            [
+                'key' => 'slightly_late', 'label' => 'Up to 15 minutes late',
+                'from_minutes' => 0, 'to_minutes' => 15,
+                'tiers' => [
+                    ['from_occurrence' => 1, 'consequence' => 'none'],
+                    ['from_occurrence' => 4, 'consequence' => 'deduction'],
+                ],
+            ],
+            [
+                'key' => 'late_arrival', 'label' => '15 minutes to 3 hours late',
+                'from_minutes' => 15, 'to_minutes' => 180,
+                'tiers' => [
+                    ['from_occurrence' => 1, 'consequence' => 'none'],
+                    ['from_occurrence' => 3, 'consequence' => 'deduction'],
+                ],
+            ],
+            [
+                'key' => 'after_midday', 'label' => 'More than 3 hours late',
+                'from_minutes' => 180, 'to_minutes' => null,
+                'tiers' => [['from_occurrence' => 1, 'consequence' => 'deduction']],
+                'requires_review' => true,
+            ],
+        ],
+    ];
+}
+
+it('holds a band 3 day for review, provisionally, on the very first occurrence', function () {
+    // 13:30 against a 09:00 shift is 270 minutes late.
+    $outcome = engineRun(['2026-08-03 13:30:00', '2026-08-03 18:00:00'], ['policy' => bandedPolicy()]);
+
+    expect($outcome->graceWindowKey)->toBe('after_midday');
+    expect($outcome->consequence)->toBe(AttendanceConsequence::Deduction);
+    expect($outcome->isProvisional)->toBeTrue();
+    expect($outcome->flags)->toContain('exceptional_lateness');
+});
+
+it('does not hold a band 1 deduction for review', function () {
+    // Fifth occurrence in band 1: deducts a full day, and is still a
+    // deterministic outcome of a configured ladder, so no review.
+    $outcome = engineRun(
+        ['2026-08-03 09:10:00', '2026-08-03 18:00:00'],
+        ['policy' => bandedPolicy(), 'prior' => ['slightly_late' => 4]],
+    );
+
+    expect($outcome->consequence)->toBe(AttendanceConsequence::Deduction);
+    expect($outcome->isProvisional)->toBeFalse();
+    expect($outcome->flags)->not->toContain('exceptional_lateness');
+});
+
+it('does not hold a band 2 deduction for review', function () {
+    $outcome = engineRun(
+        ['2026-08-03 10:30:00', '2026-08-03 18:00:00'],
+        ['policy' => bandedPolicy(), 'prior' => ['late_arrival' => 2]],
+    );
+
+    expect($outcome->graceWindowKey)->toBe('late_arrival');
+    expect($outcome->consequence)->toBe(AttendanceConsequence::Deduction);
+    expect($outcome->isProvisional)->toBeFalse();
+});
+
+it('leaves an unflagged band alone even when it deducts from the first occurrence', function () {
+    // ⚠ The reason `requires_review` is stored rather than inferred from "no
+    // free occurrences". This band deducts immediately and is NOT exceptional.
+    $policy = bandedPolicy();
+    $policy['grace_windows'][2]['requires_review'] = false;
+
+    $outcome = engineRun(['2026-08-03 13:30:00', '2026-08-03 18:00:00'], ['policy' => $policy]);
+
+    expect($outcome->consequence)->toBe(AttendanceConsequence::Deduction);
+    expect($outcome->isProvisional)->toBeFalse();
+});

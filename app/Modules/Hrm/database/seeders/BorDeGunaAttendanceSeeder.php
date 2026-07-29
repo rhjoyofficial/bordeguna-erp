@@ -176,6 +176,17 @@ class BorDeGunaAttendanceSeeder extends Seeder
                         // No allowance. "Will work but not get paid."
                         ['from_occurrence' => 1, 'consequence' => 'deduction'],
                     ],
+                    // Correction C15b. The only band held back for HR: arriving
+                    // more than three hours late is an exceptional event, and
+                    // management may reasonably forgive the day's deduction on
+                    // the circumstances. Bands 1 and 2 deduct deterministically
+                    // once their free occurrences are spent and need no such
+                    // judgement, so they are not flagged.
+                    //
+                    // ⚠ Forgiveness itself remains a PAYROLL ADJUSTMENT, never
+                    // an edit to the attendance record (Joy, 2026-07-28). This
+                    // flag only ensures a human sees the day first.
+                    'requires_review' => true,
                 ],
             ],
             'early_leave_grace_minutes' => 15,

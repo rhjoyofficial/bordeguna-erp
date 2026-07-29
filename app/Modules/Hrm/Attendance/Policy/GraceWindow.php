@@ -28,6 +28,26 @@ final readonly class GraceWindow
         public int $fromMinutes,
         public ?int $toMinutes,
         public array $tiers,
+        /**
+         * Whether a day in this band is an exception HR must review before
+         * payroll may use it (Correction C15b).
+         *
+         * ⚠ **Stored, never inferred.** Bor De Guna's third band happens to be
+         * the only one with no free occurrences, so "deducts from the first
+         * occurrence" would identify it today — and would be wrong the moment a
+         * band is configured with no free occurrences but a mild consequence,
+         * or an exceptional band that does grant a couple. This is the same
+         * lesson `ScheduleAssignment::is_temporary` learned: a property that
+         * currently correlates with a derivable one is still a different fact,
+         * and conflating them mislabels the history later.
+         *
+         * ⚠ Defaults to **false** so an existing policy's behaviour is
+         * unchanged. Bands 1 and 2 also deduct once their free occurrences are
+         * exhausted, and Joy's ruling (2026-07-29) is that those are
+         * deterministic policy outcomes needing no human judgement. Only a band
+         * explicitly marked here is held back.
+         */
+        public bool $requiresReview = false,
     ) {}
 
     /**
@@ -41,6 +61,7 @@ final readonly class GraceWindow
             (int) $config['from_minutes'],
             isset($config['to_minutes']) && $config['to_minutes'] !== null ? (int) $config['to_minutes'] : null,
             array_map(OccurrenceTier::fromArray(...), $config['tiers'] ?? []),
+            (bool) ($config['requires_review'] ?? false),
         );
     }
 
@@ -84,6 +105,7 @@ final readonly class GraceWindow
             'from_minutes' => $this->fromMinutes,
             'to_minutes' => $this->toMinutes,
             'tiers' => array_map(fn (OccurrenceTier $tier) => $tier->toArray(), $this->tiers),
+            'requires_review' => $this->requiresReview,
         ];
     }
 }

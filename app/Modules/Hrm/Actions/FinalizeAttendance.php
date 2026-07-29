@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Actions;
 
+use App\Modules\Foundation\Support\SystemActor;
 use App\Modules\Hrm\Models\DailyAttendance;
 use Illuminate\Support\Facades\Auth;
 
@@ -18,8 +19,10 @@ class FinalizeAttendance
     /**
      * @return array{finalized: int, blocked: int}
      */
-    public function handle(iterable $days): array
+    public function handle(iterable $days, ?int $actorId = null): array
     {
+        $actorId ??= Auth::id();
+
         $finalized = 0;
         $blocked = 0;
 
@@ -33,13 +36,48 @@ class FinalizeAttendance
             $day->update([
                 'is_provisional' => false,
                 'finalized_at' => now(),
-                'finalized_by' => Auth::id(),
+                'finalized_by' => $actorId,
             ]);
 
             $finalized++;
         }
 
         return ['finalized' => $finalized, 'blocked' => $blocked];
+    }
+
+    /**
+     * The scheduler's path (Corrections C15a and C15c): close a day that has
+     * left the reprocessing window, recording the system as the actor.
+     *
+     * ⚠ **It refuses a provisional day, which `handle()` does not.** A human
+     * finalising is *exercising* the judgement POL-06 asks for, so clearing
+     * `is_provisional` is the whole point. The system has no judgement to
+     * exercise, so a day awaiting review must survive the window rather than be
+     * closed by the passage of time. Without this guard the seven-day window
+     * would quietly become an approval: an unreviewed Band 3 deduction would
+     * finalise itself a week later and reach payroll unseen, which is precisely
+     * what C15b exists to stop.
+     *
+     * @return array{finalized: int, blocked: int}
+     */
+    public function bySystem(iterable $days): array
+    {
+        $eligible = [];
+        $blocked = 0;
+
+        foreach ($days as $day) {
+            if ($day->is_provisional) {
+                $blocked++;
+
+                continue;
+            }
+
+            $eligible[] = $day;
+        }
+
+        $result = $this->handle($eligible, SystemActor::id());
+
+        return ['finalized' => $result['finalized'], 'blocked' => $blocked + $result['blocked']];
     }
 
     public function one(DailyAttendance $day): bool
