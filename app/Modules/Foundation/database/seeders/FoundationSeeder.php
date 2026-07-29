@@ -4,6 +4,7 @@ namespace App\Modules\Foundation\database\seeders;
 
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Support\SeedCredentials;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -25,7 +26,15 @@ class FoundationSeeder extends Seeder
 
         $superAdmin = User::firstOrCreate(
             ['email' => 'superadmin@bordeguna-erp.test'],
-            ['name' => 'Bor De Guna Super Admin', 'password' => 'password', 'is_super_admin' => true]
+            // ⚠ Not a known password outside local/testing. This account holds
+            // is_super_admin, and it was found live on the public production
+            // system accepting the word "password" on 2026-07-29.
+            [
+                'name' => 'Bor De Guna Super Admin',
+                'password' => SeedCredentials::demoPassword(),
+                'is_super_admin' => true,
+                'is_active' => SeedCredentials::demoActive(),
+            ]
         );
 
         foreach ($this->businesses() as $slug => $name) {
@@ -39,7 +48,11 @@ class FoundationSeeder extends Seeder
 
             $owner = User::firstOrCreate(
                 ['email' => "owner@{$slug}.bordeguna-erp.test"],
-                ['name' => "{$name} Owner", 'password' => 'password']
+                [
+                    'name' => "{$name} Owner",
+                    'password' => SeedCredentials::demoPassword(),
+                    'is_active' => SeedCredentials::demoActive(),
+                ]
             );
 
             if (! $owner->businesses()->where('businesses.id', $business->id)->exists()) {

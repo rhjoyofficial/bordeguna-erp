@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Modules\Foundation\Support\SeedCredentials;
 use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
 use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
 use App\Modules\Foundation\database\seeders\FoundationSeeder;
@@ -41,7 +42,14 @@ class DatabaseSeeder extends Seeder
         // this project is deliberately idempotent; this one line was not.
         User::firstOrCreate(
             ['email' => 'test@example.com'],
-            ['name' => 'Test User', 'password' => bcrypt('password')],
+            [
+                'name' => 'Test User',
+                // ⚠ Laravel's stock demo login. Harmless locally, an open door
+                // on a public production box — it was found live and active on
+                // 2026-07-29 accepting the word "password".
+                'password' => bcrypt(SeedCredentials::demoPassword()),
+                'is_active' => SeedCredentials::demoActive(),
+            ],
         );
 
         $this->call(FoundationSeeder::class);
