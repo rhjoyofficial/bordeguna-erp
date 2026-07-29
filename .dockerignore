@@ -1,0 +1,35 @@
+# Keep the build context small and the image clean.
+#
+# ⚠ database/database.sqlite is the DEVELOPMENT database and must never reach a
+# production image. It contains dev employees, dev salary structures and a dev
+# payroll run.
+
+.git
+.github
+node_modules
+vendor
+public/build
+public/hot
+storage/app/private
+storage/app/public
+storage/logs
+storage/framework/cache
+storage/framework/sessions
+storage/framework/testing
+storage/framework/views
+bootstrap/cache/*.php
+
+database/database.sqlite
+database/*.sqlite
+.env
+.env.*
+!deploy/.env.example
+
+tests
+.phpunit.result.cache
+phpunit.xml
+
+deploy/*.md
+*.log
+.DS_Store
+Thumbs.db

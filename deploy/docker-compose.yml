@@ -1,0 +1,170 @@
+# Bor De Guna ERP — production stack for srv1808022.
+#
+# ⚠⚠ THIS STACK IS MANAGED BY HAND AND WILL NOT APPEAR IN HOSTINGER'S hPANEL.
+# The other four stacks on this host (traefik-rsf3, n8n-vb99, postgresql-4jjn,
+# content-render-b7k2) were created by hPanel's one-click installer and have no
+# compose files on disk. This one lives in the repository instead. Never edit
+# Traefik's own configuration to accommodate this stack; it declares labels and
+# Traefik picks them up, which is the whole point of the pattern.
+#
+# ⚠ TRAEFIK RUNS ON THE HOST NETWORK. It therefore reaches these containers by
+# their bridge IP directly, and this stack needs NO shared network with it.
+# That is why `internal` below is a plain private bridge with nothing else on
+# it: n8n and Hermes have no path in, and this stack has no path out to them.
+#
+# Rollback at any point: `docker compose down`. Nothing outside
+# /opt/bordeguna-erp is modified.
+
+name: bordeguna-erp
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: bordeguna-erp:latest
+    restart: unless-stopped
+    env_file: [.env]
+    volumes:
+      - storage:/var/www/html/storage
+      # Shared with `web`, which is plain nginx and has none of these files.
+      # The entrypoint republishes it on every start so a redeploy is not
+      # serving the previous release's compiled assets.
+      - public:/var/www/html/public
+    networks: [internal]
+    depends_on:
+      db:
+        condition: service_healthy
+    # 2 cores are shared with n8n. An unbounded PHP-FPM pool during a payroll
+    # calculation could otherwise take the machine, which is exactly what this
+    # deployment is supposed to be incapable of.
+    deploy:
+      resources:
+        limits: {cpus: '1.0', memory: 768M}
+
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - storage:/var/www/html/storage:ro
+      - public:/var/www/html/public:ro
+    networks: [internal]
+    depends_on: [app]
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 128M}
+    labels:
+      # The only service in this stack Traefik is allowed to see. `db`, `worker`
+      # and `scheduler` carry no labels and `exposedbydefault=false` on the
+      # Traefik side means they stay unreachable rather than relying on us not
+      # to publish ports.
+      - traefik.enable=true
+      - traefik.http.routers.bordeguna-erp.entrypoints=websecure
+      - traefik.http.routers.bordeguna-erp.rule=Host(`erp.srv1808022.hstgr.cloud`)
+      - traefik.http.routers.bordeguna-erp.tls.certresolver=letsencrypt
+      - traefik.http.services.bordeguna-erp.loadbalancer.server.port=80
+
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    # ⚠ Deliberately NOT the existing postgresql-4jjn. A shared database is a
+    # shared failure: a runaway payroll query or a bad migration would become
+    # n8n's problem too. A few hundred MB of RAM buys complete separation.
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # Bangla names and addresses are stored throughout. utf8mb4 is not
+      # optional here, and MySQL's historical "utf8" is not it.
+    volumes:
+      - dbdata:/var/lib/mysql
+    networks: [internal]
+    # ⚠ No published ports. The database is reachable only from this stack's
+    # own bridge.
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-p${DB_ROOT_PASSWORD}']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    deploy:
+      resources:
+        limits: {cpus: '1.0', memory: 1G}
+
+  worker:
+    image: bordeguna-erp:latest
+    restart: unless-stopped
+    env_file: [.env]
+    command: php artisan queue:work --tries=1 --max-time=3600 --sleep=3
+    volumes:
+      - storage:/var/www/html/storage
+    networks: [internal]
+    depends_on:
+      db:
+        condition: service_healthy
+    # --tries=1 matches RenderReportJob's existing setting: these jobs restore
+    # tenant context by hand and a blind retry is not automatically safe.
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 512M}
+
+  scheduler:
+    image: bordeguna-erp:latest
+    restart: unless-stopped
+    env_file: [.env]
+    command: php artisan schedule:work
+    volumes:
+      - storage:/var/www/html/storage
+    networks: [internal]
+    depends_on:
+      db:
+        condition: service_healthy
+    # ⚠⚠ THIS CONTAINER IS THE POINT OF THE C15 SLICE. `schedule:work` keeps its
+    # own minute timer, so no host cron is needed — and none is possible, since
+    # there is no PHP on this host and installing it would break the isolation
+    # this stack exists to preserve.
+    #
+    # ⚠ DELIBERATELY SEPARATE FROM `worker`. A stuck queue job must never be
+    # able to stop attendance being processed; sharing one container would make
+    # exactly that possible.
+    #
+    # Verification that it is working: rows appearing in
+    # `attendance_processing_runs` without anybody running a command. An empty
+    # table means this container is not doing its job.
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 384M}
+
+  backup:
+    image: mysql:8.0
+    restart: unless-stopped
+    env_file: [.env]
+    entrypoint: ['/bin/bash', '/backup.sh']
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - /root/backups/bordeguna-erp:/backups
+    networks: [internal]
+    depends_on:
+      db:
+        condition: service_healthy
+    # ⚠ On-server backups only. This protects against a bad migration, a dropped
+    # table or a corrupt row — NOT against losing the VPS. Payroll data is the
+    # least replaceable data in the company, so an offsite copy remains an open
+    # item rather than a solved one.
+    deploy:
+      resources:
+        limits: {cpus: '0.25', memory: 256M}
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  dbdata:
+  storage:
+  public:
