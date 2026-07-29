@@ -100,6 +100,32 @@ done
 log "database reachable"
 
 # ---------------------------------------------------------------------------
+# 2.5 Recreate the storage skeleton.
+#
+# ⚠ `storage/` is a named VOLUME, and .dockerignore deliberately excludes the
+# framework's working subdirectories so a developer's cached views, sessions and
+# logs never reach a production image. The consequence is that neither the image
+# nor a fresh volume contains them, and `view:cache` dies with the wonderfully
+# unhelpful "View path not found."
+#
+# It has to happen on every start rather than once at build, because the volume
+# outlives the image and an operator clearing it by hand would otherwise break
+# the next boot.
+# ---------------------------------------------------------------------------
+log "ensuring storage skeleton"
+mkdir -p \
+    /var/www/html/storage/app/private \
+    /var/www/html/storage/app/public \
+    /var/www/html/storage/framework/cache/data \
+    /var/www/html/storage/framework/sessions \
+    /var/www/html/storage/framework/views \
+    /var/www/html/storage/logs \
+    /var/www/html/bootstrap/cache
+
+chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+chmod -R ug+rwX /var/www/html/storage /var/www/html/bootstrap/cache
+
+# ---------------------------------------------------------------------------
 # 3. Caches.
 #
 # ⚠ CLEAR BEFORE CACHING, always. A stale config cache has cost this project a
