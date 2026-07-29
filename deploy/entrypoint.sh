@@ -31,10 +31,31 @@ fi
 # restart under a running app is not the normal case and a worker that dies on
 # boot loops noisily.
 # ---------------------------------------------------------------------------
-until mysqladmin ping -h "${DB_HOST:-db}" --silent 2>/dev/null; do
-    log "waiting for database at ${DB_HOST:-db}"
+# ⚠ Checks that the APPLICATION USER can reach its own database, not merely
+# that a server is listening. `mysqladmin ping` with no credentials is rejected
+# by MySQL 8, which made an earlier version of this loop spin forever against a
+# database that was already healthy.
+#
+# ⚠ BOUNDED, deliberately. An unbounded wait turns a misconfiguration into a
+# container that hangs silently and looks like a slow start. 60 × 2s = 2 minutes,
+# then fail loudly with the reason.
+db_ready() {
+    mysql -h "${DB_HOST:-db}" -u"${DB_USERNAME}" -p"${DB_PASSWORD}" \
+          -e 'SELECT 1' "${DB_DATABASE}" >/dev/null 2>&1
+}
+
+attempts=0
+until db_ready; do
+    attempts=$((attempts + 1))
+    if [ "${attempts}" -ge 60 ]; then
+        log "FATAL: database at ${DB_HOST:-db} not reachable as ${DB_USERNAME} after 2 minutes"
+        mysql -h "${DB_HOST:-db}" -u"${DB_USERNAME}" -p"${DB_PASSWORD}" -e 'SELECT 1' "${DB_DATABASE}" || true
+        exit 1
+    fi
+    log "waiting for database at ${DB_HOST:-db} (${attempts}/60)"
     sleep 2
 done
+log "database reachable"
 
 # ---------------------------------------------------------------------------
 # 3. Caches.
