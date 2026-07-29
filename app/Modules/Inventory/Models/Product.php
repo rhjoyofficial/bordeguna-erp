@@ -66,11 +66,44 @@ class Product extends Model
         return $this->hasMany(StockMovement::class);
     }
 
+    /**
+     * Stock on hand across active batches.
+     *
+     * ⚠⚠ THE NORMALISATION IS NOT COSMETIC. An aggregate over a decimal column
+     * is stringified differently by every driver: SQLite returns `20`, MySQL
+     * returns `20.0000`, and PostgreSQL would return `20.0000` as well. This
+     * method declares `: string`, so without normalising, its return value —
+     * and anything comparing it with `===` or printing it on a screen — changes
+     * meaning with the database underneath.
+     *
+     * Found on 2026-07-29 running the suite against production MySQL for the
+     * first time. It is a portability bug in the application, not merely a
+     * test-assertion difference, which is why it is fixed here rather than in
+     * the tests.
+     */
     public function currentStockQuantity(): string
     {
-        return (string) $this->batches()
+        $sum = $this->batches()
             ->where('status', StockBatchStatus::Active)
             ->sum('current_quantity');
+
+        return self::normaliseDecimal((string) $sum);
+    }
+
+    /**
+     * Trim a decimal string to its shortest exact form: `20.0000` → `20`,
+     * `20.5000` → `20.5`, `0.0000` → `0`. Never rounds, so no quantity is
+     * altered by being displayed.
+     */
+    private static function normaliseDecimal(string $value): string
+    {
+        if (! str_contains($value, '.')) {
+            return $value;
+        }
+
+        $trimmed = rtrim(rtrim($value, '0'), '.');
+
+        return ($trimmed === '' || $trimmed === '-') ? '0' : $trimmed;
     }
 
     /**
