@@ -96,6 +96,46 @@ class DailyAttendance extends Model
         return $this->finalized_at !== null;
     }
 
+    /**
+     * Did the employee actually report for work on this day (Correction C14)?
+     *
+     * This is the eligibility rule for a per-day allowance such as TA & DA, and
+     * it is deliberately **not** `presentDays`. `presentDays` measures payable
+     * working fractions for salary proration; this measures whether somebody
+     * turned up. The two are similar today and mean different things, and
+     * keeping them apart is what stops a future change to proration silently
+     * repricing a travel allowance.
+     *
+     * Joy's rule, 2026-07-29: eligibility follows whether the employee reported
+     * for work, never their salary status and never a payable fraction. So:
+     *
+     *  - Present, Late (**every band**, including one whose day's salary was
+     *    forfeited), Field duty → yes. They travelled and reported.
+     *  - **Half day → yes, in full.** The journey was made in full, so this
+     *    method answers a whole day where `presentDays` counts 0.5.
+     *  - **Approved work on a holiday or weekly off → yes.** The status stays
+     *    `Holiday`/`WeeklyOff` in that case, so it is checked explicitly here.
+     *    Unapproved holiday work is flagged by POL-09 and does not count.
+     *  - Approved leave, Absent, no check-in at all → no.
+     *  - Missing punch → no; PAY-09 holds the payslip until it is corrected.
+     */
+    public function reportedForWork(): bool
+    {
+        if ($this->status->establishesReportingForWork()) {
+            return true;
+        }
+
+        if (! in_array($this->status, [AttendanceStatus::Holiday, AttendanceStatus::WeeklyOff], true)) {
+            return false;
+        }
+
+        // POL-09: worked, and not withheld for want of approval. The flag is
+        // the authority here rather than payable_minutes, because an approved
+        // holiday's payable minutes are a payroll question and this is not.
+        return $this->worked_minutes > 0
+            && ! in_array('unapproved_holiday_work', $this->flags ?? [], true);
+    }
+
     public function scopeOnDate(Builder $query, Carbon|string $date): Builder
     {
         return $query->whereDate('attendance_date', Carbon::parse($date)->toDateString());

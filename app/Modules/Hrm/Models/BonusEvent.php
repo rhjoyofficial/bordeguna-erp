@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use LogicException;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -85,6 +86,7 @@ class BonusEvent extends Model
             SalaryCalculationBasis::Fixed => $value,
             SalaryCalculationBasis::PercentOfBasic => $salary->basic * $value / 100,
             SalaryCalculationBasis::PercentOfGross => $salary->gross * $value / 100,
+            SalaryCalculationBasis::PerPresentDay => $this->refuseAttendancePricedBasis(),
         }, 2);
     }
 
@@ -102,6 +104,30 @@ class BonusEvent extends Model
                 rtrim(rtrim(number_format((float) $this->value, 2), '0'), '.'),
                 number_format($salary->gross, 2),
             ),
+            SalaryCalculationBasis::PerPresentDay => $this->refuseAttendancePricedBasis(),
         };
+    }
+
+    /**
+     * Correction C14 added a fourth `SalaryCalculationBasis`, and this enum is
+     * shared with the bonus screen rather than duplicated. A bonus resolved
+     * "per day reported for work" has no meaning: an award is priced once,
+     * against the salary in force at award time, with no payroll period and no
+     * attendance in scope.
+     *
+     * ⚠ **This throws rather than returning 0.00 deliberately.** Validation
+     * already blocks the basis at creation, so this is unreachable through the
+     * UI and only a hand-edited row can reach it. A zero would pay nobody and
+     * look like a correctly-calculated bonus of nothing, which is precisely the
+     * class of defect this project keeps finding late; failing loudly stops the
+     * run instead.
+     */
+    private function refuseAttendancePricedBasis(): never
+    {
+        throw new LogicException(sprintf(
+            'Bonus event %d uses the "%s" basis, which is priced by attendance and is not valid for a bonus award.',
+            $this->id,
+            $this->calculation_basis->value,
+        ));
     }
 }

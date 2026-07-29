@@ -7,6 +7,7 @@ use App\Modules\Hrm\Payroll\Data\EmployeePayrollContext;
 use App\Modules\Hrm\Payroll\Data\PayrollComputation;
 use App\Modules\Hrm\Payroll\Data\PayslipOutcome;
 use App\Modules\Hrm\Payroll\Stages\ApplyAbsenceDeductions;
+use App\Modules\Hrm\Payroll\Stages\ApplyAttendanceAllowances;
 use App\Modules\Hrm\Payroll\Stages\ApplyAttendanceConsequences;
 use App\Modules\Hrm\Payroll\Stages\ApplyOvertime;
 use App\Modules\Hrm\Payroll\Stages\ApplyPayrollInputs;
@@ -25,14 +26,19 @@ use App\Modules\Hrm\Payroll\Stages\ValidatePayslip;
  *   2. prorate a part period                    (PAY-05, PAY-06)
  *   3. deduct absence and unpaid leave          (PAY-03, PAY-04, PAY-08)
  *   4. price the attendance consequence         (PAY-07, POL-02/03)
- *   5. add overtime                             (ADJ-01, ADJ-02 via C7a, ADJ-03)
- *   6. add allowances, loans and adjustments    (ADJ-05, ADJ-07, ADJ-08)
- *   7. run the blocking checks                  (PAY-09, PAY-11)
+ *   5. add per-day attendance allowances        (C14 — TA & DA)
+ *   6. add overtime                             (ADJ-01, ADJ-02 via C7a, ADJ-03)
+ *   7. add allowances, loans and adjustments    (ADJ-05, ADJ-07, ADJ-08)
+ *   8. run the blocking checks                  (PAY-09, PAY-11)
  *
  * The order is not arbitrary. Gross must exist before anything is deducted from
  * it; proration precedes the absence maths so a mid-month joiner is never
  * charged for days before they arrived; and validation runs last because both
  * of its questions need the finished figures.
+ *
+ * ⚠ Stage 5 sits after every deduction for the same reason: a per-day allowance
+ * is earned by turning up, so it must never be prorated or deducted against.
+ * See `ApplyAttendanceAllowances` and `TA-DA-ARCHITECTURE-PLAN.md`.
  *
  * Because of that, a payslip can be recalculated at any time and reproduce
  * exactly the same answer from the same inputs — which is what makes a payroll
@@ -57,6 +63,7 @@ class PayrollEngine
             new ApplyProration,
             new ApplyAbsenceDeductions,
             new ApplyAttendanceConsequences,
+            new ApplyAttendanceAllowances,
             new ApplyOvertime,
             new ApplyPayrollInputs,
             new ValidatePayslip,

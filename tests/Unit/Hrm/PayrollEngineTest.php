@@ -61,6 +61,43 @@ function payFacts(array $overrides = []): AttendanceFacts
         // fact. Four late arrivals are a warning only, so nothing is priced.
         deductibleDays: $overrides['deductible_days'] ?? 0.0,
         hasUnresolvedMissingPunch: $overrides['missing_punch'] ?? false,
+        // C14. Deliberately a separate figure from `present`, and the default
+        // deliberately differs from it, so a test that means one and passes
+        // because of the other cannot go unnoticed.
+        daysReportedForWork: $overrides['reported_for_work'] ?? 25,
+    );
+}
+
+/**
+ * PAY-13's structure plus a per-day allowance (C14) — the shape Bor De Guna's
+ * two Retail Sales Officers are paid on.
+ *
+ * ⚠ Note what `gross` is: `$basic + $houseRent + $medical`, with the allowance
+ * absent. That is the property the whole correction rests on, mirrored here the
+ * way `SalaryResolver` produces it.
+ */
+function payBreakdownWithDailyAllowance(float $rate = 246.0): SalaryBreakdown
+{
+    $base = payBreakdown();
+
+    $allowance = new ResolvedSalaryLine(
+        componentId: 9,
+        code: 'ta_da',
+        name: 'TA & DA',
+        type: SalaryComponentType::Earning,
+        basis: SalaryCalculationBasis::PerPresentDay,
+        isBasic: false,
+        isStatutory: false,
+        value: $rate,
+        amount: 0.0,
+        formula: sprintf('%s per day reported for work', number_format($rate, 2)),
+    );
+
+    return new SalaryBreakdown(
+        [...$base->lines, $allowance],
+        $base->basic,
+        $base->gross,
+        $base->contractualDeductions,
     );
 }
 
@@ -333,4 +370,101 @@ it('explains the whole payslip in its notes', function () {
 
     expect($explanation)->toContain('24 June');
     expect($explanation)->toContain('30');
+});
+
+// =============================================================================
+// Correction C14 — TA & DA, an allowance earned per day reported for work.
+//
+// The first two tests are the ones that matter most. They pin the property the
+// whole design rests on: that adding this component changes NOTHING about any
+// other figure on the payslip. Both would pass trivially today and would fail
+// loudly the moment somebody "fixes" SalaryResolver by adding the line to gross.
+// =============================================================================
+
+it('does not let a per-day allowance into gross', function () {
+    $plain = payBreakdown();
+    $withAllowance = payBreakdownWithDailyAllowance();
+
+    expect($withAllowance->gross)->toBe($plain->gross);
+    expect($withAllowance->basic)->toBe($plain->basic);
+});
+
+it('leaves absence, proration and overtime identical when a per-day allowance is added', function () {
+    $facts = payFacts(['absent' => 3, 'reported_for_work' => 20]);
+
+    $without = payRun(['attendance' => $facts, 'joining' => '2026-07-09']);
+    $with = payRun([
+        'attendance' => $facts,
+        'joining' => '2026-07-09',
+        'salary' => payBreakdownWithDailyAllowance(),
+    ]);
+
+    // Every salary-based figure must be untouched. If the allowance had reached
+    // gross, all three of these would rise and the payslip would still foot.
+    expect($with->line('absent')->amount)->toBe($without->line('absent')->amount);
+    expect($with->line('proration')->amount)->toBe($without->line('proration')->amount);
+    expect($with->line('overtime')->amount)->toBe($without->line('overtime')->amount);
+
+    // And the allowance is genuinely additive: the whole difference in net is
+    // the allowance itself, nothing else moved.
+    expect(round($with->net - $without->net, 2))->toBe($with->line('ta_da')->amount);
+});
+
+it('prices the allowance at the rate times the days reported for work', function () {
+    $payslip = payRun([
+        'salary' => payBreakdownWithDailyAllowance(361.0),
+        'attendance' => payFacts(['reported_for_work' => 22]),
+    ]);
+
+    expect($payslip->line('ta_da')->amount)->toBe(7942.00);
+    expect($payslip->line('ta_da')->quantity)->toBe(22.0);
+    expect($payslip->line('ta_da')->rate)->toBe(361.0);
+    expect($payslip->line('ta_da')->isEarning())->toBeTrue();
+    expect($payslip->line('ta_da')->formula)->toContain('22 days reported for work');
+});
+
+it('prices the allowance from days reported for work, never from present days', function () {
+    // The C14a/C14b case in miniature: a half day and an approved holiday
+    // worked make these two figures differ. Reading the wrong one underpays.
+    $payslip = payRun([
+        'salary' => payBreakdownWithDailyAllowance(246.0),
+        'attendance' => payFacts(['present' => 19.5, 'reported_for_work' => 21]),
+    ]);
+
+    expect($payslip->line('ta_da')->amount)->toBe(5166.00)   // 246 × 21
+        ->and($payslip->line('ta_da')->amount)->not->toBe(4797.00); // 246 × 19.5
+});
+
+it('emits a zero allowance line rather than omitting it when nobody reported for work', function () {
+    $payslip = payRun([
+        'salary' => payBreakdownWithDailyAllowance(),
+        'attendance' => payFacts(['reported_for_work' => 0]),
+    ]);
+
+    // Visible and zero, not absent. An absent line reads as a payroll mistake.
+    expect($payslip->line('ta_da')->amount)->toBe(0.0);
+    expect($payslip->line('ta_da')->quantity)->toBe(0.0);
+});
+
+it('puts exactly one line on the payslip for a per-day component', function () {
+    $payslip = payRun(['salary' => payBreakdownWithDailyAllowance()]);
+
+    $taDaLines = array_filter($payslip->lines, fn ($line) => $line->code === 'ta_da');
+
+    // ResolveSalaryLines must skip it, or the 0.00 contractual line and the
+    // priced line both land and the payslip shows the component twice.
+    expect($taDaLines)->toHaveCount(1);
+    expect(reset($taDaLines)->amount)->toBeGreaterThan(0.0);
+});
+
+it('pays the allowance in full on a day whose salary the lateness ladder forfeited', function () {
+    // C14c. The band-3 day is deducted a full day's salary and still counts as
+    // reporting for work, because the person travelled in.
+    $payslip = payRun([
+        'salary' => payBreakdownWithDailyAllowance(246.0),
+        'attendance' => payFacts(['deductible_days' => 2.0, 'reported_for_work' => 24]),
+    ]);
+
+    expect($payslip->line('late_early')->amount)->toBe(3333.33);
+    expect($payslip->line('ta_da')->amount)->toBe(5904.00); // 246 × 24, undiminished
 });

@@ -90,6 +90,10 @@ class SalaryRevisionController extends Controller
                     'is_basic' => $c->is_basic,
                     'basis_label' => $c->calculation_basis->label(),
                     'is_percentage' => $c->calculation_basis->isPercentage(),
+                    // C14, same reason as SalaryController::presentComponent —
+                    // a revision screen must not present a daily rate as if it
+                    // were a monthly amount.
+                    'is_priced_by_attendance' => $c->calculation_basis->isPricedByAttendance(),
                 ]),
         ]);
     }

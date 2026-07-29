@@ -52,6 +52,25 @@ class SalaryResolver
 
             [$amount, $formula] = $this->amountFor($line, $basic, gross: 0.0);
             $resolved[] = $this->line($line, $amount, $formula);
+
+            // ⚠⚠ CORRECTION C14 — DO NOT "FIX" THIS BY ADDING THE LINE TO GROSS.
+            //
+            // An attendance-priced allowance is deliberately kept out of Gross,
+            // and this is the single place that decision is enforced. Gross is
+            // not just a display figure: `EmployeePayrollContext::dailyRate()`
+            // divides it by 30 to price absence (PAY-03) and part-period
+            // proration (PAY-05/06). Letting a per-day travel allowance into it
+            // would raise the cost of every absent day for every other
+            // component, permanently, and the payslip would still foot.
+            //
+            // It also resolves to 0.00 above, because the count of days worked
+            // does not exist until a payroll period is named. The engine's
+            // `ApplyAttendanceAllowances` stage prices it once attendance is
+            // known. See `TA-DA-ARCHITECTURE-PLAN.md` §4.
+            if ($line->component->calculation_basis->isPricedByAttendance()) {
+                continue;
+            }
+
             $gross = round($gross + $amount, 2);
         }
 
@@ -86,6 +105,15 @@ class SalaryResolver
             SalaryCalculationBasis::PercentOfGross => [
                 round($gross * $value / 100, 2),
                 sprintf('%s%% of Gross %s', self::trim($value), number_format($gross, 2)),
+            ],
+            // C14: no amount is knowable here. This object answers "what is
+            // this person paid", not "what are they owed this month", and the
+            // days they reported for work is a fact about a period. The rate is
+            // still carried on the line's `value`, so the payroll engine has
+            // everything it needs without a second lookup.
+            SalaryCalculationBasis::PerPresentDay => [
+                0.0,
+                sprintf('%s per day reported for work', number_format($value, 2)),
             ],
         };
     }

@@ -48,7 +48,7 @@ interface Props {
     employees: EmployeeRow[];
     components: Component[];
     types: { value: string; label: string }[];
-    bases: { value: string; label: string; allowed_for_earning: boolean }[];
+    bases: { value: string; label: string; allowed_for_earning: boolean; allowed_for_deduction: boolean }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Salary', href: '/hrm/salary' }];
@@ -66,7 +66,9 @@ function ComponentDialog({ component, bases, types, trigger }: { component?: Com
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     // Gross is the sum of the earnings, so an earning cannot be a share of it.
-    const available = bases.filter((b) => type !== 'earning' || b.allowed_for_earning);
+    // And a per-day allowance is earned by attending, so it cannot be charged
+    // as a deduction (C14). Both rules are re-checked server-side.
+    const available = bases.filter((b) => (type === 'earning' ? b.allowed_for_earning : b.allowed_for_deduction));
 
     const submit = () => {
         const payload = { code, name, type, calculation_basis: basis, sequence: Number(sequence), description: description || null };
@@ -114,8 +116,15 @@ function ComponentDialog({ component, bases, types, trigger }: { component?: Com
                                 value={type}
                                 disabled={component?.is_basic}
                                 onChange={(e) => {
-                                    setType(e.target.value);
-                                    if (e.target.value === 'earning' && basis === 'percent_of_gross') setBasis('fixed');
+                                    const next = e.target.value;
+                                    setType(next);
+                                    // Drop a basis the new type cannot use, or the
+                                    // select would keep showing a value that is no
+                                    // longer in its option list and submit it.
+                                    const stillAllowed = bases.find(
+                                        (b) => b.value === basis && (next === 'earning' ? b.allowed_for_earning : b.allowed_for_deduction),
+                                    );
+                                    if (!stillAllowed) setBasis('fixed');
                                 }}
                             >
                                 {types.map((t) => (

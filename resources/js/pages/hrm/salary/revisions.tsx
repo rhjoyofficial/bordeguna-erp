@@ -24,6 +24,7 @@ interface ComponentOption {
     is_basic: boolean;
     basis_label: string;
     is_percentage: boolean;
+    is_priced_by_attendance: boolean;
 }
 
 interface EmployeeOption {
@@ -169,7 +170,9 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                                         value={values[c.id] ?? ''}
                                         onChange={(e) => setValues({ ...values, [c.id]: e.target.value })}
                                     />
-                                    <span className="text-xs text-muted-foreground">{c.is_percentage ? c.basis_label : c.type}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                        {c.is_percentage || c.is_priced_by_attendance ? c.basis_label : c.type}
+                                    </span>
                                 </div>
                             ))}
                             {errors.lines && <p className="text-xs text-destructive">{errors.lines}</p>}

@@ -50,6 +50,7 @@ interface Component {
     type: string;
     is_basic: boolean;
     is_percentage: boolean;
+    is_priced_by_attendance: boolean;
     basis_label: string;
     is_statutory: boolean;
 }
@@ -115,7 +116,9 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
             <Label htmlFor={`c-${c.id}`}>
                 {c.name}
                 {c.is_basic && ' (required)'}
-                {c.is_percentage && <span className="ml-1 text-xs text-muted-foreground">— {c.basis_label}</span>}
+                {(c.is_percentage || c.is_priced_by_attendance) && (
+                    <span className="ml-1 text-xs text-muted-foreground">— {c.basis_label}</span>
+                )}
             </Label>
             <Input
                 id={`c-${c.id}`}
@@ -126,6 +129,14 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
                 onChange={(e) => set(c.id, e.target.value)}
                 placeholder={c.is_percentage ? '%' : '0.00'}
             />
+            {/* C14: this field is a daily rate, and it looks exactly like a
+                monthly amount unless it says otherwise. */}
+            {c.is_priced_by_attendance && (
+                <p className="text-xs text-muted-foreground">
+                    Rate for each day reported for work. Paid on any day with a check-in, including a half day and approved holiday work. Not part of
+                    gross, so it does not affect absence, proration or overtime.
+                </p>
+            )}
         </div>
     );
 

@@ -30,11 +30,32 @@ final readonly class AttendanceFacts
         public float $deductibleDays,
         /** PAY-09: an unresolved missing punch blocks this employee's line entirely. */
         public bool $hasUnresolvedMissingPunch,
+        /**
+         * Days the employee actually reported for work (Correction C14) — the
+         * eligibility count for a per-day allowance such as TA & DA.
+         *
+         * ⚠⚠ **This is not `presentDays`, and must never be replaced by it.**
+         * `presentDays` measures payable working fractions for salary
+         * proration: a half day counts 0.5 there, and an approved holiday
+         * worked is absent from it entirely. This one counts whether somebody
+         * turned up, so a half day is a **whole** 1 and an approved holiday
+         * worked is included. They are similar today and mean different things,
+         * and keeping them apart is what stops a future change to proration
+         * silently repricing a travel allowance.
+         *
+         * Typed `int` rather than `float` deliberately: there is no such thing
+         * as a fraction of reporting for work, and the type says so before
+         * anyone is tempted to halve it.
+         *
+         * ⚠ Defaulted to 0 so it is **fail-closed**: a caller that forgets it
+         * pays no allowance, rather than paying one nobody is entitled to.
+         */
+        public int $daysReportedForWork = 0,
     ) {}
 
     public static function none(): self
     {
-        return new self(0, 0, 0, 0, 0, 0, 0, false);
+        return new self(0, 0, 0, 0, 0, 0, 0, false, 0);
     }
 
     /**
@@ -51,6 +72,7 @@ final readonly class AttendanceFacts
             'late_minutes' => $this->lateMinutes,
             'deductible_days' => $this->deductibleDays,
             'has_unresolved_missing_punch' => $this->hasUnresolvedMissingPunch,
+            'days_reported_for_work' => $this->daysReportedForWork,
         ];
     }
 }

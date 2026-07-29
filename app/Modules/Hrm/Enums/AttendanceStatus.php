@@ -62,4 +62,25 @@ enum AttendanceStatus: string
     {
         return in_array($this, [self::Present, self::Late, self::HalfDay, self::FieldDuty], true);
     }
+
+    /**
+     * Whether the status on its own establishes that the employee turned up
+     * (Correction C14).
+     *
+     * ⚠ **Status alone is not the whole rule.** Approved work on a holiday or a
+     * weekly off also counts as reporting for work, but such a day keeps the
+     * status `Holiday` or `WeeklyOff` (`DetermineStatus::nonWorkingDay()` never
+     * changes it, even when POL-09 approval exists). The complete rule
+     * therefore lives on `DailyAttendance::reportedForWork()`, which consults
+     * this method and then handles that case. Do not use this method as the
+     * eligibility test by itself.
+     *
+     * `MissingPunch` is excluded: the day is unresolved, PAY-09 holds the whole
+     * payslip until a correction is approved, and that correction resolves the
+     * day into a real status which is then judged on its own terms.
+     */
+    public function establishesReportingForWork(): bool
+    {
+        return $this->isWorkedDay();
+    }
 }

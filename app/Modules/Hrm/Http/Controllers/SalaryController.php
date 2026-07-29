@@ -63,6 +63,7 @@ class SalaryController extends Controller
                     'value' => $b->value,
                     'label' => $b->label(),
                     'allowed_for_earning' => $b->allowedForEarning(),
+                    'allowed_for_deduction' => $b->allowedForDeduction(),
                 ]),
         ]);
     }
@@ -186,6 +187,12 @@ class SalaryController extends Controller
             ]);
         }
 
+        if ($type === SalaryComponentType::Deduction && ! $basis->allowedForDeduction()) {
+            throw ValidationException::withMessages([
+                'calculation_basis' => 'A deduction cannot be charged per day reported for work. That basis is for allowances earned by attending (C14).',
+            ]);
+        }
+
         // `is_basic` is deliberately absent: exactly one Basic exists per
         // business, seeded from SAL-02, and it is not something a new component
         // may claim.
@@ -220,6 +227,11 @@ class SalaryController extends Controller
             'calculation_basis' => $component->calculation_basis->value,
             'basis_label' => $component->calculation_basis->label(),
             'is_percentage' => $component->calculation_basis->isPercentage(),
+            // C14: the figure HR types for one of these is a *daily rate*, not a
+            // monthly amount, and the form must say so. Without it the field
+            // looks identical to a fixed monthly component and 246 could
+            // reasonably be read as a monthly allowance.
+            'is_priced_by_attendance' => $component->calculation_basis->isPricedByAttendance(),
             'sequence' => $component->sequence,
             'is_statutory' => $component->is_statutory,
             'description' => $component->description,

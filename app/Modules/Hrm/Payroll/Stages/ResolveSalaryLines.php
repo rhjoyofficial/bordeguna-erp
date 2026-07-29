@@ -28,6 +28,16 @@ class ResolveSalaryLines implements PayrollStage
         }
 
         foreach ($context->salary->lines as $line) {
+            // C14: an attendance-priced line has no contractual monthly amount
+            // to copy — it resolved to 0.00 because the days it multiplies do
+            // not exist until a period is named. `ApplyAttendanceAllowances`
+            // emits it once attendance is known. Copying it here as well would
+            // put two lines for one component on the payslip, the first of them
+            // a meaningless zero.
+            if ($line->isPricedByAttendance()) {
+                continue;
+            }
+
             $computation = $computation->withLine($this->toPayslipLine($line));
         }
 

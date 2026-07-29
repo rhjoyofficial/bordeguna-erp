@@ -34,6 +34,17 @@ class SalaryComponentSeeder extends Seeder
             ['code' => 'house_rent', 'name' => 'House Rent', 'type' => 'earning', 'sequence' => 20],
             ['code' => 'medical', 'name' => 'Medical Allowance', 'type' => 'earning', 'sequence' => 30],
             ['code' => 'conveyance', 'name' => 'Conveyance', 'type' => 'earning', 'sequence' => 40],
+            // Correction C14. The only component that is not a fixed monthly
+            // figure: the stored value is a RATE PER DAY, and payroll multiplies
+            // it by the days the employee reported for work.
+            //
+            // ⚠ It is deliberately **not** part of gross, so it never affects
+            // the daily rate that prices absence, proration or overtime. The
+            // rate is per employee (Bor De Guna: 246.00 and 361.00), set on the
+            // salary structure, not here.
+            ['code' => 'ta_da', 'name' => 'TA & DA', 'type' => 'earning', 'sequence' => 50,
+                'calculation_basis' => 'per_present_day',
+                'description' => 'Travel and daily allowance, paid for each day the employee reported for work. Not part of gross.'],
 
             // --- Deductions (SAL-03) ---
             ['code' => 'income_tax', 'name' => 'Income Tax', 'type' => 'deduction', 'sequence' => 10,
@@ -68,7 +79,7 @@ class SalaryComponentSeeder extends Seeder
                         'name' => $definition['name'],
                         'type' => $definition['type'],
                         'is_basic' => $definition['is_basic'] ?? false,
-                        'calculation_basis' => 'fixed',
+                        'calculation_basis' => $definition['calculation_basis'] ?? 'fixed',
                         'sequence' => $definition['sequence'],
                         'is_statutory' => $definition['is_statutory'] ?? false,
                         'description' => $definition['description'] ?? null,

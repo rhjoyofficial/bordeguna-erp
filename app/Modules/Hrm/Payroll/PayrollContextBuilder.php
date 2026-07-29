@@ -115,6 +115,12 @@ class PayrollContextBuilder
             deductibleDays: (float) $days->filter(fn (DailyAttendance $d) => $d->consequence->deducts())->count(),
             // PAY-09.
             hasUnresolvedMissingPunch: $days->where('holds_payroll', true)->isNotEmpty(),
+            // C14. Counted from the day itself rather than derived from
+            // `presentDays`, because the two rules genuinely differ: a half day
+            // is a whole day of reporting for work, and an approved holiday
+            // worked counts here while carrying a `Holiday` status that keeps
+            // it out of `presentDays` altogether.
+            daysReportedForWork: $days->filter(fn (DailyAttendance $d) => $d->reportedForWork())->count(),
         );
     }
 

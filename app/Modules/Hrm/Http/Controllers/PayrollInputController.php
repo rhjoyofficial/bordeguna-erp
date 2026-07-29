@@ -27,6 +27,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum as EnumRule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -140,8 +141,14 @@ class PayrollInputController extends Controller
                     'is_earning' => $t->isEarning(),
                     'describe' => $t->describe(),
                 ])->values(),
+            // ⚠ Filtered, not the whole enum. `SalaryCalculationBasis` is shared
+            // with the salary structure, so C14's per-day allowance basis
+            // reaches this list unless it is excluded here — and it has no
+            // meaning for a one-off award (see `BonusEvent::amountFor`).
             'bonus_bases' => collect(SalaryCalculationBasis::cases())
-                ->map(fn (SalaryCalculationBasis $b) => ['value' => $b->value, 'label' => $b->label()]),
+                ->filter(fn (SalaryCalculationBasis $b) => $b->allowedForBonus())
+                ->map(fn (SalaryCalculationBasis $b) => ['value' => $b->value, 'label' => $b->label()])
+                ->values(),
             'overtime_rules' => [
                 'daily_max_hours' => PayrollConfig::defaults()->overtimeDailyMaxHours,
                 'monthly_max_hours' => PayrollConfig::defaults()->overtimeMonthlyMaxHours,
@@ -219,6 +226,14 @@ class PayrollInputController extends Controller
             'payroll_period_id' => ['required', Rule::exists('payroll_periods', 'id')->where('business_id', $this->businessId())],
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
+
+        // The form already omits it, but a hand-posted request must not be able
+        // to store a basis `BonusEvent` cannot price (C14).
+        if (! SalaryCalculationBasis::from($validated['calculation_basis'])->allowedForBonus()) {
+            throw ValidationException::withMessages([
+                'calculation_basis' => 'A bonus cannot be calculated per day reported for work. That basis belongs to a standing salary component.',
+            ]);
+        }
 
         BonusEvent::create([...$validated, 'created_by' => $request->user()->id]);
 

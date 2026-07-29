@@ -41,6 +41,21 @@ final readonly class ResolvedSalaryLine
     }
 
     /**
+     * Whether this line's amount is decided by a payroll period's attendance
+     * rather than by the structure alone (Correction C14).
+     *
+     * Such a line arrives here resolved to 0.00 with the rate kept on `value`,
+     * is excluded from Gross, and is priced by the engine's
+     * `ApplyAttendanceAllowances` stage. `ResolveSalaryLines` skips it for
+     * exactly that reason — copying it would put a 0.00 line on the payslip
+     * that the allowance stage then duplicates.
+     */
+    public function isPricedByAttendance(): bool
+    {
+        return $this->basis->isPricedByAttendance();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(): array
