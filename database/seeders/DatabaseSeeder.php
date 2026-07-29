@@ -11,6 +11,7 @@ use App\Modules\Hrm\database\seeders\AttendanceCorrectionWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\AttendancePolicySeeder;
 use App\Modules\Hrm\database\seeders\BangladeshHolidayCalendarSeeder;
 use App\Modules\Hrm\database\seeders\BorDeGunaAttendanceSeeder;
+use App\Modules\Hrm\database\seeders\BorDeGunaEmployeeSeeder;
 use App\Modules\Hrm\database\seeders\BorDeGunaOrganisationSeeder;
 use App\Modules\Hrm\database\seeders\HrmChangeRequestWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\LeaveTypeSeeder;
@@ -81,6 +82,12 @@ class DatabaseSeeder extends Seeder
         // example policy with Bor De Guna's real ladder, and binds their teams
         // to their shifts.
         $this->call(BorDeGunaAttendanceSeeder::class);
+
+        // ⚠ W1 migration: the nine real employees. Must run AFTER the
+        // organisation, attendance and salary-component seeders — it needs
+        // departments, designations and the `basic`/`ta_da` components to
+        // already exist.
+        $this->call(BorDeGunaEmployeeSeeder::class);
 
         $this->call(InventoryReasonsSeeder::class);
         $this->call(InventoryDemoDataSeeder::class);
