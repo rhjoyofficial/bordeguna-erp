@@ -19,7 +19,7 @@ RUN npm ci
 
 COPY resources ./resources
 COPY public ./public
-COPY vite.config.ts tsconfig.json components.json ./
+COPY vite.config.js tsconfig.json components.json ./
 
 # Ziggy's generated routes file is committed, but Vite still needs the PHP-side
 # aliases resolved at build time; everything it reads is copied above.
