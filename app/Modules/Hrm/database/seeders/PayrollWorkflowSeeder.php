@@ -38,8 +38,23 @@ class PayrollWorkflowSeeder extends Seeder
         }
 
         foreach (Business::all() as $business) {
-            // WFL-07: payroll approval on the shared pipeline. A single stage —
-            // the questionnaire asks for approval, not a chain, at this point.
+            // WFL-07: payroll approval on the shared pipeline. A single stage,
+            // and deliberately so.
+            //
+            // ⚠ The review step is NOT missing from this chain — it lives in the
+            // payroll state machine, one layer up. `PayrollController@review`
+            // requires `hrm.payroll.manage` and moves the run to Reviewed, which
+            // is what opens this approval. So Joy's process of 2026-08-01 is
+            // already expressed end to end:
+            //
+            //   Coordinator reviews and corrects  -> hrm.payroll.manage (review)
+            //   Founder approves                  -> this stage, hrm.payroll.approve
+            //   Coordinator pays                  -> hrm.payroll.manage (disburse)
+            //
+            // Adding a "review" stage HERE was tried on 2026-08-01 and reverted:
+            // it makes the reviewer sign the same run twice and buys no extra
+            // control, because the separation that matters is manage-vs-approve
+            // and it is already enforced by permission at each step.
             $this->seed($business->id, 'payroll_run', 'Payroll approval', [
                 [
                     'sequence' => 1,
@@ -90,10 +105,20 @@ class PayrollWorkflowSeeder extends Seeder
             ['name' => $name, 'is_active' => true],
         );
 
-        if ($workflow->stages()->exists()) {
-            return;
+        // ⚠ Idempotent PER STAGE, not per workflow. It used to return the moment
+        // a workflow had any stage at all, so adding a stage to a chain could
+        // only ever reach a workflow that had none — and every live workflow has
+        // stages. The second payroll stage added on 2026-08-01 would have
+        // reached production only through a hand-written insert, while the
+        // seeder reported success. Same failure the holiday seeder had.
+        //
+        // ⚠ It creates what is missing and never deletes: a stage somebody added
+        // through the Roles or Workflow screen is not the seeder's to remove.
+        foreach ($stages as $stage) {
+            $workflow->stages()->firstOrCreate(
+                ['sequence' => $stage['sequence']],
+                $stage,
+            );
         }
-
-        $workflow->stages()->createMany($stages);
     }
 }
