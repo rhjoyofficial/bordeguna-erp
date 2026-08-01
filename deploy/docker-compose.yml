@@ -152,13 +152,36 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    # ⚠ On-server backups only. This protects against a bad migration, a dropped
-    # table or a corrupt row — NOT against losing the VPS. Payroll data is the
-    # least replaceable data in the company, so an offsite copy remains an open
-    # item rather than a solved one.
+    # ⚠ On-server backups only — same disk as the database. This protects
+    # against a bad migration, a dropped table or a corrupt row, NOT against
+    # losing the VPS. The `offsite` service below is what closes that gap; this
+    # one is still the first link, because offsite replicates these dumps.
     deploy:
       resources:
         limits: {cpus: '0.25', memory: 256M}
+
+  # Encrypted offsite replication to Backblaze B2 (restic). Runs at 02:00 UTC,
+  # an hour after the dump above, and is deliberately a SEPARATE container: a
+  # failure to reach B2 must never stop the local dump being taken.
+  #
+  # ⚠ Reads /backups read-only. It replicates what the backup container
+  # produced; it never produces a dump of its own, so there is exactly one
+  # definition of what a good dump is.
+  offsite:
+    image: restic/restic:0.17.3
+    restart: unless-stopped
+    env_file: [.env]
+    entrypoint: ['/bin/sh', '/offsite.sh']
+    volumes:
+      - ./offsite.sh:/offsite.sh:ro
+      - /root/backups/bordeguna-erp:/backups:ro
+      # restic's cache. Persisted so a nightly run does not re-download the
+      # repository index every time.
+      - resticcache:/root/.cache/restic
+    networks: [internal]
+    deploy:
+      resources:
+        limits: {cpus: '0.25', memory: 512M}
 
 networks:
   internal:
@@ -168,3 +191,4 @@ volumes:
   dbdata:
   storage:
   public:
+  resticcache:

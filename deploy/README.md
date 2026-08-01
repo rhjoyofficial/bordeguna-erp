@@ -202,3 +202,83 @@ free -h && uptime
 
 ⚠ Verifying that n8n and Hermes are still healthy is **not a formality**. The
 whole design is meant to make the answer obviously yes; check it anyway.
+
+## Offsite backup (Backblaze B2, encrypted)
+
+The `backup` container dumps the database nightly at 01:00 UTC into
+`/root/backups/bordeguna-erp`. Those dumps sit **on the same disk as the
+database**, so on their own they protect against a bad migration and against
+nothing else. The `offsite` container replicates them to Backblaze B2 at 02:00
+UTC using restic, encrypted before anything leaves the server.
+
+Why restic rather than `rclone copy`: it encrypts client-side, so salary data is
+never readable in someone else's bucket; it deduplicates, so years of
+near-identical dumps cost almost nothing; and `restic check` can verify a backup
+is actually restorable. `rclone` copies files and cannot tell you the copy is
+sound.
+
+### One-time setup
+
+1. Create a Backblaze account and a **private** bucket, e.g. `bordeguna-erp-backup`.
+2. Create an **application key scoped to that bucket only** — not a master key.
+   Note the `keyID` and `applicationKey`; B2 shows the secret once.
+3. Turn on Object Lock on the bucket if offered. Without it, anyone who gets
+   root on this host can delete the offsite copies too.
+4. Generate the encryption password **on the server**, so it never travels:
+
+```bash
+# --- ON THE VPS ---
+openssl rand -base64 32
+```
+
+5. Put all four values in `/opt/bordeguna-erp/deploy/.env`
+   (`RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, `B2_ACCOUNT_ID`, `B2_ACCOUNT_KEY`),
+   then `docker compose up -d offsite`.
+
+⚠⚠ **Copy `RESTIC_PASSWORD` into a password manager off this server.** Backblaze
+cannot recover it. Without it every offsite backup is permanently unreadable,
+including ones already taken. A key that lives only beside the data it protects
+is not a second copy of anything.
+
+### Checking it
+
+```bash
+# --- ON THE VPS ---
+cd /opt/bordeguna-erp/deploy
+docker compose logs --tail=30 offsite
+docker compose run --rm --entrypoint restic offsite snapshots
+```
+
+### Restoring
+
+⚠ **Do this once now, not for the first time during an incident.** A backup
+nobody has read back is a hope, not a backup.
+
+```bash
+# --- ON THE VPS ---
+cd /opt/bordeguna-erp/deploy
+
+# Pull the newest dump out of B2 into /tmp on the host:
+docker compose run --rm --entrypoint restic \
+  -v /tmp/restore:/restore offsite restore latest --target /restore
+
+# Restore into a SCRATCH database, never straight over the live one:
+docker compose exec -T db mysql -uroot -p"$DB_ROOT_PASSWORD" \
+  -e 'CREATE DATABASE IF NOT EXISTS bordeguna_restore_test'
+gunzip -c /tmp/restore/backups/daily/erp-*.sql.gz | tail -1 | \
+  docker compose exec -T db mysql -uroot -p"$DB_ROOT_PASSWORD" bordeguna_restore_test
+
+# Confirm it came back, then drop the scratch copy:
+docker compose exec -T db mysql -uroot -p"$DB_ROOT_PASSWORD" \
+  -e 'SELECT COUNT(*) FROM bordeguna_restore_test.employees'
+```
+
+### Retention
+
+14 daily, 8 weekly, 24 monthly, 7 yearly. Longer than the on-server window on
+purpose: payroll records carry legal retention obligations, and the whole
+archive is a few megabytes.
+
+⚠ `offsite.sh` **refuses to snapshot an empty source directory.** Paired with
+`forget --prune`, an empty snapshot would quietly age out every real one and
+leave a repository full of nothing while reporting success every night.
