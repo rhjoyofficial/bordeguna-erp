@@ -3,6 +3,7 @@
 namespace App\Modules\Hrm\Jobs;
 
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Mail\PayslipMail;
 use App\Modules\Hrm\Models\Payslip;
 use App\Modules\Hrm\Payroll\Payslip\PayslipPdf;
@@ -48,7 +49,10 @@ class SendPayslipEmail implements ShouldQueue
 
     public function handle(BusinessContext $context, PayslipPdf $pdf): void
     {
-        $context->set($this->businessId);
+        // TenantScope, not the business alone. `PayslipPdf::render()` is
+        // handed `Auth::user()` and C9b/ACL-02 decide what that user may see,
+        // so the permission team id has to be part of entering the tenant.
+        TenantScope::enter($this->businessId);
 
         if ($this->actingUserId !== null) {
             Auth::loginUsingId($this->actingUserId);

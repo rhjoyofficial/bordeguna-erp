@@ -3,10 +3,9 @@
 namespace App\Modules\Foundation\Http\Middleware;
 
 use App\Modules\Foundation\Models\Business;
-use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\TenantScope;
 use Closure;
 use Illuminate\Http\Request;
-use Spatie\Permission\PermissionRegistrar;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -39,8 +38,11 @@ class ResolveCurrentBusiness
         }
 
         if ($business) {
-            app(BusinessContext::class)->set($business->id);
-            app(PermissionRegistrar::class)->setPermissionsTeamId($business->id);
+            // Both halves, through the one entry point that cannot do half the
+            // job. This middleware always did set both; queued jobs did not,
+            // and that gap was a live ACL-02 bypass until 2026-08-01. Routing
+            // every caller through `TenantScope` is what stops it recurring.
+            TenantScope::enter($business->id);
         }
 
         return $next($request);

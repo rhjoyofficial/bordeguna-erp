@@ -13,20 +13,23 @@ use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\Definitions\DailyAttendanceReport;
 use App\Modules\Hrm\Reporting\ReportColumn;
-use App\Modules\Hrm\Reporting\ReportParameters;
-use App\Modules\Hrm\Reporting\ReportRegistry;
+use App\Modules\Hrm\Reporting\ReportColumnType;
 use App\Modules\Hrm\Reporting\ReportMeta;
 use App\Modules\Hrm\Reporting\ReportParameter;
+use App\Modules\Hrm\Reporting\ReportParameters;
+use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Hrm\Reporting\ReportRunner;
 use App\Modules\Hrm\Reporting\ReportScope;
 use App\Modules\Hrm\Reporting\ReportValue;
-use Illuminate\Support\LazyCollection;
-use App\Modules\Hrm\Reporting\ReportColumnType;
+use App\Modules\Hrm\Reporting\WriterRegistry;
 use App\Modules\Hrm\Reporting\Writers\CsvWriter;
 use App\Modules\Hrm\Reporting\Writers\PdfWriter;
 use App\Modules\Hrm\Reporting\Writers\PrintHtmlWriter;
 use App\Modules\Hrm\Reporting\Writers\XlsxWriter;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\LazyCollection;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -620,4 +623,88 @@ it('has every registered report declaring a permission, columns and a group', fu
             expect($column)->toBeInstanceOf(ReportColumn::class);
         }
     });
+});
+
+// --- W1: the queue must scope exactly as the request does -------------------
+
+/**
+ * ⚠⚠ A LIVE ACL-02 BYPASS, and the job's own docblock names the risk it fails
+ * to prevent: "a queued render is exactly the path where an unscoped export
+ * would land in someone's inbox with nobody watching."
+ *
+ * `ResolveCurrentBusiness` sets BusinessContext AND spatie's permission team id
+ * together, and says in its docblock that they must not drift apart. No job
+ * sets the second one. Roles here are team-scoped by business, so inside a
+ * worker `hasRole('Manager')` is false, `isDepartmentManagerOnly()` returns
+ * false, and `ReportScope::for()` hands back `unrestricted()`.
+ *
+ * The bypass is chosen BY SIZE, because `shouldQueue()` routes large reports to
+ * the queue, so it fires when there is most data to leak. And it is not
+ * deterministic: `queue:work --max-time=3600` is long-lived, so the team id may
+ * be left over from whatever job ran before.
+ *
+ * These tests run the job the way a worker does - with no team id set - and
+ * assert the manager gets their own department and nothing else.
+ */
+function renderQueued(User $user, int $businessId, array $parameters): string
+{
+    Storage::fake('local');
+    Mail::fake();
+
+    // A worker process has never run ResolveCurrentBusiness. Nothing has set a
+    // team id, and the permission cache is cold.
+    app(PermissionRegistrar::class)->setPermissionsTeamId(null);
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    (new RenderReportJob('attendance_daily', 'csv', $parameters, $user->id, $businessId))->handle(
+        app(ReportRegistry::class),
+        app(WriterRegistry::class),
+        app(ReportRunner::class),
+        app(BusinessContext::class),
+    );
+
+    $files = Storage::disk('local')->files("reports/{$user->id}");
+
+    expect($files)->toHaveCount(1);
+
+    return Storage::disk('local')->get($files[0]);
+}
+
+it('scopes a QUEUED report to the manager own department, exactly as the inline run does', function () {
+    $packaging = Department::create([
+        'name' => 'Packaging', 'office_id' => $this->office->id, 'is_active' => true,
+    ]);
+    $outsider = Employee::create([
+        'employee_code' => 'BDG-000050', 'first_name' => 'Outside', 'last_name' => 'Department',
+        'employment_type' => 'permanent', 'status' => 'active',
+    ]);
+    EmployeeAssignment::create([
+        'employee_id' => $outsider->id, 'office_id' => $this->office->id,
+        'department_id' => $packaging->id, 'is_primary' => true, 'effective_from' => '2025-01-01',
+    ]);
+    DailyAttendance::create([
+        'employee_id' => $outsider->id,
+        'attendance_date' => $this->date, 'status' => AttendanceStatus::Present,
+        'worked_minutes' => 480, 'payable_minutes' => 480, 'late_minutes' => 0, 'early_leave_minutes' => 0,
+    ]);
+
+    $csv = renderQueued($this->manager, $this->business->id, ['date' => $this->date]);
+
+    // The whole point: another department's employee must not be in the file
+    // that lands in this manager's inbox.
+    expect($csv)->not->toContain('BDG-000050');
+});
+
+it('does not widen a queued report even when the manager asks for another department', function () {
+    $packaging = Department::create([
+        'name' => 'Packaging', 'office_id' => $this->office->id, 'is_active' => true,
+    ]);
+
+    $csv = renderQueued($this->manager, $this->business->id, [
+        'date' => $this->date,
+        'department_id' => $packaging->id,
+    ]);
+
+    // Their own department's people, not the one they asked for.
+    expect($csv)->toContain('BDG-000001');
 });

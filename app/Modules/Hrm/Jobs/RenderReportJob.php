@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Jobs;
 
 use App\Models\User;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Mail\ReportReadyMail;
 use App\Modules\Hrm\Reporting\ReportParameters;
 use App\Modules\Hrm\Reporting\ReportRegistry;
@@ -25,13 +26,18 @@ use Illuminate\Support\Facades\Storage;
  * ⚠ **The two queue gotchas 3c found the hard way apply here unchanged, and
  * they are the reason this job restores both by hand:**
  *
- *  1. **`BusinessContext` does not survive serialisation.** Without
- *     `$context->set()` the business scope resolves to nothing and the report
- *     silently renders *every business's* rows — a tenancy leak that looks like
- *     a successful export.
+ *  1. **The tenant does not survive serialisation.** Without entering it the
+ *     business scope resolves to nothing and the report silently renders
+ *     *every business's* rows, a tenancy leak that looks like a successful
+ *     export.
  *  2. **The authenticated user does not survive either.** Without
  *     `Auth::loginUsingId()` any permission check inside a definition sees a
  *     guest, and the file lands with no owner.
+ *  3. ⚠⚠ **And the PERMISSION TEAM ID is part of the tenant.** Restoring only
+ *     the business was a live ACL-02 bypass until 2026-08-01: roles are
+ *     team-scoped, so with no team id `hasRole('Manager')` was false and a
+ *     Department Manager's queued report rendered UNSCOPED. Entering through
+ *     `TenantScope` is what makes 1 and 3 impossible to separate.
  *
  * `tries = 1`, deliberately, as in 3c: a report that failed should be re-run by
  * a human who can see why, not retried silently into the same failure.
@@ -61,10 +67,18 @@ class RenderReportJob implements ShouldQueue
         ReportRunner $runner,
         BusinessContext $context,
     ): void {
+        // ⚠⚠ TenantScope, not BusinessContext alone. Setting only the business
+        // left spatie with no team id, so `hasRole('Manager')` was false inside
+        // the worker, `ReportScope::for()` returned `unrestricted()`, and the
+        // C10d re-application below silently became a no-op — the very thing
+        // this job's docblock claims it is protecting against.
         if ($this->businessId !== null) {
-            $context->set($this->businessId);
+            TenantScope::enter($this->businessId);
         }
 
+        // ⚠ Loaded AFTER entering the tenant, deliberately. Spatie caches the
+        // roles relation on the model instance, so a User read under the wrong
+        // team keeps the wrong answer even once the team is corrected.
         Auth::loginUsingId($this->userId);
         $user = User::find($this->userId);
 
@@ -90,5 +104,4 @@ class RenderReportJob implements ShouldQueue
             Mail::to($user->email)->send(new ReportReadyMail($definition->name(), $filename));
         }
     }
-
 }

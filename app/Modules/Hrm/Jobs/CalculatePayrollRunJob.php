@@ -3,6 +3,7 @@
 namespace App\Modules\Hrm\Jobs;
 
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Actions\CalculatePayroll;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Payroll\PayrollConfig;
@@ -49,7 +50,10 @@ class CalculatePayrollRunJob implements ShouldQueue
 
     public function handle(BusinessContext $context, CalculatePayroll $calculate): void
     {
-        $context->set($this->businessId);
+        // TenantScope, not the business alone: roles are team-scoped, and a
+        // payroll run evaluates permissions. See TenantScope's docblock for
+        // the ACL-02 bypass this shape caused in RenderReportJob.
+        TenantScope::enter($this->businessId);
 
         if ($this->actingUserId !== null) {
             // So `calculated_by` and the activity log name a person rather than
