@@ -7,7 +7,6 @@ use App\Modules\Foundation\Models\Department;
 use App\Modules\Foundation\Models\Designation;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
-use App\Modules\Hrm\Enums\SalaryCalculationBasis;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\SalaryComponent;
@@ -71,18 +70,28 @@ class BorDeGunaEmployeeSeeder extends Seeder
      * `ta_da` is the per-day rate for the two Retail Sales Officers
      * (Correction C14). ⚠ It is NOT part of gross and must never be added to it.
      *
-     * ⚠⚠ `enroll` is the ZKTeco `No.` column and is **NOT YET SUPPLIED FOR
-     * ANYONE**. Until it is, the attendance backfill will match nobody. Add it
-     * as `'enroll' => '3'` per person and re-run; the seeder is idempotent and
-     * will not blank an ID entered by hand in the meantime.
+     * ✅ `enroll` is the ZKTeco `No.` column, SUPPLIED 2026-08-01 and read off
+     * the device's own `AllInOutData` export rather than assumed. Every mapping
+     * below is confirmed twice: the export carries both `No.` and a `CardNo`
+     * holding the employee code, and the two agree on all eight.
      *
-     * ℹ The device reports 12 enrolments against 9 employees, so the mapping
-     * must be read off the device rather than assumed from the employee codes.
+     * ⚠ `No.` is NOT the employee code and is not derivable from it — 7 maps to
+     * BDG-000001, 8 to BDG-000010. The earlier note that the device held 12
+     * enrolments against 9 employees is consistent with what arrived: only eight
+     * enrolments produced punches, and 11 is absent from the export entirely.
+     *
+     * ⚠⚠ BDG-000002 (Shuborna Mostafa) HAS NO ENROLMENT AND IS NOT EXPECTED TO.
+     * Joy confirmed 2026-08-01 that she works from home and gives no device
+     * attendance. Her `enroll` is deliberately absent rather than blank-by-
+     * oversight, and her presence is authorised by approved movement instead.
+     * ⚠ There is no "exempt from attendance" concept in the model yet, so she
+     * would otherwise be proposed Absent every working day — which blocks
+     * payroll, since `is_provisional` is payroll's gate.
      */
     private const EMPLOYEES = [
         ['code' => 'BDG-000001', 'first' => 'Chowdhury Md.', 'last' => 'Moin',
             'dept' => 'Main Team', 'designation' => 'Founder',
-            'joined' => '2019-05-01', 'gross' => 100000, 'supervisor' => null],
+            'joined' => '2019-05-01', 'gross' => 100000, 'supervisor' => null, 'enroll' => '7'],
 
         ['code' => 'BDG-000002', 'first' => 'Shuborna', 'last' => 'Mostafa',
             'dept' => 'Main Team', 'designation' => 'Deputy Managing Director',
@@ -93,32 +102,32 @@ class BorDeGunaEmployeeSeeder extends Seeder
 
         ['code' => 'BDG-000012', 'first' => 'Musa', 'last' => 'Islam',
             'dept' => 'Main Team', 'designation' => 'Coordinator',
-            'joined' => '2025-09-01', 'gross' => 18000, 'supervisor' => 'BDG-000002'],
+            'joined' => '2025-09-01', 'gross' => 18000, 'supervisor' => 'BDG-000002', 'enroll' => '9'],
 
         ['code' => 'BDG-000016', 'first' => 'Rakibul Hasan', 'last' => 'Joy',
             'dept' => 'Main Team', 'designation' => 'Software Innovation and System Engineer',
-            'joined' => '2025-10-04', 'gross' => 30000, 'supervisor' => 'BDG-000012'],
+            'joined' => '2025-10-04', 'gross' => 30000, 'supervisor' => 'BDG-000012', 'enroll' => '10'],
 
         ['code' => 'BDG-000019', 'first' => 'Md. Shoykod', 'last' => 'Hossain',
             'dept' => 'Retail Sales Team', 'designation' => 'Assistant Sales Manager',
-            'joined' => '2026-05-09', 'gross' => 35000, 'supervisor' => 'BDG-000012'],
+            'joined' => '2026-05-09', 'gross' => 35000, 'supervisor' => 'BDG-000012', 'enroll' => '12'],
 
         ['code' => 'BDG-000020', 'first' => 'Md. Rakib', 'last' => 'Hossain',
             'dept' => 'Retail Sales Team', 'designation' => 'Retail Sales Officer',
-            'joined' => '2026-07-01', 'gross' => 13000, 'supervisor' => 'BDG-000019', 'ta_da' => 246],
+            'joined' => '2026-07-01', 'gross' => 13000, 'supervisor' => 'BDG-000019', 'ta_da' => 246, 'enroll' => '13'],
 
         ['code' => 'BDG-000021', 'first' => 'Md. Nazmul', 'last' => 'Haque',
             'dept' => 'Retail Sales Team', 'designation' => 'Retail Sales Officer',
-            'joined' => '2026-07-01', 'gross' => 14000, 'supervisor' => 'BDG-000019', 'ta_da' => 361],
+            'joined' => '2026-07-01', 'gross' => 14000, 'supervisor' => 'BDG-000019', 'ta_da' => 361, 'enroll' => '14'],
 
         ['code' => 'BDG-000010', 'first' => 'Md. Iftekharul', 'last' => 'Alam',
             'dept' => 'Office Assistant Team', 'designation' => 'Operation Support Assistant',
             // ⚠ 3,000 also confirmed correct by Joy 2026-07-28. Do not flag.
-            'joined' => '2026-07-21', 'gross' => 3000, 'supervisor' => 'BDG-000012'],
+            'joined' => '2026-07-21', 'gross' => 3000, 'supervisor' => 'BDG-000012', 'enroll' => '8'],
 
         ['code' => 'BDG-000022', 'first' => 'Md. Jahidul Islam', 'last' => 'Munna',
             'dept' => 'Office Assistant Team', 'designation' => 'Operation Support Assistant',
-            'joined' => '2026-07-09', 'gross' => 12000, 'supervisor' => 'BDG-000012'],
+            'joined' => '2026-07-09', 'gross' => 12000, 'supervisor' => 'BDG-000012', 'enroll' => '15'],
     ];
 
     public function run(): void
