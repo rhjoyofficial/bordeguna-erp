@@ -36,11 +36,12 @@ use Illuminate\Validation\ValidationException;
  *     `VerifyCode` is *how* the person identified (fingerprint, card, password),
  *     not whether they were arriving or leaving.
  *
- * ⚠ **The sample is a binary `.xls` (BIFF8), and this parser reads CSV only.**
- * Locking the headers does not by itself make that file importable — see the
- * open item in `HRM-IMPLEMENTATION-PLAN.md`. Exporting the same report as CSV
- * from ZKTime.Net works today; reading the binary directly needs a new
- * dependency and therefore a decision, not an assumption.
+ * ✅ **The binary `.xls` the device actually emits is now readable too**, along
+ * with `.xlsx` and `.ods`. `AttendanceFileReader` turns any of them into the
+ * rows this class already understands and calls `parseLines()`, so every format
+ * shares one definition of which column means what. This parser itself still
+ * reads only delimited text, which is the point: the file-type problem was
+ * solved beside it rather than inside it.
  */
 class AttendanceCsvParser
 {
@@ -119,8 +120,24 @@ class AttendanceCsvParser
      */
     public function parse(string $contents): array
     {
-        $lines = $this->readCsv($contents);
+        return $this->parseLines($this->readCsv($contents));
+    }
 
+    /**
+     * The same parse, starting from rows that have already been read.
+     *
+     * Split out so a spreadsheet upload reaches identical column-alias and
+     * date-format handling instead of a second implementation of it — see
+     * `AttendanceFileReader`. A `.xls` and a CSV of the same report must not be
+     * able to disagree about which column is the enroll id.
+     *
+     * @param  array<int, array<int, string>>  $lines
+     * @return array{rows: array<int, array<string, mixed>>, headers: array<int, string>}
+     *
+     * @throws ValidationException when the file has no usable header row
+     */
+    public function parseLines(array $lines): array
+    {
         if ($lines === []) {
             throw ValidationException::withMessages([
                 'file' => 'The file is empty.',
@@ -132,12 +149,22 @@ class AttendanceCsvParser
 
         $rows = [];
 
-        foreach ($lines as $index => $line) {
+        foreach (array_values($lines) as $index => $line) {
             // +2: one for the header row, one because humans count from 1.
             $rows[] = $this->parseRow($line, $map, $index + 2);
         }
 
         return ['rows' => $rows, 'headers' => $headers];
+    }
+
+    /**
+     * Raw delimited rows, before any column is interpreted.
+     *
+     * @return array<int, array<int, string>>
+     */
+    public function readLines(string $contents): array
+    {
+        return $this->readCsv($contents);
     }
 
     /**

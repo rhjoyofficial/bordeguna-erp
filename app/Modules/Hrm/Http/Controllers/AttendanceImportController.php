@@ -64,13 +64,18 @@ class AttendanceImportController extends Controller
         $this->authorize('hrm.attendance.manage');
 
         $validated = $request->validate([
-            'file' => ['required', 'file', 'mimes:csv,txt', 'max:10240'],
+            // ⚠ The device's own default export is a legacy binary `.xls`, so a
+            // CSV-only rule made HR convert every file by hand before it could
+            // be uploaded. `mimes` checks the real type, not the extension, and
+            // Excel-written .xls/.xlsx both report as generic archives or OLE
+            // containers often enough that `extensions` has to back it up.
+            'file' => ['required', 'file', 'mimes:csv,txt,xls,xlsx,ods', 'extensions:csv,txt,xls,xlsx,ods', 'max:10240'],
             'source' => ['required', new EnumRule(PunchSource::class)],
             'device_identifier' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $batch = $import->handle(
-            file_get_contents($request->file('file')->getRealPath()),
+        $batch = $import->handleFile(
+            $request->file('file')->getRealPath(),
             $request->file('file')->getClientOriginalName(),
             PunchSource::from($validated['source']),
             $validated['device_identifier'] ?? null,

@@ -101,8 +101,16 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border grid gap-4 rounded-xl border p-4 sm:grid-cols-3">
                     <div className="grid gap-2">
-                        <Label htmlFor="file">CSV file</Label>
-                        <Input id="file" type="file" accept=".csv,text/csv,text/plain" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+                        <Label htmlFor="file">Attendance file</Label>
+                        <Input
+                            id="file"
+                            type="file"
+                            accept=".csv,.txt,.xls,.xlsx,.ods,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Excel (.xls, .xlsx), OpenDocument (.ods) or CSV. Upload the device export as it comes.
+                        </p>
                         {errors.file && <p className="text-xs text-destructive">{errors.file}</p>}
                     </div>
                     <div className="grid gap-2">

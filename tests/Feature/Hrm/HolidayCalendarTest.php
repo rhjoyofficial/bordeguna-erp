@@ -6,6 +6,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\database\seeders\BangladeshHolidayCalendarSeeder;
 use App\Modules\Hrm\Models\Holiday;
 use App\Modules\Hrm\Models\HolidayCalendar;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -123,8 +124,46 @@ it('seeds a default Bangladesh calendar with Friday off and fixed holidays', fun
     expect($calendar)->not->toBeNull();
     expect($calendar->is_default)->toBeTrue();
     expect($calendar->weekly_off_days)->toBe([5]);
+    expect($calendar->holidays()->count())->toBe(6);
+    expect($calendar->holidays()->pluck('name'))
+        ->toContain('Independence Day')
+        ->toContain('July Mass Uprising Day');
+});
+
+/**
+ * The seeder used to skip a calendar entirely once it held any holiday, so a
+ * newly added fixed date could only ever reach an empty calendar — never a live
+ * one. It re-ran cleanly and did nothing, which is the failure that hides.
+ */
+it('delivers a newly added fixed holiday to a calendar that already has holidays', function () {
+    app(BangladeshHolidayCalendarSeeder::class)->run();
+
+    $calendar = HolidayCalendar::where('name', 'Bangladesh')->first();
+    $calendar->holidays()->whereDate('date', now()->year.'-08-05')->delete();
     expect($calendar->holidays()->count())->toBe(5);
-    expect($calendar->holidays()->pluck('name'))->toContain('Independence Day');
+
+    app(BangladeshHolidayCalendarSeeder::class)->run();
+
+    expect($calendar->holidays()->count())->toBe(6);
+    expect($calendar->holidays()->pluck('name'))->toContain('July Mass Uprising Day');
+});
+
+it('adds nothing on a second run', function () {
+    app(BangladeshHolidayCalendarSeeder::class)->run();
+    app(BangladeshHolidayCalendarSeeder::class)->run();
+
+    expect(HolidayCalendar::where('name', 'Bangladesh')->first()->holidays()->count())->toBe(6);
+});
+
+it('never overwrites a holiday HR entered by hand on the same date', function () {
+    app(BangladeshHolidayCalendarSeeder::class)->run();
+
+    $calendar = HolidayCalendar::where('name', 'Bangladesh')->first();
+    $calendar->holidays()->whereDate('date', now()->year.'-08-05')->update(['name' => 'Renamed by HR']);
+
+    app(BangladeshHolidayCalendarSeeder::class)->run();
+
+    expect($calendar->holidays()->whereDate('date', now()->year.'-08-05')->value('name'))->toBe('Renamed by HR');
 });
 
 it('renders the calendars page for a scheduler', function () {
@@ -132,7 +171,7 @@ it('renders the calendars page for a scheduler', function () {
 
     calOwner()->get(route('hrm.calendars.index'))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/calendars/index')
             ->has('calendars', 1)
             ->where('calendars.0.weekly_off_label', 'Friday'));

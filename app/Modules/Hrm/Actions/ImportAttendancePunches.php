@@ -6,6 +6,8 @@ use App\Modules\Hrm\Enums\PunchSource;
 use App\Modules\Hrm\Models\AttendanceImportBatch;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Support\AttendanceCsvParser;
+use App\Modules\Hrm\Support\AttendanceFileReader;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -26,8 +28,30 @@ class ImportAttendancePunches
 {
     public function __construct(
         private readonly AttendanceCsvParser $parser,
+        private readonly AttendanceFileReader $reader,
         private readonly RecordPunch $recordPunch,
     ) {}
+
+    /**
+     * Import from a file on disk, in whatever format it was exported.
+     *
+     * This is the path an upload takes. `.xls`, `.xlsx`, `.ods`, CSV and plain
+     * text all arrive here and converge on the same parser, so HR never has to
+     * convert the device's export by hand before uploading it.
+     */
+    public function handleFile(
+        string $path,
+        string $filename,
+        PunchSource $source = PunchSource::Biometric,
+        ?string $deviceIdentifier = null,
+    ): AttendanceImportBatch {
+        return $this->import(
+            $this->parser->parseLines($this->reader->read($path, $filename)),
+            $filename,
+            $source,
+            $deviceIdentifier,
+        );
+    }
 
     public function handle(
         string $contents,
@@ -35,7 +59,18 @@ class ImportAttendancePunches
         PunchSource $source = PunchSource::Biometric,
         ?string $deviceIdentifier = null,
     ): AttendanceImportBatch {
-        $parsed = $this->parser->parse($contents);
+        return $this->import($this->parser->parse($contents), $filename, $source, $deviceIdentifier);
+    }
+
+    /**
+     * @param  array{rows: array<int, array<string, mixed>>, headers: array<int, string>}  $parsed
+     */
+    private function import(
+        array $parsed,
+        string $filename,
+        PunchSource $source,
+        ?string $deviceIdentifier,
+    ): AttendanceImportBatch {
 
         // Resolved once rather than per row: an export is thousands of lines
         // over a handful of people.
@@ -89,7 +124,7 @@ class ImportAttendancePunches
 
     /**
      * @param  array<string, mixed>  $row
-     * @param  \Illuminate\Support\Collection<string, Employee>  $employeesByEnroll
+     * @param  Collection<string, Employee>  $employeesByEnroll
      * @return array{status: string, reason: string|null}
      */
     private function importRow(array $row, PunchSource $source, ?string $deviceIdentifier, $employeesByEnroll): array

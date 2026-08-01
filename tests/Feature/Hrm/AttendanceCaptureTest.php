@@ -12,10 +12,15 @@ use App\Modules\Hrm\Exceptions\ImmutablePunchException;
 use App\Modules\Hrm\Models\AttendancePunch;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
+use App\Modules\Hrm\Support\AttendanceFileReader;
 use App\Modules\Hrm\Support\Geofence;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -467,4 +472,156 @@ it('keeps one biometric enroll ID from being shared by two employees', function 
     ])->assertSessionHasErrors('biometric_enroll_id');
 
     expect($first->fresh()->biometric_enroll_id)->toBe('7');
+});
+
+// --- Spreadsheet uploads (ATT-02): the device's own export, unconverted ------
+
+/**
+ * Writes a spreadsheet shaped like Bor De Guna's real ZKTeco export, including
+ * the two things that file does which a hand-made fixture would not:
+ *
+ *  - `Date/Time` is a genuine date CELL, not text, so it carries a serial
+ *    number and a format rather than anything a date parser could read;
+ *  - `CardNo` is the FORMULA `="bdg-"&F{row}`, not a literal.
+ */
+function attSpreadsheet(string $extension, array $rows, bool $padColumns = false): string
+{
+    $spreadsheet = new Spreadsheet;
+    $sheet = $spreadsheet->getActiveSheet();
+    $sheet->fromArray(['Department', 'Name', 'No.', 'Date/Time', 'Location ID', 'ID Number', 'VerifyCode', 'CardNo'], null, 'A1');
+
+    foreach ($rows as $index => $row) {
+        $line = $index + 2;
+        $sheet->setCellValue("A{$line}", $row['dept'] ?? 'Head Office');
+        $sheet->setCellValue("B{$line}", $row['name'] ?? 'Karim Test');
+        $sheet->setCellValueExplicit("C{$line}", $row['no'], DataType::TYPE_STRING);
+        $sheet->setCellValue("D{$line}", Date::PHPToExcel(new DateTime($row['at'])));
+        $sheet->getStyle("D{$line}")->getNumberFormat()->setFormatCode('m/d/yyyy h:mm:ss AM/PM');
+        $sheet->setCellValue("E{$line}", $row['location'] ?? '104');
+        $sheet->setCellValueExplicit("F{$line}", $row['id'] ?? '000020', DataType::TYPE_STRING);
+        $sheet->setCellValue("G{$line}", 'FP');
+        $sheet->setCellValue("H{$line}", '="bdg-"&F'.$line);
+
+        if ($padColumns) {
+            // The legacy .xls reports its width as the sheet maximum, so every
+            // row arrives with a long tail of empty cells.
+            $sheet->setCellValue("IV{$line}", null);
+        }
+    }
+
+    $path = tempnam(sys_get_temp_dir(), 'att').'.'.$extension;
+    $writer = IOFactory::createWriter($spreadsheet, $extension === 'xls' ? 'Xls' : 'Xlsx');
+    $writer->save($path);
+
+    return $path;
+}
+
+it('imports the legacy .xls the device actually exports, without a hand conversion', function () {
+    attEmployee('Karim', '13');
+
+    $path = attSpreadsheet('xls', [
+        ['no' => '13', 'at' => '2026-07-25 08:12:15'],
+        ['no' => '13', 'at' => '2026-07-25 18:27:32'],
+    ], padColumns: true);
+
+    $batch = app(ImportAttendancePunches::class)->handleFile($path, 'BDGAllInOutData.xls', PunchSource::Biometric);
+
+    expect($batch->imported_count)->toBe(2)
+        ->and($batch->failed_count)->toBe(0)
+        ->and($batch->total_rows)->toBe(2);
+
+    expect(AttendancePunch::orderBy('punched_at')->pluck('punched_at')->map->format('Y-m-d H:i:s')->all())
+        ->toBe(['2026-07-25 08:12:15', '2026-07-25 18:27:32']);
+});
+
+it('imports an .xlsx export just as well', function () {
+    attEmployee('Karim', '13');
+
+    $path = attSpreadsheet('xlsx', [['no' => '13', 'at' => '2026-07-25 08:12:15']]);
+
+    $batch = app(ImportAttendancePunches::class)->handleFile($path, 'BDGAllInOutData.xlsx', PunchSource::Biometric);
+
+    expect($batch->imported_count)->toBe(1)->and($batch->failed_count)->toBe(0);
+});
+
+/**
+ * ⚠ The regression that matters most. A date CELL carries a number, so the
+ * US-vs-day-first question the CSV path agonises over cannot arise — but only
+ * if the reader converts it from the serial rather than letting a formatted
+ * string reach the parser. Read wrongly, 7/8 becomes 8 July instead of 7 August
+ * and nothing looks broken.
+ */
+it('reads a spreadsheet date cell as the date it is, not as a day-first string', function () {
+    attEmployee('Karim', '13');
+
+    // The 8th month, 7th day. Day-first reading gives 7 August.
+    $path = attSpreadsheet('xlsx', [['no' => '13', 'at' => '2026-08-07 09:30:00']]);
+
+    app(ImportAttendancePunches::class)->handleFile($path, 'dates.xlsx', PunchSource::Biometric);
+
+    expect(AttendancePunch::sole()->punched_at->format('Y-m-d H:i:s'))->toBe('2026-08-07 09:30:00');
+});
+
+it('resolves a formula cell rather than handing on its source text', function () {
+    attEmployee('Karim', '13');
+
+    $path = attSpreadsheet('xlsx', [['no' => '13', 'at' => '2026-07-25 08:12:15', 'id' => '000020']]);
+
+    $rows = app(AttendanceFileReader::class)->read($path, 'formula.xlsx');
+
+    // CardNo is `="bdg-"&F2` in the file; the reader must hand on its value.
+    expect($rows[1][7])->toBe('bdg-000020');
+});
+
+it('trims the empty trailing columns a legacy .xls pads every row with', function () {
+    $path = attSpreadsheet('xls', [['no' => '13', 'at' => '2026-07-25 08:12:15']], padColumns: true);
+
+    $rows = app(AttendanceFileReader::class)->read($path, 'wide.xls');
+
+    expect($rows[0])->toHaveCount(8)
+        ->and($rows[1])->toHaveCount(8);
+});
+
+it('reports an unmapped enroll id from a spreadsheet the same way it does from a CSV', function () {
+    attEmployee('Karim', '13');
+
+    $path = attSpreadsheet('xlsx', [
+        ['no' => '13', 'at' => '2026-07-25 08:12:15'],
+        ['no' => '99', 'at' => '2026-07-25 08:14:00'],
+    ]);
+
+    $batch = app(ImportAttendancePunches::class)->handleFile($path, 'mixed.xlsx', PunchSource::Biometric);
+
+    expect($batch->imported_count)->toBe(1)
+        ->and($batch->failed_count)->toBe(1)
+        ->and($batch->report[0]['enroll_id'])->toBe('99');
+});
+
+it('accepts a spreadsheet upload through the import screen', function () {
+    attEmployee('Karim', '13');
+
+    $path = attSpreadsheet('xlsx', [['no' => '13', 'at' => '2026-07-25 08:12:15']]);
+
+    $this->actingAs($this->owner)
+        ->post(route('hrm.attendance.import.store'), [
+            'file' => new UploadedFile($path, 'BDGAllInOutData.xlsx', null, null, true),
+            'source' => PunchSource::Biometric->value,
+        ])
+        ->assertRedirect();
+
+    expect(AttendancePunch::count())->toBe(1);
+});
+
+it('refuses a file type that is not an attendance export', function () {
+    $path = tempnam(sys_get_temp_dir(), 'att').'.pdf';
+    file_put_contents($path, '%PDF-1.4 not a spreadsheet');
+
+    $this->actingAs($this->owner)
+        ->post(route('hrm.attendance.import.store'), [
+            'file' => new UploadedFile($path, 'notes.pdf', null, null, true),
+            'source' => PunchSource::Biometric->value,
+        ])
+        ->assertSessionHasErrors('file');
+
+    expect(AttendancePunch::count())->toBe(0);
 });
