@@ -95,10 +95,17 @@ class ValidatePayrollRun
         if ($unresolved > 0) {
             // PAY-09 blocks the payslip anyway; surfacing it here means HR fixes
             // it before running rather than discovering it in the results.
+            // ⚠ The VERB agrees, not only the noun. "2 days of attendance is
+            // unresolved" shipped for months and read as broken English on the
+            // one screen somebody stares at before releasing a month of salary.
+            // Second occurrence in this project — "1 employee have punched
+            // today" on the dashboard was the first — and both survived because
+            // `toContain('2 days')` passes either way.
             $issues[] = sprintf(
-                '%d day%s of attendance is unresolved (missing punch).',
+                '%d day%s of attendance %s unresolved (missing punch).',
                 $unresolved,
                 $unresolved === 1 ? '' : 's',
+                $unresolved === 1 ? 'is' : 'are',
             );
         }
 
@@ -112,9 +119,10 @@ class ValidatePayrollRun
             // POL-06: a provisional status is the system's proposal, not a
             // payroll-eligible fact. Paying on one would skip the human review.
             $issues[] = sprintf(
-                '%d day%s of attendance still awaits HR review.',
+                '%d day%s of attendance still %s HR review.',
                 $provisional,
                 $provisional === 1 ? '' : 's',
+                $provisional === 1 ? 'awaits' : 'await',
             );
         }
 

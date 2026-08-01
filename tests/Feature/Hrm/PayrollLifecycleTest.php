@@ -2,9 +2,11 @@
 
 use App\Models\User;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Models\ApprovalWorkflow;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Actions\AssignSchedule;
 use App\Modules\Hrm\Actions\CalculatePayroll;
 use App\Modules\Hrm\Actions\RequestPayrollUnlock;
 use App\Modules\Hrm\Actions\SaveSalaryStructure;
@@ -12,20 +14,23 @@ use App\Modules\Hrm\Actions\TransitionPayrollRun;
 use App\Modules\Hrm\Actions\ValidatePayrollRun;
 use App\Modules\Hrm\database\seeders\PayrollWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\SalaryComponentSeeder;
+use App\Modules\Hrm\Enums\AttendanceConsequence;
+use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Enums\ScheduleScope;
 use App\Modules\Hrm\Jobs\CalculatePayrollRunJob;
+use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\HolidayCalendar;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
-use App\Modules\Hrm\Models\PayrollUnlockRequest;
 use App\Modules\Hrm\Models\SalaryComponent;
 use App\Modules\Hrm\Models\Shift;
 use App\Support\ApprovalInbox;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -80,7 +85,7 @@ beforeEach(function () {
         'effective_from' => '2025-01-01',
     ]);
 
-    app(\App\Modules\Hrm\Actions\AssignSchedule::class)->handle(ScheduleScope::Business, null, [
+    app(AssignSchedule::class)->handle(ScheduleScope::Business, null, [
         'schedule_type' => 'fixed',
         'shift_id' => $this->shift->id,
         'holiday_calendar_id' => $this->calendar->id,
@@ -342,7 +347,7 @@ it('defines the unlock stages by permission rather than by invented roles', func
     // HR Head and Management do not exist as roles in this system, so the
     // stages authorise on permissions that can be granted to whatever roles
     // the business actually has.
-    $workflow = \App\Modules\Foundation\Models\ApprovalWorkflow::where('key', 'payroll_unlock')->sole();
+    $workflow = ApprovalWorkflow::where('key', 'payroll_unlock')->sole();
     $stages = $workflow->stages()->orderBy('sequence')->get();
 
     expect($stages->pluck('name')->all())->toBe(['HR Head', 'Finance', 'Management']);
@@ -408,9 +413,70 @@ it('renders the payroll screen with its lifecycle state', function () {
 
     cycleHr()->get(route('hrm.payroll.index', ['year' => 2026, 'month' => 7]))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/payroll/index')
             ->where('run.status', 'calculated')
             ->where('run.is_rerunnable', true)
             ->has('payslips', 1));
+});
+
+// --- The validation report is prose somebody reads before releasing salary ----
+
+/**
+ * ⚠ These assert the VERB, not just the number.
+ *
+ * "2 days of attendance is unresolved" and "2 days of attendance still awaits
+ * HR review" both shipped: the noun was pluralised and the verb was not. Every
+ * `toContain('2 days')` assertion passed the whole time, which is exactly how
+ * the same bug survived once before on the dashboard ("1 employee have punched
+ * today"). This is the report Payroll reads before a month's salary is
+ * released, so it is the last place broken English belongs.
+ */
+function attendanceDayFor(array $attributes): void
+{
+    DailyAttendance::create(array_merge([
+        'employee_id' => test()->employee->id,
+        'business_id' => test()->business->id,
+        'status' => AttendanceStatus::Present,
+        'worked_minutes' => 480,
+        'payable_minutes' => 480,
+        'late_minutes' => 0,
+        'early_leave_minutes' => 0,
+        'consequence' => AttendanceConsequence::None,
+    ], $attributes));
+}
+
+function payrollIssuesText(): string
+{
+    $report = app(ValidatePayrollRun::class)->handle(test()->period);
+
+    return implode(' ', collect($report['employees'])->pluck('issues')->flatten()->all());
+}
+
+it('says one day is unresolved, and two days are', function () {
+    attendanceDayFor(['attendance_date' => '2026-07-01', 'holds_payroll' => true]);
+
+    expect(payrollIssuesText())
+        ->toContain('1 day of attendance is unresolved')
+        ->not->toContain('days of attendance is');
+
+    attendanceDayFor(['attendance_date' => '2026-07-02', 'holds_payroll' => true]);
+
+    expect(payrollIssuesText())
+        ->toContain('2 days of attendance are unresolved')
+        ->not->toContain('days of attendance is');
+});
+
+it('says one day awaits review, and two days await', function () {
+    attendanceDayFor(['attendance_date' => '2026-07-01', 'is_provisional' => true]);
+
+    expect(payrollIssuesText())
+        ->toContain('1 day of attendance still awaits HR review')
+        ->not->toContain('days of attendance still awaits');
+
+    attendanceDayFor(['attendance_date' => '2026-07-02', 'is_provisional' => true]);
+
+    expect(payrollIssuesText())
+        ->toContain('2 days of attendance still await HR review')
+        ->not->toContain('days of attendance still awaits');
 });
