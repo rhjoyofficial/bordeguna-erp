@@ -480,3 +480,83 @@ it('says one day awaits review, and two days await', function () {
         ->toContain('2 days of attendance still await HR review')
         ->not->toContain('days of attendance still awaits');
 });
+
+// --- Warnings: visible, never blocking (Joy, 2026-08-01) ---------------------
+
+/**
+ * ⚠⚠ The property that matters most here is what warnings DO NOT do.
+ *
+ * A missing attendance record is expected during go-live, a partial period, a
+ * mid-month joiner, a historical import or salary-only payroll — and is also
+ * exactly what a stalled scheduler looks like. So it must be seen and must not
+ * stop anybody being paid.
+ */
+it('warns about unrecorded attendance days without blocking the calculation', function () {
+    $this->travelTo('2026-08-01');
+
+    $run = app(CalculatePayroll::class)->handle($this->period);
+
+    // The whole point: it calculated anyway.
+    expect($run->status)->toBe(PayrollStatus::Calculated)
+        ->and($run->payslips()->count())->toBe(1)
+        ->and($run->hasValidationIssues())->toBeFalse()
+        ->and($run->hasValidationWarnings())->toBeTrue();
+
+    expect(implode(' ', collect($run->validation_report['warnings'])->pluck('warnings')->flatten()->all()))
+        ->toContain('elapsed days of this period have no attendance record')
+        ->toContain('please verify before approval');
+});
+
+it('keeps warnings out of the blocking channel entirely', function () {
+    $this->travelTo('2026-08-01');
+
+    $report = app(ValidatePayrollRun::class)->handle($this->period);
+
+    expect($report['issue_count'])->toBe(0)
+        ->and($report['employees'])->toBe([])
+        ->and($report['warning_count'])->toBeGreaterThan(0);
+});
+
+it('says nothing about days of the period that have not elapsed yet', function () {
+    // Two days in, both recorded. Nothing is missing; the rest is not yet due.
+    $this->travelTo('2026-06-25');
+
+    attendanceDayFor(['attendance_date' => '2026-06-24']);
+    attendanceDayFor(['attendance_date' => '2026-06-25']);
+
+    $report = app(ValidatePayrollRun::class)->handle($this->period);
+
+    expect($report['warning_count'])->toBe(0);
+});
+
+it('asks nothing of the days before an employee joined', function () {
+    $this->travelTo('2026-08-01');
+
+    $this->employee->update(['joining_date' => '2026-07-22']);
+    attendanceDayFor(['attendance_date' => '2026-07-22']);
+    attendanceDayFor(['attendance_date' => '2026-07-23']);
+
+    expect(app(ValidatePayrollRun::class)->handle($this->period)['warning_count'])->toBe(0);
+});
+
+it('counts a single unrecorded day in the singular', function () {
+    $this->travelTo('2026-08-01');
+
+    $this->employee->update(['joining_date' => '2026-07-22']);
+    attendanceDayFor(['attendance_date' => '2026-07-22']);
+
+    expect(implode(' ', collect(app(ValidatePayrollRun::class)->handle($this->period)['warnings'])
+        ->pluck('warnings')->flatten()->all()))
+        ->toContain('1 elapsed day of this period has no attendance record')
+        ->not->toContain('days of this period has');
+});
+
+it('still warns on a run that is blocked for a different reason', function () {
+    $this->travelTo('2026-08-01');
+    $this->employee->update(['bank_account_number' => null]);
+
+    $run = app(CalculatePayroll::class)->handle($this->period);
+
+    expect($run->hasValidationIssues())->toBeTrue()
+        ->and($run->hasValidationWarnings())->toBeTrue();
+});

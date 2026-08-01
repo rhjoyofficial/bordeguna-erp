@@ -146,6 +146,17 @@ class PayrollRun extends Model
     }
 
     /**
+     * Warnings do NOT block, and this must never be folded into the check
+     * above (Joy, 2026-08-01). A warning survives calculation on purpose: it is
+     * there to be read at review and approval, which is after the figures
+     * exist, not instead of them.
+     */
+    public function hasValidationWarnings(): bool
+    {
+        return ($this->validation_report['warning_count'] ?? 0) > 0;
+    }
+
+    /**
      * Live progress of a queued calculation. Held in the cache rather than the
      * database because WFL-09 wraps the calculation in one transaction — a
      * progress column written inside it would stay invisible until commit,

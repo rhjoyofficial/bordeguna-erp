@@ -49,6 +49,13 @@ interface ValidationRow {
     issues: string[];
 }
 
+interface WarningRow {
+    employee_id: number;
+    employee: string;
+    employee_code: string;
+    warnings: string[];
+}
+
 interface UnlockRequest {
     id: number;
     reason: string;
@@ -79,7 +86,13 @@ interface Run {
     closed_reason: string | null;
     queue_state: string | null;
     failure_message: string | null;
-    validation_report: { issue_count: number; checked: number; employees: ValidationRow[] } | null;
+    validation_report: {
+        issue_count: number;
+        checked: number;
+        employees: ValidationRow[];
+        warning_count?: number;
+        warnings?: WarningRow[];
+    } | null;
     awaiting_approval: boolean;
     approval_stage: string | null;
     unlock_requests: UnlockRequest[];
@@ -377,6 +390,44 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
                                             <ul className="ml-4 list-disc space-y-1 text-xs text-muted-foreground">
                                                 {row.issues.map((issue, i) => (
                                                     <li key={i}>{issue}</li>
+                                                ))}
+                                            </ul>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {/*
+                 * Warnings never block a calculation, so they are the one panel
+                 * that shows on a SUCCESSFUL run — and they sit immediately
+                 * above the review and approval buttons on purpose. A caveat
+                 * placed after the action it should inform is decoration.
+                 */}
+                {run && run.validation_report && (run.validation_report.warning_count ?? 0) > 0 && (
+                    <div className="rounded-xl border border-amber-500/50 bg-amber-50 p-4 dark:bg-amber-950/20">
+                        <h3 className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                            {run.validation_report.warning_count} warning{run.validation_report.warning_count === 1 ? '' : 's'} — payroll still
+                            calculated
+                        </h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            These do not stop payroll and may be entirely expected, for instance during go-live, a partial period, a mid-month joiner
+                            or a historical import. Please verify them before approving.
+                        </p>
+                        <table className="mt-3 w-full min-w-[36rem] text-sm">
+                            <tbody>
+                                {(run.validation_report.warnings ?? []).map((row) => (
+                                    <tr key={row.employee_id} className="border-sidebar-border/70 dark:border-sidebar-border border-b last:border-b-0">
+                                        <td className="py-2 align-top">
+                                            {row.employee}
+                                            <span className="ml-2 text-xs text-muted-foreground">{row.employee_code}</span>
+                                        </td>
+                                        <td className="py-2">
+                                            <ul className="ml-4 list-disc space-y-1 text-xs text-muted-foreground">
+                                                {row.warnings.map((warning, i) => (
+                                                    <li key={i}>{warning}</li>
                                                 ))}
                                             </ul>
                                         </td>

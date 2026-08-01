@@ -21,41 +21,156 @@ use Illuminate\Support\Collection;
  *
  * That ordering matters more than it looks. Finding six problems one payroll
  * run at a time is six rounds of frustration; finding all six at once is one.
+ *
+ * ---
+ *
+ * **TWO CHANNELS, AND THE DIFFERENCE IS THE WHOLE POINT (Joy, 2026-08-01).**
+ *
+ * `issues` BLOCK. They are reserved for conditions under which payroll must
+ * never proceed — no salary structure, no payment details, an unresolved punch.
+ *
+ * `warnings` NEVER block. They exist for facts that are usually fine and
+ * occasionally the first sign of something wrong, where refusing to pay anybody
+ * would be the wrong response. A missing attendance record is the founding
+ * example: expected during go-live, partial periods, mid-month joining,
+ * historical imports and salary-only payroll — and also exactly what a stalled
+ * scheduler looks like.
+ *
+ * ⚠ Warnings are a SEPARATE top-level key rather than extra entries in
+ * `employees`. Anything that lands in `employees` is understood by its readers
+ * — and by `CalculatePayroll` — as a reason not to pay, and quietly widening
+ * that list is how a warning turns into a blocker nobody intended.
  */
 class ValidatePayrollRun
 {
     public function __construct(private readonly ScheduleResolver $resolver) {}
 
     /**
-     * @return array{issue_count: int, employees: array<int, array<string, mixed>>, checked: int}
+     * @return array{issue_count: int, warning_count: int, employees: array<int, array<string, mixed>>, warnings: array<int, array<string, mixed>>, checked: int}
      */
     public function handle(PayrollPeriod $period): array
     {
         $employees = $this->population($period);
         $rows = [];
+        $warningRows = [];
         $issueCount = 0;
+        $warningCount = 0;
 
         foreach ($employees as $employee) {
             $issues = $this->issuesFor($employee, $period);
 
-            if ($issues === []) {
-                continue;
+            if ($issues !== []) {
+                $issueCount += count($issues);
+                $rows[] = [
+                    'employee_id' => $employee->id,
+                    'employee' => $employee->fullName(),
+                    'employee_code' => $employee->employee_code,
+                    'issues' => $issues,
+                ];
             }
 
-            $issueCount += count($issues);
-            $rows[] = [
-                'employee_id' => $employee->id,
-                'employee' => $employee->fullName(),
-                'employee_code' => $employee->employee_code,
-                'issues' => $issues,
-            ];
+            $warnings = $this->warningsFor($employee, $period);
+
+            if ($warnings !== []) {
+                $warningCount += count($warnings);
+                $warningRows[] = [
+                    'employee_id' => $employee->id,
+                    'employee' => $employee->fullName(),
+                    'employee_code' => $employee->employee_code,
+                    'warnings' => $warnings,
+                ];
+            }
         }
 
         return [
             'issue_count' => $issueCount,
+            'warning_count' => $warningCount,
             'checked' => $employees->count(),
             'employees' => $rows,
+            'warnings' => $warningRows,
         ];
+    }
+
+    /**
+     * Things worth seeing before approving, none of which stop the calculation.
+     *
+     * @return array<int, string>
+     */
+    private function warningsFor(Employee $employee, PayrollPeriod $period): array
+    {
+        $warnings = [];
+
+        $unrecorded = $this->unrecordedDays($employee, $period);
+
+        if ($unrecorded > 0) {
+            $warnings[] = sprintf(
+                '%d elapsed day%s of this period %s no attendance record. '
+                .'Attendance appears incomplete — please verify before approval.',
+                $unrecorded,
+                $unrecorded === 1 ? '' : 's',
+                $unrecorded === 1 ? 'has' : 'have',
+            );
+        }
+
+        return $warnings;
+    }
+
+    /**
+     * Elapsed days in the period for which no `daily_attendances` row exists.
+     *
+     * ⚠⚠ **A DAY WITH NO ROW IS NOT ABSENT — IT IS INVISIBLE.** `AttendanceFacts`
+     * builds `absentDays` by counting rows whose status is Absent, so a day that
+     * was never processed produces no deduction, no allowance and no warning of
+     * its own. It is silently paid in full and the payslip foots perfectly.
+     *
+     * Normally that cannot happen: `ProcessAttendanceDaily` writes a row per
+     * employee per day, weekly offs and holidays included. But it reprocesses
+     * only **today plus seven days**, so if the scheduler stops for more than
+     * eight days those dates fall out of the window and no row is ever created.
+     *
+     * Found on 2026-08-01 by running the engine on real data for the first time:
+     * one employee had 9 attendance rows across a 31-day period and was paid his
+     * full gross with zero deductions. Correct in that instance — the other 22
+     * days had not happened yet — which is why this counts only days that HAVE
+     * elapsed, and only while the employee was actually on the books.
+     */
+    private function unrecordedDays(Employee $employee, PayrollPeriod $period): int
+    {
+        $start = $period->start_date->copy()->startOfDay();
+        $end = $period->end_date->copy()->startOfDay();
+
+        // Days still in the future are not missing, they are not yet due.
+        // Without this every mid-period run warns about its own remainder,
+        // which would train people to ignore the warning — the worst outcome.
+        $today = now()->startOfDay();
+
+        if ($today->lt($end)) {
+            $end = $today;
+        }
+
+        // A mid-period joiner owes nothing before they started, and a leaver
+        // owes nothing after their last day.
+        if ($employee->joining_date !== null && $employee->joining_date->gt($start)) {
+            $start = $employee->joining_date->copy()->startOfDay();
+        }
+
+        if ($employee->separation_date !== null && $employee->separation_date->lt($end)) {
+            $end = $employee->separation_date->copy()->startOfDay();
+        }
+
+        if ($end->lt($start)) {
+            return 0;
+        }
+
+        $expected = (int) $start->diffInDays($end) + 1;
+
+        $recorded = DailyAttendance::where('employee_id', $employee->id)
+            ->whereDate('attendance_date', '>=', $start->toDateString())
+            ->whereDate('attendance_date', '<=', $end->toDateString())
+            ->distinct()
+            ->count('attendance_date');
+
+        return max(0, $expected - $recorded);
     }
 
     /**
