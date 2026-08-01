@@ -233,7 +233,18 @@ openssl rand -base64 32
 
 5. Put all four values in `/opt/bordeguna-erp/deploy/.env`
    (`RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, `B2_ACCOUNT_ID`, `B2_ACCOUNT_KEY`),
-   then `docker compose up -d offsite`.
+   then start it explicitly:
+
+```bash
+# --- ON THE VPS ---
+cd /opt/bordeguna-erp/deploy
+docker compose --profile offsite up -d
+```
+
+⚠ The service sits behind a Compose **profile**, so an ordinary `docker compose up -d`
+deliberately does not start it. Without that it comes up on every deploy and crash-loops
+against absent credentials. The `--profile offsite` flag is also needed on later deploys
+once it is enabled, or that deploy will stop it again.
 
 ⚠⚠ **Copy `RESTIC_PASSWORD` into a password manager off this server.** Backblaze
 cannot recover it. Without it every offsite backup is permanently unreadable,

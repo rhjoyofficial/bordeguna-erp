@@ -169,6 +169,14 @@ services:
   # definition of what a good dump is.
   offsite:
     image: restic/restic:0.17.3
+    # ⚠ Behind a profile, so a plain `docker compose up -d` does NOT start it.
+    # Without this it comes up on every deploy and crash-loops against missing
+    # B2 credentials, which is exactly what happened on 2026-08-01. Joy has
+    # postponed offsite backup, so the stack must deploy cleanly without it.
+    #
+    # To enable, once B2_ACCOUNT_ID and B2_ACCOUNT_KEY are in .env:
+    #   docker compose --profile offsite up -d
+    profiles: ["offsite"]
     restart: unless-stopped
     env_file: [.env]
     entrypoint: ['/bin/sh', '/offsite.sh']
