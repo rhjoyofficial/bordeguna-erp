@@ -89,7 +89,11 @@ class BorDeGunaEmployeeSeeder extends Seeder
      * payroll, since `is_provisional` is payroll's gate.
      */
     private const EMPLOYEES = [
-        ['code' => 'BDG-000001', 'first' => 'Chowdhury Md.', 'last' => 'Moin',
+        // ⚠ 'Chowdhury Mohammad', not 'Chowdhury Md.' — the name was corrected in
+        // the app after the first seeding, and this seeder fills names on every
+        // run. Left stale it silently reverts a correction a human made, which
+        // is the kind of change nobody thinks to look for.
+        ['code' => 'BDG-000001', 'first' => 'Chowdhury Mohammad', 'last' => 'Moin',
             'dept' => 'Main Team', 'designation' => 'Founder',
             'joined' => '2019-05-01', 'gross' => 100000, 'supervisor' => null, 'enroll' => '7'],
 
