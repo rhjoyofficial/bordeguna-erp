@@ -3,11 +3,11 @@
 namespace App\Modules\Inventory\Actions;
 
 use App\Models\User;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Models\InventoryAdjustment;
-use App\Modules\Inventory\Models\InventoryPeriodLock;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use Illuminate\Support\Collection;
@@ -39,7 +39,7 @@ class ApproveInventoryAdjustment
         // adjustment sits in the queue, and posting into a period that has since
         // been closed is exactly what the lock exists to prevent. Checking only
         // on the way in leaves a hole as wide as the queue is slow.
-        InventoryPeriodLock::assertOpenFor($adjustment->effective_date);
+        AccountingPeriod::assertOpenFor($adjustment->effective_date);
 
         return DB::transaction(function () use ($adjustment, $approvedBy) {
             $note = trim("Adjustment #{$adjustment->id} ({$adjustment->type->label()})".($adjustment->note ? ": {$adjustment->note}" : ''));

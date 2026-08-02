@@ -1,25 +1,30 @@
 <?php
 
-namespace App\Modules\Inventory\Models;
+namespace App\Modules\Foundation\Models;
 
 use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
-use App\Modules\Inventory\Exceptions\PeriodLockedException;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * The date before which inventory is closed for this business (C-SC-2).
+ * The date before which the books are closed for this business.
+ *
+ * ⚠⚠ Built for Inventory (C-SC-2) and generalised in Phase 1.2 of Accounting,
+ * because a closed month has to mean the same thing to a salary payment, a
+ * supplier bill and a journal as it does to a goods receipt. The alternative was
+ * a second lock that could disagree with the first.
  *
  * One row per business: the question is always "what is the earliest date I may
  * still write to?", and a single moving boundary answers it without a table that
  * grows forever or gaps between periods that nobody notices.
  */
-class InventoryPeriodLock extends Model
+class AccountingPeriod extends Model
 {
     use BelongsToBusiness;
 
-    private const LOG = 'inventory.period_lock';
+    private const LOG = 'accounting.period';
 
     protected $fillable = [
         'business_id',
@@ -74,7 +79,7 @@ class InventoryPeriodLock extends Model
         activity(self::LOG)
             ->causedBy($by)
             ->withProperties(['closed_through' => $through->toDateString(), 'note' => $note])
-            ->log("Closed inventory through {$through->toDateString()}");
+            ->log("Closed the books through {$through->toDateString()}");
 
         return $lock->refresh();
     }
@@ -129,7 +134,7 @@ class InventoryPeriodLock extends Model
 
         // Inclusive: "closed through the 31st" closes the 31st.
         if ($date->lessThanOrEqualTo($lock->closed_through->endOfDay())) {
-            throw PeriodLockedException::forDate($date, $lock->closed_through);
+            throw PeriodClosedException::forDate($date, $lock->closed_through);
         }
     }
 }

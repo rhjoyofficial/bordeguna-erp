@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -10,9 +12,7 @@ use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\InventoryAdjustmentType;
 use App\Modules\Inventory\Enums\ProductType;
-use App\Modules\Inventory\Exceptions\PeriodLockedException;
 use App\Modules\Inventory\Models\InventoryAdjustment;
-use App\Modules\Inventory\Models\InventoryPeriodLock;
 use App\Modules\Inventory\Models\InventorySetting;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
@@ -207,10 +207,10 @@ it('re-checks the period lock at approval, not only at creation', function () {
     $adjustment = makeAdjustment($this, ['effectiveDate' => '2026-07-30 17:00:00']);
     expect($adjustment->approvalRequest->isPending())->toBeTrue();
 
-    InventoryPeriodLock::closeThrough(Carbon::parse('2026-07-31'), $this->founder, 'July close');
+    AccountingPeriod::closeThrough(Carbon::parse('2026-07-31'), $this->founder, 'July close');
 
     expect(fn () => app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->founder))
-        ->toThrow(PeriodLockedException::class);
+        ->toThrow(PeriodClosedException::class);
 
     expect((float) StockBatch::sum('current_quantity'))->toBe(10.0);
 });

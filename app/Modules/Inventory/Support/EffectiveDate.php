@@ -2,7 +2,7 @@
 
 namespace App\Modules\Inventory\Support;
 
-use App\Modules\Inventory\Models\InventoryPeriodLock;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
@@ -38,7 +38,7 @@ class EffectiveDate
         // may modify inventory down its own private route, and a rule copied
         // into five callers is five rules waiting to disagree - the next new
         // action would simply forget it.
-        InventoryPeriodLock::assertOpenFor($date);
+        AccountingPeriod::assertOpenFor($date);
 
         return $date;
     }

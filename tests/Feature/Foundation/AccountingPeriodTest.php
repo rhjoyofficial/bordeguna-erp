@@ -1,12 +1,12 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Enums\ProductType;
-use App\Modules\Inventory\Exceptions\PeriodLockedException;
-use App\Modules\Inventory\Models\InventoryPeriodLock;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
@@ -55,9 +55,9 @@ afterEach(function () {
     Carbon::setTestNow();
 });
 
-function lockThrough(string $date, User $by): InventoryPeriodLock
+function lockThrough(string $date, User $by): AccountingPeriod
 {
-    return InventoryPeriodLock::closeThrough(Carbon::parse($date), $by, 'July close');
+    return AccountingPeriod::closeThrough(Carbon::parse($date), $by, 'July close');
 }
 
 it('allows posting when no period has ever been closed', function () {
@@ -83,7 +83,7 @@ it('refuses a movement dated inside a closed period', function () {
         unitCost: '100',
         performedBy: $this->user,
         occurredAt: '2026-07-15 10:00:00',
-    ))->toThrow(PeriodLockedException::class);
+    ))->toThrow(PeriodClosedException::class);
 
     expect(StockBatch::count())->toBe(0);
 });
@@ -115,7 +115,7 @@ it('treats the closing date itself as closed', function () {
         unitCost: '100',
         performedBy: $this->user,
         occurredAt: '2026-07-31 23:59:00',
-    ))->toThrow(PeriodLockedException::class);
+    ))->toThrow(PeriodClosedException::class);
 });
 
 it('lets the Founder unlock, post, and relock, recording every step', function () {
@@ -124,7 +124,7 @@ it('lets the Founder unlock, post, and relock, recording every step', function (
 
     lockThrough('2026-07-31', $this->user);
 
-    InventoryPeriodLock::current()->unlock($founder, 'Correcting a missed delivery');
+    AccountingPeriod::current()->unlock($founder, 'Correcting a missed delivery');
 
     $movement = app(RecordStockIn::class)->handle(
         product: $this->product,
@@ -137,7 +137,7 @@ it('lets the Founder unlock, post, and relock, recording every step', function (
 
     expect($movement->occurred_at->toDateTimeString())->toBe('2026-07-15 10:00:00');
 
-    InventoryPeriodLock::current()->relock($founder);
+    AccountingPeriod::current()->relock($founder);
 
     expect(fn () => app(RecordStockIn::class)->handle(
         product: $this->product,
@@ -146,7 +146,7 @@ it('lets the Founder unlock, post, and relock, recording every step', function (
         unitCost: '100',
         performedBy: $this->user,
         occurredAt: '2026-07-16 10:00:00',
-    ))->toThrow(PeriodLockedException::class);
+    ))->toThrow(PeriodClosedException::class);
 });
 
 it('audits the unlock and the relock, with who and why', function () {
@@ -157,10 +157,10 @@ it('audits the unlock and the relock, with who and why', function () {
     $founder->businesses()->attach($this->business->id);
 
     lockThrough('2026-07-31', $this->user);
-    InventoryPeriodLock::current()->unlock($founder, 'Correcting a missed delivery');
-    InventoryPeriodLock::current()->relock($founder);
+    AccountingPeriod::current()->unlock($founder, 'Correcting a missed delivery');
+    AccountingPeriod::current()->relock($founder);
 
-    $entries = Activity::where('log_name', 'inventory.period_lock')
+    $entries = Activity::where('log_name', 'accounting.period')
         ->orderBy('id')
         ->get();
 
@@ -179,5 +179,5 @@ it('scopes the lock to one business, so closing one does not freeze another', fu
 
     app(BusinessContext::class)->set($other->id);
 
-    expect(InventoryPeriodLock::current())->toBeNull();
+    expect(AccountingPeriod::current())->toBeNull();
 });

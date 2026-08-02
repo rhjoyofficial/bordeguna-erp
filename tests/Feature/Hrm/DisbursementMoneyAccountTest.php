@@ -2,6 +2,8 @@
 
 use App\Models\User;
 use App\Modules\Foundation\Enums\MoneyAccountType;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -9,6 +11,7 @@ use App\Modules\Hrm\Actions\ConfirmDisbursementBatch;
 use App\Modules\Hrm\Models\DisbursementBatch;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -118,4 +121,49 @@ it('refuses an inactive account', function () {
 
     expect(fn () => app(ConfirmDisbursementBatch::class)->handle($batch, $this->user, moneyAccount: $this->account))
         ->toThrow(ValidationException::class);
+});
+
+it('refuses to confirm a payment dated inside a closed accounting period', function () {
+    // ⚠⚠ This is what makes the period lock GENERAL rather than renamed. It was
+    // built for stock and lived in Inventory; a closed month has to mean the
+    // same thing to a salary payment as it does to a goods receipt, or the two
+    // disagree and the books are wrong in a way nobody sees.
+    //
+    // ⚠ One period control for the whole system, not one per module - two locks
+    // that can disagree is a worse outcome than the single-module one.
+    Carbon::setTestNow('2026-08-02 09:00:00');
+
+    $batch = bareBatch($this);
+
+    AccountingPeriod::closeThrough(Carbon::parse('2026-07-31'), $this->user, 'July close');
+
+    expect(fn () => app(ConfirmDisbursementBatch::class)->handle(
+        $batch,
+        $this->user,
+        paidOn: Carbon::parse('2026-07-20'),
+        moneyAccount: $this->account,
+    ))->toThrow(PeriodClosedException::class);
+
+    expect($batch->fresh()->confirmed_at)->toBeNull();
+
+    Carbon::setTestNow();
+});
+
+it('allows a payment dated after the closed period', function () {
+    Carbon::setTestNow('2026-08-02 09:00:00');
+
+    $batch = bareBatch($this);
+
+    AccountingPeriod::closeThrough(Carbon::parse('2026-07-31'), $this->user, 'July close');
+
+    app(ConfirmDisbursementBatch::class)->handle(
+        $batch,
+        $this->user,
+        paidOn: Carbon::parse('2026-08-01'),
+        moneyAccount: $this->account,
+    );
+
+    expect($batch->fresh()->confirmed_at)->not->toBeNull();
+
+    Carbon::setTestNow();
 });

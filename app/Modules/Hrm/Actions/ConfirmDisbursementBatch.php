@@ -3,6 +3,7 @@
 namespace App\Modules\Hrm\Actions;
 
 use App\Models\User;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Models\DisbursementBatch;
 use App\Modules\Hrm\Models\Payslip;
@@ -68,6 +69,12 @@ class ConfirmDisbursementBatch
                 'money_account_id' => 'That account is no longer active.',
             ]);
         }
+
+        // ⚠⚠ The period lock, now general. A closed month has to mean the same
+        // thing to a salary payment as it does to a goods receipt; money leaving
+        // the business is exactly the kind of event a closed period exists to
+        // keep out.
+        AccountingPeriod::assertOpenFor($paidOn ?? now());
 
         return DB::transaction(function () use ($batch, $user, $paidOn, $adviceReference, $moneyAccount) {
             $paid = 0;
