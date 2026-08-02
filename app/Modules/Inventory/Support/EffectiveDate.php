@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Support;
 
+use App\Modules\Inventory\Models\InventoryPeriodLock;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
@@ -31,6 +32,13 @@ class EffectiveDate
                 "The {$label} date {$date->toDateTimeString()} is in the future; stock cannot move before it exists."
             );
         }
+
+        // C-SC-2. Checked HERE, at the one point every stock path already passes
+        // through, rather than in each action. Joy's principle is that nothing
+        // may modify inventory down its own private route, and a rule copied
+        // into five callers is five rules waiting to disagree - the next new
+        // action would simply forget it.
+        InventoryPeriodLock::assertOpenFor($date);
 
         return $date;
     }
