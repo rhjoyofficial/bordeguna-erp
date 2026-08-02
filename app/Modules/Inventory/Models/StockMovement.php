@@ -2,11 +2,11 @@
 
 namespace App\Modules\Inventory\Models;
 
+use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -38,6 +38,7 @@ class StockMovement extends Model
         'reverses_movement_id',
         'performed_by',
         'note',
+        'occurred_at',
     ];
 
     protected function casts(): array
@@ -47,6 +48,10 @@ class StockMovement extends Model
             'reason' => MovementReason::class,
             'quantity' => 'decimal:4',
             'unit_cost' => 'decimal:4',
+            // ⚠ When it happened in the warehouse, which is not `created_at`
+            // (when we were told). Both are kept on purpose: an audit needs to
+            // answer "what did we believe then" as well as "what was true then".
+            'occurred_at' => 'datetime',
         ];
     }
 

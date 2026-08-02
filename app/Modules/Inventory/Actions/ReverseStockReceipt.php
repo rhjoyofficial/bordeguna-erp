@@ -9,6 +9,7 @@ use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\EffectiveDate;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
@@ -53,7 +54,9 @@ class ReverseStockReceipt
         User $performedBy,
         ?string $note = null,
         MovementReason $reason = MovementReason::PurchaseReturn,
+        mixed $occurredAt = null,
     ): Collection {
+        $returnedAt = EffectiveDate::resolve($occurredAt);
         $receipts = collect($receipts)->sortBy('id')->values();
 
         if ($receipts->isEmpty()) {
@@ -107,6 +110,7 @@ class ReverseStockReceipt
                 'quantity' => $this->unscaled($take),
                 'unit_cost' => $batch->unit_cost,
                 'reverses_movement_id' => $receipt->id,
+                'occurred_at' => $returnedAt,
                 'performed_by' => $performedBy->id,
                 'note' => $note,
             ]));

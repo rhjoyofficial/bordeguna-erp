@@ -7,6 +7,8 @@ use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\EffectiveDate;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 trait ConsumesFifoStock
@@ -19,7 +21,7 @@ trait ConsumesFifoStock
      *
      * @return Collection<int, array{batch: StockBatch, quantity: string}>
      */
-    protected function consumeFifo(Product $product, Warehouse $warehouse, string $quantity): Collection
+    protected function consumeFifo(Product $product, Warehouse $warehouse, string $quantity, ?Carbon $movedAt = null): Collection
     {
         // ⚠ Integer-scaled arithmetic, not float (I2). Quantities are
         // decimal(15,4), so four places are the entire domain and scaling by
@@ -45,6 +47,14 @@ trait ConsumesFifoStock
         foreach ($batches as $batch) {
             if ($remaining <= 0) {
                 break;
+            }
+
+            // ⚠ A withdrawal cannot predate the stock it consumes. Taking goods
+            // out on the 1st that arrived on the 5th is not a date to sort into
+            // place, it is an impossible sequence, and allowing it produces a
+            // ledger whose running balance goes negative inside its own history.
+            if ($movedAt !== null && $batch->received_at !== null) {
+                EffectiveDate::assertNotBefore($movedAt, $batch->received_at, $batch->id);
             }
 
             $available = $this->scaleQuantity((string) $batch->current_quantity);

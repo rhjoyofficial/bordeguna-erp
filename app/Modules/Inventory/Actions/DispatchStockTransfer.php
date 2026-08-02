@@ -12,6 +12,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\StockTransfer;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\EffectiveDate;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -35,6 +36,7 @@ class DispatchStockTransfer
         Reason $reason,
         User $performedBy,
         ?string $note = null,
+        mixed $occurredAt = null,
     ): StockTransfer {
         if ($source->id === $target->id) {
             throw new InvalidArgumentException('Cannot transfer a product to the same warehouse.');
@@ -44,9 +46,11 @@ class DispatchStockTransfer
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
         }
 
-        return DB::transaction(function () use ($product, $source, $target, $quantity, $reason, $performedBy, $note) {
+        $movedAt = EffectiveDate::resolve($occurredAt);
+
+        return DB::transaction(function () use ($product, $source, $target, $quantity, $reason, $performedBy, $note, $movedAt) {
             $transferGroupId = (string) Str::uuid();
-            $consumed = $this->consumeFifo($product, $source, $quantity);
+            $consumed = $this->consumeFifo($product, $source, $quantity, $movedAt);
 
             foreach ($consumed as $portion) {
                 StockMovement::create([
@@ -58,6 +62,7 @@ class DispatchStockTransfer
                     'reason_id' => $reason->id,
                     'quantity' => $portion['quantity'],
                     'unit_cost' => $portion['batch']->unit_cost,
+                    'occurred_at' => $movedAt,
                     'transfer_group_id' => $transferGroupId,
                     'performed_by' => $performedBy->id,
                     'note' => $note,

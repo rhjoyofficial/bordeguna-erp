@@ -9,6 +9,7 @@ use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\EffectiveDate;
 use DomainException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -28,13 +29,16 @@ class RecordStockOut
         ?string $note = null,
         MovementReason $reason = MovementReason::Usage,
         ?int $reasonId = null,
+        mixed $occurredAt = null,
     ): Collection {
         if (! $product->type->isStocked()) {
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
         }
 
-        return DB::transaction(function () use ($product, $warehouse, $quantity, $performedBy, $note, $reason, $reasonId) {
-            $consumed = $this->consumeFifo($product, $warehouse, $quantity);
+        $movedAt = EffectiveDate::resolve($occurredAt);
+
+        return DB::transaction(function () use ($product, $warehouse, $quantity, $performedBy, $note, $reason, $reasonId, $movedAt) {
+            $consumed = $this->consumeFifo($product, $warehouse, $quantity, $movedAt);
 
             return $consumed->map(fn ($portion) => StockMovement::create([
                 'product_id' => $product->id,
@@ -47,6 +51,7 @@ class RecordStockOut
                 'unit_cost' => $portion['batch']->unit_cost,
                 'performed_by' => $performedBy->id,
                 'note' => $note,
+                'occurred_at' => $movedAt,
             ]));
         });
     }

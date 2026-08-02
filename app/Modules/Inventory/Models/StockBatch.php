@@ -24,6 +24,7 @@ class StockBatch extends Model
         'initial_quantity',
         'current_quantity',
         'status',
+        'received_at',
     ];
 
     protected function casts(): array
@@ -31,6 +32,7 @@ class StockBatch extends Model
         return [
             'status' => StockBatchStatus::class,
             'expiry_date' => 'date',
+            'received_at' => 'datetime',
             'unit_cost' => 'decimal:4',
             'initial_quantity' => 'decimal:4',
             'current_quantity' => 'decimal:4',
@@ -81,7 +83,7 @@ class StockBatch extends Model
         return $query->where('status', StockBatchStatus::Active)
             ->where('current_quantity', '>', 0)
             ->orderByRaw('stock_batches.expiry_date IS NULL, stock_batches.expiry_date asc')
-            ->orderBy('stock_batches.created_at')
+            ->orderBy('stock_batches.received_at')
             ->orderBy('stock_batches.id');
     }
 }

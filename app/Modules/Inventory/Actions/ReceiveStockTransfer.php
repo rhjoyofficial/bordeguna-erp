@@ -10,6 +10,7 @@ use App\Modules\Inventory\Enums\TransferStatus;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\StockTransfer;
+use App\Modules\Inventory\Support\EffectiveDate;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -24,18 +25,23 @@ class ReceiveStockTransfer
     /**
      * @return Collection<int, StockMovement>
      */
-    public function handle(StockTransfer $transfer, User $performedBy): Collection
+    public function handle(StockTransfer $transfer, User $performedBy, mixed $occurredAt = null): Collection
     {
         if (! $transfer->isInTransit()) {
             throw new RuntimeException("Stock transfer #{$transfer->id} has already been received.");
         }
 
-        return DB::transaction(function () use ($transfer, $performedBy) {
+        // ⚠ The arrival date of the RECEIVING leg. A transfer that left on the
+        // 1st and landed on the 3rd is two events, not one, and the destination
+        // batch did not exist at the source's date.
+        $arrivedAt = EffectiveDate::resolve($occurredAt);
+
+        return DB::transaction(function () use ($transfer, $performedBy, $arrivedAt) {
             $outLegs = StockMovement::where('transfer_group_id', $transfer->transfer_group_id)
                 ->where('direction', MovementDirection::Out)
                 ->get();
 
-            $movements = $outLegs->map(function (StockMovement $outLeg) use ($transfer, $performedBy) {
+            $movements = $outLegs->map(function (StockMovement $outLeg) use ($transfer, $performedBy, $arrivedAt) {
                 $targetBatch = StockBatch::create([
                     'product_id' => $transfer->product_id,
                     'warehouse_id' => $transfer->target_warehouse_id,
@@ -45,6 +51,7 @@ class ReceiveStockTransfer
                     'initial_quantity' => $outLeg->quantity,
                     'current_quantity' => $outLeg->quantity,
                     'status' => StockBatchStatus::Active,
+                    'received_at' => $arrivedAt,
                 ]);
 
                 return StockMovement::create([
@@ -57,6 +64,7 @@ class ReceiveStockTransfer
                     'quantity' => $outLeg->quantity,
                     'unit_cost' => $outLeg->unit_cost,
                     'transfer_group_id' => $transfer->transfer_group_id,
+                    'occurred_at' => $arrivedAt,
                     'performed_by' => $performedBy->id,
                     'note' => $transfer->note,
                 ]);
