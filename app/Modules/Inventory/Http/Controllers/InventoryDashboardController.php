@@ -17,9 +17,17 @@ class InventoryDashboardController extends Controller
 
         $stockedProducts = Product::stocked()->where('is_active', true)->get();
 
-        $totalStockValue = StockBatch::where('status', StockBatchStatus::Active)
+        // ⚠ I7. `number_format` is not decoration here. SUM() over decimal
+        // columns stringifies at full scale, which is how the main dashboard
+        // came to read "Stock value 19200.00000000" on 2026-07-29. That instance
+        // was fixed in DashboardController and this identical one was left
+        // standing, so the bug kept shipping on the Inventory dashboard.
+        //
+        // ⚠ Any aggregate over a decimal column that reaches a user needs
+        // explicit formatting. Fourth appearance of this pattern on this project.
+        $totalStockValue = number_format((float) (StockBatch::where('status', StockBatchStatus::Active)
             ->selectRaw('SUM(current_quantity * unit_cost) as value')
-            ->value('value') ?? '0';
+            ->value('value') ?? 0), 2);
 
         $lowStockProducts = $stockedProducts->filter->isBelowLowStockThreshold()->values();
 
