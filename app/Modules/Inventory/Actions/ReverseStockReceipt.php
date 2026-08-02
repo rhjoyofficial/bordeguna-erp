@@ -5,7 +5,6 @@ namespace App\Modules\Inventory\Actions;
 use App\Models\User;
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
-use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
@@ -89,17 +88,9 @@ class ReverseStockReceipt
 
             $take = min($remaining, $available);
 
-            // Integer arithmetic on the scaled values, then back to a decimal
-            // string once. See I2: floats cannot hold tenths, and a residue here
-            // would either strand dust in a batch or refuse a return that is
-            // exactly satisfiable.
-            $batch->current_quantity = $this->unscaled($available - $take);
-
-            if ($available - $take <= 0) {
-                $batch->status = StockBatchStatus::Depleted;
-            }
-
-            $batch->save();
+            // ⚠ Slice 4: the batch is not written here. The movement below is
+            // what the quantity derives from. Integer scaling is still used to
+            // decide how much this layer can give (I2).
 
             $written->push(StockMovement::create([
                 'product_id' => $receipt->product_id,

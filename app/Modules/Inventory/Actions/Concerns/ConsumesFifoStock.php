@@ -2,7 +2,6 @@
 
 namespace App\Modules\Inventory\Actions\Concerns;
 
-use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
@@ -60,14 +59,12 @@ trait ConsumesFifoStock
             $available = $this->scaleQuantity((string) $batch->current_quantity);
             $take = min($remaining, $available);
 
-            $batch->current_quantity = $this->unscaleQuantity($available - $take);
-
-            if ($available - $take <= 0) {
-                $batch->status = StockBatchStatus::Depleted;
-            }
-
-            $batch->save();
-
+            // ⚠⚠ Slice 4: this READS the cache to plan how much to take from
+            // which layer, and no longer WRITES it. The movement the caller is
+            // about to record is what the new quantity is derived from, via
+            // StockMovementObserver. Subtracting here as well would put the two
+            // numbers back to being written by the same hand, independently -
+            // which is the arrangement slice 4 exists to end.
             $consumed->push(['batch' => $batch, 'quantity' => $this->unscaleQuantity($take)]);
             $remaining -= $take;
         }
