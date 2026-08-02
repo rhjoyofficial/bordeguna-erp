@@ -32,16 +32,11 @@ class SubmitStockRequest
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
         }
 
-        if ($type === StockRequestType::Transfer && $targetWarehouse === null) {
+        // ⚠ A stock request is only ever a transfer now. Corrections go through
+        // InventoryAdjustment, which carries the type, effective date, approval
+        // status and movement links this table never had.
+        if ($targetWarehouse === null) {
             throw new InvalidArgumentException('targetWarehouse is required for a transfer request.');
-        }
-
-        if ($type === StockRequestType::Adjustment && $direction === null) {
-            throw new InvalidArgumentException('direction is required for an adjustment request.');
-        }
-
-        if ($type === StockRequestType::Adjustment && $direction === AdjustmentDirection::Increase && $unitCost === null) {
-            throw new InvalidArgumentException('unitCost is required for an increase-direction adjustment request.');
         }
 
         $request = DB::transaction(function () use ($type, $product, $warehouse, $quantity, $reason, $requestedBy, $targetWarehouse, $direction, $unitCost, $note) {

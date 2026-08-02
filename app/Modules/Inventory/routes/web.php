@@ -45,6 +45,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     });
     // storeAdjustment/storeTransfer authorize inventory.stock.adjust internally
     Route::post('stock/adjustments', [StockController::class, 'storeAdjustment'])->name('stock.adjustments.store');
+    Route::post('stock/adjustments/{adjustment}/approve', [StockController::class, 'approveAdjustment'])->name('stock.adjustments.approve');
+    Route::post('stock/adjustments/{adjustment}/reject', [StockController::class, 'rejectAdjustment'])->name('stock.adjustments.reject');
     Route::post('stock/transfers', [StockController::class, 'storeTransfer'])->name('stock.transfers.store');
     Route::get('stock/transfers', [StockController::class, 'transfersIndex'])->name('stock.transfers.index');
     // authorizes inventory.stock.adjust internally

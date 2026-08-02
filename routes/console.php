@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
+use App\Modules\Inventory\Actions\ProposeExpiredStockWriteOffs;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -45,3 +46,11 @@ Schedule::command(ProcessAttendanceDaily::class)
     ->dailyAt('23:00')
     ->withoutOverlapping()
     ->runInBackground();
+
+// ⚠ Proposes only. Expired stock is already unsellable the moment its date
+// passes (StockBatch::scopeConsumable), so a customer is protected whether or
+// not this ever runs - this raises the write-off a human then approves.
+Schedule::call(fn () => app(ProposeExpiredStockWriteOffs::class)->handle())
+    ->dailyAt('23:30')
+    ->name('inventory:propose-expired-write-offs')
+    ->withoutOverlapping();

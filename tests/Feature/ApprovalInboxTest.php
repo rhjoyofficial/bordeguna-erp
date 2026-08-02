@@ -4,7 +4,7 @@ use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
-use App\Modules\Inventory\Enums\AdjustmentDirection;
+use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockRequest;
@@ -15,12 +15,14 @@ use App\Modules\Purchasing\Models\Supplier;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Tests\TestCase;
 
 beforeEach(function () {
     $this->business = Business::create(['name' => 'Approvals Co', 'slug' => 'approvals-co']);
     app(BusinessContext::class)->set($this->business->id);
 
     $this->warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Main', 'code' => 'MAIN']);
+    $this->targetWarehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Second', 'code' => 'SECOND']);
     $unit = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Pieces', 'abbreviation' => 'pcs']);
     $this->product = Product::create([
         'business_id' => $this->business->id,
@@ -31,6 +33,17 @@ beforeEach(function () {
     ]);
     $this->reason = Reason::create(['business_id' => $this->business->id, 'context' => 'inventory.stock_adjustment', 'name' => 'Damaged']);
     $this->supplier = Supplier::create(['business_id' => $this->business->id, 'name' => 'Acme Supplies']);
+
+    // ⚠ Stock has to exist now. The old fixture raised an INCREASE adjustment,
+    // which needs none; a transfer moves real units and the source warehouse
+    // must actually hold them.
+    app(RecordStockIn::class)->handle(
+        product: $this->product,
+        warehouse: $this->warehouse,
+        quantity: '50',
+        unitCost: '10',
+        performedBy: User::factory()->create(),
+    );
 
     $allPermissions = [
         'inventory.stock.request', 'inventory.stock.approve',
@@ -61,18 +74,20 @@ beforeEach(function () {
     $this->staff->assignRole('Staff');
 });
 
-function submitPendingRequests(Tests\TestCase $test): void
+function submitPendingRequests(TestCase $test): void
 {
     $test->actingAs($test->staff)
         ->withSession(['current_business_id' => $test->business->id])
         ->post(route('inventory.stock-requests.store'), [
-            'type' => 'adjustment',
+            // ⚠ A transfer, because a stock request is only ever a transfer
+            // since slice 3. What this test cares about - that a pending request
+            // reaches the approver's inbox - is the same either way.
+            'type' => 'transfer',
             'product_id' => $test->product->id,
             'warehouse_id' => $test->warehouse->id,
-            'direction' => AdjustmentDirection::Increase->value,
+            'target_warehouse_id' => $test->targetWarehouse->id,
             'quantity' => '5',
             'reason_id' => $test->reason->id,
-            'unit_cost' => '10',
         ])
         ->assertRedirect();
 

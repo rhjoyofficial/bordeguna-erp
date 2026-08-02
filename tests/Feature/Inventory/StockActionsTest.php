@@ -11,7 +11,6 @@ use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Actions\RecordStockOut;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\ProductType;
-use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Enums\TransferStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
@@ -95,8 +94,14 @@ it('consumes stock FIFO across multiple batches by expiry date', function () {
 
     // Batch B expires sooner than batch A despite being created second —
     // FIFO must consume B first regardless of creation order.
-    $recordIn->handle($this->product, $this->warehouse, '20', '10', $this->user, expiryDate: '2027-01-01'); // batch A
-    $recordIn->handle($this->product, $this->warehouse, '30', '12', $this->user, expiryDate: '2026-06-01'); // batch B
+    //
+    // ⚠ Dates are RELATIVE to now, not hardcoded. They were fixed strings, and
+    // once expired stock stopped being consumable (C-INV-3) batch B's
+    // '2026-06-01' had quietly aged into the past - so this test failed for a
+    // reason that had nothing to do with what it checks. A fixture date that
+    // walks into a rule is a test that rots on a calendar.
+    $recordIn->handle($this->product, $this->warehouse, '20', '10', $this->user, expiryDate: now()->addYears(2)->toDateString()); // batch A
+    $recordIn->handle($this->product, $this->warehouse, '30', '12', $this->user, expiryDate: now()->addYear()->toDateString()); // batch B
 
     // Requesting more than batch B alone holds forces consumption to spill into batch A.
     $movements = app(RecordStockOut::class)->handle($this->product, $this->warehouse, '35', $this->user);

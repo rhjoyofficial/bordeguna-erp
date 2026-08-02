@@ -1,12 +1,12 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Foundation\Actions\NotifyApprovers;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Notifications\PendingApprovalNotification;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\SubmitStockRequest;
-use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockRequestType;
 use App\Modules\Inventory\Models\Product;
@@ -14,6 +14,7 @@ use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -25,6 +26,7 @@ beforeEach(function () {
     app(BusinessContext::class)->set($this->business->id);
 
     $this->warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Main', 'code' => 'MAIN']);
+    $this->targetWarehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Second', 'code' => 'SECOND']);
     $unit = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Pieces', 'abbreviation' => 'pcs']);
     $this->product = Product::create([
         'business_id' => $this->business->id,
@@ -77,13 +79,13 @@ beforeEach(function () {
 function submitRequest(): void
 {
     app(SubmitStockRequest::class)->handle(
-        type: StockRequestType::Adjustment,
+        type: StockRequestType::Transfer,
         product: test()->product,
         warehouse: test()->warehouse,
         quantity: '5',
         reason: test()->reason,
         requestedBy: test()->submitter,
-        direction: AdjustmentDirection::Decrease,
+        targetWarehouse: test()->targetWarehouse,
     );
 }
 
@@ -146,7 +148,7 @@ it('does not notify when a purchase order is self-approved on creation', functio
 it('queues the approval notification instead of sending it inline', function () {
     $notification = new PendingApprovalNotification('something', 'https://example.test/approvals');
 
-    expect($notification)->toBeInstanceOf(Illuminate\Contracts\Queue\ShouldQueue::class);
+    expect($notification)->toBeInstanceOf(ShouldQueue::class);
 });
 
 it('waits for the surrounding transaction to commit before the worker sees it', function () {
@@ -174,7 +176,7 @@ it('still reaches exactly the right approvers once queued', function () {
     // permission team — queueing defers the send, never the resolution.
     Notification::fake();
 
-    app(App\Modules\Foundation\Actions\NotifyApprovers::class)
+    app(NotifyApprovers::class)
         ->handle($this->business->id, 'inventory.stock.approve', 'A stock request is pending', $this->submitter->id);
 
     Notification::assertSentTo($this->approver, PendingApprovalNotification::class);

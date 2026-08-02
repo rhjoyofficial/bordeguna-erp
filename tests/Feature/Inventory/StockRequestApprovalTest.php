@@ -6,8 +6,11 @@ use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
+use App\Modules\Inventory\Enums\InventoryAdjustmentType;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockRequestType;
+use App\Modules\Inventory\Models\InventoryAdjustment;
+use App\Modules\Inventory\Models\InventorySetting;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Inventory\Models\UnitOfMeasure;
@@ -72,26 +75,57 @@ function makeUserWithRole(Business $business, string $roleName): User
     return $user;
 }
 
-it('lets a Staff member submit a stock request but not apply it directly', function () {
+it('lets a Staff member raise a correction but never post one', function () {
+    // ⚠ THE BOUNDARY MOVED, deliberately. It used to be "Staff may not touch the
+    // adjustment endpoint at all", because that endpoint posted stock
+    // immediately. Now the endpoint RAISES a correction and approval is what
+    // posts, so refusing Staff outright would have quietly removed something
+    // they could always do - submit a request for review.
+    //
+    // The boundary that actually matters is unchanged and is asserted here:
+    // nothing Staff do moves stock on their own say-so.
     $this->actingAs($this->staff)
         ->withSession(['current_business_id' => $this->business->id])
         ->post(route('inventory.stock.adjustments.store'), [
+            'type' => InventoryAdjustmentType::Damaged->value,
             'product_id' => $this->product->id,
             'warehouse_id' => $this->warehouse->id,
             'direction' => 'decrease',
             'quantity' => '10',
             'reason_id' => $this->reason->id,
         ])
+        ->assertRedirect();
+
+    $adjustment = InventoryAdjustment::sole();
+
+    expect($adjustment->approvalRequest->isPending())->toBeTrue()
+        ->and($this->product->fresh()->currentStockQuantity())->toBe('100');
+
+    // And they cannot approve their own.
+    $this->actingAs($this->staff)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->post(route('inventory.stock.adjustments.approve', $adjustment))
         ->assertForbidden();
 
     expect($this->product->fresh()->currentStockQuantity())->toBe('100');
 });
 
-it('lets Staff submit an adjustment request that stays pending until Manager approves it', function () {
+/**
+ * ⚠ The five adjustment cases that used to live here moved to the ONE inventory
+ * adjustment workflow in slice 3. They are rewritten below against the new
+ * pipeline rather than deleted, because two of them cover things the engine
+ * tests do not: the Staff-raises / Manager-approves permission boundary, and
+ * the rejection path.
+ *
+ * The old "a Manager applies an adjustment directly without a request" is gone
+ * on purpose - that WAS the second code path, and it left no record that a
+ * decision had been made. Its replacement is the auto-approval case below.
+ */
+it('lets Staff raise a correction that stays pending until the approver posts it', function () {
     $this->actingAs($this->staff)
         ->withSession(['current_business_id' => $this->business->id])
-        ->post(route('inventory.stock-requests.store'), [
-            'type' => StockRequestType::Adjustment->value,
+        ->post(route('inventory.stock.adjustments.store'), [
+            'type' => InventoryAdjustmentType::Damaged->value,
             'product_id' => $this->product->id,
             'warehouse_id' => $this->warehouse->id,
             'direction' => AdjustmentDirection::Decrease->value,
@@ -100,25 +134,25 @@ it('lets Staff submit an adjustment request that stays pending until Manager app
         ])
         ->assertRedirect();
 
-    $request = StockRequest::sole();
-    expect($request->approvalRequest->status->value)->toBe('pending');
-    // Stock must not move until a Manager approves the request.
+    $adjustment = InventoryAdjustment::sole();
+    expect($adjustment->approvalRequest->status->value)->toBe('pending');
+    // Nothing moves until somebody approves it.
     expect($this->product->fresh()->currentStockQuantity())->toBe('100');
 
     $this->actingAs($this->manager)
         ->withSession(['current_business_id' => $this->business->id])
-        ->post(route('inventory.stock-requests.approve', $request))
+        ->post(route('inventory.stock.adjustments.approve', $adjustment))
         ->assertRedirect();
 
-    expect($request->fresh()->approvalRequest->status->value)->toBe('approved');
+    expect($adjustment->fresh()->approvalRequest->status->value)->toBe('approved');
     expect($this->product->fresh()->currentStockQuantity())->toBe('80');
 });
 
-it('lets Staff submit an increase-direction adjustment request with a unit cost that lands as a new batch on approval', function () {
+it('lands an approved increase as a new batch at the cost given', function () {
     $this->actingAs($this->staff)
         ->withSession(['current_business_id' => $this->business->id])
-        ->post(route('inventory.stock-requests.store'), [
-            'type' => StockRequestType::Adjustment->value,
+        ->post(route('inventory.stock.adjustments.store'), [
+            'type' => InventoryAdjustmentType::StockCountVariance->value,
             'product_id' => $this->product->id,
             'warehouse_id' => $this->warehouse->id,
             'direction' => AdjustmentDirection::Increase->value,
@@ -128,23 +162,22 @@ it('lets Staff submit an increase-direction adjustment request with a unit cost 
         ])
         ->assertRedirect();
 
-    $request = StockRequest::sole();
-    expect((string) $request->unit_cost)->toBe('12.5000');
+    $adjustment = InventoryAdjustment::sole();
+    expect((string) $adjustment->unit_cost)->toBe('12.5000');
 
     $this->actingAs($this->manager)
         ->withSession(['current_business_id' => $this->business->id])
-        ->post(route('inventory.stock-requests.approve', $request))
+        ->post(route('inventory.stock.adjustments.approve', $adjustment))
         ->assertRedirect();
 
-    expect($request->fresh()->approvalRequest->status->value)->toBe('approved');
     expect($this->product->fresh()->currentStockQuantity())->toBe('115');
 });
 
-it('rejects an increase-direction adjustment request without a unit cost', function () {
+it('refuses an increase with no unit cost', function () {
     $this->actingAs($this->staff)
         ->withSession(['current_business_id' => $this->business->id])
-        ->post(route('inventory.stock-requests.store'), [
-            'type' => StockRequestType::Adjustment->value,
+        ->post(route('inventory.stock.adjustments.store'), [
+            'type' => InventoryAdjustmentType::StockCountVariance->value,
             'product_id' => $this->product->id,
             'warehouse_id' => $this->warehouse->id,
             'direction' => AdjustmentDirection::Increase->value,
@@ -153,14 +186,17 @@ it('rejects an increase-direction adjustment request without a unit cost', funct
         ])
         ->assertInvalid(['unit_cost']);
 
-    expect(StockRequest::count())->toBe(0);
+    expect(InventoryAdjustment::count())->toBe(0);
 });
 
-it('leaves stock untouched when a Manager rejects a request', function () {
+it('leaves stock untouched when the approver rejects a correction', function () {
+    // ⚠ Kept from the old suite because the engine tests do not cover rejection.
+    // A rejected adjustment posts nothing, and there is no undo to write: the
+    // movements were never created, since approval is what posts.
     $this->actingAs($this->staff)
         ->withSession(['current_business_id' => $this->business->id])
-        ->post(route('inventory.stock-requests.store'), [
-            'type' => StockRequestType::Adjustment->value,
+        ->post(route('inventory.stock.adjustments.store'), [
+            'type' => InventoryAdjustmentType::Damaged->value,
             'product_id' => $this->product->id,
             'warehouse_id' => $this->warehouse->id,
             'direction' => AdjustmentDirection::Decrease->value,
@@ -168,21 +204,28 @@ it('leaves stock untouched when a Manager rejects a request', function () {
             'reason_id' => $this->reason->id,
         ]);
 
-    $request = StockRequest::sole();
+    $adjustment = InventoryAdjustment::sole();
 
     $this->actingAs($this->manager)
         ->withSession(['current_business_id' => $this->business->id])
-        ->post(route('inventory.stock-requests.reject', $request), ['review_note' => 'recount first'])
+        ->post(route('inventory.stock.adjustments.reject', $adjustment), ['review_note' => 'recount first'])
         ->assertRedirect();
 
-    expect($request->fresh()->approvalRequest->status->value)->toBe('rejected');
-    expect($this->product->fresh()->currentStockQuantity())->toBe('100');
+    expect($adjustment->fresh()->approvalRequest->status->value)->toBe('rejected')
+        ->and($this->product->fresh()->currentStockQuantity())->toBe('100')
+        ->and($adjustment->movements()->count())->toBe(0);
 });
 
-it('lets a Manager apply an adjustment directly without a request', function () {
+it('posts immediately when the value is under the configured threshold', function () {
+    // The replacement for "a Manager applies an adjustment directly". It still
+    // posts in one step for somebody who may adjust stock - but it now leaves a
+    // record, an approval and an audit trail behind it.
+    InventorySetting::forCurrentBusiness()->update(['adjustment_approval_threshold' => '100000']);
+
     $this->actingAs($this->manager)
         ->withSession(['current_business_id' => $this->business->id])
         ->post(route('inventory.stock.adjustments.store'), [
+            'type' => InventoryAdjustmentType::ManualCorrection->value,
             'product_id' => $this->product->id,
             'warehouse_id' => $this->warehouse->id,
             'direction' => 'decrease',
@@ -192,7 +235,10 @@ it('lets a Manager apply an adjustment directly without a request', function () 
         ->assertRedirect();
 
     expect($this->product->fresh()->currentStockQuantity())->toBe('90');
-    expect(StockRequest::count())->toBe(0);
+
+    $adjustment = InventoryAdjustment::sole();
+    expect($adjustment->approvalRequest->isComplete())->toBeTrue()
+        ->and($adjustment->movements()->count())->toBeGreaterThan(0);
 });
 
 it('lets a Manager dispatch and receive a transfer request end to end', function () {

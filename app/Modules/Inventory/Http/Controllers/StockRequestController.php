@@ -7,7 +7,6 @@ use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Actions\ApproveStockRequest;
 use App\Modules\Inventory\Actions\SubmitStockRequest;
-use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\StockRequestType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockRequest;
@@ -56,11 +55,9 @@ class StockRequestController extends Controller
             'type' => ['required', new Enum(StockRequestType::class)],
             'product_id' => ['required', 'exists:products,id'],
             'warehouse_id' => ['required', 'exists:warehouses,id'],
-            'target_warehouse_id' => ['required_if:type,transfer', 'nullable', 'exists:warehouses,id', 'different:warehouse_id'],
-            'direction' => ['required_if:type,adjustment', 'nullable', new Enum(AdjustmentDirection::class)],
+            'target_warehouse_id' => ['required', 'exists:warehouses,id', 'different:warehouse_id'],
             'quantity' => ['required', 'numeric', 'gt:0'],
             'reason_id' => ['required', 'exists:reasons,id'],
-            'unit_cost' => ['nullable', 'required_if:direction,increase', 'numeric', 'min:0'],
             'note' => ['nullable', 'string'],
         ]);
 
@@ -71,9 +68,7 @@ class StockRequestController extends Controller
             quantity: $data['quantity'],
             reason: Reason::findOrFail($data['reason_id']),
             requestedBy: $request->user(),
-            targetWarehouse: isset($data['target_warehouse_id']) ? Warehouse::findOrFail($data['target_warehouse_id']) : null,
-            direction: isset($data['direction']) ? AdjustmentDirection::from($data['direction']) : null,
-            unitCost: $data['unit_cost'] ?? null,
+            targetWarehouse: Warehouse::findOrFail($data['target_warehouse_id']),
             note: $data['note'] ?? null,
         );
 

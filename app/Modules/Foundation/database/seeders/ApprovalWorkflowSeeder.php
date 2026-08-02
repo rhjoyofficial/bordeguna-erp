@@ -26,6 +26,12 @@ class ApprovalWorkflowSeeder extends Seeder
                 ['name' => 'Approval', 'roles' => [], 'permissions' => ['inventory.stock.approve']],
             ],
         ],
+        'inventory_adjustment' => [
+            'name' => 'Inventory adjustment approval',
+            'stages' => [
+                ['name' => 'Approval', 'roles' => [], 'permissions' => ['inventory.stock.approve']],
+            ],
+        ],
         'purchase_order' => [
             'name' => 'Purchase order approval',
             'stages' => [

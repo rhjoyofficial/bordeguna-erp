@@ -82,6 +82,18 @@ class StockBatch extends Model
         // `business_user` pivot sprang in W2.
         return $query->where('status', StockBatchStatus::Active)
             ->where('current_quantity', '>', 0)
+            // ⚠⚠ C-INV-3. Expired stock is never consumable. Filtered by DATE
+            // rather than by status, and that is the whole point: the `Expired`
+            // status case existed and NOTHING in the codebase ever set it, so
+            // the scope filtered on `active` and happily sold goods that expired
+            // last year while the enum made it look handled. A date comparison
+            // is true whether or not any sweep has run.
+            //
+            // ⚠ `whereDate` and `>=`, so a batch is good through the WHOLE of
+            // its expiry date. An off-by-one here destroys a day of sellable
+            // stock on every batch.
+            ->where(fn ($q) => $q->whereNull('stock_batches.expiry_date')
+                ->orWhereDate('stock_batches.expiry_date', '>=', now()->toDateString()))
             ->orderByRaw('stock_batches.expiry_date IS NULL, stock_batches.expiry_date asc')
             ->orderBy('stock_batches.received_at')
             ->orderBy('stock_batches.id');
