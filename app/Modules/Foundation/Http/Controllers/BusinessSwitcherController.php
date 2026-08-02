@@ -7,12 +7,21 @@ use App\Modules\Foundation\Models\ActivityLogEntry;
 use App\Modules\Foundation\Models\Business;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Route;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class BusinessSwitcherController extends Controller
 {
     private const LOG = 'foundation.business_switch';
+
+    /**
+     * Routes that are never a sensible place to land after switching, even
+     * though they take no parameters.
+     *
+     * @var array<int, string>
+     */
+    private const EXEMPT_RETURN = ['login', 'logout', 'register'];
 
     public function index(Request $request): Response
     {
@@ -89,7 +98,55 @@ class BusinessSwitcherController extends Controller
 
         $request->session()->put('current_business_id', $business->id);
 
-        return redirect()->route('dashboard')->with('success', "Switched to {$business->name}.");
+        return redirect($this->returnTo($request))
+            ->with('success', "Switched to {$business->name}.");
+    }
+
+    /**
+     * W5a. Switching used to discard where you were, which is the whole
+     * annoyance for anybody comparing the same screen across two tenants.
+     *
+     * ⚠ Only a route that takes NO parameters comes back. `/hrm/shifts` means
+     * the same thing in any business; `/hrm/shifts/3` does not, because shift 3
+     * belongs to one of them - carrying it across would 404 or, worse, resolve
+     * to an unrelated record with the same id.
+     *
+     * ⚠ Known limitation, stated in §14.1 rather than hidden: roles are
+     * team-scoped, so returning to a page the user cannot access in the NEW
+     * business lands on a 403 where the dashboard would have worked. It cannot
+     * be pre-checked, because authorisation happens inside the controllers here
+     * rather than in route middleware. A 403 is visible and recoverable.
+     */
+    private function returnTo(Request $request): string
+    {
+        $referer = $request->headers->get('referer');
+
+        if (! $referer || ! str_starts_with($referer, $request->getSchemeAndHttpHost())) {
+            return route('dashboard');
+        }
+
+        $route = $this->routeFor($referer);
+
+        if ($route === null
+            || $route->parameterNames() !== []
+            || in_array($route->getName(), ['businesses.switch', ...self::EXEMPT_RETURN], true)) {
+            return route('dashboard');
+        }
+
+        return $referer;
+    }
+
+    private function routeFor(string $url): ?Route
+    {
+        try {
+            return app('router')->getRoutes()->match(
+                Request::create($url, 'GET'),
+            );
+        } catch (\Throwable) {
+            // Anything unmatched - a stale URL, a route since removed - is not
+            // worth an exception on a successful switch.
+            return null;
+        }
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Modules\Foundation\Models\Business;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -17,7 +18,17 @@ class DashboardTest extends TestCase
 
     public function test_authenticated_users_can_visit_the_dashboard()
     {
-        $this->actingAs($user = User::factory()->create());
+        // ⚠ The business attachment is not incidental. This test used to create
+        // a bare user and assert 200, which quietly encoded the W5b defect: a
+        // user belonging to NO business was shown a dashboard that rendered
+        // empty and correct, with nothing saying why. They are now sent to the
+        // switcher, which explains it - see BusinessSwitchReturnTest and §14.2.
+        $business = Business::create(['name' => 'Dashboard Co', 'slug' => 'dashboard-co']);
+
+        $user = User::factory()->create();
+        $user->businesses()->attach($business->id);
+
+        $this->actingAs($user);
 
         $this->get('/dashboard')->assertOk();
     }
