@@ -18,6 +18,7 @@ class PurchaseOrderLine extends Model
         'product_id',
         'quantity_ordered',
         'quantity_received',
+        'quantity_invoiced',
         'quantity_returned',
         'unit_cost',
     ];
@@ -27,6 +28,10 @@ class PurchaseOrderLine extends Model
         return [
             'quantity_ordered' => 'decimal:4',
             'quantity_received' => 'decimal:4',
+            // ⚠ The third quantity. Ordered, received and invoiced are allowed
+            // to disagree - that disagreement is the normal state of a purchase
+            // and is exactly what Goods Received Not Invoiced reports on.
+            'quantity_invoiced' => 'decimal:4',
             'quantity_returned' => 'decimal:4',
             'unit_cost' => 'decimal:4',
         ];
