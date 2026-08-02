@@ -28,9 +28,13 @@ class ResolveCurrentBusiness
         $business = $businessId ? $this->findAccessible($user, $businessId) : null;
 
         if (! $business) {
+            // W2: this used to be `orderBy('name')`, so the tenant somebody
+            // landed in was decided by a display string - the super admin landed
+            // in an empty Azmion, and a rename would have moved everyone.
+            // `inDefaultOrder()` is the one rule, shared by both branches.
             $business = $user->is_super_admin
-                ? Business::where('is_active', true)->orderBy('name')->first()
-                : $user->businesses()->where('is_active', true)->orderBy('name')->first();
+                ? Business::where('is_active', true)->inDefaultOrder()->first()
+                : $user->businesses()->where('businesses.is_active', true)->inDefaultOrder()->first();
 
             if ($business) {
                 $request->session()->put('current_business_id', $business->id);

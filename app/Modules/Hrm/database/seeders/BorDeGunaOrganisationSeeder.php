@@ -138,6 +138,14 @@ class BorDeGunaOrganisationSeeder extends Seeder
             ],
         );
 
+        // W2: this installation's landing business. Set outside firstOrCreate so
+        // it is corrected on an existing row too, and set directly rather than
+        // mass-assigned because `is_default` is deliberately not fillable.
+        if (! $business->is_default) {
+            $business->is_default = true;
+            $business->save();
+        }
+
         // Office, Department and Designation are business-scoped, and a seeder
         // runs in the console where no request has set the context — the same
         // trap 3c found with queued jobs. Set it explicitly.
