@@ -3,28 +3,57 @@
 namespace App\Modules\Purchasing\Actions;
 
 use App\Models\User;
-use App\Modules\Inventory\Actions\RecordStockOut;
-use App\Modules\Inventory\Enums\MovementReason;
+use App\Modules\Inventory\Actions\ReverseStockReceipt;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\PurchaseReturn;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use RuntimeException;
 
 /**
  * Returns previously-received goods against a PO — the counterpart to
- * RecordGoodsReceipt. For stocked products this calls Inventory's own
- * RecordStockOut — Purchasing never touches stock_batches/stock_movements
+ * RecordGoodsReceipt. Purchasing never touches stock_batches/stock_movements
  * directly, per the cross-module boundary rule (see ERP-PLAN risk #4).
  * Service-type lines have nothing to reverse.
+ *
+ * ⚠ This used to call `RecordStockOut`, which consumes FIFO, so a return
+ * relieved the OLDEST batch in the warehouse instead of the one the supplier
+ * actually delivered (I1). It now calls `ReverseStockReceipt` against this
+ * line's own receipt movements. A return is the reversal of a specific receipt,
+ * not a withdrawal, and the two questions have different right answers.
  */
 class RecordPurchaseReturn
 {
     public function __construct(
-        private readonly RecordStockOut $recordStockOut,
+        private readonly ReverseStockReceipt $reverseStockReceipt,
     ) {}
+
+    /**
+     * The stock movements this line's receipts created, oldest first.
+     *
+     * ⚠ Ordered by id, not by `created_at`. Two receipts recorded in the same
+     * second are perfectly ordinary and a second-precision timestamp does not
+     * separate them - the same total-ordering trap as I5 and as W2 before it.
+     * Here it would decide which cost layer a return relieves.
+     *
+     * @return Collection<int, StockMovement>
+     */
+    private function receiptMovementsFor(PurchaseOrderLine $line): Collection
+    {
+        return GoodsReceiptLine::where('purchase_order_line_id', $line->id)
+            ->whereNotNull('stock_movement_id')
+            ->with('stockMovement')
+            ->orderBy('id')
+            ->get()
+            ->pluck('stockMovement')
+            ->filter()
+            ->values();
+    }
 
     /**
      * @param  array<int, array{line: PurchaseOrderLine, quantity: string}>  $lineReturns
@@ -50,7 +79,11 @@ class RecordPurchaseReturn
             ]);
 
             foreach ($lineReturns as $entry) {
-                $line = $entry['line'];
+                // I3, same shape as RecordGoodsReceipt: re-read inside the
+                // transaction so two stale copies cannot each add to the value
+                // the other started from. See that class for why the re-read
+                // rather than the lock is what makes it correct.
+                $line = PurchaseOrderLine::whereKey($entry['line']->id)->lockForUpdate()->firstOrFail();
                 $quantity = $entry['quantity'];
                 $returnable = (float) $line->quantityReturnable();
 
@@ -59,13 +92,17 @@ class RecordPurchaseReturn
                 }
 
                 if ($line->product->type->isStocked()) {
-                    $this->recordStockOut->handle(
-                        product: $line->product,
-                        warehouse: $order->warehouse,
+                    // I1. Reverse THIS line's own receipts, oldest first, rather
+                    // than withdrawing FIFO from the warehouse. The goods going
+                    // back are the goods this supplier delivered, and the credit
+                    // note is at their price. Purchasing still never touches
+                    // stock tables: it knows which movements its receipts
+                    // created, and Inventory decides how to undo them.
+                    $this->reverseStockReceipt->handle(
+                        receipts: $this->receiptMovementsFor($line),
                         quantity: $quantity,
                         performedBy: $returnedBy,
                         note: "Returned against {$order->po_number}".($note ? ": {$note}" : ''),
-                        reason: MovementReason::PurchaseReturn,
                     );
                 }
 

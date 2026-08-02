@@ -49,7 +49,23 @@ class RecordGoodsReceipt
             ]);
 
             foreach ($lineReceipts as $entry) {
-                $line = $entry['line'];
+                // ⚠⚠ I3. Re-read the line INSIDE the transaction and trust that,
+                // never the caller's copy. The old code checked and incremented
+                // using the instance it was handed, so two requests holding
+                // copies loaded before either wrote would both pass the
+                // remaining check and the second write would overwrite the
+                // first: stock created twice, the order recording it once, and
+                // nothing anywhere comparing the two.
+                //
+                // ⚠ The realistic trigger is one clerk double-clicking Receive,
+                // not two clerks.
+                //
+                // ⚠ The re-read is what makes this correct, not the lock.
+                // `lockForUpdate()` serialises concurrent transactions on MySQL
+                // but is a NO-OP on SQLite, so a fix that only locked would be
+                // green in the suite and broken in production. Both are here:
+                // the lock for real concurrency, the re-read for correctness.
+                $line = PurchaseOrderLine::whereKey($entry['line']->id)->lockForUpdate()->firstOrFail();
                 $quantity = $entry['quantity'];
                 $remaining = (float) $line->quantityRemaining();
 
