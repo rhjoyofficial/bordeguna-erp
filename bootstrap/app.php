@@ -1,12 +1,23 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Modules\Foundation\Http\Middleware\EnsurePageBusinessMatches;
 use App\Modules\Foundation\Http\Middleware\ResolveCurrentBusiness;
+use Illuminate\Auth\Middleware\Authorize;
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
+use Illuminate\Contracts\Session\Middleware\AuthenticatesSessions;
+use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Routing\Middleware\ThrottleRequestsWithRedis;
+use Illuminate\Session\Middleware\StartSession;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -47,6 +58,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            // W3. Refuses a mutating request whose PAGE was built for a
+            // different business than the session now holds. Global rather than
+            // per-route on purpose: a guard somebody has to remember to add to a
+            // new route is a guard that will be missing from exactly the route
+            // nobody thought about. It no-ops when no business is resolved.
+            EnsurePageBusinessMatches::class,
         ]);
 
         $middleware->alias([
@@ -60,17 +77,20 @@ return Application::configure(basePath: dirname(__DIR__))
         // exists. Custom middleware aliases are otherwise unordered relative to
         // framework middleware, so this must be explicit.
         $middleware->priority([
-            \Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests::class,
-            \Illuminate\Cookie\Middleware\EncryptCookies::class,
-            \Illuminate\Session\Middleware\StartSession::class,
-            \Illuminate\View\Middleware\ShareErrorsFromSession::class,
-            \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
+            HandlePrecognitiveRequests::class,
+            EncryptCookies::class,
+            StartSession::class,
+            ShareErrorsFromSession::class,
+            AuthenticatesRequests::class,
             ResolveCurrentBusiness::class,
-            \Illuminate\Routing\Middleware\ThrottleRequests::class,
-            \Illuminate\Routing\Middleware\ThrottleRequestsWithRedis::class,
-            \Illuminate\Contracts\Session\Middleware\AuthenticatesSessions::class,
-            \Illuminate\Routing\Middleware\SubstituteBindings::class,
-            \Illuminate\Auth\Middleware\Authorize::class,
+            // W3: must run AFTER the business is resolved, or it compares the
+            // page's stamp against nothing and lets every write through.
+            EnsurePageBusinessMatches::class,
+            ThrottleRequests::class,
+            ThrottleRequestsWithRedis::class,
+            AuthenticatesSessions::class,
+            SubstituteBindings::class,
+            Authorize::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

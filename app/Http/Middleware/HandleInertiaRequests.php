@@ -52,6 +52,12 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
             ],
+            // W3. The business this page was BUILT for, which is not the same
+            // thing as the business the session holds by the time somebody
+            // clicks a button in it. The client sends it back on every mutating
+            // request and EnsurePageBusinessMatches refuses a mismatch, the same
+            // way a CSRF token makes a page assert the context it came from.
+            'current_business_id' => fn () => app(BusinessContext::class)->id(),
             'pendingApprovalsCount' => fn () => $this->actionableApprovalsCount($request),
             'canReviewApprovals' => fn () => $this->canReviewApprovals($request),
             'canManageUsers' => fn () => (bool) $request->user()?->can('foundation.users.manage'),
