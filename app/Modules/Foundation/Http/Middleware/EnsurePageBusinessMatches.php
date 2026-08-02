@@ -27,7 +27,13 @@ class EnsurePageBusinessMatches
 {
     public const HEADER = 'X-Business-Id';
 
-    public const MESSAGE = 'This page was opened for a different business. Please reload.';
+    /**
+     * Joy's wording, revised 2026-08-02 once he saw the behaviour. The first
+     * version said "Please reload", but the rejection redirects back, so the tab
+     * has already reloaded itself by the time anybody reads it. This says what
+     * actually happened, and says plainly that nothing was written.
+     */
+    public const MESSAGE = 'This page belongs to a different business because you switched businesses in another tab. No changes were saved. Please reopen this page from the current business.';
 
     /**
      * ⚠⚠ The switch endpoint is not optional here. After switching in tab B,
