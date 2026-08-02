@@ -1,7 +1,9 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\AssignSchedule;
@@ -255,7 +257,10 @@ it('confirms a whole batch by paying every payslip in it', function () {
     $batches = app(CreateDisbursementBatches::class)->handle($run, $this->hr);
     $batch = $batches->firstWhere('method', SalaryPaymentMethod::BankTransfer);
 
-    $paid = app(ConfirmDisbursementBatch::class)->handle($batch, $this->hr, null, 'ADV-9911');
+    // ⚠ Confirmation now requires the account the money left from. That is the
+    // point of the change, not an inconvenience of it: a payment nobody can
+    // trace to an account cannot appear in a cash book.
+    $paid = app(ConfirmDisbursementBatch::class)->handle($batch, $this->hr, null, 'ADV-9911', disAccount());
 
     expect($paid)->toBe(1);
     expect($batch->fresh()->isConfirmed())->toBeTrue();
@@ -271,7 +276,7 @@ it('does not pay an already-settled payslip a second time when the batch is conf
     $payslip = disPayslip($run);
     app(RecordPayslipPayment::class)->paid($payslip, $this->hr, (float) $payslip->net);
 
-    expect(app(ConfirmDisbursementBatch::class)->handle($batch, $this->hr))->toBe(0);
+    expect(app(ConfirmDisbursementBatch::class)->handle($batch, $this->hr, moneyAccount: disAccount()))->toBe(0);
     expect($payslip->fresh()->paidTotal())->toBe(round((float) $payslip->net, 2));
 });
 
@@ -530,7 +535,10 @@ it('confirms a batch through the real HTTP route', function () {
     app(CreateDisbursementBatches::class)->handle($run, $this->hr);
     $batch = DisbursementBatch::where('method', SalaryPaymentMethod::Cash)->sole();
 
-    disHr()->post(route('hrm.batches.confirm', $batch), ['advice_reference' => 'CASH-01'])
+    disHr()->post(route('hrm.batches.confirm', $batch), [
+        'advice_reference' => 'CASH-01',
+        'money_account_id' => disAccount()->id,
+    ])
         ->assertRedirect();
 
     expect(disPayslip($run, $this->cashEmployee)->fresh()->paymentStatus())->toBe(PayslipPaymentStatus::Paid);
@@ -547,3 +555,15 @@ it('keeps a locked payroll payable, since locking follows disbursement', functio
 
     expect($payslip->fresh()->paymentStatus())->toBe(PayslipPaymentStatus::Paid);
 });
+
+/**
+ * The account salaries are paid from. ⚠ Created on demand rather than in
+ * beforeEach so it is obvious in each test that a payment now names one.
+ */
+function disAccount(): MoneyAccount
+{
+    return MoneyAccount::firstOrCreate(
+        ['name' => 'Payroll account'],
+        ['type' => MoneyAccountType::Bank, 'account_number' => '1501202536477001'],
+    );
+}

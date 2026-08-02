@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Enums\PaymentEventType;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -38,6 +39,11 @@ class DisbursementBatch extends Model
 {
     use BelongsToBusiness, HasAttachments, HasFactory, LogsActivity;
 
+    public function moneyAccount(): BelongsTo
+    {
+        return $this->belongsTo(MoneyAccount::class, 'money_account_id');
+    }
+
     /** Attachment collection holding the bank advice file or its confirmation. */
     public const ADVICE_COLLECTION = 'bank_advice';
 
@@ -48,6 +54,7 @@ class DisbursementBatch extends Model
         'method',
         'note',
         'advice_reference',
+        'money_account_id',
         'confirmed_at',
         'confirmed_by',
         'created_by',

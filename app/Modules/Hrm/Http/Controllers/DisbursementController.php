@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\StoreAttachment;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Actions\ConfirmDisbursementBatch;
 use App\Modules\Hrm\Actions\CreateDisbursementBatches;
 use App\Modules\Hrm\Actions\RecordPayslipPayment;
@@ -123,6 +124,10 @@ class DisbursementController extends Controller
         $data = $request->validate([
             'paid_on' => ['nullable', 'date'],
             'advice_reference' => ['nullable', 'string', 'max:255'],
+            // ⚠ Required here, not nullable. Confirming means the money has gone
+            // and a payment that cannot say which account it left is the record
+            // that was missing every time somebody was paid.
+            'money_account_id' => ['required', 'exists:money_accounts,id'],
         ]);
 
         $paid = $action->handle(
@@ -130,6 +135,7 @@ class DisbursementController extends Controller
             $request->user(),
             isset($data['paid_on']) ? Carbon::parse($data['paid_on']) : null,
             $data['advice_reference'] ?? null,
+            MoneyAccount::findOrFail($data['money_account_id']),
         );
 
         return back()->with('success', sprintf('%d payslip(s) marked paid in %s.', $paid, $batch->reference));
