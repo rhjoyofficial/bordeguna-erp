@@ -42,9 +42,11 @@ class InventoryAdjustment extends Model
         'direction',
         'product_id',
         'warehouse_id',
+        'stock_batch_id',
         'quantity',
         'reason_id',
         'unit_cost',
+        'new_unit_cost',
         'effective_date',
         'estimated_value',
         'note',
@@ -60,6 +62,7 @@ class InventoryAdjustment extends Model
             'direction' => AdjustmentDirection::class,
             'quantity' => 'decimal:4',
             'unit_cost' => 'decimal:4',
+            'new_unit_cost' => 'decimal:4',
             'estimated_value' => 'decimal:4',
             'effective_date' => 'datetime',
         ];
@@ -71,6 +74,23 @@ class InventoryAdjustment extends Model
             ->logOnly(['type', 'direction', 'product_id', 'warehouse_id', 'quantity', 'unit_cost', 'effective_date', 'estimated_value'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
+    }
+
+    /**
+     * ⚠⚠ The discriminator is the DATA, not the type. An adjustment either moves
+     * units (quantity > 0) or moves money (quantity 0 with a new cost), and the
+     * engine asks that question rather than asking what kind of correction this
+     * is. Slice 3's structural test forbids branching on the type, and adding
+     * `Revaluation` as a seventh case required no engine change at all.
+     */
+    public function changesValueOnly(): bool
+    {
+        return $this->new_unit_cost !== null && (float) $this->quantity === 0.0;
+    }
+
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(StockBatch::class, 'stock_batch_id');
     }
 
     public function product(): BelongsTo

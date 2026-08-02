@@ -91,6 +91,8 @@ class RecordPurchaseReturn
                     throw new InvalidArgumentException("Cannot return {$quantity} of line #{$line->id}; only {$returnable} is returnable.");
                 }
 
+                $movements = collect();
+
                 if ($line->product->type->isStocked()) {
                     // I1. Reverse THIS line's own receipts, oldest first, rather
                     // than withdrawing FIFO from the warehouse. The goods going
@@ -98,7 +100,7 @@ class RecordPurchaseReturn
                     // note is at their price. Purchasing still never touches
                     // stock tables: it knows which movements its receipts
                     // created, and Inventory decides how to undo them.
-                    $this->reverseStockReceipt->handle(
+                    $movements = $this->reverseStockReceipt->handle(
                         receipts: $this->receiptMovementsFor($line),
                         quantity: $quantity,
                         performedBy: $returnedBy,
@@ -106,9 +108,17 @@ class RecordPurchaseReturn
                     );
                 }
 
+                // A2. ⚠ Receipts have always kept this link and returns never
+                // did, so the movements sending goods BACK to a supplier could
+                // not reach the return - and a credit-note journal could not
+                // tell which supplier to credit except by inferring through
+                // `reverses_movement_id`. A posting that depends on a two-hop
+                // inference credits the wrong supplier the first time somebody
+                // returns goods received on two different orders.
                 $return->lines()->create([
                     'purchase_order_line_id' => $line->id,
                     'quantity_returned' => $quantity,
+                    'stock_movement_id' => $movements->first()?->id,
                 ]);
 
                 $line->update(['quantity_returned' => (float) $line->quantity_returned + (float) $quantity]);

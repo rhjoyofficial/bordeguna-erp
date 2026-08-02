@@ -27,6 +27,11 @@ enum InventoryAdjustmentType: string
     case InternalConsumption = 'internal_consumption';
     case ManualCorrection = 'manual_correction';
 
+    // ⚠ The SEVENTH type, added 2026-08-02 for A1. It required no change to the
+    // adjustment engine at all - which is the first real test of the claim §3 of
+    // the workflow architecture made, rather than a claim made in principle.
+    case Revaluation = 'revaluation';
+
     public function label(): string
     {
         // ⚠ Presentation only, and deliberately a lookup rather than a match on
@@ -39,6 +44,7 @@ enum InventoryAdjustmentType: string
             'lost_or_stolen' => 'Lost or stolen',
             'internal_consumption' => 'Internal consumption',
             'manual_correction' => 'Manual correction',
+            'revaluation' => 'Revaluation',
         ][$this->value] ?? $this->value;
     }
 }

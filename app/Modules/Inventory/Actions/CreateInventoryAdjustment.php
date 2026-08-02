@@ -45,19 +45,33 @@ class CreateInventoryAdjustment
         ?string $note = null,
         mixed $effectiveDate = null,
         ?Model $source = null,
+        ?StockBatch $batch = null,
+        ?string $newUnitCost = null,
     ): InventoryAdjustment {
         if (! $product->type->isStocked()) {
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
         }
 
-        if ((float) $quantity <= 0) {
+        // ⚠ A1. An adjustment moves EITHER units or money. A zero quantity is
+        // only meaningful when it carries a new cost; otherwise it is a request
+        // to do nothing, and the original guard still refuses it.
+        $revaluing = $newUnitCost !== null && (float) $quantity === 0.0;
+
+        if (! $revaluing && (float) $quantity <= 0) {
             throw new InvalidArgumentException('An adjustment quantity must be greater than zero.');
+        }
+
+        // ⚠ Value lives per COST LAYER. Revaluing "the product" would mean
+        // inventing a spread across layers, which is a valuation rule nobody has
+        // asked for and exactly the kind this project refuses to guess.
+        if ($revaluing && $batch === null) {
+            throw new InvalidArgumentException('A revaluation must name the stock batch whose value is changing.');
         }
 
         // ⚠ An increase creates inventory value out of nothing, so the cost is
         // never invented. C-SC-1: the UI suggests the latest purchase cost, a
         // human accepts or overrides it, and it arrives here already decided.
-        if ($direction === AdjustmentDirection::Increase && $unitCost === null) {
+        if (! $revaluing && $direction === AdjustmentDirection::Increase && $unitCost === null) {
             throw new InvalidArgumentException('unitCost is required when an adjustment increases stock.');
         }
 
@@ -65,17 +79,21 @@ class CreateInventoryAdjustment
         // than restated here.
         $appliesAt = EffectiveDate::resolve($effectiveDate, 'effective_date');
 
-        return DB::transaction(function () use ($type, $direction, $product, $warehouse, $quantity, $reason, $createdBy, $unitCost, $note, $appliesAt, $source) {
+        return DB::transaction(function () use ($type, $direction, $product, $warehouse, $quantity, $reason, $createdBy, $unitCost, $note, $appliesAt, $source, $batch, $newUnitCost, $revaluing) {
             $adjustment = InventoryAdjustment::create([
                 'type' => $type,
                 'direction' => $direction,
                 'product_id' => $product->id,
                 'warehouse_id' => $warehouse->id,
+                'stock_batch_id' => $batch?->id,
                 'quantity' => $quantity,
                 'reason_id' => $reason->id,
                 'unit_cost' => $unitCost,
+                'new_unit_cost' => $newUnitCost,
                 'effective_date' => $appliesAt,
-                'estimated_value' => $this->estimateValue($direction, $product, $warehouse, $quantity, $unitCost),
+                'estimated_value' => $revaluing
+                    ? $this->estimateRevaluation($batch, $newUnitCost)
+                    : $this->estimateValue($direction, $product, $warehouse, $quantity, $unitCost),
                 'note' => $note,
                 'source_type' => $source ? $source::class : null,
                 'source_id' => $source?->getKey(),
@@ -95,6 +113,20 @@ class CreateInventoryAdjustment
 
             return $adjustment->fresh(['approvalRequest', 'movements']);
         });
+    }
+
+    /**
+     * What a revaluation is worth: the units on hand times the change in cost.
+     *
+     * ⚠ Computed once, here, and stored. The quantity on hand changes over time,
+     * so recomputing this later would produce a different number for the same
+     * event.
+     */
+    private function estimateRevaluation(StockBatch $batch, string $newUnitCost): string
+    {
+        $delta = ((float) $newUnitCost - (float) $batch->unit_cost) * (float) $batch->current_quantity;
+
+        return number_format(abs($delta), 4, '.', '');
     }
 
     private function maySelfApprove(User $actor, InventoryAdjustment $adjustment): bool

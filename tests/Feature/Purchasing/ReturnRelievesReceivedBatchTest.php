@@ -16,6 +16,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Actions\RecordPurchaseReturn;
+use App\Modules\Purchasing\Models\PurchaseReturnLine;
 use App\Modules\Purchasing\Models\Supplier;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -178,4 +179,29 @@ it('refuses to return stock that has already left the warehouse', function () {
 
     // And nothing moved: the refusal is total, not partial.
     expect((float) $order->lines->first()->fresh()->quantity_returned)->toBe(0.0);
+});
+
+it('keeps the movement on the return line, so a credit note can find its supplier', function () {
+    // ⚠ A2. `goods_receipt_lines` has always carried `stock_movement_id`;
+    // return lines never did. So the movements sending goods BACK could not
+    // reach the return, and a credit-note journal could only find the supplier
+    // by inferring through `reverses_movement_id` - a two-hop inference that
+    // credits the wrong supplier the first time somebody returns goods received
+    // on two different orders.
+    $order = receivedOrder($this, '10', '120');
+
+    app(RecordPurchaseReturn::class)->handle($order, [
+        ['line' => $order->lines->first(), 'quantity' => '5'],
+    ], $this->user);
+
+    $line = PurchaseReturnLine::sole();
+
+    expect($line->stock_movement_id)->not->toBeNull();
+
+    // And the chain a journal actually walks: movement → return → order → supplier.
+    $movement = StockMovement::findOrFail($line->stock_movement_id);
+
+    expect($movement->direction->value)->toBe('out')
+        ->and((float) $movement->unit_cost)->toBe(120.0)
+        ->and($line->purchaseReturn->purchaseOrder->supplier_id)->toBe($this->supplier->id);
 });

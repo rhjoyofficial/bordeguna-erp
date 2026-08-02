@@ -16,6 +16,7 @@ class PurchaseReturnLine extends Model
         'purchase_return_id',
         'purchase_order_line_id',
         'quantity_returned',
+        'stock_movement_id',
     ];
 
     protected function casts(): array

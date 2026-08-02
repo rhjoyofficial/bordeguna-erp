@@ -127,6 +127,11 @@ function ReceiptForm({ products, warehouses }: { products: Option[]; warehouses:
             <div className="grid gap-2">
                 <Label>Unit cost</Label>
                 <Input value={data.unit_cost} onChange={(e) => setData('unit_cost', e.target.value)} />
+                {/* C-ACC-1. Bor De Guna is not doing VAT accounting yet, so the
+                    assumption is stated rather than enforced: movements are
+                    immutable, and a number whose meaning nobody wrote down is
+                    permanently ambiguous. */}
+                <p className="text-muted-foreground text-xs">Amount paid per unit, including any taxes charged.</p>
                 <InputError message={errors.unit_cost} />
             </div>
             <div className="grid gap-2">
@@ -222,6 +227,7 @@ function DirectAdjustmentForm({ products, warehouses, reasons }: { products: Opt
                 <div className="grid gap-2">
                     <Label>Unit cost</Label>
                     <Input value={data.unit_cost} onChange={(e) => setData('unit_cost', e.target.value)} />
+                    <p className="text-muted-foreground text-xs">Amount paid per unit, including any taxes charged.</p>
                     <InputError message={errors.unit_cost} />
                 </div>
             )}
@@ -399,6 +405,7 @@ function RequestAdjustmentForm({
                 <div className="grid gap-2">
                     <Label>Unit cost</Label>
                     <Input value={data.unit_cost} onChange={(e) => setData('unit_cost', e.target.value)} />
+                    <p className="text-muted-foreground text-xs">Amount paid per unit, including any taxes charged.</p>
                     <InputError message={errors.unit_cost} />
                 </div>
             )}
