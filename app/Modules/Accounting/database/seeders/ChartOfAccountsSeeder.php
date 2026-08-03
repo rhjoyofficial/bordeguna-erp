@@ -80,7 +80,9 @@ class ChartOfAccountsSeeder extends Seeder
         // it and the month does not close.
         ['2120', 'Goods Received Not Invoiced', AccountType::Liability, '2100', true, 'goods_received_not_invoiced'],
         ['2130', 'Salaries and Wages Payable', AccountType::Liability, '2100', true, 'salaries_payable'],
-        ['2140', 'Employee Deductions Payable', AccountType::Liability, '2100', true, null],
+        // Tax and provident fund withheld from pay and owed onward. Slugged
+        // because payroll posting has to find it (Phase 3).
+        ['2140', 'Employee Deductions Payable', AccountType::Liability, '2100', true, 'employee_deductions_payable'],
         ['2150', 'Advances from Customers', AccountType::Liability, '2100', true, null],
         ['2160', 'Accrued Expenses', AccountType::Liability, '2100', true, null],
 
@@ -124,7 +126,7 @@ class ChartOfAccountsSeeder extends Seeder
         ['6200', 'Rent', AccountType::Expense, '6000', true, null],
         ['6210', 'Electricity, Gas and Water', AccountType::Expense, '6000', true, null],
         ['6220', 'Internet and Telephone', AccountType::Expense, '6000', true, null],
-        ['6230', 'Fuel and Conveyance', AccountType::Expense, '6000', true, null],
+        ['6230', 'Fuel and Conveyance', AccountType::Expense, '6000', true, 'fuel_and_conveyance'],
         ['6240', 'Repairs and Maintenance', AccountType::Expense, '6000', true, null],
         ['6250', 'Office Supplies and Stationery', AccountType::Expense, '6000', true, null],
         ['6260', 'Marketing and Advertising', AccountType::Expense, '6000', true, null],

@@ -2,10 +2,10 @@
 
 namespace App\Modules\Hrm\Actions;
 
+use App\Models\User;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
 use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Models\PayrollRun;
-use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -27,6 +27,7 @@ class TransitionPayrollRun
         private readonly NotifyStageApprovers $notify,
         private readonly PostPayrollRecoveries $recoveries,
         private readonly PostLoanRepayments $loanRepayments,
+        private readonly PostPayrollAccrual $accrual,
     ) {}
 
     /**
@@ -64,23 +65,44 @@ class TransitionPayrollRun
      */
     public function markApproved(PayrollRun $run, User $user): PayrollRun
     {
-        $run->update([
-            'status' => PayrollStatus::Approved,
-            'approved_at' => now(),
-            'approved_by' => $user->id,
-        ]);
+        return DB::transaction(function () use ($run, $user) {
+            $run->update([
+                'status' => PayrollStatus::Approved,
+                'approved_at' => now(),
+                'approved_by' => $user->id,
+            ]);
 
-        return $run->fresh();
+            // ⚠⚠ THE ACCRUAL. Approval is the moment the obligation exists, so
+            // it is the moment the cost belongs in the books (C-GL-5). Posted
+            // automatically from the business event and never by hand, per
+            // Joy's principle of 2026-08-03 - a wage figure with two possible
+            // origins can never be conclusively reconciled.
+            //
+            // ⚠ In the same transaction as the status change: a run that is
+            // approved but unposted, or posted but unapproved, is a state
+            // nobody could reconcile and neither is recoverable by retrying.
+            $this->accrual->handle($run, $user);
+
+            return $run->fresh();
+        });
     }
 
-    public function markRejected(PayrollRun $run, ?string $reason = null): PayrollRun
+    public function markRejected(PayrollRun $run, User $user, ?string $reason = null): PayrollRun
     {
-        $run->update([
-            'status' => PayrollStatus::Rejected,
-            'closed_reason' => $reason,
-        ]);
+        return DB::transaction(function () use ($run, $user, $reason) {
+            $run->update([
+                'status' => PayrollStatus::Rejected,
+                'closed_reason' => $reason,
+            ]);
 
-        return $run->fresh();
+            // Defensive: a rejected run has normally never been approved and so
+            // has no journal. `reverse` returns null when there is nothing to
+            // undo, and the alternative is a path where a posted cost survives
+            // the run that explained it.
+            $this->accrual->reverse($run, $user);
+
+            return $run->fresh();
+        });
     }
 
     /**
@@ -130,16 +152,29 @@ class TransitionPayrollRun
     /**
      * @throws ValidationException
      */
-    public function cancel(PayrollRun $run, string $reason): PayrollRun
+    public function cancel(PayrollRun $run, User $user, string $reason): PayrollRun
     {
         $this->guard($run, PayrollStatus::Cancelled);
 
-        $run->update([
-            'status' => PayrollStatus::Cancelled,
-            'closed_reason' => $reason,
-        ]);
+        return DB::transaction(function () use ($run, $user, $reason) {
+            $run->update([
+                'status' => PayrollStatus::Cancelled,
+                'closed_reason' => $reason,
+            ]);
 
-        return $run->fresh();
+            // ⚠ DEFENSIVE, and worth saying why rather than implying more.
+            // `transitionableTo()` does not allow Approved to reach Cancelled
+            // today - an approved run goes to Disbursed or is reopened - so no
+            // run arriving here has a journal, and this reverses nothing.
+            //
+            // It stays because the transition map is the kind of thing that
+            // gets one more arrow added to it, and the day Approved becomes
+            // cancellable the cost has to come back out of the books on the
+            // same commit. `reverse` returns null when there is nothing to undo.
+            $this->accrual->reverse($run, $user);
+
+            return $run->fresh();
+        });
     }
 
     /**
@@ -152,7 +187,7 @@ class TransitionPayrollRun
      *
      * @throws ValidationException
      */
-    public function reopen(PayrollRun $run, string $reason): PayrollRun
+    public function reopen(PayrollRun $run, User $user, string $reason): PayrollRun
     {
         if (! $run->status->isReopenable()) {
             throw ValidationException::withMessages([
@@ -162,7 +197,7 @@ class TransitionPayrollRun
             ]);
         }
 
-        return DB::transaction(function () use ($run, $reason) {
+        return DB::transaction(function () use ($run, $user, $reason) {
             $next = $run->period->runs()->create([
                 'version' => $run->version + 1,
                 'status' => PayrollStatus::Draft,
@@ -174,6 +209,13 @@ class TransitionPayrollRun
                 'status' => PayrollStatus::Cancelled,
                 'closed_reason' => sprintf('Reopened as version %d: %s', $next->version, $reason),
             ]);
+
+            // ⚠⚠ The superseded version's cost comes back out. Without this the
+            // new version's accrual would ADD to the old one and the wage bill
+            // would double every time somebody reopened a payroll - a mistake
+            // that would look like a rounding problem for exactly one month and
+            // then like fraud.
+            $this->accrual->reverse($run, $user);
 
             return $next;
         });

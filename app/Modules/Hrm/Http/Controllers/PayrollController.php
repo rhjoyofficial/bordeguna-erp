@@ -4,14 +4,16 @@ namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\RequestPayrollUnlock;
 use App\Modules\Hrm\Actions\TransitionPayrollRun;
 use App\Modules\Hrm\Jobs\CalculatePayrollRunJob;
 use App\Modules\Hrm\Models\PayrollPeriod;
-use App\Modules\Hrm\Models\PayrollUnlockRequest;
 use App\Modules\Hrm\Models\PayrollRun;
+use App\Modules\Hrm\Models\PayrollUnlockRequest;
 use App\Modules\Hrm\Models\Payslip;
 use App\Modules\Hrm\Models\PayslipLine;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -134,7 +136,7 @@ class PayrollController extends Controller
     /**
      * Progress for a queued run, polled by the screen while it works.
      */
-    public function progress(PayrollRun $run): \Illuminate\Http\JsonResponse
+    public function progress(PayrollRun $run): JsonResponse
     {
         $this->authorize('hrm.payroll.manage');
 
@@ -186,7 +188,7 @@ class PayrollController extends Controller
         $note = $request->validate(['note' => ['nullable', 'string', 'max:500']])['note'] ?? null;
 
         $approval->reject($request->user(), $note);
-        $transition->markRejected($run, $note);
+        $transition->markRejected($run, $request->user(), $note);
 
         return back()->with('success', 'Payroll rejected.');
     }
@@ -217,7 +219,7 @@ class PayrollController extends Controller
         $this->authorize('hrm.payroll.manage');
 
         $reason = $request->validate(['reason' => ['required', 'string', 'max:255']])['reason'];
-        $next = $transition->reopen($run, $reason);
+        $next = $transition->reopen($run, $request->user(), $reason);
 
         return back()->with('success', sprintf('Reopened as version %d.', $next->version));
     }
@@ -227,7 +229,7 @@ class PayrollController extends Controller
         $this->authorize('hrm.payroll.manage');
 
         $reason = $request->validate(['reason' => ['required', 'string', 'max:255']])['reason'];
-        $transition->cancel($run, $reason);
+        $transition->cancel($run, $request->user(), $reason);
 
         return back()->with('success', 'Payroll cancelled.');
     }
@@ -292,7 +294,7 @@ class PayrollController extends Controller
 
     private function businessId(): int
     {
-        return app(\App\Modules\Foundation\Support\BusinessContext::class)->id();
+        return app(BusinessContext::class)->id();
     }
 
     /**

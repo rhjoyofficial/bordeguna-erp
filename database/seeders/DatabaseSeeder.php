@@ -18,6 +18,7 @@ use App\Modules\Hrm\database\seeders\BorDeGunaOrganisationSeeder;
 use App\Modules\Hrm\database\seeders\HrmChangeRequestWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\LeaveTypeSeeder;
 use App\Modules\Hrm\database\seeders\LeaveWorkflowSeeder;
+use App\Modules\Hrm\database\seeders\PayrollAccountMappingSeeder;
 use App\Modules\Hrm\database\seeders\PayrollInputWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\PayrollWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\SalaryComponentSeeder;
@@ -102,5 +103,8 @@ class DatabaseSeeder extends Seeder
         // balances (C-GL-1). It depends on no other seeder and nothing depends
         // on it yet, so it sits at the end where it is easy to see.
         $this->call(ChartOfAccountsSeeder::class);
+        // ⚠ AFTER the chart, because it resolves accounts by system slug, and
+        // after the businesses, because it walks every one of them.
+        $this->call(PayrollAccountMappingSeeder::class);
     }
 }

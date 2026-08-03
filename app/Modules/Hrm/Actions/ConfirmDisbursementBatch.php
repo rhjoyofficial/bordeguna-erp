@@ -28,7 +28,10 @@ use Illuminate\Validation\ValidationException;
  */
 class ConfirmDisbursementBatch
 {
-    public function __construct(private readonly RecordPayslipPayment $payments) {}
+    public function __construct(
+        private readonly RecordPayslipPayment $payments,
+        private readonly PostPayrollPayment $posting,
+    ) {}
 
     /**
      * @throws ValidationException
@@ -105,6 +108,13 @@ class ConfirmDisbursementBatch
                 'confirmed_at' => now(),
                 'confirmed_by' => $user->id,
             ]);
+
+            // ⚠⚠ The money has gone, so the ledger says so - automatically,
+            // from the business event, never by hand. This is the entry that
+            // clears the payable the approval accrued, and it is posted in the
+            // SAME transaction as the confirmation: a batch confirmed but
+            // unposted is a payment the cash book cannot see.
+            $this->posting->handle($batch->refresh(), $moneyAccount, $user, $paidOn);
 
             return $paid;
         });

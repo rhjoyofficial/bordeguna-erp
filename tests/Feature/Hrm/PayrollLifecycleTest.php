@@ -272,7 +272,7 @@ it('reopens an approved payroll as a new version, superseding the old one', func
     $transition->review($run, $this->hr);
     cycleHr()->post(route('hrm.payroll.approve', $run));
 
-    $next = $transition->reopen($run->fresh(), 'Attendance correction landed');
+    $next = $transition->reopen($run->fresh(), $this->hr, 'Attendance correction landed');
 
     expect($next->version)->toBe(2);
     expect($next->status)->toBe(PayrollStatus::Draft);
@@ -289,7 +289,7 @@ it('refuses to reopen a disbursed payroll, since the difference becomes an arrea
     cycleHr()->post(route('hrm.payroll.approve', $run));
     $transition->disburse($run->fresh(), $this->hr);
 
-    expect(fn () => $transition->reopen($run->fresh(), 'Too late'))
+    expect(fn () => $transition->reopen($run->fresh(), $this->hr, 'Too late'))
         ->toThrow(ValidationException::class);
 });
 
