@@ -72,6 +72,11 @@ class HandleInertiaRequests extends Middleware
                 || $request->user()?->can('hrm.salary.view')),
             // WFL-04: who may generate a payroll run.
             'canManagePayroll' => fn () => (bool) $request->user()?->can('hrm.payroll.manage'),
+            // Accounting Phase 2. Reading the ledger is close to reading payroll
+            // once salary journals exist, so it follows the same ACL-02 shape:
+            // Owner, Finance and Payroll, nobody else by default.
+            'canViewAccounting' => fn () => (bool) $request->user()?->can('accounting.view'),
+            'canManageChartOfAccounts' => fn () => (bool) $request->user()?->can('accounting.chart.manage'),
             // Self-scope (P3): whether the signed-in user has their own employee
             // record, so the "My profile" self-service link can show. Distinct
             // from canManageEmployees — an employee who isn't HR still has one.

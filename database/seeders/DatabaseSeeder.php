@@ -3,6 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Modules\Accounting\database\seeders\AccountingPermissionsSeeder;
+use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Foundation\Support\SeedCredentials;
 use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
 use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
@@ -67,6 +69,10 @@ class DatabaseSeeder extends Seeder
         $this->call(HrmPermissionsSeeder::class);
         $this->call(InventoryPermissionsSeeder::class);
         $this->call(PurchasingPermissionsSeeder::class);
+        // ⚠ Like every permission seeder here, it iterates Business::all(), so
+        // it must run after BorDeGunaOrganisationSeeder has created the real
+        // business and its Payroll and Finance roles.
+        $this->call(AccountingPermissionsSeeder::class);
         $this->call(ApprovalWorkflowSeeder::class);
         $this->call(HrmChangeRequestWorkflowSeeder::class);
         $this->call(BangladeshHolidayCalendarSeeder::class);
@@ -91,5 +97,10 @@ class DatabaseSeeder extends Seeder
 
         $this->call(InventoryReasonsSeeder::class);
         $this->call(InventoryDemoDataSeeder::class);
+
+        // ⚠ Installation-level, not per business: ONE chart, four sets of
+        // balances (C-GL-1). It depends on no other seeder and nothing depends
+        // on it yet, so it sits at the end where it is easy to see.
+        $this->call(ChartOfAccountsSeeder::class);
     }
 }

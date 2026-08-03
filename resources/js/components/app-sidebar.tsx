@@ -3,11 +3,11 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Banknote, Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileBarChart, FileUp, Fingerprint, HandCoins, LayoutDashboard, Palmtree, PenSquare, ReceiptText, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
+import { Banknote, BookOpen, Boxes, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileBarChart, FileUp, Fingerprint, HandCoins, LayoutDashboard, Palmtree, PenSquare, ReceiptText, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
-    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, canManageScheduling, canManageAttendance, canManageLeave, canAccessSalary, canManagePayroll, hasEmployeeProfile } =
+    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, canManageScheduling, canManageAttendance, canManageLeave, canAccessSalary, canManagePayroll, canViewAccounting, hasEmployeeProfile } =
         usePage<SharedData>().props;
 
     const navGroups: NavGroup[] = [
@@ -100,6 +100,17 @@ export function AppSidebar() {
                                 ]
                               : []),
                       ],
+                  },
+              ]
+            : []),
+        // Accounting Phase 2. Gated on accounting.view, which is Owner, Finance
+        // and Payroll by default - a general ledger eventually carries a line
+        // per salary payment, so reading it is close to reading payroll.
+        ...(canViewAccounting
+            ? [
+                  {
+                      label: 'Accounting',
+                      items: [{ title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen }],
                   },
               ]
             : []),
