@@ -39,6 +39,9 @@ class Loan extends Model
         'reference',
         'type',
         'status',
+        // Which bank, cash box or wallet the principal was handed over from.
+        // Nullable until disbursement; required at it once accounting is on.
+        'money_account_id',
         'principal',
         'installment_amount',
         'installment_count',

@@ -2,6 +2,8 @@
 
 namespace App\Modules\Hrm\Actions;
 
+use App\Models\User;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Enums\LoanInstallmentStatus;
 use App\Modules\Hrm\Enums\LoanLedgerEntryType;
 use App\Modules\Hrm\Enums\LoanStatus;
@@ -28,21 +30,41 @@ use Illuminate\Support\Facades\DB;
  */
 class DisburseLoan
 {
-    public function handle(Loan $loan): Loan
+    public function __construct(private readonly PostLoanDisbursement $posting) {}
+
+    /**
+     * ⚠ `$moneyAccount` is optional in the SIGNATURE and required in practice
+     * once accounting is switched on. A loan approved before the ledger existed
+     * must still be disbursable, and an installation with no accounting at all
+     * never needs to answer the question - the same on-ramp every other
+     * integration uses.
+     */
+    public function handle(Loan $loan, ?MoneyAccount $moneyAccount = null, ?User $disbursedBy = null): Loan
     {
         if ($loan->isApplied()) {
             return $loan;
         }
 
-        return DB::transaction(function () use ($loan) {
+        return DB::transaction(function () use ($loan, $moneyAccount, $disbursedBy) {
             $loan->update([
                 'status' => LoanStatus::Active,
+                'money_account_id' => $moneyAccount?->id,
                 'disbursed_on' => now()->toDateString(),
                 'applied_at' => now(),
             ]);
 
             $this->postDisbursement($loan);
             $this->generateSchedule($loan);
+
+            // ⚠⚠ Money has left the business and the employee now owes it, so
+            // the ledger says so - Dr Employee Advances, Cr the account it came
+            // from. In the same transaction as the loan ledger entry, so the two
+            // records of the same debt cannot disagree.
+            $this->posting->handle(
+                $loan->fresh(['employee']),
+                $moneyAccount,
+                $disbursedBy ?? Auth::user(),
+            );
 
             return $loan->fresh(['installments', 'ledgerEntries']);
         });

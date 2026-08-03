@@ -69,6 +69,12 @@ class PayrollAccountMappingSeeder extends Seeder
 
         // ─── The two sides of the settlement ─────────────────────────────────
         'payroll.net_payable' => 'salaries_payable',
+
+        // ⚠ The DEBIT side of handing a loan over, and the mirror of the
+        // `loan_repayment` deduction above. Between the two, "what do the staff
+        // owe us" becomes a ledger balance rather than a number somebody adds up
+        // from the loan module.
+        'payroll.employee_advances' => 'employee_advances',
     ];
 
     public function run(): void

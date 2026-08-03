@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Actions\DisburseLoan;
 use App\Modules\Hrm\Actions\RequestLoan;
 use App\Modules\Hrm\Actions\SettleLoan;
@@ -110,7 +111,14 @@ class LoanController extends Controller
             return back()->with('success', 'Approved. Sent to the next stage.');
         }
 
-        $applied = $disburse->handle($loan);
+        // ⚠ The final approver says which account the money leaves from. Same
+        // question a payroll disbursement asks, and for the same reason: where
+        // the cash came from is a fact only the person handing it over knows.
+        $account = $request->filled('money_account_id')
+            ? MoneyAccount::find($request->integer('money_account_id'))
+            : null;
+
+        $applied = $disburse->handle($loan, $account, $request->user());
 
         return back()->with('success', sprintf(
             'Loan approved and disbursed. %d installment(s) scheduled from %s.',
