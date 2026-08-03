@@ -11,6 +11,8 @@ interface AccountOption {
     id: number;
     label: string;
     type_label: string;
+    /** Owned by Payroll, Inventory, Purchasing or Fixed Assets. */
+    system_owned: boolean;
 }
 
 interface TypeOption {
@@ -174,8 +176,16 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                                         >
                                             <option value="">Choose an account</option>
                                             {accounts.map((account) => (
-                                                <option key={account.id} value={account.id}>
+                                                <option
+                                                    key={account.id}
+                                                    value={account.id}
+                                                    // Owned accounts stay selectable for an opening
+                                                    // balance, which is the one entry that
+                                                    // legitimately sets them by hand.
+                                                    disabled={account.system_owned && data.journal_type !== 'opening_balance'}
+                                                >
                                                     {account.label}
+                                                    {account.system_owned ? ' — maintained by another module' : ''}
                                                 </option>
                                             ))}
                                         </select>

@@ -12,6 +12,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\SubsystemAccounts;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -67,6 +68,11 @@ class JournalController extends Controller
 
     public function create(): Response
     {
+        // ⚠ Shown on the form rather than only enforced on save. A rule the user
+        // meets as a rejection after typing eight lines is a rule they resent;
+        // the same rule visible in the list is one they work with.
+        $owned = SubsystemAccounts::on(Carbon::today());
+
         return Inertia::render('accounting/journals/create', [
             'accounts' => Account::query()
                 ->postable()
@@ -76,6 +82,10 @@ class JournalController extends Controller
                     'id' => $account->id,
                     'label' => $account->label(),
                     'type_label' => $account->type->label(),
+                    // True when an operational module owns this account. Still
+                    // selectable for an opening balance, which is the one entry
+                    // that legitimately sets these by hand.
+                    'system_owned' => isset($owned[$account->id]),
                 ]),
             'types' => collect(JournalType::cases())->map(fn (JournalType $type) => [
                 'value' => $type->value,
@@ -154,11 +164,16 @@ class JournalController extends Controller
                 : JournalLineDraft::credit((int) $line['account_id'], $credit, $line['memo'] ?? null);
         }
 
+        $type = JournalType::from($data['journal_type']);
+        $on = Carbon::parse($data['journal_date'])->startOfDay();
+
+        $this->assertNoSubsystemAccounts($data['lines'], $type, $on);
+
         $draft = new JournalDraft(
-            date: Carbon::parse($data['journal_date'])->startOfDay(),
+            date: $on,
             lines: $lines,
             memo: $data['memo'] ?? null,
-            type: JournalType::from($data['journal_type']),
+            type: $type,
         );
 
         $journal = $this->postOrFail(fn () => app(PostJournal::class)->handle($draft, $request->user()));
@@ -170,6 +185,17 @@ class JournalController extends Controller
 
     public function reverse(Request $request, Journal $journal): RedirectResponse
     {
+        // ⚠⚠ A SUBSYSTEM JOURNAL IS CORRECTED BY REVERSING THE BUSINESS EVENT,
+        // never from the ledger screen. Reversing a payroll accrual here would
+        // leave the payroll run approved and its cost gone from the books, with
+        // nothing in either system able to explain the difference. The presence
+        // of a source is exactly the test: a manual journal has none.
+        if ($journal->source_type !== null) {
+            throw ValidationException::withMessages([
+                'lines' => 'This entry was created by another part of the system. Correct it there - reversing it here would leave the two records disagreeing with nothing to explain the difference.',
+            ]);
+        }
+
         $reversal = $this->postOrFail(
             fn () => app(ReverseJournal::class)->handle($journal, $request->user())
         );
@@ -190,6 +216,56 @@ class JournalController extends Controller
             return $post();
         } catch (JournalException|PeriodClosedException $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * ⚠⚠ THE SAFEGUARD. Payroll, Inventory, Purchasing and Fixed Assets own the
+     * accounts they are mapped to, and a human may not post to them by hand.
+     * A wages figure with two possible origins can never be conclusively
+     * reconciled, and the way that principle dies is one well-meaning
+     * correction.
+     *
+     * ⚠ ENFORCED HERE AND NOT IN PostJournal, deliberately. The subsystems
+     * themselves post to these accounts constantly and legitimately; the engine
+     * must stay blind to what kind of journal it is handling, and a structural
+     * test keeps it that way. What is being restricted is the MANUAL ENTRY PATH,
+     * which is a property of this screen rather than of the ledger.
+     *
+     * ⚠ OPENING BALANCES ARE EXEMPT, and must be. The opening position of a
+     * business is precisely a hand-entered figure for Stock on Hand, Accounts
+     * Payable and Employee Advances - there is no subsystem history to derive it
+     * from, because the history predates the system.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     */
+    private function assertNoSubsystemAccounts(array $lines, JournalType $type, Carbon $on): void
+    {
+        if ($type === JournalType::OpeningBalance) {
+            return;
+        }
+
+        $owned = SubsystemAccounts::on($on);
+
+        if ($owned === []) {
+            return;
+        }
+
+        foreach ($lines as $index => $line) {
+            $accountId = (int) ($line['account_id'] ?? 0);
+
+            if (! isset($owned[$accountId])) {
+                continue;
+            }
+
+            $account = Account::find($accountId);
+
+            throw ValidationException::withMessages([
+                "lines.{$index}.account_id" => sprintf(
+                    '%s is maintained by another part of the system. Record the business event there instead - entries here would make that account impossible to reconcile.',
+                    $account?->label() ?? 'That account',
+                ),
+            ]);
         }
     }
 
