@@ -3,7 +3,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Banknote, BookOpen, Boxes, Landmark, NotebookPen, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileBarChart, FileUp, Fingerprint, HandCoins, LayoutDashboard, Palmtree, PenSquare, ReceiptText, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
+import { Banknote, BookOpen, Boxes, Landmark, NotebookPen, Scale, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileBarChart, FileUp, Fingerprint, HandCoins, LayoutDashboard, Palmtree, PenSquare, ReceiptText, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
@@ -111,6 +111,7 @@ export function AppSidebar() {
                   {
                       label: 'Accounting',
                       items: [
+                          { title: 'Trial balance', url: '/accounting/trial-balance', icon: Scale },
                           { title: 'Journals', url: '/accounting/journals', icon: NotebookPen },
                           { title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen },
                           { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },

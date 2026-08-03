@@ -3,6 +3,7 @@
 use App\Modules\Accounting\Http\Controllers\AccountController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
+use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -23,6 +24,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // approving his own payroll run.
         Route::get('journals', [JournalController::class, 'index'])->name('journals.index');
         Route::get('journals/{journal}', [JournalController::class, 'show'])->name('journals.show');
+
+        Route::get('trial-balance', [TrialBalanceController::class, 'index'])->name('trial-balance');
     });
 
     Route::middleware('can:accounting.chart.manage')->group(function () {
