@@ -66,7 +66,20 @@ return new class extends Migration
             //
             // ⚠ One row per (payment, bill): paying the same bill twice from one
             // payment is a data-entry slip, not a business case.
-            $table->unique(['supplier_payment_id', 'supplier_bill_id']);
+            //
+            // ⚠⚠ NAMED EXPLICITLY, AND THAT IS NOT COSMETIC. Laravel's generated
+            // name here would be
+            // `supplier_payment_allocations_supplier_payment_id_supplier_bill_id_unique`
+            // at 71 characters, and MySQL refuses any identifier over 64. The
+            // migration aborted on production having already created both
+            // tables, leaving them without this index and the migration
+            // unrecorded - while the whole suite stayed green, because SQLite
+            // has no such limit.
+            //
+            // ⚠ Fifth time this project has been caught by something only the
+            // production driver enforces. Long table names plus a two-column
+            // unique index is the combination to watch.
+            $table->unique(['supplier_payment_id', 'supplier_bill_id'], 'supplier_payment_bill_unique');
             $table->index('supplier_bill_id');
         });
     }
