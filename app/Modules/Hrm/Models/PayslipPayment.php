@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Models;
 
 use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Enums\PaymentEventType;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use Illuminate\Database\Eloquent\Builder;
@@ -35,6 +36,10 @@ class PayslipPayment extends Model
         'disbursement_batch_id',
         'event_type',
         'method',
+        // Which bank, cash box or wallet this payment left from. The batch has
+        // always recorded it; the individual payment did not, so the two paths
+        // left different records and only one reached the ledger.
+        'money_account_id',
         'amount',
         'paid_on',
         'reference',
@@ -56,6 +61,11 @@ class PayslipPayment extends Model
     public function payslip(): BelongsTo
     {
         return $this->belongsTo(Payslip::class);
+    }
+
+    public function moneyAccount(): BelongsTo
+    {
+        return $this->belongsTo(MoneyAccount::class);
     }
 
     public function employee(): BelongsTo

@@ -14,6 +14,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Actions\ConfirmDisbursementBatch;
+use App\Modules\Hrm\Actions\RecordPayslipPayment;
 use App\Modules\Hrm\Actions\TransitionPayrollRun;
 use App\Modules\Hrm\database\seeders\PayrollAccountMappingSeeder;
 use App\Modules\Hrm\Enums\PayrollStatus;
@@ -23,6 +24,7 @@ use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\Payslip;
 use App\Modules\Hrm\Models\PayslipLine;
+use App\Modules\Hrm\Models\PayslipPayment;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
@@ -303,10 +305,15 @@ it('records where the salary money actually went', function () {
 
     app(ConfirmDisbursementBatch::class)->handle($batch, $this->user, Carbon::parse('2026-08-01'), null, $bank);
 
-    $payment = Journal::where('source_type', $batch->getMorphClass())->first();
+    // ⚠⚠ The journal now hangs off the PAYSLIP PAYMENT, not the batch. Posting
+    // moved down to the single payment so that confirming a batch and paying
+    // one person by hand go through the same mechanism - before this, the
+    // individual route moved money and told the ledger nothing.
+    $payment = Journal::where('source_type', (new PayslipPayment)->getMorphClass())->first();
 
     expect($payment)->not->toBeNull()
-        ->and($payment->balance()->isZero())->toBeTrue();
+        ->and($payment->balance()->isZero())->toBeTrue()
+        ->and(Journal::where('source_type', $batch->getMorphClass())->count())->toBe(0);
 
     $payable = Account::bySlug('salaries_payable');
     $cashAtBank = Account::bySlug('cash_at_bank');
@@ -320,6 +327,69 @@ it('records where the salary money actually went', function () {
     // ⚠⚠ And the whole point: after accrual and payment, Wages Payable is back
     // to zero. Nothing is owed because everything was paid.
     expect((int) JournalLine::where('account_id', $payable->id)->sum('amount_minor'))->toBe(0);
+});
+
+it('leaves the same record whether one person is paid or a whole batch', function () {
+    // ⚠⚠ THE POINT OF THIS SLICE. ConfirmDisbursementBatch's docblock has always
+    // claimed that "whole batch" and "employee-wise" are the same mechanism at
+    // two speeds - but only the batch reached the LEDGER, so paying one person
+    // by hand moved money and told the books nothing. The coverage matrix found
+    // it.
+    $run = ($this->buildRun)();
+    app(TransitionPayrollRun::class)->markApproved($run, $this->user);
+    $run = app(TransitionPayrollRun::class)->disburse($run->fresh(), $this->user);
+
+    $bank = MoneyAccount::create([
+        'business_id' => $this->business->id,
+        'name' => 'BRAC', 'type' => MoneyAccountType::Bank,
+        'account_id' => Account::bySlug('cash_at_bank')->id,
+    ]);
+
+    // Paid one at a time, with no batch confirmation anywhere.
+    app(RecordPayslipPayment::class)->paid(
+        payslip: $run->payslips()->first(),
+        user: $this->user,
+        amount: 26500.00,
+        moneyAccount: $bank,
+    );
+
+    $payable = Account::bySlug('salaries_payable');
+    $cashAtBank = Account::bySlug('cash_at_bank');
+
+    // Exactly what the batch route produces: the payable cleared per employee,
+    // the bank down by the same amount.
+    expect((int) JournalLine::where('account_id', $payable->id)->sum('amount_minor'))->toBe(0)
+        ->and((int) JournalLine::where('account_id', $cashAtBank->id)->sum('amount_minor'))->toBe(-2650000);
+
+    $journal = Journal::where('source_type', (new PayslipPayment)->getMorphClass())->first();
+    expect($journal)->not->toBeNull()
+        ->and($journal->lines->first()->party->is($this->employee))->toBeTrue();
+});
+
+it('takes the journal back out when a payment is reversed', function () {
+    $run = ($this->buildRun)();
+    app(TransitionPayrollRun::class)->markApproved($run, $this->user);
+    $run = app(TransitionPayrollRun::class)->disburse($run->fresh(), $this->user);
+
+    $bank = MoneyAccount::create([
+        'business_id' => $this->business->id,
+        'name' => 'BRAC', 'type' => MoneyAccountType::Bank,
+        'account_id' => Account::bySlug('cash_at_bank')->id,
+    ]);
+
+    $payment = app(RecordPayslipPayment::class)->paid(
+        payslip: $run->payslips()->first(),
+        user: $this->user,
+        amount: 26500.00,
+        moneyAccount: $bank,
+    );
+
+    app(RecordPayslipPayment::class)->reverse($payment, $this->user, 'Bank rejected the transfer');
+
+    // ⚠ A bounced transfer took no money, so the bank must come back to where
+    // it was - and the payable must go back to being owed.
+    expect((int) JournalLine::where('account_id', Account::bySlug('cash_at_bank')->id)->sum('amount_minor'))->toBe(0)
+        ->and((int) JournalLine::where('account_id', Account::bySlug('salaries_payable')->id)->sum('amount_minor'))->toBe(-2650000);
 });
 
 it('refuses to confirm from an account that has no ledger account', function () {

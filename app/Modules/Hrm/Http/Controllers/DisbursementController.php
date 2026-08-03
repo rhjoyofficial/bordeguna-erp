@@ -202,6 +202,10 @@ class DisbursementController extends Controller
             'method' => ['nullable', new EnumRule(SalaryPaymentMethod::class)],
             'paid_on' => ['nullable', 'date'],
             'reference' => ['nullable', 'string', 'max:255'],
+            // ⚠ The individual payment now asks the same question the batch
+            // confirmation does. Money leaving without a named account is the
+            // record that made a cash book impossible to produce.
+            'money_account_id' => ['nullable', 'integer', 'exists:money_accounts,id'],
         ]);
 
         $action->paid(
@@ -212,6 +216,7 @@ class DisbursementController extends Controller
             isset($data['paid_on']) ? Carbon::parse($data['paid_on']) : null,
             $data['reference'] ?? null,
             $payslip->batch(),
+            isset($data['money_account_id']) ? MoneyAccount::find($data['money_account_id']) : null,
         );
 
         return back()->with('success', 'Payment recorded.');

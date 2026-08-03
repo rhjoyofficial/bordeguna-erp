@@ -3,6 +3,7 @@
 namespace App\Modules\Hrm\Actions;
 
 use App\Models\User;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Enums\PaymentEventType;
 use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
@@ -28,7 +29,10 @@ use Illuminate\Validation\ValidationException;
  */
 class RecordPayslipPayment
 {
-    public function __construct(private readonly ReconcilePayslipLedgers $reconcile) {}
+    public function __construct(
+        private readonly ReconcilePayslipLedgers $reconcile,
+        private readonly PostPayrollPayment $posting,
+    ) {}
 
     /**
      * @throws ValidationException
@@ -41,6 +45,7 @@ class RecordPayslipPayment
         ?Carbon $paidOn = null,
         ?string $reference = null,
         ?DisbursementBatch $batch = null,
+        ?MoneyAccount $moneyAccount = null,
     ): PayslipPayment {
         $this->guardDisbursed($payslip);
 
@@ -66,7 +71,7 @@ class RecordPayslipPayment
             ]);
         }
 
-        return $this->record($payslip, $user, PaymentEventType::Paid, $amount, $method, $paidOn, $reference, null, $batch);
+        return $this->record($payslip, $user, PaymentEventType::Paid, $amount, $method, $paidOn, $reference, null, $batch, null, $moneyAccount);
     }
 
     /**
@@ -154,8 +159,9 @@ class RecordPayslipPayment
         ?string $failureReason,
         ?DisbursementBatch $batch,
         ?PayslipPayment $reverses = null,
+        ?MoneyAccount $moneyAccount = null,
     ): PayslipPayment {
-        return DB::transaction(function () use ($payslip, $user, $type, $amount, $method, $paidOn, $reference, $failureReason, $batch, $reverses) {
+        return DB::transaction(function () use ($payslip, $user, $type, $amount, $method, $paidOn, $reference, $failureReason, $batch, $reverses, $moneyAccount) {
             $event = PayslipPayment::create([
                 'business_id' => $payslip->business_id,
                 'payslip_id' => $payslip->id,
@@ -166,6 +172,7 @@ class RecordPayslipPayment
                     ?? $batch?->method
                     ?? $payslip->employee?->salary_payment_method
                     ?? SalaryPaymentMethod::Cash,
+                'money_account_id' => $moneyAccount?->id,
                 'amount' => max($amount, 0),
                 'paid_on' => ($paidOn ?? now())->toDateString(),
                 'reference' => $reference,
@@ -178,6 +185,24 @@ class RecordPayslipPayment
             // — it makes the ledgers agree with whether the payslip is settled,
             // rather than reacting to what this particular event was.
             $this->reconcile->handle($payslip->fresh(), $event);
+
+            // ⚠⚠ THE JOURNAL IS POSTED HERE, at the single payment, rather than
+            // at the batch. This action is already the one path both routes
+            // take - ConfirmDisbursementBatch walks it - so posting here is what
+            // finally makes "whole batch" and "employee-wise" the same
+            // mechanism rather than two that can disagree. Before this, paying
+            // one person by hand moved money and told the ledger nothing.
+            //
+            // ⚠ Only a real payment posts. A FAILED attempt moved no money, and
+            // a REVERSED one takes the original journal back out rather than
+            // writing a second entry of its own.
+            if ($type === PaymentEventType::Paid) {
+                $this->posting->handle($event->fresh(['employee', 'moneyAccount']), $moneyAccount, $user);
+            }
+
+            if ($type === PaymentEventType::Reversed && $reverses !== null) {
+                $this->posting->reverse($reverses, $user);
+            }
 
             return $event;
         });

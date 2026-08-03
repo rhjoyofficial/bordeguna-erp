@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Actions\PostJournal;
+use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
@@ -12,97 +13,103 @@ use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\MoneyAccount;
-use App\Modules\Hrm\Models\DisbursementBatch;
+use App\Modules\Hrm\Models\PayslipPayment;
 use Illuminate\Support\Carbon;
 
 /**
- * Records the moment salary money actually leaves an account.
+ * Records the moment one employee's salary actually leaves an account.
  *
- *   Dr  Salaries and Wages Payable   ONE LINE PER EMPLOYEE, clearing the accrual
- *       Cr  Cash at Bank / Cash in Hand   the money account's own ledger account
+ *   Dr  Salaries and Wages Payable (party = employee)
+ *       Cr  the money account's own ledger account
  *
- * ⚠ The credit account comes from `money_accounts.account_id`, not from a
- * mapping key. The mapping answers "what kind of thing is this"; a bank account
- * already knows what it is, and routing it through a key would let two places
- * disagree about where one account reports.
+ * ⚠⚠ POSTED PER PAYMENT, NOT PER BATCH, and that is a deliberate change.
+ * `ConfirmDisbursementBatch`'s own docblock has always said that "whole batch"
+ * and "employee-wise" are the same mechanism at two speeds rather than two
+ * mechanisms that can disagree - but the JOURNAL was posted only at the batch
+ * level, so paying one person by hand moved money and told the ledger nothing.
+ * The coverage matrix found the discrepancy.
  *
- * ⚠ Lives in HRM for the same reason as PostPayrollAccrual: the ledger never
- * learns what a disbursement batch is.
+ * Now every payment posts, whichever route created it, because the batch walks
+ * this same path. A batch of nine produces nine journals, each traceable to the
+ * employee it paid - which is what makes Wages Payable answerable per person.
+ *
+ * ⚠ The credit account comes from `money_accounts.account_id`, not a mapping
+ * key: a bank account already knows what it is.
  */
 class PostPayrollPayment
 {
     public function __construct(private readonly PostJournal $postJournal) {}
 
-    public function handle(DisbursementBatch $batch, MoneyAccount $moneyAccount, User $postedBy, ?Carbon $paidOn = null): ?Journal
+    public function handle(PayslipPayment $payment, ?MoneyAccount $moneyAccount, User $postedBy): ?Journal
     {
-        if ($this->existingJournal($batch) !== null) {
+        if ($this->existingJournal($payment) !== null) {
             return null;
         }
 
-        $on = $paidOn ?? Carbon::today();
+        $on = Carbon::parse($payment->paid_on)->startOfDay();
 
-        // ⚠ The same anchor as the accrual: a business that has not switched
-        // accounting on pays its people exactly as it did before and posts
-        // nothing. See PostPayrollAccrual::isConfigured for why this distinction
-        // exists at all.
+        // The anchor: a business that has not switched accounting on pays its
+        // people exactly as it did before and posts nothing.
         if (AccountMapping::forKeyOn('payroll.net_payable', $on) === null) {
             return null;
         }
 
-        // ⚠⚠ A money account with no ledger account cannot be posted from, and
-        // that has to STOP the confirmation rather than post the credit
-        // somewhere plausible. The screen that creates the account offers the
-        // field; leaving it blank is a setup step nobody has finished, and the
-        // loud failure is what makes somebody finish it.
+        $moneyAccount ??= $payment->moneyAccount;
+
+        // ⚠⚠ A payment that cannot say where the money came from stops. The
+        // screen offers the field; leaving it blank is a setup step nobody
+        // finished, and the loud failure is what makes somebody finish it.
+        if ($moneyAccount === null) {
+            throw MappingNotFound::for('the account this salary was paid from', $on);
+        }
+
         if ($moneyAccount->account_id === null) {
             throw MappingNotFound::for("money account [{$moneyAccount->name}]", $on);
+        }
+
+        $amount = Money::ofTaka((string) $payment->amount);
+
+        if ($amount->isZero()) {
+            return null;
         }
 
         $payable = AccountMapping::resolve('payroll.net_payable', $on);
         $bank = Account::findOrFail($moneyAccount->account_id);
 
-        $lines = [];
-        $total = Money::zero();
-
-        foreach ($batch->payslips()->with('employee')->get() as $payslip) {
-            $net = Money::ofTaka((string) $payslip->net);
-
-            if ($net->isZero()) {
-                continue;
-            }
-
-            // ⚠ Per employee, clearing exactly the lines the accrual created.
-            // A single aggregated debit would balance and would make "who are we
-            // still owing" unanswerable from the ledger.
-            $lines[] = JournalLineDraft::debit($payable->id, $net, $payslip->employee?->employee_code, $payslip->employee);
-            $total = $total->plus($net);
-        }
-
-        if ($lines === [] || $total->isZero()) {
-            return null;
-        }
-
-        $lines[] = JournalLineDraft::credit(
-            $bank->id,
-            $total,
-            $moneyAccount->label(),
-            null,
-            $moneyAccount,
-        );
-
         return $this->postJournal->handle(new JournalDraft(
             date: $on,
-            lines: $lines,
-            memo: 'Salary payment from '.$moneyAccount->label(),
-            source: $batch,
+            lines: [
+                JournalLineDraft::debit($payable->id, $amount, $payment->employee?->employee_code, $payment->employee),
+                JournalLineDraft::credit($bank->id, $amount, $moneyAccount->label(), null, $moneyAccount),
+            ],
+            memo: 'Salary paid to '.($payment->employee?->employee_code ?? 'employee').' from '.$moneyAccount->label(),
+            source: $payment,
         ), $postedBy);
     }
 
-    public function existingJournal(DisbursementBatch $batch): ?Journal
+    /**
+     * A reversed payment takes its journal back out.
+     *
+     * ⚠ Through ReverseJournal like everything else, so the correction faces
+     * every guard the original faced - including the period lock. A bounced
+     * transfer reversed after the month closed cannot silently reopen it.
+     */
+    public function reverse(PayslipPayment $payment, User $reversedBy): ?Journal
+    {
+        $journal = $this->existingJournal($payment);
+
+        if ($journal === null || $journal->hasBeenReversed()) {
+            return null;
+        }
+
+        return app(ReverseJournal::class)->handle($journal, $reversedBy);
+    }
+
+    public function existingJournal(PayslipPayment $payment): ?Journal
     {
         return Journal::query()
-            ->where('source_type', $batch->getMorphClass())
-            ->where('source_id', $batch->getKey())
+            ->where('source_type', $payment->getMorphClass())
+            ->where('source_id', $payment->getKey())
             ->whereNull('reverses_journal_id')
             ->first();
     }

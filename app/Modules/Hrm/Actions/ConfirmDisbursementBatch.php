@@ -28,10 +28,7 @@ use Illuminate\Validation\ValidationException;
  */
 class ConfirmDisbursementBatch
 {
-    public function __construct(
-        private readonly RecordPayslipPayment $payments,
-        private readonly PostPayrollPayment $posting,
-    ) {}
+    public function __construct(private readonly RecordPayslipPayment $payments) {}
 
     /**
      * @throws ValidationException
@@ -89,6 +86,12 @@ class ConfirmDisbursementBatch
                     continue;
                 }
 
+                // ⚠ The account is passed down to each payment rather than
+                // recorded only on the batch. Each payment then posts its own
+                // journal through the one path both routes share, so confirming
+                // a batch of nine leaves exactly what paying nine people one at
+                // a time would leave - which is what this class's own docblock
+                // has always claimed.
                 $this->payments->paid(
                     $payslip,
                     $user,
@@ -97,6 +100,7 @@ class ConfirmDisbursementBatch
                     $paidOn,
                     $adviceReference ?? $batch->advice_reference,
                     $batch,
+                    $moneyAccount,
                 );
 
                 $paid++;
@@ -109,13 +113,9 @@ class ConfirmDisbursementBatch
                 'confirmed_by' => $user->id,
             ]);
 
-            // ⚠⚠ The money has gone, so the ledger says so - automatically,
-            // from the business event, never by hand. This is the entry that
-            // clears the payable the approval accrued, and it is posted in the
-            // SAME transaction as the confirmation: a batch confirmed but
-            // unposted is a payment the cash book cannot see.
-            $this->posting->handle($batch->refresh(), $moneyAccount, $user, $paidOn);
-
+            // ⚠ No posting here any more. Each payslip payment posted its own
+            // journal on the way through, which is what removed the last place
+            // the batch route and the individual route could disagree.
             return $paid;
         });
     }
