@@ -23,6 +23,7 @@ use App\Modules\Hrm\database\seeders\PayrollInputWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\PayrollWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\SalaryComponentSeeder;
 use App\Modules\Hrm\database\seeders\HrmPermissionsSeeder;
+use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\database\seeders\InventoryDemoDataSeeder;
 use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
 use App\Modules\Inventory\database\seeders\InventoryReasonsSeeder;
@@ -106,5 +107,6 @@ class DatabaseSeeder extends Seeder
         // ⚠ AFTER the chart, because it resolves accounts by system slug, and
         // after the businesses, because it walks every one of them.
         $this->call(PayrollAccountMappingSeeder::class);
+        $this->call(InventoryAccountMappingSeeder::class);
     }
 }

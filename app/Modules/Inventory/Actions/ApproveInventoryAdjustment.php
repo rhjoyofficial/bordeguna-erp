@@ -27,6 +27,7 @@ class ApproveInventoryAdjustment
     public function __construct(
         private readonly RecordStockIn $recordStockIn,
         private readonly RecordStockOut $recordStockOut,
+        private readonly PostInventoryAdjustmentJournal $posting,
     ) {}
 
     public function handle(InventoryAdjustment $adjustment, User $approvedBy): InventoryAdjustment
@@ -52,6 +53,13 @@ class ApproveInventoryAdjustment
             StockMovement::whereIn('id', $movements->pluck('id'))->update(['adjustment_id' => $adjustment->id]);
 
             $adjustment->approvalRequest->approve($approvedBy);
+
+            // ⚠⚠ The value has left (or arrived), so the ledger says so -
+            // automatically, from the business event, never by hand. In the same
+            // transaction as the movements themselves: stock that moved without
+            // a journal, or a journal without the movements, is a state nobody
+            // could reconcile.
+            $this->posting->handle($adjustment->fresh(['movements']), $approvedBy);
 
             return $adjustment->fresh(['approvalRequest', 'movements']);
         });

@@ -1,0 +1,140 @@
+<?php
+
+namespace App\Modules\Purchasing\Actions;
+
+use App\Models\User;
+use App\Modules\Accounting\Actions\PostJournal;
+use App\Modules\Accounting\Models\AccountMapping;
+use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Support\JournalDraft;
+use App\Modules\Accounting\Support\JournalLineDraft;
+use App\Modules\Accounting\Support\LedgerRounding;
+use App\Modules\Accounting\Support\Money;
+use App\Modules\Purchasing\Models\GoodsReceipt;
+use App\Modules\Purchasing\Models\SupplierBill;
+use Illuminate\Support\Carbon;
+
+/**
+ * The two purchasing events that move value into the books.
+ *
+ * **Receiving goods:**   Dr Stock on Hand   Cr Goods Received Not Invoiced
+ * **Receiving the bill:** Dr GRNI           Cr Accounts Payable (party = supplier)
+ *
+ * ⚠⚠ GRNI IS WHAT MAKES THE MONTH CLOSE. Between the lorry arriving and the
+ * invoice arriving, the business owns stock it has not been billed for. Without
+ * this account that stock sits on the balance sheet with no liability behind it,
+ * and the books are wrong by exactly the value of everything in transit - which
+ * is a number that grows all month and collapses at random.
+ *
+ * ⚠ The two entries clear each other: the receipt credits GRNI, the bill debits
+ * it. A GRNI balance is therefore a real report - "delivered but not yet
+ * invoiced" - rather than a suspense account.
+ *
+ * ⚠ Lives in Purchasing. The ledger never learns what a goods receipt is.
+ */
+class PostPurchaseJournals
+{
+    public function __construct(private readonly PostJournal $postJournal) {}
+
+    public function forReceipt(GoodsReceipt $receipt, User $postedBy): ?Journal
+    {
+        if ($this->existingJournal($receipt) !== null) {
+            return null;
+        }
+
+        $on = Carbon::parse($receipt->received_at ?? $receipt->created_at)->startOfDay();
+
+        if (AccountMapping::forKeyOn('inventory.stock_on_hand', $on) === null) {
+            return null;
+        }
+
+        $stock = AccountMapping::resolve('inventory.stock_on_hand', $on);
+        $grni = AccountMapping::resolve('inventory.goods_received_not_invoiced', $on);
+
+        $lines = [];
+        $total = Money::zero();
+
+        // ⚠ Valued from the MOVEMENT the receipt actually wrote, not from the
+        // purchase order's price. `goods_receipt_lines.stock_movement_id` exists
+        // precisely so the two can never drift: what went into stock and what
+        // went into the ledger are the same number by construction.
+        foreach ($receipt->lines()->with('stockMovement')->get() as $line) {
+            $movement = $line->stockMovement;
+
+            if ($movement === null) {
+                continue;
+            }
+
+            $value = Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost);
+
+            if ($value->isZero()) {
+                continue;
+            }
+
+            $lines[] = JournalLineDraft::debit($stock->id, $value);
+            $total = $total->plus($value);
+        }
+
+        if ($lines === [] || $total->isZero()) {
+            return null;
+        }
+
+        $lines[] = JournalLineDraft::credit($grni->id, $total, 'Received not invoiced');
+        $lines = LedgerRounding::balance($lines, $on, "Rounding on receipt #{$receipt->id}");
+
+        return $this->postJournal->handle(new JournalDraft(
+            date: $on,
+            lines: $lines,
+            memo: "Goods received #{$receipt->id}",
+            source: $receipt,
+        ), $postedBy);
+    }
+
+    public function forBill(SupplierBill $bill, User $postedBy): ?Journal
+    {
+        if ($this->existingJournal($bill) !== null) {
+            return null;
+        }
+
+        $on = Carbon::parse($bill->bill_date)->startOfDay();
+
+        if (AccountMapping::forKeyOn('inventory.stock_on_hand', $on) === null) {
+            return null;
+        }
+
+        $grni = AccountMapping::resolve('inventory.goods_received_not_invoiced', $on);
+        $payable = AccountMapping::resolve('purchasing.accounts_payable', $on);
+
+        $total = Money::ofTaka((string) $bill->total);
+
+        if ($total->isZero()) {
+            return null;
+        }
+
+        // ⚠ The party is the SUPPLIER, which is what turns one Accounts Payable
+        // balance into a subsidiary ledger somebody can act on: "who do we owe"
+        // has to be answerable without opening every bill.
+        $lines = [
+            JournalLineDraft::debit($grni->id, $total, $bill->bill_number),
+            JournalLineDraft::credit($payable->id, $total, $bill->bill_number, $bill->supplier),
+        ];
+
+        $lines = LedgerRounding::balance($lines, $on, "Rounding on bill {$bill->bill_number}");
+
+        return $this->postJournal->handle(new JournalDraft(
+            date: $on,
+            lines: $lines,
+            memo: "Supplier bill {$bill->bill_number}",
+            source: $bill,
+        ), $postedBy);
+    }
+
+    public function existingJournal(GoodsReceipt|SupplierBill $document): ?Journal
+    {
+        return Journal::query()
+            ->where('source_type', $document->getMorphClass())
+            ->where('source_id', $document->getKey())
+            ->whereNull('reverses_journal_id')
+            ->first();
+    }
+}

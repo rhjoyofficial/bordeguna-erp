@@ -23,6 +23,7 @@ class RecordGoodsReceipt
 {
     public function __construct(
         private readonly RecordStockIn $recordStockIn,
+        private readonly PostPurchaseJournals $posting,
     ) {}
 
     /**
@@ -96,6 +97,13 @@ class RecordGoodsReceipt
             }
 
             $this->recomputeStatus($order);
+
+            // ⚠⚠ Stock has arrived and the business owes for it, so the ledger
+            // says so - automatically, in the same transaction. Dr Stock on
+            // Hand, Cr Goods Received Not Invoiced: between the lorry and the
+            // invoice, the liability has to exist or the balance sheet is short
+            // by the value of everything in transit.
+            $this->posting->forReceipt($receipt->fresh('lines'), $receivedBy);
 
             return $receipt->fresh('lines');
         });

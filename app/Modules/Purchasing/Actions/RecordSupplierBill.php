@@ -20,10 +20,16 @@ use InvalidArgumentException;
  * between what was received and what has been invoiced is Goods Received Not
  * Invoiced, and it is the accrual that makes accrual accounting mean anything.
  *
- * ⛔ Posts no journal. Phase 1 builds documents; Phase 3 posts them.
+ * ✅ Phase 3: it now posts. Dr Goods Received Not Invoiced, Cr Accounts Payable
+ * with the supplier as the line's party - which is what turns one payables
+ * balance into a ledger somebody can act on. The receipt credited GRNI and this
+ * debits it, so the two clear each other and a GRNI balance is a real report:
+ * delivered but not yet invoiced.
  */
 class RecordSupplierBill
 {
+    public function __construct(private readonly PostPurchaseJournals $posting) {}
+
     /**
      * @param  array<int, array{line: PurchaseOrderLine, quantity: string, unitCost: string}>  $lines
      */
@@ -106,6 +112,8 @@ class RecordSupplierBill
             }
 
             $bill->update(['total' => number_format($total, 4, '.', '')]);
+
+            $this->posting->forBill($bill->fresh(['lines', 'supplier']), $createdBy);
 
             return $bill->fresh('lines');
         });

@@ -83,6 +83,67 @@ final class Money
         return new self($negative ? -$minor : $minor);
     }
 
+    /**
+     * The product of two decimal amounts, as money.
+     *
+     * ⚠⚠ INTEGER-SCALED, NEVER FLOAT. `quantity * unit_cost` is the single most
+     * dangerous multiplication in this codebase: both carry four decimal places,
+     * and doing it in floating point is how a stock value acquires a tail of
+     * 2.78e-17. Inventory already learned this in FIFO and fixed it by scaling
+     * to integers; this is the same fix at the ledger boundary.
+     *
+     * ⚠ Deliberately not bcmath. The extension is not guaranteed to be loaded,
+     * and a money path that silently changes behaviour with a php.ini is worse
+     * than one that does its own arithmetic in twenty lines.
+     */
+    public static function ofProduct(string $a, string $b): self
+    {
+        [$aScaled, $aScale] = self::scale($a);
+        [$bScaled, $bScale] = self::scale($b);
+
+        $product = $aScaled * $bScaled;              // scaled by 10^($aScale + $bScale)
+        $divisor = 10 ** ($aScale + $bScale - 2);    // leaving paisa
+
+        if ($divisor < 1) {
+            return new self($product * (10 ** (2 - $aScale - $bScale)));
+        }
+
+        $negative = $product < 0;
+        $product = abs($product);
+
+        // Round half away from zero, the same rule as ofTaka.
+        $minor = intdiv($product, $divisor);
+
+        if (($product % $divisor) * 2 >= $divisor) {
+            $minor++;
+        }
+
+        return new self($negative ? -$minor : $minor);
+    }
+
+    /**
+     * "12.3400" becomes [123400, 4].
+     *
+     * @return array{0: int, 1: int}
+     */
+    private static function scale(string $decimal): array
+    {
+        $raw = trim(str_replace([',', ' '], '', $decimal));
+
+        if (! preg_match('/^[+-]?\d+(\.\d+)?$/', $raw)) {
+            throw new InvalidArgumentException("[{$decimal}] is not a number.");
+        }
+
+        $negative = str_starts_with($raw, '-');
+        $raw = ltrim($raw, '+-');
+
+        [$whole, $fraction] = str_contains($raw, '.') ? explode('.', $raw, 2) : [$raw, ''];
+
+        $scaled = (int) ($whole.$fraction);
+
+        return [$negative ? -$scaled : $scaled, strlen($fraction)];
+    }
+
     public function plus(self $other): self
     {
         return new self($this->minor + $other->minor);
