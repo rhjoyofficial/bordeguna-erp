@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\AccountingPermissionsSeeder;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Assets\database\seeders\AssetAccountMappingSeeder;
 use App\Modules\Foundation\Support\SeedCredentials;
 use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
 use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
@@ -108,5 +109,6 @@ class DatabaseSeeder extends Seeder
         // after the businesses, because it walks every one of them.
         $this->call(PayrollAccountMappingSeeder::class);
         $this->call(InventoryAccountMappingSeeder::class);
+        $this->call(AssetAccountMappingSeeder::class);
     }
 }

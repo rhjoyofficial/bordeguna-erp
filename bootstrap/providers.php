@@ -1,10 +1,19 @@
 <?php
 
+use App\Modules\Accounting\Providers\AccountingServiceProvider;
+use App\Modules\Assets\Providers\AssetsServiceProvider;
+use App\Modules\Foundation\Providers\FoundationServiceProvider;
+use App\Modules\Hrm\Providers\HrmServiceProvider;
+use App\Modules\Inventory\Providers\InventoryServiceProvider;
+use App\Modules\Purchasing\Providers\PurchasingServiceProvider;
+use App\Providers\AppServiceProvider;
+
 return [
-    App\Providers\AppServiceProvider::class,
-    App\Modules\Accounting\Providers\AccountingServiceProvider::class,
-    App\Modules\Foundation\Providers\FoundationServiceProvider::class,
-    App\Modules\Hrm\Providers\HrmServiceProvider::class,
-    App\Modules\Inventory\Providers\InventoryServiceProvider::class,
-    App\Modules\Purchasing\Providers\PurchasingServiceProvider::class,
+    AppServiceProvider::class,
+    AccountingServiceProvider::class,
+    AssetsServiceProvider::class,
+    FoundationServiceProvider::class,
+    HrmServiceProvider::class,
+    InventoryServiceProvider::class,
+    PurchasingServiceProvider::class,
 ];
