@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Models;
 
 use App\Models\User;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -70,5 +71,33 @@ class SupplierBill extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(SupplierBillLine::class);
+    }
+
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(SupplierPaymentAllocation::class);
+    }
+
+    /**
+     * ⚠ DERIVED from the allocations, never stored on the bill.
+     *
+     * An `amount_paid` column would be a second source of truth for a figure the
+     * allocations already answer, and it would drift the first time a payment
+     * was recorded by a path that forgot to update it. This project spent four
+     * Inventory slices removing exactly that shape from stock quantities.
+     */
+    public function paidTotal(): Money
+    {
+        return Money::ofTaka((string) ($this->allocations()->sum('amount') ?: '0'));
+    }
+
+    public function outstanding(): Money
+    {
+        return Money::ofTaka((string) $this->total)->plus($this->paidTotal()->negated());
+    }
+
+    public function isSettled(): bool
+    {
+        return $this->outstanding()->minor <= 0;
     }
 }

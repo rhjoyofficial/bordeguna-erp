@@ -4,6 +4,8 @@ namespace App\Modules\Purchasing\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Actions\PostJournal;
+use App\Modules\Accounting\Exceptions\MappingNotFound;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\JournalDraft;
@@ -13,6 +15,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierPayment;
 use Illuminate\Support\Carbon;
 
 /**
@@ -203,7 +206,56 @@ class PostPurchaseJournals
         ), $postedBy);
     }
 
-    public function existingJournal(GoodsReceipt|SupplierBill|PurchaseReturn $document): ?Journal
+    /**
+     * Paying the supplier.
+     *
+     *   Dr  Accounts Payable (party = supplier)   Cr  the money account
+     *
+     * ⚠ The credit account comes from `money_accounts.account_id`, not a mapping
+     * key - a bank account already knows what it is. Refused outright if that is
+     * unset, because posting the credit somewhere plausible is how a cash book
+     * goes wrong in a way nobody finds.
+     */
+    public function forPayment(SupplierPayment $payment, User $postedBy): ?Journal
+    {
+        if ($this->existingJournal($payment) !== null) {
+            return null;
+        }
+
+        $on = Carbon::parse($payment->paid_on)->startOfDay();
+
+        if (AccountMapping::forKeyOn('inventory.stock_on_hand', $on) === null) {
+            return null;
+        }
+
+        if ($payment->moneyAccount?->account_id === null) {
+            throw MappingNotFound::for("money account [{$payment->moneyAccount?->name}]", $on);
+        }
+
+        $payable = AccountMapping::resolve('purchasing.accounts_payable', $on);
+        $bank = Account::findOrFail($payment->moneyAccount->account_id);
+        $total = Money::ofTaka((string) $payment->amount);
+
+        if ($total->isZero()) {
+            return null;
+        }
+
+        $lines = [
+            JournalLineDraft::debit($payable->id, $total, $payment->reference, $payment->supplier),
+            JournalLineDraft::credit($bank->id, $total, $payment->moneyAccount->label(), null, $payment->moneyAccount),
+        ];
+
+        $lines = LedgerRounding::balance($lines, $on, "Rounding on payment #{$payment->id}");
+
+        return $this->postJournal->handle(new JournalDraft(
+            date: $on,
+            lines: $lines,
+            memo: 'Paid '.$payment->supplier?->name.($payment->reference ? " ({$payment->reference})" : ''),
+            source: $payment,
+        ), $postedBy);
+    }
+
+    public function existingJournal(GoodsReceipt|SupplierBill|PurchaseReturn|SupplierPayment $document): ?Journal
     {
         return Journal::query()
             ->where('source_type', $document->getMorphClass())
