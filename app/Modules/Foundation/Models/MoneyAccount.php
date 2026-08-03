@@ -24,6 +24,10 @@ class MoneyAccount extends Model
         'business_id',
         'name',
         'type',
+        // Phase 2.3: which Chart of Accounts entry this rolls up into. Nullable,
+        // and it stays nullable - a cash box can exist before anybody has
+        // decided what its balance is called in the books.
+        'account_id',
         'account_number',
         'bank_name',
         'branch',
@@ -67,6 +71,25 @@ class MoneyAccount extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    /**
+     * ⚠⚠ THERE IS DELIBERATELY NO `account()` RELATION HERE, even though
+     * `account_id` is a column on this table.
+     *
+     * Foundation is the base module and references no module above it - checked,
+     * and this would have been the only exception in the codebase. A `belongsTo`
+     * pointing at Accounting would invert that for the convenience of one eager
+     * load, and the inversion is the kind that is never noticed until something
+     * has to be extracted. Accounting resolves the label from its own side.
+     *
+     * ⚠ Several money accounts can legitimately share one ledger account: three
+     * bank accounts may all report as "Cash at Bank". The ledger answers "how
+     * much is in the bank"; this table answers "which bank".
+     */
+    public function ledgerAccountId(): ?int
+    {
+        return $this->account_id;
     }
 
     /**

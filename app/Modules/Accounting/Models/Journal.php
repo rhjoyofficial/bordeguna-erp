@@ -3,6 +3,7 @@
 namespace App\Modules\Accounting\Models;
 
 use App\Models\User;
+use App\Modules\Accounting\Enums\JournalType;
 use App\Modules\Accounting\Exceptions\ImmutableJournalException;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
@@ -45,9 +46,15 @@ class Journal extends Model
     protected function casts(): array
     {
         return [
+            'journal_type' => JournalType::class,
             'journal_date' => 'date',
             'posted_at' => 'datetime',
         ];
+    }
+
+    public function scopeOfType(Builder $query, JournalType $type): Builder
+    {
+        return $query->where('journal_type', $type);
     }
 
     protected static function booted(): void

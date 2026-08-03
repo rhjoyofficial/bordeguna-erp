@@ -64,6 +64,9 @@ class PostJournal
             $journal = new Journal;
             $journal->business_id = $businessId;
             $journal->journal_number = $this->nextNumber($business, $draft);
+            // ⚠ Stored, never consulted. The engine does not ask what kind of
+            // journal this is, and a structural test keeps it that way.
+            $journal->journal_type = $draft->type;
             $journal->journal_date = $draft->date->toDateString();
             $journal->memo = $draft->memo;
             $journal->posted_by = $postedBy->id;

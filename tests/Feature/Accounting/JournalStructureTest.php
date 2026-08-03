@@ -109,6 +109,42 @@ it('lets nothing but PostJournal write to the ledger', function () {
 });
 
 /**
+ * ⚠⚠ THE TYPE MUST NEVER CHANGE THE MECHANISM.
+ *
+ * `JournalType` says why an entry exists; the date, the accounts and the
+ * amounts say what happens. The moment the engine asks what kind of journal it
+ * is posting, adding a third kind means editing the engine, and the claim that
+ * "every journal is treated identically" quietly stops being true.
+ *
+ * This is the rule that has already survived a genuinely new seventh case in
+ * InventoryAdjustmentType without a single line of change to the engine that
+ * consumes it - the one real test of a claim otherwise made only in principle.
+ * Two comments in this module assert this test exists; it does.
+ */
+it('never lets the posting engine ask what kind of journal it is', function () {
+    $engine = ['Modules/Accounting/Actions/PostJournal.php', 'Modules/Accounting/Actions/ReverseJournal.php'];
+
+    $offenders = [];
+
+    foreach ($engine as $relative) {
+        $contents = accountingSourceWithoutComments(file_get_contents(app_path($relative)));
+
+        // A `match` anywhere in the engine, or any branch on the type at all.
+        if (preg_match('/\bmatch\s*\(/', $contents, $m)) {
+            $offenders[] = "app/{$relative} branches with match: {$m[0]}";
+        }
+
+        if (preg_match('/(if|elseif|\?\?|\?)\s*[^;]{0,80}(journal_type|JournalType::)/', $contents, $m)) {
+            $offenders[] = "app/{$relative} branches on the journal type: ".trim($m[0]);
+        }
+    }
+
+    expect($offenders)->toBeEmpty(
+        "The type says why, not what happens. Offenders:\n".implode("\n", $offenders)
+    );
+});
+
+/**
  * ⚠ The second half of the same rule. A journal can be written only by
  * PostJournal, and once written it can be changed by nobody at all - so a
  * correction has to be a new, opposite entry, which is what leaves both the

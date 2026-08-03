@@ -60,6 +60,11 @@ class ReverseJournal
             ))->all(),
             memo: $memo ?? "Reversal of {$journal->journal_number}".($journal->memo ? ": {$journal->memo}" : ''),
             source: $journal->source,
+            // ⚠ The reversal inherits the original's kind. Undoing an opening
+            // balance is still an opening-balance matter, and filing it as
+            // ordinary trading would make the opening photograph and the year's
+            // movement disagree by exactly the amount being corrected.
+            type: $journal->journal_type,
         );
 
         // ⚠ The link is passed to PostJournal rather than written afterwards, so

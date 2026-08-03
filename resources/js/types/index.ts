@@ -59,6 +59,7 @@ export interface SharedData {
     canManagePayroll: boolean;
     canViewAccounting: boolean;
     canManageChartOfAccounts: boolean;
+    canPostJournal: boolean;
     hasEmployeeProfile: boolean;
     [key: string]: unknown;
 }

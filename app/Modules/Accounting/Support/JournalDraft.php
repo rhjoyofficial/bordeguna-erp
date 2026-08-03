@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Support;
 
+use App\Modules\Accounting\Enums\JournalType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
@@ -30,6 +31,7 @@ final class JournalDraft
         public readonly array $lines,
         public readonly ?string $memo = null,
         public readonly ?Model $source = null,
+        public readonly JournalType $type = JournalType::Manual,
     ) {}
 
     public function total(): Money
