@@ -31,6 +31,7 @@ class RecordPurchaseReturn
 {
     public function __construct(
         private readonly ReverseStockReceipt $reverseStockReceipt,
+        private readonly PostPurchaseJournals $posting,
     ) {}
 
     /**
@@ -123,6 +124,11 @@ class RecordPurchaseReturn
 
                 $line->update(['quantity_returned' => (float) $line->quantity_returned + (float) $quantity]);
             }
+
+            // ⚠⚠ Value has left stock and the supplier owes it back, so the
+            // ledger says so - in the same transaction as the movements, like
+            // every other integration in Phase 3.
+            $this->posting->forReturn($return->fresh('lines'), $returnedBy);
 
             return $return->fresh('lines');
         });

@@ -11,6 +11,7 @@ use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Purchasing\Models\GoodsReceipt;
+use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\SupplierBill;
 use Illuminate\Support\Carbon;
 
@@ -129,7 +130,80 @@ class PostPurchaseJournals
         ), $postedBy);
     }
 
-    public function existingJournal(GoodsReceipt|SupplierBill $document): ?Journal
+    /**
+     * Goods going back to the supplier.
+     *
+     *   Dr  Goods Received Not Invoiced   Cr  Stock on Hand
+     *
+     * ⚠⚠ THE CONTRA IS GRNI, NOT ACCOUNTS PAYABLE, and the reason is symmetry:
+     * a return is the reversal of a RECEIPT, and the receipt credited GRNI. The
+     * two entries cancel exactly, which is what makes "delivered but not yet
+     * invoiced" a figure that can be trusted.
+     *
+     * ⚠ If the bill has already arrived, the supplier owes a credit note, and
+     * moving that from GRNI to Accounts Payable is the credit note's own entry -
+     * a document that does not exist yet. Recorded in the coverage matrix as a
+     * named gap rather than guessed at here: crediting AP for goods that were
+     * never invoiced would put a debit balance against a supplier who has not
+     * billed us.
+     *
+     * ⚠ Valued from the reversing MOVEMENTS via `purchase_return_lines.
+     * stock_movement_id`, the column added in slice A2 precisely so a return
+     * could find its own paperwork. I1 made those movements reverse the specific
+     * receipts this supplier delivered, so the value here is what they were
+     * received at rather than a FIFO cost from somewhere else.
+     */
+    public function forReturn(PurchaseReturn $return, User $postedBy): ?Journal
+    {
+        if ($this->existingJournal($return) !== null) {
+            return null;
+        }
+
+        $on = Carbon::parse($return->returned_at ?? $return->created_at)->startOfDay();
+
+        if (AccountMapping::forKeyOn('inventory.stock_on_hand', $on) === null) {
+            return null;
+        }
+
+        $stock = AccountMapping::resolve('inventory.stock_on_hand', $on);
+        $grni = AccountMapping::resolve('inventory.goods_received_not_invoiced', $on);
+
+        $lines = [];
+        $total = Money::zero();
+
+        foreach ($return->lines()->with('stockMovement')->get() as $line) {
+            $movement = $line->stockMovement;
+
+            if ($movement === null) {
+                continue;
+            }
+
+            $value = Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost);
+
+            if ($value->isZero()) {
+                continue;
+            }
+
+            $lines[] = JournalLineDraft::credit($stock->id, $value);
+            $total = $total->plus($value);
+        }
+
+        if ($lines === [] || $total->isZero()) {
+            return null;
+        }
+
+        $lines[] = JournalLineDraft::debit($grni->id, $total, 'Returned to supplier', $return->purchaseOrder?->supplier);
+        $lines = LedgerRounding::balance($lines, $on, "Rounding on return #{$return->id}");
+
+        return $this->postJournal->handle(new JournalDraft(
+            date: $on,
+            lines: $lines,
+            memo: "Purchase return #{$return->id}",
+            source: $return,
+        ), $postedBy);
+    }
+
+    public function existingJournal(GoodsReceipt|SupplierBill|PurchaseReturn $document): ?Journal
     {
         return Journal::query()
             ->where('source_type', $document->getMorphClass())
