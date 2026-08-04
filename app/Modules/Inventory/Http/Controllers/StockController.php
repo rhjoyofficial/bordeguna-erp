@@ -9,8 +9,6 @@ use App\Modules\Inventory\Actions\ApproveInventoryAdjustment;
 use App\Modules\Inventory\Actions\CreateInventoryAdjustment;
 use App\Modules\Inventory\Actions\DispatchStockTransfer;
 use App\Modules\Inventory\Actions\ReceiveStockTransfer;
-use App\Modules\Inventory\Actions\RecordStockIn;
-use App\Modules\Inventory\Actions\RecordStockOut;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\InventoryAdjustmentType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
@@ -58,52 +56,6 @@ class StockController extends Controller
             'in_transit_count' => StockTransfer::where('status', TransferStatus::InTransit)->count(),
             'filters' => $filters,
         ]);
-    }
-
-    public function storeReceipt(Request $request, RecordStockIn $action): RedirectResponse
-    {
-        $data = $request->validate([
-            'product_id' => ['required', 'exists:products,id'],
-            'warehouse_id' => ['required', 'exists:warehouses,id'],
-            'quantity' => ['required', 'numeric', 'gt:0'],
-            'unit_cost' => ['required', 'numeric', 'min:0'],
-            'batch_number' => ['nullable', 'string', 'max:100'],
-            'expiry_date' => ['nullable', 'date'],
-            'note' => ['nullable', 'string'],
-        ]);
-
-        $action->handle(
-            product: Product::findOrFail($data['product_id']),
-            warehouse: Warehouse::findOrFail($data['warehouse_id']),
-            quantity: $data['quantity'],
-            unitCost: $data['unit_cost'],
-            performedBy: $request->user(),
-            batchNumber: $data['batch_number'] ?? null,
-            expiryDate: $data['expiry_date'] ?? null,
-            note: $data['note'] ?? null,
-        );
-
-        return back()->with('success', 'Stock receipt recorded.');
-    }
-
-    public function storeUsage(Request $request, RecordStockOut $action): RedirectResponse
-    {
-        $data = $request->validate([
-            'product_id' => ['required', 'exists:products,id'],
-            'warehouse_id' => ['required', 'exists:warehouses,id'],
-            'quantity' => ['required', 'numeric', 'gt:0'],
-            'note' => ['nullable', 'string'],
-        ]);
-
-        $action->handle(
-            product: Product::findOrFail($data['product_id']),
-            warehouse: Warehouse::findOrFail($data['warehouse_id']),
-            quantity: $data['quantity'],
-            performedBy: $request->user(),
-            note: $data['note'] ?? null,
-        );
-
-        return back()->with('success', 'Stock usage recorded.');
     }
 
     /**

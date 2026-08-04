@@ -92,94 +92,18 @@ function ReasonSelect({ reasons, value, onChange, error }: { reasons: Option[]; 
     );
 }
 
-function ReceiptForm({ products, warehouses }: { products: Option[]; warehouses: Option[] }) {
-    const { data, setData, post, errors, processing, reset } = useForm({
-        product_id: '',
-        warehouse_id: '',
-        quantity: '',
-        unit_cost: '',
-        batch_number: '',
-        expiry_date: '',
-        note: '',
-    });
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        post(route('inventory.stock.receipts.store'), { onSuccess: () => reset() });
-    };
-
-    return (
-        <form onSubmit={submit} className="grid grid-cols-2 gap-3 rounded-xl border border-sidebar-border/70 p-4 sm:grid-cols-3 dark:border-sidebar-border">
-            <h3 className="col-span-full font-medium">Record stock in (receipt)</h3>
-            <ProductWarehouseSelects
-                products={products}
-                warehouses={warehouses}
-                productId={data.product_id}
-                warehouseId={data.warehouse_id}
-                onProductChange={(v) => setData('product_id', v)}
-                onWarehouseChange={(v) => setData('warehouse_id', v)}
-            />
-            <div className="grid gap-2">
-                <Label>Quantity</Label>
-                <Input value={data.quantity} onChange={(e) => setData('quantity', e.target.value)} />
-                <InputError message={errors.quantity} />
-            </div>
-            <div className="grid gap-2">
-                <Label>Unit cost</Label>
-                <Input value={data.unit_cost} onChange={(e) => setData('unit_cost', e.target.value)} />
-                {/* C-ACC-1. Bor De Guna is not doing VAT accounting yet, so the
-                    assumption is stated rather than enforced: movements are
-                    immutable, and a number whose meaning nobody wrote down is
-                    permanently ambiguous. */}
-                <p className="text-muted-foreground text-xs">Amount paid per unit, including any taxes charged.</p>
-                <InputError message={errors.unit_cost} />
-            </div>
-            <div className="grid gap-2">
-                <Label>Batch # (optional)</Label>
-                <Input value={data.batch_number} onChange={(e) => setData('batch_number', e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-                <Label>Expiry date (optional)</Label>
-                <Input type="date" value={data.expiry_date} onChange={(e) => setData('expiry_date', e.target.value)} />
-            </div>
-            <Button disabled={processing} className="col-span-full w-fit">
-                Record receipt
-            </Button>
-        </form>
-    );
-}
-
-function UsageForm({ products, warehouses }: { products: Option[]; warehouses: Option[] }) {
-    const { data, setData, post, errors, processing, reset } = useForm({ product_id: '', warehouse_id: '', quantity: '', note: '' });
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        post(route('inventory.stock.usages.store'), { onSuccess: () => reset() });
-    };
-
-    return (
-        <form onSubmit={submit} className="grid grid-cols-2 gap-3 rounded-xl border border-sidebar-border/70 p-4 sm:grid-cols-3 dark:border-sidebar-border">
-            <h3 className="col-span-full font-medium">Record stock out (usage)</h3>
-            <ProductWarehouseSelects
-                products={products}
-                warehouses={warehouses}
-                productId={data.product_id}
-                warehouseId={data.warehouse_id}
-                onProductChange={(v) => setData('product_id', v)}
-                onWarehouseChange={(v) => setData('warehouse_id', v)}
-            />
-            <div className="grid gap-2">
-                <Label>Quantity</Label>
-                <Input value={data.quantity} onChange={(e) => setData('quantity', e.target.value)} />
-                <InputError message={errors.quantity} />
-            </div>
-            <Button disabled={processing} className="col-span-full w-fit">
-                Record usage
-            </Button>
-        </form>
-    );
-}
-
+/*
+ * ⛔ ReceiptForm and UsageForm were REMOVED on 2026-08-04 (C-FLOW-5).
+ *
+ * They posted to `stock.receipts.store` and `stock.usages.store`, which moved
+ * stock and wrote NOTHING to the ledger - value entered and left the warehouse
+ * without ever reaching the books, and the outgoing direction lost value with
+ * nothing on the profit and loss.
+ *
+ * Stock now arrives through a goods receipt or the opening stock document, and
+ * leaves through a sale or an inventory adjustment. Each of those knows its own
+ * accounting consequence. See INVENTORY-ENTRY-POINTS-DESIGN.md.
+ */
 function DirectAdjustmentForm({ products, warehouses, reasons }: { products: Option[]; warehouses: Option[]; reasons: Option[] }) {
     const { data, setData, post, errors, processing, reset } = useForm({
         product_id: '',
@@ -511,8 +435,6 @@ export default function StockIndex({
                 <Pagination meta={stock} />
 
                 <div className="grid gap-4 lg:grid-cols-2">
-                    <ReceiptForm products={products} warehouses={warehouses} />
-                    <UsageForm products={products} warehouses={warehouses} />
                     {can_adjust_directly ? (
                         <>
                             <DirectAdjustmentForm products={products} warehouses={warehouses} reasons={adjustment_reasons} />

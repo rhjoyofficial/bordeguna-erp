@@ -4,7 +4,6 @@ use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
-use App\Modules\Inventory\Actions\ApplyStockAdjustment;
 use App\Modules\Inventory\Actions\DispatchStockTransfer;
 use App\Modules\Inventory\Actions\ReceiveStockTransfer;
 use App\Modules\Inventory\Actions\RecordStockIn;
@@ -127,39 +126,11 @@ it('throws when consuming more stock than is available, without partial consumpt
     expect($this->product->currentStockQuantity())->toBe('10');
 });
 
-it('applies a direct increase adjustment as a new batch, tagged with its reason', function () {
-    $reason = createReason($this->business);
-
-    $movement = app(ApplyStockAdjustment::class)->handle(
-        product: $this->product,
-        warehouse: $this->warehouse,
-        direction: AdjustmentDirection::Increase,
-        quantity: '15',
-        reason: $reason,
-        performedBy: $this->user,
-        unitCost: '8',
-    );
-
-    expect($this->product->currentStockQuantity())->toBe('15');
-    expect($movement->reason_id)->toBe($reason->id);
-});
-
-it('applies a direct decrease adjustment by consuming stock', function () {
-    app(RecordStockIn::class)->handle($this->product, $this->warehouse, '20', '10', $this->user);
-    $reason = createReason($this->business);
-
-    $movements = app(ApplyStockAdjustment::class)->handle(
-        product: $this->product,
-        warehouse: $this->warehouse,
-        direction: AdjustmentDirection::Decrease,
-        quantity: '5',
-        reason: $reason,
-        performedBy: $this->user,
-    );
-
-    expect($this->product->currentStockQuantity())->toBe('15');
-    expect($movements->first()->reason_id)->toBe($reason->id);
-});
+// ⚠⚠ The two direct-adjustment cases that lived here were REMOVED on 2026-08-04
+// with ApplyStockAdjustment itself (C-FLOW-4c). They exercised an action that
+// could change stock without an approval, an effective date or a journal.
+// Direct adjustments are now covered end to end, including their posting, by
+// InventoryAdjustmentWorkflowTest.
 
 it('dispatches a transfer into an in-transit state without moving destination stock yet', function () {
     $target = createWarehouse($this->business, 'SECOND');

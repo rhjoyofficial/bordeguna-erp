@@ -2,6 +2,7 @@
 
 use App\Modules\Inventory\Http\Controllers\CategoryController;
 use App\Modules\Inventory\Http\Controllers\InventoryDashboardController;
+use App\Modules\Inventory\Http\Controllers\OpeningStockController;
 use App\Modules\Inventory\Http\Controllers\ProductController;
 use App\Modules\Inventory\Http\Controllers\StockController;
 use App\Modules\Inventory\Http\Controllers\StockRequestController;
@@ -39,9 +40,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
 
     // Stock movements
     Route::get('stock', [StockController::class, 'index'])->name('stock.index');
-    Route::middleware('can:inventory.stock.record')->group(function () {
-        Route::post('stock/receipts', [StockController::class, 'storeReceipt'])->name('stock.receipts.store');
-        Route::post('stock/usages', [StockController::class, 'storeUsage'])->name('stock.usages.store');
+    // ⛔ C-FLOW-5: the generic 'receive stock' and 'record usage' routes are GONE.
+    // They moved stock and posted NOTHING, so value entered and left the
+    // warehouse without ever reaching the ledger. Stock now arrives through a
+    // goods receipt or the opening stock document, and leaves through a sale or
+    // an inventory adjustment - each of which knows its own accounting
+    // consequence. See INVENTORY-ENTRY-POINTS-DESIGN.md.
+    Route::middleware('can:inventory.stock.adjust')->group(function () {
+        Route::get('opening-stock', [OpeningStockController::class, 'index'])->name('opening-stock.index');
+        Route::post('opening-stock', [OpeningStockController::class, 'store'])->name('opening-stock.store');
     });
     // storeAdjustment/storeTransfer authorize inventory.stock.adjust internally
     Route::post('stock/adjustments', [StockController::class, 'storeAdjustment'])->name('stock.adjustments.store');

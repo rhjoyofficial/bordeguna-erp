@@ -4,10 +4,9 @@ use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
-use App\Modules\Inventory\Actions\ApplyStockAdjustment;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Actions\RecordStockOut;
-use App\Modules\Inventory\Enums\AdjustmentDirection;
+use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
@@ -138,13 +137,19 @@ it('reconciles every batch to its own movements across a full trading day', func
         'is_active' => true,
     ]);
 
-    app(ApplyStockAdjustment::class)->handle(
+    // ⚠ ApplyStockAdjustment was deleted with C-FLOW-4c. This test is about one
+    // invariant only - that every batch reconciles to its own movements - so it
+    // writes the movement through Inventory's primitive directly rather than
+    // standing up an approval workflow it does not exercise. What it needs is a
+    // decrease on the day, tagged with a reason, which is exactly what the
+    // deleted action produced.
+    app(RecordStockOut::class)->handle(
         product: $this->product,
         warehouse: $this->warehouse,
-        direction: AdjustmentDirection::Decrease,
         quantity: '0.75',
-        reason: $reason,
         performedBy: $this->user,
+        reason: MovementReason::Adjustment,
+        reasonId: $reason->id,
     );
 
     expect(batchesDisagreeingWithLedger())->toBe([]);

@@ -41,13 +41,17 @@ function moduleSources(): array
 }
 
 it('has exactly one code path that turns an adjustment into stock movements', function () {
-    // ⚠ ApplyStockAdjustment is no longer a public entry point. It is the engine
-    // an APPROVED adjustment invokes, and anything else calling it is a second
-    // way to change stock with no record, no approval and no effective date -
-    // which is precisely what this slice removed.
+    // ⚠⚠ ApplyStockAdjustment was DELETED on 2026-08-04 (C-FLOW-4c). It had
+    // already stopped being an entry point - nothing called it - but it still
+    // held the stock primitives, and an orphaned action that can move stock
+    // without posting is exactly how a bypass reappears: somebody finds it and
+    // uses it.
+    //
+    // ℹ This test therefore finds nothing today. It is kept as a REGRESSION
+    // guard: if the class is ever recreated and imported anywhere, this fails.
+    // The broader rule now lives in StockEntryPointsTest.
     $allowed = [
         'Modules/Inventory/Actions/ApproveInventoryAdjustment.php',
-        'Modules/Inventory/Actions/ApplyStockAdjustment.php',
     ];
 
     $offenders = [];
@@ -81,7 +85,6 @@ it('never branches on adjustment type inside the engine', function () {
     $engine = [
         'Modules/Inventory/Actions/CreateInventoryAdjustment.php',
         'Modules/Inventory/Actions/ApproveInventoryAdjustment.php',
-        'Modules/Inventory/Actions/ApplyStockAdjustment.php',
     ];
 
     $offenders = [];
