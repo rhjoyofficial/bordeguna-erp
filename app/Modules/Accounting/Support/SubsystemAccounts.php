@@ -32,8 +32,15 @@ final class SubsystemAccounts
      * ⚠ `accounting.` is deliberately absent. Rounding Differences is the
      * ledger's own account, not a subsystem's, and a correction posted there by
      * hand is exactly what it is for.
+     *
+     * ⚠⚠ `sales.` added 2026-08-04 with Sales slice 2. Without it, Sales Revenue,
+     * Accounts Receivable, Cost of Goods Sold, Goods Delivered Not Invoiced and
+     * Discounts Allowed were the ONLY module-maintained accounts a manual
+     * journal could still touch - and revenue is the single figure a business is
+     * most tempted to "just adjust" at month end. Adding a module means adding
+     * its prefix here; nothing does that automatically.
      */
-    private const OWNED_PREFIXES = ['payroll.', 'inventory.', 'purchasing.', 'assets.'];
+    private const OWNED_PREFIXES = ['payroll.', 'inventory.', 'purchasing.', 'assets.', 'sales.'];
 
     /**
      * @return array<int, string> account id => the key that owns it

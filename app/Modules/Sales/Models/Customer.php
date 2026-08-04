@@ -40,6 +40,26 @@ class Customer extends Model
         'note',
     ];
 
+    /**
+     * ⚠⚠ The database defaults, repeated on the model ON PURPOSE. A column
+     * default only applies once the row is written, so `Customer::create([...])`
+     * without them returns an instance whose `is_active` is NULL - and a caller
+     * checking `! $customer->is_active` then refuses a customer the database
+     * considers perfectly active.
+     *
+     * Found on 2026-08-04: the delivery action rejected every freshly created
+     * customer with "that customer is no longer active". ⚠ The slice 1 test
+     * hid it by asserting on `->fresh()`, which reads the row back from the
+     * database and therefore never sees the state a caller actually holds.
+     *
+     * Same convention as Account and MoneyAccount.
+     */
+    protected $attributes = [
+        'type' => 'retail',
+        'is_system' => false,
+        'is_active' => true,
+    ];
+
     protected function casts(): array
     {
         return [

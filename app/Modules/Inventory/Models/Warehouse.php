@@ -19,6 +19,20 @@ class Warehouse extends Model
         'is_active',
     ];
 
+    /**
+     * ⚠ The database defaults, repeated on the model. A column default only
+     * applies once the row is written, so a freshly created Warehouse instance
+     * has a NULL `is_active` and any caller checking `! $warehouse->is_active`
+     * refuses a warehouse the database considers active.
+     *
+     * Latent until Sales slice 2 asked the question on 2026-08-04. Same
+     * convention as Account, MoneyAccount and Customer.
+     */
+    protected $attributes = [
+        'is_default' => false,
+        'is_active' => true,
+    ];
+
     protected function casts(): array
     {
         return [
