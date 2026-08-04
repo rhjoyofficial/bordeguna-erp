@@ -6,6 +6,7 @@ use App\Modules\Foundation\Providers\FoundationServiceProvider;
 use App\Modules\Hrm\Providers\HrmServiceProvider;
 use App\Modules\Inventory\Providers\InventoryServiceProvider;
 use App\Modules\Purchasing\Providers\PurchasingServiceProvider;
+use App\Modules\Sales\Providers\SalesServiceProvider;
 use App\Providers\AppServiceProvider;
 
 return [
@@ -16,4 +17,5 @@ return [
     HrmServiceProvider::class,
     InventoryServiceProvider::class,
     PurchasingServiceProvider::class,
+    SalesServiceProvider::class,
 ];

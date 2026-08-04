@@ -55,6 +55,19 @@ class ChartOfAccountsSeeder extends Seeder
         ['1130', 'Mobile Financial Services', AccountType::Asset, '1100', true, 'mobile_financial_services'],
         ['1140', 'Accounts Receivable', AccountType::Asset, '1100', true, 'accounts_receivable'],
         ['1150', 'Inventory - Stock on Hand', AccountType::Asset, '1100', true, 'stock_on_hand'],
+        // ⚠⚠ The mirror of Goods Received Not Invoiced (2120), on the selling
+        // side. Stock the business no longer holds but has not yet earned
+        // revenue against - goods out on a delivery challan, not yet invoiced.
+        //
+        // Without it, cost lands in the month the lorry left and revenue lands
+        // in the month the invoice was raised, so every gross margin is drawn
+        // from two different periods. Joy's distributor flow is "challan today,
+        // invoice at month end", which makes that split the normal case rather
+        // than the exception.
+        //
+        // ⚠ Not a suspense account. Its balance is a report somebody asks for:
+        // what is out and not yet billed. See SALES-PHASE1-DESIGN.md §2.
+        ['1155', 'Goods Delivered Not Invoiced', AccountType::Asset, '1100', true, 'goods_delivered_not_invoiced'],
         ['1160', 'Advances to Suppliers', AccountType::Asset, '1100', true, null],
         ['1170', 'Employee Advances and Loans', AccountType::Asset, '1100', true, 'employee_advances'],
         ['1180', 'Prepaid Expenses', AccountType::Asset, '1100', true, null],
@@ -106,6 +119,17 @@ class ChartOfAccountsSeeder extends Seeder
         ['4000', 'Income', AccountType::Income, null, false, null],
         ['4100', 'Sales Revenue', AccountType::Income, '4000', true, 'sales_revenue'],
         ['4200', 'Sales Returns and Discounts', AccountType::Income, '4000', true, null],
+        // ⚠ A contra-revenue account: it lives under Income and normally carries
+        // a DEBIT balance, which needs no special type because the ledger stores
+        // signed amounts.
+        //
+        // ⚠⚠ Why a new code rather than a slug on 4200: this seeder is
+        // firstOrCreate on the code, so a slug added to a row that already
+        // exists would never reach an installation that has already run - and
+        // production has. A new code plants cleanly. It also separates a
+        // discount from a return, which are different events that happened to
+        // share a line in the default chart, and leaves 4200 to Phase 4.
+        ['4210', 'Discounts Allowed', AccountType::Income, '4000', true, 'discounts_allowed'],
         ['4900', 'Other Income', AccountType::Income, '4000', true, null],
 
         // ─── 5000 Cost of Sales ─────────────────────────────────────────────

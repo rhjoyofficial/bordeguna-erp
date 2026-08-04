@@ -29,6 +29,8 @@ use App\Modules\Inventory\database\seeders\InventoryDemoDataSeeder;
 use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
 use App\Modules\Inventory\database\seeders\InventoryReasonsSeeder;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
+use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
+use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -101,6 +103,10 @@ class DatabaseSeeder extends Seeder
         $this->call(InventoryReasonsSeeder::class);
         $this->call(InventoryDemoDataSeeder::class);
 
+        // ⚠ Walks every business, like the permission seeders above, so it must
+        // run after BorDeGunaOrganisationSeeder has created the real one.
+        $this->call(WalkInCustomerSeeder::class);
+
         // ⚠ Installation-level, not per business: ONE chart, four sets of
         // balances (C-GL-1). It depends on no other seeder and nothing depends
         // on it yet, so it sits at the end where it is easy to see.
@@ -110,5 +116,6 @@ class DatabaseSeeder extends Seeder
         $this->call(PayrollAccountMappingSeeder::class);
         $this->call(InventoryAccountMappingSeeder::class);
         $this->call(AssetAccountMappingSeeder::class);
+        $this->call(SalesAccountMappingSeeder::class);
     }
 }
