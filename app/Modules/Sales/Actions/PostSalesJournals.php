@@ -4,12 +4,15 @@ namespace App\Modules\Sales\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Actions\PostJournal;
+use App\Modules\Accounting\Exceptions\MappingNotFound;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Support\Carbon;
@@ -195,7 +198,56 @@ class PostSalesJournals
         ), $postedBy);
     }
 
-    public function existingJournal(Delivery|SalesInvoice $document): ?Journal
+    /**
+     * The customer paying.
+     *
+     *   Dr  the money account   Cr  Accounts Receivable (party = customer)
+     *
+     * ⚠ The debit account comes from `money_accounts.account_id`, not a mapping
+     * key - a bank account already knows what it is. Refused outright if that is
+     * unset, because posting the debit somewhere plausible is how a cash book
+     * goes wrong in a way nobody finds. Identical to the supplier side.
+     */
+    public function forReceipt(CustomerReceipt $receipt, User $postedBy): ?Journal
+    {
+        if ($this->existingJournal($receipt) !== null) {
+            return null;
+        }
+
+        $on = Carbon::parse($receipt->received_on)->startOfDay();
+
+        if (AccountMapping::forKeyOn('sales.revenue', $on) === null) {
+            return null;
+        }
+
+        if ($receipt->moneyAccount?->account_id === null) {
+            throw MappingNotFound::for("money account [{$receipt->moneyAccount?->name}]", $on);
+        }
+
+        $receivable = AccountMapping::resolve('sales.accounts_receivable', $on);
+        $bank = Account::findOrFail($receipt->moneyAccount->account_id);
+        $total = Money::ofTaka((string) $receipt->amount);
+
+        if ($total->isZero()) {
+            return null;
+        }
+
+        $lines = [
+            JournalLineDraft::debit($bank->id, $total, $receipt->moneyAccount->label(), null, $receipt->moneyAccount),
+            JournalLineDraft::credit($receivable->id, $total, $receipt->reference, $receipt->customer),
+        ];
+
+        $lines = LedgerRounding::balance($lines, $on, "Rounding on receipt #{$receipt->id}");
+
+        return $this->postJournal->handle(new JournalDraft(
+            date: $on,
+            lines: $lines,
+            memo: 'Received from '.$receipt->customer?->name.($receipt->reference ? " ({$receipt->reference})" : ''),
+            source: $receipt,
+        ), $postedBy);
+    }
+
+    public function existingJournal(Delivery|SalesInvoice|CustomerReceipt $document): ?Journal
     {
         return Journal::query()
             ->where('source_type', $document->getMorphClass())

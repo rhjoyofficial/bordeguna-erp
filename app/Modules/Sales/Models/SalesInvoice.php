@@ -83,6 +83,32 @@ class SalesInvoice extends Model
         return Money::ofTaka((string) $this->total);
     }
 
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(CustomerReceiptAllocation::class, 'sales_invoice_id');
+    }
+
+    /**
+     * ⚠ DERIVED from the allocations, never stored on the invoice. A stored
+     * "amount paid" is a second answer to a question the allocations already
+     * answer, and it drifts the first time a receipt is corrected. Same
+     * reasoning as SupplierBill.
+     */
+    public function receivedTotal(): Money
+    {
+        return Money::ofTaka((string) ($this->allocations()->sum('amount') ?: '0'));
+    }
+
+    public function outstanding(): Money
+    {
+        return Money::ofMinor($this->totalMoney()->minor - $this->receivedTotal()->minor);
+    }
+
+    public function isSettled(): bool
+    {
+        return $this->outstanding()->minor <= 0;
+    }
+
     /**
      * The cost this invoice released from GDNI into Cost of Goods Sold.
      */
