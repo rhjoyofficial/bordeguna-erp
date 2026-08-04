@@ -11,6 +11,7 @@ use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Sales\Models\Delivery;
+use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Support\Carbon;
 
 /**
@@ -108,7 +109,93 @@ class PostSalesJournals
         ), $postedBy);
     }
 
-    public function existingJournal(Delivery $document): ?Journal
+    /**
+     * Billing the customer.
+     *
+     * ```
+     * Dr  Cost of Goods Sold                    cost released from the challan
+     *     Cr  Goods Delivered Not Invoiced
+     *
+     * Dr  Accounts Receivable (party = customer)   what they owe
+     * Dr  Discounts Allowed                        invoice-level discount
+     *     Cr  Sales Revenue                        subtotal, net of line discounts
+     * ```
+     *
+     * ⚠⚠ ONE JOURNAL, both halves. The revenue and the cost of that revenue
+     * belong to the same event, and splitting them invites a month where one
+     * posted and the other did not.
+     *
+     * ⚠ Accounts Receivable is debited even when the customer pays cash at the
+     * counter. The receipt then credits it in the same transaction and the
+     * balance nets to zero instantly. That is what makes retail and credit the
+     * same engine instead of two - see SALES-PHASE1-DESIGN.md §2.3.
+     *
+     * ⚠ A LINE discount never appears here. It reduced the line, so Sales
+     * Revenue is credited net and reads as the real figure. Only an
+     * invoice-level discount is contra-revenue.
+     */
+    public function forInvoice(SalesInvoice $invoice, User $postedBy): ?Journal
+    {
+        if ($this->existingJournal($invoice) !== null) {
+            return null;
+        }
+
+        $on = Carbon::parse($invoice->invoice_date)->startOfDay();
+
+        if (AccountMapping::forKeyOn('sales.revenue', $on) === null) {
+            return null;
+        }
+
+        $revenue = AccountMapping::resolve('sales.revenue', $on);
+        $receivable = AccountMapping::resolve('sales.accounts_receivable', $on);
+
+        $invoice->loadMissing('lines', 'customer');
+
+        $subtotal = Money::ofTaka((string) $invoice->subtotal);
+        $discount = Money::ofTaka((string) $invoice->invoice_discount);
+        $total = Money::ofTaka((string) $invoice->total);
+        $cost = $invoice->costReleased();
+
+        $lines = [];
+
+        // ⚠ The cost half only exists when goods were actually delivered. A pure
+        // service invoice has nothing in GDNI to release.
+        if (! $cost->isZero()) {
+            $cogs = AccountMapping::resolve('sales.cost_of_goods_sold', $on);
+            $gdni = AccountMapping::resolve('sales.goods_delivered_not_invoiced', $on);
+
+            $lines[] = JournalLineDraft::debit($cogs->id, $cost, 'Cost of goods sold');
+            $lines[] = JournalLineDraft::credit($gdni->id, $cost, 'Released on '.$invoice->invoice_number, $invoice->customer);
+        }
+
+        if (! $total->isZero()) {
+            $lines[] = JournalLineDraft::debit($receivable->id, $total, $invoice->invoice_number, $invoice->customer);
+        }
+
+        if (! $discount->isZero()) {
+            $discounts = AccountMapping::resolve('sales.discounts_allowed', $on);
+            $lines[] = JournalLineDraft::debit($discounts->id, $discount, 'Discount on '.$invoice->invoice_number, $invoice->customer);
+        }
+
+        if (! $subtotal->isZero()) {
+            $lines[] = JournalLineDraft::credit($revenue->id, $subtotal, $invoice->invoice_number);
+        }
+
+        if ($lines === []) {
+            return null;
+        }
+
+        $lines = LedgerRounding::balance($lines, $on, "Rounding on invoice {$invoice->invoice_number}");
+
+        return $this->postJournal->handle(new JournalDraft(
+            date: $on,
+            lines: $lines,
+            memo: "Invoice {$invoice->invoice_number}",
+            source: $invoice,
+        ), $postedBy);
+    }
+
+    public function existingJournal(Delivery|SalesInvoice $document): ?Journal
     {
         return Journal::query()
             ->where('source_type', $document->getMorphClass())
