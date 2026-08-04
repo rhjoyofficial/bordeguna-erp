@@ -30,6 +30,7 @@ use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
 use App\Modules\Inventory\database\seeders\InventoryReasonsSeeder;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
+use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -78,6 +79,10 @@ class DatabaseSeeder extends Seeder
         // it must run after BorDeGunaOrganisationSeeder has created the real
         // business and its Payroll and Finance roles.
         $this->call(AccountingPermissionsSeeder::class);
+        // ⚠ Same ordering constraint as every permission seeder here: it walks
+        // Business::all(), so it must run after the real business and its roles
+        // exist.
+        $this->call(SalesPermissionsSeeder::class);
         $this->call(ApprovalWorkflowSeeder::class);
         $this->call(HrmChangeRequestWorkflowSeeder::class);
         $this->call(BangladeshHolidayCalendarSeeder::class);
