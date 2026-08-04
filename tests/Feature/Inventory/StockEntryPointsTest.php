@@ -96,6 +96,9 @@ $sanctioned = [
     'Modules/Sales/Actions/RecordDelivery.php',
     // Inventory's own approved workflow.
     'Modules/Inventory/Actions/ApproveInventoryAdjustment.php',
+    // ⚠ Opening stock: Dr Stock on Hand / Cr Opening Balance Equity, posted as
+    // an OpeningBalance journal. The fifth sanctioned document (C-FLOW-5).
+    'Modules/Inventory/Actions/RecordOpeningStock.php',
     // ⚠ Demo data for demo businesses, not a business path. Explicitly allowed
     // so the rule stays about production behaviour rather than fixtures.
     'Modules/Inventory/database/seeders/InventoryDemoDataSeeder.php',
