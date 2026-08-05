@@ -28,7 +28,11 @@ class ProductController extends Controller
         $products = Product::query()
             ->with(['category', 'unitOfMeasure'])
             ->when($filters['search'], fn ($query, $search) => $query->where(
-                fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")
+                fn ($q) => $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('sku', 'like', "%{$search}%")
+                    // ⚠ A scanned barcode is the fastest way anybody looks a
+                    // product up, so it has to be searchable or it is decoration.
+                    ->orWhere('barcode', 'like', "%{$search}%")
             ))
             ->when($filters['type'], fn ($query, $type) => $query->where('type', $type))
             ->when($filters['category_id'], fn ($query, $categoryId) => $query->where('category_id', $categoryId))
@@ -38,9 +42,15 @@ class ProductController extends Controller
             ->through(fn (Product $product) => [
                 'id' => $product->id,
                 'sku' => $product->sku,
+                'barcode' => $product->barcode,
                 'name' => $product->name,
                 'type' => $product->type->value,
                 'category' => $product->category?->name,
+                // ⚠ The ids, not only the display names: without them the edit
+                // form cannot preselect what the product already is.
+                'category_id' => $product->category_id,
+                'unit_of_measure_id' => $product->unit_of_measure_id,
+                'description' => $product->description,
                 'unit' => $product->unitOfMeasure->abbreviation,
                 'low_stock_threshold' => $product->low_stock_threshold,
                 'is_active' => $product->is_active,
@@ -82,17 +92,53 @@ class ProductController extends Controller
         return back()->with('success', 'Product deactivated.');
     }
 
+    /**
+     * ⚠⚠ The screen and the catalogue import must produce the SAME product. A
+     * product typed in by hand must not be structurally different from an
+     * imported one - otherwise the fields only the import can reach are blank
+     * on exactly the records somebody created in a hurry. Enforced by the
+     * structural guard in ProductScreenTest, which reads Product::getFillable().
+     *
+     * @return array<string, mixed>
+     */
     private function validated(Request $request, ?Product $product = null): array
     {
+        $businessId = $product?->business_id ?? app(BusinessContext::class)->id();
+
+        // ⚠ A blank barcode box must reach the database as NULL, never as ''.
+        // The unique index is on (business_id, barcode), and both MySQL and
+        // SQLite permit many NULLs but only one '' - so a business that uses no
+        // barcodes at all would fail on a duplicate key at its SECOND product.
+        // Nothing here does that conversion: the framework's global
+        // ConvertEmptyStringsToNull middleware already has, before validation
+        // runs. That is the whole defence on this path, which is why
+        // ProductScreenTest pins the behaviour rather than the mechanism.
+        // ⚠⚠ The catalogue importer does NOT pass through that middleware and
+        // must nullify its own blanks.
+
         return $request->validate([
             'sku' => [
                 'required', 'string', 'max:100',
-                Rule::unique('products', 'sku')->where('business_id', app(BusinessContext::class)->id())->ignore($product),
+                Rule::unique('products', 'sku')->where('business_id', $businessId)->ignore($product),
+            ],
+            // ⚠ The number printed on the pack, kept apart from the SKU: a
+            // product's permanent code is ours, its barcode is the
+            // manufacturer's and may be absent, reused or corrected.
+            'barcode' => [
+                'nullable', 'string', 'max:100',
+                Rule::unique('products', 'barcode')->where('business_id', $businessId)->ignore($product),
             ],
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', new Enum(ProductType::class)],
-            'category_id' => ['nullable', 'exists:categories,id'],
-            'unit_of_measure_id' => ['required', 'exists:units_of_measure,id'],
+            // ⚠⚠ Scoped to the business. A bare `exists:` accepts another
+            // business's id, and unlike the sales and purchasing screens -
+            // which re-fetch through findOrFail and so fail closed on the
+            // global scope - these two are written straight onto the row by
+            // Product::create(). An unscoped unit_of_measure_id therefore
+            // persists, and then the index 500s, because the global scope
+            // hides the row that `$product->unitOfMeasure->abbreviation` reads.
+            'category_id' => ['nullable', Rule::exists('categories', 'id')->where('business_id', $businessId)],
+            'unit_of_measure_id' => ['required', Rule::exists('units_of_measure', 'id')->where('business_id', $businessId)],
             'description' => ['nullable', 'string'],
             'low_stock_threshold' => ['nullable', 'numeric', 'min:0'],
         ]);

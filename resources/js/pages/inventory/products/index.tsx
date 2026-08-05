@@ -9,16 +9,20 @@ import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useState } from 'react';
 
 const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Product {
     id: number;
     sku: string;
+    barcode: string | null;
     name: string;
     type: string;
     category: string | null;
+    category_id: number | null;
+    unit_of_measure_id: number;
+    description: string | null;
     unit: string;
     low_stock_threshold: string | null;
     is_active: boolean;
@@ -26,6 +30,19 @@ interface Product {
     average_unit_cost: string | null;
     is_below_threshold: boolean;
 }
+
+// ⚠⚠ Every field the catalogue import can set, the screen can set. A product
+// created by hand must not be structurally different from an imported one.
+const EMPTY = {
+    sku: '',
+    barcode: '',
+    name: '',
+    type: 'raw_material',
+    category_id: '',
+    unit_of_measure_id: '',
+    description: '',
+    low_stock_threshold: '',
+};
 
 interface Option {
     id: number;
@@ -59,18 +76,38 @@ export default function ProductsIndex({
     filters: { search: string; type: string; category_id: string };
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/inventory/products', initialFilters);
+    const [editing, setEditing] = useState<Product | null>(null);
+    const { data, setData, post, put, errors, processing, reset, clearErrors } = useForm(EMPTY);
 
-    const { data, setData, post, errors, processing, reset } = useForm({
-        sku: '',
-        name: '',
-        type: 'raw_material',
-        category_id: '',
-        unit_of_measure_id: '',
-        low_stock_threshold: '',
-    });
+    const startEdit = (product: Product) => {
+        clearErrors();
+        setEditing(product);
+        setData({
+            sku: product.sku,
+            barcode: product.barcode ?? '',
+            name: product.name,
+            type: product.type,
+            category_id: product.category_id ? String(product.category_id) : '',
+            unit_of_measure_id: String(product.unit_of_measure_id),
+            description: product.description ?? '',
+            low_stock_threshold: product.low_stock_threshold ?? '',
+        });
+    };
+
+    const cancel = () => {
+        setEditing(null);
+        clearErrors();
+        reset();
+    };
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+
+        if (editing) {
+            put(route('inventory.products.update', editing.id), { onSuccess: cancel });
+            return;
+        }
+
         post(route('inventory.products.store'), { onSuccess: () => reset() });
     };
 
@@ -87,6 +124,16 @@ export default function ProductsIndex({
                         <Label htmlFor="sku">SKU</Label>
                         <Input id="sku" value={data.sku} onChange={(e) => setData('sku', e.target.value)} />
                         <InputError message={errors.sku} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="barcode">Barcode</Label>
+                        <Input
+                            id="barcode"
+                            value={data.barcode}
+                            onChange={(e) => setData('barcode', e.target.value)}
+                            placeholder="optional"
+                        />
+                        <InputError message={errors.barcode} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="name">Name</Label>
@@ -149,10 +196,31 @@ export default function ProductsIndex({
                             onChange={(e) => setData('low_stock_threshold', e.target.value)}
                             placeholder="optional"
                         />
+                        <InputError message={errors.low_stock_threshold} />
                     </div>
-                    <Button disabled={processing} className="col-span-2 w-fit sm:col-span-3 lg:col-span-6">
-                        Add product
-                    </Button>
+                    <div className="grid gap-2 col-span-2 sm:col-span-3 lg:col-span-6">
+                        <Label htmlFor="description">Description</Label>
+                        <Input
+                            id="description"
+                            value={data.description}
+                            onChange={(e) => setData('description', e.target.value)}
+                            placeholder="optional"
+                        />
+                        <InputError message={errors.description} />
+                    </div>
+                    <div className="col-span-2 flex items-center gap-2 sm:col-span-3 lg:col-span-6">
+                        <Button disabled={processing} className="w-fit">
+                            {editing ? 'Save changes' : 'Add product'}
+                        </Button>
+                        {editing && (
+                            <>
+                                <Button type="button" variant="ghost" onClick={cancel}>
+                                    Cancel
+                                </Button>
+                                <span className="text-sm text-muted-foreground">Editing {editing.name}</span>
+                            </>
+                        )}
+                    </div>
                 </form>
 
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
@@ -161,7 +229,7 @@ export default function ProductsIndex({
                             id="filter-search"
                             value={filters.search}
                             onChange={(e) => setFilter('search', e.target.value)}
-                            placeholder="Search SKU or name…"
+                            placeholder="Search SKU, barcode or name…"
                         />
                     </FilterField>
                     <FilterField label="Type" htmlFor="filter-type">
@@ -195,6 +263,7 @@ export default function ProductsIndex({
                     <thead>
                         <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
                             <th className="py-2">SKU</th>
+                            <th className="py-2">Barcode</th>
                             <th className="py-2">Name</th>
                             <th className="py-2">Type</th>
                             <th className="py-2">Category</th>
@@ -207,6 +276,7 @@ export default function ProductsIndex({
                         {products.data.map((product) => (
                             <tr key={product.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2 font-mono text-xs">{product.sku}</td>
+                                <td className="py-2 font-mono text-xs text-muted-foreground">{product.barcode ?? '—'}</td>
                                 <td className="py-2">
                                     {product.name}
                                     {!product.is_active && (
@@ -229,6 +299,9 @@ export default function ProductsIndex({
                                 </td>
                                 <td className="py-2 text-muted-foreground">{product.average_unit_cost ?? '—'}</td>
                                 <td className="py-2 text-right">
+                                    <Button variant="ghost" size="sm" onClick={() => startEdit(product)}>
+                                        Edit
+                                    </Button>
                                     {product.is_active && (
                                         <Button variant="ghost" size="sm" onClick={() => deactivate(product)}>
                                             Deactivate
@@ -239,7 +312,7 @@ export default function ProductsIndex({
                         ))}
                         {products.data.length === 0 && (
                             <tr>
-                                <td colSpan={7} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={8} className="py-4 text-center text-muted-foreground">
                                     {hasActiveFilters ? 'No products match these filters.' : 'No products yet.'}
                                 </td>
                             </tr>
