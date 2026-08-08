@@ -1,0 +1,148 @@
+<?php
+
+namespace App\Modules\Inventory\Support;
+
+use RuntimeException;
+
+/**
+ * Reads the catalogue CSV into rows, and refuses anything it cannot read
+ * unambiguously.
+ *
+ * ⚠ Header problems are fatal here rather than collected as row errors,
+ * because a file whose columns are not understood produces meaningless row
+ * errors - hundreds of them, all saying the same thing badly.
+ */
+class ProductCatalogueFile
+{
+    public const MANDATORY = ['sku', 'name', 'category', 'unit', 'unit_abbr', 'type'];
+
+    public const OPTIONAL = ['barcode', 'description', 'low_stock_threshold', 'is_active'];
+
+    /**
+     * @return list<array{line:int, values:array<string,string>}>
+     */
+    public static function read(string $path): array
+    {
+        if (! is_file($path) || ! is_readable($path)) {
+            throw new RuntimeException("Cannot read catalogue file: {$path}");
+        }
+
+        $handle = fopen($path, 'r');
+
+        if ($handle === false) {
+            throw new RuntimeException("Cannot open catalogue file: {$path}");
+        }
+
+        try {
+            $header = fgetcsv($handle);
+
+            if ($header === false || $header === [null]) {
+                throw new RuntimeException('The catalogue file is empty.');
+            }
+
+            $header = self::normaliseHeader($header);
+            self::assertHeaderIsUsable($header);
+
+            $rows = [];
+            $line = 1;
+
+            while (($values = fgetcsv($handle)) !== false) {
+                $line++;
+
+                // A trailing newline yields a single null field. Not a row.
+                if ($values === [null]) {
+                    continue;
+                }
+
+                // ⚠ A row of nothing but separators is what a spreadsheet
+                // leaves behind under the last real row. Skipping it silently
+                // is right; treating it as a product with no SKU is not.
+                if (self::isBlankRow($values)) {
+                    continue;
+                }
+
+                if (count($values) !== count($header)) {
+                    throw new RuntimeException(
+                        "Line {$line} has ".count($values).' values but the header declares '.count($header).
+                        '. Fix the file rather than guessing which column is which.'
+                    );
+                }
+
+                $rows[] = ['line' => $line, 'values' => array_combine($header, $values)];
+            }
+
+            return $rows;
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    /**
+     * @param  list<string|null>  $header
+     * @return list<string>
+     */
+    private static function normaliseHeader(array $header): array
+    {
+        $clean = [];
+
+        foreach ($header as $index => $name) {
+            $name = (string) $name;
+
+            // ⚠⚠ Excel writes a UTF-8 BOM. Without stripping it the first
+            // column reads as "\u{FEFF}sku", the mandatory-header check fails,
+            // and the message gives no hint why - the two strings look
+            // identical in every terminal.
+            if ($index === 0) {
+                $name = preg_replace('/^\x{FEFF}/u', '', $name) ?? $name;
+            }
+
+            $clean[] = strtolower(CatalogueText::clean($name));
+        }
+
+        return $clean;
+    }
+
+    /**
+     * @param  list<string>  $header
+     */
+    private static function assertHeaderIsUsable(array $header): void
+    {
+        $missing = array_diff(self::MANDATORY, $header);
+
+        if ($missing !== []) {
+            throw new RuntimeException('The file is missing mandatory column(s): '.implode(', ', $missing).'.');
+        }
+
+        $duplicates = array_keys(array_filter(array_count_values($header), fn ($n) => $n > 1));
+
+        if ($duplicates !== []) {
+            throw new RuntimeException('The file repeats column(s): '.implode(', ', $duplicates).'.');
+        }
+
+        // ⚠⚠ An unknown column is an ERROR, not a warning. A file headed
+        // `barcodes` instead of `barcode` imports perfectly and silently drops
+        // every barcode - and nothing downstream can ever tell that it did.
+        $unknown = array_diff($header, self::MANDATORY, self::OPTIONAL);
+
+        if ($unknown !== []) {
+            throw new RuntimeException(
+                'The file has unrecognised column(s): '.implode(', ', $unknown).
+                '. Expected only: '.implode(', ', array_merge(self::MANDATORY, self::OPTIONAL)).'.'
+            );
+        }
+    }
+
+    /**
+     * @param  list<string|null>  $values
+     */
+    private static function isBlankRow(array $values): bool
+    {
+        foreach ($values as $value) {
+            if (CatalogueText::clean((string) $value) !== '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}
