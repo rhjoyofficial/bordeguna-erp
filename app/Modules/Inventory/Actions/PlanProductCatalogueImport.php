@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Actions;
 
 use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
@@ -37,6 +38,19 @@ class PlanProductCatalogueImport
         $existingProducts = Product::all()->keyBy('sku');
         $existingCategories = Category::all()->keyBy(fn (Category $c) => CatalogueText::categoryKey($c->name));
         $existingUnits = UnitOfMeasure::all()->keyBy(fn (UnitOfMeasure $u) => CatalogueText::unitKey($u->abbreviation));
+
+        // ⚠⚠ Brands are RESOLVED, never created (D-4). Keyed by both code and
+        // name so the file may say `LLD` or `LaLaDia` and mean the same thing.
+        // Unlike categories, an unrecognised brand STOPS the run: brands are
+        // few and deliberate, and auto-creating on a typo produces "Bionc"
+        // which nobody finds until a profit report is short.
+        $brands = Brand::all();
+        $existingBrands = collect();
+
+        foreach ($brands as $brand) {
+            $existingBrands->put(CatalogueText::unitKey($brand->code), $brand);
+            $existingBrands->put(CatalogueText::categoryKey($brand->name), $brand);
+        }
 
         // Barcode → SKU, so a barcode already worn by a different product is
         // caught against the database as well as within the file.
@@ -107,6 +121,7 @@ class PlanProductCatalogueImport
             $type = $this->resolveType($values['type'] ?? '', $line, $sku, $plan);
             $categoryKey = $this->resolveCategory($values['category'] ?? '', $line, $sku, $plan, $existingCategories, $categoryNames);
             $unitKey = $this->resolveUnit($values, $line, $sku, $plan, $existingUnits, $unitNames);
+            $brandId = $this->resolveBrand($values['brand'] ?? null, $type, $line, $sku, $plan, $existingBrands);
 
             $barcode = CatalogueText::nullIfBlank($values['barcode'] ?? null);
 
@@ -154,6 +169,7 @@ class PlanProductCatalogueImport
                 'barcode' => $barcode,
                 'name' => $name,
                 'type' => $type,
+                'brand_id' => $brandId,
                 'description' => CatalogueText::nullIfBlank($values['description'] ?? null),
                 'low_stock_threshold' => $threshold,
                 'is_active' => $isActive,
@@ -328,6 +344,59 @@ class PlanProductCatalogueImport
         return $key;
     }
 
+    /**
+     * ⚠⚠ RESOLVED, NEVER CREATED (D-4). Unlike a category, a brand the file does
+     * not recognise stops the run. Brands are few, deliberate and are the axis
+     * profit is reported along, so auto-creating one on a typo would produce
+     * "Bionc" and split a brand's margin in two without anybody noticing.
+     *
+     * ⚠ Blank is legitimate: raw materials have no brand (D-5). A FINISHED GOOD
+     * without one is a warning rather than an error (D-3), because a hard
+     * failure there would stop the whole first import on exactly the rows whose
+     * brand has not been decided yet.
+     *
+     * @param  Collection<string, Brand>  $brands
+     */
+    private function resolveBrand(?string $raw, ?string $type, int $line, string $sku, CatalogueImportPlan $plan, $brands): ?int
+    {
+        $clean = CatalogueText::nullIfBlank($raw);
+
+        if ($clean === null) {
+            if ($type === ProductType::FinishedGood->value) {
+                $plan->addWarning($line, $sku, 'finished good has no brand.');
+            }
+
+            return null;
+        }
+
+        // Accepted by code (LLD) or by name (LaLaDia), matched the same way the
+        // rest of this importer matches: case and whitespace folded in PHP.
+        $brand = $brands->get(CatalogueText::unitKey($clean))
+            ?? $brands->get(CatalogueText::categoryKey($clean));
+
+        if ($brand === null) {
+            $known = $brands->unique('id')->map(fn (Brand $b) => $b->code)->sort()->values()->all();
+
+            // ⚠ Kept SHORT on purpose. A long line wraps in the console, and a
+            // wrapped message breaks every test asserting on its text - the same
+            // trap that made this command render plain lines instead of tables.
+            // The policy sentence belongs in the report footer, said once,
+            // rather than repeated on forty rows.
+            $plan->addError($line, $sku, "unknown brand \"{$clean}\". Known: "
+                .($known === [] ? 'none' : implode(' ', $known)));
+
+            return null;
+        }
+
+        if (! $brand->is_active) {
+            $plan->addError($line, $sku, "brand \"{$brand->name}\" is retired and cannot take new products.");
+
+            return null;
+        }
+
+        return $brand->id;
+    }
+
     private function resolveThreshold(?string $raw, int $line, string $sku, CatalogueImportPlan $plan): ?string
     {
         $value = CatalogueText::nullIfBlank($raw);
@@ -465,6 +534,13 @@ class PlanProductCatalogueImport
 
         if ($existing->is_active !== $attributes['is_active']) {
             $changes['is_active'] = [$existing->is_active, $attributes['is_active']];
+        }
+
+        // ⚠ Compared as ids, both nullable. Moving a product between brands is a
+        // real change and must show in the review, because brand is what profit
+        // is grouped by.
+        if ($existing->brand_id !== $attributes['brand_id']) {
+            $changes['brand_id'] = [$existing->brand_id, $attributes['brand_id']];
         }
 
         // ⚠⚠ NUMERIC comparison. low_stock_threshold is decimal(15,4), so the

@@ -21,6 +21,8 @@ interface Product {
     type: string;
     category: string | null;
     category_id: number | null;
+    brand: string | null;
+    brand_id: number | null;
     unit_of_measure_id: number;
     description: string | null;
     unit: string;
@@ -39,6 +41,7 @@ const EMPTY = {
     name: '',
     type: 'raw_material',
     category_id: '',
+    brand_id: '',
     unit_of_measure_id: '',
     description: '',
     low_stock_threshold: '',
@@ -47,6 +50,10 @@ const EMPTY = {
 interface Option {
     id: number;
     name: string;
+}
+
+interface BrandOption extends Option {
+    code: string;
 }
 
 interface UnitOption extends Option {
@@ -67,13 +74,15 @@ const PRODUCT_TYPES = [
 export default function ProductsIndex({
     products,
     categories,
+    brands,
     units,
     filters: initialFilters,
 }: {
     products: Paginated<Product>;
     categories: Option[];
+    brands: BrandOption[];
     units: UnitOption[];
-    filters: { search: string; type: string; category_id: string };
+    filters: { search: string; type: string; category_id: string; brand_id: string };
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/inventory/products', initialFilters);
     const [editing, setEditing] = useState<Product | null>(null);
@@ -88,6 +97,7 @@ export default function ProductsIndex({
             name: product.name,
             type: product.type,
             category_id: product.category_id ? String(product.category_id) : '',
+            brand_id: product.brand_id ? String(product.brand_id) : '',
             unit_of_measure_id: String(product.unit_of_measure_id),
             description: product.description ?? '',
             low_stock_threshold: product.low_stock_threshold ?? '',
@@ -170,6 +180,30 @@ export default function ProductsIndex({
                                 </option>
                             ))}
                         </select>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="brand_id">Brand</Label>
+                        <select
+                            id="brand_id"
+                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            value={data.brand_id}
+                            onChange={(e) => setData('brand_id', e.target.value)}
+                        >
+                            {/* ⚠ "None" is a legitimate answer, not a blank. Raw
+                                materials have no brand (D-5). */}
+                            <option value="">None</option>
+                            {brands.map((b) => (
+                                <option key={b.id} value={b.id}>
+                                    {b.name}
+                                </option>
+                            ))}
+                        </select>
+                        <InputError message={errors.brand_id} />
+                        {data.type === 'finished_good' && data.brand_id === '' && (
+                            <p className="text-xs text-amber-600 dark:text-amber-500">
+                                Finished goods usually carry a brand.
+                            </p>
+                        )}
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="unit_of_measure_id">Unit</Label>
@@ -257,6 +291,25 @@ export default function ProductsIndex({
                             ))}
                         </select>
                     </FilterField>
+                    <FilterField label="Brand" htmlFor="filter-brand">
+                        <select
+                            id="filter-brand"
+                            className={selectClass}
+                            value={filters.brand_id}
+                            onChange={(e) => setFilter('brand_id', e.target.value)}
+                        >
+                            <option value="">All brands</option>
+                            {brands.map((b) => (
+                                <option key={b.id} value={b.id}>
+                                    {b.name}
+                                </option>
+                            ))}
+                            {/* ⚠ A real filter, not an empty one: "which finished
+                                goods still have no brand" is the question the
+                                warning in D-3 leaves open. */}
+                            <option value="none">No brand</option>
+                        </select>
+                    </FilterField>
                 </FilterBar>
 
                 <table className="w-full text-sm">
@@ -267,6 +320,7 @@ export default function ProductsIndex({
                             <th className="py-2">Name</th>
                             <th className="py-2">Type</th>
                             <th className="py-2">Category</th>
+                            <th className="py-2">Brand</th>
                             <th className="py-2">Stock</th>
                             <th className="py-2">Avg. cost</th>
                             <th className="py-2 text-right">Actions</th>
@@ -287,6 +341,7 @@ export default function ProductsIndex({
                                 </td>
                                 <td className="py-2 text-muted-foreground">{product.type.replace('_', ' ')}</td>
                                 <td className="py-2 text-muted-foreground">{product.category ?? '—'}</td>
+                                <td className="py-2 text-muted-foreground">{product.brand ?? '—'}</td>
                                 <td className="py-2">
                                     {product.current_quantity !== null ? (
                                         <span className={product.is_below_threshold ? 'font-medium text-destructive' : ''}>

@@ -203,7 +203,26 @@ class ImportProductCatalogue extends Command
             foreach ($plan->errors as $error) {
                 $this->line('  '.$this->where($error).' '.$error['message']);
             }
+
+            // ⚠ D-4, said ONCE rather than on every offending row. Brands are
+            // few and deliberate, and auto-creating one on a typo would split a
+            // brand's margin in two without anybody noticing.
+            if ($this->mentionsUnknownBrand($plan)) {
+                $this->newLine();
+                $this->line('<comment>Brands are never created by an import. Add the brand first, then re-run.</>');
+            }
         }
+    }
+
+    private function mentionsUnknownBrand(CatalogueImportPlan $plan): bool
+    {
+        foreach ($plan->errors as $error) {
+            if (str_contains($error['message'], 'unknown brand')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

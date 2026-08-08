@@ -3,10 +3,11 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
+use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
-use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -43,6 +44,9 @@ beforeEach(function () {
     $this->category = Category::create([
         'business_id' => $this->business->id, 'name' => 'Honey', 'slug' => 'honey',
     ]);
+    $this->brand = Brand::create([
+        'business_id' => $this->business->id, 'code' => 'LLD', 'name' => 'LaLaDia', 'slug' => 'laladia',
+    ]);
 
     $this->asRole = function (string $role) {
         $user = User::factory()->create();
@@ -59,6 +63,10 @@ beforeEach(function () {
         'name' => 'Mustard Flower Honey 500g',
         'type' => 'finished_good',
         'category_id' => $this->category->id,
+        // ⚠ The structural guard below caught the absence of this the moment
+        // brand_id was added to Product::$fillable, which is exactly what it is
+        // for. Brand must be settable from the screen, not only by the import.
+        'brand_id' => $this->brand->id,
         'unit_of_measure_id' => $this->unit->id,
         'description' => 'Sealed jar, 500g net.',
         'low_stock_threshold' => '12',
@@ -212,6 +220,43 @@ it('refuses a category belonging to another business', function () {
         ->assertSessionHasErrors('category_id');
 
     expect(Product::count())->toBe(0);
+});
+
+/**
+ * ⚠⚠ Brand joins the same family, and it matters more than the other two: a
+ * product pointing at another business's brand would quietly corrupt a margin
+ * report grouped by brand, rather than merely 500 a page.
+ */
+it('refuses a brand belonging to another business', function () {
+    $other = Business::create(['name' => 'Rival Co', 'slug' => 'rival-brand-co']);
+    $theirBrand = Brand::create([
+        'business_id' => $other->id, 'code' => 'BNC', 'name' => 'Theirs', 'slug' => 'theirs',
+    ]);
+
+    ($this->asRole)('Manager')
+        ->post('/inventory/products', array_merge($this->full, ['brand_id' => $theirBrand->id]))
+        ->assertSessionHasErrors('brand_id');
+
+    expect(Product::count())->toBe(0);
+});
+
+// ⚠ D-5. A raw material with no brand is a valid product, not a validation error.
+it('creates a product with no brand at all', function () {
+    ($this->asRole)('Manager')
+        ->post('/inventory/products', array_merge($this->full, [
+            'sku' => 'SUG-RAW', 'barcode' => null, 'type' => 'raw_material', 'brand_id' => null,
+        ]))
+        ->assertRedirect();
+
+    expect(Product::where('sku', 'SUG-RAW')->firstOrFail()->brand_id)->toBeNull();
+});
+
+it('offers the brands to the screen', function () {
+    ($this->asRole)('Manager')
+        ->get('/inventory/products')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('brands', 1)
+            ->where('brands.0.code', 'LLD'));
 });
 
 // ⚠ Viewing the catalogue is open to the business; changing it is not.

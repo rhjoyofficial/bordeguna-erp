@@ -20,6 +20,7 @@ class Product extends Model
     protected $fillable = [
         'business_id',
         'category_id',
+        'brand_id',
         'unit_of_measure_id',
         'sku',
         'barcode',
@@ -42,7 +43,7 @@ class Product extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'sku', 'category_id', 'low_stock_threshold', 'is_active'])
+            ->logOnly(['name', 'sku', 'brand_id', 'category_id', 'low_stock_threshold', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -50,6 +51,18 @@ class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * ⚠ Nullable by design. Raw materials have no brand: the same sugar becomes
+     * LaLaDia sugar or Bionic sugar depending only on what it is packed into.
+     * A finished good WITHOUT a brand is a warning rather than an error (D-3),
+     * because a hard failure would stop the first import on exactly the rows
+     * whose brand has not been decided yet.
+     */
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
     }
 
     public function unitOfMeasure(): BelongsTo

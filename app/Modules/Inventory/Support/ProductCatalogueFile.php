@@ -16,7 +16,9 @@ class ProductCatalogueFile
 {
     public const MANDATORY = ['sku', 'name', 'category', 'unit', 'unit_abbr', 'type'];
 
-    public const OPTIONAL = ['barcode', 'description', 'low_stock_threshold', 'is_active'];
+    // ⚠ `brand` is OPTIONAL because raw materials have no brand (D-5). A
+    // finished good without one is a warning, not an error (D-3).
+    public const OPTIONAL = ['brand', 'barcode', 'description', 'low_stock_threshold', 'is_active'];
 
     /**
      * @return list<array{line:int, values:array<string,string>}>

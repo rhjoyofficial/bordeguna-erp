@@ -5,6 +5,7 @@ namespace App\Modules\Inventory\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
@@ -23,10 +24,11 @@ class ProductController extends Controller
             'search' => $request->string('search')->toString(),
             'type' => $request->string('type')->toString(),
             'category_id' => $request->string('category_id')->toString(),
+            'brand_id' => $request->string('brand_id')->toString(),
         ];
 
         $products = Product::query()
-            ->with(['category', 'unitOfMeasure'])
+            ->with(['category', 'brand', 'unitOfMeasure'])
             ->when($filters['search'], fn ($query, $search) => $query->where(
                 fn ($q) => $q->where('name', 'like', "%{$search}%")
                     ->orWhere('sku', 'like', "%{$search}%")
@@ -36,6 +38,12 @@ class ProductController extends Controller
             ))
             ->when($filters['type'], fn ($query, $type) => $query->where('type', $type))
             ->when($filters['category_id'], fn ($query, $categoryId) => $query->where('category_id', $categoryId))
+            // ⚠ "none" is a real filter, not an empty one: "which finished goods
+            // still have no brand" is the question D-3 leaves open, and without
+            // this the warning has no screen to act on.
+            ->when($filters['brand_id'], fn ($query, $brandId) => $brandId === 'none'
+                ? $query->whereNull('brand_id')
+                : $query->where('brand_id', $brandId))
             ->orderBy('name')
             ->paginate(15)
             ->withQueryString()
@@ -46,9 +54,11 @@ class ProductController extends Controller
                 'name' => $product->name,
                 'type' => $product->type->value,
                 'category' => $product->category?->name,
+                'brand' => $product->brand?->name,
                 // ⚠ The ids, not only the display names: without them the edit
                 // form cannot preselect what the product already is.
                 'category_id' => $product->category_id,
+                'brand_id' => $product->brand_id,
                 'unit_of_measure_id' => $product->unit_of_measure_id,
                 'description' => $product->description,
                 'unit' => $product->unitOfMeasure->abbreviation,
@@ -62,6 +72,10 @@ class ProductController extends Controller
         return Inertia::render('inventory/products/index', [
             'products' => $products,
             'categories' => Category::orderBy('name')->get(['id', 'name']),
+            // ⚠ Active brands only in the picker. A retired brand must stay
+            // readable on the products that already carry it (which is why
+            // brand_id is RESTRICT on delete) without being offered for new ones.
+            'brands' => Brand::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
             'units' => UnitOfMeasure::orderBy('name')->get(['id', 'name', 'abbreviation']),
             'filters' => $filters,
         ]);
@@ -138,6 +152,12 @@ class ProductController extends Controller
             // persists, and then the index 500s, because the global scope
             // hides the row that `$product->unitOfMeasure->abbreviation` reads.
             'category_id' => ['nullable', Rule::exists('categories', 'id')->where('business_id', $businessId)],
+            // ⚠⚠ Scoped for the same reason, and it matters more here than
+            // anywhere: brand is the axis profit is reported along, so a product
+            // pointing at another business's brand would quietly corrupt a
+            // margin report rather than merely 500 a page.
+            // ⚠ Nullable: raw materials have no brand (D-5).
+            'brand_id' => ['nullable', Rule::exists('brands', 'id')->where('business_id', $businessId)],
             'unit_of_measure_id' => ['required', Rule::exists('units_of_measure', 'id')->where('business_id', $businessId)],
             'description' => ['nullable', 'string'],
             'low_stock_threshold' => ['nullable', 'numeric', 'min:0'],
