@@ -12,6 +12,16 @@ use Spatie\Permission\Models\Role;
  * permissions (create a PO, record what physically arrived) but not the
  * financial-commitment ones (approving a PO, marking it paid) — same
  * philosophy as Inventory's direct-adjust-vs-approval-queue split.
+ *
+ * ⚠⚠ `purchasing.payment.record` is deliberately NOT `purchasing.payment.update`.
+ * The older one guards a payment-STATUS string on a purchase order, which moves
+ * no money and reaches no ledger. This one lets money actually leave the
+ * business. Reusing the existing name would have silently handed every current
+ * holder the power to pay suppliers, which is exactly the kind of quiet
+ * privilege widening an ACL review is supposed to catch.
+ *
+ * ⚠ Owner and Manager only. Staff can raise a PO and receive goods; deciding
+ * that money leaves the bank is a different job.
  */
 class PurchasingPermissionsSeeder extends Seeder
 {
@@ -22,6 +32,7 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.po.approve',
             'purchasing.receipt.record',
             'purchasing.payment.update',
+            'purchasing.payment.record',
             'purchasing.reports.view',
         ],
         'Manager' => [
@@ -30,6 +41,7 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.po.approve',
             'purchasing.receipt.record',
             'purchasing.payment.update',
+            'purchasing.payment.record',
             'purchasing.reports.view',
         ],
         'Staff' => [

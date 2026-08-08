@@ -79,6 +79,10 @@ class HandleInertiaRequests extends Middleware
             'canManageChartOfAccounts' => fn () => (bool) $request->user()?->can('accounting.chart.manage'),
             // C-GL-6: the highest-risk permission in the system. Owner only.
             'canPostJournal' => fn () => (bool) $request->user()?->can('accounting.journal.post'),
+            // Money LEAVING the business for a supplier. Deliberately not
+            // `purchasing.payment.update`, which only guards a payment-status
+            // string on a purchase order and moves nothing.
+            'canRecordSupplierPayment' => fn () => (bool) $request->user()?->can('purchasing.payment.record'),
             // Self-scope (P3): whether the signed-in user has their own employee
             // record, so the "My profile" self-service link can show. Distinct
             // from canManageEmployees — an employee who isn't HR still has one.

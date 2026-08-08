@@ -2,6 +2,7 @@
 
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\SupplierController;
+use App\Modules\Purchasing\Http\Controllers\SupplierPaymentController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purchasing.')->group(function () {
@@ -25,4 +26,20 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     Route::post('purchase-orders/{purchaseOrder}/payment-status', [PurchaseOrderController::class, 'updatePaymentStatus'])->name('purchase-orders.payment-status');
     Route::post('purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
     Route::post('purchase-orders/{purchaseOrder}/returns', [PurchaseOrderController::class, 'returnGoods'])->name('purchase-orders.returns.store');
+
+    // Supplier payments — money actually leaving the business.
+    // ⚠ Viewing follows the same rule as bills and orders: anyone in the
+    // business may READ the payment history, because a payment nobody can see
+    // is a payment nobody can question. Creating one needs the permission.
+    Route::get('payments', [SupplierPaymentController::class, 'index'])->name('payments.index');
+    Route::get('payments/{payment}', [SupplierPaymentController::class, 'show'])
+        ->whereNumber('payment')->name('payments.show');
+
+    Route::middleware('can:purchasing.payment.record')->group(function () {
+        // ⚠ Declared BEFORE the {payment} route would otherwise swallow it.
+        // `whereNumber` above already prevents that, and both defences are kept
+        // because losing either one silently turns /payments/new into a 404.
+        Route::get('payments/new', [SupplierPaymentController::class, 'create'])->name('payments.create');
+        Route::post('payments', [SupplierPaymentController::class, 'store'])->name('payments.store');
+    });
 });

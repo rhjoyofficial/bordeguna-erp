@@ -42,6 +42,7 @@ export function AppSidebar() {
             items: [
                 { title: 'Suppliers', url: '/purchasing/suppliers', icon: Truck },
                 { title: 'Purchase orders', url: '/purchasing/purchase-orders', icon: ShoppingCart },
+                { title: 'Payments', url: '/purchasing/payments', icon: Banknote },
             ],
         },
         ...(canManageEmployees

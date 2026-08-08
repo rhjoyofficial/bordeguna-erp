@@ -1,0 +1,292 @@
+<?php
+
+namespace App\Modules\Purchasing\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Exceptions\MappingNotFound;
+use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Purchasing\Actions\RecordSupplierPayment;
+use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierPayment;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Inertia\Response;
+
+/**
+ * The screen over an engine that already existed.
+ *
+ * ⚠⚠ THIS CONTROLLER DECIDES NOTHING ABOUT MONEY. Every rule that matters -
+ * the accounting period lock, the cross-business check, re-reading each bill
+ * under a lock inside the transaction, refusing to pay more than is outstanding,
+ * and posting Dr Accounts Payable / Cr the money account through PostJournal -
+ * lives in RecordSupplierPayment and stays there. This class collects a form,
+ * validates its SHAPE, and hands it over.
+ *
+ * ▶ Why that matters: the action is the only path that writes a payment, so a
+ * second set of rules here would be a second payment engine that drifts from
+ * the first. The validation below deliberately stops short of the money rules
+ * for that reason - it checks that a number is a number, not whether the
+ * business may pay it.
+ *
+ * ⚠ The one thing it does decide is OWNERSHIP: every `exists:` here is scoped to
+ * the current business, because a bare one accepts another business's id - the
+ * hole found on the product screen on 5 August. That is a routing concern rather
+ * than an accounting one, which is why it belongs here and not in the action.
+ */
+class SupplierPaymentController extends Controller
+{
+    public function index(Request $request): Response
+    {
+        $filters = [
+            'search' => $request->string('search')->toString(),
+            'supplier_id' => $request->string('supplier_id')->toString(),
+        ];
+
+        $payments = SupplierPayment::query()
+            ->with(['supplier:id,name', 'moneyAccount:id,name'])
+            ->when($filters['search'], fn ($query, $search) => $query->where(
+                fn ($q) => $q->where('reference', 'like', "%{$search}%")
+                    ->orWhereHas('supplier', fn ($s) => $s->where('name', 'like', "%{$search}%"))
+            ))
+            ->when($filters['supplier_id'], fn ($query, $id) => $query->where('supplier_id', (int) $id))
+            ->orderByDesc('paid_on')
+            ->orderByDesc('id')
+            ->paginate(20)
+            ->withQueryString();
+
+        // ⚠ Same date and money corrections as the detail page. A list that
+        // disagrees with the document it links to is worse than either alone.
+        $payments->getCollection()->transform(function (SupplierPayment $payment) {
+            $payment->setAttribute('paid_on_date', $payment->paid_on?->toDateString());
+            $payment->setAttribute('amount_taka', Money::ofTaka((string) $payment->amount)->toTaka());
+
+            return $payment;
+        });
+
+        return Inertia::render('purchasing/payments/index', [
+            'payments' => $payments,
+            'filters' => $filters,
+            'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    /**
+     * The form. Shows every supplier that is actually owed something, and for a
+     * chosen supplier, the bills that are still open.
+     */
+    public function create(Request $request): Response
+    {
+        $supplierId = $request->integer('supplier_id') ?: null;
+
+        $supplier = $supplierId === null
+            ? null
+            : Supplier::query()->find($supplierId);
+
+        return Inertia::render('purchasing/payments/create', [
+            'suppliers' => $this->suppliersWithOutstanding(),
+            'selectedSupplierId' => $supplier?->id,
+            'bills' => $supplier === null ? [] : $this->openBillsFor($supplier),
+            'moneyAccounts' => MoneyAccount::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name', 'type']),
+            'today' => now()->toDateString(),
+        ]);
+    }
+
+    public function store(Request $request, RecordSupplierPayment $action): RedirectResponse
+    {
+        $businessId = app(BusinessContext::class)->id();
+
+        $data = $request->validate([
+            // ⚠ Scoped exists, not a bare one. A bare `exists:suppliers,id`
+            // accepts another business's supplier, and the global scope would
+            // then hide the row the payment points at. Same hole that was found
+            // and closed on the product screen on 5 August.
+            'supplier_id' => ['required', 'integer', Rule::exists('suppliers', 'id')
+                ->where('business_id', $businessId)],
+            'money_account_id' => ['required', 'integer', Rule::exists('money_accounts', 'id')
+                ->where('business_id', $businessId)],
+            'paid_on' => ['required', 'date'],
+            'reference' => ['nullable', 'string', 'max:255'],
+            'note' => ['nullable', 'string'],
+            'allocations' => ['required', 'array', 'min:1'],
+            // ⚠⚠ `distinct` is not the safety net, it is the error message. The
+            // same bill twice in one submission is already impossible: the
+            // allocations table is unique on (supplier_payment_id,
+            // supplier_bill_id) and the whole write is one transaction, so the
+            // data was never at risk. Without this rule the clerk simply gets a
+            // raw 500 from the constraint instead of a sentence naming the line.
+            // Verified by deleting it and watching the SQLSTATE 23000 arrive.
+            'allocations.*.supplier_bill_id' => ['required', 'integer', 'distinct'],
+            // ⚠ `gte:0`, not `gt:0`. The form sends a row per open bill and the
+            // clerk fills in the ones being paid; a zero row is "not this one",
+            // not an error. The action drops them and then refuses a payment
+            // that allocates nothing at all, which is the real rule.
+            'allocations.*.amount' => ['required', 'numeric', 'gte:0'],
+        ]);
+
+        $supplier = Supplier::findOrFail($data['supplier_id']);
+        $moneyAccount = MoneyAccount::findOrFail($data['money_account_id']);
+
+        $allocations = [];
+
+        foreach ($data['allocations'] as $index => $row) {
+            $bill = SupplierBill::find($row['supplier_bill_id']);
+
+            // ⚠ A bill from another business fails the global scope and comes
+            // back null. Reported as a validation error on the row rather than
+            // a 404, because the operator needs to know WHICH line is wrong.
+            if ($bill === null) {
+                return back()->withErrors([
+                    "allocations.{$index}.supplier_bill_id" => 'That bill is not available in this business.',
+                ]);
+            }
+
+            $allocations[] = ['bill' => $bill, 'amount' => (string) $row['amount']];
+        }
+
+        // ⚠⚠ The action's own refusals are RENDERED, never re-decided. A
+        // ValidationException it raises - overpayment, a bill belonging to
+        // another supplier - passes straight through untouched, with its own
+        // wording, and lands on the right field.
+        //
+        // ⚠ PeriodClosedException and MappingNotFound are plain RuntimeExceptions,
+        // so without this they reach the user as a raw 500 page. Caught here and
+        // turned into a sentence on the form, exactly as JournalController does
+        // it. This adds no rule: the decision was made in the engine, and all
+        // that happens here is that a human can read it.
+        try {
+            $payment = $action->handle(
+                supplier: $supplier,
+                moneyAccount: $moneyAccount,
+                paidOn: $data['paid_on'],
+                allocations: $allocations,
+                createdBy: $request->user(),
+                reference: $data['reference'] ?? null,
+                note: $data['note'] ?? null,
+            );
+        } catch (PeriodClosedException|MappingNotFound $e) {
+            throw ValidationException::withMessages(['paid_on' => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->route('purchasing.payments.show', $payment->id)
+            ->with('success', 'Payment recorded.');
+    }
+
+    public function show(SupplierPayment $payment): Response
+    {
+        $payment->load([
+            'supplier:id,name,code',
+            'moneyAccount:id,name,type',
+            'createdBy:id,name',
+            'allocations.bill:id,bill_number,bill_date,due_date,total',
+        ]);
+
+        // ⚠ Outstanding is recomputed per bill AS IT IS NOW, not as it was when
+        // this payment was made. That is the honest figure to show next to a
+        // historical allocation: "you paid 500 of this bill, and 200 is still
+        // owed today".
+        $allocations = $payment->allocations->map(function ($allocation) {
+            $bill = $allocation->bill;
+
+            return [
+                'id' => $allocation->id,
+                'amount' => Money::ofTaka((string) $allocation->amount)->toTaka(),
+                'bill' => $bill === null ? null : [
+                    'id' => $bill->id,
+                    'bill_number' => $bill->bill_number,
+                    // ⚠⚠ toDateString(), not the model's date cast. A `date`
+                    // cast serialises to JSON in UTC, and Dhaka is UTC+6, so
+                    // midnight local becomes 18:00 the PREVIOUS day - a bill
+                    // dated the 8th displayed as the 7th. Caught in a browser;
+                    // the database was correct throughout.
+                    'bill_date' => $bill->bill_date?->toDateString(),
+                    'total' => Money::ofTaka((string) $bill->total)->toTaka(),
+                    'outstanding' => $bill->outstanding()->toTaka(),
+                ],
+            ];
+        });
+
+        return Inertia::render('purchasing/payments/show', [
+            'payment' => array_merge($payment->toArray(), [
+                // ⚠ Same two corrections on the document itself: a calendar date
+                // that cannot shift, and money formatted rather than the raw
+                // decimal(15,4) the column holds (which reads "750.0000").
+                'paid_on' => $payment->paid_on?->toDateString(),
+                'amount' => Money::ofTaka((string) $payment->amount)->toTaka(),
+            ]),
+            'allocations' => $allocations,
+            // ⚠ The journal is shown on the document on purpose, exactly as the
+            // sales invoice does it. "Show me what this did to the books" is the
+            // question that makes an accountant trust the system, and hiding it
+            // behind the ledger screen is how people stop checking.
+            'journal' => Journal::query()
+                ->where('source_type', $payment->getMorphClass())
+                ->where('source_id', $payment->id)
+                ->whereNull('reverses_journal_id')
+                ->with('lines.account:id,code,name')
+                ->first(),
+        ]);
+    }
+
+    /**
+     * Suppliers with at least one bill still owing, and how much in total.
+     *
+     * @return array<int, array{id:int, name:string, outstanding:string}>
+     */
+    private function suppliersWithOutstanding(): array
+    {
+        return Supplier::query()
+            ->with(['bills.allocations'])
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Supplier $supplier) => [
+                'id' => $supplier->id,
+                'name' => $supplier->name,
+                'outstanding' => $supplier->outstanding()->toTaka(),
+            ])
+            // ⚠ Compared through Money, not by casting the string to a float.
+            // A supplier owed exactly nothing must not appear, and float
+            // comparison on money is the habit this codebase removed.
+            ->filter(fn (array $row) => Money::ofTaka($row['outstanding'])->minor > 0)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function openBillsFor(Supplier $supplier): array
+    {
+        return SupplierBill::query()
+            ->where('supplier_id', $supplier->id)
+            ->with('allocations')
+            ->orderBy('bill_date')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (SupplierBill $bill) => [
+                'id' => $bill->id,
+                'bill_number' => $bill->bill_number,
+                'bill_date' => $bill->bill_date?->toDateString(),
+                'due_date' => $bill->due_date?->toDateString(),
+                'total' => $bill->total,
+                'outstanding' => $bill->outstanding()->toTaka(),
+            ])
+            // ⚠ Settled bills are dropped AFTER the outstanding figure is
+            // computed, not by a WHERE clause. There is no paid column to filter
+            // on - it is derived from the allocations, deliberately.
+            ->filter(fn (array $row) => Money::ofTaka($row['outstanding'])->minor > 0)
+            ->values()
+            ->all();
+    }
+}
