@@ -3,11 +3,13 @@
 namespace App\Modules\Sales\Models;
 
 use App\Modules\Crm\Models\CrmAttribution;
+use App\Modules\Crm\Models\Lead;
 use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Sales\Enums\CustomerType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -79,6 +81,24 @@ class Customer extends Model
         static::saving(function (self $customer): void {
             $customer->phone_normalized = PhoneIdentity::normalize($customer->phone);
         });
+    }
+
+    /**
+     * The leads that became this customer.
+     *
+     * ⚠⚠ THIS IS WHAT KEEPS ATTRIBUTION REPORTABLE AFTER CONVERSION. A lead's
+     * activities and attributions are never copied onto the customer - copying
+     * would make "when did we first speak" and "which campaign produced this"
+     * answerable twice, differently, and the two answers would drift. Instead
+     * the link is followed: campaign ROI for a paying customer is read through
+     * `$customer->leads->flatMap->attributions`.
+     *
+     * ⚠ hasMany rather than hasOne on purpose. Two prospects can turn out to be
+     * the same company, and both may legitimately be converted into it.
+     */
+    public function leads(): HasMany
+    {
+        return $this->hasMany(Lead::class, 'converted_customer_id');
     }
 
     public function attributions(): MorphMany

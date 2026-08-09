@@ -4,6 +4,7 @@ namespace App\Modules\Crm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Crm\Actions\ConvertLead;
 use App\Modules\Crm\Enums\LeadStatus;
 use App\Modules\Crm\Models\Campaign;
 use App\Modules\Crm\Models\CrmAttribution;
@@ -306,5 +307,42 @@ class LeadController extends Controller
             ->orderBy('name')
             ->get(['users.id', 'users.name'])
             ->map(fn ($user) => ['id' => $user->id, 'name' => $user->name]);
+    }
+
+    /**
+     * A prospect becomes a customer - either one we already have, or a new one.
+     *
+     * ⚠⚠ Every rule lives in `ConvertLead`. This validates SHAPE and ownership
+     * and hands over, because the action is the single writer of
+     * `converted_customer_id` and a second set of rules here would be a second
+     * conversion path that disagrees with the first.
+     */
+    public function convert(Request $request, Lead $lead, ConvertLead $action): RedirectResponse
+    {
+        $businessId = app(BusinessContext::class)->id();
+
+        $data = $request->validate([
+            // ⚠ Scoped exists. A bare rule would accept another business's
+            // customer, and the global scope would then hide the row the lead
+            // points at.
+            'customer_id' => ['nullable', 'integer',
+                Rule::exists('customers', 'id')->where('business_id', $businessId)],
+            'code' => ['nullable', 'string', 'max:64'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'type' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'address' => ['nullable', 'string'],
+            'note' => ['nullable', 'string'],
+        ]);
+
+        $customer = $action->handle(
+            lead: $lead,
+            convertedBy: $request->user(),
+            existing: empty($data['customer_id']) ? null : Customer::findOrFail($data['customer_id']),
+            newCustomer: $data,
+        );
+
+        return back()->with('success', "Converted to customer {$customer->code}.");
     }
 }

@@ -20,6 +20,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         Route::put('leads/{lead}', [LeadController::class, 'update'])->name('leads.update');
     });
 
+    // ⚠⚠ Conversion creates MASTER DATA with a permanent code, so it is its own
+    // permission and deliberately NOT given to Staff. They qualify a lead;
+    // deciding that a customer record exists is a manager's call (C-CRMB-14).
+    Route::middleware('can:crm.leads.convert')->group(function () {
+        Route::post('leads/{lead}/convert', [LeadController::class, 'convert'])->name('leads.convert');
+    });
+
     // ⚠ Sources and campaigns are the REPORTING AXES. Staff capture leads;
     // inventing a source mid-campaign is how a report ends up with four
     // spellings of "Meta" (C-CRM-14).

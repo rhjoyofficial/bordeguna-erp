@@ -39,10 +39,24 @@ class Lead extends Model
      * `booted()` from `phone` and must never be supplied by a caller, or the two
      * could disagree and a lead would become unfindable by phone.
      */
+    /**
+     * ⚠⚠ `converted_customer_id` and `converted_at` are DELIBERATELY ABSENT.
+     * Conversion asserts that a customer exists and that this prospect became
+     * them; it is the one lead change with a consequence outside CRM. Leaving
+     * these fillable meant any mass assignment - a settings form, an importer, a
+     * future API - could claim a conversion with nothing behind it, and every
+     * conversion figure the business ever reads would be unreliable.
+     *
+     * `ConvertLead` sets them with forceFill, which works regardless of
+     * $fillable and is the ONLY path that does. Same reasoning as
+     * businesses.is_default and businesses.vat_enabled.
+     *
+     * @var list<string>
+     */
     protected $fillable = [
         'business_id', 'name', 'phone', 'email', 'address',
         'brand_id', 'status', 'assigned_to_user_id', 'qualification_note',
-        'lost_reason_id', 'lost_at', 'converted_customer_id', 'converted_at', 'note',
+        'lost_reason_id', 'lost_at', 'note',
     ];
 
     /**
