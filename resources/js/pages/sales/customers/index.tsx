@@ -9,7 +9,7 @@ import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useState } from 'react';
 
 const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
@@ -18,6 +18,15 @@ interface Customer {
     code: string | null;
     name: string;
     type: string;
+    // ⚠ These four were in the form's state and posted as EMPTY STRINGS on every
+    // save, with no input ever rendered - so the database column existed, the
+    // controller validated it, and nothing could ever put a value in it. Same
+    // failure as products.barcode. They are here because the edit form has to
+    // preselect what the customer already is.
+    contact_name: string | null;
+    email: string | null;
+    address: string | null;
+    note: string | null;
     phone: string | null;
     payment_terms: string | null;
     credit_limit: string | null;
@@ -25,6 +34,20 @@ interface Customer {
     is_system: boolean;
     is_active: boolean;
 }
+
+const EMPTY = {
+    name: '',
+    code: '',
+    type: 'retail',
+    contact_name: '',
+    phone: '',
+    email: '',
+    address: '',
+    payment_terms: '',
+    credit_limit: '',
+    price_group: '',
+    note: '',
+};
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Sales', href: '/sales/invoices' },
@@ -42,22 +65,46 @@ export default function CustomersIndex({
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/customers', initialFilters);
 
-    const { data, setData, post, errors, processing, reset } = useForm({
-        name: '',
-        code: '',
-        type: 'retail',
-        contact_name: '',
-        phone: '',
-        email: '',
-        address: '',
-        payment_terms: '',
-        credit_limit: '',
-        price_group: '',
-    });
+    const [editing, setEditing] = useState<Customer | null>(null);
+    const { data, setData, post, put, errors, processing, reset, clearErrors } = useForm(EMPTY);
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+
+        // ⚠ `update()` and its PUT route existed from the first slice with
+        // NOTHING calling them - the same gap suppliers and products both had.
+        // A customer entered with a typo could not be corrected.
+        if (editing) {
+            put(route('sales.customers.update', editing.id), { onSuccess: () => cancel() });
+
+            return;
+        }
+
         post(route('sales.customers.store'), { onSuccess: () => reset() });
+    };
+
+    const edit = (customer: Customer) => {
+        setEditing(customer);
+        clearErrors();
+        setData({
+            name: customer.name,
+            code: customer.code ?? '',
+            type: customer.type,
+            contact_name: customer.contact_name ?? '',
+            phone: customer.phone ?? '',
+            email: customer.email ?? '',
+            address: customer.address ?? '',
+            payment_terms: customer.payment_terms ?? '',
+            credit_limit: customer.credit_limit ?? '',
+            price_group: customer.price_group ?? '',
+            note: customer.note ?? '',
+        });
+    };
+
+    const cancel = () => {
+        setEditing(null);
+        clearErrors();
+        reset();
     };
 
     return (
@@ -113,10 +160,50 @@ export default function CustomersIndex({
                             placeholder="dealer"
                         />
                     </div>
-                    <div className="flex items-end">
+                    <div className="grid gap-2">
+                        <Label htmlFor="contact_name">Contact person</Label>
+                        <Input id="contact_name" value={data.contact_name} onChange={(e) => setData('contact_name', e.target.value)} />
+                        <InputError message={errors.contact_name} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input id="email" type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} />
+                        <InputError message={errors.email} />
+                    </div>
+                    <div className="grid gap-2 md:col-span-2">
+                        <Label htmlFor="address">Address</Label>
+                        <textarea
+                            id="address"
+                            className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            value={data.address}
+                            onChange={(e) => setData('address', e.target.value)}
+                        />
+                        <InputError message={errors.address} />
+                    </div>
+                    <div className="grid gap-2 md:col-span-2">
+                        <Label htmlFor="note">Note</Label>
+                        <textarea
+                            id="note"
+                            className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            value={data.note}
+                            onChange={(e) => setData('note', e.target.value)}
+                        />
+                        <InputError message={errors.note} />
+                    </div>
+                    <div className="flex items-end gap-2 md:col-span-4">
                         <Button type="submit" disabled={processing}>
-                            Add customer
+                            {editing ? 'Save changes' : 'Add customer'}
                         </Button>
+                        {editing && (
+                            <>
+                                <Button type="button" variant="ghost" onClick={cancel}>
+                                    Cancel
+                                </Button>
+                                <span className="self-center text-sm text-muted-foreground">
+                                    Editing {editing.name}
+                                </span>
+                            </>
+                        )}
                     </div>
                 </form>
 
@@ -173,6 +260,13 @@ export default function CustomersIndex({
                                     <td className="p-3">{customer.payment_terms ?? '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{customer.credit_limit ?? '-'}</td>
                                     <td className="p-3 text-right">
+                                        {/* ⚠ The walk-in row IS editable - a business may want to
+                                            call it "Counter Sale" - but the controller refuses any
+                                            change to its code or type, because Customer::walkIn()
+                                            resolves the counter customer by code. */}
+                                        <Button variant="ghost" size="sm" onClick={() => edit(customer)}>
+                                            Edit
+                                        </Button>
                                         {/* The walk-in row cannot be deactivated: every counter
                                             sale ever made points at it. */}
                                         {customer.is_active && !customer.is_system && (

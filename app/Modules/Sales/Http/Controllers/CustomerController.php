@@ -52,9 +52,39 @@ class CustomerController extends Controller
         return back()->with('success', 'Customer created.');
     }
 
+    /**
+     * ⚠⚠ THE WALK-IN ROW'S CODE IS IMMUTABLE, and this guard exists because the
+     * edit form was previously unreachable.
+     *
+     * `Customer::walkIn()` resolves the counter customer by `code = 'WALK-IN'`.
+     * Making edit mode work would otherwise let somebody rename that code and
+     * silently break EVERY counter sale - `walkIn()` would return null, and the
+     * failure would appear at the till, not on the screen that caused it.
+     *
+     * ⚠ `type` is frozen for the same reason: a walk-in row reclassified as a
+     * distributor is no longer what the counter picks up. Everything else about
+     * the row - its name, phone, address - stays editable, because a business
+     * may reasonably want to call it "Counter Sale".
+     */
     public function update(Request $request, Customer $customer): RedirectResponse
     {
-        $customer->update($this->validated($request, $customer));
+        $data = $this->validated($request, $customer);
+
+        if ($customer->is_system) {
+            if (($data['code'] ?? null) !== $customer->code) {
+                throw ValidationException::withMessages([
+                    'code' => "The walk-in customer's code is part of the system and cannot be changed.",
+                ]);
+            }
+
+            if (($data['type'] ?? null) !== $customer->type->value) {
+                throw ValidationException::withMessages([
+                    'type' => "The walk-in customer's type is part of the system and cannot be changed.",
+                ]);
+            }
+        }
+
+        $customer->update($data);
 
         return back()->with('success', 'Customer updated.');
     }
