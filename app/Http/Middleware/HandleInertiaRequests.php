@@ -83,6 +83,16 @@ class HandleInertiaRequests extends Middleware
             // `purchasing.payment.update`, which only guards a payment-status
             // string on a purchase order and moves nothing.
             'canRecordSupplierPayment' => fn () => (bool) $request->user()?->can('purchasing.payment.record'),
+            // ⚠⚠ SALES AND CRM WERE DEPLOYED WITH NO WAY TO REACH THEM. Every
+            // Sales page - the counter, customers, prices, invoices, deliveries -
+            // and both CRM pages were live in production and absent from the
+            // navigation and from every other screen, so the only way in was to
+            // type the URL. The revenue side of the ERP was invisible.
+            'canViewSales' => fn () => (bool) $request->user()?->can('sales.reports.view'),
+            'canSell' => fn () => (bool) $request->user()?->can('sales.sell'),
+            'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),
+            'canViewCrm' => fn () => (bool) $request->user()?->can('crm.leads.view'),
+            'canManageCrmSettings' => fn () => (bool) $request->user()?->can('crm.settings.manage'),
             // Self-scope (P3): whether the signed-in user has their own employee
             // record, so the "My profile" self-service link can show. Distinct
             // from canManageEmployees — an employee who isn't HR still has one.

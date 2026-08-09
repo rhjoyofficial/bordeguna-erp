@@ -3,11 +3,11 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Banknote, BookOpen, Boxes, Landmark, NotebookPen, Scale, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileBarChart, FileUp, Fingerprint, HandCoins, LayoutDashboard, Palmtree, PenSquare, ReceiptText, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
+import { BadgeDollarSign, Banknote, BookOpen, Boxes, Contact, FileText, Landmark, Megaphone, PackageCheck, Store, UserPlus, NotebookPen, Scale, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileBarChart, FileUp, Fingerprint, HandCoins, LayoutDashboard, Palmtree, PenSquare, ReceiptText, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
-    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, canManageScheduling, canManageAttendance, canManageLeave, canAccessSalary, canManagePayroll, canViewAccounting, hasEmployeeProfile } =
+    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, canManageScheduling, canManageAttendance, canManageLeave, canAccessSalary, canManagePayroll, canViewAccounting, canViewSales, canSell, canManagePrices, canViewCrm, canManageCrmSettings, hasEmployeeProfile } =
         usePage<SharedData>().props;
 
     const navGroups: NavGroup[] = [
@@ -45,6 +45,40 @@ export function AppSidebar() {
                 { title: 'Payments', url: '/purchasing/payments', icon: Banknote },
             ],
         },
+        // ⚠⚠ SALES WAS DEPLOYED AND UNREACHABLE. Every page below was live in
+        // production with no link to it anywhere in the application - not in this
+        // sidebar and not from any other screen - so the entire revenue side of
+        // the ERP could only be reached by typing a URL. Fixed here, and a
+        // structural test now fails if any module ships without navigation.
+        ...(canViewSales || canSell
+            ? [
+                  {
+                      label: 'Sales',
+                      items: [
+                          ...(canSell ? [{ title: 'Counter sale', url: '/sales/counter', icon: Store }] : []),
+                          ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
+                          ...(canViewSales || canManagePrices
+                              ? [{ title: 'Selling prices', url: '/sales/prices', icon: BadgeDollarSign }]
+                              : []),
+                          ...(canViewSales ? [{ title: 'Invoices', url: '/sales/invoices', icon: FileText }] : []),
+                          ...(canViewSales ? [{ title: 'Deliveries', url: '/sales/deliveries', icon: PackageCheck }] : []),
+                      ],
+                  },
+              ]
+            : []),
+        ...(canViewCrm
+            ? [
+                  {
+                      label: 'CRM',
+                      items: [
+                          { title: 'Leads', url: '/crm/leads', icon: UserPlus },
+                          ...(canManageCrmSettings
+                              ? [{ title: 'Sources & campaigns', url: '/crm/settings', icon: Megaphone }]
+                              : []),
+                      ],
+                  },
+              ]
+            : []),
         ...(canManageEmployees
             ? [
                   {
