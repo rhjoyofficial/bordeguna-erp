@@ -2,6 +2,7 @@
 
 namespace App\Modules\Foundation\Providers;
 
+use App\Modules\Foundation\Console\Commands\TeardownSandbox;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -16,6 +17,10 @@ class FoundationServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([TeardownSandbox::class]);
+        }
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
 
         // A Super Admin bypasses every permission check across every business.

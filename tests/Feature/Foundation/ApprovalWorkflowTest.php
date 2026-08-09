@@ -40,7 +40,7 @@ beforeEach(function () {
     $this->requester = User::factory()->create();
     $this->requester->businesses()->attach($this->business->id);
 
-    $this->fake = new WorkflowFakeApprovable();
+    $this->fake = new WorkflowFakeApprovable;
     $this->fake->id = 1;
     $this->fake->business_id = $this->business->id;
 });
