@@ -1,6 +1,7 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SupplierImportPanel } from '@/components/supplier-import-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -127,6 +128,10 @@ export default function SuppliersIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Suppliers" />
             <div className="flex flex-col gap-6 p-4">
+                {/* ⚠ Behind the same permission as the form below: an export
+                    hands over bank account numbers, BIN and TIN in one file. */}
+                {mayManage && <SupplierImportPanel />}
+
                 {mayManage && (
                     <form onSubmit={submit} className="flex flex-col gap-4 rounded-lg border p-4">
                         <p className="text-sm font-medium">{editing ? `Editing ${editing.name}` : 'Add a supplier'}</p>

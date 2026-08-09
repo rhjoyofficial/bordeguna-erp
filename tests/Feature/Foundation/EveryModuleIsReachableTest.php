@@ -27,7 +27,14 @@ function sidebarSource(): string
     return file_get_contents(resource_path('js/components/app-sidebar.tsx'));
 }
 
-/** Whether a route's controller method declares a JSON return type. */
+/**
+ * Whether a route answers with something that is not a PAGE.
+ *
+ * ⚠ Decided by the controller's declared RETURN TYPE rather than by a list of
+ * route names, so a new lookup endpoint or file download does not have to be
+ * remembered here. A JSON body is not a page; neither is a CSV download, and
+ * putting "Download blank template" in the sidebar would be absurd.
+ */
 function returnsJson($route): bool
 {
     $action = $route->getActionName();
@@ -42,9 +49,11 @@ function returnsJson($route): bool
         return false;
     }
 
-    $type = (new ReflectionMethod($class, $method))->getReturnType();
+    $type = (string) ((new ReflectionMethod($class, $method))->getReturnType() ?? '');
 
-    return $type !== null && str_contains((string) $type, 'JsonResponse');
+    return str_contains($type, 'JsonResponse')
+        || str_contains($type, 'StreamedResponse')
+        || str_contains($type, 'BinaryFileResponse');
 }
 
 it('offers a way into every module that has user-facing pages', function (string $landingPage) {

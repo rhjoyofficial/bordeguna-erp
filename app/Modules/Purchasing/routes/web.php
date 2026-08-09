@@ -3,6 +3,7 @@
 use App\Modules\Purchasing\Http\Controllers\ExpenseVoucherController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\SupplierController;
+use App\Modules\Purchasing\Http\Controllers\SupplierImportController;
 use App\Modules\Purchasing\Http\Controllers\SupplierPaymentController;
 use Illuminate\Support\Facades\Route;
 
@@ -10,7 +11,16 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     // Suppliers: anyone in the business can view; only purchasing.suppliers.manage may mutate.
     Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
 
+    // ⚠ Exporting the supplier list hands over bank account numbers, BIN and
+    // TIN in one file, so it follows the same permission as MANAGING suppliers
+    // rather than the open read on the list screen - which deliberately hides
+    // those columns from everyone else.
     Route::middleware('can:purchasing.suppliers.manage')->group(function () {
+        Route::get('suppliers/template', [SupplierImportController::class, 'template'])->name('suppliers.template');
+        Route::get('suppliers/export', [SupplierImportController::class, 'export'])->name('suppliers.export');
+        Route::post('suppliers/import/review', [SupplierImportController::class, 'review'])->name('suppliers.import.review');
+        Route::post('suppliers/import/apply', [SupplierImportController::class, 'apply'])->name('suppliers.import.apply');
+
         Route::post('suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
         Route::put('suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
         Route::delete('suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
