@@ -75,20 +75,34 @@ class RecordFixedAsset
             throw ValidationException::withMessages(['account_id' => "{$assetAccount->label()} cannot be posted to."]);
         }
 
-        // ⚠⚠ FOUND WHILE BUILDING THE SCREEN, 9 August. Accumulated Depreciation
-        // is an Asset account, postable and active, so every check above passed
-        // it - and filing a van's cost there would put a DEBIT into the
-        // contra-asset that cancels real accumulated depreciation. The trial
-        // balance stays at zero and the balance sheet is wrong by twice the
-        // asset's value, in the direction that makes the business look richer.
+        // ⚠⚠ AN ASSET IS NEVER ACQUIRED INTO AN ACCOUNT THE SOFTWARE POSTS TO
+        // ITSELF. Cash at Bank, Stock on Hand, Accounts Receivable and
+        // Accumulated Depreciation are all type Asset, postable and active, so
+        // every check above passes them - and each one is a different way to
+        // make the balance sheet wrong while the trial balance stays at zero:
         //
-        // ⚠ Guarded in the ACTION rather than only in the picker, because a
-        // screen-level filter is a suggestion and this is a rule. The system
-        // slug is the honest test: this account exists for the software's own
-        // posting and is never somewhere a person files a purchase.
-        if ($assetAccount->system_slug === 'accumulated_depreciation') {
+        //   Stock on Hand           a van becomes inventory, and the next FIFO
+        //                           issue writes it off as cost of goods sold
+        //   Cash at Bank            Dr cash / Cr cash nets to nothing; the
+        //                           purchase leaves NO trace at all
+        //   Accumulated Depreciation a DEBIT into the contra-asset cancels real
+        //                           depreciation - wrong by twice the value, in
+        //                           the direction that flatters the business
+        //
+        // ⚠ The `system_slug` is the honest test, and it generalises rather than
+        // blacklisting three codes: an account the software finds by name is one
+        // it posts to on its own, and a genuinely new asset account somebody
+        // adds to the chart carries no slug and is unaffected.
+        //
+        // ⚠⚠ Guarded HERE and not only in the picker. The screen already offers
+        // the non-current group only - and a screen filter is a suggestion,
+        // while this is a rule. Verified on scratch MySQL, where the engine
+        // accepted both Stock on Hand and Cash at Bank before this existed.
+        if ($assetAccount->system_slug !== null) {
             throw ValidationException::withMessages([
-                'account_id' => "{$assetAccount->label()} is where depreciation accumulates, not where an asset is recorded.",
+                'account_id' => $assetAccount->system_slug === 'accumulated_depreciation'
+                    ? "{$assetAccount->label()} is where depreciation accumulates, not where an asset is recorded."
+                    : "{$assetAccount->label()} is used by the system itself and cannot hold a fixed asset.",
             ]);
         }
 

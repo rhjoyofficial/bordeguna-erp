@@ -129,15 +129,31 @@ it('records an asset with no money account and posts nothing', function () {
  * depreciation: the trial balance stays at zero and the balance sheet is wrong
  * by twice the asset's value, in the direction that flatters the business.
  */
-it('refuses to file an asset into accumulated depreciation', function () {
-    $accumulated = Account::bySlug('accumulated_depreciation');
-
+it('refuses to acquire an asset into an account the software posts to itself', function (string $slug) {
     $this->actingAs($this->owner)
-        ->post('/assets', ($this->payload)(['account_id' => $accumulated->id]))
+        ->post('/assets', ($this->payload)(['account_id' => Account::bySlug($slug)->id]))
         ->assertSessionHasErrors('account_id');
 
     expect(FixedAsset::count())->toBe(0)
         ->and(Journal::count())->toBe(0);
+})->with([
+    // ⚠⚠ Each of these was ACCEPTED BY THE ENGINE until 9 August, and each is a
+    // different way to make the balance sheet wrong while the trial balance
+    // stays perfectly at zero. Found on scratch MySQL, not by the suite.
+    'accumulated depreciation - a debit cancels real depreciation' => ['accumulated_depreciation'],
+    'stock on hand - the van becomes inventory and is issued as COGS' => ['stock_on_hand'],
+    'cash at bank - Dr cash / Cr cash leaves no trace of the purchase' => ['cash_at_bank'],
+    'accounts receivable' => ['accounts_receivable'],
+]);
+
+it('still allows an ordinary non-current asset account', function () {
+    // ⚠ The guard is only correct if the legitimate case still passes. A rule
+    // that refuses everything is not a rule, it is an outage.
+    $this->actingAs($this->owner)
+        ->post('/assets', ($this->payload)(['account_id' => Account::where('code', '1210')->sole()->id]))
+        ->assertRedirect();
+
+    expect(FixedAsset::count())->toBe(1);
 });
 
 it('refuses a non-asset account, a future acquisition and salvage above cost', function (array $overrides, string $field) {
