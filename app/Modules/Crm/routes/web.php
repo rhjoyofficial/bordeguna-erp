@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Crm\Http\Controllers\CrmActivityController;
+use App\Modules\Crm\Http\Controllers\CrmReportController;
 use App\Modules\Crm\Http\Controllers\CrmSettingsController;
 use App\Modules\Crm\Http\Controllers\LeadController;
 use Illuminate\Support\Facades\Route;
@@ -49,6 +50,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         // ⚠⚠ Declared BEFORE the {type}/{id} pattern, which would otherwise
         // swallow `/crm/queue` as a subject called "queue".
         Route::get('queue', [CrmActivityController::class, 'queue'])->name('queue');
+        Route::get('reports', [CrmReportController::class, 'index'])->name('reports');
 
         Route::get('{type}/{id}/timeline', [CrmActivityController::class, 'show'])
             ->whereIn('type', ['lead', 'customer'])->whereNumber('id')->name('timeline');

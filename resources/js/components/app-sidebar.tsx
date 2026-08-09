@@ -81,6 +81,7 @@ export function AppSidebar() {
                           // ⚠ The work queue is the screen an agent lives in all
                           // day. Without it, follow-ups exist and nobody sees them.
                           { title: 'Follow-ups', url: '/crm/queue', icon: CalendarCheck },
+                          { title: 'CRM reports', url: '/crm/reports', icon: FileBarChart },
                           ...(canManageCrmSettings
                               ? [{ title: 'Sources & campaigns', url: '/crm/settings', icon: Megaphone }]
                               : []),
