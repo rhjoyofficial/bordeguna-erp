@@ -5,6 +5,8 @@ namespace App\Modules\Foundation\database\seeders;
 use App\Modules\Accounting\database\seeders\AccountingPermissionsSeeder;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Assets\database\seeders\AssetAccountMappingSeeder;
+use App\Modules\Assets\database\seeders\AssetsPermissionsSeeder;
 use App\Modules\Crm\database\seeders\CrmPermissionsSeeder;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -93,6 +95,7 @@ class SandboxSeeder extends Seeder
             SalesPermissionsSeeder::class,
             AccountingPermissionsSeeder::class,
             CrmPermissionsSeeder::class,
+            AssetsPermissionsSeeder::class,
         ] as $seeder) {
             (new $seeder)->run();
         }
@@ -108,6 +111,11 @@ class SandboxSeeder extends Seeder
         (new ChartOfAccountsSeeder)->run();
         (new InventoryAccountMappingSeeder)->run();
         (new SalesAccountMappingSeeder)->run();
+        // ⚠⚠ Without this, depreciation writes its charge rows and posts
+        // NOTHING - silently, by design, because the register is useful before
+        // the ledger is configured. The screen now warns about it; the sandbox
+        // seeds it so the cycle exercises the posting rather than the silence.
+        (new AssetAccountMappingSeeder)->run();
         (new WalkInCustomerSeeder)->run();
     }
 

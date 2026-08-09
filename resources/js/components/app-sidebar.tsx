@@ -7,7 +7,7 @@ import { BadgeDollarSign, Banknote, BookOpen, Boxes, Contact, FileText, Landmark
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
-    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, canManageScheduling, canManageAttendance, canManageLeave, canAccessSalary, canManagePayroll, canViewAccounting, canViewSales, canSell, canManagePrices, canViewCrm, canManageCrmSettings, hasEmployeeProfile } =
+    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, canManageScheduling, canManageAttendance, canManageLeave, canAccessSalary, canManagePayroll, canViewAccounting, canViewSales, canSell, canManagePrices, canViewCrm, canManageCrmSettings, canViewAssets, hasEmployeeProfile } =
         usePage<SharedData>().props;
 
     const navGroups: NavGroup[] = [
@@ -81,6 +81,22 @@ export function AppSidebar() {
                           ...(canManageCrmSettings
                               ? [{ title: 'Sources & campaigns', url: '/crm/settings', icon: Megaphone }]
                               : []),
+                      ],
+                  },
+              ]
+            : []),
+        // ⚠⚠ The Assets module loaded MIGRATIONS ONLY until 9 August: tables and
+        // tested actions with no routes, no screens and no permissions. A
+        // delivery van's only reachable path was Purchasing, which files it as
+        // stock and expenses it as cost of goods sold - through one month's P&L
+        // and off the balance sheet entirely.
+        ...(canViewAssets
+            ? [
+                  {
+                      label: 'Assets',
+                      items: [
+                          { title: 'Fixed assets', url: '/assets', icon: Landmark },
+                          { title: 'Depreciation', url: '/assets/depreciation', icon: Scale },
                       ],
                   },
               ]

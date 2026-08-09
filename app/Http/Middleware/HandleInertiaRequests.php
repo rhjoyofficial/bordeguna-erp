@@ -93,6 +93,13 @@ class HandleInertiaRequests extends Middleware
             'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),
             'canViewCrm' => fn () => (bool) $request->user()?->can('crm.leads.view'),
             'canManageCrmSettings' => fn () => (bool) $request->user()?->can('crm.settings.manage'),
+            // ⚠ The Assets module shipped loading MIGRATIONS ONLY - no routes, no
+            // screens, no permissions - so nothing the business owns could be
+            // recorded and depreciation had no caller at all. Reading the
+            // register is its own permission rather than open to the business:
+            // what the company owns and paid is closer to payroll than to stock.
+            'canViewAssets' => fn () => (bool) $request->user()?->can('assets.view'),
+            'canRunDepreciation' => fn () => (bool) $request->user()?->can('assets.depreciation.run'),
             // Self-scope (P3): whether the signed-in user has their own employee
             // record, so the "My profile" self-service link can show. Distinct
             // from canManageEmployees — an employee who isn't HR still has one.

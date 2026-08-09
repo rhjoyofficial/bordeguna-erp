@@ -75,6 +75,23 @@ class RecordFixedAsset
             throw ValidationException::withMessages(['account_id' => "{$assetAccount->label()} cannot be posted to."]);
         }
 
+        // ⚠⚠ FOUND WHILE BUILDING THE SCREEN, 9 August. Accumulated Depreciation
+        // is an Asset account, postable and active, so every check above passed
+        // it - and filing a van's cost there would put a DEBIT into the
+        // contra-asset that cancels real accumulated depreciation. The trial
+        // balance stays at zero and the balance sheet is wrong by twice the
+        // asset's value, in the direction that makes the business look richer.
+        //
+        // ⚠ Guarded in the ACTION rather than only in the picker, because a
+        // screen-level filter is a suggestion and this is a rule. The system
+        // slug is the honest test: this account exists for the software's own
+        // posting and is never somewhere a person files a purchase.
+        if ($assetAccount->system_slug === 'accumulated_depreciation') {
+            throw ValidationException::withMessages([
+                'account_id' => "{$assetAccount->label()} is where depreciation accumulates, not where an asset is recorded.",
+            ]);
+        }
+
         $price = Money::ofTaka($cost);
         $salvage = Money::ofTaka($salvageValue);
 

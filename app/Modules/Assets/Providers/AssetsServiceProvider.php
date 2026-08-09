@@ -18,5 +18,11 @@ class AssetsServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+        // ⚠⚠ Added 9 August. Until this line, the module loaded migrations ONLY:
+        // the tables existed, the actions were tested, and there was no way for
+        // a person to reach any of it. A delivery van's only reachable path was
+        // Purchasing, which turns it into stock and expenses it as cost of goods
+        // sold - straight through one month's P&L and off the balance sheet.
+        $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
     }
 }

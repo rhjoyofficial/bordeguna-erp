@@ -284,6 +284,44 @@ it('records what the business spent on running itself and still balances', funct
     Journal::all()->each(fn (Journal $journal) => expect($journal->balance()->isZero())->toBeTrue());
 });
 
+// ── ⚠⚠ What the business OWNS, and what it wears out ────────────────────────
+
+it('buys a van, keeps it off the P&L, and wears it down a month at a time', function () {
+    $till = MoneyAccount::where('name', 'DUMMY BRAC Bank')->sole();
+    $vehicles = Account::where('code', '1230')->sole();
+
+    // ⚠⚠ Until the Assets screens existed, THE ONLY REACHABLE PATH for this van
+    // was Purchasing - which files it as stock and expenses it as cost of goods
+    // sold the first time it is issued. It would pass through one month's P&L
+    // and vanish from the balance sheet.
+    $this->actingAs($this->user)->post('/assets', [
+        'asset_code' => 'DUMMY-VAN-01',
+        'name' => 'DUMMY Delivery van',
+        'account_id' => $vehicles->id,
+        'acquired_on' => '2026-07-01',
+        'cost' => '1200000.00',
+        'salvage_value' => '120000.00',
+        'useful_life_months' => 36,
+        'money_account_id' => $till->id,
+    ])->assertRedirect();
+
+    // On the balance sheet, not in the costs.
+    expect((int) JournalLine::where('account_id', $vehicles->id)->sum('amount_minor'))->toBe(120000000)
+        ->and(($this->balanceOn)('cost_of_goods_sold'))->toBe(0);
+
+    $this->actingAs($this->user)
+        ->post('/assets/depreciation', ['year' => 2026, 'month' => 7])
+        ->assertRedirect();
+
+    // (1,200,000 - 120,000) / 36 = 30,000 for July.
+    expect(($this->balanceOn)('depreciation_expense'))->toBe(3000000)
+        ->and(($this->balanceOn)('accumulated_depreciation'))->toBe(-3000000);
+
+    expect((int) JournalLine::sum('amount_minor'))->toBe(0);
+
+    Journal::all()->each(fn (Journal $journal) => expect($journal->balance()->isZero())->toBeTrue());
+});
+
 // ── Teardown ────────────────────────────────────────────────────────────────
 
 it('removes the entire sandbox and leaves no orphan row', function () {
