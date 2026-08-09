@@ -438,3 +438,67 @@ it('refuses a campaign whose source belongs to another business', function () {
         ])
         ->assertSessionHasErrors('lead_source_id');
 });
+
+// ── The screens actually render ─────────────────────────────────────────────
+
+/**
+ * ⚠⚠ Found during the pre-deployment review: every other test POSTs or PUTs, so
+ * nothing proved the INDEX pages render. `index()` maps each row through
+ * `$lead->status->label()` and four relations - a null there is a 500 that no
+ * amount of write-path testing would catch, and it is the first thing a user
+ * sees.
+ */
+it('renders the lead list with a lead on it', function () {
+    ($this->asRole)('Manager')->post('/crm/leads', $this->full);
+
+    ($this->asRole)('Manager')->get('/crm/leads')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('crm/leads/index')
+            ->has('leads.data', 1)
+            ->where('leads.data.0.name', 'Rahima Begum')
+            ->where('leads.data.0.status_label', 'New')
+            ->where('leads.data.0.brand', 'LaLaDia')
+            ->where('leads.data.0.assigned_to', 'Call Centre Agent')
+            // ⚠ The form's list must NOT offer `converted`.
+            ->has('selectable_statuses', 6)
+            ->has('statuses', 7)
+        );
+});
+
+it('renders the lead list when a lead has no name, brand or assignee', function () {
+    // ⚠ Every personal field is nullable for C-CRM-16 anonymisation, so the list
+    // must survive a row where they are all null - which is exactly what an
+    // anonymised lead will look like one day.
+    ($this->asRole)('Manager')->post('/crm/leads', [
+        'name' => null, 'phone' => null, 'email' => null, 'status' => 'new',
+    ])->assertRedirect();
+
+    ($this->asRole)('Manager')->get('/crm/leads')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('leads.data', 1)->where('leads.data.0.name', null));
+});
+
+it('renders the sources and campaigns screen', function () {
+    ($this->asRole)('Manager')->get('/crm/settings')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('crm/settings/index')
+            ->has('sources', 1)
+            ->where('sources.0.code', 'META')
+            ->where('sources.0.campaigns_count', 1)
+            ->has('campaigns', 1)
+            ->where('campaigns.0.source', 'Meta Ads')
+            ->where('campaigns.0.brand', 'LaLaDia')
+        );
+});
+
+it('filters the lead list without error', function () {
+    ($this->asRole)('Manager')->post('/crm/leads', $this->full);
+
+    ($this->asRole)('Manager')->get('/crm/leads?search=8801711000000&status=new')
+        ->assertOk()
+        // ⚠ Searching an international spelling must find a lead captured any
+        // other way, or duplicate detection on the list is theatre.
+        ->assertInertia(fn ($page) => $page->has('leads.data', 1));
+});

@@ -259,3 +259,23 @@ it('keeps a customer inside its own business', function () {
 
     expect(Customer::where('code', 'KARIM')->exists())->toBeFalse();
 });
+
+it('still renders the customer list after the bin/tin change', function () {
+    // ⚠ Same gap as CRM: the write paths were tested, the render was not. The
+    // index now serialises three new columns and a derived phone_normalized.
+    ($this->asRole)('Manager')->post('/sales/customers', $this->full);
+
+    ($this->asRole)('Manager')->get('/sales/customers')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('sales/customers/index')->has('customers.data', 2));
+});
+
+it('derives phone_normalized on a customer without touching the entered phone', function () {
+    ($this->asRole)('Manager')->post('/sales/customers', array_merge($this->full, ['phone' => '+8801711000000']));
+
+    $customer = Customer::where('code', 'KARIM')->sole();
+
+    // ⚠⚠ The user's input is theirs. C-CRM-12.
+    expect($customer->phone)->toBe('+8801711000000')
+        ->and($customer->phone_normalized)->toBe('01711000000');
+});
