@@ -18,6 +18,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
     Route::middleware('can:crm.leads.manage')->group(function () {
         Route::post('leads', [LeadController::class, 'store'])->name('leads.store');
         Route::put('leads/{lead}', [LeadController::class, 'update'])->name('leads.update');
+        // ⚠ Linking a duplicate deletes nothing and moves nothing; it records
+        // which of two leads should be worked. A working-list correction, so it
+        // needs no permission beyond managing leads.
+        Route::post('leads/{lead}/duplicate-of', [LeadController::class, 'linkDuplicate'])->name('leads.duplicate-of');
     });
 
     // ⚠⚠ Conversion creates MASTER DATA with a permanent code, so it is its own

@@ -5,6 +5,7 @@ namespace App\Modules\Crm\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Crm\Actions\ConvertLead;
+use App\Modules\Crm\Actions\LinkDuplicateLead;
 use App\Modules\Crm\Enums\LeadStatus;
 use App\Modules\Crm\Models\Campaign;
 use App\Modules\Crm\Models\CrmAttribution;
@@ -307,6 +308,30 @@ class LeadController extends Controller
             ->orderBy('name')
             ->get(['users.id', 'users.name'])
             ->map(fn ($user) => ['id' => $user->id, 'name' => $user->name]);
+    }
+
+    /**
+     * Two leads are one person.
+     *
+     * ⚠ A working-list correction, not master data: it creates nothing outside
+     * CRM, so `crm.leads.manage` is the right gate rather than a new permission.
+     */
+    public function linkDuplicate(Request $request, Lead $lead, LinkDuplicateLead $action): RedirectResponse
+    {
+        $businessId = app(BusinessContext::class)->id();
+
+        $data = $request->validate([
+            'survivor_id' => ['required', 'integer',
+                Rule::exists('leads', 'id')->where('business_id', $businessId)],
+        ]);
+
+        $action->handle(
+            duplicate: $lead,
+            survivor: Lead::findOrFail($data['survivor_id']),
+            mergedBy: $request->user(),
+        );
+
+        return back()->with('success', 'Marked as a duplicate. Nothing was deleted.');
     }
 
     /**

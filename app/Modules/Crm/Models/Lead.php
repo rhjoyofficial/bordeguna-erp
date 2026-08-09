@@ -13,6 +13,7 @@ use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -40,6 +41,11 @@ class Lead extends Model
      * could disagree and a lead would become unfindable by phone.
      */
     /**
+     * ⚠⚠ `duplicate_of_lead_id`, `merged_at` and `merged_by` are ALSO absent,
+     * for the same reason: `LinkDuplicateLead` is their only writer, and a lead
+     * that could be marked a duplicate by a stray mass assignment would vanish
+     * from the working list with nobody having decided it should.
+     *
      * ⚠⚠ `converted_customer_id` and `converted_at` are DELIBERATELY ABSENT.
      * Conversion asserts that a customer exists and that this prospect became
      * them; it is the one lead change with a consequence outside CRM. Leaving
@@ -73,7 +79,43 @@ class Lead extends Model
             'status' => LeadStatus::class,
             'lost_at' => 'datetime',
             'converted_at' => 'datetime',
+            'merged_at' => 'datetime',
         ];
+    }
+
+    /**
+     * The lead this one turned out to be a duplicate of.
+     *
+     * ⚠⚠ Nothing was moved when this was set. This lead keeps its own
+     * activities, tasks, interests and attributions; the link only says which
+     * one should be WORKED. Re-parenting historical rows would make "which
+     * campaign produced this" answer differently than it did yesterday.
+     */
+    public function duplicateOf(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'duplicate_of_lead_id');
+    }
+
+    /** The leads that turned out to be this one. */
+    public function duplicates(): HasMany
+    {
+        return $this->hasMany(self::class, 'duplicate_of_lead_id');
+    }
+
+    public function isDuplicate(): bool
+    {
+        // ⚠ Derived, not a status. An eighth LeadStatus case would shatter
+        // every exhaustive match over the enum to say what this column says.
+        return $this->duplicate_of_lead_id !== null;
+    }
+
+    /**
+     * ⚠ The working list: leads somebody should actually act on. A prospect
+     * nobody should call twice must not sit in the queue twice.
+     */
+    public function scopeWorkable(Builder $query): Builder
+    {
+        return $query->whereNull('duplicate_of_lead_id');
     }
 
     /**
