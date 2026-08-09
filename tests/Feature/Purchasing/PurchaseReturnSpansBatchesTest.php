@@ -280,3 +280,127 @@ it('still records a single line when the return fits inside one batch', function
     expect(PurchaseReturnLine::count())->toBe(1)
         ->and(($this->balanceOn)('stock_on_hand'))->toBe(250000 - 25000);
 });
+
+/**
+ * ⚠⚠ FOUND BY THE ROUND-2 CODE REVIEW, AFTER DEPLOYMENT.
+ *
+ * `ReverseStockReceipt` guards a rounding residue with
+ * `if ($remaining > 0 && $remaining < 1)`. `$remaining` is an INT - it is seeded
+ * from `scaled()` and every arm of the match yields an int - so that condition is
+ * UNSATISFIABLE and the guard never fires. The comment above it describes exactly
+ * the case it was written to prevent: a residue of 1, one ten-thousandth of a
+ * kilogram, left by converting purchase units to stock units and back, throwing
+ * InsufficientStock for goods that are all physically present.
+ *
+ * ▶ This test returns the WHOLE of a converted line delivered in two receipts,
+ * which is precisely that case.
+ */
+it('lets a converted line be returned in full when it arrived in two deliveries', function () {
+    $oil = Product::create([
+        'business_id' => $this->business->id,
+        'unit_of_measure_id' => $this->litre->id,
+        'sku' => 'OIL-MUSTARD-FULL',
+        'name' => 'Mustard Oil',
+        'type' => ProductType::FinishedGood,
+    ]);
+
+    ProductUnitConversion::record(
+        businessId: $this->business->id,
+        product: $oil,
+        fromUnit: $this->kg,
+        toUnit: $this->litre,
+        stockUnitsPerPurchaseUnit: '1.09051254',
+        purchaseUnitsPerStockUnit: '0.917',
+        effectiveFrom: '2020-01-01',
+        source: 'PROVISIONAL - general reference, not yet confirmed',
+    );
+    $oil->refresh();
+
+    $order = orderReceivedTwice($this, $oil, '33.3333', '66.6667', '320.00');
+
+    // The entire 100 kg goes back. Nothing is left in the warehouse, so the
+    // return must be accepted.
+    app(RecordPurchaseReturn::class)->handle($order, [
+        ['line' => $order->lines->first(), 'quantity' => '100'],
+    ], $this->user);
+
+    $remaining = StockBatch::where('product_id', $oil->id)->get()
+        ->sum(fn (StockBatch $b) => (float) $b->current_quantity);
+
+    expect(round($remaining, 4))->toBe(0.0);
+});
+
+it('refuses a return quantity that rounds away to nothing', function () {
+    // ⚠⚠ `numeric|min:0` on the screen and `> 0` in the action both let 0.00004
+    // through, and it scales to 0 in the reversal. The old code handed back an
+    // empty collection WITHOUT throwing, so a return line was written with no
+    // movement behind it: the order line's returnable quantity shrank while no
+    // stock moved and no journal posted.
+    $jars = Product::create([
+        'business_id' => $this->business->id,
+        'unit_of_measure_id' => $this->kg->id,
+        'sku' => 'SHUTKI-TINY',
+        'name' => 'Loitta Shutki',
+        'type' => ProductType::FinishedGood,
+    ]);
+
+    $order = orderReceivedTwice($this, $jars, '40', '60', '25.00');
+
+    expect(fn () => app(RecordPurchaseReturn::class)->handle($order, [
+        ['line' => $order->lines->first(), 'quantity' => '0.00004'],
+    ], $this->user))->toThrow(InvalidArgumentException::class, 'rounds to zero');
+
+    // Nothing recorded, nothing consumed.
+    expect(PurchaseReturnLine::count())->toBe(0)
+        ->and((float) $order->fresh('lines')->lines->first()->quantity_returned)->toBe(0.0);
+});
+
+it('refuses a return whose deliveries straddle the recording of a conversion', function () {
+    // ⚠⚠ Delivery 1 arrives BEFORE the conversion exists, so its batch has no
+    // factor and its quantity is in the stock unit. Delivery 2 arrives after and
+    // freezes a factor. `$quantity` on a return spanning both would be kilograms
+    // for one batch and litres for the other - there is no single unit the clerk
+    // could have meant, and reversing anyway debits GRNI in the wrong unit for
+    // part of the line while every journal still balances.
+    $oil = Product::create([
+        'business_id' => $this->business->id,
+        'unit_of_measure_id' => $this->litre->id,
+        'sku' => 'OIL-MUSTARD-STRADDLE',
+        'name' => 'Mustard Oil',
+        'type' => ProductType::FinishedGood,
+    ]);
+
+    $order = app(CreatePurchaseOrder::class)->handle(
+        supplier: $this->supplier,
+        warehouse: $this->warehouse,
+        lines: [['product' => $oil, 'quantity' => '100', 'unit_cost' => '320.00']],
+        createdBy: $this->user,
+    );
+    $order->approvalRequest->approve($this->user);
+    $order = $order->fresh(['lines', 'approvalRequest']);
+
+    // Delivery 1: no conversion exists yet, so nothing converts.
+    app(RecordGoodsReceipt::class)->handle($order, [['line' => $order->lines->first(), 'quantity' => '40']], $this->user);
+
+    ProductUnitConversion::record(
+        businessId: $this->business->id,
+        product: $oil,
+        fromUnit: $this->kg,
+        toUnit: $this->litre,
+        stockUnitsPerPurchaseUnit: '1.09051254',
+        purchaseUnitsPerStockUnit: '0.917',
+        effectiveFrom: '2020-01-01',
+        source: 'PROVISIONAL - recorded after the first delivery',
+    );
+    $oil->refresh();
+
+    // Delivery 2: converts, and freezes a factor on its batch.
+    app(RecordGoodsReceipt::class)->handle($order, [['line' => $order->lines->first(), 'quantity' => '60']], $this->user);
+
+    $factors = StockBatch::where('product_id', $oil->id)->orderBy('id')->pluck('conversion_factor');
+    expect($factors[0])->toBeNull()->and($factors[1])->not->toBeNull();
+
+    expect(fn () => app(RecordPurchaseReturn::class)->handle($order, [
+        ['line' => $order->lines->first(), 'quantity' => '70'],
+    ], $this->user))->toThrow(InvalidArgumentException::class, 'no single unit');
+});

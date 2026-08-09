@@ -16,6 +16,37 @@ import { FormEventHandler } from 'react';
  * invoices. Typing the stocked figure instead is a ~9% error that balances
  * everywhere downstream, so the box has to say which one it wants.
  */
+/**
+ * One display row per ORDER LINE, summing the per-cost-layer rows behind it.
+ * ⚠ The stored rows stay one-per-batch - that is what lets the journal value
+ * every layer a return empties. This is presentation only.
+ */
+const aggregateReturnLines = (
+    lines: { id: number; quantity_returned: string; purchase_order_line: { id: number; product: { name: string; sku: string } } }[],
+) => {
+    const byLine = new Map<number, { key: string; name: string; sku: string; quantity: number; batches: number }>();
+
+    for (const line of lines) {
+        const id = line.purchase_order_line.id;
+        const existing = byLine.get(id);
+
+        if (existing) {
+            existing.quantity += parseFloat(line.quantity_returned);
+            existing.batches += 1;
+        } else {
+            byLine.set(id, {
+                key: `${id}`,
+                name: line.purchase_order_line.product.name,
+                sku: line.purchase_order_line.product.sku,
+                quantity: parseFloat(line.quantity_returned),
+                batches: 1,
+            });
+        }
+    }
+
+    return [...byLine.values()].map((e) => ({ ...e, quantity: String(Number(e.quantity.toFixed(4))) }));
+};
+
 const purchaseUnitOf = (line: Line): string | null =>
     line.product.purchase_unit?.abbreviation ?? line.product.unit_of_measure?.abbreviation ?? null;
 
@@ -426,10 +457,21 @@ export default function PurchaseOrderShow({
                                     {purchaseReturn.note && ` — ${purchaseReturn.note}`}
                                 </p>
                                 <ul className="mt-1 list-disc pl-5">
-                                    {purchaseReturn.lines.map((line) => (
-                                        <li key={line.id}>
-                                            {line.purchase_order_line.product.name} ({line.purchase_order_line.product.sku}) —{' '}
-                                            {line.quantity_returned}
+                                    {/*
+                                     * ⚠ Aggregated by ORDER LINE. A return large enough to span two
+                                     * deliveries writes one row per cost layer emptied, which is what
+                                     * the ledger needs, but a clerk who returned 70 kg of one product
+                                     * once should not read two unexplained bullets for it.
+                                     */}
+                                    {aggregateReturnLines(purchaseReturn.lines).map((entry) => (
+                                        <li key={entry.key}>
+                                            {entry.name} ({entry.sku}) — {entry.quantity}
+                                            {entry.batches > 1 && (
+                                                <span className="text-xs text-muted-foreground">
+                                                    {' '}
+                                                    (across {entry.batches} cost layers)
+                                                </span>
+                                            )}
                                         </li>
                                     ))}
                                 </ul>

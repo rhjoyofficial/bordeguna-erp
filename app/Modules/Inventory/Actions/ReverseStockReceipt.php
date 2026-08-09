@@ -67,7 +67,38 @@ class ReverseStockReceipt
         }
 
         $remaining = $this->scaled($quantity);
+
+        // ⚠⚠ A quantity that rounds to nothing is not a small return, it is no
+        // return. `numeric|min:0` on the screen and `> 0` in the caller both let
+        // 0.00004 through, and it scales to 0 here: the loop would break at once,
+        // hand back an empty collection WITHOUT throwing, and the caller would
+        // record a return line with no movement behind it - permanently reducing
+        // what the order line may still return, with no stock moved and no
+        // journal posted. Refusing is the only honest answer.
+        if ($remaining <= 0) {
+            throw new InvalidArgumentException(
+                "A return quantity of {$quantity} rounds to zero at four decimal places; nothing would move."
+            );
+        }
+
         $written = collect();
+
+        // ⚠⚠ MIXED BATCHES ARE REFUSED, NOT AVERAGED. If some batches on this
+        // line froze a conversion factor and others did not - which happens when
+        // a delivery arrives BEFORE the product's conversion is recorded and
+        // another after - then `$quantity` is in kilograms for one batch and in
+        // litres for the other, and there is no single unit the caller could
+        // have meant. Reversing anyway debits GRNI in the wrong unit for part of
+        // the line, and every journal still balances.
+        $factors = collect($receipts)
+            ->map(fn (StockMovement $r) => StockBatch::find($r->batch_id)?->conversion_factor);
+
+        if ($factors->filter()->isNotEmpty() && $factors->contains(null)) {
+            throw new InvalidArgumentException(
+                'This line was received both before and after its unit conversion was recorded, '.
+                'so a return quantity has no single unit. Reverse the deliveries separately.'
+            );
+        }
 
         foreach ($receipts as $receipt) {
             if ($remaining <= 0) {
@@ -158,13 +189,24 @@ class ReverseStockReceipt
             $remaining -= $consumed;
         }
 
-        // ⚠ A residue below one ten-thousandth is rounding, not a shortfall.
-        // Converting purchase units to stock units and back cannot round-trip
-        // exactly, so returning the WHOLE of a delivery that arrived in two
-        // receipts could leave `$remaining` at 1 - a ten-thousandth of a
-        // kilogram - and throw InsufficientStock for goods that are all
-        // physically present, rolling back a legitimate return.
-        if ($remaining > 0 && $remaining < 1) {
+        // ⚠⚠ THIS GUARD WAS A NO-OP AND THE ROUND-2 REVIEW CAUGHT IT.
+        // `$remaining` is an INT - seeded from `scaled()`, and every arm of the
+        // match above yields an int - so `$remaining > 0 && $remaining < 1` was
+        // UNSATISFIABLE and never once fired. The comment it carried described
+        // precisely the case it failed to catch.
+        //
+        // ⚠ What it is for: converting purchase units to stock units and back
+        // cannot round-trip exactly, so returning the WHOLE of a line delivered
+        // in two receipts could leave one ten-thousandth outstanding and throw
+        // InsufficientStock for goods that are all physically present.
+        //
+        // ℹ HONESTY ABOUT ITS REACH: no input has been found that actually
+        // leaves a residue here - the `$take === $wanted` arm absorbs it on the
+        // final batch, and a search over two-batch splits found none. The
+        // tolerance stays because one tick is unambiguously rounding rather than
+        // a shortfall, and because a guard that silently does nothing is worse
+        // than no guard at all. It is NOT claimed to be exercised.
+        if ($remaining > 0 && $remaining <= 1) {
             $remaining = 0;
         }
 
