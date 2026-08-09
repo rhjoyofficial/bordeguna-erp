@@ -5,13 +5,20 @@ namespace App\Modules\Crm\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Crm\Actions\LogCrmActivity;
+use App\Modules\Crm\Actions\RecordProductInterest;
 use App\Modules\Crm\Enums\ActivityDirection;
 use App\Modules\Crm\Enums\ActivityType;
+use App\Modules\Crm\Enums\InterestStatus;
 use App\Modules\Crm\Enums\TaskStatus;
 use App\Modules\Crm\Models\CrmActivity;
+use App\Modules\Crm\Models\CrmProductInterest;
 use App\Modules\Crm\Models\CrmTask;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Models\Brand;
+use App\Modules\Inventory\Models\Category;
+use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -113,6 +120,52 @@ class CrmActivityController extends Controller
                 ])->all(),
             'directions' => collect(ActivityDirection::cases())
                 ->map(fn (ActivityDirection $d) => ['value' => $d->value, 'label' => $d->label()])->all(),
+            // ⚠ Newest request first: the most recent thing somebody asked for
+            // is what the next call is about.
+            'interests' => CrmProductInterest::query()
+                ->where('subject_type', $subject->getMorphClass())
+                ->where('subject_id', $subject->getKey())
+                ->with(['product:id,sku,name,is_active', 'category:id,name', 'brand:id,name',
+                    'requestedUnit:id,name,abbreviation', 'recordedBy:id,name'])
+                ->orderByDesc('requested_at')
+                ->orderByDesc('id')
+                ->get()
+                ->map(fn (CrmProductInterest $i) => [
+                    'id' => $i->id,
+                    'what' => $i->what(),
+                    'kind' => $i->product_id !== null ? 'product' : ($i->category_id !== null ? 'category' : 'brand'),
+                    'sku' => $i->product?->sku,
+                    // ⚠ Surfaced rather than hidden: somebody asking for an
+                    // inactive product is a demand signal, not an error, but
+                    // the person reading the screen needs to know it is not
+                    // currently sold.
+                    'product_is_active' => $i->product_id === null ? null : (bool) $i->product?->is_active,
+                    'quantity' => $i->requested_quantity === null
+                        ? null
+                        : rtrim(rtrim((string) $i->requested_quantity, '0'), '.'),
+                    // ⚠⚠ The unit they SAID, which may differ from the
+                    // product's stock unit. Shown as stated.
+                    'unit' => $i->requestedUnit?->abbreviation,
+                    'note' => $i->note,
+                    'requested_at' => $i->requested_at?->toDateTimeString(),
+                    'status' => $i->status->value,
+                    'status_label' => $i->status->label(),
+                    'closed_note' => $i->closed_note,
+                    'by' => $i->recordedBy?->name,
+                ])->all(),
+
+            'interestStatuses' => collect(InterestStatus::closable())
+                ->map(fn (InterestStatus $s) => ['value' => $s->value, 'label' => $s->label()])->all(),
+
+            'products' => Product::query()->orderBy('name')->get(['id', 'sku', 'name', 'is_active'])
+                ->map(fn (Product $p) => [
+                    'id' => $p->id,
+                    'label' => $p->is_active ? "{$p->sku} - {$p->name}" : "{$p->sku} - {$p->name} (inactive)",
+                ])->all(),
+            'categories' => Category::query()->orderBy('name')->get(['id', 'name'])->all(),
+            'brands' => Brand::query()->orderBy('name')->get(['id', 'name'])->all(),
+            'units' => UnitOfMeasure::query()->orderBy('name')->get(['id', 'name', 'abbreviation'])->all(),
+
             'assignableUsers' => $this->assignableUsers(),
             'canRecord' => $request->user()?->can('crm.leads.manage') ?? false,
             'canAssign' => $request->user()?->can('crm.leads.assign') ?? false,
@@ -236,6 +289,77 @@ class CrmActivityController extends Controller
         $task->save();
 
         return back()->with('success', 'Follow-up updated.');
+    }
+
+    /**
+     * Record that somebody asked for something.
+     *
+     * ⚠⚠ ALWAYS A NEW ROW. "Wants 2kg" in June and "wants 10kg for Eid" in
+     * August are two different business facts, and the demand history is what
+     * tells you whether to stock mango again. An earlier draft used
+     * updateOrCreate; that would have destroyed the first statement every time
+     * somebody made a second one.
+     */
+    public function storeInterest(Request $request, string $type, int $id, RecordProductInterest $action): RedirectResponse
+    {
+        $subject = $this->resolveSubject($type, $id);
+        $businessId = app(BusinessContext::class)->id();
+
+        // ⚠ Every foreign key is tenant-scoped. A bare exists rule would accept
+        // another business's product and the global scope would then hide the
+        // row this interest points at.
+        // ⛔ Products are NOT restricted to active ones: somebody asking for
+        // last season's mango is the demand signal that decides whether to
+        // stock it again.
+        $data = $request->validate([
+            'product_id' => ['nullable', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
+            'category_id' => ['nullable', 'integer', Rule::exists('categories', 'id')->where('business_id', $businessId)],
+            'brand_id' => ['nullable', 'integer', Rule::exists('brands', 'id')->where('business_id', $businessId)],
+            'requested_quantity' => ['nullable', 'numeric'],
+            'requested_unit_id' => ['nullable', 'integer', Rule::exists('units_of_measure', 'id')->where('business_id', $businessId)],
+            'note' => ['nullable', 'string', 'max:255'],
+            'requested_at' => ['nullable', 'date'],
+        ]);
+
+        $action->handle(
+            subject: $subject,
+            recordedBy: $request->user(),
+            product: empty($data['product_id']) ? null : Product::findOrFail($data['product_id']),
+            category: empty($data['category_id']) ? null : Category::findOrFail($data['category_id']),
+            brand: empty($data['brand_id']) ? null : Brand::findOrFail($data['brand_id']),
+            requestedQuantity: isset($data['requested_quantity']) ? (string) $data['requested_quantity'] : null,
+            requestedUnit: empty($data['requested_unit_id']) ? null : UnitOfMeasure::findOrFail($data['requested_unit_id']),
+            note: $data['note'] ?? null,
+            requestedAt: $data['requested_at'] ?? null,
+        );
+
+        return back()->with('success', 'Interest recorded.');
+    }
+
+    /**
+     * Close an interest. ⚠⚠ NEVER DELETE ONE.
+     *
+     * A demand signal that quietly disappears is one nobody can audit, and the
+     * request itself is immutable - the model refuses any edit to what was
+     * originally asked for, so this can only append an outcome.
+     */
+    public function closeInterest(Request $request, CrmProductInterest $interest): RedirectResponse
+    {
+        $data = $request->validate([
+            'status' => ['required', Rule::in(
+                collect(InterestStatus::closable())->map(fn (InterestStatus $s) => $s->value)->all()
+            )],
+            'closed_note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $interest->update([
+            'status' => InterestStatus::from($data['status']),
+            'closed_at' => now(),
+            'closed_by' => $request->user()->id,
+            'closed_note' => $data['closed_note'] ?? null,
+        ]);
+
+        return back()->with('success', 'Interest closed.');
     }
 
     /**

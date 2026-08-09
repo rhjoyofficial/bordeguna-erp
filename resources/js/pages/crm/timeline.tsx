@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useState } from 'react';
 
 const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
@@ -45,22 +45,50 @@ interface ActivityTypeOption {
     has_duration: boolean;
 }
 
+interface Interest {
+    id: number;
+    what: string;
+    kind: string;
+    sku: string | null;
+    product_is_active: boolean | null;
+    quantity: string | null;
+    unit: string | null;
+    note: string | null;
+    requested_at: string | null;
+    status: string;
+    status_label: string;
+    closed_note: string | null;
+    by: string | null;
+}
+
 export default function CrmTimeline({
     subject,
     activities,
     tasks,
+    interests,
+    interestStatuses,
     activityTypes,
     directions,
     assignableUsers,
+    products,
+    categories,
+    brands,
+    units,
     canRecord,
     canAssign,
 }: {
     subject: { kind: string; id: number; name: string | null; phone: string | null; converted_customer_id: number | null };
     activities: Activity[];
     tasks: Task[];
+    interests: Interest[];
+    interestStatuses: { value: string; label: string }[];
     activityTypes: ActivityTypeOption[];
     directions: { value: string; label: string }[];
     assignableUsers: { id: number; name: string }[];
+    products: { id: number; label: string }[];
+    categories: { id: number; name: string }[];
+    brands: { id: number; name: string }[];
+    units: { id: number; name: string; abbreviation: string }[];
     canRecord: boolean;
     canAssign: boolean;
 }) {
@@ -81,6 +109,16 @@ export default function CrmTimeline({
 
     const task = useForm({ title: '', note: '', due_at: '', assigned_to_user_id: '' });
 
+    const [interestKind, setInterestKind] = useState('product');
+    const interest = useForm({
+        product_id: '',
+        category_id: '',
+        brand_id: '',
+        requested_quantity: '',
+        requested_unit_id: '',
+        note: '',
+    });
+
     const chosen = activityTypes.find((t) => t.value === log.data.type);
 
     const submitLog: FormEventHandler = (e) => {
@@ -96,6 +134,14 @@ export default function CrmTimeline({
         task.post(`/crm/${subject.kind}/${subject.id}/tasks`, {
             preserveScroll: true,
             onSuccess: () => task.reset(),
+        });
+    };
+
+    const submitInterest: FormEventHandler = (e) => {
+        e.preventDefault();
+        interest.post(`/crm/${subject.kind}/${subject.id}/interests`, {
+            preserveScroll: true,
+            onSuccess: () => interest.reset(),
         });
     };
 
@@ -209,6 +255,150 @@ export default function CrmTimeline({
                         </form>
                     </div>
                 )}
+
+                {canRecord && (
+                    <form onSubmit={submitInterest} className="flex flex-wrap items-end gap-3 rounded-md border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                        <p className="w-full text-sm font-medium">What did they ask for?</p>
+                        <div className="grid gap-2">
+                            <Label htmlFor="interest_kind">About</Label>
+                            <select id="interest_kind" className={selectClass} value={interestKind} onChange={(e) => setInterestKind(e.target.value)}>
+                                <option value="product">A product</option>
+                                <option value="category">A category</option>
+                                <option value="brand">A brand</option>
+                            </select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="interest_target">Which</Label>
+                            <select
+                                id="interest_target"
+                                className={`${selectClass} w-64`}
+                                value={
+                                    interestKind === 'product'
+                                        ? interest.data.product_id
+                                        : interestKind === 'category'
+                                          ? interest.data.category_id
+                                          : interest.data.brand_id
+                                }
+                                onChange={(e) => {
+                                    /* ⚠ Exactly one of the three is ever sent: three
+                                       different statements in one row would make every
+                                       count over the table ambiguous. */
+                                    interest.setData({
+                                        ...interest.data,
+                                        product_id: interestKind === 'product' ? e.target.value : '',
+                                        category_id: interestKind === 'category' ? e.target.value : '',
+                                        brand_id: interestKind === 'brand' ? e.target.value : '',
+                                    });
+                                }}
+                            >
+                                <option value="">Choose</option>
+                                {(interestKind === 'product' ? products : interestKind === 'category' ? categories : brands).map(
+                                    (o: { id: number; label?: string; name?: string }) => (
+                                        <option key={o.id} value={o.id}>
+                                            {o.label ?? o.name}
+                                        </option>
+                                    ),
+                                )}
+                            </select>
+                            <InputError message={interest.errors.product_id} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="requested_quantity">How much</Label>
+                            <Input
+                                id="requested_quantity"
+                                className="w-24 text-right"
+                                inputMode="decimal"
+                                value={interest.data.requested_quantity}
+                                onChange={(e) => interest.setData('requested_quantity', e.target.value)}
+                            />
+                            <InputError message={interest.errors.requested_quantity} />
+                        </div>
+                        <div className="grid gap-2">
+                            {/* ⚠⚠ The unit THEY said, which may differ from the
+                                product's stock unit. Never converted at capture. */}
+                            <Label htmlFor="requested_unit_id">In what unit</Label>
+                            <select
+                                id="requested_unit_id"
+                                className={selectClass}
+                                value={interest.data.requested_unit_id}
+                                onChange={(e) => interest.setData('requested_unit_id', e.target.value)}
+                            >
+                                <option value="">Not stated</option>
+                                {units.map((u) => (
+                                    <option key={u.id} value={u.id}>
+                                        {u.abbreviation}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="interest_note">Context</Label>
+                            <Input
+                                id="interest_note"
+                                className="w-56"
+                                placeholder="For Eid"
+                                value={interest.data.note}
+                                onChange={(e) => interest.setData('note', e.target.value)}
+                            />
+                        </div>
+                        <Button disabled={interest.processing}>Record what they want</Button>
+                    </form>
+                )}
+
+                <div>
+                    <h2 className="mb-2 text-sm font-medium">What they asked for</h2>
+                    <div className="flex flex-col gap-2">
+                        {interests.map((i) => (
+                            <div key={i.id} className="rounded-md border p-3 text-sm">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                        <p className="font-medium">
+                                            {i.quantity && `${i.quantity} ${i.unit ?? ''} `}
+                                            {i.what}
+                                            {i.sku && <span className="ml-2 text-xs text-muted-foreground">{i.sku}</span>}
+                                            {/* ⚠ Surfaced, not hidden: a request for a
+                                                product we no longer sell is a demand
+                                                signal worth seeing. */}
+                                            {i.product_is_active === false && (
+                                                <Badge variant="secondary" className="ml-2">
+                                                    not currently sold
+                                                </Badge>
+                                            )}
+                                        </p>
+                                        <p className="text-muted-foreground">
+                                            {i.kind} · asked {i.requested_at}
+                                            {i.by && ` · ${i.by}`}
+                                            {i.note && ` · ${i.note}`}
+                                            {i.closed_note && ` · ${i.closed_note}`}
+                                        </p>
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-2">
+                                        <Badge variant={i.status === 'open' ? 'default' : 'secondary'}>{i.status_label}</Badge>
+                                        {canRecord && i.status === 'open' && (
+                                            <select
+                                                aria-label={`Close interest ${i.id}`}
+                                                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                                                value=""
+                                                onChange={(e) =>
+                                                    e.target.value &&
+                                                    router.put(`/crm/interests/${i.id}/close`, { status: e.target.value }, { preserveScroll: true })
+                                                }
+                                            >
+                                                <option value="">Close as…</option>
+                                                {interestStatuses.map((s) => (
+                                                    <option key={s.value} value={s.value}>
+                                                        {s.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {interests.length === 0 && <p className="text-sm text-muted-foreground">Nothing asked for yet.</p>}
+                    </div>
+                </div>
 
                 <div className="grid gap-6 lg:grid-cols-2">
                     <div>

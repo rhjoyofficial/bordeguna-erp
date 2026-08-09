@@ -56,5 +56,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         Route::post('{type}/{id}/tasks', [CrmActivityController::class, 'storeTask'])
             ->whereIn('type', ['lead', 'customer'])->whereNumber('id')->name('tasks.store');
         Route::put('tasks/{task}', [CrmActivityController::class, 'updateTask'])->name('tasks.update');
+
+        // ⚠ Interest is CLOSED, never deleted - there is deliberately no
+        // DELETE route. A demand signal that quietly disappears is one nobody
+        // can audit.
+        Route::post('{type}/{id}/interests', [CrmActivityController::class, 'storeInterest'])
+            ->whereIn('type', ['lead', 'customer'])->whereNumber('id')->name('interests.store');
+        Route::put('interests/{interest}/close', [CrmActivityController::class, 'closeInterest'])->name('interests.close');
     });
 });
