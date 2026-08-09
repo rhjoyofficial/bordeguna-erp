@@ -55,6 +55,7 @@ it('offers a way into every module that has user-facing pages', function (string
     'inventory' => ['/inventory/products'],
     'purchasing suppliers' => ['/purchasing/suppliers'],
     'purchasing orders' => ['/purchasing/purchase-orders'],
+    'purchasing expenses' => ['/purchasing/expenses'],
     'sales counter' => ['/sales/counter'],
     'sales customers' => ['/sales/customers'],
     'sales prices' => ['/sales/prices'],

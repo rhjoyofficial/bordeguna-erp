@@ -22,6 +22,11 @@ use Spatie\Permission\Models\Role;
  *
  * ⚠ Owner and Manager only. Staff can raise a PO and receive goods; deciding
  * that money leaves the bank is a different job.
+ *
+ * ⚠⚠ `purchasing.expense.record` follows the same reasoning. An expense voucher
+ * pays money out with NO supplier bill behind it and no goods to count, so it is
+ * the least verifiable way money leaves the business - closer to a payment than
+ * to a goods receipt. Owner and Manager only, deliberately.
  */
 class PurchasingPermissionsSeeder extends Seeder
 {
@@ -33,6 +38,7 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.receipt.record',
             'purchasing.payment.update',
             'purchasing.payment.record',
+            'purchasing.expense.record',
             'purchasing.reports.view',
         ],
         'Manager' => [
@@ -42,6 +48,7 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.receipt.record',
             'purchasing.payment.update',
             'purchasing.payment.record',
+            'purchasing.expense.record',
             'purchasing.reports.view',
         ],
         'Staff' => [

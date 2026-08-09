@@ -230,6 +230,60 @@ it('leaves the trial balance at zero after the entire cycle', function () {
     expect(Journal::count())->toBeGreaterThan(4);
 });
 
+// ── ⚠⚠ Running costs, the other half of the P&L ─────────────────────────────
+
+it('records what the business spent on running itself and still balances', function () {
+    $honey = Product::where('sku', 'DUMMY-HON-500G')->sole();
+    buyAndPay($this, $honey, '100', '480.00');
+
+    ProductPrice::create([
+        'business_id' => $this->business->id, 'product_id' => $honey->id,
+        'unit_price' => '850.0000', 'effective_from' => '2026-08-01',
+    ]);
+
+    $till = MoneyAccount::where('name', 'DUMMY Cash in Hand')->sole();
+    $walkIn = Customer::where('code', Customer::WALK_IN_CODE)->sole();
+
+    $this->actingAs($this->user)->post('/sales/counter', [
+        'customer_id' => $walkIn->id,
+        'warehouse_id' => $this->warehouse->id,
+        'money_account_id' => $till->id,
+        'lines' => [['product_id' => $honey->id, 'quantity' => '10']],
+    ])->assertRedirect();
+
+    // ⚠⚠ Until this screen existed, THIS WAS UNREACHABLE. Stock could be bought
+    // and sold, so the ERP could show a gross margin - but rent, fuel and
+    // utilities had nowhere to be entered, so the figure below the gross margin
+    // was always zero and the P&L was a half-truth.
+    $this->actingAs($this->user)->post('/purchasing/expenses', [
+        'money_account_id' => $till->id,
+        'spent_on' => '2026-08-09',
+        'paid_to' => 'DUMMY Adabor landlord',
+        'reference' => 'DUMMY-RCPT-01',
+        'lines' => [
+            ['account_id' => Account::where('code', '6200')->sole()->id, 'amount' => '25000.00', 'description' => 'August rent'],
+            ['account_id' => Account::where('code', '6230')->sole()->id, 'amount' => '1500.50', 'description' => 'Delivery fuel'],
+        ],
+    ])->assertRedirect();
+
+    $rent = (int) JournalLine::where('account_id', Account::where('code', '6200')->sole()->id)->sum('amount_minor');
+    $fuel = (int) JournalLine::where('account_id', Account::where('code', '6230')->sole()->id)->sum('amount_minor');
+
+    expect($rent)->toBe(2500000)
+        ->and($fuel)->toBe(150050);
+
+    // Revenue 8,500 · COGS 4,800 · running costs 26,500.50. The business made a
+    // gross profit and a net LOSS, and only now can the ERP say so.
+    expect(($this->balanceOn)('sales_revenue'))->toBe(-850000)
+        ->and(($this->balanceOn)('cost_of_goods_sold'))->toBe(480000);
+
+    // ⚠⚠ The assertion that matters: adding a whole new document type to the
+    // day's trading must leave the books balanced.
+    expect((int) JournalLine::sum('amount_minor'))->toBe(0);
+
+    Journal::all()->each(fn (Journal $journal) => expect($journal->balance()->isZero())->toBeTrue());
+});
+
 // ── Teardown ────────────────────────────────────────────────────────────────
 
 it('removes the entire sandbox and leaves no orphan row', function () {

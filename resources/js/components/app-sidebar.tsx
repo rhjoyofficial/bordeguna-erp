@@ -43,6 +43,12 @@ export function AppSidebar() {
                 { title: 'Suppliers', url: '/purchasing/suppliers', icon: Truck },
                 { title: 'Purchase orders', url: '/purchasing/purchase-orders', icon: ShoppingCart },
                 { title: 'Payments', url: '/purchasing/payments', icon: Banknote },
+                // ⚠⚠ Same class of gap as Sales below: RecordExpenseVoucher was
+                // built and tested with no route and no screen, so rent, fuel and
+                // utilities had nowhere to be entered and most of the P&L had no
+                // source at all. Reading the list is open to the business; only
+                // purchasing.expense.record may add one.
+                { title: 'Expenses', url: '/purchasing/expenses', icon: ReceiptText },
             ],
         },
         // ⚠⚠ SALES WAS DEPLOYED AND UNREACHABLE. Every page below was live in

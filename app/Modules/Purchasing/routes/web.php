@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Purchasing\Http\Controllers\ExpenseVoucherController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\SupplierController;
 use App\Modules\Purchasing\Http\Controllers\SupplierPaymentController;
@@ -41,5 +42,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         // because losing either one silently turns /payments/new into a 404.
         Route::get('payments/new', [SupplierPaymentController::class, 'create'])->name('payments.create');
         Route::post('payments', [SupplierPaymentController::class, 'store'])->name('payments.store');
+    });
+
+    // Expense vouchers — rent, fuel, utilities, repairs.
+    // ⚠ Same read/write split as payments: anyone in the business may READ what
+    // the business spent, because spending nobody can see is spending nobody can
+    // question. Recording one moves money and needs the permission.
+    Route::get('expenses', [ExpenseVoucherController::class, 'index'])->name('expenses.index');
+
+    Route::middleware('can:purchasing.expense.record')->group(function () {
+        Route::post('expenses', [ExpenseVoucherController::class, 'store'])->name('expenses.store');
     });
 });
