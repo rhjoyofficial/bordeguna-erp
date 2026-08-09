@@ -60,7 +60,13 @@ class MoneyAccountController extends Controller
                     'is_active' => $account->is_active,
                     'account_id' => $account->account_id,
                     'ledger_account' => $ledgerAccounts->get($account->account_id)?->label(),
+                    // ⚠ Legacy rows created before the rule above can still be
+                    // unmapped, and a payment from one WILL fail. The screen says
+                    // so rather than waiting for the till to.
+                    'is_unmapped' => $account->account_id === null,
                 ]),
+            // ⚠ Counted server-side so the warning cannot drift from the rows.
+            'unmappedCount' => MoneyAccount::whereNull('account_id')->count(),
             'types' => collect(MoneyAccountType::cases())->map(fn (MoneyAccountType $type) => [
                 'value' => $type->value,
                 'label' => $type->label(),
@@ -105,6 +111,22 @@ class MoneyAccountController extends Controller
             'branch' => ['nullable', 'string', 'max:255'],
             'routing_number' => ['nullable', 'string', 'max:255'],
             'provider' => ['nullable', 'string', 'max:255'],
+            // ⚠⚠ DELIBERATELY STILL NULLABLE, and this was nearly changed in
+            // error on 9 August.
+            //
+            // The end-to-end cycle found that a money account with a null
+            // `account_id` fails only when somebody tries to PAY A SUPPLIER,
+            // three steps and possibly months later, with MappingNotFound at the
+            // till. The obvious fix - make it required here - would have broken a
+            // decision this codebase made on purpose and TESTED: "a cash box may
+            // exist before anybody has decided what it reports under", because
+            // refusing to record a real account would lose the fact that the
+            // account exists at all.
+            //
+            // ▶ So the gap is closed by SURFACING rather than refusing: the index
+            // exposes `is_unmapped`, the screen names the consequence in the row,
+            // and a banner counts them. Setup order is preserved and the state is
+            // impossible to miss.
             'account_id' => ['nullable', 'integer', Rule::exists('accounts', 'id')],
             'is_active' => ['required', 'boolean'],
             'note' => ['nullable', 'string', 'max:1000'],

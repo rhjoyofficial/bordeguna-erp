@@ -384,3 +384,57 @@ it('offers only asset accounts for a bank account to report under', function () 
         ->and($options->pluck('label')->filter(fn ($label) => str_starts_with($label, '4')))->toBeEmpty()
         ->and($options->pluck('label')->contains(fn ($label) => str_starts_with($label, '1120')))->toBeTrue();
 });
+
+// ── Finding 2: an unmapped money account must be impossible to miss ─────────
+
+/**
+ * ⚠⚠ FOUND BY THE END-TO-END CYCLE, 9 August. A money account with a null
+ * `account_id` is accepted at setup and fails only when somebody tries to PAY A
+ * SUPPLIER - three steps and possibly months later - with MappingNotFound.
+ *
+ * ⚠ The obvious fix, making it required, was NEARLY APPLIED and would have
+ * broken a decision this codebase made on purpose and tested above: a cash box
+ * may exist before anybody has decided what it reports under, because refusing
+ * to record a real account would lose the fact that it exists. So the gap is
+ * closed by SURFACING, not refusing.
+ */
+it('tells the screen which money accounts have no ledger account', function () {
+    $this->actingAs($this->founder)->post(route('accounting.money-accounts.store'), [
+        'name' => 'Unmapped cash box', 'type' => MoneyAccountType::Cash->value, 'is_active' => true,
+    ]);
+    $this->actingAs($this->founder)->post(route('accounting.money-accounts.store'), [
+        'name' => 'Mapped bank', 'type' => MoneyAccountType::Bank->value,
+        'account_id' => $this->bank->id, 'is_active' => true,
+    ]);
+
+    $response = $this->actingAs($this->founder)->get(route('accounting.money-accounts.index'))->assertOk();
+
+    // ⚠ Deliberately NOT asserting on array positions. The index orders by type
+    // then name, and a test that encodes that ordering passes for a reason that
+    // has nothing to do with what it claims to check - this project has already
+    // had a whole suite pass because fixture order happened to match.
+    $accounts = collect($response->viewData('page')['props']['accounts']);
+
+    expect($response->viewData('page')['props']['unmappedCount'])->toBe(1)
+        ->and($accounts->firstWhere('name', 'Unmapped cash box')['is_unmapped'])->toBeTrue()
+        ->and($accounts->firstWhere('name', 'Mapped bank')['is_unmapped'])->toBeFalse();
+});
+
+it('still allows a money account to be created before its mapping is decided', function () {
+    // ⚠ The behaviour the surfacing fix deliberately preserves.
+    $this->actingAs($this->founder)->post(route('accounting.money-accounts.store'), [
+        'name' => 'Undecided wallet', 'type' => MoneyAccountType::Mfs->value, 'is_active' => true,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect(MoneyAccount::where('name', 'Undecided wallet')->sole()->account_id)->toBeNull();
+});
+
+it('reports zero unmapped accounts once every one is mapped', function () {
+    $this->actingAs($this->founder)->post(route('accounting.money-accounts.store'), [
+        'name' => 'Mapped bank', 'type' => MoneyAccountType::Bank->value,
+        'account_id' => $this->bank->id, 'is_active' => true,
+    ]);
+
+    $this->actingAs($this->founder)->get(route('accounting.money-accounts.index'))
+        ->assertInertia(fn ($page) => $page->where('unmappedCount', 0));
+});

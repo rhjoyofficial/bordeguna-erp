@@ -22,6 +22,7 @@ interface MoneyAccount {
     is_active: boolean;
     account_id: number | null;
     ledger_account: string | null;
+    is_unmapped: boolean;
 }
 
 interface Option {
@@ -52,10 +53,12 @@ export default function MoneyAccountsIndex({
     accounts,
     types,
     ledgerAccounts,
+    unmappedCount,
 }: {
     accounts: MoneyAccount[];
     types: Option[];
     ledgerAccounts: Option[];
+    unmappedCount: number;
 }) {
     const { canManageChartOfAccounts } = usePage<SharedData>().props;
     const [editing, setEditing] = useState<MoneyAccount | null>(null);
@@ -102,6 +105,25 @@ export default function MoneyAccountsIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Bank & cash" />
             <div className="flex flex-col gap-6 p-4">
+                {/*
+                  ⚠⚠ An unmapped money account does not fail here. It fails at the
+                  till, when somebody pays a supplier or takes a customer receipt,
+                  with an error naming an account nobody remembers creating. The
+                  account is deliberately allowed to exist before its mapping is
+                  decided - so the unfinished state is made loud instead.
+                */}
+                {unmappedCount > 0 && (
+                    <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm">
+                        <p className="font-medium">
+                            {unmappedCount} account{unmappedCount === 1 ? '' : 's'} {unmappedCount === 1 ? 'has' : 'have'} no
+                            ledger account.
+                        </p>
+                        <p className="text-muted-foreground">
+                            Payments and customer receipts using {unmappedCount === 1 ? 'it' : 'them'} will be refused when
+                            somebody tries to record one. Set the ledger account below to finish the setup.
+                        </p>
+                    </div>
+                )}
                 <div>
                     <h1 className="text-lg font-semibold">Bank &amp; cash accounts</h1>
                     <p className="max-w-2xl text-sm text-muted-foreground">
@@ -240,7 +262,14 @@ export default function MoneyAccountsIndex({
                                         {[account.bank_name, account.branch, account.provider, account.account_number].filter(Boolean).join(' · ')}
                                     </td>
                                     <td className="py-2 text-muted-foreground">
-                                        {account.ledger_account ?? <span className="italic">not set</span>}
+                                        {account.ledger_account ?? (
+                                            /* ⚠⚠ Not a cosmetic gap. A payment from an unmapped
+                                               account fails at the till with MappingNotFound, long
+                                               after whoever created it has left this screen. */
+                                            <span className="font-medium text-destructive">
+                                                Not set — payments and receipts from this account will fail
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="py-2 text-right">
                                         {canManageChartOfAccounts && (
