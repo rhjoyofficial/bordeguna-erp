@@ -9,9 +9,26 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
+/**
+ * ⚠⚠ The unit a purchase quantity is TYPED IN. For a product bought in one unit
+ * and stocked in another this is the PURCHASE unit, because the order, the
+ * receipt, the supplier bill and the return all stay in the unit the supplier
+ * invoices. Typing the stocked figure instead is a ~9% error that balances
+ * everywhere downstream, so the box has to say which one it wants.
+ */
+const purchaseUnitOf = (line: Line): string | null =>
+    line.product.purchase_unit?.abbreviation ?? line.product.unit_of_measure?.abbreviation ?? null;
+
 interface Line {
     id: number;
-    product: { id: number; name: string; sku: string; type: 'raw_material' | 'finished_good' | 'service' };
+    product: {
+        id: number;
+        name: string;
+        sku: string;
+        type: 'raw_material' | 'finished_good' | 'service';
+        unit_of_measure?: { abbreviation: string } | null;
+        purchase_unit?: { abbreviation: string } | null;
+    };
     quantity_ordered: string;
     quantity_received: string;
     quantity_returned: string;
@@ -131,12 +148,20 @@ function ReceiveGoodsForm({ order }: { order: Order }) {
                     <div key={line.id} className="grid grid-cols-[2fr_1fr] items-center gap-2">
                         <span>
                             {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>{' '}
-                            <span className="text-xs text-muted-foreground">remaining {remaining(line)}</span>
+                            <span className="text-xs text-muted-foreground">
+                                remaining {remaining(line)}
+                                {purchaseUnitOf(line) ? ` ${purchaseUnitOf(line)}` : ''}
+                            </span>
                         </span>
-                        <Input
-                            value={entry?.quantity ?? String(remaining(line))}
-                            onChange={(e) => updateQuantity(line.id, e.target.value)}
-                        />
+                        <div className="flex items-center gap-2">
+                            <Input
+                                value={entry?.quantity ?? String(remaining(line))}
+                                onChange={(e) => updateQuantity(line.id, e.target.value)}
+                            />
+                            {purchaseUnitOf(line) && (
+                                <span className="w-10 shrink-0 text-sm text-muted-foreground">{purchaseUnitOf(line)}</span>
+                            )}
+                        </div>
                     </div>
                 );
             })}
@@ -204,9 +229,17 @@ function ReturnGoodsForm({ order }: { order: Order }) {
                     <div key={line.id} className="grid grid-cols-[2fr_1fr] items-center gap-2">
                         <span>
                             {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>{' '}
-                            <span className="text-xs text-muted-foreground">returnable {returnable(line)}</span>
+                            <span className="text-xs text-muted-foreground">
+                                returnable {returnable(line)}
+                                {purchaseUnitOf(line) ? ` ${purchaseUnitOf(line)}` : ''}
+                            </span>
                         </span>
-                        <Input value={entry?.quantity ?? '0'} onChange={(e) => updateQuantity(line.id, e.target.value)} />
+                        <div className="flex items-center gap-2">
+                            <Input value={entry?.quantity ?? '0'} onChange={(e) => updateQuantity(line.id, e.target.value)} />
+                            {purchaseUnitOf(line) && (
+                                <span className="w-10 shrink-0 text-sm text-muted-foreground">{purchaseUnitOf(line)}</span>
+                            )}
+                        </div>
                     </div>
                 );
             })}

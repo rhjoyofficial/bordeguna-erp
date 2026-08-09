@@ -22,7 +22,6 @@ class Product extends Model
         'category_id',
         'brand_id',
         'unit_of_measure_id',
-        'purchase_unit_id',
         'sku',
         'barcode',
         'name',
@@ -74,6 +73,13 @@ class Product extends Model
     /**
      * The unit the supplier invoices in, when it differs from the unit stock is
      * held and sold in.
+     *
+     * ⚠⚠ DELIBERATELY NOT FILLABLE, AND NOT ON THE PRODUCT SCREEN. Setting it
+     * without a matching conversion puts the product into a state where every
+     * goods receipt throws for ever, with no in-app remedy - a clerk could brick
+     * a product and only a developer could unbrick it. It is set by
+     * `ProductUnitConversion::record()`, which declares the second unit and the
+     * factor together, in one place, or not at all.
      *
      * ⚠ NULL means "bought in the same unit it is stocked in", which is every
      * product except the few genuinely bought in one measure and sold in

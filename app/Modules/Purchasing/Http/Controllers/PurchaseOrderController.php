@@ -57,7 +57,15 @@ class PurchaseOrderController extends Controller
             'createdBy:id,name',
             'approvalRequest.requestedBy:id,name',
             'approvalRequest.reviewedBy:id,name',
-            'lines.product:id,name,sku,type',
+            // ⚠⚠ The UNIT comes down with the line, and for a converted product
+            // it is the PURCHASE unit. Mustard oil is ordered, received, invoiced
+            // and returned in kilograms while the warehouse holds litres, and a
+            // clerk typing 109 (the litres delivered) where 100 (the kilograms
+            // invoiced) belongs stocks 9% too much at a 9% low cost, with every
+            // number downstream balancing. The screen has to say which.
+            'lines.product:id,name,sku,type,unit_of_measure_id,purchase_unit_id',
+            'lines.product.unitOfMeasure:id,abbreviation',
+            'lines.product.purchaseUnit:id,abbreviation',
             'goodsReceipts.receivedBy:id,name',
             'goodsReceipts.lines.purchaseOrderLine:id,product_id',
             'goodsReceipts.lines.purchaseOrderLine.product:id,name,sku',

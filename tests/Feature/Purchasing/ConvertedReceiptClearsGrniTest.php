@@ -15,6 +15,7 @@ use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
+use App\Modules\Purchasing\Actions\RecordPurchaseReturn;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\Models\Supplier;
 use Illuminate\Support\Carbon;
@@ -61,7 +62,6 @@ beforeEach(function () {
     $this->oil = Product::create([
         'business_id' => $this->business->id,
         'unit_of_measure_id' => $litre->id,
-        'purchase_unit_id' => $kg->id,
         'sku' => 'OIL-MUSTARD',
         'name' => 'Mustard Oil',
         'type' => ProductType::FinishedGood,
@@ -70,15 +70,22 @@ beforeEach(function () {
     // ⚠ TEST DATA. The reciprocal of a general edible-oil reference, which Joy
     // said explicitly is NOT the confirmed Bor De Guna factor. No seeder, no
     // default, no production row uses it.
-    ProductUnitConversion::create([
-        'business_id' => $this->business->id,
-        'product_id' => $this->oil->id,
-        'from_unit_id' => $kg->id,
-        'to_unit_id' => $litre->id,
-        'stock_units_per_purchase_unit' => '1.09051254',
-        'effective_from' => '2020-01-01',
-        'source' => 'PROVISIONAL - general reference, not yet confirmed',
-    ]);
+    // ⚠ Through the controlled path, which is what also declares the product's
+    // purchase unit. `purchase_unit_id` is not fillable, so setting it in
+    // Product::create() above would have been SILENTLY DROPPED - and this test
+    // would have passed while measuring an unconverted product.
+    ProductUnitConversion::record(
+        businessId: $this->business->id,
+        product: $this->oil,
+        fromUnit: $kg,
+        toUnit: $litre,
+        stockUnitsPerPurchaseUnit: '1.09051254',
+        purchaseUnitsPerStockUnit: '0.917',
+        effectiveFrom: '2020-01-01',
+        source: 'PROVISIONAL - general reference, not yet confirmed',
+    );
+
+    $this->oil->refresh();
 
     $this->supplier = Supplier::create(['business_id' => $this->business->id, 'name' => 'Ad-Deen Food', 'code' => 'ADDEEN']);
 
@@ -165,4 +172,29 @@ it('puts the residue in the rounding account where a human can see it', function
     // it holds, and the named residue add up to nothing left over.
     expect($stock + $payable + $rounding)->toBe(0)
         ->and(($this->balanceOn)('goods_received_not_invoiced'))->toBe(0);
+});
+
+it('clears GRNI when a converted delivery is received and then wholly returned', function () {
+    // ⚠⚠ THE ASYMMETRY THE REVIEW CAUGHT. `forReceipt` was fixed to credit GRNI
+    // with the invoice value while `forReturn` still debited it with the stock
+    // value, so receiving and returning the same 100 kg left in GRNI exactly the
+    // residue the receipt fix existed to remove.
+    $order = app(CreatePurchaseOrder::class)->handle(
+        supplier: $this->supplier,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->oil, 'quantity' => '1000', 'unit_cost' => '319.99']],
+        createdBy: $this->user,
+    );
+    $order->approvalRequest->approve($this->user);
+    $order = $order->fresh(['lines', 'approvalRequest']);
+    $line = $order->lines->first();
+
+    app(RecordGoodsReceipt::class)->handle($order, [['line' => $line, 'quantity' => '1000']], $this->user);
+    app(RecordPurchaseReturn::class)->handle($order, [['line' => $line, 'quantity' => '1000']], $this->user);
+
+    // Everything came and went. Nothing is owed, nothing is held.
+    expect(($this->balanceOn)('goods_received_not_invoiced'))->toBe(0)
+        ->and(($this->balanceOn)('stock_on_hand'))->toBe(0);
+
+    Journal::all()->each(fn (Journal $j) => expect($j->balance()->isZero())->toBeTrue());
 });

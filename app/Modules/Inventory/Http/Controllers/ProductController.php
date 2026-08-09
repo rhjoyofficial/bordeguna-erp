@@ -60,7 +60,6 @@ class ProductController extends Controller
                 'category_id' => $product->category_id,
                 'brand_id' => $product->brand_id,
                 'unit_of_measure_id' => $product->unit_of_measure_id,
-                'purchase_unit_id' => $product->purchase_unit_id,
                 'description' => $product->description,
                 'unit' => $product->unitOfMeasure->abbreviation,
                 // ⚠ Shown in the list, not only in the form. A product bought in
@@ -164,14 +163,6 @@ class ProductController extends Controller
             // ⚠ Nullable: raw materials have no brand (D-5).
             'brand_id' => ['nullable', Rule::exists('brands', 'id')->where('business_id', $businessId)],
             'unit_of_measure_id' => ['required', Rule::exists('units_of_measure', 'id')->where('business_id', $businessId)],
-            // ⚠ The unit the SUPPLIER invoices in, when it differs from the one
-            // stock is held and sold in: mustard oil is bought by the kilogram
-            // and sold by the litre. Scoped for the same reason as the two above.
-            // ⚠⚠ Nullable, and null is the normal case - almost every product is
-            // bought in the unit it is stocked in. Setting it commits the product
-            // to needing a conversion on every receipt, and a receipt with no
-            // conversion in force is REFUSED rather than assumed 1:1 (C-UOM-9).
-            'purchase_unit_id' => ['nullable', Rule::exists('units_of_measure', 'id')->where('business_id', $businessId)],
             'description' => ['nullable', 'string'],
             'low_stock_threshold' => ['nullable', 'numeric', 'min:0'],
         ]);

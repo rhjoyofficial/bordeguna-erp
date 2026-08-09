@@ -79,6 +79,47 @@ class ProductUnitConversion extends Model
         string $source,
         ?string $note = null,
     ): self {
+        // ⚠⚠ SIGN FIRST. `reciprocalsAgree` only asks whether the two multiply
+        // to 1, and TWO NEGATIVES DO. A pair of -1.09051254 and -0.917 would
+        // sail through, and a negative factor makes a goods receipt create a
+        // batch with negative quantity and post a negative debit to Stock on
+        // Hand - a delivery that REDUCES inventory, with the ledger balancing.
+        if ((float) $stockUnitsPerPurchaseUnit <= 0 || (float) $purchaseUnitsPerStockUnit <= 0) {
+            throw new InvalidArgumentException(
+                "A conversion factor must be greater than zero; got {$stockUnitsPerPurchaseUnit} ".
+                "and {$purchaseUnitsPerStockUnit} for {$product->sku}."
+            );
+        }
+
+        // ⚠⚠ THE UNITS MUST BE THE PRODUCT'S OWN. Without this a conversion
+        // recorded as kilogram-to-litre keeps resolving after the product's
+        // purchase unit is changed to something else, and every later receipt
+        // silently applies a factor that describes a different measurement -
+        // the wrong number that looks right, ledger balanced. `forProductOn`
+        // matches on product and date alone, so the check has to be here.
+        if ($toUnit->id !== $product->unit_of_measure_id) {
+            throw new InvalidArgumentException(
+                "The conversion for {$product->sku} must convert INTO the unit it is stocked in. ".
+                "Given {$toUnit->abbreviation}, but stock is held in {$product->unitOfMeasure->abbreviation}."
+            );
+        }
+
+        if ($fromUnit->id === $toUnit->id) {
+            throw new InvalidArgumentException(
+                "A conversion for {$product->sku} must be between two DIFFERENT units."
+            );
+        }
+
+        // ⚠ A product that already converts cannot be quietly re-pointed at a
+        // different purchase unit: existing batches froze a factor describing
+        // the old one, and the new rows would silently describe something else.
+        if ($product->purchase_unit_id !== null && $product->purchase_unit_id !== $fromUnit->id) {
+            throw new InvalidArgumentException(
+                "{$product->sku} is already bought in {$product->purchaseUnit->abbreviation}. ".
+                "Changing the purchase unit is not a conversion, it is a new product."
+            );
+        }
+
         if (! PurchaseUnitConversion::reciprocalsAgree($stockUnitsPerPurchaseUnit, $purchaseUnitsPerStockUnit)) {
             throw new InvalidArgumentException(
                 "The two directions given for {$product->sku} are not reciprocals: ".
@@ -86,6 +127,16 @@ class ProductUnitConversion extends Model
                 rtrim(rtrim(number_format(((float) $stockUnitsPerPurchaseUnit) * ((float) $purchaseUnitsPerStockUnit), 6, '.', ''), '0'), '.').
                 ', not 1. One of them is the wrong way round.'
             );
+        }
+
+        // ⚠⚠ THE SECOND UNIT AND ITS FACTOR ARE DECLARED TOGETHER, HERE, OR NOT
+        // AT ALL. `products.purchase_unit_id` is not fillable and is absent from
+        // the product screen precisely so this is the only way in: setting the
+        // unit without a factor would put the product into a state where every
+        // goods receipt throws for ever (C-UOM-9) and no screen could undo it.
+        if ($product->purchase_unit_id === null) {
+            $product->purchase_unit_id = $fromUnit->id;
+            $product->save();
         }
 
         return static::create([

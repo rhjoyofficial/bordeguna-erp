@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Support;
 
 use App\Modules\Accounting\Support\Money;
+use InvalidArgumentException;
 
 /**
  * The arithmetic that turns an invoiced purchase quantity into stocked
@@ -34,6 +35,17 @@ final class PurchaseUnitConversion
     {
         $quantity = self::scale($purchaseQuantity, self::QUANTITY_SCALE);
         $scaledFactor = self::scale($factor, self::FACTOR_SCALE);
+
+        // ⚠ A 1e4-scaled quantity times a 1e8-scaled factor overflows a 64-bit
+        // int above roughly 9.2 million units, at which point PHP turns it into
+        // a float and `intdiv` raises a TypeError - a 500, not a refusal. The
+        // column is decimal(15,4) and permits eleven integer digits, so the
+        // schema allows quantities this class must still handle.
+        if ($quantity !== 0 && abs($quantity) > intdiv(PHP_INT_MAX, max(abs($scaledFactor), 1))) {
+            throw new InvalidArgumentException(
+                "Purchase quantity {$purchaseQuantity} is too large to convert precisely."
+            );
+        }
 
         $product = $quantity * $scaledFactor;   // scaled by QUANTITY_SCALE * FACTOR_SCALE
 

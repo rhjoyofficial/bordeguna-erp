@@ -43,7 +43,6 @@ beforeEach(function () {
     $this->oil = Product::create([
         'business_id' => $this->business->id,
         'unit_of_measure_id' => $this->litre->id,   // held and sold in litres
-        'purchase_unit_id' => $this->kg->id,        // invoiced in kilograms
         'sku' => 'OIL-MUSTARD',
         'name' => 'Mustard Oil',
         'type' => ProductType::FinishedGood,
@@ -113,6 +112,51 @@ it('keeps the derived value within a paisa of the invoice total', function () {
     $rebuilt = Money::ofProduct($quantity, $unitCost);
 
     expect(abs($rebuilt->minor - $total->minor))->toBeLessThanOrEqual(1);
+});
+
+it('declares the purchase unit and the factor together, or not at all', function () {
+    // ⚠⚠ `products.purchase_unit_id` is NOT fillable and is absent from the
+    // product screen. Setting it alone would put the product into a state where
+    // every goods receipt throws for ever (C-UOM-9) with no in-app remedy, so
+    // recording the conversion is what declares the second unit.
+    expect($this->oil->fresh()->purchase_unit_id)->toBeNull();
+
+    recordConversion($this);
+
+    expect($this->oil->fresh()->purchase_unit_id)->toBe($this->kg->id);
+});
+
+it('refuses a conversion that does not convert into the unit the product is stocked in', function () {
+    $drum = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Drum', 'abbreviation' => 'drum']);
+
+    expect(fn () => ProductUnitConversion::record(
+        businessId: $this->business->id,
+        product: $this->oil,
+        fromUnit: $this->kg,
+        toUnit: $drum,
+        stockUnitsPerPurchaseUnit: '1.09051254',
+        purchaseUnitsPerStockUnit: '0.917',
+        effectiveFrom: '2020-01-01',
+        source: 'TEST',
+    ))->toThrow(InvalidArgumentException::class, 'stocked in');
+});
+
+it('refuses a negative factor even though two negatives multiply to one', function () {
+    // ⚠⚠ reciprocalsAgree alone would PASS this pair. A negative factor makes a
+    // goods receipt create a batch with negative quantity and post a negative
+    // debit to Stock on Hand: a delivery that REDUCES inventory, ledger balanced.
+    expect(fn () => ProductUnitConversion::record(
+        businessId: $this->business->id,
+        product: $this->oil,
+        fromUnit: $this->kg,
+        toUnit: $this->litre,
+        stockUnitsPerPurchaseUnit: '-1.09051254',
+        purchaseUnitsPerStockUnit: '-0.917',
+        effectiveFrom: '2020-01-01',
+        source: 'TEST',
+    ))->toThrow(InvalidArgumentException::class, 'greater than zero');
+
+    expect(ProductUnitConversion::count())->toBe(0);
 });
 
 it('refuses to record a conversion whose two directions are not reciprocals', function () {
@@ -189,6 +233,16 @@ it('refuses the receipt when no conversion is in force, rather than assuming one
     // ⚠⚠ C-UOM-9. Defaulting to 1 would put 100 litres in stock for a 100 kg
     // drum and understate cost per litre by about 9%, with the ledger balancing
     // perfectly throughout.
+    //
+    // ⚠ The product is put into this state DELIBERATELY, bypassing
+    // `record()`, because the controlled path can no longer produce it: the
+    // purchase unit and the factor are declared together. This is the state a
+    // hand-edited row, a restored backup or a future importer could still
+    // create, and the engine must refuse it rather than trust that the only way
+    // in is the good one.
+    $this->oil->purchase_unit_id = $this->kg->id;
+    $this->oil->save();
+
     expect(fn () => receiveKilograms($this, '100', '320'))
         ->toThrow(MissingUnitConversionException::class);
 

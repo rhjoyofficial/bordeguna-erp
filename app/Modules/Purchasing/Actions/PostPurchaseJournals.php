@@ -198,9 +198,10 @@ class PostPurchaseJournals
         $grni = AccountMapping::resolve('inventory.goods_received_not_invoiced', $on);
 
         $lines = [];
-        $total = Money::zero();
+        $stocked = Money::zero();
+        $owed = Money::zero();
 
-        foreach ($return->lines()->with('stockMovement')->get() as $line) {
+        foreach ($return->lines()->with(['stockMovement', 'purchaseOrderLine'])->get() as $line) {
             $movement = $line->stockMovement;
 
             if ($movement === null) {
@@ -214,14 +215,29 @@ class PostPurchaseJournals
             }
 
             $lines[] = JournalLineDraft::credit($stock->id, $value);
-            $total = $total->plus($value);
+            $stocked = $stocked->plus($value);
+
+            // ⚠⚠ THE MIRROR OF `forReceipt`, AND IT HAS TO BE. The receipt
+            // credits GRNI with what the supplier will invoice; if the return
+            // debited GRNI with the STOCK value instead, receiving 100 kg of a
+            // converted product and sending all 100 kg back would leave in GRNI
+            // exactly the paisa-level residue the receipt side was rewritten to
+            // eliminate - in an account that is a report, not a suspense.
+            //
+            // ⚠ For a product bought in the unit it is stocked in the two are
+            // the same number, so nothing changes for anything else.
+            $poLine = $line->purchaseOrderLine;
+
+            $owed = $owed->plus($poLine === null
+                ? $value
+                : Money::ofProduct((string) $line->quantity_returned, (string) $poLine->unit_cost));
         }
 
-        if ($lines === [] || $total->isZero()) {
+        if ($lines === [] || $stocked->isZero()) {
             return null;
         }
 
-        $lines[] = JournalLineDraft::debit($grni->id, $total, 'Returned to supplier', $return->purchaseOrder?->supplier);
+        $lines[] = JournalLineDraft::debit($grni->id, $owed, 'Returned to supplier', $return->purchaseOrder?->supplier);
         $lines = LedgerRounding::balance($lines, $on, "Rounding on return #{$return->id}");
 
         return $this->postJournal->handle(new JournalDraft(

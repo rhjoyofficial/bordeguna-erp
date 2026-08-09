@@ -55,13 +55,6 @@ class ReverseStockReceipt
         ?string $note = null,
         MovementReason $reason = MovementReason::PurchaseReturn,
         mixed $occurredAt = null,
-        // ⚠⚠ C-UOM-8. A purchase return is expressed in the unit the SUPPLIER
-        // credits, which for converted goods is not the unit stock is held in:
-        // the credit note says 10 kilograms, the warehouse holds litres. When
-        // this is true, `$quantity` is in purchase units and each batch converts
-        // it with ITS OWN stored factor - never with whatever factor happens to
-        // be current, which is the whole reason the factor lives on the batch.
-        bool $quantityIsInPurchaseUnits = false,
     ): Collection {
         $returnedAt = EffectiveDate::resolve($occurredAt);
         $receipts = collect($receipts)->sortBy('id')->values();
@@ -94,12 +87,22 @@ class ReverseStockReceipt
                 continue;
             }
 
-            // ⚠ C-UOM-8. `$remaining` counts in purchase units when converting,
-            // so it must be turned into stock units at THIS batch's factor before
-            // it can be compared with what the batch holds. Two batches of the
-            // same product may carry different factors, which is exactly the case
-            // this loop has to get right.
-            $factor = $quantityIsInPurchaseUnits ? (string) ($batch->conversion_factor ?? '1') : null;
+            // ⚠⚠ C-UOM-8, AND THE UNIT IS DECIDED BY THE BATCH, NOT BY THE
+            // PRODUCT. A purchase return is expressed in the unit the SUPPLIER
+            // credits: the credit note says 10 kilograms while the warehouse
+            // holds litres. Which unit that is, is a fact about the delivery that
+            // is being reversed, and the batch froze it.
+            //
+            // ⚠⚠ An earlier version of this took a flag derived from
+            // `$product->isBoughtInAnotherUnit()` - the product's CURRENT,
+            // freely editable state. Clearing `purchase_unit_id` on the product
+            // screen would then have made a 10 kg credit note remove 10 LITRES
+            // from batches that were stocked at 1.0905 litres per kilogram,
+            // crediting Stock on Hand about 9% short with every journal
+            // balancing. That is the precise failure C-UOM-4 put the factor on
+            // the batch to prevent, and reading the product row put it straight
+            // back. Immutable history decides; the mutable row does not.
+            $factor = $batch->conversion_factor !== null ? (string) $batch->conversion_factor : null;
             $wanted = $factor === null
                 ? $remaining
                 : $this->scaled(PurchaseUnitConversion::toStockQuantity($this->unscaled($remaining), $factor));
@@ -143,6 +146,16 @@ class ReverseStockReceipt
             } else {
                 $remaining -= $this->scaled(PurchaseUnitConversion::toPurchaseQuantity($this->unscaled($take), $factor));
             }
+        }
+
+        // ⚠ A residue below one ten-thousandth is rounding, not a shortfall.
+        // Converting purchase units to stock units and back cannot round-trip
+        // exactly, so returning the WHOLE of a delivery that arrived in two
+        // receipts could leave `$remaining` at 1 - a ten-thousandth of a
+        // kilogram - and throw InsufficientStock for goods that are all
+        // physically present, rolling back a legitimate return.
+        if ($remaining > 0 && $remaining < 1) {
+            $remaining = 0;
         }
 
         if ($remaining > 0) {
