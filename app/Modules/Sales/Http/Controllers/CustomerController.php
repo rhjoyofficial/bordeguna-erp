@@ -130,6 +130,13 @@ class CustomerController extends Controller
             'contact_name' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
+            // ⚠ Optional for every customer type and NEVER required. A dealer,
+            // distributor or corporate customer has a BIN/TIN; an individual
+            // consumer does not and must never be asked. No VAT dependency:
+            // storing a tax identifier is not tax treatment, and nothing in the
+            // sales engine reads these columns.
+            'bin' => ['nullable', 'string', 'max:50'],
+            'tin' => ['nullable', 'string', 'max:50'],
             'address' => ['nullable', 'string'],
             'payment_terms' => ['nullable', 'string', 'max:255'],
             'credit_limit' => ['nullable', 'numeric', 'min:0'],

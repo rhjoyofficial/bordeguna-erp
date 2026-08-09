@@ -60,6 +60,12 @@ beforeEach(function () {
         'contact_name' => 'Karim Uddin',
         'phone' => '01711000000',
         'email' => 'karim@example.com',
+        // ⚠ The structural guard caught the absence of these the moment they
+        // joined Customer::$fillable, which is exactly what it is for. Optional
+        // for an individual consumer; a dealer, distributor or corporate
+        // customer has them.
+        'bin' => '004123456789',
+        'tin' => '123456789012',
         'address' => 'Savar, Dhaka',
         'payment_terms' => 'Net 30',
         'credit_limit' => '500000',
@@ -97,7 +103,9 @@ it('creates a customer with the four fields that were previously unreachable', f
 
     $customer = Customer::where('code', 'KARIM')->firstOrFail();
 
-    expect($customer->contact_name)->toBe('Karim Uddin')
+    expect($customer->bin)->toBe('004123456789')
+        ->and($customer->tin)->toBe('123456789012')
+        ->and($customer->contact_name)->toBe('Karim Uddin')
         ->and($customer->email)->toBe('karim@example.com')
         ->and($customer->address)->toBe('Savar, Dhaka')
         ->and($customer->note)->toBe('Collects from the Savar warehouse.')

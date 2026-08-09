@@ -2,10 +2,13 @@
 
 namespace App\Modules\Sales\Models;
 
+use App\Modules\Crm\Models\CrmAttribution;
+use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Sales\Enums\CustomerType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -31,6 +34,11 @@ class Customer extends Model
         'contact_name',
         'phone',
         'email',
+        // ⚠ Optional, never required, and with NO VAT dependency. Storing a tax
+        // identifier is recording an attribute of the customer; VAT treatment is
+        // how a sale is taxed. An individual consumer is never asked for a BIN.
+        'bin',
+        'tin',
         'address',
         'payment_terms',
         'credit_limit',
@@ -59,6 +67,24 @@ class Customer extends Model
         'is_system' => false,
         'is_active' => true,
     ];
+
+    /**
+     * ⚠⚠ The matching key, derived in ONE place so it cannot drift from `phone`.
+     * Deliberately NOT fillable: a caller that set one but not the other would
+     * produce a customer nobody can find by phone. `phone` itself is never
+     * rewritten - the user's input is theirs (C-CRM-12).
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $customer): void {
+            $customer->phone_normalized = PhoneIdentity::normalize($customer->phone);
+        });
+    }
+
+    public function attributions(): MorphMany
+    {
+        return $this->morphMany(CrmAttribution::class, 'subject');
+    }
 
     protected function casts(): array
     {

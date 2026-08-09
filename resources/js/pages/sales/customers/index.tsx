@@ -25,6 +25,8 @@ interface Customer {
     // preselect what the customer already is.
     contact_name: string | null;
     email: string | null;
+    bin: string | null;
+    tin: string | null;
     address: string | null;
     note: string | null;
     phone: string | null;
@@ -42,6 +44,8 @@ const EMPTY = {
     contact_name: '',
     phone: '',
     email: '',
+    bin: '',
+    tin: '',
     address: '',
     payment_terms: '',
     credit_limit: '',
@@ -93,6 +97,8 @@ export default function CustomersIndex({
             contact_name: customer.contact_name ?? '',
             phone: customer.phone ?? '',
             email: customer.email ?? '',
+            bin: customer.bin ?? '',
+            tin: customer.tin ?? '',
             address: customer.address ?? '',
             payment_terms: customer.payment_terms ?? '',
             credit_limit: customer.credit_limit ?? '',
@@ -169,6 +175,16 @@ export default function CustomersIndex({
                         <Label htmlFor="email">Email</Label>
                         <Input id="email" type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} />
                         <InputError message={errors.email} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="bin">BIN (optional)</Label>
+                        <Input id="bin" value={data.bin} onChange={(e) => setData('bin', e.target.value)} />
+                        <InputError message={errors.bin} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="tin">TIN (optional)</Label>
+                        <Input id="tin" value={data.tin} onChange={(e) => setData('tin', e.target.value)} />
+                        <InputError message={errors.tin} />
                     </div>
                     <div className="grid gap-2 md:col-span-2">
                         <Label htmlFor="address">Address</Label>
