@@ -106,6 +106,16 @@ class ReverseStockReceipt
 
             $take = min($wanted, $available);
 
+            // ⚠ Before conversion existed `$take` could never be zero: the loop
+            // top guarantees `$remaining > 0` and the check above guarantees
+            // `$available > 0`. Converting broke that, because a small enough
+            // purchase quantity against a small enough factor rounds to nothing
+            // in stock units - and a zero-quantity movement is a row that says
+            // something happened when nothing did.
+            if ($take <= 0) {
+                continue;
+            }
+
             // ⚠ Slice 4: the batch is not written here. The movement below is
             // what the quantity derives from. Integer scaling is still used to
             // decide how much this layer can give (I2).

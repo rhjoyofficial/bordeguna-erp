@@ -37,7 +37,7 @@ final class PurchaseUnitConversion
 
         $product = $quantity * $scaledFactor;   // scaled by QUANTITY_SCALE * FACTOR_SCALE
 
-        return self::unscale(self::divideRounded($product, self::FACTOR_SCALE), self::QUANTITY_SCALE);
+        return self::unscale(self::divideRounded($product, self::FACTOR_SCALE), self::QUANTITY_SCALE, 4);
     }
 
     /**
@@ -58,7 +58,7 @@ final class PurchaseUnitConversion
             return '0.0000';
         }
 
-        return self::unscale(self::divideRounded($quantity * self::FACTOR_SCALE, $scaledFactor), self::QUANTITY_SCALE);
+        return self::unscale(self::divideRounded($quantity * self::FACTOR_SCALE, $scaledFactor), self::QUANTITY_SCALE, 4);
     }
 
     /**
@@ -74,9 +74,16 @@ final class PurchaseUnitConversion
      *
      * ⚠ It still cannot be exact. `unit_cost` is decimal(15,4), so
      * `quantity * unit_cost` reproduces the total only to within half of the last
-     * place per unit - at most 0.00005 * quantity taka. That residue is real,
-     * bounded, and routed to the rounding-difference account by
-     * `LedgerRounding`, never absorbed. C-UOM-7.
+     * place per unit - at most 0.00005 * quantity taka.
+     *
+     * ⚠⚠ THAT RESIDUE IS HANDLED IN `PostPurchaseJournals::forReceipt`, NOT
+     * HERE, and not by `LedgerRounding` alone. LedgerRounding closes a gap
+     * inside ONE journal, and a receipt journal whose debit and credit are both
+     * this number balances perfectly while leaving the difference stranded in
+     * GRNI. The receipt therefore debits stock with what the movement is worth
+     * and credits GRNI with what the supplier will invoice - two independently
+     * computed sides - and the difference between them is what LedgerRounding
+     * then names. See ConvertedReceiptClearsGrniTest. C-UOM-7.
      */
     public static function toStockUnitCost(Money $total, string $stockQuantity): string
     {
@@ -89,7 +96,7 @@ final class PurchaseUnitConversion
         // minor units are paisa (1e2); we want taka at 1e4, so scale by 1e6.
         $numerator = $total->minor * 1000000;
 
-        return self::unscale(self::divideRounded($numerator, $quantity), self::QUANTITY_SCALE);
+        return self::unscale(self::divideRounded($numerator, $quantity), self::QUANTITY_SCALE, 4);
     }
 
     /**
@@ -112,9 +119,15 @@ final class PurchaseUnitConversion
         return (int) round(((float) $value) * $scale);
     }
 
-    private static function unscale(int $scaled, int $scale): string
+    /**
+     * ⚠ The number of decimals is passed in, not derived with `log10($scale)`.
+     * Deriving it puts a floating-point call in the middle of a money path for
+     * no reason: `(int) log10(...)` returning 3 instead of 4 on some build would
+     * silently truncate every quantity this class produces.
+     */
+    private static function unscale(int $scaled, int $scale, int $decimals): string
     {
-        return number_format($scaled / $scale, (int) log10($scale), '.', '');
+        return number_format($scaled / $scale, $decimals, '.', '');
     }
 
     /** Round half away from zero, the same rule `Money` uses. */

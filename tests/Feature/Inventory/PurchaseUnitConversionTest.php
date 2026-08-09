@@ -56,15 +56,19 @@ beforeEach(function () {
 
 function recordConversion($test, string $factor = TEST_FACTOR, string $from = '2020-01-01'): ProductUnitConversion
 {
-    return ProductUnitConversion::create([
-        'business_id' => $test->business->id,
-        'product_id' => $test->oil->id,
-        'from_unit_id' => $test->kg->id,
-        'to_unit_id' => $test->litre->id,
-        'stock_units_per_purchase_unit' => $factor,
-        'effective_from' => $from,
-        'source' => 'PROVISIONAL - general edible oil reference, not yet confirmed by Bor De Guna',
-    ]);
+    // ⚠ Through the CONTROLLED PATH, which is what production will use. Going
+    // round it with ::create() would mean the reciprocal guard was never
+    // exercised by anything.
+    return ProductUnitConversion::record(
+        businessId: $test->business->id,
+        product: $test->oil,
+        fromUnit: $test->kg,
+        toUnit: $test->litre,
+        stockUnitsPerPurchaseUnit: $factor,
+        purchaseUnitsPerStockUnit: number_format(1 / (float) $factor, 8, '.', ''),
+        effectiveFrom: $from,
+        source: 'PROVISIONAL - general edible oil reference, not yet confirmed by Bor De Guna',
+    );
 }
 
 function receiveKilograms($test, string $kilograms, string $costPerKilogram)
@@ -109,6 +113,38 @@ it('keeps the derived value within a paisa of the invoice total', function () {
     $rebuilt = Money::ofProduct($quantity, $unitCost);
 
     expect(abs($rebuilt->minor - $total->minor))->toBeLessThanOrEqual(1);
+});
+
+it('refuses to record a conversion whose two directions are not reciprocals', function () {
+    // ⚠⚠ The guard is now REACHABLE, not just tested in isolation. Both numbers
+    // given as the density is the realistic mistake, and it is 21% wrong.
+    expect(fn () => ProductUnitConversion::record(
+        businessId: $this->business->id,
+        product: $this->oil,
+        fromUnit: $this->kg,
+        toUnit: $this->litre,
+        stockUnitsPerPurchaseUnit: '0.917',
+        purchaseUnitsPerStockUnit: '0.917',
+        effectiveFrom: '2020-01-01',
+        source: 'TEST - an inverted pair',
+    ))->toThrow(InvalidArgumentException::class, 'not reciprocals');
+
+    expect(ProductUnitConversion::count())->toBe(0);
+});
+
+it('records a conversion when the two directions do agree', function () {
+    $conversion = ProductUnitConversion::record(
+        businessId: $this->business->id,
+        product: $this->oil,
+        fromUnit: $this->kg,
+        toUnit: $this->litre,
+        stockUnitsPerPurchaseUnit: '1.09051254',
+        purchaseUnitsPerStockUnit: '0.917',
+        effectiveFrom: '2020-01-01',
+        source: 'TEST',
+    );
+
+    expect((string) $conversion->stock_units_per_purchase_unit)->toBe('1.09051254');
 });
 
 it('catches an inverted factor, which is the dangerous one', function () {

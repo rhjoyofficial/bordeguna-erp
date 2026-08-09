@@ -3,10 +3,12 @@
 namespace App\Modules\Inventory\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Inventory\Support\PurchaseUnitConversion;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use InvalidArgumentException;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -47,6 +49,55 @@ class ProductUnitConversion extends Model
             ->logOnly(['product_id', 'stock_units_per_purchase_unit', 'effective_from', 'source'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
+    }
+
+    /**
+     * The controlled path for creating a conversion: BOTH directions must be
+     * supplied and they must be reciprocals.
+     *
+     * ⚠⚠ THIS EXISTS BECAUSE ONLY ONE DIRECTION IS STORED. The reciprocal check
+     * has nowhere else to live: there is no conversion screen (deliberately -
+     * one product, one row), so without this the guard would be a tested helper
+     * that nothing ever calls. That is precisely how `products.barcode` shipped
+     * unreachable behind six passing tests, and it is not happening twice.
+     *
+     * ⚠ An inverted factor is the dangerous error here: 0.917 stored where
+     * 1.0905 belongs is 21% wrong, permanently, with every ledger still
+     * balancing. Two numbers that must multiply to 1 make it impossible to
+     * supply quietly. C-UOM-3.
+     *
+     * @throws InvalidArgumentException when the two directions are not reciprocals
+     */
+    public static function record(
+        int $businessId,
+        Product $product,
+        UnitOfMeasure $fromUnit,
+        UnitOfMeasure $toUnit,
+        string $stockUnitsPerPurchaseUnit,
+        string $purchaseUnitsPerStockUnit,
+        string $effectiveFrom,
+        string $source,
+        ?string $note = null,
+    ): self {
+        if (! PurchaseUnitConversion::reciprocalsAgree($stockUnitsPerPurchaseUnit, $purchaseUnitsPerStockUnit)) {
+            throw new InvalidArgumentException(
+                "The two directions given for {$product->sku} are not reciprocals: ".
+                "{$stockUnitsPerPurchaseUnit} and {$purchaseUnitsPerStockUnit} multiply to ".
+                rtrim(rtrim(number_format(((float) $stockUnitsPerPurchaseUnit) * ((float) $purchaseUnitsPerStockUnit), 6, '.', ''), '0'), '.').
+                ', not 1. One of them is the wrong way round.'
+            );
+        }
+
+        return static::create([
+            'business_id' => $businessId,
+            'product_id' => $product->id,
+            'from_unit_id' => $fromUnit->id,
+            'to_unit_id' => $toUnit->id,
+            'stock_units_per_purchase_unit' => $stockUnitsPerPurchaseUnit,
+            'effective_from' => $effectiveFrom,
+            'source' => $source,
+            'note' => $note,
+        ]);
     }
 
     public function product(): BelongsTo

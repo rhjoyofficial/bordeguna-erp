@@ -56,13 +56,14 @@ class PostPurchaseJournals
         $grni = AccountMapping::resolve('inventory.goods_received_not_invoiced', $on);
 
         $lines = [];
-        $total = Money::zero();
+        $stocked = Money::zero();
+        $owed = Money::zero();
 
         // ⚠ Valued from the MOVEMENT the receipt actually wrote, not from the
         // purchase order's price. `goods_receipt_lines.stock_movement_id` exists
         // precisely so the two can never drift: what went into stock and what
         // went into the ledger are the same number by construction.
-        foreach ($receipt->lines()->with('stockMovement')->get() as $line) {
+        foreach ($receipt->lines()->with(['stockMovement', 'purchaseOrderLine'])->get() as $line) {
             $movement = $line->stockMovement;
 
             if ($movement === null) {
@@ -76,14 +77,39 @@ class PostPurchaseJournals
             }
 
             $lines[] = JournalLineDraft::debit($stock->id, $value);
-            $total = $total->plus($value);
+            $stocked = $stocked->plus($value);
+
+            // ⚠⚠ GRNI IS CREDITED WITH WHAT THE SUPPLIER WILL INVOICE, WHICH IS
+            // NOT ALWAYS WHAT WENT INTO STOCK.
+            //
+            // For a product bought in the unit it is stocked in the two are the
+            // same number and this changes nothing. For a CONVERTED product they
+            // differ by a rounding: stock is 109.0513 litres at a derived
+            // 293.4399 each, while the invoice is 100 kilograms at 320.
+            //
+            // Crediting GRNI with the stock value left a residue there on every
+            // converted delivery - 12 paisa on one of the cases in
+            // ConvertedReceiptClearsGrniTest - and GRNI is a REPORT, not a
+            // suspense: a balance means "received but not yet invoiced". A
+            // residue is a small permanent lie about what the business owes.
+            //
+            // ⚠ LedgerRounding cannot fix this on its own. It closes a gap
+            // INSIDE one journal, and both the receipt and the bill journals
+            // balance by construction. The two sides have to be computed
+            // independently here for the difference to become visible at all -
+            // which is exactly the case LedgerRounding's own note anticipated.
+            $poLine = $line->purchaseOrderLine;
+
+            $owed = $owed->plus($poLine === null
+                ? $value
+                : Money::ofProduct((string) $line->quantity_received, (string) $poLine->unit_cost));
         }
 
-        if ($lines === [] || $total->isZero()) {
+        if ($lines === [] || $stocked->isZero()) {
             return null;
         }
 
-        $lines[] = JournalLineDraft::credit($grni->id, $total, 'Received not invoiced');
+        $lines[] = JournalLineDraft::credit($grni->id, $owed, 'Received not invoiced');
         $lines = LedgerRounding::balance($lines, $on, "Rounding on receipt #{$receipt->id}");
 
         return $this->postJournal->handle(new JournalDraft(
