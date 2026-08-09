@@ -92,7 +92,7 @@ class RecordPurchaseReturn
                     throw new InvalidArgumentException("Cannot return {$quantity} of line #{$line->id}; only {$returnable} is returnable.");
                 }
 
-                $movements = collect();
+                $reversals = collect();
 
                 if ($line->product->type->isStocked()) {
                     // I1. Reverse THIS line's own receipts, oldest first, rather
@@ -101,7 +101,7 @@ class RecordPurchaseReturn
                     // note is at their price. Purchasing still never touches
                     // stock tables: it knows which movements its receipts
                     // created, and Inventory decides how to undo them.
-                    $movements = $this->reverseStockReceipt->handle(
+                    $reversals = $this->reverseStockReceipt->handle(
                         receipts: $this->receiptMovementsFor($line),
                         quantity: $quantity,
                         performedBy: $returnedBy,
@@ -122,11 +122,36 @@ class RecordPurchaseReturn
                 // `reverses_movement_id`. A posting that depends on a two-hop
                 // inference credits the wrong supplier the first time somebody
                 // returns goods received on two different orders.
-                $return->lines()->create([
-                    'purchase_order_line_id' => $line->id,
-                    'quantity_returned' => $quantity,
-                    'stock_movement_id' => $movements->first()?->id,
-                ]);
+                //
+                // ⚠⚠ ONE ROW PER BATCH TOUCHED, NOT ONE PER LINE. A return large
+                // enough to span two deliveries empties two cost layers at two
+                // different unit costs, and `stock_movement_id` holds ONE
+                // movement. Writing a single row kept the first batch's movement
+                // and dropped the rest, so `PostPurchaseJournals::forReturn`
+                // credited Stock on Hand with the first batch's value alone while
+                // both batches had physically emptied. The stock sub-ledger and
+                // the general ledger then disagreed permanently, with nothing
+                // comparing them and every journal balancing.
+                //
+                // ⚠ The quantities are the SHARE each batch took, in the unit the
+                // supplier credits, so they still sum to the line's return
+                // quantity - which is what `quantity_returned` on the order line
+                // below depends on.
+                if ($reversals->isEmpty()) {
+                    $return->lines()->create([
+                        'purchase_order_line_id' => $line->id,
+                        'quantity_returned' => $quantity,
+                        'stock_movement_id' => null,
+                    ]);
+                } else {
+                    foreach ($reversals as $reversal) {
+                        $return->lines()->create([
+                            'purchase_order_line_id' => $line->id,
+                            'quantity_returned' => $reversal->purchaseQuantity,
+                            'stock_movement_id' => $reversal->movement->id,
+                        ]);
+                    }
+                }
 
                 $line->update(['quantity_returned' => (float) $line->quantity_returned + (float) $quantity]);
             }

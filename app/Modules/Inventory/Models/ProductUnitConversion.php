@@ -116,7 +116,7 @@ class ProductUnitConversion extends Model
         if ($product->purchase_unit_id !== null && $product->purchase_unit_id !== $fromUnit->id) {
             throw new InvalidArgumentException(
                 "{$product->sku} is already bought in {$product->purchaseUnit->abbreviation}. ".
-                "Changing the purchase unit is not a conversion, it is a new product."
+                'Changing the purchase unit is not a conversion, it is a new product.'
             );
         }
 

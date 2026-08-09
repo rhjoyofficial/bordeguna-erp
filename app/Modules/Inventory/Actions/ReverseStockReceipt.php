@@ -10,6 +10,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\EffectiveDate;
 use App\Modules\Inventory\Support\PurchaseUnitConversion;
+use App\Modules\Inventory\Support\ReversedReceipt;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
@@ -46,7 +47,9 @@ class ReverseStockReceipt
      * somebody else's cost layer is exactly the drift being fixed.
      *
      * @param  Collection<int, StockMovement>|array<int, StockMovement>  $receipts
-     * @return Collection<int, StockMovement> one movement per batch touched
+     * @return Collection<int, ReversedReceipt> one entry per batch touched, each
+     *                                          carrying the movement AND the share
+     *                                          of `$quantity` it consumed
      */
     public function handle(
         Collection|array $receipts,
@@ -123,7 +126,7 @@ class ReverseStockReceipt
             // what the quantity derives from. Integer scaling is still used to
             // decide how much this layer can give (I2).
 
-            $written->push(StockMovement::create([
+            $movement = StockMovement::create([
                 'product_id' => $receipt->product_id,
                 'warehouse_id' => $receipt->warehouse_id,
                 'batch_id' => $batch->id,
@@ -135,17 +138,24 @@ class ReverseStockReceipt
                 'occurred_at' => $returnedAt,
                 'performed_by' => $performedBy->id,
                 'note' => $note,
-            ]));
+            ]);
 
-            // ⚠ Decrement in the unit `$remaining` is counted in. When the whole
-            // wanted amount was taken, the purchase-unit amount consumed is
-            // exactly what was left, and saying so avoids dividing back through
-            // the factor and losing a ten-thousandth to rounding on every line.
-            if ($factor === null || $take === $wanted) {
-                $remaining -= $factor === null ? $take : $remaining;
-            } else {
-                $remaining -= $this->scaled(PurchaseUnitConversion::toPurchaseQuantity($this->unscaled($take), $factor));
-            }
+            // ⚠ How much of the CALLER'S quantity this batch consumed. When the
+            // whole wanted amount was taken, that is exactly what was left, and
+            // saying so avoids dividing back through the factor and losing a
+            // ten-thousandth to rounding on every line.
+            $consumed = match (true) {
+                $factor === null => $take,
+                $take === $wanted => $remaining,
+                default => $this->scaled(PurchaseUnitConversion::toPurchaseQuantity($this->unscaled($take), $factor)),
+            };
+
+            // ⚠⚠ The movement AND its share of the caller's quantity. A return
+            // that spans two batches has to hand back both, or the caller writes
+            // down only the first and the ledger values only the first with it.
+            $written->push(new ReversedReceipt($movement, $this->unscaled($consumed)));
+
+            $remaining -= $consumed;
         }
 
         // ⚠ A residue below one ten-thousandth is rounding, not a shortfall.
