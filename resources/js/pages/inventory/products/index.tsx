@@ -24,8 +24,10 @@ interface Product {
     brand: string | null;
     brand_id: number | null;
     unit_of_measure_id: number;
+    purchase_unit_id: number | null;
     description: string | null;
     unit: string;
+    purchase_unit: string | null;
     low_stock_threshold: string | null;
     is_active: boolean;
     current_quantity: string | null;
@@ -43,6 +45,7 @@ const EMPTY = {
     category_id: '',
     brand_id: '',
     unit_of_measure_id: '',
+    purchase_unit_id: '',
     description: '',
     low_stock_threshold: '',
 };
@@ -99,6 +102,7 @@ export default function ProductsIndex({
             category_id: product.category_id ? String(product.category_id) : '',
             brand_id: product.brand_id ? String(product.brand_id) : '',
             unit_of_measure_id: String(product.unit_of_measure_id),
+            purchase_unit_id: product.purchase_unit_id ? String(product.purchase_unit_id) : '',
             description: product.description ?? '',
             low_stock_threshold: product.low_stock_threshold ?? '',
         });
@@ -221,6 +225,28 @@ export default function ProductsIndex({
                             ))}
                         </select>
                         <InputError message={errors.unit_of_measure_id} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="purchase_unit_id">Purchase unit (optional)</Label>
+                        <select
+                            id="purchase_unit_id"
+                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            value={data.purchase_unit_id}
+                            onChange={(e) => setData('purchase_unit_id', e.target.value)}
+                        >
+                            <option value="">Same as unit</option>
+                            {units.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                    {u.name} ({u.abbreviation})
+                                </option>
+                            ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">
+                            Set this only when the supplier invoices in a different unit from the one
+                            you stock and sell in. A goods receipt is then refused until a conversion
+                            has been recorded for the product.
+                        </p>
+                        <InputError message={errors.purchase_unit_id} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="low_stock_threshold">Low-stock threshold</Label>

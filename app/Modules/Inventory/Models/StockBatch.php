@@ -21,7 +21,10 @@ class StockBatch extends Model
         'batch_number',
         'expiry_date',
         'unit_cost',
+        'conversion_factor',
         'initial_quantity',
+        'purchase_quantity',
+        'purchase_unit_id',
         'current_quantity',
         'status',
         'received_at',
@@ -34,9 +37,22 @@ class StockBatch extends Model
             'expiry_date' => 'date',
             'received_at' => 'datetime',
             'unit_cost' => 'decimal:4',
+            // ⚠⚠ EIGHT places, and COPIED here rather than resolved from
+            // `product_unit_conversions` at cost time. A batch that merely
+            // pointed at a conversion row would have its history rewritten the
+            // day somebody corrected that row - silently, with the trial balance
+            // still balancing. C-UOM-4.
+            'conversion_factor' => 'decimal:8',
             'initial_quantity' => 'decimal:4',
+            'purchase_quantity' => 'decimal:4',
             'current_quantity' => 'decimal:4',
         ];
+    }
+
+    /** The unit the supplier invoiced, when this batch was converted on receipt. */
+    public function purchaseUnit(): BelongsTo
+    {
+        return $this->belongsTo(UnitOfMeasure::class, 'purchase_unit_id');
     }
 
     public function product(): BelongsTo

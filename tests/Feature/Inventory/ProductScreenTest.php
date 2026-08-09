@@ -41,6 +41,9 @@ beforeEach(function () {
     $this->unit = UnitOfMeasure::create([
         'business_id' => $this->business->id, 'name' => 'Piece', 'abbreviation' => 'pcs',
     ]);
+    $this->purchaseUnit = UnitOfMeasure::create([
+        'business_id' => $this->business->id, 'name' => 'Kilogram', 'abbreviation' => 'kg',
+    ]);
     $this->category = Category::create([
         'business_id' => $this->business->id, 'name' => 'Honey', 'slug' => 'honey',
     ]);
@@ -68,6 +71,12 @@ beforeEach(function () {
         // for. Brand must be settable from the screen, not only by the import.
         'brand_id' => $this->brand->id,
         'unit_of_measure_id' => $this->unit->id,
+        // ⚠ The guard caught this too, the moment purchase_unit_id joined
+        // Product::$fillable. It is NULL for almost every product - goods bought
+        // in the unit they are stocked in - but "usually null" is exactly the
+        // excuse that left `barcode` unreachable, so the screen must be able to
+        // set it and this fixture must prove it.
+        'purchase_unit_id' => $this->purchaseUnit->id,
         'description' => 'Sealed jar, 500g net.',
         'low_stock_threshold' => '12',
     ];

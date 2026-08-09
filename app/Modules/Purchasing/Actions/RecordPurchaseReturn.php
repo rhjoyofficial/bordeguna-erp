@@ -106,6 +106,12 @@ class RecordPurchaseReturn
                         quantity: $quantity,
                         performedBy: $returnedBy,
                         note: "Returned against {$order->po_number}".($note ? ": {$note}" : ''),
+                        // ⚠⚠ C-UOM-6 and C-UOM-8. `$quantity` here is in the unit
+                        // the supplier invoiced and will credit - kilograms for
+                        // mustard oil - because the whole purchase side stays in
+                        // that unit. Inventory converts it per batch using each
+                        // batch's own stored factor.
+                        quantityIsInPurchaseUnits: $line->product->isBoughtInAnotherUnit(),
                     );
                 }
 

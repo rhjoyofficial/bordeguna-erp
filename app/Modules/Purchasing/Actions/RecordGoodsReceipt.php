@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Actions;
 
 use App\Models\User;
 use App\Modules\Inventory\Actions\RecordStockIn;
+use App\Modules\Inventory\Actions\ResolveReceiptConversion;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -24,6 +25,7 @@ class RecordGoodsReceipt
     public function __construct(
         private readonly RecordStockIn $recordStockIn,
         private readonly PostPurchaseJournals $posting,
+        private readonly ResolveReceiptConversion $conversion,
     ) {}
 
     /**
@@ -77,13 +79,29 @@ class RecordGoodsReceipt
                 $movement = null;
 
                 if ($line->product->type->isStocked()) {
+                    // ⚠⚠ THE ONE POINT WHERE THE PURCHASE UNIT BECOMES THE STOCK
+                    // UNIT. Everything upstream of here - order, receipt line,
+                    // supplier bill, purchase return - stays in the unit the
+                    // supplier invoices. Everything downstream is stock units.
+                    // For a product bought in the unit it is stocked in this
+                    // returns its inputs unchanged. C-UOM-5, C-UOM-6.
+                    $converted = $this->conversion->handle(
+                        product: $line->product,
+                        purchaseQuantity: $quantity,
+                        purchaseUnitCost: (string) $line->unit_cost,
+                        on: $receipt->received_at ?? now(),
+                    );
+
                     $movement = $this->recordStockIn->handle(
                         product: $line->product,
                         warehouse: $order->warehouse,
-                        quantity: $quantity,
-                        unitCost: (string) $line->unit_cost,
+                        quantity: $converted['quantity'],
+                        unitCost: $converted['unitCost'],
                         performedBy: $receivedBy,
                         note: "Received against {$order->po_number}".($note ? ": {$note}" : ''),
+                        purchaseQuantity: $converted['purchaseQuantity'],
+                        purchaseUnitId: $converted['purchaseUnitId'],
+                        conversionFactor: $converted['factor'],
                     );
                 }
 

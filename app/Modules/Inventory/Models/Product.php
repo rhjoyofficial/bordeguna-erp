@@ -22,6 +22,7 @@ class Product extends Model
         'category_id',
         'brand_id',
         'unit_of_measure_id',
+        'purchase_unit_id',
         'sku',
         'barcode',
         'name',
@@ -68,6 +69,32 @@ class Product extends Model
     public function unitOfMeasure(): BelongsTo
     {
         return $this->belongsTo(UnitOfMeasure::class);
+    }
+
+    /**
+     * The unit the supplier invoices in, when it differs from the unit stock is
+     * held and sold in.
+     *
+     * ⚠ NULL means "bought in the same unit it is stocked in", which is every
+     * product except the few genuinely bought in one measure and sold in
+     * another. Absence is the honest statement, not a flag kept in step with a
+     * value. C-UOM-1.
+     */
+    public function purchaseUnit(): BelongsTo
+    {
+        return $this->belongsTo(UnitOfMeasure::class, 'purchase_unit_id');
+    }
+
+    public function unitConversions(): HasMany
+    {
+        return $this->hasMany(ProductUnitConversion::class);
+    }
+
+    /** Whether a receipt of this product has to convert before it becomes stock. */
+    public function isBoughtInAnotherUnit(): bool
+    {
+        return $this->purchase_unit_id !== null
+            && $this->purchase_unit_id !== $this->unit_of_measure_id;
     }
 
     public function batches(): HasMany

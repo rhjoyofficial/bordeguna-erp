@@ -9,6 +9,7 @@ use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\EffectiveDate;
+use App\Modules\Inventory\Support\PurchaseUnitConversion;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
@@ -54,6 +55,13 @@ class ReverseStockReceipt
         ?string $note = null,
         MovementReason $reason = MovementReason::PurchaseReturn,
         mixed $occurredAt = null,
+        // ⚠⚠ C-UOM-8. A purchase return is expressed in the unit the SUPPLIER
+        // credits, which for converted goods is not the unit stock is held in:
+        // the credit note says 10 kilograms, the warehouse holds litres. When
+        // this is true, `$quantity` is in purchase units and each batch converts
+        // it with ITS OWN stored factor - never with whatever factor happens to
+        // be current, which is the whole reason the factor lives on the batch.
+        bool $quantityIsInPurchaseUnits = false,
     ): Collection {
         $returnedAt = EffectiveDate::resolve($occurredAt);
         $receipts = collect($receipts)->sortBy('id')->values();
@@ -86,7 +94,17 @@ class ReverseStockReceipt
                 continue;
             }
 
-            $take = min($remaining, $available);
+            // ⚠ C-UOM-8. `$remaining` counts in purchase units when converting,
+            // so it must be turned into stock units at THIS batch's factor before
+            // it can be compared with what the batch holds. Two batches of the
+            // same product may carry different factors, which is exactly the case
+            // this loop has to get right.
+            $factor = $quantityIsInPurchaseUnits ? (string) ($batch->conversion_factor ?? '1') : null;
+            $wanted = $factor === null
+                ? $remaining
+                : $this->scaled(PurchaseUnitConversion::toStockQuantity($this->unscaled($remaining), $factor));
+
+            $take = min($wanted, $available);
 
             // ⚠ Slice 4: the batch is not written here. The movement below is
             // what the quantity derives from. Integer scaling is still used to
@@ -106,7 +124,15 @@ class ReverseStockReceipt
                 'note' => $note,
             ]));
 
-            $remaining -= $take;
+            // ⚠ Decrement in the unit `$remaining` is counted in. When the whole
+            // wanted amount was taken, the purchase-unit amount consumed is
+            // exactly what was left, and saying so avoids dividing back through
+            // the factor and losing a ten-thousandth to rounding on every line.
+            if ($factor === null || $take === $wanted) {
+                $remaining -= $factor === null ? $take : $remaining;
+            } else {
+                $remaining -= $this->scaled(PurchaseUnitConversion::toPurchaseQuantity($this->unscaled($take), $factor));
+            }
         }
 
         if ($remaining > 0) {

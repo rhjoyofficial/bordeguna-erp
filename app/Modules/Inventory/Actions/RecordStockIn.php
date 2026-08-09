@@ -28,6 +28,15 @@ class RecordStockIn
         MovementReason $reason = MovementReason::Receipt,
         ?int $reasonId = null,
         mixed $occurredAt = null,
+        // ⚠ The purchase-unit trio, supplied ONLY by the goods receipt path.
+        // Conversion deliberately does NOT happen inside this action even though
+        // it is the single choke point that creates every batch: opening stock is
+        // counted in the tank in stock units, and adjustments and transfers are
+        // already in stock units too. Converting here would convert quantities
+        // that were never in a purchase unit. C-UOM-5.
+        ?string $purchaseQuantity = null,
+        ?int $purchaseUnitId = null,
+        ?string $conversionFactor = null,
     ): StockMovement {
         if (! $product->type->isStocked()) {
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
@@ -36,7 +45,7 @@ class RecordStockIn
         // When the goods actually arrived, not when somebody typed them in.
         $receivedAt = EffectiveDate::resolve($occurredAt, 'received_at');
 
-        return DB::transaction(function () use ($product, $warehouse, $quantity, $unitCost, $performedBy, $batchNumber, $expiryDate, $note, $reason, $reasonId, $receivedAt) {
+        return DB::transaction(function () use ($product, $warehouse, $quantity, $unitCost, $performedBy, $batchNumber, $expiryDate, $note, $reason, $reasonId, $receivedAt, $purchaseQuantity, $purchaseUnitId, $conversionFactor) {
             $batch = StockBatch::create([
                 'product_id' => $product->id,
                 'warehouse_id' => $warehouse->id,
@@ -47,6 +56,12 @@ class RecordStockIn
                 'current_quantity' => $quantity,
                 'status' => StockBatchStatus::Active,
                 'received_at' => $receivedAt,
+                // ⚠ Null for every product bought in the unit it is stocked in,
+                // which is almost all of them. Set, and frozen, when a receipt
+                // converted. C-UOM-4.
+                'purchase_quantity' => $purchaseQuantity,
+                'purchase_unit_id' => $purchaseUnitId,
+                'conversion_factor' => $conversionFactor,
             ]);
 
             return StockMovement::create([
