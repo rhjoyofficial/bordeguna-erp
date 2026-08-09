@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Carbon;
 
 class Business extends Model
 {
@@ -28,6 +29,33 @@ class Business extends Model
         // is not a settings field, and leaving it unfillable means no request
         // path can ever mass-assign it. The migration and the seeder set it
         // explicitly, which works regardless of $fillable.
+        //
+        // ⚠⚠ `vat_enabled`, `vat_effective_from`, `vat_regime` and
+        // `prices_include_tax` are ALSO deliberately absent, for a stronger
+        // version of the same reason. Turning VAT on changes what every future
+        // invoice charges a customer, and whether a price includes tax decides
+        // what every past one MEANT. Neither may ever be set by a stray mass
+        // assignment from a settings form; C-VAT-7 makes switching VAT on an
+        // Owner-only, audited act with its own explicit path.
+    ];
+
+    /**
+     * ⚠⚠ MIRRORS THE DATABASE DEFAULTS IN THE MODEL, and this is not decoration.
+     * A column default only applies once the row is WRITTEN, so a freshly
+     * created Business carries null for these in memory while the stored row is
+     * true/false. Code asking `$business->prices_include_tax` immediately after
+     * creating it would get null - reading as "prices exclude tax", the exact
+     * opposite of Joy's C-VAT-1 decision, until somebody happened to reload.
+     *
+     * ⚠ Caught by this slice's own test rather than by review. The project has
+     * now met this bug three times: money_accounts.is_active, LeadSource, and
+     * here.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'prices_include_tax' => true,
+        'vat_enabled' => false,
     ];
 
     protected function casts(): array
@@ -36,7 +64,33 @@ class Business extends Model
             'is_active' => 'boolean',
             'is_default' => 'boolean',
             'fiscal_year_start_month' => 'integer',
+            'prices_include_tax' => 'boolean',
+            'vat_enabled' => 'boolean',
+            'vat_effective_from' => 'date',
         ];
+    }
+
+    /**
+     * Whether VAT applies to something happening on a given date.
+     *
+     * ⚠⚠ THE ONE PLACE THIS QUESTION IS EVER ANSWERED. C-VAT-5: VAT starts FROM
+     * A DATE and never retrospectively - the ledger is immutable and closed
+     * periods are locked, so switching VAT on must not change a single invoice
+     * already posted. A caller checking `vat_enabled` alone would do exactly
+     * that, which is why the flag is not public knowledge and this method is.
+     *
+     * ⛔ RETURNS FALSE EVERYWHERE TODAY. The engine is dormant (C-VAT-9) and no
+     * posting path calls this yet. It exists so that when the engine is built,
+     * the date rule is already written and tested rather than invented in a
+     * hurry alongside the calculation.
+     */
+    public function vatAppliesOn(Carbon $date): bool
+    {
+        if (! $this->vat_enabled || $this->vat_effective_from === null) {
+            return false;
+        }
+
+        return $date->startOfDay()->greaterThanOrEqualTo($this->vat_effective_from->startOfDay());
     }
 
     public function users(): BelongsToMany

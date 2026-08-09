@@ -24,6 +24,7 @@ interface Product {
     brand: string | null;
     brand_id: number | null;
     unit_of_measure_id: number;
+    tax_class_id: number | null;
     description: string | null;
     unit: string;
     purchase_unit: string | null;
@@ -44,6 +45,7 @@ const EMPTY = {
     category_id: '',
     brand_id: '',
     unit_of_measure_id: '',
+    tax_class_id: '',
     description: '',
     low_stock_threshold: '',
 };
@@ -77,12 +79,14 @@ export default function ProductsIndex({
     categories,
     brands,
     units,
+    taxClasses,
     filters: initialFilters,
 }: {
     products: Paginated<Product>;
     categories: Option[];
     brands: BrandOption[];
     units: UnitOption[];
+    taxClasses: Option[];
     filters: { search: string; type: string; category_id: string; brand_id: string };
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/inventory/products', initialFilters);
@@ -100,6 +104,7 @@ export default function ProductsIndex({
             category_id: product.category_id ? String(product.category_id) : '',
             brand_id: product.brand_id ? String(product.brand_id) : '',
             unit_of_measure_id: String(product.unit_of_measure_id),
+            tax_class_id: product.tax_class_id === null ? '' : String(product.tax_class_id),
             description: product.description ?? '',
             low_stock_threshold: product.low_stock_threshold ?? '',
         });
@@ -222,6 +227,28 @@ export default function ProductsIndex({
                             ))}
                         </select>
                         <InputError message={errors.unit_of_measure_id} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="tax_class_id">Tax class</Label>
+                        <select
+                            id="tax_class_id"
+                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            value={data.tax_class_id}
+                            onChange={(e) => setData('tax_class_id', e.target.value)}
+                        >
+                            {/* ⚠⚠ "Not classified" is NOT zero-rated. It means nobody
+                                has decided yet, and it falls back to the business
+                                default when VAT is switched on. The two are wrong in
+                                opposite directions and only one of them is a refund. */}
+                            <option value="">Not classified</option>
+                            {taxClasses.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">VAT is off. This is recorded for later and changes nothing now.</p>
+                        <InputError message={errors.tax_class_id} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="low_stock_threshold">Low-stock threshold</Label>

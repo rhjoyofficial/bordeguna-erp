@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\Models\TaxClass;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
@@ -50,6 +51,9 @@ beforeEach(function () {
     $this->brand = Brand::create([
         'business_id' => $this->business->id, 'code' => 'LLD', 'name' => 'LaLaDia', 'slug' => 'laladia',
     ]);
+    $this->taxClass = TaxClass::create([
+        'business_id' => $this->business->id, 'code' => 'STANDARD', 'name' => 'Standard',
+    ]);
 
     $this->asRole = function (string $role) {
         $user = User::factory()->create();
@@ -71,6 +75,11 @@ beforeEach(function () {
         // for. Brand must be settable from the screen, not only by the import.
         'brand_id' => $this->brand->id,
         'unit_of_measure_id' => $this->unit->id,
+        // ⚠ Caught by the structural guard below the moment tax_class_id was
+        // added to Product::$fillable, exactly as brand_id was before it. The
+        // VAT engine is dormant, but a field the model can hold and the screen
+        // cannot set is the failure this guard exists to prevent.
+        'tax_class_id' => $this->taxClass->id,
         'description' => 'Sealed jar, 500g net.',
         'low_stock_threshold' => '12',
     ];

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Models;
 
+use App\Modules\Accounting\Models\TaxClass;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
@@ -22,6 +23,10 @@ class Product extends Model
         'category_id',
         'brand_id',
         'unit_of_measure_id',
+        // ⚠ Fillable, unlike the business-level VAT switches. A product's tax
+        // class is ordinary master data a manager edits on the product screen;
+        // it decides nothing on its own while the engine is dormant.
+        'tax_class_id',
         'sku',
         'barcode',
         'name',
@@ -63,6 +68,21 @@ class Product extends Model
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);
+    }
+
+    /**
+     * What kind of thing this is for tax purposes.
+     *
+     * ⚠⚠ NULL IS NOT ZERO-RATED. A product with no class falls back to the
+     * business default when the engine is built (C-VAT-11); it never silently
+     * means "charge nothing". The two are wrong in opposite directions and only
+     * one of them is a refund.
+     *
+     * ⛔ Nothing calculates with this yet. The VAT engine is dormant.
+     */
+    public function taxClass(): BelongsTo
+    {
+        return $this->belongsTo(TaxClass::class);
     }
 
     public function unitOfMeasure(): BelongsTo

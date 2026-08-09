@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Models\TaxClass;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Brand;
@@ -60,6 +61,7 @@ class ProductController extends Controller
                 'category_id' => $product->category_id,
                 'brand_id' => $product->brand_id,
                 'unit_of_measure_id' => $product->unit_of_measure_id,
+                'tax_class_id' => $product->tax_class_id,
                 'description' => $product->description,
                 'unit' => $product->unitOfMeasure->abbreviation,
                 // ⚠ Shown in the list, not only in the form. A product bought in
@@ -81,6 +83,9 @@ class ProductController extends Controller
             // brand_id is RESTRICT on delete) without being offered for new ones.
             'brands' => Brand::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
             'units' => UnitOfMeasure::orderBy('name')->get(['id', 'name', 'abbreviation']),
+            // ⛔ Offered so the catalogue can be classified ahead of the VAT
+            // switch. Choosing one changes nothing today; the engine is dormant.
+            'taxClasses' => TaxClass::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
             'filters' => $filters,
         ]);
     }
@@ -163,6 +168,13 @@ class ProductController extends Controller
             // ⚠ Nullable: raw materials have no brand (D-5).
             'brand_id' => ['nullable', Rule::exists('brands', 'id')->where('business_id', $businessId)],
             'unit_of_measure_id' => ['required', Rule::exists('units_of_measure', 'id')->where('business_id', $businessId)],
+            // ⚠ Scoped like every other foreign key here. Nullable, and NULL is
+            // NOT zero-rated: it means "not yet classified" and falls back to
+            // the business default when the VAT engine is built (C-VAT-11).
+            // ⛔ Classifying a product calculates nothing today - the engine is
+            // dormant. It is allowed now so the catalogue can be classified
+            // ahead of the switch rather than in a rush on the day.
+            'tax_class_id' => ['nullable', Rule::exists('tax_classes', 'id')->where('business_id', $businessId)],
             'description' => ['nullable', 'string'],
             'low_stock_threshold' => ['nullable', 'numeric', 'min:0'],
         ]);

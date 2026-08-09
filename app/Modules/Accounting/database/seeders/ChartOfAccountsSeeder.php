@@ -71,6 +71,12 @@ class ChartOfAccountsSeeder extends Seeder
         ['1160', 'Advances to Suppliers', AccountType::Asset, '1100', true, null],
         ['1170', 'Employee Advances and Loans', AccountType::Asset, '1100', true, 'employee_advances'],
         ['1180', 'Prepaid Expenses', AccountType::Asset, '1100', true, null],
+        // ⚠⚠ C-VAT-6. VAT paid on purchases, reclaimable from the government -
+        // money owed BACK to the business, so an asset. Kept strictly separate
+        // from output VAT below and NEVER netted in the ledger; the net figure
+        // is a report, the same rule GRNI follows.
+        // ⚠ Planted now and posted to by nothing. The engine is dormant.
+        ['1185', 'Input VAT Receivable', AccountType::Asset, '1100', true, 'input_vat_receivable'],
         // Deducted at source by customers and set against the year's tax bill.
         // It is money owed back to the business, so it is an asset, not a cost.
         ['1190', 'Advance Income Tax', AccountType::Asset, '1100', true, null],
@@ -98,6 +104,12 @@ class ChartOfAccountsSeeder extends Seeder
         ['2140', 'Employee Deductions Payable', AccountType::Liability, '2100', true, 'employee_deductions_payable'],
         ['2150', 'Advances from Customers', AccountType::Liability, '2100', true, null],
         ['2160', 'Accrued Expenses', AccountType::Liability, '2100', true, null],
+        // ⚠⚠ C-VAT-6. VAT charged to customers and owed onward to the
+        // government. It is never the business's money, which is exactly why it
+        // is a liability and not revenue - and why a VAT-inclusive price
+        // (C-VAT-1) overstates revenue until the engine extracts this out of it.
+        // ⚠ Planted now and posted to by nothing. The engine is dormant.
+        ['2170', 'Output VAT Payable', AccountType::Liability, '2100', true, 'output_vat_payable'],
 
         ['2200', 'Non-Current Liabilities', AccountType::Liability, '2000', false, null],
         ['2210', 'Bank Loans', AccountType::Liability, '2200', true, null],
