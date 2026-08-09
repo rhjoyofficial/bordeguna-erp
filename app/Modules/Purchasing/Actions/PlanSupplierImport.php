@@ -182,7 +182,13 @@ class PlanSupplierImport
         }
 
         if (preg_match('/^1\d{9}$/', $digits)) {
-            $plan->addWarning($line, $code, "Phone \"{$phone}\" looks like a Bangladesh mobile missing its leading zero (01{$digits}). Imported exactly as written.");
+            // ⚠⚠ ONE ZERO, NOT "01". `$digits` already begins with the 1, so
+            // prefixing "01" produced a TWELVE-digit suggestion - the message
+            // told the reader to type a number that cannot exist. Shipped on
+            // 9 August and caught within the hour by actually reading the output
+            // of a review run rather than only the assertion that a warning
+            // appeared. The regression test now pins the exact string.
+            $plan->addWarning($line, $code, "Phone \"{$phone}\" looks like a Bangladesh mobile missing its leading zero (0{$digits}). Imported exactly as written.");
 
             return;
         }

@@ -4,6 +4,7 @@ use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
+use App\Modules\Purchasing\Actions\PlanSupplierImport;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Support\SupplierCsv;
@@ -199,6 +200,55 @@ it('warns about a phone missing its leading zero and imports it verbatim', funct
 
     TenantScope::enter($this->business->id);
     expect(Supplier::sole()->phone)->toBe('1778838393');
+});
+
+/**
+ * ⚠⚠ REGRESSION, 9 August. The warning SUGGESTED A TWELVE-DIGIT NUMBER:
+ * `$digits` already starts with the 1, and the message prefixed "01", so
+ * 1778838393 was reported as 011778838393 - a number that cannot exist. The
+ * stored value was never wrong; the sentence telling a human what to type was.
+ *
+ * The old test asserted only that the words "missing its leading zero"
+ * appeared, which they did, so it passed throughout. Found by reading the
+ * output of a real review run against production.
+ *
+ * ⚠ This pins the WHOLE suggestion, not a fragment. A test that matches a
+ * substring is how the defect survived the first time.
+ */
+it('suggests exactly one leading zero, never two digits', function (string $given, string $suggested) {
+    $plan = app(PlanSupplierImport::class)->handle([
+        ['line' => 2, 'values' => ['code' => 'AYESHA', 'name' => 'Ayesha Siddika', 'phone' => $given]],
+    ]);
+
+    expect($plan->warnings)->toHaveCount(1)
+        ->and($plan->warnings[0]['message'])->toBe(
+            "Phone \"{$given}\" looks like a Bangladesh mobile missing its leading zero ({$suggested}). Imported exactly as written."
+        );
+
+    // The suggestion must be a real Bangladesh mobile: 11 digits starting 01.
+    expect(strlen($suggested))->toBe(11)
+        ->and($suggested)->toStartWith('01');
+
+    // ⚠ And the plan still carries the number EXACTLY as the file wrote it.
+    expect($plan->creates[0]['attributes']['phone'])->toBe($given);
+})->with([
+    'Ayesha' => ['1778838393', '01778838393'],
+    'Ad-Deen' => ['1971836736', '01971836736'],
+    'Premi' => ['1742001747', '01742001747'],
+]);
+
+it('says nothing at all about a phone that is already correct', function () {
+    // The three real suppliers, as corrected. A clean file must review clean -
+    // a warning nobody needs is a warning everybody learns to ignore.
+    $plan = app(PlanSupplierImport::class)->handle([
+        ['line' => 2, 'values' => ['code' => 'AYESHA', 'name' => 'Ayesha Siddika', 'phone' => '01778838393']],
+        ['line' => 3, 'values' => ['code' => 'ADDEEN', 'name' => 'Ad-Deen Food', 'phone' => '01971836736']],
+        ['line' => 4, 'values' => ['code' => 'PREMI', 'name' => 'Premi Farm', 'phone' => '01742001747']],
+    ]);
+
+    expect($plan->warnings)->toBe([])
+        ->and($plan->errors)->toBe([])
+        ->and($plan->creates)->toHaveCount(3);
 });
 
 // ── What it leaves alone ────────────────────────────────────────────────────
