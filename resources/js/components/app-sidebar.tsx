@@ -78,6 +78,9 @@ export function AppSidebar() {
                       label: 'CRM',
                       items: [
                           { title: 'Leads', url: '/crm/leads', icon: UserPlus },
+                          // ⚠ The work queue is the screen an agent lives in all
+                          // day. Without it, follow-ups exist and nobody sees them.
+                          { title: 'Follow-ups', url: '/crm/queue', icon: CalendarCheck },
                           ...(canManageCrmSettings
                               ? [{ title: 'Sources & campaigns', url: '/crm/settings', icon: Megaphone }]
                               : []),

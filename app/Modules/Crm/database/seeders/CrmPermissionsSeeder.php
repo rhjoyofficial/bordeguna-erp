@@ -26,8 +26,8 @@ use Spatie\Permission\Models\Role;
 class CrmPermissionsSeeder extends Seeder
 {
     private const ROLE_PERMISSIONS = [
-        'Owner' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage'],
-        'Manager' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage'],
+        'Owner' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage', 'crm.tasks.view.all'],
+        'Manager' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage', 'crm.tasks.view.all'],
         'Staff' => ['crm.leads.view', 'crm.leads.manage'],
     ];
 

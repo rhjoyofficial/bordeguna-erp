@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Crm\Http\Controllers\CrmActivityController;
 use App\Modules\Crm\Http\Controllers\CrmSettingsController;
 use App\Modules\Crm\Http\Controllers\LeadController;
 use Illuminate\Support\Facades\Route;
@@ -28,5 +29,25 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         Route::put('settings/sources/{leadSource}', [CrmSettingsController::class, 'updateSource'])->name('settings.sources.update');
         Route::post('settings/campaigns', [CrmSettingsController::class, 'storeCampaign'])->name('settings.campaigns.store');
         Route::put('settings/campaigns/{campaign}', [CrmSettingsController::class, 'updateCampaign'])->name('settings.campaigns.update');
+    });
+
+    // ── Phase B: timeline and work queue ────────────────────────────────────
+    // ⚠ The subject is `lead` or `customer`, constrained in the route so a
+    // typo 404s at routing rather than reaching the controller as a null model.
+    Route::middleware('can:crm.leads.view')->group(function () {
+        // ⚠⚠ Declared BEFORE the {type}/{id} pattern, which would otherwise
+        // swallow `/crm/queue` as a subject called "queue".
+        Route::get('queue', [CrmActivityController::class, 'queue'])->name('queue');
+
+        Route::get('{type}/{id}/timeline', [CrmActivityController::class, 'show'])
+            ->whereIn('type', ['lead', 'customer'])->whereNumber('id')->name('timeline');
+    });
+
+    Route::middleware('can:crm.leads.manage')->group(function () {
+        Route::post('{type}/{id}/activities', [CrmActivityController::class, 'store'])
+            ->whereIn('type', ['lead', 'customer'])->whereNumber('id')->name('activities.store');
+        Route::post('{type}/{id}/tasks', [CrmActivityController::class, 'storeTask'])
+            ->whereIn('type', ['lead', 'customer'])->whereNumber('id')->name('tasks.store');
+        Route::put('tasks/{task}', [CrmActivityController::class, 'updateTask'])->name('tasks.update');
     });
 });
