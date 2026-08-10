@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Actions;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Support\ResolvedPrice;
 use Illuminate\Support\Carbon;
@@ -113,13 +114,53 @@ class ResolveSellingPrice
             return $customer !== null && $rule->customer_id === $customer->id;
         }
 
-        if ($rule->price_group !== null) {
+        if ($rule->price_group_id !== null) {
             return $customer !== null
-                && $customer->price_group !== null
-                && $rule->price_group === $customer->price_group;
+                && $this->groupIdFor($customer) === $rule->price_group_id;
         }
 
         return true;
+    }
+
+    /**
+     * The group this customer is priced in.
+     *
+     * ⚠⚠ RETAIL IS THE DEFAULT GROUP (D-PRC-2, Joy, 2026-08-10): a customer
+     * with no group is priced as RETAIL. This mapping lives HERE and nowhere
+     * else - a second place deciding what "no group" means would drift from
+     * this one, and the two answers would differ exactly when a RETAIL price
+     * row exists.
+     *
+     * ⚠ Looked up by the customer's OWN business_id, bypassing the global
+     * scope, so a resolve running outside the customer's tenant context (a
+     * queued job, a report) still answers for the right business. Cached per
+     * business for the life of this action instance - one sale resolves a
+     * price per line, and asking the same question per line is a query the
+     * database does not need.
+     *
+     * ℹ A business whose RETAIL group is missing gets null, and the customer
+     * simply falls through to the general tier - the pre-group behaviour,
+     * degraded gracefully rather than an exception at the counter.
+     *
+     * @var array<int, int|null>
+     */
+    private array $defaultGroupIds = [];
+
+    private function groupIdFor(Customer $customer): ?int
+    {
+        if ($customer->price_group_id !== null) {
+            return $customer->price_group_id;
+        }
+
+        if (! array_key_exists($customer->business_id, $this->defaultGroupIds)) {
+            $this->defaultGroupIds[$customer->business_id] = PriceGroup::query()
+                ->withoutGlobalScopes()
+                ->where('business_id', $customer->business_id)
+                ->where('code', PriceGroup::DEFAULT_CODE)
+                ->value('id');
+        }
+
+        return $this->defaultGroupIds[$customer->business_id];
     }
 
     /**

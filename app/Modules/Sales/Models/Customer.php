@@ -9,6 +9,7 @@ use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Sales\Enums\CustomerType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Spatie\Activitylog\LogOptions;
@@ -44,7 +45,11 @@ class Customer extends Model
         'address',
         'payment_terms',
         'credit_limit',
-        'price_group',
+        // ⚠ A FK to price_groups, not free text - a typo can no longer create
+        // a phantom group that silently prices a distributor at retail. Null
+        // means RETAIL, the default group (D-PRC-2); the mapping lives in
+        // ResolveSellingPrice only.
+        'price_group_id',
         'is_system',
         'is_active',
         'note',
@@ -106,6 +111,11 @@ class Customer extends Model
         return $this->morphMany(CrmAttribution::class, 'subject');
     }
 
+    public function priceGroup(): BelongsTo
+    {
+        return $this->belongsTo(PriceGroup::class);
+    }
+
     protected function casts(): array
     {
         return [
@@ -119,7 +129,7 @@ class Customer extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'code', 'type', 'phone', 'payment_terms', 'credit_limit', 'price_group', 'is_active'])
+            ->logOnly(['name', 'code', 'type', 'phone', 'payment_terms', 'credit_limit', 'price_group_id', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

@@ -33,7 +33,7 @@ class CounterSaleController extends Controller
             'products' => Product::query()->where('is_active', true)->stocked()
                 ->orderBy('name')->get(['id', 'name', 'sku']),
             'customers' => Customer::query()->active()->orderBy('name')
-                ->get(['id', 'name', 'code', 'is_system', 'price_group']),
+                ->get(['id', 'name', 'code', 'is_system', 'price_group_id']),
             'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
             'walkInId' => Customer::walkIn()?->id,

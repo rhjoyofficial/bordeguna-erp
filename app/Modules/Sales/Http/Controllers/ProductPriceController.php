@@ -3,12 +3,15 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -32,7 +35,7 @@ class ProductPriceController extends Controller
         ];
 
         $prices = ProductPrice::query()
-            ->with(['product:id,name,sku', 'customer:id,name'])
+            ->with(['product:id,name,sku', 'customer:id,name', 'priceGroup:id,code,name'])
             ->when($filters['product'], fn ($query, $id) => $query->where('product_id', $id))
             ->when($filters['search'], fn ($query, $search) => $query->whereHas(
                 'product',
@@ -49,18 +52,35 @@ class ProductPriceController extends Controller
             'products' => Product::query()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'sku']),
             'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name']),
+            'priceGroups' => PriceGroup::query()->active()
+                ->orderBy('id')->get(['id', 'code', 'name']),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
+        $businessId = app(BusinessContext::class)->id();
+
         $data = $request->validate([
-            'product_id' => ['required', 'integer', 'exists:products,id'],
+            // ⚠ All three FKs tenant-scoped. A bare `exists:` accepts another
+            // business's id, and while the resolver's global scope would keep
+            // the row from ever pricing anything, a rule that silently never
+            // applies is this module's defining failure shape.
+            'product_id' => [
+                'required', 'integer',
+                Rule::exists('products', 'id')->where('business_id', $businessId),
+            ],
             'unit_price' => ['required', 'numeric', 'min:0'],
             'effective_from' => ['required', 'date'],
             'effective_to' => ['nullable', 'date', 'after_or_equal:effective_from'],
-            'customer_id' => ['nullable', 'integer', 'exists:customers,id'],
-            'price_group' => ['nullable', 'string', 'max:100'],
+            'customer_id' => [
+                'nullable', 'integer',
+                Rule::exists('customers', 'id')->where('business_id', $businessId),
+            ],
+            'price_group_id' => [
+                'nullable', 'integer',
+                Rule::exists('price_groups', 'id')->where('business_id', $businessId),
+            ],
             'min_quantity' => ['nullable', 'numeric', 'min:0'],
             'note' => ['nullable', 'string', 'max:255'],
         ]);
@@ -68,9 +88,9 @@ class ProductPriceController extends Controller
         // ⚠ A rule cannot be for a customer AND a group at once - the resolver
         // has three ordered tiers, and a row claiming two of them has no defined
         // place in that order.
-        if (! empty($data['customer_id']) && ! empty($data['price_group'])) {
+        if (! empty($data['customer_id']) && ! empty($data['price_group_id'])) {
             throw ValidationException::withMessages([
-                'price_group' => 'A price is either for one customer or for a group, not both.',
+                'price_group_id' => 'A price is either for one customer or for a group, not both.',
             ]);
         }
 
@@ -82,7 +102,7 @@ class ProductPriceController extends Controller
                 ? Carbon::parse($data['effective_to'])->startOfDay()
                 : null,
             'customer_id' => $data['customer_id'] ?? null,
-            'price_group' => $data['price_group'] ?? null,
+            'price_group_id' => $data['price_group_id'] ?? null,
             'min_quantity' => $data['min_quantity'] ?? 0,
             'note' => $data['note'] ?? null,
             'created_by' => $request->user()->id,

@@ -38,7 +38,7 @@ final readonly class ResolvedPrice
     {
         return match ($this->tier()) {
             'customer' => 'Agreed price for this customer',
-            'price_group' => "Price for group [{$this->rule->price_group}]",
+            'price_group' => "Price for group [{$this->rule->priceGroup?->code}]",
             default => 'Standard selling price',
         }.((float) $this->rule->min_quantity > 0
             ? " from {$this->rule->min_quantity} units"

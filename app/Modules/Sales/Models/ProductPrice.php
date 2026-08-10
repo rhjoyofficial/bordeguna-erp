@@ -20,7 +20,7 @@ class ProductPrice extends Model
         'business_id',
         'product_id',
         'customer_id',
-        'price_group',
+        'price_group_id',
         'min_quantity',
         'unit_price',
         'effective_from',
@@ -49,6 +49,11 @@ class ProductPrice extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function priceGroup(): BelongsTo
+    {
+        return $this->belongsTo(PriceGroup::class);
     }
 
     /**
@@ -80,7 +85,7 @@ class ProductPrice extends Model
     {
         return match (true) {
             $this->customer_id !== null => 3,
-            $this->price_group !== null => 2,
+            $this->price_group_id !== null => 2,
             default => 1,
         };
     }

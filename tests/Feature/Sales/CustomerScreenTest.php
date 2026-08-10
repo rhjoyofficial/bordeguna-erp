@@ -6,6 +6,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroup;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -41,6 +42,12 @@ beforeEach(function () {
     (new WalkInCustomerSeeder)->run();
     (new SalesPermissionsSeeder)->run();
 
+    $this->dealerGroup = PriceGroup::create([
+        'business_id' => $this->business->id,
+        'code' => 'DEALER',
+        'name' => 'Dealer',
+    ]);
+
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
 
@@ -69,7 +76,7 @@ beforeEach(function () {
         'address' => 'Savar, Dhaka',
         'payment_terms' => 'Net 30',
         'credit_limit' => '500000',
-        'price_group' => 'dealer',
+        'price_group_id' => (string) $this->dealerGroup->id,
         'note' => 'Collects from the Savar warehouse.',
     ];
 });

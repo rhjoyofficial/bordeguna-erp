@@ -15,12 +15,12 @@ interface Price {
     id: number;
     unit_price: string;
     min_quantity: string;
-    price_group: string | null;
     effective_from: string;
     effective_to: string | null;
     note: string | null;
     product: { id: number; name: string; sku: string } | null;
     customer: { id: number; name: string } | null;
+    price_group: { id: number; code: string; name: string } | null;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -32,10 +32,12 @@ export default function PricesIndex({
     prices,
     products,
     customers,
+    priceGroups,
 }: {
     prices: Paginated<Price>;
     products: { id: number; name: string; sku: string }[];
     customers: { id: number; name: string }[];
+    priceGroups: { id: number; code: string; name: string }[];
 }) {
     const { data, setData, post, errors, processing, reset } = useForm({
         product_id: '',
@@ -43,7 +45,7 @@ export default function PricesIndex({
         effective_from: new Date().toISOString().slice(0, 10),
         effective_to: '',
         customer_id: '',
-        price_group: '',
+        price_group_id: '',
         min_quantity: '0',
         note: '',
     });
@@ -120,14 +122,23 @@ export default function PricesIndex({
                         </select>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="price_group">Or a price group</Label>
-                        <Input
-                            id="price_group"
-                            value={data.price_group}
-                            onChange={(e) => setData('price_group', e.target.value)}
-                            placeholder="dealer"
-                        />
-                        <InputError message={errors.price_group} />
+                        <Label htmlFor="price_group_id">Or a price group</Label>
+                        {/* ⚠ Rows, never typed: the free-text version of this field
+                            is how a distributor gets silently charged retail. */}
+                        <select
+                            id="price_group_id"
+                            className={selectClass}
+                            value={data.price_group_id}
+                            onChange={(e) => setData('price_group_id', e.target.value)}
+                        >
+                            <option value="">No group</option>
+                            {priceGroups.map((g) => (
+                                <option key={g.id} value={g.id}>
+                                    {g.code}
+                                </option>
+                            ))}
+                        </select>
+                        <InputError message={errors.price_group_id} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="min_quantity">From quantity</Label>
@@ -159,7 +170,7 @@ export default function PricesIndex({
                                         {price.customer ? (
                                             <Badge variant="secondary">{price.customer.name}</Badge>
                                         ) : price.price_group ? (
-                                            <Badge variant="outline">{price.price_group}</Badge>
+                                            <Badge variant="outline">{price.price_group.code}</Badge>
                                         ) : (
                                             <span className="text-muted-foreground">Everyone</span>
                                         )}

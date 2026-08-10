@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroup;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -42,6 +43,12 @@ class CustomerController extends Controller
             'types' => collect(CustomerType::cases())
                 ->map(fn (CustomerType $type) => ['value' => $type->value, 'label' => $type->label()])
                 ->values(),
+            // ⚠ Groups come from the table, never typed. RETAIL is deliberately
+            // in the list even though "no group" already means RETAIL - picking
+            // it records an explicit choice, leaving it blank records a default,
+            // and both price identically by construction.
+            'priceGroups' => PriceGroup::query()->active()
+                ->orderBy('id')->get(['id', 'code', 'name']),
         ]);
     }
 
@@ -140,7 +147,12 @@ class CustomerController extends Controller
             'address' => ['nullable', 'string'],
             'payment_terms' => ['nullable', 'string', 'max:255'],
             'credit_limit' => ['nullable', 'numeric', 'min:0'],
-            'price_group' => ['nullable', 'string', 'max:100'],
+            // ⚠ Tenant-scoped: a price group from another business must be
+            // unreachable (C-PRC-6). Null means RETAIL, the default group.
+            'price_group_id' => [
+                'nullable', 'integer',
+                Rule::exists('price_groups', 'id')->where('business_id', $businessId),
+            ],
             'note' => ['nullable', 'string'],
         ]);
     }

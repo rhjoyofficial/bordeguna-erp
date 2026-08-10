@@ -32,9 +32,15 @@ interface Customer {
     phone: string | null;
     payment_terms: string | null;
     credit_limit: string | null;
-    price_group: string | null;
+    price_group_id: number | null;
     is_system: boolean;
     is_active: boolean;
+}
+
+interface PriceGroup {
+    id: number;
+    code: string;
+    name: string;
 }
 
 const EMPTY = {
@@ -49,7 +55,7 @@ const EMPTY = {
     address: '',
     payment_terms: '',
     credit_limit: '',
-    price_group: '',
+    price_group_id: '',
     note: '',
 };
 
@@ -62,10 +68,12 @@ export default function CustomersIndex({
     customers,
     filters: initialFilters,
     types,
+    priceGroups,
 }: {
     customers: Paginated<Customer>;
     filters: { search: string; type: string; status: string };
     types: { value: string; label: string }[];
+    priceGroups: PriceGroup[];
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/customers', initialFilters);
 
@@ -102,7 +110,7 @@ export default function CustomersIndex({
             address: customer.address ?? '',
             payment_terms: customer.payment_terms ?? '',
             credit_limit: customer.credit_limit ?? '',
-            price_group: customer.price_group ?? '',
+            price_group_id: customer.price_group_id !== null ? String(customer.price_group_id) : '',
             note: customer.note ?? '',
         });
     };
@@ -158,13 +166,25 @@ export default function CustomersIndex({
                         <InputError message={errors.credit_limit} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="price_group">Price group</Label>
-                        <Input
-                            id="price_group"
-                            value={data.price_group}
-                            onChange={(e) => setData('price_group', e.target.value)}
-                            placeholder="dealer"
-                        />
+                        <Label htmlFor="price_group_id">Price group</Label>
+                        {/* ⚠ A select over real rows, never typed - free text here
+                            once meant `Distributor` vs `distributor` silently
+                            charged a distributor the retail price. Blank means
+                            RETAIL, the default group. */}
+                        <select
+                            id="price_group_id"
+                            className={selectClass}
+                            value={data.price_group_id}
+                            onChange={(e) => setData('price_group_id', e.target.value)}
+                        >
+                            <option value="">Default (RETAIL)</option>
+                            {priceGroups.map((g) => (
+                                <option key={g.id} value={g.id}>
+                                    {g.code}
+                                </option>
+                            ))}
+                        </select>
+                        <InputError message={errors.price_group_id} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="contact_name">Contact person</Label>

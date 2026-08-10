@@ -2,9 +2,10 @@
 
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
-use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
+use App\Modules\Sales\Models\PriceGroup;
 use Illuminate\Database\QueryException;
 
 /**
@@ -20,6 +21,12 @@ beforeEach(function () {
 });
 
 it('holds everything a distributor needs from the first migration', function () {
+    $group = PriceGroup::create([
+        'business_id' => $this->business->id,
+        'code' => 'DISTRIBUTOR',
+        'name' => 'Distributor',
+    ]);
+
     $customer = Customer::create([
         'business_id' => $this->business->id,
         'code' => 'DIST-001',
@@ -31,12 +38,12 @@ it('holds everything a distributor needs from the first migration', function () 
         'address' => 'Savar, Dhaka',
         'payment_terms' => 'Net 30',
         'credit_limit' => '500000',
-        'price_group' => 'distributor',
+        'price_group_id' => $group->id,
     ]);
 
     expect($customer->fresh()->type)->toBe(CustomerType::Distributor)
         ->and($customer->fresh()->credit_limit)->toBe('500000.0000')
-        ->and($customer->fresh()->price_group)->toBe('distributor');
+        ->and($customer->fresh()->priceGroup->code)->toBe('DISTRIBUTOR');
 });
 
 it('defaults a new customer to retail and active', function () {

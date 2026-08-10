@@ -9,6 +9,7 @@ use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 use Illuminate\Support\Carbon;
 
@@ -42,6 +43,16 @@ beforeEach(function () {
     ]);
 
     Carbon::setTestNow('2026-08-04 10:00:00');
+
+    // ⚠ Groups are ROWS now (C-PRC-1), created here the way the seeder would.
+    // The free-text version of these tests could not fail on a case mismatch,
+    // which is exactly the defect the FK exists to make unrepresentable.
+    $this->groups = collect(['RETAIL', 'DEALER', 'DISTRIBUTOR'])
+        ->mapWithKeys(fn (string $code) => [$code => PriceGroup::create([
+            'business_id' => $this->business->id,
+            'code' => $code,
+            'name' => ucfirst(mb_strtolower($code)),
+        ])]);
 
     $this->price = function (array $attributes) {
         return ProductPrice::create(array_merge([
@@ -81,11 +92,11 @@ it('prefers a price agreed with the customer over their group and the default', 
         'business_id' => $this->business->id,
         'name' => 'Rahim Stores',
         'type' => CustomerType::Dealer,
-        'price_group' => 'dealer',
+        'price_group_id' => $this->groups['DEALER']->id,
     ]);
 
     ($this->price)(['unit_price' => '850']);
-    ($this->price)(['unit_price' => '780', 'price_group' => 'dealer']);
+    ($this->price)(['unit_price' => '780', 'price_group_id' => $this->groups['DEALER']->id]);
     ($this->price)(['unit_price' => '740', 'customer_id' => $customer->id]);
 
     $resolved = $this->resolver->resolve($this->product, $customer);
@@ -99,11 +110,11 @@ it('prefers a group price over the default', function () {
         'business_id' => $this->business->id,
         'name' => 'Karim Traders',
         'type' => CustomerType::Distributor,
-        'price_group' => 'distributor',
+        'price_group_id' => $this->groups['DISTRIBUTOR']->id,
     ]);
 
     ($this->price)(['unit_price' => '850']);
-    ($this->price)(['unit_price' => '700', 'price_group' => 'distributor']);
+    ($this->price)(['unit_price' => '700', 'price_group_id' => $this->groups['DISTRIBUTOR']->id]);
 
     expect($this->resolver->resolve($this->product, $customer)->tier())->toBe('price_group');
 });
@@ -116,9 +127,51 @@ it('ignores a group price for a customer who is not in that group', function () 
     ]);
 
     ($this->price)(['unit_price' => '850']);
-    ($this->price)(['unit_price' => '700', 'price_group' => 'distributor']);
+    ($this->price)(['unit_price' => '700', 'price_group_id' => $this->groups['DISTRIBUTOR']->id]);
 
     expect($this->resolver->resolve($this->product, $customer)->unitPrice)->toBe('850.0000');
+});
+
+// ⚠⚠ D-PRC-2: RETAIL IS THE DEFAULT GROUP. A customer with no group is priced
+// as RETAIL, so a retail price entered as a RETAIL-group row reaches them -
+// otherwise "the default group" would be a sentence in a design note and not a
+// behaviour, and retail prices would need entering twice.
+it('prices a customer with no group as RETAIL, the default group', function () {
+    $customer = Customer::create([
+        'business_id' => $this->business->id,
+        'name' => 'Counter Regular',
+        'type' => CustomerType::Retail,
+    ]);
+
+    ($this->price)(['unit_price' => '850']);
+    ($this->price)(['unit_price' => '820', 'price_group_id' => $this->groups['RETAIL']->id]);
+
+    $resolved = $this->resolver->resolve($this->product, $customer);
+
+    expect($resolved->unitPrice)->toBe('820.0000')
+        ->and($resolved->tier())->toBe('price_group');
+});
+
+// The mirror: a customer explicitly IN the RETAIL group prices identically to
+// one in no group. Explicit choice and default must never diverge.
+it('prices an explicit RETAIL member and a no-group customer identically', function () {
+    $explicit = Customer::create([
+        'business_id' => $this->business->id,
+        'name' => 'Explicit Retail',
+        'type' => CustomerType::Retail,
+        'price_group_id' => $this->groups['RETAIL']->id,
+    ]);
+    $defaulted = Customer::create([
+        'business_id' => $this->business->id,
+        'name' => 'Defaulted Retail',
+        'type' => CustomerType::Retail,
+    ]);
+
+    ($this->price)(['unit_price' => '850']);
+    ($this->price)(['unit_price' => '820', 'price_group_id' => $this->groups['RETAIL']->id]);
+
+    expect($this->resolver->resolve($this->product, $explicit)->unitPrice)
+        ->toBe($this->resolver->resolve($this->product, $defaulted)->unitPrice);
 });
 
 it('ignores a price agreed with a different customer', function () {
@@ -173,14 +226,14 @@ it('takes the deepest quantity break within the most specific tier', function ()
         'business_id' => $this->business->id,
         'name' => 'Bulk Dealer',
         'type' => CustomerType::Dealer,
-        'price_group' => 'dealer',
+        'price_group_id' => $this->groups['DEALER']->id,
     ]);
 
     // ⚠ The group price is cheaper than the customer's, and must still lose.
     // Specificity decides first, quantity second - otherwise a negotiated rate
     // silently stops applying the moment somebody buys a lot.
     ($this->price)(['unit_price' => '850']);
-    ($this->price)(['unit_price' => '600', 'price_group' => 'dealer', 'min_quantity' => '48']);
+    ($this->price)(['unit_price' => '600', 'price_group_id' => $this->groups['DEALER']->id, 'min_quantity' => '48']);
     ($this->price)(['unit_price' => '740', 'customer_id' => $customer->id]);
     ($this->price)(['unit_price' => '700', 'customer_id' => $customer->id, 'min_quantity' => '48']);
 
@@ -231,10 +284,10 @@ it('keeps a group price when a later general break would beat it', function () {
         'business_id' => $this->business->id,
         'name' => 'Grouped Dealer',
         'type' => CustomerType::Dealer,
-        'price_group' => 'dealer',
+        'price_group_id' => $this->groups['DEALER']->id,
     ]);
 
-    ($this->price)(['unit_price' => '780', 'price_group' => 'dealer', 'effective_from' => '2026-01-01']);
+    ($this->price)(['unit_price' => '780', 'price_group_id' => $this->groups['DEALER']->id, 'effective_from' => '2026-01-01']);
     ($this->price)(['unit_price' => '850', 'effective_from' => '2026-01-01']);
     ($this->price)(['unit_price' => '800', 'min_quantity' => '48', 'effective_from' => '2026-07-01']);
 
@@ -286,14 +339,14 @@ it('reports which rule produced the price', function () {
         'business_id' => $this->business->id,
         'name' => 'Explained Co',
         'type' => CustomerType::Dealer,
-        'price_group' => 'dealer',
+        'price_group_id' => $this->groups['DEALER']->id,
     ]);
 
-    ($this->price)(['unit_price' => '780', 'price_group' => 'dealer', 'min_quantity' => '12']);
+    ($this->price)(['unit_price' => '780', 'price_group_id' => $this->groups['DEALER']->id, 'min_quantity' => '12']);
 
     $resolved = $this->resolver->resolve($this->product, $customer, '20');
 
-    expect($resolved->explain())->toBe('Price for group [dealer] from 12.0000 units')
+    expect($resolved->explain())->toBe('Price for group [DEALER] from 12.0000 units')
         ->and($resolved->rule->id)->not->toBeNull();
 });
 
