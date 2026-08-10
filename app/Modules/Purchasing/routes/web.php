@@ -3,6 +3,7 @@
 use App\Modules\Purchasing\Http\Controllers\ExpenseVoucherController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\SupplierController;
+use App\Modules\Purchasing\Http\Controllers\SupplierCreditNoteController;
 use App\Modules\Purchasing\Http\Controllers\SupplierImportController;
 use App\Modules\Purchasing\Http\Controllers\SupplierPaymentController;
 use Illuminate\Support\Facades\Route;
@@ -55,6 +56,18 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     });
 
     // Expense vouchers — rent, fuel, utilities, repairs.
+    // Supplier credit notes — the claim a late return creates, settled.
+    // Same read/write split as payments, and the same reasoning: a credit
+    // reduces what leaves the bank, so recording one is a financial decision.
+    Route::get('credit-notes', [SupplierCreditNoteController::class, 'index'])->name('credit-notes.index');
+    Route::get('credit-notes/{creditNote}', [SupplierCreditNoteController::class, 'show'])
+        ->whereNumber('creditNote')->name('credit-notes.show');
+
+    Route::middleware('can:purchasing.credit_note.record')->group(function () {
+        Route::get('credit-notes/new', [SupplierCreditNoteController::class, 'create'])->name('credit-notes.create');
+        Route::post('credit-notes', [SupplierCreditNoteController::class, 'store'])->name('credit-notes.store');
+    });
+
     // ⚠ Same read/write split as payments: anyone in the business may READ what
     // the business spent, because spending nobody can see is spending nobody can
     // question. Recording one moves money and needs the permission.

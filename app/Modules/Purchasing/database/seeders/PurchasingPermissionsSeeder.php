@@ -38,6 +38,10 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.receipt.record',
             'purchasing.payment.update',
             'purchasing.payment.record',
+            // ⚠ Same reasoning as payment.record: a credit note reduces what
+            // leaves the bank, so recording one is a financial decision.
+            // Owner and Manager only, deliberately.
+            'purchasing.credit_note.record',
             'purchasing.expense.record',
             'purchasing.reports.view',
         ],
@@ -48,6 +52,7 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.receipt.record',
             'purchasing.payment.update',
             'purchasing.payment.record',
+            'purchasing.credit_note.record',
             'purchasing.expense.record',
             'purchasing.reports.view',
         ],

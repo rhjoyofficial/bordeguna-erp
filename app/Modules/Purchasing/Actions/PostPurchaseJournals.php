@@ -15,6 +15,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use Illuminate\Support\Carbon;
 
@@ -297,7 +298,53 @@ class PostPurchaseJournals
         ), $postedBy);
     }
 
-    public function existingJournal(GoodsReceipt|SupplierBill|PurchaseReturn|SupplierPayment $document): ?Journal
+    /**
+     * The supplier's credit note for goods returned after the bill arrived.
+     *
+     *   Dr  Accounts Payable (party = supplier)   Cr  Goods Received Not Invoiced
+     *
+     * ⚠ The mirror of the bill, at the credit's value. The late return left
+     * GRNI with a DEBIT balance - the supplier owed us for goods sent back
+     * after billing - and this is the entry that moves that claim onto the
+     * supplier's payable balance, where the next payment can see it.
+     */
+    public function forCreditNote(SupplierCreditNote $creditNote, User $postedBy): ?Journal
+    {
+        if ($this->existingJournal($creditNote) !== null) {
+            return null;
+        }
+
+        $on = Carbon::parse($creditNote->credit_date)->startOfDay();
+
+        if (AccountMapping::forKeyOn('inventory.stock_on_hand', $on) === null) {
+            return null;
+        }
+
+        $grni = AccountMapping::resolve('inventory.goods_received_not_invoiced', $on);
+        $payable = AccountMapping::resolve('purchasing.accounts_payable', $on);
+
+        $total = Money::ofTaka((string) $creditNote->total);
+
+        if ($total->isZero()) {
+            return null;
+        }
+
+        $lines = [
+            JournalLineDraft::debit($payable->id, $total, $creditNote->credit_note_number, $creditNote->supplier),
+            JournalLineDraft::credit($grni->id, $total, $creditNote->credit_note_number),
+        ];
+
+        $lines = LedgerRounding::balance($lines, $on, "Rounding on credit note {$creditNote->credit_note_number}");
+
+        return $this->postJournal->handle(new JournalDraft(
+            date: $on,
+            lines: $lines,
+            memo: "Supplier credit note {$creditNote->credit_note_number}",
+            source: $creditNote,
+        ), $postedBy);
+    }
+
+    public function existingJournal(GoodsReceipt|SupplierBill|PurchaseReturn|SupplierPayment|SupplierCreditNote $document): ?Journal
     {
         return Journal::query()
             ->where('source_type', $document->getMorphClass())

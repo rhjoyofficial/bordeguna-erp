@@ -15,6 +15,7 @@ use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseReturnLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
@@ -139,13 +140,16 @@ final class SubledgerReconciliation
         $payments = Money::sum(SupplierPayment::query()->pluck('amount')->map(
             fn ($amount) => Money::ofTaka((string) $amount),
         ));
+        $credits = Money::sum(SupplierCreditNote::query()->pluck('total')->map(
+            fn ($total) => Money::ofTaka((string) $total),
+        ));
         $allocated = Money::sum(
             SupplierPayment::query()->with('allocations')->get()
                 ->flatMap->allocations
                 ->map(fn ($allocation) => Money::ofTaka((string) $allocation->amount)),
         );
 
-        $derived = $bills->plus($payments->negated());
+        $derived = $bills->plus($payments->negated())->plus($credits->negated());
         $unallocated = $payments->plus($allocated->negated());
 
         if (! $unallocated->isZero()) {
@@ -167,13 +171,14 @@ final class SubledgerReconciliation
             $account->id,
             partyClass: Supplier::class,
             creditNormal: true,
-            derivedByParty: $this->foldByKey(
-                SupplierBill::query()->get(['supplier_id', 'total']),
-                'supplier_id',
-                fn ($bill) => Money::ofTaka((string) $bill->total),
-                SupplierPayment::query()->get(['supplier_id', 'amount']),
-                fn ($payment) => Money::ofTaka((string) $payment->amount)->negated(),
-            ),
+            derivedByParty: $this->foldByKey([
+                [SupplierBill::query()->get(['supplier_id', 'total']), 'supplier_id',
+                    fn ($bill) => Money::ofTaka((string) $bill->total)],
+                [SupplierPayment::query()->get(['supplier_id', 'amount']), 'supplier_id',
+                    fn ($payment) => Money::ofTaka((string) $payment->amount)->negated()],
+                [SupplierCreditNote::query()->get(['supplier_id', 'total']), 'supplier_id',
+                    fn ($credit) => Money::ofTaka((string) $credit->total)->negated()],
+            ]),
             nameFor: fn (array $ids) => Supplier::query()->whereIn('id', $ids)->pluck('name', 'id')->all(),
         );
     }
@@ -224,13 +229,12 @@ final class SubledgerReconciliation
             $account->id,
             partyClass: Customer::class,
             creditNormal: false,
-            derivedByParty: $this->foldByKey(
-                SalesInvoice::query()->get(['customer_id', 'total']),
-                'customer_id',
-                fn ($invoice) => Money::ofTaka((string) $invoice->total),
-                CustomerReceipt::query()->get(['customer_id', 'amount']),
-                fn ($receipt) => Money::ofTaka((string) $receipt->amount)->negated(),
-            ),
+            derivedByParty: $this->foldByKey([
+                [SalesInvoice::query()->get(['customer_id', 'total']), 'customer_id',
+                    fn ($invoice) => Money::ofTaka((string) $invoice->total)],
+                [CustomerReceipt::query()->get(['customer_id', 'amount']), 'customer_id',
+                    fn ($receipt) => Money::ofTaka((string) $receipt->amount)->negated()],
+            ]),
             nameFor: fn (array $ids) => Customer::query()->whereIn('id', $ids)->pluck('name', 'id')->all(),
         );
     }
@@ -275,7 +279,12 @@ final class SubledgerReconciliation
                 )),
         );
 
-        $derived = $received->plus($billed->negated())->plus($returned->negated());
+        // Credit notes credit GRNI back for goods returned after billing.
+        $credited = Money::sum(SupplierCreditNote::query()->pluck('total')->map(
+            fn ($total) => Money::ofTaka((string) $total),
+        ));
+
+        $derived = $received->plus($billed->negated())->plus($returned->negated())->plus($credited);
 
         // A negative GRNI means the business has been billed for more than it
         // has received - possible, legal, and worth a human glance.
@@ -562,27 +571,22 @@ final class SubledgerReconciliation
     }
 
     /**
-     * Folds two document sets into one per-party Money map.
+     * Folds document sets into one per-party Money map. Each set is
+     * [iterable documents, key column, value callable] - the callable returns
+     * a signed Money, so subtractions are negated values, not a special case.
      *
+     * @param  array<int, array{0: iterable<object>, 1: string, 2: callable(object): Money}>  $sets
      * @return array<int, Money>
      */
-    private function foldByKey(
-        iterable $additions,
-        string $key,
-        callable $addValue,
-        iterable $subtractions,
-        callable $subtractValue,
-    ): array {
+    private function foldByKey(array $sets): array
+    {
         $byParty = [];
 
-        foreach ($additions as $document) {
-            $partyId = $document->{$key};
-            $byParty[$partyId] = ($byParty[$partyId] ?? Money::zero())->plus($addValue($document));
-        }
-
-        foreach ($subtractions as $document) {
-            $partyId = $document->{$key};
-            $byParty[$partyId] = ($byParty[$partyId] ?? Money::zero())->plus($subtractValue($document));
+        foreach ($sets as [$documents, $key, $value]) {
+            foreach ($documents as $document) {
+                $partyId = $document->{$key};
+                $byParty[$partyId] = ($byParty[$partyId] ?? Money::zero())->plus($value($document));
+            }
         }
 
         return $byParty;

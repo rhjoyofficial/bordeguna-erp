@@ -78,6 +78,11 @@ class SupplierBill extends Model
         return $this->hasMany(SupplierPaymentAllocation::class);
     }
 
+    public function creditAllocations(): HasMany
+    {
+        return $this->hasMany(SupplierCreditNoteAllocation::class);
+    }
+
     /**
      * ⚠ DERIVED from the allocations, never stored on the bill.
      *
@@ -91,9 +96,19 @@ class SupplierBill extends Model
         return Money::ofTaka((string) ($this->allocations()->sum('amount') ?: '0'));
     }
 
+    /**
+     * What the supplier's credit notes have knocked off this bill.
+     */
+    public function creditedTotal(): Money
+    {
+        return Money::ofTaka((string) ($this->creditAllocations()->sum('amount') ?: '0'));
+    }
+
     public function outstanding(): Money
     {
-        return Money::ofTaka((string) $this->total)->plus($this->paidTotal()->negated());
+        return Money::ofTaka((string) $this->total)
+            ->plus($this->paidTotal()->negated())
+            ->plus($this->creditedTotal()->negated());
     }
 
     public function isSettled(): bool
