@@ -93,10 +93,20 @@ return new class extends Migration
         // tables, so a plain column is correct here - unlike the
         // delivery_line_movements case, where a cross-module boundary forced a
         // link table. Mirrors goods_receipt_lines.purchase_order_line_id.
+        //
+        // ⚠⚠ The constraint name is deliberately the DEFAULT
+        // (delivery_lines_sales_order_line_id_foreign, 42 chars, under the
+        // 64 ceiling). The first version passed indexName: to constrained() -
+        // which names the FOREIGN KEY ITSELF, not an index - and down()'s
+        // dropConstrainedForeignId() drops by the conventional name, so the
+        // rollback failed with error 1091 ON MYSQL ONLY. SQLite rebuilds the
+        // table on column drop and never says a constraint name out loud,
+        // so the whole suite was green with a broken down(). Caught by the
+        // scratch-MySQL run against a production dump, 2026-08-11.
         Schema::table('delivery_lines', function (Blueprint $table) {
             $table->foreignId('sales_order_line_id')
                 ->nullable()
-                ->constrained('sales_order_lines', indexName: 'delivery_lines_order_line_index')
+                ->constrained('sales_order_lines')
                 ->restrictOnDelete();
         });
     }
