@@ -2,25 +2,28 @@
 
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Accounting\Models\Journal;
+use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
+use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
-use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\RecordDelivery;
-use App\Modules\Sales\Enums\CustomerType;
-use App\Modules\Sales\Enums\SalesOrderStatus;
-use App\Modules\Sales\Models\Customer;
-use App\Modules\Sales\Models\ProductPrice;
-use App\Modules\Sales\Models\SalesInvoice;
-use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
+use App\Modules\Sales\Enums\CustomerType;
+use App\Modules\Sales\Enums\SalesOrderStatus;
+use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\DeliveryLine;
+use App\Modules\Sales\Models\ProductPrice;
+use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -146,14 +149,14 @@ it('answers the exposure question and blocks nothing (C-SO-3)', function () {
 describe('who may do what', function () {
     it('stops Staff from approving an order', function () {
         $order = ($this->ownerOrder)();
-        $order->approvalRequest->update(['status' => \App\Modules\Foundation\Enums\ApprovalStatus::Pending]);
+        $order->approvalRequest->update(['status' => ApprovalStatus::Pending]);
 
         ($this->asRole)('Staff')->post("/sales/orders/{$order->id}/approve")->assertForbidden();
     });
 
     it('lets a Manager approve a pending order', function () {
         $order = ($this->ownerOrder)();
-        $order->approvalRequest->update(['status' => \App\Modules\Foundation\Enums\ApprovalStatus::Pending]);
+        $order->approvalRequest->update(['status' => ApprovalStatus::Pending]);
 
         ($this->asRole)('Manager')->post("/sales/orders/{$order->id}/approve")->assertRedirect();
 
@@ -248,7 +251,7 @@ it('bills a direct challan at the resolver price of the invoice date', function 
     ($this->asRole)('Staff')->post('/sales/invoices', [
         'customer_id' => $this->customer->id,
         'lines' => [[
-            'delivery_line_id' => \App\Modules\Sales\Models\DeliveryLine::first()->id,
+            'delivery_line_id' => DeliveryLine::first()->id,
             'quantity' => '10',
         ]],
     ])->assertRedirect();
@@ -315,5 +318,5 @@ it('keeps the whole order flow invisible to the ledger until delivery', function
         'lines' => [['product_id' => $this->product->id, 'quantity' => '40']],
     ]);
 
-    expect(\App\Modules\Accounting\Models\Journal::count())->toBe(0);
+    expect(Journal::count())->toBe(0);
 });

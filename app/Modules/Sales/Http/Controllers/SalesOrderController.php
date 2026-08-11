@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\RejectApprovable;
+use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\ApproveSalesOrder;
@@ -12,7 +13,6 @@ use App\Modules\Sales\Actions\CloseSalesOrder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\CustomerExposure;
 use App\Modules\Sales\Actions\RecordDelivery;
-use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;

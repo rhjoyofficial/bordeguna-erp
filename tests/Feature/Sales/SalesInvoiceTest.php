@@ -1,24 +1,26 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
-use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
+use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
-use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
+use App\Modules\Sales\Actions\PostSalesJournals;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
+use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesInvoice;
-use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\PermissionRegistrar;
@@ -354,7 +356,7 @@ describe('the ledger', function () {
         ($this->stockIn)('10', '500');
         $delivery = ($this->deliver)('5');
 
-        \App\Modules\Accounting\Models\AccountMapping::where('key', 'sales.revenue')->delete();
+        AccountMapping::where('key', 'sales.revenue')->delete();
 
         $invoice = ($this->invoiceFor)([[
             'deliveryLine' => $delivery->lines->first(),
@@ -377,7 +379,7 @@ describe('the ledger', function () {
             'unitPrice' => '850',
         ]]);
 
-        app(\App\Modules\Sales\Actions\PostSalesJournals::class)->forInvoice($invoice, $this->user);
+        app(PostSalesJournals::class)->forInvoice($invoice, $this->user);
 
         expect(Journal::where('source_type', $invoice->getMorphClass())
             ->where('source_id', $invoice->id)->count())->toBe(1);

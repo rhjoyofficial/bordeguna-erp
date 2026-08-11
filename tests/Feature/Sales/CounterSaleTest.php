@@ -1,26 +1,27 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalLine;
-use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
+use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
-use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Sales\Actions\RecordCounterSale;
+use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
+use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesInvoice;
-use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
-use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
 use Illuminate\Support\Carbon;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -159,7 +160,7 @@ it('refuses to sell a product nothing prices', function () {
 it('leaves nothing behind when the stock is not there', function () {
     try {
         ($this->sell)('999');
-    } catch (\App\Modules\Inventory\Exceptions\InsufficientStockException) {
+    } catch (InsufficientStockException) {
         // expected
     }
 
@@ -211,4 +212,4 @@ it('sells only from the warehouse it was made in', function () {
         createdBy: $this->user,
         moneyAccount: $this->cash,
     );
-})->throws(\App\Modules\Inventory\Exceptions\InsufficientStockException::class);
+})->throws(InsufficientStockException::class);

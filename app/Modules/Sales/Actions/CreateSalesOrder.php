@@ -9,6 +9,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Enums\SalesOrderStatus;
+use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Support\Carbon;
@@ -42,7 +43,7 @@ class CreateSalesOrder
      * @param  array<int, array{product: Product, quantity: string, unit_price?: string|null}>  $lines
      *
      * @throws ValidationException
-     * @throws \App\Modules\Sales\Exceptions\NoSellingPriceException
+     * @throws NoSellingPriceException
      */
     public function handle(
         Customer $customer,

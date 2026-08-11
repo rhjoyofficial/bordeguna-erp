@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Actions;
 
 use App\Models\User;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Support\CounterSale;
@@ -40,7 +41,7 @@ class RecordCounterSale
 
     /**
      * @param  array<int, array{
-     *     product: \App\Modules\Inventory\Models\Product,
+     *     product: Product,
      *     quantity: string,
      *     unitPrice?: string|null,
      *     discount?: string|null

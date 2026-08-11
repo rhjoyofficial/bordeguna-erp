@@ -1,23 +1,23 @@
 <?php
 
 use App\Models\User;
-use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
+use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
-use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
-use App\Modules\Sales\Models\Customer;
-use App\Modules\Sales\Models\ProductPrice;
-use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
+use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\ProductPrice;
+use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;

@@ -1,25 +1,26 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalLine;
-use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
+use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
-use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\RecordDelivery;
+use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesOrder;
-use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
@@ -164,7 +165,7 @@ it('refuses a fully delivered order for further delivery', function () {
 // ⚠ C-SO-1: an unapproved order exists but goods may not leave against it.
 it('refuses delivery against a pending unapproved order', function () {
     $order = ($this->makeOrder)();
-    $order->approvalRequest->update(['status' => \App\Modules\Foundation\Enums\ApprovalStatus::Pending]);
+    $order->approvalRequest->update(['status' => ApprovalStatus::Pending]);
 
     ($this->deliverAgainst)($order->fresh(), '10');
 })->throws(ValidationException::class);

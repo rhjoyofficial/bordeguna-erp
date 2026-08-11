@@ -1,27 +1,29 @@
 <?php
 
 use App\Models\User;
-use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
+use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
+use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
-use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Sales\Actions\CancelSalesOrder;
 use App\Modules\Sales\Actions\CloseSalesOrder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\RecordDelivery;
+use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\ProductPrice;
-use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -173,7 +175,7 @@ it('refuses delivery against a closed order', function () {
     app(CloseSalesOrder::class)->handle($order->fresh(), $this->owner, 'Customer stopped');
 
     ($this->deliverAgainst)($order->fresh(), '5');
-})->throws(Illuminate\Validation\ValidationException::class);
+})->throws(ValidationException::class);
 
 // ⚠⚠ §7 of the doc, held through the whole lifecycle: create, deliver, close,
 // cancel - the only journals and movements in this test came from the
@@ -183,7 +185,7 @@ it('never touches stock or the ledger through any order transition', function ()
     app(CancelSalesOrder::class)->handle($cancelled);
 
     expect(Journal::count())->toBe(0)
-        ->and(StockMovement::query()->where('reason', \App\Modules\Inventory\Enums\MovementReason::Sale)->count())->toBe(0);
+        ->and(StockMovement::query()->where('reason', MovementReason::Sale)->count())->toBe(0);
 
     $closed = ($this->makeOrder)('40');
     ($this->deliverAgainst)($closed, '25');

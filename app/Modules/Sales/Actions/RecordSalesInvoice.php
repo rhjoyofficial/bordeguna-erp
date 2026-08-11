@@ -7,6 +7,7 @@ use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Inventory\Models\Product;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
@@ -33,7 +34,7 @@ class RecordSalesInvoice
     /**
      * @param  array<int, array{
      *     deliveryLine?: DeliveryLine|null,
-     *     product?: \App\Modules\Inventory\Models\Product|null,
+     *     product?: Product|null,
      *     description?: string|null,
      *     quantity: string,
      *     unitPrice: string,
