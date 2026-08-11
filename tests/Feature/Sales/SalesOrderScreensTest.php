@@ -1,0 +1,266 @@
+<?php
+
+use App\Models\User;
+use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Actions\RecordStockIn;
+use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
+use App\Modules\Sales\Actions\CreateSalesOrder;
+use App\Modules\Sales\Actions\RecordDelivery;
+use App\Modules\Sales\Enums\CustomerType;
+use App\Modules\Sales\Enums\SalesOrderStatus;
+use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\ProductPrice;
+use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
+use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
+use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
+use Illuminate\Support\Carbon;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
+
+/**
+ * Sales orders slice 4: the order book screens and their permission layer,
+ * plus the invoice-from-challan flow (F1) that finally makes billing a challan
+ * reachable - at the ORDER price where the goods trace to an order (C-SO-4).
+ */
+beforeEach(function () {
+    $this->business = Business::create(['name' => 'Order Screen Co', 'slug' => 'order-screen-co']);
+    app(BusinessContext::class)->set($this->business->id);
+    app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
+
+    foreach (['Owner', 'Manager', 'Staff'] as $name) {
+        Role::create(['name' => $name, 'guard_name' => 'web', 'business_id' => $this->business->id]);
+    }
+
+    (new ChartOfAccountsSeeder)->run();
+    (new InventoryAccountMappingSeeder)->run();
+    (new SalesAccountMappingSeeder)->run();
+    (new WalkInCustomerSeeder)->run();
+    (new SalesPermissionsSeeder)->run();
+    app(BusinessContext::class)->set($this->business->id);
+    app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
+
+    $this->warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Main', 'code' => 'MAIN']);
+    $unit = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Pieces', 'abbreviation' => 'pcs']);
+    $this->product = Product::create([
+        'business_id' => $this->business->id,
+        'unit_of_measure_id' => $unit->id,
+        'sku' => 'SKU-HONEY',
+        'name' => 'Sundarban Honey 500g',
+        'type' => ProductType::FinishedGood,
+    ]);
+    $this->customer = Customer::create([
+        'business_id' => $this->business->id,
+        'name' => 'Karim Traders',
+        'type' => CustomerType::Distributor,
+        'credit_limit' => '100000',
+    ]);
+
+    ProductPrice::create([
+        'business_id' => $this->business->id,
+        'product_id' => $this->product->id,
+        'unit_price' => '850',
+        'effective_from' => '2026-01-01',
+    ]);
+
+    Carbon::setTestNow('2026-08-11 10:00:00');
+
+    $this->asRole = function (string $role) {
+        $user = User::factory()->create();
+        $user->businesses()->attach($this->business->id);
+        setPermissionsTeamId($this->business->id);
+        $user->assignRole($role);
+        $this->currentUser = $user;
+
+        return $this->actingAs($user);
+    };
+
+    app(RecordStockIn::class)->handle(
+        $this->product, $this->warehouse, '100', '500',
+        User::factory()->create(), occurredAt: '2026-08-01 09:00:00'
+    );
+
+    $this->ownerOrder = function (string $quantity = '40') {
+        $owner = User::factory()->create();
+        $owner->businesses()->attach($this->business->id);
+        setPermissionsTeamId($this->business->id);
+        $owner->assignRole('Owner');
+
+        return app(CreateSalesOrder::class)->handle(
+            customer: $this->customer,
+            lines: [['product' => $this->product, 'quantity' => $quantity]],
+            createdBy: $owner,
+        );
+    };
+});
+
+afterEach(fn () => Carbon::setTestNow());
+
+it('shows the order book to anyone who may view sales', function () {
+    ($this->asRole)('Staff')->get('/sales/orders')->assertOk();
+});
+
+it('lets Staff record an order that then waits for approval', function () {
+    ($this->asRole)('Staff')->post('/sales/orders', [
+        'customer_id' => $this->customer->id,
+        'lines' => [['product_id' => $this->product->id, 'quantity' => '40']],
+    ])->assertRedirect();
+
+    $order = SalesOrder::first();
+
+    expect($order)->not->toBeNull()
+        ->and($order->approvalRequest->isPending())->toBeTrue()
+        ->and((float) $order->lines->first()->unit_price)->toBe(850.0);
+});
+
+it('self-approves a Manager-created order', function () {
+    ($this->asRole)('Manager')->post('/sales/orders', [
+        'customer_id' => $this->customer->id,
+        'lines' => [['product_id' => $this->product->id, 'quantity' => '40']],
+    ]);
+
+    expect(SalesOrder::first()->isDeliverable())->toBeTrue();
+});
+
+it('answers the exposure question and blocks nothing (C-SO-3)', function () {
+    $order = ($this->ownerOrder)('40'); // 40 x 850 = 34,000 undelivered
+
+    ($this->asRole)('Staff')
+        ->postJson('/sales/orders/exposure', ['customer_id' => $this->customer->id])
+        ->assertOk()
+        ->assertJson([
+            'credit_limit' => '100000.0000',
+            'open_invoices' => '0.00',
+            'undelivered_orders' => '34000.00',
+            'total' => '34000.00',
+        ]);
+});
+
+describe('who may do what', function () {
+    it('stops Staff from approving an order', function () {
+        $order = ($this->ownerOrder)();
+        $order->approvalRequest->update(['status' => \App\Modules\Foundation\Enums\ApprovalStatus::Pending]);
+
+        ($this->asRole)('Staff')->post("/sales/orders/{$order->id}/approve")->assertForbidden();
+    });
+
+    it('lets a Manager approve a pending order', function () {
+        $order = ($this->ownerOrder)();
+        $order->approvalRequest->update(['status' => \App\Modules\Foundation\Enums\ApprovalStatus::Pending]);
+
+        ($this->asRole)('Manager')->post("/sales/orders/{$order->id}/approve")->assertRedirect();
+
+        expect($order->fresh()->isDeliverable())->toBeTrue();
+    });
+
+    // ⚠ C-SO-6: erasing a commitment is a management decision.
+    it('stops Staff from cancelling or closing an order', function () {
+        $order = ($this->ownerOrder)();
+
+        ($this->asRole)('Staff')->post("/sales/orders/{$order->id}/cancel")->assertForbidden();
+        ($this->asRole)('Staff')->post("/sales/orders/{$order->id}/close", ['reason' => 'x'])->assertForbidden();
+    });
+
+    it('lets a Manager cancel an untouched order', function () {
+        $order = ($this->ownerOrder)();
+
+        ($this->asRole)('Manager')->post("/sales/orders/{$order->id}/cancel")->assertRedirect();
+
+        expect($order->fresh()->status)->toBe(SalesOrderStatus::Cancelled);
+    });
+});
+
+it('delivers against the order from its own screen', function () {
+    $order = ($this->ownerOrder)('40');
+
+    ($this->asRole)('Staff')->post("/sales/orders/{$order->id}/deliver", [
+        'warehouse_id' => $this->warehouse->id,
+        'lines' => [['sales_order_line_id' => $order->lines->first()->id, 'quantity' => '25']],
+    ])->assertRedirect();
+
+    $order->refresh();
+    expect($order->status)->toBe(SalesOrderStatus::PartiallyDelivered)
+        ->and((float) $order->lines->first()->quantity_delivered)->toBe(25.0);
+});
+
+// ⚠⚠ F1 + C-SO-4, end to end: the challan is billed from the create screen,
+// and the price offered and used is the ORDER price - even though the price
+// RULE changed between order and invoice. This is the sentence the whole
+// module exists for.
+it('bills a challan at the order price, not the rule of the day', function () {
+    $order = ($this->ownerOrder)('40'); // agreed at 850
+
+    app(RecordDelivery::class)->handle(
+        customer: $this->customer,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->product, 'quantity' => '25', 'orderLine' => $order->lines->first()]],
+        createdBy: $this->customer->createdBy ?? User::factory()->create(),
+    );
+
+    // The rule rises AFTER the order was agreed.
+    ProductPrice::create([
+        'business_id' => $this->business->id,
+        'product_id' => $this->product->id,
+        'unit_price' => '999',
+        'effective_from' => '2026-08-10',
+    ]);
+
+    // The create screen offers the ORDER price for the order-traced line.
+    $response = ($this->asRole)('Staff')->get('/sales/invoices/create?customer_id='.$this->customer->id);
+    $response->assertOk();
+
+    $billable = $response->original->getData()['page']['props']['billable'];
+    expect($billable)->toHaveCount(1)
+        ->and($billable[0]['unit_price'])->toBe('850.0000')
+        ->and($billable[0]['price_source'])->toContain($order->order_number);
+
+    // And storing WITHOUT a price override bills at the order price too.
+    ($this->asRole)('Staff')->post('/sales/invoices', [
+        'customer_id' => $this->customer->id,
+        'lines' => [[
+            'delivery_line_id' => $billable[0]['delivery_line_id'],
+            'quantity' => '25',
+        ]],
+    ])->assertRedirect();
+
+    $invoice = SalesInvoice::first();
+
+    expect($invoice)->not->toBeNull()
+        ->and((float) $invoice->lines->first()->unit_price)->toBe(850.0)
+        ->and((float) $invoice->total)->toBe(25 * 850.0);
+});
+
+it('bills a direct challan at the resolver price of the invoice date', function () {
+    app(RecordDelivery::class)->handle(
+        customer: $this->customer,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->product, 'quantity' => '10']],
+        createdBy: User::factory()->create(),
+    );
+
+    ($this->asRole)('Staff')->post('/sales/invoices', [
+        'customer_id' => $this->customer->id,
+        'lines' => [[
+            'delivery_line_id' => \App\Modules\Sales\Models\DeliveryLine::first()->id,
+            'quantity' => '10',
+        ]],
+    ])->assertRedirect();
+
+    expect((float) SalesInvoice::first()->lines->first()->unit_price)->toBe(850.0);
+});
+
+it('keeps the whole order flow invisible to the ledger until delivery', function () {
+    ($this->asRole)('Manager')->post('/sales/orders', [
+        'customer_id' => $this->customer->id,
+        'lines' => [['product_id' => $this->product->id, 'quantity' => '40']],
+    ]);
+
+    expect(\App\Modules\Accounting\Models\Journal::count())->toBe(0);
+});

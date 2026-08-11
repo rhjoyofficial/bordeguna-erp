@@ -6,6 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
+use App\Modules\Sales\Actions\RecordSalesInvoice;
+use App\Modules\Sales\Actions\ResolveSellingPrice;
+use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,7 +56,132 @@ class SalesInvoiceController extends Controller
         return Inertia::render('sales/invoices/index', [
             'invoices' => $invoices,
             'filters' => $filters,
+            'can_create' => $request->user()->can('sales.sell'),
         ]);
+    }
+
+    /**
+     * Billing what left on challans - the month-end half of the distributor
+     * rhythm, and the screen that discharges finding F1 of
+     * SALES-ORDER-ARCHITECTURE.md §11.1: RecordSalesInvoice existed with no
+     * route and no screen, so a challan could never actually be billed.
+     *
+     * ⚠⚠ THE SERVER SUPPLIES EVERY DEFAULT PRICE (C-SO-4): the order price
+     * where the delivery line traces to a sales order - that is what "agreed"
+     * means - and the resolver at today's date where it does not. A screen
+     * that computes its own price is a second pricing engine.
+     */
+    public function create(Request $request, ResolveSellingPrice $resolver): Response
+    {
+        $customerId = $request->integer('customer_id') ?: null;
+        $customer = $customerId !== null ? Customer::query()->findOrFail($customerId) : null;
+
+        $billable = [];
+
+        if ($customer !== null) {
+            $lines = DeliveryLine::query()
+                ->whereHas('delivery', fn ($q) => $q->where('customer_id', $customer->id))
+                ->whereColumn('quantity_invoiced', '<', 'quantity')
+                ->with(['delivery:id,delivery_number,delivered_at', 'product:id,name,sku', 'orderLine.order:id,order_number'])
+                ->get();
+
+            $billable = $lines->map(function (DeliveryLine $line) use ($resolver, $customer) {
+                if ($line->orderLine !== null) {
+                    $price = (string) $line->orderLine->unit_price;
+                    $priceSource = "Agreed on {$line->orderLine->order->order_number}";
+                } else {
+                    $resolved = $resolver->find($line->product, $customer, $line->quantityUninvoiced());
+                    $price = $resolved?->unitPrice;
+                    $priceSource = $resolved?->explain() ?? 'No price rule - enter one';
+                }
+
+                return [
+                    'delivery_line_id' => $line->id,
+                    'delivery_number' => $line->delivery->delivery_number,
+                    'delivered_at' => $line->delivery->delivered_at->toDateString(),
+                    'product_name' => $line->product->name,
+                    'product_sku' => $line->product->sku,
+                    'quantity_uninvoiced' => $line->quantityUninvoiced(),
+                    'unit_price' => $price,
+                    'price_source' => $priceSource,
+                ];
+            })->values()->all();
+        }
+
+        return Inertia::render('sales/invoices/create', [
+            'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name']),
+            'customerId' => $customerId,
+            'billable' => $billable,
+        ]);
+    }
+
+    public function store(Request $request, RecordSalesInvoice $action, ResolveSellingPrice $resolver): RedirectResponse
+    {
+        $data = $request->validate([
+            'customer_id' => ['required', 'integer', 'exists:customers,id'],
+            'invoice_date' => ['nullable', 'date'],
+            'due_date' => ['nullable', 'date'],
+            'invoice_discount' => ['nullable', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string'],
+            'lines' => ['required', 'array', 'min:1'],
+            'lines.*.delivery_line_id' => ['nullable', 'integer', 'exists:delivery_lines,id'],
+            'lines.*.description' => ['nullable', 'string', 'max:255'],
+            'lines.*.quantity' => ['required', 'numeric', 'min:0'],
+            'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.discount' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $customer = Customer::findOrFail($data['customer_id']);
+
+        $deliveryLines = DeliveryLine::query()
+            ->whereIn('id', collect($data['lines'])->pluck('delivery_line_id')->filter())
+            ->with(['product', 'orderLine'])
+            ->get()
+            ->keyBy('id');
+
+        $invoiceDate = $data['invoice_date'] ?? null;
+
+        $lines = collect($data['lines'])
+            ->filter(fn (array $line) => (float) $line['quantity'] > 0)
+            ->map(function (array $line) use ($deliveryLines, $resolver, $customer, $invoiceDate) {
+                $deliveryLine = isset($line['delivery_line_id']) ? $deliveryLines[$line['delivery_line_id']] ?? null : null;
+
+                // ⚠⚠ C-SO-4. When the screen does not override, the price is
+                // the ORDER price for an order-traced line, else the resolver
+                // at the INVOICE date. Decided here, on the server, exactly
+                // once - the create screen only previewed the same answer.
+                $unitPrice = isset($line['unit_price']) ? (string) $line['unit_price'] : null;
+
+                if ($unitPrice === null && $deliveryLine !== null) {
+                    $unitPrice = $deliveryLine->orderLine !== null
+                        ? (string) $deliveryLine->orderLine->unit_price
+                        : $resolver->resolve($deliveryLine->product, $customer, (string) $line['quantity'], $invoiceDate)->unitPrice;
+                }
+
+                return [
+                    'deliveryLine' => $deliveryLine,
+                    'product' => $deliveryLine?->product,
+                    'description' => $line['description'] ?? null,
+                    'quantity' => (string) $line['quantity'],
+                    'unitPrice' => $unitPrice ?? '0',
+                    'discount' => isset($line['discount']) ? (string) $line['discount'] : '0',
+                ];
+            })
+            ->values()
+            ->all();
+
+        $invoice = $action->handle(
+            customer: $customer,
+            lines: $lines,
+            createdBy: $request->user(),
+            invoiceDate: $invoiceDate,
+            invoiceDiscount: (string) ($data['invoice_discount'] ?? '0'),
+            dueDate: $data['due_date'] ?? null,
+            note: $data['note'] ?? null,
+        );
+
+        return redirect()->route('sales.invoices.show', $invoice)
+            ->with('success', "Invoice {$invoice->invoice_number} raised.");
     }
 
     public function show(SalesInvoice $invoice): Response

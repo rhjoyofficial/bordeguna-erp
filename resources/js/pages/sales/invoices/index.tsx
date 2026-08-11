@@ -1,6 +1,7 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
@@ -26,9 +27,11 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function InvoicesIndex({
     invoices,
+    can_create,
     filters: initialFilters,
 }: {
     invoices: Paginated<Invoice>;
+    can_create?: boolean;
     filters: { search: string; status: string };
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/invoices', initialFilters);
@@ -37,6 +40,16 @@ export default function InvoicesIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Sales Invoices" />
             <div className="flex flex-col gap-6 p-4">
+                {can_create && (
+                    <div className="flex justify-end">
+                        {/* ⚠ Billing a challan - the month-end half of the distributor
+                            rhythm. This button is the fix for F1: the engine existed
+                            with no way for a human to reach it. */}
+                        <Button asChild size="sm">
+                            <Link href={route('sales.invoices.create')}>New invoice from challans</Link>
+                        </Button>
+                    </div>
+                )}
                 <FilterBar showClear={hasActiveFilters} onClear={resetFilters}>
                     <Input
                         placeholder="Search invoice number or customer"

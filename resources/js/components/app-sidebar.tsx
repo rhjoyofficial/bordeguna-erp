@@ -63,6 +63,10 @@ export function AppSidebar() {
                       label: 'Sales',
                       items: [
                           ...(canSell ? [{ title: 'Counter sale', url: '/sales/counter', icon: Store }] : []),
+                          // ⚠ The order book: what is promised, to whom, and how
+                          // much of it has left. Shipped WITH its screens in one
+                          // commit - the reachability lesson this file records.
+                          ...(canViewSales ? [{ title: 'Sales orders', url: '/sales/orders', icon: ClipboardList }] : []),
                           ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
                           ...(canViewSales || canManagePrices
                               ? [{ title: 'Selling prices', url: '/sales/prices', icon: BadgeDollarSign }]
