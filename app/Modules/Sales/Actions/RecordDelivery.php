@@ -10,8 +10,11 @@ use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\EffectiveDate;
+use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
+use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Models\SalesOrderLine;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -36,7 +39,14 @@ class RecordDelivery
     ) {}
 
     /**
-     * @param  array<int, array{product: Product, quantity: string}>  $lines
+     * @param  array<int, array{product: Product, quantity: string, orderLine?: SalesOrderLine|null}>  $lines
+     *
+     * ⚠ `orderLine` is OPTIONAL, and absent it behaves byte-for-byte as before:
+     * a direct delivery, which is every counter sale forever. Present, the line
+     * fulfils (part of) a sales order line - capped at what remains ordered,
+     * against an APPROVED, still-open order only (C-SO-1/C-SO-5, Joy
+     * 2026-08-11). One challan may serve several orders of the same customer;
+     * that falls out of per-line linking for free.
      *
      * @throws ValidationException
      */
@@ -113,11 +123,17 @@ class RecordDelivery
                 'created_by' => $createdBy->id,
             ]);
 
-            foreach ($lines as $entry) {
+            /** @var array<int, SalesOrder> $ordersTouched keyed by order id */
+            $ordersTouched = [];
+
+            foreach ($lines as $index => $entry) {
+                $orderLine = $this->claimOrderLine($entry, $index, $customer, $ordersTouched);
+
                 $line = $delivery->lines()->create([
                     'business_id' => $delivery->business_id,
                     'product_id' => $entry['product']->id,
                     'quantity' => $entry['quantity'],
+                    'sales_order_line_id' => $orderLine?->id,
                 ]);
 
                 // ⚠⚠ FIFO decides the cost, and nobody chooses it per sale. This
@@ -146,6 +162,14 @@ class RecordDelivery
                 }
             }
 
+            // ⚠ The order's status is recomputed INSIDE the delivery
+            // transaction, the RecordGoodsReceipt shape - a challan that
+            // completed an order and a header still saying "open" is not a
+            // state this can reach.
+            foreach ($ordersTouched as $order) {
+                $this->recomputeStatus($order);
+            }
+
             // ⚠⚠ Dr Goods Delivered Not Invoiced, Cr Stock on Hand - in the same
             // transaction as the document, so stock that has left the building
             // with no ledger entry behind it is not a state this can reach.
@@ -153,6 +177,98 @@ class RecordDelivery
 
             return $delivery->fresh(['lines.movements', 'customer', 'warehouse']);
         });
+    }
+
+    /**
+     * Validate and claim the ordered quantity this line fulfils, or null for a
+     * direct delivery.
+     *
+     * ⚠⚠ I3, its fifth application. The line is RE-READ under lockForUpdate
+     * inside the transaction and the remaining check runs against that copy,
+     * never the caller's - two clerks (or one double-click) delivering the
+     * last cartons would otherwise both pass the check and the order would
+     * record more delivered than ordered. The lock serialises real MySQL
+     * concurrency; the re-read is what makes it correct (lockForUpdate is a
+     * no-op on SQLite).
+     *
+     * @param  array{product: Product, quantity: string, orderLine?: SalesOrderLine|null}  $entry
+     * @param  array<int, SalesOrder>  $ordersTouched
+     */
+    private function claimOrderLine(array $entry, int $index, Customer $customer, array &$ordersTouched): ?SalesOrderLine
+    {
+        if (($entry['orderLine'] ?? null) === null) {
+            return null;
+        }
+
+        $orderLine = SalesOrderLine::whereKey($entry['orderLine']->id)->lockForUpdate()->firstOrFail();
+        $order = $ordersTouched[$orderLine->sales_order_id]
+            ?? SalesOrder::whereKey($orderLine->sales_order_id)->lockForUpdate()->firstOrFail();
+
+        if ($order->customer_id !== $customer->id) {
+            throw ValidationException::withMessages([
+                "lines.{$index}.orderLine" => "Order {$order->order_number} belongs to a different customer.",
+            ]);
+        }
+
+        // ⚠ C-SO-1: goods leave against an APPROVED order only, and never
+        // against one that is delivered, closed or cancelled.
+        if (! $order->isDeliverable()) {
+            throw ValidationException::withMessages([
+                "lines.{$index}.orderLine" => "Order {$order->order_number} is not open for delivery.",
+            ]);
+        }
+
+        if ($orderLine->product_id !== $entry['product']->id) {
+            throw ValidationException::withMessages([
+                "lines.{$index}.orderLine" => "That order line is for a different product than {$entry['product']->name}.",
+            ]);
+        }
+
+        // ⚠ C-SO-5 (Joy): over-delivery is REFUSED. The extra goes on a direct
+        // line on the same challan - silently inflating quantity_delivered past
+        // quantity_ordered would make every order-book report lie by a little.
+        // Integer-scaled comparison, the same arithmetic as quantityUninvoiced.
+        $remaining = (int) round(((float) $orderLine->quantityRemaining()) * 10000);
+        $wanted = (int) round(((float) $entry['quantity']) * 10000);
+
+        if ($wanted > $remaining) {
+            throw ValidationException::withMessages([
+                "lines.{$index}.orderLine" => "Only {$orderLine->quantityRemaining()} of {$orderLine->product->name} remains on order {$order->order_number}; record the extra as a direct delivery line.",
+            ]);
+        }
+
+        $orderLine->forceFill([
+            'quantity_delivered' => number_format(
+                (float) $orderLine->quantity_delivered + (float) $entry['quantity'],
+                4, '.', ''
+            ),
+        ])->save();
+
+        $ordersTouched[$order->id] = $order;
+
+        return $orderLine;
+    }
+
+    /**
+     * Open / PartiallyDelivered / Delivered, derived from the lines - the
+     * RecordGoodsReceipt shape. ⚠ Closed and Cancelled are never produced
+     * here: they are explicit actions, and isDeliverable() already refused
+     * them before any quantity moved.
+     */
+    private function recomputeStatus(SalesOrder $order): void
+    {
+        $lines = $order->lines()->get(['quantity_ordered', 'quantity_delivered']);
+
+        $allDelivered = $lines->every(fn (SalesOrderLine $line) => (float) $line->quantity_delivered >= (float) $line->quantity_ordered);
+        $anyDelivered = $lines->contains(fn (SalesOrderLine $line) => (float) $line->quantity_delivered > 0);
+
+        $order->update([
+            'status' => match (true) {
+                $allDelivered => SalesOrderStatus::Delivered,
+                $anyDelivered => SalesOrderStatus::PartiallyDelivered,
+                default => SalesOrderStatus::Open,
+            },
+        ]);
     }
 
     /**
