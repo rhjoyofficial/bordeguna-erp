@@ -21,6 +21,7 @@ class DeliveryLine extends Model
         'product_id',
         'quantity',
         'quantity_invoiced',
+        'sales_order_line_id',
     ];
 
     protected function casts(): array
@@ -34,6 +35,17 @@ class DeliveryLine extends Model
     public function delivery(): BelongsTo
     {
         return $this->belongsTo(Delivery::class);
+    }
+
+    /**
+     * The order line this delivery fulfils (part of), or null for a direct
+     * delivery - which is every delivery that existed before sales orders,
+     * and every counter sale forever. Mirrors
+     * goods_receipt_lines.purchase_order_line_id.
+     */
+    public function orderLine(): BelongsTo
+    {
+        return $this->belongsTo(SalesOrderLine::class, 'sales_order_line_id');
     }
 
     public function product(): BelongsTo

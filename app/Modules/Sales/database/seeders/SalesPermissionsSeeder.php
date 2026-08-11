@@ -32,6 +32,9 @@ class SalesPermissionsSeeder extends Seeder
             'sales.sell',
             'sales.receipt.record',
             'sales.reports.view',
+            'sales.orders.record',
+            'sales.orders.approve',
+            'sales.orders.cancel',
         ],
         'Manager' => [
             'sales.customers.manage',
@@ -39,11 +42,20 @@ class SalesPermissionsSeeder extends Seeder
             'sales.sell',
             'sales.receipt.record',
             'sales.reports.view',
+            'sales.orders.record',
+            'sales.orders.approve',
+            'sales.orders.cancel',
         ],
+        // ⚠ Staff TAKE orders (order-book data entry, the same trust level as
+        // sales.sell) but cannot approve them - a staff-created order sits
+        // pending until Owner/Manager review (C-SO-1) - and cannot cancel or
+        // short-close one: erasing a commitment is a management decision
+        // (C-SO-6), the same class as an invoice-level discount.
         'Staff' => [
             'sales.sell',
             'sales.receipt.record',
             'sales.reports.view',
+            'sales.orders.record',
         ],
     ];
 
