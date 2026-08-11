@@ -256,6 +256,59 @@ it('bills a direct challan at the resolver price of the invoice date', function 
     expect((float) SalesInvoice::first()->lines->first()->unit_price)->toBe(850.0);
 });
 
+// ⚠ C-SO-2: no reservation - the committed-vs-on-hand report is the honest
+// substitute, and it must only count APPROVED, still-open promises.
+it('reports committed vs on hand, and flags a shortfall', function () {
+    $order = ($this->ownerOrder)('40');
+    ($this->ownerOrder)('75'); // 40 + 75 = 115 committed against 100 on hand
+
+    $response = ($this->asRole)('Staff')->get('/sales/orders');
+    $committed = $response->original->getData()['page']['props']['committed'];
+
+    expect($committed)->toHaveCount(1)
+        ->and($committed[0]['committed'])->toBe('115.0000')
+        ->and($committed[0]['on_hand'])->toBe('100.0000')
+        ->and($committed[0]['short'])->toBeTrue();
+
+    // Delivering part of one order shrinks the committed figure...
+    app(RecordDelivery::class)->handle(
+        customer: $this->customer,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->product, 'quantity' => '25', 'orderLine' => $order->lines->first()]],
+        createdBy: User::factory()->create(),
+    );
+
+    $committed = ($this->asRole)('Staff')->get('/sales/orders')
+        ->original->getData()['page']['props']['committed'];
+
+    // 115 - 25 delivered = 90 committed, 75 on hand: still short.
+    expect($committed[0]['committed'])->toBe('90.0000')
+        ->and($committed[0]['on_hand'])->toBe('75.0000')
+        ->and($committed[0]['short'])->toBeTrue();
+});
+
+it('excludes pending, cancelled and closed orders from the committed figure', function () {
+    // A pending (unapproved) order is not yet a commitment.
+    $staffUser = User::factory()->create();
+    $staffUser->businesses()->attach($this->business->id);
+    setPermissionsTeamId($this->business->id);
+    $staffUser->assignRole('Staff');
+    app(CreateSalesOrder::class)->handle(
+        customer: $this->customer,
+        lines: [['product' => $this->product, 'quantity' => '30']],
+        createdBy: $staffUser,
+    );
+
+    // A cancelled order stopped being owed.
+    $cancelled = ($this->ownerOrder)('20');
+    $cancelled->update(['status' => SalesOrderStatus::Cancelled]);
+
+    $committed = ($this->asRole)('Staff')->get('/sales/orders')
+        ->original->getData()['page']['props']['committed'];
+
+    expect($committed)->toBeEmpty();
+});
+
 it('keeps the whole order flow invisible to the ledger until delivery', function () {
     ($this->asRole)('Manager')->post('/sales/orders', [
         'customer_id' => $this->customer->id,

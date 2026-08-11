@@ -12,9 +12,11 @@ use App\Modules\Sales\Actions\CloseSalesOrder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\CustomerExposure;
 use App\Modules\Sales\Actions\RecordDelivery;
+use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Models\SalesOrderLine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -54,6 +56,11 @@ class SalesOrderController extends Controller
         return Inertia::render('sales/orders/index', [
             'orders' => $orders,
             'filters' => $filters,
+            // ⚠ C-SO-2 (Joy): NO reservation. This report is the honest
+            // substitute - what is promised against what is on the shelf, per
+            // product, for a human deciding whether to take the next order.
+            // Nothing anywhere enforces it.
+            'committed' => $this->committedVersusOnHand(),
             'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name', 'credit_limit']),
             'warehouses' => Warehouse::query()->where('is_active', true)
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
@@ -61,6 +68,46 @@ class SalesOrderController extends Controller
                 ->orderBy('name')->get(['id', 'name', 'sku']),
             'can_create' => $request->user()->can('sales.orders.record'),
         ]);
+    }
+
+    /**
+     * The undelivered promise per product, against what the shelves hold.
+     *
+     * ⚠ Only APPROVED, still-open orders count - a pending order is not yet a
+     * commitment, and closed/cancelled remainders stopped being owed. Derived
+     * fresh on every load, stored nowhere; a reservation table that must be
+     * maintained is exactly what C-SO-2 declined.
+     *
+     * @return array<int, array{product_id: int, product_name: string, product_sku: string, committed: string, on_hand: string, short: bool}>
+     */
+    private function committedVersusOnHand(): array
+    {
+        $lines = SalesOrderLine::query()
+            ->whereHas('order', fn ($q) => $q
+                ->whereIn('status', [SalesOrderStatus::Open, SalesOrderStatus::PartiallyDelivered])
+                ->whereHas('approvalRequest', fn ($a) => $a->where('status', ApprovalStatus::Approved)))
+            ->with('product:id,name,sku')
+            ->get();
+
+        return $lines
+            ->groupBy('product_id')
+            ->map(function ($productLines) {
+                $committed = $productLines->sum(fn (SalesOrderLine $line) => (float) $line->quantityRemaining());
+                $product = $productLines->first()->product;
+                $onHand = (float) $product->currentStockQuantity();
+
+                return [
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'product_sku' => $product->sku,
+                    'committed' => number_format($committed, 4, '.', ''),
+                    'on_hand' => number_format($onHand, 4, '.', ''),
+                    'short' => $committed > $onHand,
+                ];
+            })
+            ->filter(fn (array $row) => (float) $row['committed'] > 0)
+            ->values()
+            ->all();
     }
 
     public function show(Request $request, SalesOrder $order): Response

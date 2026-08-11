@@ -42,6 +42,15 @@ interface Exposure {
     total: string;
 }
 
+interface CommittedRow {
+    product_id: number;
+    product_name: string;
+    product_sku: string;
+    committed: string;
+    on_hand: string;
+    short: boolean;
+}
+
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Sales orders', href: '/sales/orders' }];
 
 const statusVariant: Record<OrderRow['status'], 'secondary' | 'default' | 'outline' | 'destructive'> = {
@@ -231,6 +240,7 @@ function CreateOrderForm({ customers, warehouses, products }: { customers: Optio
 
 export default function SalesOrdersIndex({
     orders,
+    committed,
     customers,
     warehouses,
     products,
@@ -238,6 +248,7 @@ export default function SalesOrdersIndex({
     filters: initialFilters,
 }: {
     orders: Paginated<OrderRow>;
+    committed: CommittedRow[];
     customers: Option[];
     warehouses: Option[];
     products: Option[];
@@ -318,6 +329,41 @@ export default function SalesOrdersIndex({
                 </table>
 
                 <Pagination meta={orders} />
+
+                {committed.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                        <h3 className="font-medium">Committed vs on hand</h3>
+                        {/* ⚠ C-SO-2: no reservation. This is the honest substitute -
+                            the promise per product against the shelf, for a human
+                            deciding whether to take the next order. Nothing blocks. */}
+                        <div className="overflow-x-auto rounded-lg border">
+                            <table className="w-full text-sm">
+                                <thead className="bg-muted/50 text-left">
+                                    <tr>
+                                        <th className="p-3">Product</th>
+                                        <th className="p-3 text-right">Committed on open orders</th>
+                                        <th className="p-3 text-right">On hand</th>
+                                        <th className="p-3"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {committed.map((row) => (
+                                        <tr key={row.product_id} className="border-t">
+                                            <td className="p-3">
+                                                {row.product_name} <span className="text-muted-foreground">({row.product_sku})</span>
+                                            </td>
+                                            <td className="p-3 text-right tabular-nums">{row.committed}</td>
+                                            <td className="p-3 text-right tabular-nums">{row.on_hand}</td>
+                                            <td className="p-3">
+                                                {row.short && <Badge variant="destructive">Short</Badge>}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
 
                 {can_create && <CreateOrderForm customers={customers} warehouses={warehouses} products={products} />}
             </div>
