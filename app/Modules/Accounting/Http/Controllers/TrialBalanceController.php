@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\TrialBalance;
 use App\Modules\Accounting\Support\TrialBalanceRow;
 use App\Modules\Foundation\Models\Business;
@@ -72,14 +73,14 @@ class TrialBalanceController extends Controller
      */
     private function window(Request $request, ?Business $business): array
     {
-        $startMonth = (int) ($business?->fiscal_year_start_month ?: 1);
-
         $today = Carbon::today();
-        $yearStart = $today->copy()->month($startMonth)->startOfMonth();
 
-        if ($yearStart->greaterThan($today)) {
-            $yearStart->subYear();
-        }
+        // ⚠ C-FS-8: the fiscal year rule now has one home. This method used to
+        // carry its own copy, and the two financial statements needed the same
+        // date.
+        $yearStart = $business === null
+            ? $today->copy()->startOfYear()
+            : FiscalYear::containing($today, $business)->startsOn();
 
         $from = $request->filled('from') ? Carbon::parse($request->string('from')->toString()) : $yearStart;
         $to = $request->filled('to') ? Carbon::parse($request->string('to')->toString()) : $today;

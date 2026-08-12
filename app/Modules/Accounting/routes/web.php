@@ -1,6 +1,8 @@
 <?php
 
 use App\Modules\Accounting\Http\Controllers\AccountController;
+use App\Modules\Accounting\Http\Controllers\BalanceSheetController;
+use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
@@ -26,6 +28,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::get('journals/{journal}', [JournalController::class, 'show'])->name('journals.show');
 
         Route::get('trial-balance', [TrialBalanceController::class, 'index'])->name('trial-balance');
+
+        // The two statements a business actually runs on. Reading them is the
+        // same permission as reading the ledger they summarise: a figure is no
+        // more sensitive for being totalled.
+        Route::get('income-statement', [IncomeStatementController::class, 'index'])->name('income-statement');
+        Route::get('balance-sheet', [BalanceSheetController::class, 'index'])->name('balance-sheet');
     });
 
     Route::middleware('can:accounting.chart.manage')->group(function () {

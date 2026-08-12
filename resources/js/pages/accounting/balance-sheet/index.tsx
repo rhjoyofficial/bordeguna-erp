@@ -1,0 +1,241 @@
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import AppLayout from '@/layouts/app-layout';
+import { type BreadcrumbItem } from '@/types';
+import { Head, router } from '@inertiajs/react';
+import { FormEventHandler, useState } from 'react';
+
+interface Line {
+    code: string;
+    name: string;
+    amount: string;
+    is_contra: boolean;
+}
+
+interface Section {
+    code: string;
+    name: string;
+    total: string;
+    lines: Line[];
+}
+
+interface Result {
+    brought_forward: string;
+    brought_forward_is_loss: boolean;
+    for_the_year: string;
+    for_the_year_is_loss: boolean;
+    total: string;
+}
+
+interface Totals {
+    assets: string;
+    liabilities: string;
+    equity_accounts: string;
+    equity: string;
+    liabilities_and_equity: string;
+    difference: string;
+    balances: boolean;
+}
+
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Accounting', href: '/accounting/journals' },
+    { title: 'Balance sheet', href: '/accounting/balance-sheet' },
+];
+
+function SectionBlock({ section }: { section: Section }) {
+    return (
+        <>
+            <tr className="border-b border-sidebar-border/70 dark:border-sidebar-border">
+                <td className="py-2 font-mono text-xs text-muted-foreground">{section.code}</td>
+                <td className="py-2 font-medium">{section.name}</td>
+                <td className="py-2 text-right tabular-nums font-medium">{section.total}</td>
+            </tr>
+            {section.lines.map((line) => (
+                <tr key={line.code} className="border-b border-sidebar-border/40 dark:border-sidebar-border/40">
+                    <td className="py-1.5 font-mono text-xs text-muted-foreground">{line.code}</td>
+                    <td className="py-1.5 pl-6 text-muted-foreground">
+                        {line.name}
+                        {line.is_contra && <span className="ml-2 text-xs">(deduction)</span>}
+                    </td>
+                    <td className="py-1.5 text-right tabular-nums text-muted-foreground">
+                        {line.is_contra ? `(${line.amount})` : line.amount}
+                    </td>
+                </tr>
+            ))}
+        </>
+    );
+}
+
+export default function BalanceSheetIndex({
+    as_at,
+    fiscal_year,
+    fiscal_year_start,
+    assets,
+    liabilities,
+    equity,
+    result,
+    totals,
+    empty,
+    ledger_empty,
+}: {
+    as_at: string;
+    fiscal_year: string | null;
+    fiscal_year_start?: string;
+    assets: Section[];
+    liabilities: Section[];
+    equity: Section[];
+    result?: Result;
+    totals: Totals | null;
+    empty: boolean;
+    ledger_empty: boolean;
+}) {
+    const [date, setDate] = useState(as_at);
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        router.get(route('accounting.balance-sheet'), { as_at: date }, { preserveState: true });
+    };
+
+    return (
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Balance sheet" />
+            <div className="flex flex-col gap-6 p-4">
+                <div>
+                    <h1 className="text-lg font-semibold">Balance sheet</h1>
+                    <p className="max-w-2xl text-sm text-muted-foreground">
+                        What the business owns and owes on one day. Everything recorded up to and including the date shown.
+                        {fiscal_year && <> Fiscal year {fiscal_year}.</>}
+                    </p>
+                </div>
+
+                <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+                    <div className="grid gap-2">
+                        <Label htmlFor="as_at">As at</Label>
+                        <Input id="as_at" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
+                    </div>
+                    <Button variant="outline">Show</Button>
+                </form>
+
+                {/* The one thing this page exists to say, said before the detail. */}
+                {totals && !empty && (
+                    <div
+                        className={`rounded-md border px-4 py-3 text-sm ${
+                            totals.balances
+                                ? 'border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border'
+                                : 'border-destructive/40 bg-destructive/5 font-medium text-destructive'
+                        }`}
+                    >
+                        {totals.balances
+                            ? `Balanced. Assets and the claims against them both total ${totals.assets}.`
+                            : `This balance sheet does not balance. Assets differ from liabilities and equity by ${totals.difference}. The ledger is at fault, not the report: run accounting:verify-ledger.`}
+                    </div>
+                )}
+
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[40rem] text-sm">
+                        <tbody>
+                            <tr>
+                                <td colSpan={3} className="pt-2 pb-1 text-xs uppercase tracking-wide text-muted-foreground">
+                                    Assets
+                                </td>
+                            </tr>
+                            {assets.map((section) => (
+                                <SectionBlock key={section.code} section={section} />
+                            ))}
+                            <tr className="border-b-2 border-sidebar-border text-base font-semibold">
+                                <td className="py-2.5" colSpan={2}>
+                                    Total assets
+                                </td>
+                                <td className="py-2.5 text-right tabular-nums">{totals?.assets}</td>
+                            </tr>
+
+                            <tr>
+                                <td colSpan={3} className="pt-5 pb-1 text-xs uppercase tracking-wide text-muted-foreground">
+                                    Liabilities
+                                </td>
+                            </tr>
+                            {liabilities.map((section) => (
+                                <SectionBlock key={section.code} section={section} />
+                            ))}
+                            <tr className="border-b border-sidebar-border/70 font-medium dark:border-sidebar-border">
+                                <td className="py-2" colSpan={2}>
+                                    Total liabilities
+                                </td>
+                                <td className="py-2 text-right tabular-nums">{totals?.liabilities}</td>
+                            </tr>
+
+                            <tr>
+                                <td colSpan={3} className="pt-5 pb-1 text-xs uppercase tracking-wide text-muted-foreground">
+                                    Equity
+                                </td>
+                            </tr>
+                            {equity.map((section) => (
+                                <SectionBlock key={section.code} section={section} />
+                            ))}
+
+                            {/* ⚠ The line that makes the sheet balance. Income and expense
+                                are never closed into equity by this system, so the result
+                                still sits in those accounts and has to be shown here. */}
+                            {result && (
+                                <>
+                                    <tr className="border-b border-sidebar-border/40 dark:border-sidebar-border/40">
+                                        <td className="py-1.5" />
+                                        <td className="py-1.5 text-muted-foreground">
+                                            {result.brought_forward_is_loss ? 'Loss brought forward' : 'Result brought forward'}
+                                            {fiscal_year_start && (
+                                                <span className="ml-2 text-xs">(before {fiscal_year_start})</span>
+                                            )}
+                                        </td>
+                                        <td className="py-1.5 text-right tabular-nums text-muted-foreground">
+                                            {result.brought_forward}
+                                        </td>
+                                    </tr>
+                                    <tr className="border-b border-sidebar-border/40 dark:border-sidebar-border/40">
+                                        <td className="py-1.5" />
+                                        <td className="py-1.5 text-muted-foreground">
+                                            {result.for_the_year_is_loss ? 'Loss for the year to date' : 'Result for the year to date'}
+                                        </td>
+                                        <td className="py-1.5 text-right tabular-nums text-muted-foreground">
+                                            {result.for_the_year}
+                                        </td>
+                                    </tr>
+                                </>
+                            )}
+
+                            <tr className="border-b border-sidebar-border/70 font-medium dark:border-sidebar-border">
+                                <td className="py-2" colSpan={2}>
+                                    Total equity
+                                </td>
+                                <td className="py-2 text-right tabular-nums">{totals?.equity}</td>
+                            </tr>
+
+                            <tr className="text-base font-semibold">
+                                <td className="py-3" colSpan={2}>
+                                    Total liabilities and equity
+                                </td>
+                                <td className="py-3 text-right tabular-nums">{totals?.liabilities_and_equity}</td>
+                            </tr>
+
+                            {empty && (
+                                <tr>
+                                    <td colSpan={3} className="py-6 text-center text-muted-foreground">
+                                        {ledger_empty
+                                            ? 'Nothing has been posted to the ledger yet.'
+                                            : 'No account held a balance on this date.'}
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                <p className="max-w-2xl text-sm text-muted-foreground">
+                    No year end has ever been closed on this ledger, so profit is not folded into retained earnings. It is shown
+                    inside equity as the result brought forward and the result for the year, which is what makes the two sides
+                    agree.
+                </p>
+            </div>
+        </AppLayout>
+    );
+}

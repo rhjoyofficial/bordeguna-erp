@@ -184,6 +184,13 @@ export function AppSidebar() {
                   {
                       label: 'Accounting',
                       items: [
+                          // ⚠ The two statements first, and the trial balance
+                          // after them. A trial balance answers "do the books
+                          // add up"; these answer "how did we do" and "what do
+                          // we own" - which is what somebody opens the section
+                          // to find out.
+                          { title: 'Profit & loss', url: '/accounting/income-statement', icon: TrendingUp },
+                          { title: 'Balance sheet', url: '/accounting/balance-sheet', icon: FileBarChart },
                           { title: 'Trial balance', url: '/accounting/trial-balance', icon: Scale },
                           { title: 'Journals', url: '/accounting/journals', icon: NotebookPen },
                           { title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen },
