@@ -64,6 +64,34 @@ final readonly class PayrollConfig
     }
 
     /**
+     * PAY-02, in the one place that owns it: one day's pay is the configured
+     * base divided by the configured divisor - never the calendar length of the
+     * period.
+     *
+     * ⚠⚠ THIS RULE MUST HAVE EXACTLY ONE HOME. Payroll prices absence, lateness
+     * and proration with it; the leave provision prices banked days with it.
+     * `LeaveEntitlement`'s docblock records what a second copy costs: two places
+     * computing one rule eventually disagree about the same person, with no
+     * error raised, just two different numbers - and on an encashable balance
+     * that disagreement is cash. Callers that need a presentable figure round
+     * the result themselves; the rule returns it unrounded so payroll's
+     * arithmetic is unchanged by anyone else's formatting.
+     */
+    public function dailyRateFrom(float $basic, float $gross): float
+    {
+        return $this->dailyRateBaseFrom($basic, $gross) / max(1, $this->divisorDays);
+    }
+
+    /**
+     * Which of the two figures PAY-02 divides - the half of the rule a payslip
+     * has to be able to show, so it lives beside the rule rather than opposite it.
+     */
+    public function dailyRateBaseFrom(float $basic, float $gross): float
+    {
+        return $this->absenceRateBase === 'basic' ? $basic : $gross;
+    }
+
+    /**
      * @param  array<string, mixed>  $config
      */
     public static function fromArray(array $config): self

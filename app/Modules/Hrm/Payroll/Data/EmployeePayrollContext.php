@@ -49,14 +49,12 @@ final readonly class EmployeePayrollContext
      */
     public function dailyRate(): float
     {
-        $base = $this->config->absenceRateBase === 'basic' ? $this->salary->basic : $this->salary->gross;
-
-        return $base / max(1, $this->config->divisorDays);
+        return $this->config->dailyRateFrom($this->salary->basic, $this->salary->gross);
     }
 
     public function dailyRateBaseAmount(): float
     {
-        return $this->config->absenceRateBase === 'basic' ? $this->salary->basic : $this->salary->gross;
+        return $this->config->dailyRateBaseFrom($this->salary->basic, $this->salary->gross);
     }
 
     /**

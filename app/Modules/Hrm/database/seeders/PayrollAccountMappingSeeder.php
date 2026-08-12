@@ -75,6 +75,15 @@ class PayrollAccountMappingSeeder extends Seeder
         // owe us" becomes a ledger balance rather than a number somebody adds up
         // from the loan module.
         'payroll.employee_advances' => 'employee_advances',
+
+        // ─── Leave earned but not taken (coverage item 5) ────────────────────
+        // ⚠⚠ The liability that existed from day one and was recorded nowhere.
+        // The expense is 6130 - the same head an actual encashment payment
+        // lands in, so providing for it and paying it read as one story - and
+        // the credit is its own liability head rather than generic accruals
+        // (C-LPE-1). Both are Joy-and-accountant changeable in one row.
+        'payroll.leave_encashment' => 'leave_encashment',
+        'payroll.leave_provision' => 'leave_provision',
     ];
 
     public function run(): void

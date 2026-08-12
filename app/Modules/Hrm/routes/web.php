@@ -10,6 +10,7 @@ use App\Modules\Hrm\Http\Controllers\EmployeeController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\HrmDashboardController;
 use App\Modules\Hrm\Http\Controllers\LeaveController;
+use App\Modules\Hrm\Http\Controllers\LeaveProvisionController;
 use App\Modules\Hrm\Http\Controllers\LoanController;
 use App\Modules\Hrm\Http\Controllers\PayrollController;
 use App\Modules\Hrm\Http\Controllers\PayrollInputController;
@@ -168,6 +169,14 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
 
     // PAY-11's manual resolution: carry a shortfall forward, then recalculate.
     Route::post('payslips/{payslip}/carry-forward', [PayrollInputController::class, 'carryForward'])->name('payslips.carry-forward');
+
+    // The leave encashment provision (coverage item 5). Preview and commit run
+    // the same computation; each action authorises hrm.payroll.manage.
+    // ⚠ The literal segment is registered before the numeric wildcard.
+    Route::get('leave-provision', [LeaveProvisionController::class, 'index'])->name('leave-provision.index');
+    Route::post('leave-provision', [LeaveProvisionController::class, 'store'])->name('leave-provision.store');
+    Route::get('leave-provision/{leaveProvision}', [LeaveProvisionController::class, 'show'])
+        ->whereNumber('leaveProvision')->name('leave-provision.show');
 
     // Payroll calculation (PAY-01..13). The WFL-02 lifecycle beyond
     // Draft/Calculated arrives in Phase 3c.

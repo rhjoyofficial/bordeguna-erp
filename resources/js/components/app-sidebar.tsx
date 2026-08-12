@@ -166,6 +166,10 @@ export function AppSidebar() {
                                     { title: 'Payroll inputs', url: '/hrm/payroll-inputs', icon: Coins },
                                     { title: 'Loans & advances', url: '/hrm/loans', icon: HandCoins },
                                     { title: 'Payroll runs', url: '/hrm/payroll', icon: Banknote },
+                                    // The liability for leave earned and not
+                                    // taken - shipped WITH its screens, the
+                                    // reachability rule this file records.
+                                    { title: 'Leave provision', url: '/hrm/leave-provision', icon: Palmtree },
                                 ]
                               : []),
                       ],
