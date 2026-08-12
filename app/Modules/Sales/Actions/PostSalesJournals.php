@@ -13,8 +13,10 @@ use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Sales\Models\CustomerReceipt;
+use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Models\SalesReturn;
 use Illuminate\Support\Carbon;
 
 /**
@@ -247,7 +249,162 @@ class PostSalesJournals
         ), $postedBy);
     }
 
-    public function existingJournal(Delivery|SalesInvoice|CustomerReceipt $document): ?Journal
+    /**
+     * Goods coming back (SALES-RETURNS-ARCHITECTURE.md §4), one journal:
+     *
+     * ```
+     * Dr  Stock on Hand                    layer cost of what went back on the shelf
+     * Dr  the damaged-goods loss account   layer cost of what was destroyed
+     * Dr  Sales Returns (4200)             gross credit at the invoiced prices
+     *     Cr  GDNI (party = customer)      pro-rata relief of the unbilled portion
+     *     Cr  Cost of Goods Sold           the balancing cost figure (may flip to Dr)
+     *     Cr  Discounts Allowed            clawed-back share of invoice discounts
+     *     Cr  AR (party = customer)        the net the customer is credited
+     * ```
+     *
+     * ⚠ 4200 posts GROSS, never netted into 4100 - "we sold 100,000 and took
+     * back 8,000" must be visible on the face of the P&L, because the return
+     * rate is a real operational signal for a food business (C-SR-5).
+     *
+     * ⚠ The write-off side reuses the damaged-goods adjustment mapping
+     * (C-SR-7): destroyed-because-returned and destroyed-on-the-shelf read as
+     * the same kind of loss.
+     */
+    public function forSalesReturn(SalesReturn $salesReturn, User $postedBy): ?Journal
+    {
+        if ($this->existingJournal($salesReturn) !== null) {
+            return null;
+        }
+
+        $on = Carbon::parse($salesReturn->returned_at)->startOfDay();
+
+        if (AccountMapping::forKeyOn('sales.revenue', $on) === null) {
+            return null;
+        }
+
+        $salesReturn->loadMissing('lines', 'customer');
+
+        $costRestored = Money::zero();
+        $costWrittenOff = Money::zero();
+        $gdniRelief = Money::zero();
+        $cogsRelief = Money::zero();
+        $creditGross = Money::zero();
+        $creditDiscount = Money::zero();
+        $creditNet = Money::zero();
+
+        foreach ($salesReturn->lines as $line) {
+            $costRestored = $costRestored->plus(Money::ofTaka((string) $line->cost_restored));
+            $costWrittenOff = $costWrittenOff->plus(Money::ofTaka((string) $line->cost_written_off));
+            $gdniRelief = $gdniRelief->plus(Money::ofTaka((string) $line->gdni_relief));
+            $cogsRelief = $cogsRelief->plus(Money::ofTaka((string) $line->cogs_relief));
+            $creditGross = $creditGross->plus(Money::ofTaka((string) $line->credit_gross));
+            $creditDiscount = $creditDiscount->plus(Money::ofTaka((string) $line->credit_discount));
+            $creditNet = $creditNet->plus(Money::ofTaka((string) $line->credit_net));
+        }
+
+        $lines = [];
+
+        if (! $costRestored->isZero()) {
+            $stock = AccountMapping::resolve('inventory.stock_on_hand', $on);
+            $lines[] = JournalLineDraft::debit($stock->id, $costRestored, 'Returned to stock on '.$salesReturn->return_number);
+        }
+
+        if (! $costWrittenOff->isZero()) {
+            $loss = AccountMapping::resolve('inventory.adjustment.damaged', $on, 'inventory.adjustment.default');
+            $lines[] = JournalLineDraft::debit($loss->id, $costWrittenOff, 'Written off on '.$salesReturn->return_number);
+        }
+
+        if (! $creditGross->isZero()) {
+            $returns = AccountMapping::resolve('sales.sales_returns', $on);
+            $lines[] = JournalLineDraft::debit($returns->id, $creditGross, $salesReturn->return_number);
+        }
+
+        if (! $gdniRelief->isZero()) {
+            $gdni = AccountMapping::resolve('sales.goods_delivered_not_invoiced', $on);
+            $lines[] = JournalLineDraft::credit($gdni->id, $gdniRelief, 'Returned before billing', $salesReturn->customer);
+        }
+
+        // ⚠ The balancing figure may be negative - returned layers cheaper
+        // than the line average - and a negative credit is a debit, stated
+        // as one rather than smuggled through as a sign.
+        if (! $cogsRelief->isZero()) {
+            $cogs = AccountMapping::resolve('sales.cost_of_goods_sold', $on);
+            $lines[] = $cogsRelief->minor > 0
+                ? JournalLineDraft::credit($cogs->id, $cogsRelief, 'Cost released back on '.$salesReturn->return_number)
+                : JournalLineDraft::debit($cogs->id, $cogsRelief->absolute(), 'Cost trued up on '.$salesReturn->return_number);
+        }
+
+        if (! $creditDiscount->isZero()) {
+            $discounts = AccountMapping::resolve('sales.discounts_allowed', $on);
+            $lines[] = JournalLineDraft::credit($discounts->id, $creditDiscount, 'Discount clawed back on '.$salesReturn->return_number);
+        }
+
+        if (! $creditNet->isZero()) {
+            $receivable = AccountMapping::resolve('sales.accounts_receivable', $on);
+            $lines[] = JournalLineDraft::credit($receivable->id, $creditNet, $salesReturn->return_number, $salesReturn->customer);
+        }
+
+        // A fully-uninvoiced return of zero-cost goods has nothing to post,
+        // and that is not an error - free samples came back.
+        if ($lines === []) {
+            return null;
+        }
+
+        $lines = LedgerRounding::balance($lines, $on, "Rounding on return {$salesReturn->return_number}");
+
+        return $this->postJournal->handle(new JournalDraft(
+            date: $on,
+            lines: $lines,
+            memo: "Sales return {$salesReturn->return_number}",
+            source: $salesReturn,
+        ), $postedBy);
+    }
+
+    /**
+     * Money going back (C-SR-6): Dr AR (party = customer) / Cr the money
+     * account - the exact reverse of a receipt, consuming the credit the
+     * return created.
+     */
+    public function forCustomerRefund(CustomerRefund $refund, User $postedBy): ?Journal
+    {
+        if ($this->existingJournal($refund) !== null) {
+            return null;
+        }
+
+        $on = Carbon::parse($refund->refunded_on)->startOfDay();
+
+        if (AccountMapping::forKeyOn('sales.revenue', $on) === null) {
+            return null;
+        }
+
+        if ($refund->moneyAccount?->account_id === null) {
+            throw MappingNotFound::for("money account [{$refund->moneyAccount?->name}]", $on);
+        }
+
+        $receivable = AccountMapping::resolve('sales.accounts_receivable', $on);
+        $bank = Account::findOrFail($refund->moneyAccount->account_id);
+        $total = Money::ofTaka((string) $refund->amount);
+
+        if ($total->isZero()) {
+            return null;
+        }
+
+        $lines = [
+            JournalLineDraft::debit($receivable->id, $total, $refund->reference ?? 'Refund', $refund->customer),
+            JournalLineDraft::credit($bank->id, $total, $refund->moneyAccount->label(), null, $refund->moneyAccount),
+        ];
+
+        $lines = LedgerRounding::balance($lines, $on, "Rounding on refund #{$refund->id}");
+
+        return $this->postJournal->handle(new JournalDraft(
+            date: $on,
+            lines: $lines,
+            memo: 'Refunded to '.$refund->customer?->name.($refund->reference ? " ({$refund->reference})" : ''),
+            source: $refund,
+        ), $postedBy);
+    }
+
+    public function existingJournal(Delivery|SalesInvoice|CustomerReceipt|SalesReturn|CustomerRefund $document): ?Journal
     {
         return Journal::query()
             ->where('source_type', $document->getMorphClass())

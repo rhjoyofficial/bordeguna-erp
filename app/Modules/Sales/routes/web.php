@@ -6,6 +6,7 @@ use App\Modules\Sales\Http\Controllers\DeliveryController;
 use App\Modules\Sales\Http\Controllers\ProductPriceController;
 use App\Modules\Sales\Http\Controllers\SalesInvoiceController;
 use App\Modules\Sales\Http\Controllers\SalesOrderController;
+use App\Modules\Sales\Http\Controllers\SalesReturnController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')->group(function () {
@@ -82,5 +83,25 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
 
     Route::middleware('can:sales.receipt.record')->group(function () {
         Route::post('invoices/{invoice}/receipts', [SalesInvoiceController::class, 'receipt'])->name('invoices.receipts.store');
+    });
+
+    // ⚠ Goods coming back. Recording is Staff-level data entry (C-SR-9, Joy:
+    // goods arrive when they arrive); the literal create segment registers
+    // before the numeric wildcard, the invoices lesson.
+    Route::middleware('can:sales.returns.record')->group(function () {
+        Route::get('returns/create', [SalesReturnController::class, 'create'])->name('returns.create');
+        Route::post('returns', [SalesReturnController::class, 'store'])->name('returns.store');
+    });
+
+    Route::middleware('can:sales.reports.view')->group(function () {
+        Route::get('returns', [SalesReturnController::class, 'index'])->name('returns.index');
+        Route::get('returns/{salesReturn}', [SalesReturnController::class, 'show'])
+            ->whereNumber('salesReturn')->name('returns.show');
+    });
+
+    // ⚠⚠ CASH LEAVING THE TILL is Owner/Manager only (C-SR-6/C-SR-9), the same
+    // class as cancelling an order.
+    Route::middleware('can:sales.returns.refund')->group(function () {
+        Route::post('returns/{salesReturn}/refunds', [SalesReturnController::class, 'refund'])->name('returns.refunds.store');
     });
 });

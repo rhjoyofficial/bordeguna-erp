@@ -12,6 +12,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesInvoiceLine;
+use App\Modules\Sales\Models\SalesReturnLine;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -222,15 +223,29 @@ class RecordSalesInvoice
             ((float) SalesInvoiceLine::where('delivery_line_id', $deliveryLine->id)->sum('cost_released')) * 100
         );
 
+        // ⚠⚠ Returns relieve GDNI too (C-SR-4): units returned before billing
+        // took their pro-rata share of this line's cost out of the bridge, so
+        // the remainder arm below must release what is LEFT after both exits -
+        // or the last invoice would strand the returned units' cost in GDNI
+        // forever, and a bridge that never quite clears stops being a report.
+        $gdniRelieved = (int) round(
+            ((float) SalesReturnLine::where('delivery_line_id', $deliveryLine->id)->sum('gdni_relief')) * 100
+        );
+
         $lineQuantity = $this->scale((string) $deliveryLine->quantity);
-        $invoicedAfter = $this->scale((string) $deliveryLine->quantity_invoiced) + $billingScaled;
+        $settledAfter = $this->scale((string) $deliveryLine->quantity_invoiced)
+            + $this->scale((string) $deliveryLine->quantity_returned_uninvoiced)
+            + $billingScaled;
 
         if ($lineQuantity <= 0) {
             return Money::zero();
         }
 
-        if ($invoicedAfter >= $lineQuantity) {
-            return Money::ofMinor($totalCost->minor - $alreadyReleased);
+        // ⚠ Fully settled means every unit either billed or returned unbilled -
+        // a line with returns is never "fully invoiced", and the old condition
+        // would have kept pro-rating forever.
+        if ($settledAfter >= $lineQuantity) {
+            return Money::ofMinor($totalCost->minor - $alreadyReleased - $gdniRelieved);
         }
 
         return Money::ofMinor((int) round($totalCost->minor * $billingScaled / $lineQuantity));

@@ -46,6 +46,10 @@ class SalesAccountMappingSeeder extends Seeder
         // customer. An invoice-level discount is a decision about the whole
         // bill, which is why it is contra-revenue and visible separately.
         'sales.discounts_allowed' => 'discounts_allowed',
+
+        // ⚠ GROSS, never netted into 4100 (C-SR-5): the return rate is a real
+        // operational signal for a food business, and netting hides it.
+        'sales.sales_returns' => 'sales_returns',
     ];
 
     public function run(): void

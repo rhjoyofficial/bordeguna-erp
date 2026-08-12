@@ -21,6 +21,8 @@ class DeliveryLine extends Model
         'product_id',
         'quantity',
         'quantity_invoiced',
+        'quantity_returned',
+        'quantity_returned_uninvoiced',
         'sales_order_line_id',
     ];
 
@@ -29,6 +31,8 @@ class DeliveryLine extends Model
         return [
             'quantity' => 'decimal:4',
             'quantity_invoiced' => 'decimal:4',
+            'quantity_returned' => 'decimal:4',
+            'quantity_returned_uninvoiced' => 'decimal:4',
         ];
     }
 
@@ -90,13 +94,46 @@ class DeliveryLine extends Model
     }
 
     /**
-     * ⚠ Delivered but not yet billed. The GDNI balance is the money version of
-     * this number, and a challan nobody invoiced is the thing it reports.
+     * ⚠ Delivered but not yet billed - the BILLABLE remainder. The GDNI balance
+     * is the money version of this number, and a challan nobody invoiced is the
+     * thing it reports.
+     *
+     * ⚠⚠ C-SR-4: a return relieves the uninvoiced portion FIRST, so goods
+     * returned before billing subtract here and month end simply bills less.
+     * Without this subtraction, month-end invoicing would bill goods that are
+     * physically back on the shelf.
      */
     public function quantityUninvoiced(): string
     {
         return number_format(
-            (float) $this->quantity - (float) $this->quantity_invoiced,
+            (float) $this->quantity
+                - (float) $this->quantity_invoiced
+                - (float) $this->quantity_returned_uninvoiced,
+            4, '.', ''
+        );
+    }
+
+    /**
+     * What may still come back: delivered less already returned, either
+     * disposition. The cap the return engine re-reads under lock.
+     */
+    public function quantityReturnable(): string
+    {
+        return number_format(
+            (float) $this->quantity - (float) $this->quantity_returned,
+            4, '.', ''
+        );
+    }
+
+    /**
+     * Invoiced and not yet returned-against - the pool a return's invoiced
+     * portion credits, walked newest invoice line first.
+     */
+    public function quantityInvoicedReturnable(): string
+    {
+        return number_format(
+            (float) $this->quantity_invoiced
+                - ((float) $this->quantity_returned - (float) $this->quantity_returned_uninvoiced),
             4, '.', ''
         );
     }

@@ -19,4 +19,9 @@ enum MovementReason: string
     case Adjustment = 'adjustment';
     case Transfer = 'transfer';
     case PurchaseReturn = 'purchase_return';
+    // ⚠⚠ Re-checked on 2026-08-12, immediately before adding this: still
+    // nothing in the codebase `match`es on MovementReason. Goods a customer
+    // sends back are not a receipt and not an adjustment - they restore the
+    // very layers a sale consumed, and the reason says so.
+    case SalesReturn = 'sales_return';
 }

@@ -47,8 +47,10 @@ it('adds Discounts Allowed as its own account under Income', function () {
         ->and($account->code)->toBe('4210')
         ->and($account->is_postable)->toBeTrue();
 
-    // 4200 is left alone, unslugged, for Phase 4 returns.
-    expect(Account::where('code', '4200')->first()->system_slug)->toBeNull();
+    // ⚠ Phase 4 arrived (2026-08-12): 4200 now carries the sales_returns slug,
+    // planted by the seeder's set-when-absent branch so installations seeded
+    // before it existed pick it up on the next seed run.
+    expect(Account::where('code', '4200')->first()->system_slug)->toBe('sales_returns');
 });
 
 it('sorts the two new accounts into the right place in the chart', function () {
@@ -69,6 +71,7 @@ it('maps every key a sale posts to', function () {
         'sales.cost_of_goods_sold' => '5100',
         'sales.goods_delivered_not_invoiced' => '1155',
         'sales.discounts_allowed' => '4210',
+        'sales.sales_returns' => '4200',
     ];
 
     foreach ($expected as $key => $code) {

@@ -1,0 +1,102 @@
+<?php
+
+namespace App\Modules\Sales\Actions;
+
+use App\Models\User;
+use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Models\AccountingPeriod;
+use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Sales\Models\CustomerRefund;
+use App\Modules\Sales\Models\SalesReturn;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+/**
+ * Money physically going back to a customer (C-SR-6).
+ *
+ * ⚠⚠ RETURN-LINKED ONLY, capped by the return's net credit less refunds
+ * already made - the same structural cap the supplier credit note carries,
+ * for the same reason: an uncapped refund is how a receivable goes quietly
+ * negative. A refund with no return behind it is a goodwill payment, a
+ * different event Joy kept out of scope.
+ *
+ * ⚠ The counter case - cash back in hand for a walk-in return - is this
+ * document recorded in the same DB transaction as the return, permission
+ * Owner/Manager (C-SR-9). The default remains credit-to-account: the
+ * distributor's credit simply nets against their next invoice.
+ */
+class RecordCustomerRefund
+{
+    public function __construct(private readonly PostSalesJournals $posting) {}
+
+    /**
+     * @throws ValidationException
+     */
+    public function handle(
+        SalesReturn $salesReturn,
+        MoneyAccount $moneyAccount,
+        string $amount,
+        User $createdBy,
+        mixed $refundedOn = null,
+        ?string $reference = null,
+        ?string $note = null,
+    ): CustomerRefund {
+        $date = ($refundedOn === null ? Carbon::now() : Carbon::parse($refundedOn))->startOfDay();
+
+        AccountingPeriod::assertOpenFor($date);
+
+        if ($moneyAccount->business_id !== $salesReturn->business_id) {
+            throw ValidationException::withMessages([
+                'money_account_id' => 'That account belongs to a different business.',
+            ]);
+        }
+
+        if (! $moneyAccount->is_active) {
+            throw ValidationException::withMessages([
+                'money_account_id' => 'That account is no longer active.',
+            ]);
+        }
+
+        $refunding = Money::ofTaka($amount);
+
+        if ($refunding->minor <= 0) {
+            throw ValidationException::withMessages([
+                'amount' => 'A refund must be greater than zero.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($salesReturn, $moneyAccount, $refunding, $createdBy, $date, $reference, $note) {
+            // ⚠ Re-read under a lock: two clerks refunding the same return at
+            // once is how a credit is paid back twice, and lockForUpdate is a
+            // no-op on SQLite - the RE-READ is what makes this correct.
+            $return = SalesReturn::query()->whereKey($salesReturn->id)->lockForUpdate()->firstOrFail();
+
+            $refundable = $return->refundable();
+
+            if ($refunding->minor > $refundable->minor) {
+                throw ValidationException::withMessages([
+                    'amount' => "Return {$return->return_number} has only {$refundable->format()} left to refund.",
+                ]);
+            }
+
+            $refund = CustomerRefund::create([
+                'business_id' => $return->business_id,
+                'customer_id' => $return->customer_id,
+                'sales_return_id' => $return->id,
+                'money_account_id' => $moneyAccount->id,
+                'amount' => $refunding->toTaka(),
+                'refunded_on' => $date,
+                'reference' => $reference,
+                'note' => $note,
+                'created_by' => $createdBy->id,
+            ]);
+
+            // Dr AR (party = customer) / Cr the money account - in the same
+            // transaction as the document.
+            $this->posting->forCustomerRefund($refund->fresh(['customer', 'moneyAccount']), $createdBy);
+
+            return $refund->fresh(['customer', 'moneyAccount', 'salesReturn']);
+        });
+    }
+}

@@ -130,7 +130,10 @@ class ChartOfAccountsSeeder extends Seeder
         // ─── 4000 Income ────────────────────────────────────────────────────
         ['4000', 'Income', AccountType::Income, null, false, null],
         ['4100', 'Sales Revenue', AccountType::Income, '4000', true, 'sales_revenue'],
-        ['4200', 'Sales Returns and Discounts', AccountType::Income, '4000', true, null],
+        // ⚠ Slug added for Phase 4 (sales returns, 2026-08-12). The
+        // set-when-absent branch below carries it onto installations seeded
+        // before it existed, so re-running this seeder is the whole upgrade.
+        ['4200', 'Sales Returns and Discounts', AccountType::Income, '4000', true, 'sales_returns'],
         // ⚠ A contra-revenue account: it lives under Income and normally carries
         // a DEBIT balance, which needs no special type because the ledger stores
         // signed amounts.

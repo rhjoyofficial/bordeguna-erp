@@ -19,9 +19,12 @@ use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
+use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesInvoiceLine;
+use App\Modules\Sales\Models\SalesReturn;
+use App\Modules\Sales\Models\SalesReturnLine;
 use Illuminate\Support\Carbon;
 
 /**
@@ -202,8 +205,21 @@ final class SubledgerReconciliation
         $receipts = Money::sum(CustomerReceipt::query()->pluck('amount')->map(
             fn ($amount) => Money::ofTaka((string) $amount),
         ));
+        // Sales returns credit AR; refunds debit it back when money physically
+        // goes home. Both are documents, so both are legs here (C-SR).
+        $returnCredits = Money::sum(SalesReturn::query()->pluck('credit_total')->map(
+            fn ($total) => Money::ofTaka((string) $total),
+        ));
+        $refunds = Money::sum(CustomerRefund::query()->pluck('amount')->map(
+            fn ($amount) => Money::ofTaka((string) $amount),
+        ));
         $allocated = Money::sum(
             CustomerReceipt::query()->with('allocations')->get()
+                ->flatMap->allocations
+                ->map(fn ($allocation) => Money::ofTaka((string) $allocation->amount)),
+        );
+        $creditAllocated = Money::sum(
+            SalesReturn::query()->with('allocations')->get()
                 ->flatMap->allocations
                 ->map(fn ($allocation) => Money::ofTaka((string) $allocation->amount)),
         );
@@ -214,13 +230,22 @@ final class SubledgerReconciliation
             $this->warnings[] = "{$business}: {$unallocated->format()} of customer receipts is not allocated to any invoice - received on account, or an allocation was missed.";
         }
 
+        // ⚠ A return whose traced invoices were already paid leaves credit the
+        // allocation could not absorb: credit-on-account, named exactly as the
+        // receipt case is, because the customer's next statement must know.
+        $creditUnallocated = $returnCredits->plus($creditAllocated->negated());
+
+        if (! $creditUnallocated->isZero()) {
+            $this->warnings[] = "{$business}: {$creditUnallocated->format()} of sales-return credit is not applied to any invoice - credit on account, or a refund is owed.";
+        }
+
         $this->compare(
             $business,
             'Accounts Receivable',
             $account->id,
             glBalance: $this->glDebitBalance($account->id),
-            derived: $invoices->plus($receipts->negated()),
-            derivedFrom: 'sales invoices less customer receipts',
+            derived: $invoices->plus($receipts->negated())->plus($returnCredits->negated())->plus($refunds),
+            derivedFrom: 'sales invoices less receipts and return credits, plus refunds',
         );
 
         $this->comparePerParty(
@@ -234,6 +259,10 @@ final class SubledgerReconciliation
                     fn ($invoice) => Money::ofTaka((string) $invoice->total)],
                 [CustomerReceipt::query()->get(['customer_id', 'amount']), 'customer_id',
                     fn ($receipt) => Money::ofTaka((string) $receipt->amount)->negated()],
+                [SalesReturn::query()->get(['customer_id', 'credit_total']), 'customer_id',
+                    fn ($return) => Money::ofTaka((string) $return->credit_total)->negated()],
+                [CustomerRefund::query()->get(['customer_id', 'amount']), 'customer_id',
+                    fn ($refund) => Money::ofTaka((string) $refund->amount)],
             ]),
             nameFor: fn (array $ids) => Customer::query()->whereIn('id', $ids)->pluck('name', 'id')->all(),
         );
@@ -371,13 +400,19 @@ final class SubledgerReconciliation
 
         $released = $this->totalCostReleased();
 
+        // Returns relieve the bridge for goods that came back unbilled
+        // (C-SR-4), valued exactly as the posting valued them.
+        $relievedByReturns = Money::sum(SalesReturnLine::query()->pluck('gdni_relief')->map(
+            fn ($relief) => Money::ofTaka((string) $relief),
+        ));
+
         $this->compare(
             $business,
             'Goods Delivered Not Invoiced',
             $account->id,
             glBalance: $this->glDebitBalance($account->id),
-            derived: $delivered->plus($released->negated()),
-            derivedFrom: 'deliveries less invoiced cost',
+            derived: $delivered->plus($released->negated())->plus($relievedByReturns->negated()),
+            derivedFrom: 'deliveries less invoiced cost and returned-unbilled relief',
         );
     }
 
@@ -395,13 +430,19 @@ final class SubledgerReconciliation
             return;
         }
 
+        // Returns true COGS back toward the layer-exact cost of what STAYS
+        // sold; the relief is stored signed, so subtracting it is exact.
+        $cogsRelief = Money::sum(SalesReturnLine::query()->pluck('cogs_relief')->map(
+            fn ($relief) => Money::ofTaka((string) $relief),
+        ));
+
         $this->compare(
             $business,
             'Cost of Goods Sold',
             $account->id,
             glBalance: $this->glDebitBalance($account->id),
-            derived: $this->totalCostReleased(),
-            derivedFrom: 'invoiced cost released',
+            derived: $this->totalCostReleased()->plus($cogsRelief->negated()),
+            derivedFrom: 'invoiced cost released less return relief',
         );
     }
 

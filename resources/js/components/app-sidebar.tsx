@@ -3,7 +3,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BadgeDollarSign, Banknote, BookOpen, Boxes, Contact, FileText, Landmark, Megaphone, PackageCheck, Store, UserPlus, NotebookPen, Scale, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileBarChart, FileUp, Fingerprint, HandCoins, LayoutDashboard, Palmtree, PenSquare, ReceiptText, TrendingUp, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
+import { BadgeDollarSign, Banknote, BookOpen, Boxes, Contact, FileText, Landmark, Megaphone, PackageCheck, Store, UserPlus, NotebookPen, Scale, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileBarChart, FileUp, Fingerprint, HandCoins, LayoutDashboard, Palmtree, PenSquare, ReceiptText, TrendingUp, Undo2, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
@@ -73,6 +73,9 @@ export function AppSidebar() {
                               : []),
                           ...(canViewSales ? [{ title: 'Invoices', url: '/sales/invoices', icon: FileText }] : []),
                           ...(canViewSales ? [{ title: 'Deliveries', url: '/sales/deliveries', icon: PackageCheck }] : []),
+                          // Goods coming back - shipped WITH its screens in one
+                          // commit, same reachability rule as the order book.
+                          ...(canViewSales ? [{ title: 'Returns', url: '/sales/returns', icon: Undo2 }] : []),
                       ],
                   },
               ]

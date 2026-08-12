@@ -88,6 +88,11 @@ class SalesInvoice extends Model
         return $this->hasMany(CustomerReceiptAllocation::class, 'sales_invoice_id');
     }
 
+    public function creditAllocations(): HasMany
+    {
+        return $this->hasMany(SalesReturnAllocation::class, 'sales_invoice_id');
+    }
+
     /**
      * ⚠ DERIVED from the allocations, never stored on the invoice. A stored
      * "amount paid" is a second answer to a question the allocations already
@@ -99,9 +104,22 @@ class SalesInvoice extends Model
         return Money::ofTaka((string) ($this->allocations()->sum('amount') ?: '0'));
     }
 
+    /**
+     * What sales returns have knocked off this invoice - the mirror of
+     * SupplierBill::creditedTotal().
+     */
+    public function creditedTotal(): Money
+    {
+        return Money::ofTaka((string) ($this->creditAllocations()->sum('amount') ?: '0'));
+    }
+
     public function outstanding(): Money
     {
-        return Money::ofMinor($this->totalMoney()->minor - $this->receivedTotal()->minor);
+        return Money::ofMinor(
+            $this->totalMoney()->minor
+                - $this->receivedTotal()->minor
+                - $this->creditedTotal()->minor,
+        );
     }
 
     public function isSettled(): bool
