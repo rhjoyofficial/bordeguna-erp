@@ -9,9 +9,9 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Models\LeaveProvisionRun;
 use App\Modules\Hrm\Models\LoanLedgerEntry;
-use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseReturnLine;
 use App\Modules\Purchasing\Models\Supplier;
@@ -350,13 +350,17 @@ final class SubledgerReconciliation
             return;
         }
 
-        $fromMovements = Money::sum(
-            StockMovement::query()->get(['direction', 'quantity', 'unit_cost'])
-                ->map(function ($movement) {
-                    $value = Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost);
-
-                    return $movement->direction === MovementDirection::In ? $value : $value->negated();
-                }),
+        // ⚠⚠ THROUGH `StockValue`, NOT AN EXPRESSION OF ITS OWN. This used to
+        // read `quantity x unit_cost` inline, which values a REVALUATION - a
+        // movement written with quantity zero and its money in `value_delta` -
+        // at nothing, while the posting engine put the whole of it in the
+        // ledger. The GL moved and the figure checking the GL did not, forever.
+        //
+        // ⚠ `StockValue::columns()` rather than a hand-written list: forgetting
+        // `value_delta` in a partial select is silent and reproduces the defect
+        // exactly.
+        $fromMovements = StockValue::sum(
+            StockMovement::query()->get(StockValue::columns()),
         );
 
         $this->compare(

@@ -10,9 +10,9 @@ use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
-use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\StockValue;
 use Illuminate\Support\Carbon;
 
 /**
@@ -98,23 +98,22 @@ class PostInventoryAdjustmentJournal
     /**
      * What a movement is worth to the ledger, signed the way stock moved.
      *
-     * ⚠⚠ `value_delta` WINS WHEN IT IS SET. A revaluation is a movement with
-     * quantity zero and a value: multiplying its quantity by its cost would
-     * value it at nothing, and the entire point of slice A1 was that stock can
-     * change in value without changing in amount.
+     * ⚠⚠ THE RULE NOW LIVES IN ONE PLACE, `StockValue`. It used to live here and
+     * ALSO, differently, in `SubledgerReconciliation` - this engine knew that
+     * `value_delta` wins when set, and the reconciliation did not, so every
+     * revaluation posted to the ledger and was valued at nothing by the figure
+     * that checks it.
+     *
+     * ⚠⚠ AND THE SIGN CHANGED. This method used to return `value_delta`
+     * unsigned. It is stored as a positive MAGNITUDE with its direction on the
+     * movement, so a write-DOWN returned a positive amount, and a positive
+     * amount is a debit: writing stock down INCREASED inventory and credited the
+     * write-off expense. `StockValue::of()` applies the movement's own direction
+     * to both kinds of movement, so a write-down now credits inventory.
      */
     private function valueOf(StockMovement $movement): Money
     {
-        if ($movement->value_delta !== null) {
-            return Money::ofTaka((string) $movement->value_delta);
-        }
-
-        // ⚠ Integer-scaled and rounded ONCE, at the end. Going through a float
-        // here is the exact trap Money exists to avoid, and a quantity of 0.1 at
-        // a cost of 0.29 is where it would show first.
-        $amount = Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost);
-
-        return $movement->direction === MovementDirection::In ? $amount : $amount->negated();
+        return StockValue::of($movement);
     }
 
     public function existingJournal(InventoryAdjustment $adjustment): ?Journal

@@ -8,11 +8,17 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\SubledgerReconciliation;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
+use App\Modules\Inventory\Actions\CreateInventoryAdjustment;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
+use App\Modules\Inventory\Enums\AdjustmentDirection;
+use App\Modules\Inventory\Enums\InventoryAdjustmentType;
 use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Models\InventorySetting;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
@@ -27,6 +33,9 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\ProductPrice;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 /**
  * The reconciliation: proving each subsidiary ledger agrees with its control
@@ -265,3 +274,133 @@ it('fails the artisan command on a reconciliation break', function () {
         ->expectsOutputToContain('reconciliation break')
         ->assertExitCode(1);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// C-IVL-1: REVALUATION, THEN RECONCILIATION
+//
+// ⚠⚠ THE SEAM THAT NOTHING CROSSED. `StockRevaluationTest` revalues and never
+// reconciles; every test above reconciles and never revalues. Both suites were
+// green while a revaluation posted to the ledger in full and was valued at
+// nothing by the figure that checks the ledger - a permanent, unclearable break
+// equal to the revaluation, plus a spurious "batch cache differs" warning.
+//
+// Latent only because production had zero adjustments. These tests are the
+// crossing, added before real opening stock exists. Approved by Joy 2026-08-13.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Setup leaves 25 units on hand at a cost of 25: bought 40 @ 25 (1,000),
+ * sold 15 at cost (375), so stock is 625 in the ledger, the movements and the
+ * batch cache alike.
+ */
+$revalueTo = function (string $newCost, AdjustmentDirection $direction) {
+    Permission::findOrCreate('inventory.stock.adjust', 'web');
+    app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
+
+    $role = Role::firstOrCreate([
+        'name' => 'Inventory Manager',
+        'business_id' => $this->business->id,
+        'guard_name' => 'web',
+    ]);
+    $role->givePermissionTo('inventory.stock.adjust');
+    $this->user->assignRole($role);
+
+    InventorySetting::forCurrentBusiness()->update(['adjustment_approval_threshold' => '1000000']);
+
+    $reason = Reason::create([
+        'business_id' => $this->business->id,
+        'context' => 'inventory.stock_adjustment',
+        'name' => 'Net realisable value',
+        'is_active' => true,
+    ]);
+
+    return app(CreateInventoryAdjustment::class)->handle(
+        type: InventoryAdjustmentType::Revaluation,
+        direction: $direction,
+        product: $this->product,
+        warehouse: $this->warehouse,
+        quantity: '0',
+        reason: $reason,
+        createdBy: $this->user->fresh(),
+        batch: StockBatch::query()->where('product_id', $this->product->id)->firstOrFail(),
+        newUnitCost: $newCost,
+    );
+};
+
+it('still reconciles after stock is revalued UPWARDS', function () use ($revalueTo) {
+    // 25 units from 25 to 30 = 125 more, capitalised onto the layer.
+    $revalueTo->call($this, '30', AdjustmentDirection::Increase);
+
+    $result = SubledgerReconciliation::reconcileAllBusinesses();
+
+    // ⚠ The whole point: the ledger moved by 125, and so must the figure that
+    // checks it. Before the fix the derivation valued the revaluation at
+    // 0 x 30 = nothing and reported a 125 break that no repair could clear.
+    expect($result['problems'])->toBeEmpty()
+        // ⚠ And no "batch cache differs from the movements" warning either.
+        // The batch's unit_cost IS updated by a revaluation, so the cache moved
+        // while the movements did not - a second, entirely spurious alarm.
+        ->and($result['warnings'])->toBeEmpty();
+
+    expect(stockOnHandInLedger())->toBe('750.00');
+});
+
+it('still reconciles after stock is written DOWN', function () use ($revalueTo) {
+    // Net realisable value: 25 units from 25 to 20 = 125 less.
+    $revalueTo->call($this, '20', AdjustmentDirection::Decrease);
+
+    $result = SubledgerReconciliation::reconcileAllBusinesses();
+
+    expect($result['problems'])->toBeEmpty()
+        ->and($result['warnings'])->toBeEmpty();
+
+    // ⚠⚠ THE SECOND DEFECT, AND THE WORSE ONE. `value_delta` is stored as a
+    // positive MAGNITUDE with its direction on the movement, and the posting
+    // engine used to return it UNSIGNED. A positive amount is a debit, so
+    // writing stock DOWN used to INCREASE Stock on Hand to 750 and credit the
+    // write-off expense: backwards, for twice the amount. It must fall to 500.
+    expect(stockOnHandInLedger())->toBe('500.00');
+});
+
+it('leaves an ordinary write-off posting exactly as it was', function () {
+    // ⚠ The regression guard Joy asked for: unrelated accounting behaviour must
+    // not move. A quantity write-off carries no `value_delta`, so it takes the
+    // quantity x cost path and its sign has always come from its direction.
+    Permission::findOrCreate('inventory.stock.adjust', 'web');
+    app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
+    $role = Role::firstOrCreate(['name' => 'Inventory Manager', 'business_id' => $this->business->id, 'guard_name' => 'web']);
+    $role->givePermissionTo('inventory.stock.adjust');
+    $this->user->assignRole($role);
+    InventorySetting::forCurrentBusiness()->update(['adjustment_approval_threshold' => '1000000']);
+
+    app(CreateInventoryAdjustment::class)->handle(
+        type: InventoryAdjustmentType::Damaged,
+        direction: AdjustmentDirection::Decrease,
+        product: $this->product,
+        warehouse: $this->warehouse,
+        quantity: '5',
+        reason: Reason::create([
+            'business_id' => $this->business->id,
+            'context' => 'inventory.stock_adjustment',
+            'name' => 'Damaged',
+            'is_active' => true,
+        ]),
+        createdBy: $this->user->fresh(),
+    );
+
+    $result = SubledgerReconciliation::reconcileAllBusinesses();
+
+    // 625 less 5 units at 25 = 500, by the path that always worked.
+    expect($result['problems'])->toBeEmpty()
+        ->and($result['warnings'])->toBeEmpty()
+        ->and(stockOnHandInLedger())->toBe('500.00');
+});
+
+function stockOnHandInLedger(): string
+{
+    $accountId = Account::bySlug('stock_on_hand')->id;
+
+    return number_format((float) DB::table('journal_lines')
+        ->where('account_id', $accountId)
+        ->sum('amount_minor') / 100, 2, '.', '');
+}
