@@ -18,6 +18,8 @@ use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesReturn;
 use App\Modules\Sales\Models\SalesReturnAllocation;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -345,7 +347,7 @@ final class Ageing
      * appear correctly as money on account rather than as a reduction of an
      * invoice that did not exist yet.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<covariant \Illuminate\Database\Eloquent\Model>  $query
+     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>  $query
      * @param  Collection<int|string, int>  $includedTargets
      * @return array{bySource: array<int, Money>, byTarget: array<int, Money>}
      */
@@ -380,7 +382,7 @@ final class Ageing
      * `SubledgerReconciliation::foldByKey()` does. Subtractions are negated
      * values rather than a special case.
      *
-     * @param  array<int, array{0: Collection<int, \Illuminate\Database\Eloquent\Model>, 1: string, 2: callable(\Illuminate\Database\Eloquent\Model): Money}>  $sets
+     * @param  array<int, array{0: Collection<int, Model>, 1: string, 2: callable(Model): Money}>  $sets
      * @return array<int, Money>
      */
     private static function foldByParty(array $sets): array

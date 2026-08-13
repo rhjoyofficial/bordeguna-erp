@@ -251,6 +251,13 @@ export function AppSidebar() {
                           // with, and the screen states that agreement.
                           { title: 'Receivables ageing', url: '/accounting/receivables-ageing', icon: HandCoins },
                           { title: 'Payables ageing', url: '/accounting/payables-ageing', icon: ReceiptText },
+                          // ⚠ Beside the ageings for the same reason: both tie
+                          // out to a control account on screen, and stock value
+                          // is read against the balance sheet it must agree
+                          // with. A route with no link here is this project's
+                          // recurring unreachable-screen defect.
+                          { title: 'Inventory valuation', url: '/accounting/inventory-valuation', icon: Boxes },
+                          { title: 'Cost of goods sold', url: '/accounting/cost-of-goods-sold', icon: Coins },
                           { title: 'General ledger', url: '/accounting/general-ledger', icon: ListTree },
                           { title: 'Journals', url: '/accounting/journals', icon: NotebookPen },
                           { title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen },

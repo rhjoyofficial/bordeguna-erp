@@ -3,8 +3,10 @@
 use App\Modules\Accounting\Http\Controllers\AccountController;
 use App\Modules\Accounting\Http\Controllers\AgeingController;
 use App\Modules\Accounting\Http\Controllers\BalanceSheetController;
+use App\Modules\Accounting\Http\Controllers\CostOfGoodsSoldController;
 use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
 use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
+use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
@@ -42,6 +44,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // assignment, and nothing in the code depends on it.
         Route::get('receivables-ageing', [AgeingController::class, 'receivables'])->name('receivables-ageing');
         Route::get('payables-ageing', [AgeingController::class, 'payables'])->name('payables-ageing');
+
+        // ⚠ Same `accounting.view` permission as every other report here, which
+        // is what keeps this slice free of any seeder change. Both tie out to a
+        // control account on screen, so whoever may read the ledger may read
+        // these - and nobody else can see stock value or margin.
+        Route::get('inventory-valuation', [InventoryValuationController::class, 'index'])->name('inventory-valuation');
+        Route::get('cost-of-goods-sold', [CostOfGoodsSoldController::class, 'index'])->name('cost-of-goods-sold');
 
         // The two statements a business actually runs on. Reading them is the
         // same permission as reading the ledger they summarise: a figure is no
