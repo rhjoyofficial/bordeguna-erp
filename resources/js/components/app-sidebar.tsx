@@ -3,21 +3,78 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BadgeDollarSign, Banknote, BookOpen, Boxes, Contact, FileText, Landmark, Megaphone, PackageCheck, Store, UserPlus, NotebookPen, Scale, CalendarCheck, CalendarClock, CalendarDays, CalendarRange, CheckSquare, Coins, FileBarChart, FileUp, Fingerprint, HandCoins, LayoutDashboard, Palmtree, PenSquare, ReceiptText, TrendingUp, Undo2, Wallet, ClipboardList, LayoutGrid, PackageSearch, Repeat, Ruler, ShoppingCart, Tags, Truck, UserCircle, Users, Warehouse } from 'lucide-react';
+import {
+    BadgeDollarSign,
+    Banknote,
+    BookOpen,
+    Boxes,
+    CalendarCheck,
+    CalendarClock,
+    CalendarDays,
+    CalendarRange,
+    CheckSquare,
+    ClipboardList,
+    Coins,
+    Contact,
+    FileBarChart,
+    FileText,
+    FileUp,
+    Fingerprint,
+    HandCoins,
+    Landmark,
+    LayoutDashboard,
+    LayoutGrid,
+    ListTree,
+    Megaphone,
+    NotebookPen,
+    PackageCheck,
+    PackageSearch,
+    Palmtree,
+    PenSquare,
+    ReceiptText,
+    Repeat,
+    Ruler,
+    Scale,
+    ShoppingCart,
+    Store,
+    Tags,
+    TrendingUp,
+    Truck,
+    Undo2,
+    UserCircle,
+    UserPlus,
+    Users,
+    Wallet,
+    Warehouse,
+} from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
-    const { pendingApprovalsCount, canReviewApprovals, canManageEmployees, canManageScheduling, canManageAttendance, canManageLeave, canAccessSalary, canManagePayroll, canViewAccounting, canViewSales, canSell, canManagePrices, canViewCrm, canManageCrmSettings, canViewAssets, hasEmployeeProfile } =
-        usePage<SharedData>().props;
+    const {
+        pendingApprovalsCount,
+        canReviewApprovals,
+        canManageEmployees,
+        canManageScheduling,
+        canManageAttendance,
+        canManageLeave,
+        canAccessSalary,
+        canManagePayroll,
+        canViewAccounting,
+        canViewSales,
+        canSell,
+        canManagePrices,
+        canViewCrm,
+        canManageCrmSettings,
+        canViewAssets,
+        hasEmployeeProfile,
+    } = usePage<SharedData>().props;
 
     const navGroups: NavGroup[] = [
         {
             label: 'Overview',
             items: [
                 { title: 'Dashboard', url: '/dashboard', icon: LayoutGrid },
-                ...(canReviewApprovals
-                    ? [{ title: 'Approvals', url: '/approvals', icon: CheckSquare, badge: pendingApprovalsCount }]
-                    : []),
+                ...(canReviewApprovals ? [{ title: 'Approvals', url: '/approvals', icon: CheckSquare, badge: pendingApprovalsCount }] : []),
                 ...(hasEmployeeProfile ? [{ title: 'My profile', url: '/hrm/my-profile', icon: UserCircle }] : []),
                 ...(hasEmployeeProfile ? [{ title: 'Clock in/out', url: '/hrm/clock', icon: Fingerprint }] : []),
                 ...(hasEmployeeProfile ? [{ title: 'My leave', url: '/hrm/my-leave', icon: Palmtree }] : []),
@@ -68,9 +125,7 @@ export function AppSidebar() {
                           // commit - the reachability lesson this file records.
                           ...(canViewSales ? [{ title: 'Sales orders', url: '/sales/orders', icon: ClipboardList }] : []),
                           ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
-                          ...(canViewSales || canManagePrices
-                              ? [{ title: 'Selling prices', url: '/sales/prices', icon: BadgeDollarSign }]
-                              : []),
+                          ...(canViewSales || canManagePrices ? [{ title: 'Selling prices', url: '/sales/prices', icon: BadgeDollarSign }] : []),
                           ...(canViewSales ? [{ title: 'Invoices', url: '/sales/invoices', icon: FileText }] : []),
                           ...(canViewSales ? [{ title: 'Deliveries', url: '/sales/deliveries', icon: PackageCheck }] : []),
                           // Goods coming back - shipped WITH its screens in one
@@ -90,9 +145,7 @@ export function AppSidebar() {
                           // day. Without it, follow-ups exist and nobody sees them.
                           { title: 'Follow-ups', url: '/crm/queue', icon: CalendarCheck },
                           { title: 'CRM reports', url: '/crm/reports', icon: FileBarChart },
-                          ...(canManageCrmSettings
-                              ? [{ title: 'Sources & campaigns', url: '/crm/settings', icon: Megaphone }]
-                              : []),
+                          ...(canManageCrmSettings ? [{ title: 'Sources & campaigns', url: '/crm/settings', icon: Megaphone }] : []),
                       ],
                   },
               ]
@@ -192,6 +245,13 @@ export function AppSidebar() {
                           { title: 'Profit & loss', url: '/accounting/income-statement', icon: TrendingUp },
                           { title: 'Balance sheet', url: '/accounting/balance-sheet', icon: FileBarChart },
                           { title: 'Trial balance', url: '/accounting/trial-balance', icon: Scale },
+                          // ⚠ The two ageings sit next to the statements rather
+                          // than under Sales and Purchasing, because they are
+                          // read against the balance sheet they must agree
+                          // with, and the screen states that agreement.
+                          { title: 'Receivables ageing', url: '/accounting/receivables-ageing', icon: HandCoins },
+                          { title: 'Payables ageing', url: '/accounting/payables-ageing', icon: ReceiptText },
+                          { title: 'General ledger', url: '/accounting/general-ledger', icon: ListTree },
                           { title: 'Journals', url: '/accounting/journals', icon: NotebookPen },
                           { title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen },
                           { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },

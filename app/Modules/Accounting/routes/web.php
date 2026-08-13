@@ -1,7 +1,9 @@
 <?php
 
 use App\Modules\Accounting\Http\Controllers\AccountController;
+use App\Modules\Accounting\Http\Controllers\AgeingController;
 use App\Modules\Accounting\Http\Controllers\BalanceSheetController;
+use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
 use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
@@ -28,6 +30,18 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::get('journals/{journal}', [JournalController::class, 'show'])->name('journals.show');
 
         Route::get('trial-balance', [TrialBalanceController::class, 'index'])->name('trial-balance');
+
+        // The drill-down the trial balance and both statements point at: one
+        // account's postings, in order, with a running balance.
+        Route::get('general-ledger', [GeneralLedgerController::class, 'index'])->name('general-ledger');
+
+        // ⚠ Same permission as the ledger they summarise, which is what keeps
+        // this slice free of any seeder change. C-GLA-A asks whether sales and
+        // collections staff should reach the receivables ageing without seeing
+        // the whole ledger; the answer costs a permission and a role
+        // assignment, and nothing in the code depends on it.
+        Route::get('receivables-ageing', [AgeingController::class, 'receivables'])->name('receivables-ageing');
+        Route::get('payables-ageing', [AgeingController::class, 'payables'])->name('payables-ageing');
 
         // The two statements a business actually runs on. Reading them is the
         // same permission as reading the ledger they summarise: a figure is no
