@@ -2,10 +2,10 @@
 
 namespace App\Modules\Inventory\Models;
 
+use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Enums\TransferStatus;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
