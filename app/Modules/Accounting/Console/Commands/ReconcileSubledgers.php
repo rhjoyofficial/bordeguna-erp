@@ -34,6 +34,28 @@ class ReconcileSubledgers extends Command
             $this->warn("  ! {$warning}");
         }
 
+        // ⚠⚠ ZERO CHECKS IS NOT AGREEMENT, and saying so was a real false green.
+        //
+        // Every family of checks is gated on an anchor account mapping (C-REC-2),
+        // so a system with no mappings skips all of them - and the old branch
+        // below then reported "every subsidiary ledger agrees" on the strength of
+        // having verified nothing at all. Found on 2026-08-13 in the first backup
+        // RESTORE DRILL: an 11-day-old dump restored and migrated cleanly, three
+        // businesses held 61,500 BDT of stock documents, not one was examined,
+        // and this command called it agreement.
+        //
+        // ⚠ Still SUCCESS, not failure. A freshly installed system legitimately
+        // has no mappings yet, and a command that is red through a normal state
+        // is a command nobody reads by the time it matters. What changes is the
+        // CLAIM: it now says what it did rather than what it did not check.
+        if ($result['checks'] === 0) {
+            $this->newLine();
+            $this->warn('Nothing was reconciled: no account mappings are configured, so every check was skipped.');
+            $this->line('This is NOT a statement that the books agree. Seed the account mappings, then run this again.');
+
+            return self::SUCCESS;
+        }
+
         if ($result['problems'] === []) {
             $this->newLine();
             $this->info('Every subsidiary ledger agrees with its control account.');

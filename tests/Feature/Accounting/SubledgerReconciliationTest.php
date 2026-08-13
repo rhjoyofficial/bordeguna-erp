@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\SubledgerReconciliation;
 use App\Modules\Foundation\Models\Business;
@@ -235,6 +236,25 @@ it('leaves no tenant behind when called without one', function () {
 it('passes the artisan command on agreeing books', function () {
     $this->artisan('accounting:reconcile')
         ->expectsOutputToContain('agrees with its control account')
+        ->assertExitCode(0);
+});
+
+it('refuses to call zero checks agreement', function () {
+    // ⚠⚠ THE FALSE GREEN THE FIRST RESTORE DRILL FOUND (2026-08-13). Every check
+    // family is gated on an anchor mapping, so a system with no mappings skips
+    // all of them - and the command used to report "every subsidiary ledger
+    // agrees" having examined nothing. On the restored 2 August dump that meant
+    // three businesses holding 61,500 BDT of stock documents, none examined, and
+    // a green result.
+    AccountMapping::query()->delete();
+
+    $this->artisan('accounting:reconcile')
+        ->expectsOutputToContain('Ran 0 reconciliation(s)')
+        ->expectsOutputToContain('Nothing was reconciled')
+        ->expectsOutputToContain('NOT a statement that the books agree')
+        ->doesntExpectOutputToContain('agrees with its control account')
+        // ⚠ Still exit 0: a freshly installed system has no mappings yet, and a
+        // command that is red through a normal state stops being read.
         ->assertExitCode(0);
 });
 
