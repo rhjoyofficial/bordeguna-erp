@@ -35,6 +35,7 @@ import {
     Repeat,
     Ruler,
     Scale,
+    ShieldCheck,
     ShoppingCart,
     Store,
     Tags,
@@ -266,6 +267,9 @@ export function AppSidebar() {
                           { title: 'Inventory valuation', url: '/accounting/inventory-valuation', icon: Boxes },
                           { title: 'Cost of goods sold', url: '/accounting/cost-of-goods-sold', icon: Coins },
                           { title: 'General ledger', url: '/accounting/general-ledger', icon: ListTree },
+                          // accounting:reconcile without the SSH: do the books
+                          // agree with the documents, right now.
+                          { title: 'Reconciliation', url: '/accounting/reconciliation', icon: ShieldCheck },
                           { title: 'Journals', url: '/accounting/journals', icon: NotebookPen },
                           { title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen },
                           { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },

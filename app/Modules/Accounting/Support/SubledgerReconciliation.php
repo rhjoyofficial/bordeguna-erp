@@ -94,6 +94,34 @@ final class SubledgerReconciliation
         ];
     }
 
+    /**
+     * The same checks, for the business the caller is already standing in - the
+     * screen's entry point (C-RSC-1).
+     *
+     * ⚠ NO TENANT SWITCHING (C-RSC-2). The `business` middleware has entered
+     * the tenant before this runs; walking other tenants here would reconcile
+     * somebody else's books into a screen scoped to this one. The console
+     * command keeps `reconcileAllBusinesses()` for the nightly sweep.
+     *
+     * @return array{problems: list<string>, warnings: list<string>, checks: int}
+     */
+    public static function reconcileCurrentBusiness(): array
+    {
+        $business = Business::withoutGlobalScopes()->find(app(BusinessContext::class)->id());
+
+        $reconciler = new self;
+
+        if ($business !== null) {
+            $reconciler->reconcileBusiness($business->name);
+        }
+
+        return [
+            'problems' => $reconciler->problems,
+            'warnings' => $reconciler->warnings,
+            'checks' => $reconciler->checks,
+        ];
+    }
+
     private function reconcileBusiness(string $business): void
     {
         $today = Carbon::today();

@@ -11,6 +11,7 @@ use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
 use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
+use App\Modules\Accounting\Http\Controllers\ReconciliationController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
 use Illuminate\Support\Facades\Route;
 
@@ -54,6 +55,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // One customer's account, told in documents and checked by the ledger
         // (C-CST-1). C-GLA-A now covers this screen too.
         Route::get('customer-statement', [CustomerStatementController::class, 'index'])->name('customer-statement');
+
+        // accounting:reconcile as a screen: the same engine, the same strings
+        // (C-RSC-1), for the business the user is standing in.
+        Route::get('reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation');
 
         // ⚠ Same `accounting.view` permission as every other report here, which
         // is what keeps this slice free of any seeder change. Both tie out to a
