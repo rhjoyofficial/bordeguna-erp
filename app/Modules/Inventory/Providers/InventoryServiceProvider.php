@@ -4,6 +4,7 @@ namespace App\Modules\Inventory\Providers;
 
 use App\Modules\Inventory\Console\Commands\ImportOpeningStock;
 use App\Modules\Inventory\Console\Commands\ImportProductCatalogue;
+use App\Modules\Inventory\Console\Commands\MigrateCatalogue;
 use App\Modules\Inventory\Console\Commands\VerifyStockLedger;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Observers\StockMovementObserver;
@@ -19,7 +20,7 @@ class InventoryServiceProvider extends ServiceProvider
         StockMovement::observe(StockMovementObserver::class);
 
         if ($this->app->runningInConsole()) {
-            $this->commands([VerifyStockLedger::class, ImportProductCatalogue::class, ImportOpeningStock::class]);
+            $this->commands([VerifyStockLedger::class, ImportProductCatalogue::class, ImportOpeningStock::class, MigrateCatalogue::class]);
         }
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
