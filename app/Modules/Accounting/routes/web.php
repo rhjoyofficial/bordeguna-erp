@@ -3,6 +3,7 @@
 use App\Modules\Accounting\Http\Controllers\AccountController;
 use App\Modules\Accounting\Http\Controllers\AgeingController;
 use App\Modules\Accounting\Http\Controllers\BalanceSheetController;
+use App\Modules\Accounting\Http\Controllers\CashAndBankBookController;
 use App\Modules\Accounting\Http\Controllers\CostOfGoodsSoldController;
 use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
 use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
@@ -44,6 +45,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // assignment, and nothing in the code depends on it.
         Route::get('receivables-ageing', [AgeingController::class, 'receivables'])->name('receivables-ageing');
         Route::get('payables-ageing', [AgeingController::class, 'payables'])->name('payables-ageing');
+
+        // Where the money is and how it moved. Same `accounting.view` as the
+        // ledger its figures come from (C-CBB-2), so no seeder change.
+        Route::get('cash-and-bank', [CashAndBankBookController::class, 'index'])->name('cash-and-bank');
 
         // ⚠ Same `accounting.view` permission as every other report here, which
         // is what keeps this slice free of any seeder change. Both tie out to a

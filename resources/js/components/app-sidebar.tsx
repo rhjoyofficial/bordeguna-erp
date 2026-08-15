@@ -251,6 +251,10 @@ export function AppSidebar() {
                           // with, and the screen states that agreement.
                           { title: 'Receivables ageing', url: '/accounting/receivables-ageing', icon: HandCoins },
                           { title: 'Payables ageing', url: '/accounting/payables-ageing', icon: ReceiptText },
+                          // ⚠ "Cash & bank book" is the REPORT; "Bank & cash"
+                          // below is the setup screen that names the accounts.
+                          // Its figures are the trial balance's own (C-CBB-2).
+                          { title: 'Cash & bank book', url: '/accounting/cash-and-bank', icon: Wallet },
                           // ⚠ Beside the ageings for the same reason: both tie
                           // out to a control account on screen, and stock value
                           // is read against the balance sheet it must agree
