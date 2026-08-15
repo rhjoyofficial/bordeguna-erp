@@ -5,6 +5,7 @@ use App\Modules\Accounting\Http\Controllers\AgeingController;
 use App\Modules\Accounting\Http\Controllers\BalanceSheetController;
 use App\Modules\Accounting\Http\Controllers\CashAndBankBookController;
 use App\Modules\Accounting\Http\Controllers\CostOfGoodsSoldController;
+use App\Modules\Accounting\Http\Controllers\CustomerStatementController;
 use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
 use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
 use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
@@ -49,6 +50,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // Where the money is and how it moved. Same `accounting.view` as the
         // ledger its figures come from (C-CBB-2), so no seeder change.
         Route::get('cash-and-bank', [CashAndBankBookController::class, 'index'])->name('cash-and-bank');
+
+        // One customer's account, told in documents and checked by the ledger
+        // (C-CST-1). C-GLA-A now covers this screen too.
+        Route::get('customer-statement', [CustomerStatementController::class, 'index'])->name('customer-statement');
 
         // ⚠ Same `accounting.view` permission as every other report here, which
         // is what keeps this slice free of any seeder change. Both tie out to a

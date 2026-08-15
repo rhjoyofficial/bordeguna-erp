@@ -250,6 +250,9 @@ export function AppSidebar() {
                           // read against the balance sheet they must agree
                           // with, and the screen states that agreement.
                           { title: 'Receivables ageing', url: '/accounting/receivables-ageing', icon: HandCoins },
+                          // The follow-up the ageing raises: which invoices,
+                          // which payments, in what order, for ONE customer.
+                          { title: 'Customer statement', url: '/accounting/customer-statement', icon: Contact },
                           { title: 'Payables ageing', url: '/accounting/payables-ageing', icon: ReceiptText },
                           // ⚠ "Cash & bank book" is the REPORT; "Bank & cash"
                           // below is the setup screen that names the accounts.
