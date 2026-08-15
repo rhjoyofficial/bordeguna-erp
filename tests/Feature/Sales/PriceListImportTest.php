@@ -155,6 +155,31 @@ it('refuses to create a product from a price file', function () {
         ->and(Product::count())->toBe(0);
 });
 
+it('skips an unknown SKU the file itself marks inactive, instead of refusing the whole file', function () {
+    // The approved catalogue decision "inactive and never created" reaches the
+    // price columns too: LLD-FRT-HIM-25KG exists in the combined file as an
+    // inactive row and deliberately has no product. Pricing nothing is not an
+    // error, and one such row must not block 216 real price rules.
+    ($this->product)('SKU-1', 'Thing');
+
+    $plan = ($this->import)("sku,is_active,retail_price\nSKU-1,yes,190\nGHOST-25KG,no,140\n");
+
+    expect($plan->errors)->toBeEmpty()
+        ->and($plan->creates)->toHaveCount(1)
+        ->and($plan->warnings)->toHaveCount(1)
+        ->and($plan->warnings[0]['message'])->toContain('never existed')
+        ->and(Product::count())->toBe(1);
+});
+
+it('still refuses an unknown SKU on an active row, whatever is_active says elsewhere', function () {
+    // The typo protection the unknown-SKU error exists for: an ACTIVE row that
+    // matches nothing is a mistake to fix, never a silent skip.
+    $plan = ($this->import)("sku,is_active,retail_price\nGHOST-1,yes,190\n");
+
+    expect($plan->hasErrors())->toBeTrue()
+        ->and($plan->errors[0]['message'])->toContain('never creates products');
+});
+
 it('never applies a plan that carries errors', function () {
     ($this->product)('SKU-1', 'Thing');
 

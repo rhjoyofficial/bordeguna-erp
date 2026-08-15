@@ -72,6 +72,18 @@ class PlanPriceListImport
             $product = $products[$sku] ?? null;
 
             if ($product === null) {
+                // An unknown SKU the file ITSELF marks inactive is the approved
+                // "inactive and never created" catalogue decision showing up in
+                // the price columns - the product deliberately does not exist,
+                // so there is nothing to price and nothing to block the file
+                // over. An unknown SKU on an ACTIVE row keeps the hard error:
+                // that is the typo this rule exists to catch.
+                if ($this->rowMarkedInactive($values)) {
+                    $plan->addWarning($line, $sku, 'No product with this SKU exists and the row is marked inactive; skipped (an inactive product that never existed is not priced).');
+
+                    continue;
+                }
+
                 $plan->addError($line, $sku, 'No product with this SKU exists in this business. A price file never creates products.');
 
                 continue;
@@ -184,6 +196,16 @@ class PlanPriceListImport
         sort($plan->stillUnpriced);
 
         return $plan;
+    }
+
+    /**
+     * Whether the file row declares itself inactive. Same word list as the
+     * catalogue importer; anything else (blank included) is NOT inactive, so
+     * an unrecognised value still falls through to the unknown-SKU error.
+     */
+    private function rowMarkedInactive(array $values): bool
+    {
+        return in_array(strtolower(trim($values['is_active'] ?? '')), ['0', 'false', 'no', 'n', 'inactive'], true);
     }
 
     /**
