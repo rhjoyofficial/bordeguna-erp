@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\Holiday;
 use App\Modules\Hrm\Models\HolidayCalendar;
+use App\Modules\Hrm\Models\WorkingDayOverride;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -28,7 +30,7 @@ class HolidayCalendarController extends Controller
     {
         $this->authorize('hrm.scheduling.manage');
 
-        $calendars = HolidayCalendar::with('holidays')->orderByDesc('year')->orderBy('name')->get()
+        $calendars = HolidayCalendar::with(['holidays', 'workingDayOverrides'])->orderByDesc('year')->orderBy('name')->get()
             ->map(fn (HolidayCalendar $calendar) => [
                 'id' => $calendar->id,
                 'name' => $calendar->name,
@@ -41,6 +43,11 @@ class HolidayCalendarController extends Controller
                     'id' => $holiday->id,
                     'date' => $holiday->date->toDateString(),
                     'name' => $holiday->name,
+                ]),
+                'working_day_overrides' => $calendar->workingDayOverrides->map(fn (WorkingDayOverride $override) => [
+                    'id' => $override->id,
+                    'date' => $override->date->toDateString(),
+                    'reason' => $override->reason,
                 ]),
             ]);
 
@@ -123,6 +130,46 @@ class HolidayCalendarController extends Controller
         $holiday->delete();
 
         return back()->with('success', 'Holiday removed.');
+    }
+
+    /**
+     * The dated exception the other way (a worked Friday, a make-up day):
+     * this date IS a working day, whatever the pattern or a holiday says.
+     */
+    public function storeWorkingDay(Request $request, HolidayCalendar $calendar): RedirectResponse
+    {
+        $this->authorize('hrm.scheduling.manage');
+
+        $data = $request->validate([
+            'date' => ['required', 'date'],
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+
+        if ($calendar->workingDayOverrides()->whereDate('date', $data['date'])->exists()) {
+            throw ValidationException::withMessages(['date' => 'This date is already a working-day override in this calendar.']);
+        }
+
+        // ⚠ Refused rather than silently pointless: a date that is already a
+        // working day needs no override, and storing one anyway teaches the
+        // operator that the button does nothing.
+        if ($calendar->isWorkingDay(Carbon::parse($data['date']))) {
+            throw ValidationException::withMessages(['date' => 'This date is already a working day on this calendar.']);
+        }
+
+        $calendar->workingDayOverrides()->create($data);
+
+        return back()->with('success', 'Working-day override added.');
+    }
+
+    public function destroyWorkingDay(HolidayCalendar $calendar, WorkingDayOverride $override): RedirectResponse
+    {
+        $this->authorize('hrm.scheduling.manage');
+
+        abort_unless($override->holiday_calendar_id === $calendar->id, 404);
+
+        $override->delete();
+
+        return back()->with('success', 'Working-day override removed.');
     }
 
     /**

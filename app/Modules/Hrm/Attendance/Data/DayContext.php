@@ -60,7 +60,7 @@ final readonly class DayContext
             return false;
         }
 
-        return ! in_array($this->scheduleType, [ScheduleType::Flexible, ScheduleType::FieldDuty], true);
+        return ! in_array($this->scheduleType, [ScheduleType::Flexible, ScheduleType::FieldDuty, ScheduleType::Exempt], true);
     }
 
     /**
@@ -93,7 +93,18 @@ final readonly class DayContext
      */
     public function requiresClosedPunchPair(): bool
     {
-        return ! in_array($this->scheduleType, [ScheduleType::Flexible, ScheduleType::FieldDuty], true);
+        return ! in_array($this->scheduleType, [ScheduleType::Flexible, ScheduleType::FieldDuty, ScheduleType::Exempt], true);
+    }
+
+    /**
+     * An Exempt schedule goes one step further than the two above: presence is
+     * assumed, not evidenced, so an empty punch list on a working day is
+     * Present rather than a proposed Absent (and a non-working-day punch never
+     * raises a review flag - one provisional day blocks a whole payroll run).
+     */
+    public function assumesPresence(): bool
+    {
+        return $this->scheduleType?->assumesPresence() ?? false;
     }
 
     public function priorOccurrencesFor(string $windowKey): int

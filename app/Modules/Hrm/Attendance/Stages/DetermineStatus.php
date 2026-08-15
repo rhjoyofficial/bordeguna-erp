@@ -42,6 +42,16 @@ class DetermineStatus implements AttendanceStage
         }
 
         if (! $context->hasPunches()) {
+            // An Exempt schedule assumes presence rather than evidencing it
+            // (works from home, or the owner whose day is meetings). Absent
+            // and its review flag are exactly what the type exists to switch
+            // off - Absent is provisional, and provisional is payroll's gate.
+            if ($context->assumesPresence()) {
+                return $computation
+                    ->with(['status' => AttendanceStatus::Present])
+                    ->note('Exempt schedule: presence is assumed on a working day, no punches required.');
+            }
+
             return $computation
                 ->with(['status' => AttendanceStatus::Absent])
                 ->flag('needs_review')
@@ -104,6 +114,16 @@ class DetermineStatus implements AttendanceStage
 
         if ($context->hasApprovedHolidayWork || $context->policy->countHolidayWorkWithoutApproval) {
             return $computation->note('Work on this non-working day is approved and counted.');
+        }
+
+        // An Exempt schedule's weekend punch is recorded but neither paid nor
+        // flagged. The flag matters more than it looks: needs_review makes the
+        // day provisional, and ONE provisional day blocks the whole payroll
+        // run - a trusted person's Friday visit must not hold nine salaries.
+        if ($context->assumesPresence()) {
+            return $computation
+                ->with(['payableMinutes' => 0])
+                ->note('Worked on a non-working day; an exempt schedule records the hours without payment or review (POL-09).');
         }
 
         return $computation

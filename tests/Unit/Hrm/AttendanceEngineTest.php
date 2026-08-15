@@ -537,3 +537,73 @@ it('leaves an unflagged band alone even when it deducts from the first occurrenc
     expect($outcome->consequence)->toBe(AttendanceConsequence::Deduction);
     expect($outcome->isProvisional)->toBeFalse();
 });
+
+// --- The Exempt schedule: presence assumed, not evidenced ---------------------
+//
+// One step past C13 on the same axis. Flexible/FieldDuty are exempt from
+// punctuality and pair-closing but still propose Absent on a punchless day
+// (pinned above); Exempt exists for the people whose work the device cannot
+// see - works from home, or the owner whose day is meetings. Joy's decision of
+// 2026-08-15: every working day is active, no lateness, no deduction, punches
+// still recorded when given.
+
+it('treats an exempt working day with no punches as Present, never provisional', function () {
+    $outcome = engineRun([], ['schedule_type' => ScheduleType::Exempt, 'shift' => null]);
+
+    expect($outcome->status)->toBe(AttendanceStatus::Present);
+    expect($outcome->isProvisional)->toBeFalse();
+    expect($outcome->holdsPayroll)->toBeFalse();
+    expect($outcome->flags)->toBe([]);
+    expect($outcome->consequence)->toBe(AttendanceConsequence::None);
+});
+
+it('never judges an exempt employee on lateness, even with a shift and a late arrival', function () {
+    // 10:30 against a 09:00 shift would be deep in a deduction band for Fixed.
+    $outcome = engineRun(
+        ['2026-08-03 10:30:00', '2026-08-03 18:00:00'],
+        ['schedule_type' => ScheduleType::Exempt],
+    );
+
+    expect($outcome->status)->toBe(AttendanceStatus::Present);
+    expect($outcome->lateMinutes)->toBe(0);
+    expect($outcome->consequence)->toBe(AttendanceConsequence::None);
+    expect($outcome->workedMinutes)->toBeGreaterThan(0);
+});
+
+it('accepts an exempt single punch without a missing-punch hold', function () {
+    $outcome = engineRun(['2026-08-03 11:00:00'], ['schedule_type' => ScheduleType::Exempt]);
+
+    expect($outcome->status)->toBe(AttendanceStatus::Present);
+    expect($outcome->holdsPayroll)->toBeFalse();
+    expect($outcome->flags)->not->toContain('payroll_hold');
+});
+
+it('still lets the calendar win for an exempt employee: a weekly off stays a weekly off', function () {
+    $outcome = engineRun([], ['schedule_type' => ScheduleType::Exempt, 'shift' => null, 'is_weekly_off' => true]);
+
+    expect($outcome->status)->toBe(AttendanceStatus::WeeklyOff);
+    expect($outcome->isProvisional)->toBeFalse();
+});
+
+it('records an exempt weekend punch without payment, review or a payroll block', function () {
+    // ⚠ The flag matters more than it looks: needs_review makes the day
+    // provisional, and ONE provisional day blocks the whole payroll run. The
+    // owner visiting the office on a Friday must not hold nine salaries.
+    $outcome = engineRun(
+        ['2026-08-07 11:00:00', '2026-08-07 13:00:00'],
+        ['date' => '2026-08-07', 'schedule_type' => ScheduleType::Exempt, 'is_weekly_off' => true],
+    );
+
+    expect($outcome->status)->toBe(AttendanceStatus::WeeklyOff);
+    expect($outcome->payableMinutes)->toBe(0);
+    expect($outcome->workedMinutes)->toBeGreaterThan(0);
+    expect($outcome->flags)->not->toContain('unapproved_holiday_work');
+    expect($outcome->flags)->not->toContain('needs_review');
+    expect($outcome->isProvisional)->toBeFalse();
+});
+
+it('still charges leave normally for an exempt employee', function () {
+    $outcome = engineRun([], ['schedule_type' => ScheduleType::Exempt, 'shift' => null, 'leave' => true]);
+
+    expect($outcome->status)->toBe(AttendanceStatus::OnLeave);
+});

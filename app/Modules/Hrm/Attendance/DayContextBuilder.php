@@ -187,6 +187,8 @@ class DayContextBuilder
     /**
      * Stage 3. Weekly off comes from the calendar's weekly_off_days (SCH-06,
      * Bangladesh default Friday); a holiday is a dated entry on it (SCH-07).
+     * A working-day override cancels both for one specific date - a worked
+     * Friday is an ordinary working day, lateness rules and all.
      *
      * @return array{0: bool, 1: bool, 2: string|null}
      */
@@ -195,6 +197,10 @@ class DayContextBuilder
         $calendar = $assignment?->calendar;
 
         if ($calendar === null) {
+            return [false, false, null];
+        }
+
+        if ($calendar->workingDayOverrides()->whereDate('date', $date->toDateString())->exists()) {
             return [false, false, null];
         }
 

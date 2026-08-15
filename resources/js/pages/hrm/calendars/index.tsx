@@ -24,6 +24,12 @@ interface Holiday {
     name: string;
 }
 
+interface WorkingDayOverride {
+    id: number;
+    date: string;
+    reason: string;
+}
+
 interface Calendar {
     id: number;
     name: string;
@@ -33,6 +39,7 @@ interface Calendar {
     is_default: boolean;
     is_active: boolean;
     holidays: Holiday[];
+    working_day_overrides: WorkingDayOverride[];
 }
 
 interface Weekday {
@@ -168,6 +175,55 @@ function AddHoliday({ calendarId }: { calendarId: number }) {
     );
 }
 
+function AddWorkingDay({ calendarId }: { calendarId: number }) {
+    const [date, setDate] = useState('');
+    const [reason, setReason] = useState('');
+    const [error, setError] = useState('');
+
+    const add = () => {
+        router.post(
+            route('hrm.calendars.working-days.store', calendarId),
+            { date, reason },
+            {
+                preserveScroll: true,
+                onError: (e) => setError(e.date ?? e.reason ?? 'Could not add the override.'),
+                onSuccess: () => {
+                    setDate('');
+                    setReason('');
+                    setError('');
+                },
+            },
+        );
+    };
+
+    return (
+        <div className="flex flex-wrap items-end gap-2">
+            <div className="grid gap-1">
+                <Label htmlFor={`wd-date-${calendarId}`} className="text-xs">
+                    Date
+                </Label>
+                <Input id={`wd-date-${calendarId}`} type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9" />
+            </div>
+            <div className="grid gap-1">
+                <Label htmlFor={`wd-reason-${calendarId}`} className="text-xs">
+                    Reason
+                </Label>
+                <Input
+                    id={`wd-reason-${calendarId}`}
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="e.g. Friday worked in place of a holiday"
+                    className="h-9"
+                />
+            </div>
+            <Button size="sm" variant="outline" onClick={add} disabled={date === '' || reason.trim() === ''}>
+                Add working day
+            </Button>
+            {error && <p className="w-full text-xs text-destructive">{error}</p>}
+        </div>
+    );
+}
+
 export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -259,6 +315,41 @@ export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
                             </div>
 
                             <AddHoliday calendarId={calendar.id} />
+
+                            <div className="border-sidebar-border/70 dark:border-sidebar-border border-t pt-3">
+                                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                                    Working-day overrides — dates that ARE working days despite a weekly off or holiday
+                                </p>
+                                {calendar.working_day_overrides.length > 0 && (
+                                    <table className="w-full min-w-[28rem] text-sm">
+                                        <tbody>
+                                            {calendar.working_day_overrides.map((override) => (
+                                                <tr key={override.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                                    <td className="w-32 py-1.5 text-muted-foreground">{override.date}</td>
+                                                    <td className="py-1.5">{override.reason}</td>
+                                                    <td className="py-1.5 text-right">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                router.delete(
+                                                                    route('hrm.calendars.working-days.destroy', [calendar.id, override.id]),
+                                                                    { preserveScroll: true },
+                                                                )
+                                                            }
+                                                        >
+                                                            Remove
+                                                        </Button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                                <div className="mt-2">
+                                    <AddWorkingDay calendarId={calendar.id} />
+                                </div>
+                            </div>
                         </div>
                     ))
                 )}

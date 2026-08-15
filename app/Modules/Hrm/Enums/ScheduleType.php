@@ -17,6 +17,17 @@ enum ScheduleType: string
     case Flexible = 'flexible';
     case FieldDuty = 'field_duty';
 
+    /**
+     * Presence assumed. One step past Flexible/FieldDuty on the same axis:
+     * they are exempt from punctuality and pair-closing, this is additionally
+     * exempt from EVIDENCE - a working day with no punches is still Present.
+     * For the people whose work the device cannot see (works from home, or the
+     * owner whose day is meetings): no lateness, no absence, punches still
+     * recorded when given. Assigned per employee, effective-dated, like any
+     * other schedule.
+     */
+    case Exempt = 'exempt';
+
     public function label(): string
     {
         return match ($this) {
@@ -25,7 +36,17 @@ enum ScheduleType: string
             self::Roster => 'Daily/weekly roster',
             self::Flexible => 'Flexible hours',
             self::FieldDuty => 'Field duty',
+            self::Exempt => 'Exempt (presence assumed)',
         };
+    }
+
+    /**
+     * Presence is assumed rather than evidenced: a working day with no punches
+     * is Present, and work on a non-working day never raises a review flag.
+     */
+    public function assumesPresence(): bool
+    {
+        return $this === self::Exempt;
     }
 
     /**

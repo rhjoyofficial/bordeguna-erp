@@ -61,6 +61,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::delete('calendars/{calendar}', [HolidayCalendarController::class, 'destroy'])->name('calendars.destroy');
     Route::post('calendars/{calendar}/holidays', [HolidayCalendarController::class, 'storeHoliday'])->name('calendars.holidays.store');
     Route::delete('calendars/{calendar}/holidays/{holiday}', [HolidayCalendarController::class, 'destroyHoliday'])->name('calendars.holidays.destroy');
+    Route::post('calendars/{calendar}/working-days', [HolidayCalendarController::class, 'storeWorkingDay'])->name('calendars.working-days.store');
+    Route::delete('calendars/{calendar}/working-days/{override}', [HolidayCalendarController::class, 'destroyWorkingDay'])->name('calendars.working-days.destroy');
 
     // Scheduling — binding shifts/calendars to groups and individuals (SCH-01/06/07)
     // and the resulting roster. {schedule} is business-scoped.

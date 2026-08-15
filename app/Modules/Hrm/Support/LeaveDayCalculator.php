@@ -49,7 +49,13 @@ class LeaveDayCalculator
 
     /**
      * A day is chargeable unless the employee's assigned calendar says it is a
-     * weekly off or a holiday.
+     * weekly off or a holiday. Deliberately the calendar's own isWorkingDay():
+     * attendance and leave charging must never disagree about what a working
+     * day is, and a working-day override (a worked Friday) counts here too.
+     *
+     * ⚠ Known limitation, accepted in the design note: covered_dates are
+     * frozen at approval time, so an override created AFTER a leave was
+     * approved does not recharge that leave.
      */
     public function isWorkingDay(Employee $employee, Carbon|string $date): bool
     {
@@ -61,11 +67,7 @@ class LeaveDayCalculator
             return true;
         }
 
-        if (in_array($date->dayOfWeek, array_map('intval', $calendar->weekly_off_days ?? []), true)) {
-            return false;
-        }
-
-        return ! $calendar->holidays()->whereDate('date', $date->toDateString())->exists();
+        return $calendar->isWorkingDay($date);
     }
 
     /**
