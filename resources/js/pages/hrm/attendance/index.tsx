@@ -23,6 +23,8 @@ interface Punch {
     employee: string | null;
     employee_code: string | null;
     punched_at: string;
+    date: string;
+    weekday: string;
     time: string;
     source: string;
     direction: string | null;
@@ -39,11 +41,23 @@ interface Punch {
     recorded_by: string | null;
 }
 
+interface Paginated<T> {
+    data: T[];
+    current_page: number;
+    last_page: number;
+    from: number | null;
+    to: number | null;
+    total: number;
+    links: { url: string | null; label: string; active: boolean }[];
+    prev_page_url: string | null;
+    next_page_url: string | null;
+}
+
 interface IndexProps {
     on: string;
-    filters: { employee_id: number | null; review: boolean };
-    punches: Punch[];
-    summary: { total: number; needs_review: number; employees: number };
+    filters: { from: string; to: string; employee_id: number | null; review: boolean; sort: string; dir: string };
+    punches: Paginated<Punch>;
+    summary: { total: number; needs_review: number; employees: number; days: number };
     employees: { id: number; name: string }[];
     directions: { value: string; label: string }[];
 }
@@ -152,8 +166,15 @@ function ManualPunchDialog({ employees, directions, on }: { employees: { id: num
 
 export default function AttendanceIndex({ on, filters, punches, summary, employees, directions }: IndexProps) {
     const reload = (params: Record<string, string | number | boolean | null>) => {
-        router.get(route('hrm.attendance.index'), { on, ...filters, ...params }, { preserveState: true, preserveScroll: true, replace: true });
+        // `on` is deliberately dropped: it is the single-day shortcut, and
+        // carrying it alongside from/to would pin the range to one day forever.
+        router.get(route('hrm.attendance.index'), { ...filters, ...params, page: null }, { preserveState: true, preserveScroll: true, replace: true });
     };
+
+    const sortBy = (column: 'time' | 'employee') =>
+        reload({ sort: column, dir: filters.sort === column && filters.dir === 'desc' ? 'asc' : 'desc' });
+
+    const arrow = (column: string) => (filters.sort === column ? (filters.dir === 'asc' ? ' ↑' : ' ↓') : '');
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -164,12 +185,20 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                         <h2 className="text-lg font-medium">Punch log</h2>
                         <p className="text-sm text-muted-foreground">
                             {summary.total} {summary.total === 1 ? 'punch' : 'punches'} from {summary.employees}{' '}
-                            {summary.employees === 1 ? 'employee' : 'employees'}
+                            {summary.employees === 1 ? 'employee' : 'employees'} across {summary.days}{' '}
+                            {summary.days === 1 ? 'day' : 'days'}
                             {summary.needs_review > 0 && ` · ${summary.needs_review} flagged for review`}
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <Input type="date" className="w-40" value={on} onChange={(e) => reload({ on: e.target.value })} />
+                        <Label htmlFor="from" className="text-sm text-muted-foreground">
+                            From
+                        </Label>
+                        <Input id="from" type="date" className="w-40" value={filters.from} onChange={(e) => reload({ from: e.target.value })} />
+                        <Label htmlFor="to" className="text-sm text-muted-foreground">
+                            To
+                        </Label>
+                        <Input id="to" type="date" className="w-40" value={filters.to} onChange={(e) => reload({ to: e.target.value })} />
                         <select className={selectClass} value={filters.employee_id ?? ''} onChange={(e) => reload({ employee_id: e.target.value || null })}>
                             <option value="">All employees</option>
                             {employees.map((e) => (
@@ -187,14 +216,24 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                    {punches.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No punches captured on {on}.</p>
+                    {punches.data.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                            No punches captured between {filters.from} and {filters.to}. Widen the dates, or check the import screen.
+                        </p>
                     ) : (
                         <table className="w-full min-w-[64rem] text-sm">
                             <thead>
                                 <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
-                                    <th className="py-2">Time</th>
-                                    <th className="py-2">Employee</th>
+                                    <th className="py-2">
+                                        <button type="button" className="hover:text-foreground" onClick={() => sortBy('time')}>
+                                            Date &amp; time{arrow('time')}
+                                        </button>
+                                    </th>
+                                    <th className="py-2">
+                                        <button type="button" className="hover:text-foreground" onClick={() => sortBy('employee')}>
+                                            Employee{arrow('employee')}
+                                        </button>
+                                    </th>
                                     <th className="py-2">Direction</th>
                                     <th className="py-2">Source</th>
                                     <th className="py-2">Device / proof</th>
@@ -202,9 +241,11 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                                 </tr>
                             </thead>
                             <tbody>
-                                {punches.map((punch) => (
+                                {punches.data.map((punch) => (
                                     <tr key={punch.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                        <td className="py-2 font-mono text-xs">{punch.time}</td>
+                                        <td className="py-2 font-mono text-xs whitespace-nowrap">
+                                            {punch.date} <span className="text-muted-foreground">{punch.weekday}</span> {punch.time}
+                                        </td>
                                         <td className="py-2">
                                             {punch.employee}
                                             <span className="ml-2 text-xs text-muted-foreground">{punch.employee_code}</span>
@@ -239,6 +280,35 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                         </table>
                     )}
                 </div>
+
+                {punches.last_page > 1 && (
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">
+                            Showing {punches.from}–{punches.to} of {punches.total}
+                        </span>
+                        <div className="flex gap-2">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={punches.prev_page_url === null}
+                                onClick={() => punches.prev_page_url && router.get(punches.prev_page_url, {}, { preserveState: true, preserveScroll: true })}
+                            >
+                                Previous
+                            </Button>
+                            <span className="self-center text-muted-foreground">
+                                Page {punches.current_page} of {punches.last_page}
+                            </span>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={punches.next_page_url === null}
+                                onClick={() => punches.next_page_url && router.get(punches.next_page_url, {}, { preserveState: true, preserveScroll: true })}
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    </div>
+                )}
 
                 <p className="text-xs text-muted-foreground">
                     Raw punches are immutable and cannot be edited or deleted. Corrections are recorded separately.

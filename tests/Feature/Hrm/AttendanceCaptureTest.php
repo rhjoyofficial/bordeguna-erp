@@ -422,7 +422,43 @@ it('renders the punch log for a date', function () {
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/attendance/index')
-            ->where('punches.0.employee', $employee->fullName())
+            // Paginated since the log became a range rather than a single day.
+            ->where('punches.data.0.employee', $employee->fullName())
+            ->where('punches.data.0.date', '2026-07-25')
+            ->where('summary.total', 1)
+            ->where('filters.from', '2026-07-25')
+            ->where('filters.to', '2026-07-25')
+        );
+});
+
+it('shows a whole range of punches in date order, not just one day', function () {
+    $employee = attEmployee();
+
+    foreach (['2026-07-25 09:00:00', '2026-07-27 09:05:00', '2026-08-01 08:55:00'] as $at) {
+        app(RecordPunch::class)->handle($employee, $at, PunchSource::Biometric, []);
+    }
+
+    attOwner()->get(route('hrm.attendance.index', ['from' => '2026-07-25', 'to' => '2026-08-01', 'dir' => 'asc']))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('summary.total', 3)
+            ->where('summary.days', 3)
+            ->where('punches.data.0.date', '2026-07-25')
+            ->where('punches.data.2.date', '2026-08-01')
+        );
+});
+
+it('anchors the default window on the newest punch rather than on today', function () {
+    // ⚠ The defect this screen was reported for: 136 punches imported cleanly,
+    // the log opened on a day the device recorded none, and it said nothing was
+    // captured. Defaulting to today is what made a full import look empty.
+    $employee = attEmployee();
+    app(RecordPunch::class)->handle($employee, '2026-07-25 09:00:00', PunchSource::Biometric, []);
+
+    attOwner()->get(route('hrm.attendance.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('filters.to', '2026-07-25')
             ->where('summary.total', 1)
         );
 });

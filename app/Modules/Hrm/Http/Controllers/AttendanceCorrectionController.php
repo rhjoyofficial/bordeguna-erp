@@ -41,6 +41,15 @@ class AttendanceCorrectionController extends Controller
         ])->orderByDesc('id')->limit(100)->get();
 
         return Inertia::render('hrm/attendance/corrections', [
+            // Arrives from the "Fix" button on a day holding payroll, so the form
+            // opens already pointed at the employee and date that need fixing
+            // rather than making someone re-find them.
+            'prefill' => [
+                'employee_id' => $request->integer('employee_id') ?: null,
+                'attendance_date' => $request->filled('date')
+                    ? Carbon::parse($request->string('date')->toString())->toDateString()
+                    : null,
+            ],
             'corrections' => $corrections->map(fn (AttendanceCorrection $c) => $this->present($c)),
             'locks' => AttendancePeriodLock::with(['locker:id,name', 'unlocker:id,name'])
                 ->orderByDesc('period_start')->limit(25)->get()

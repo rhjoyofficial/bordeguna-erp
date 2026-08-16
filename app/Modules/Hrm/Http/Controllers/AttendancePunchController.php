@@ -11,6 +11,7 @@ use App\Modules\Hrm\Models\Employee;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum as EnumRule;
 use Inertia\Inertia;
@@ -31,27 +32,52 @@ class AttendancePunchController extends Controller
     {
         $this->authorize('hrm.attendance.manage');
 
-        $on = $request->date('on') ? Carbon::parse($request->string('on')->toString()) : Carbon::today();
+        // ⚠ This screen used to show ONE day and default it to today. Import a
+        // fortnight of punches on a day the device recorded none, open the log,
+        // and it says nothing was captured — which is exactly what happened on
+        // 16 August after 136 punches landed cleanly. A log you cannot scroll
+        // through is not a log. The range is the default view now; `on` still
+        // works so an existing link keeps meaning what it meant.
+        [$from, $to] = $this->range($request);
+
         $employeeId = $request->integer('employee_id') ?: null;
         $onlyReview = $request->boolean('review');
+        $sort = in_array($request->string('sort')->toString(), ['time', 'employee'], true)
+            ? $request->string('sort')->toString()
+            : 'time';
+        $direction = $request->string('dir')->toString() === 'asc' ? 'asc' : 'desc';
 
-        $punches = AttendancePunch::with(['employee:id,employee_code,first_name,last_name', 'recorder:id,name'])
-            ->onDate($on)
-            ->when($employeeId, fn ($query) => $query->where('employee_id', $employeeId))
-            ->when($onlyReview, fn ($query) => $query->needingReview())
-            ->orderBy('punched_at')
-            ->get()
-            ->map(fn (AttendancePunch $punch) => $this->present($punch));
+        $query = AttendancePunch::with(['employee:id,employee_code,first_name,last_name', 'recorder:id,name'])
+            ->whereBetween('punched_at', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
+            ->when($employeeId, fn ($q) => $q->where('employee_id', $employeeId))
+            ->when($onlyReview, fn ($q) => $q->needingReview());
+
+        // Counted before paging, so the summary describes the whole range rather
+        // than whichever slice happens to be on screen.
+        $summary = [
+            'total' => (clone $query)->count(),
+            'needs_review' => (clone $query)->needingReview()->count(),
+            'employees' => (clone $query)->distinct()->count('employee_id'),
+            'days' => (clone $query)->distinct()->count(DB::raw('date(punched_at)')),
+        ];
+
+        $punches = $this->sorted($query, $sort, $direction)
+            ->paginate(100)
+            ->withQueryString()
+            ->through(fn (AttendancePunch $punch) => $this->present($punch));
 
         return Inertia::render('hrm/attendance/index', [
-            'on' => $on->toDateString(),
-            'filters' => ['employee_id' => $employeeId, 'review' => $onlyReview],
-            'punches' => $punches,
-            'summary' => [
-                'total' => $punches->count(),
-                'needs_review' => $punches->where('needs_review', true)->count(),
-                'employees' => $punches->pluck('employee_id')->unique()->count(),
+            'on' => $to->toDateString(),
+            'filters' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'employee_id' => $employeeId,
+                'review' => $onlyReview,
+                'sort' => $sort,
+                'dir' => $direction,
             ],
+            'punches' => $punches,
+            'summary' => $summary,
             'employees' => $this->employeeOptions(),
             'directions' => collect(PunchDirection::cases())
                 ->map(fn (PunchDirection $d) => ['value' => $d->value, 'label' => $d->label()]),
@@ -94,6 +120,57 @@ class AttendancePunchController extends Controller
         );
     }
 
+    /**
+     * The window being looked at.
+     *
+     * A bare `on=` still means that single day, so old links and the "jump to a
+     * day" control keep working. Otherwise the default is the last 30 days up to
+     * the most recent punch there actually is — not up to today, because today
+     * is frequently a day nobody has imported yet, and an empty screen reads as
+     * "no data exists" rather than "you are looking past the end of it".
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function range(Request $request): array
+    {
+        if ($request->filled('on') && ! $request->filled('from') && ! $request->filled('to')) {
+            $on = Carbon::parse($request->string('on')->toString());
+
+            return [$on, $on];
+        }
+
+        $latest = AttendancePunch::max('punched_at');
+        $anchor = $latest !== null ? Carbon::parse($latest) : Carbon::today();
+
+        $to = $request->filled('to') ? Carbon::parse($request->string('to')->toString()) : $anchor;
+        $from = $request->filled('from')
+            ? Carbon::parse($request->string('from')->toString())
+            : $to->copy()->subDays(29);
+
+        // A backwards range returns nothing and looks like missing data, so it
+        // is corrected rather than obeyed.
+        return $from->gt($to) ? [$to, $from] : [$from, $to];
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<AttendancePunch>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<AttendancePunch>
+     */
+    private function sorted($query, string $sort, string $direction)
+    {
+        if ($sort === 'employee') {
+            // Ordered by the person, then their day in time order, so one
+            // employee's fortnight reads as a continuous story.
+            return $query->join('employees', 'employees.id', '=', 'attendance_punches.employee_id')
+                ->orderBy('employees.first_name', $direction)
+                ->orderBy('employees.last_name', $direction)
+                ->orderBy('attendance_punches.punched_at')
+                ->select('attendance_punches.*');
+        }
+
+        return $query->orderBy('punched_at', $direction);
+    }
+
     private function businessId(): int
     {
         return app(\App\Modules\Foundation\Support\BusinessContext::class)->id();
@@ -110,6 +187,9 @@ class AttendancePunchController extends Controller
             'employee' => $punch->employee?->fullName(),
             'employee_code' => $punch->employee?->employee_code,
             'punched_at' => $punch->punched_at->format('Y-m-d H:i:s'),
+            // The log spans days now, so the date has to travel with the row.
+            'date' => $punch->punched_at->format('Y-m-d'),
+            'weekday' => $punch->punched_at->format('D'),
             'time' => $punch->punched_at->format('H:i:s'),
             'source' => $punch->source->label(),
             'direction' => $punch->direction?->label(),

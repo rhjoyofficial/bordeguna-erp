@@ -9,6 +9,9 @@ import { Fragment, useState } from 'react';
 
 interface Day {
     id: number;
+    date: string;
+    weekday: string;
+    employee_id: number;
     employee: string | null;
     employee_code: string | null;
     status: string;
@@ -33,7 +36,8 @@ interface Day {
 
 interface DailyProps {
     on: string;
-    filters: { review: boolean };
+    filters: { from: string; to: string; employee_id: number | null; review: boolean; holds: boolean };
+    employees: { id: number; name: string }[];
     days: Day[];
     summary: { total: number; provisional: number; holds: number; with_consequence: number };
     policy: { name: string; version: number; effective_from: string } | null;
@@ -51,12 +55,16 @@ function statusVariant(status: string): 'default' | 'secondary' | 'outline' {
     return 'secondary';
 }
 
-export default function DailyAttendance({ on, filters, days, summary, policy, department_policies = [] }: DailyProps) {
+export default function DailyAttendance({ on, filters, employees = [], days, summary, policy, department_policies = [] }: DailyProps) {
     const [expanded, setExpanded] = useState<number | null>(null);
     const [busy, setBusy] = useState(false);
 
-    const reload = (params: Record<string, string | boolean>) =>
-        router.get(route('hrm.attendance.daily.index'), { on, ...filters, ...params }, { preserveState: true, preserveScroll: true, replace: true });
+    // `on` is left out: it is the single-day shortcut, and sending it with a
+    // range would pin the grid to one day whatever the date boxes say.
+    const reload = (params: Record<string, string | number | boolean | null>) =>
+        router.get(route('hrm.attendance.daily.index'), { ...filters, ...params }, { preserveState: true, preserveScroll: true, replace: true });
+
+    const isRange = filters.from !== filters.to;
 
     const run = (routeName: string, data: Record<string, string | number | boolean | number[]>) => {
         setBusy(true);
@@ -77,20 +85,47 @@ export default function DailyAttendance({ on, filters, days, summary, policy, de
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <Label htmlFor="on" className="text-sm text-muted-foreground">
-                            Date
+                        <Label htmlFor="from" className="text-sm text-muted-foreground">
+                            From
                         </Label>
-                        <Input id="on" type="date" className="w-40" value={on} onChange={(e) => reload({ on: e.target.value })} />
+                        <Input id="from" type="date" className="w-40" value={filters.from} onChange={(e) => reload({ from: e.target.value })} />
+                        <Label htmlFor="to" className="text-sm text-muted-foreground">
+                            To
+                        </Label>
+                        <Input id="to" type="date" className="w-40" value={filters.to} onChange={(e) => reload({ to: e.target.value })} />
+                        <select
+                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            value={filters.employee_id ?? ''}
+                            onChange={(e) => reload({ employee_id: e.target.value || null })}
+                        >
+                            <option value="">All employees</option>
+                            {employees.map((e) => (
+                                <option key={e.id} value={e.id}>
+                                    {e.name}
+                                </option>
+                            ))}
+                        </select>
                         <label className="flex items-center gap-2 text-sm">
                             <input type="checkbox" checked={filters.review} onChange={(e) => reload({ review: e.target.checked })} />
                             Needs review only
                         </label>
-                        <Button size="sm" variant="outline" disabled={busy} onClick={() => run('hrm.attendance.daily.process', { on })}>
-                            {busy ? 'Working…' : 'Process day'}
-                        </Button>
-                        <Button size="sm" disabled={busy || summary.provisional === 0} onClick={() => run('hrm.attendance.daily.finalize', { on })}>
-                            Finalise all
-                        </Button>
+                        <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={filters.holds} onChange={(e) => reload({ holds: e.target.checked })} />
+                            Holding payroll only
+                        </label>
+                        {/* Process and finalise act on ONE day, so they are offered only
+                            when one day is being looked at. Offering them over a range
+                            would suggest they do something they do not. */}
+                        {!isRange && (
+                            <>
+                                <Button size="sm" variant="outline" disabled={busy} onClick={() => run('hrm.attendance.daily.process', { on })}>
+                                    {busy ? 'Working…' : 'Process day'}
+                                </Button>
+                                <Button size="sm" disabled={busy || summary.provisional === 0} onClick={() => run('hrm.attendance.daily.finalize', { on })}>
+                                    Finalise all
+                                </Button>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -117,12 +152,14 @@ export default function DailyAttendance({ on, filters, days, summary, policy, de
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     {days.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                            Nothing processed for {on} yet. Use “Process day” to run the engine over the captured punches.
+                            Nothing processed between {filters.from} and {filters.to}. Pick a single date and use “Process day” to run the engine over
+                            the captured punches.
                         </p>
                     ) : (
-                        <table className="w-full min-w-[68rem] text-sm">
+                        <table className="w-full min-w-[72rem] text-sm">
                             <thead>
                                 <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                    {isRange && <th className="py-2">Date</th>}
                                     <th className="py-2">Employee</th>
                                     <th className="py-2">Status</th>
                                     <th className="py-2">In / Out</th>
@@ -137,6 +174,11 @@ export default function DailyAttendance({ on, filters, days, summary, policy, de
                                 {days.map((day) => (
                                     <Fragment key={day.id}>
                                         <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                            {isRange && (
+                                                <td className="py-2 font-mono text-xs whitespace-nowrap">
+                                                    {day.date} <span className="text-muted-foreground">{day.weekday}</span>
+                                                </td>
+                                            )}
                                             <td className="py-2">
                                                 {day.employee}
                                                 <span className="ml-2 text-xs text-muted-foreground">{day.employee_code}</span>
@@ -174,7 +216,7 @@ export default function DailyAttendance({ on, filters, days, summary, policy, de
                                                 <Button variant="ghost" size="sm" onClick={() => setExpanded(expanded === day.id ? null : day.id)}>
                                                     {expanded === day.id ? 'Hide' : 'Explain'}
                                                 </Button>
-                                                {day.is_provisional && !day.holds_payroll && (
+                                                {day.is_provisional && !day.holds_payroll && !isRange && (
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
@@ -184,11 +226,19 @@ export default function DailyAttendance({ on, filters, days, summary, policy, de
                                                         Finalise
                                                     </Button>
                                                 )}
+                                                {/* A day held for a missing punch can only be cleared by an
+                                                    approved correction, so the row links straight to the form
+                                                    instead of leaving someone to find it. */}
+                                                {day.holds_payroll && (
+                                                    <Button variant="ghost" size="sm" asChild>
+                                                        <a href={`/hrm/attendance/corrections?employee_id=${day.employee_id}&date=${day.date}`}>Fix</a>
+                                                    </Button>
+                                                )}
                                             </td>
                                         </tr>
                                         {expanded === day.id && (
                                             <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                                <td colSpan={8} className="py-3">
+                                                <td colSpan={isRange ? 9 : 8} className="py-3">
                                                     <div className="text-xs">
                                                         <p className="mb-1 font-medium">How this day was decided</p>
                                                         <ul className="ml-4 list-disc space-y-1 text-muted-foreground">

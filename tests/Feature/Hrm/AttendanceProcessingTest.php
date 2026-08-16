@@ -443,3 +443,39 @@ it('reads the department as of the day being judged, not as of today', function 
 
     expect($day->consequence)->toBe(AttendanceConsequence::None);
 });
+
+it('shows a whole range of processed days in date order', function () {
+    // ⚠⚠ Regression guard. The first version of this range used whereBetween on
+    // date strings, which returns NOTHING against a date-cast column stored with
+    // a time component, and returns it silently — an empty grid reads exactly
+    // like "nothing has been processed". Sixth appearance of that trap here.
+    foreach (['2026-08-03', '2026-08-04', '2026-08-06'] as $date) {
+        procPunch("{$date} 09:00:00");
+        procPunch("{$date} 18:00:00");
+    }
+    app(ProcessAttendance::class)->forRange($this->employee, '2026-08-03', '2026-08-06');
+
+    procOwner()->get(route('hrm.attendance.daily.index', ['from' => '2026-08-03', 'to' => '2026-08-06']))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('days.0.date', '2026-08-03')
+            ->where('days.3.date', '2026-08-06')
+            ->where('filters.from', '2026-08-03')
+            ->where('filters.to', '2026-08-06')
+        );
+});
+
+it('filters the grid down to the days that are holding payroll', function () {
+    procPunch('2026-08-03 09:00:00');
+    procPunch('2026-08-03 18:00:00');
+    procPunch('2026-08-04 09:00:00');  // no clock-out: this is the held day
+    app(ProcessAttendance::class)->forRange($this->employee, '2026-08-03', '2026-08-04');
+
+    procOwner()->get(route('hrm.attendance.daily.index', ['from' => '2026-08-03', 'to' => '2026-08-04', 'holds' => true]))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('days', 1)
+            ->where('days.0.date', '2026-08-04')
+            ->where('days.0.holds_payroll', true)
+        );
+});

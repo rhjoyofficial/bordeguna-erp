@@ -57,6 +57,7 @@ interface Props {
     types: CorrectionType[];
     directions: { value: string; label: string }[];
     employees: { id: number; name: string }[];
+    prefill?: { employee_id: number | null; attendance_date: string | null };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -66,10 +67,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
-function CorrectionDialog({ types, directions, employees }: { types: CorrectionType[]; directions: { value: string; label: string }[]; employees: { id: number; name: string }[] }) {
-    const [open, setOpen] = useState(false);
-    const [employeeId, setEmployeeId] = useState('');
-    const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+function CorrectionDialog({ types, directions, employees, prefill }: { types: CorrectionType[]; directions: { value: string; label: string }[]; employees: { id: number; name: string }[]; prefill?: { employee_id: number | null; attendance_date: string | null } }) {
+    // Opens by itself when the Fix button on a held day sent us here, so the
+    // journey from "this day blocks payroll" to "here is why, and here is the
+    // correction" is one click rather than a hunt through the screen.
+    const [open, setOpen] = useState(prefill?.employee_id != null && prefill?.attendance_date != null);
+    const [employeeId, setEmployeeId] = useState(prefill?.employee_id != null ? String(prefill.employee_id) : '');
+    const [date, setDate] = useState(prefill?.attendance_date ?? new Date().toISOString().slice(0, 10));
     const [type, setType] = useState(types[0]?.value ?? 'add_punch');
     const [punchId, setPunchId] = useState('');
     const [correctedAt, setCorrectedAt] = useState('');
@@ -358,7 +362,7 @@ function UnlockDialog({ lock }: { lock: Lock }) {
     );
 }
 
-export default function Corrections({ corrections, locks, types, directions, employees }: Props) {
+export default function Corrections({ corrections, locks, types, directions, employees, prefill }: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Attendance corrections" />
@@ -372,7 +376,7 @@ export default function Corrections({ corrections, locks, types, directions, emp
                     </div>
                     <div className="flex gap-3">
                         <LockDialog />
-                        <CorrectionDialog types={types} directions={directions} employees={employees} />
+                        <CorrectionDialog types={types} directions={directions} employees={employees} prefill={prefill} />
                     </div>
                 </div>
 
