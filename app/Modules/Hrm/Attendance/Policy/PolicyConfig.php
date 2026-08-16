@@ -22,6 +22,7 @@ final readonly class PolicyConfig
         public float $fullDayMinimumHours,
         public ?int $halfDayArrivalAfterMinutes,
         public bool $countHolidayWorkWithoutApproval,
+        public int $duplicateScanWindowSeconds = 300,
     ) {}
 
     /**
@@ -39,6 +40,19 @@ final readonly class PolicyConfig
             isset($config['half_day_arrival_after_minutes']) ? (int) $config['half_day_arrival_after_minutes'] : null,
             // POL-09: work on a holiday or off-day never counts unless approved.
             (bool) ($config['count_holiday_work_without_approval'] ?? false),
+            // ⚠ Correction C16 (2026-08-16). The biometric device re-reads a
+            // finger that lingers, so one arrival can arrive as two punches a
+            // second or two apart. Paired strictly in time order that becomes
+            // "in at 08:51:25, out at 08:51:26" — a one-second working day that
+            // records ZERO minutes worked and orphans the real evening punch.
+            // Seen on 7 August days in the first real month, one of them
+            // belonging to the only overtime-eligible employee.
+            //
+            // Punches are immutable (ATT-03), so the duplicate is never deleted:
+            // the raw record keeps both scans and the engine collapses them at
+            // derivation time, which is also the only layer a rule change can
+            // be re-run against.
+            (int) ($config['duplicate_scan_window_seconds'] ?? 300),
         );
     }
 
@@ -68,6 +82,7 @@ final readonly class PolicyConfig
             'full_day_minimum_hours' => $this->fullDayMinimumHours,
             'half_day_arrival_after_minutes' => $this->halfDayArrivalAfterMinutes,
             'count_holiday_work_without_approval' => $this->countHolidayWorkWithoutApproval,
+            'duplicate_scan_window_seconds' => $this->duplicateScanWindowSeconds,
         ];
     }
 }

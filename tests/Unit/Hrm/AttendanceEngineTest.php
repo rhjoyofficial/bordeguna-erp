@@ -185,8 +185,52 @@ it('pairs first-in and last-out across a break', function () {
 
     expect($outcome->firstIn->format('H:i'))->toBe('09:00');
     expect($outcome->lastOut->format('H:i'))->toBe('18:00');
-    // 4h + 4h15 inside the spans; the 45 minute gap is already excluded.
+    // ⚠ Correction C16. This used to assert 495: the spans summed, with the
+    // 45 minute gap excluded. That was wrong under a FIXED-DEDUCTION break,
+    // which then subtracted a further 60 minutes — charging the same break
+    // twice, once as measured and once as assumed. The day is 09:00 to 18:00.
+    expect($outcome->workedMinutes)->toBe(540);
+    expect($outcome->payableMinutes)->toBe(480);
+});
+
+it('measures the break from the punches when the shift says to', function () {
+    $outcome = engineRun([
+        '2026-08-03 09:00:00', '2026-08-03 13:00:00',
+        '2026-08-03 13:45:00', '2026-08-03 18:00:00',
+    ], ['shift' => engineShift(['break_policy' => BreakPolicy::ActualPunches])]);
+
+    // Where the break IS punched, the alternating pairing still applies and the
+    // 45 minute gap is excluded by construction. Nothing further is deducted.
     expect($outcome->workedMinutes)->toBe(495);
+    expect($outcome->payableMinutes)->toBe(495);
+});
+
+it('reads a re-scanned finger as one arrival, not a one-second working day', function () {
+    // The exact shape seen on production, 1 August 2026: the device caught the
+    // same arrival twice, a single second apart, and the day recorded ZERO
+    // minutes worked against a man who was there until 18:18.
+    $outcome = engineRun([
+        '2026-08-03 08:51:25', '2026-08-03 08:51:26', '2026-08-03 18:18:18',
+    ]);
+
+    expect($outcome->status)->not->toBe(AttendanceStatus::MissingPunch)
+        ->and($outcome->holdsPayroll)->toBeFalse()
+        ->and($outcome->firstIn->format('H:i:s'))->toBe('08:51:25')
+        ->and($outcome->lastOut->format('H:i:s'))->toBe('18:18:18')
+        ->and($outcome->workedMinutes)->toBe(566);
+});
+
+it('does not let a chain of scans swallow the whole day', function () {
+    // Each scan is inside the window relative to the one before it, but the
+    // cluster is measured from the last one KEPT, so the arrival stays at 09:00
+    // and the 18:00 departure is never absorbed into it.
+    $outcome = engineRun([
+        '2026-08-03 09:00:00', '2026-08-03 09:04:00', '2026-08-03 09:08:00',
+        '2026-08-03 09:12:00', '2026-08-03 18:00:00',
+    ]);
+
+    expect($outcome->firstIn->format('H:i'))->toBe('09:00')
+        ->and($outcome->lastOut->format('H:i'))->toBe('18:00');
 });
 
 it('uses the device direction when the export provides one', function () {
@@ -434,17 +478,52 @@ it('still proposes absent for a field duty employee who never punched at all', f
         ->and($outcome->isProvisional)->toBeTrue();
 });
 
-it('closes the pair normally when a field employee does return', function () {
-    // The waiver is a fallback, not a bypass: when both punches exist the day
-    // is measured from them as usual, so worked time stays real wherever it
-    // can be known.
+it('reads only the first punch of a field duty day, even when more arrive', function () {
+    // ⚠ Correction C17. This used to assert that a returning field employee was
+    // measured from both punches. Joy's instruction of 2026-08-16 replaces that:
+    // "only count their first punch, if there is more then ignore them, because
+    // they come to office and go to the field and complete their work outside".
+    //
+    // A Retail Sales Officer who happens to pass the device again in the evening
+    // must not thereby be judged on hours the schedule never promised to capture.
     $outcome = engineRun(
         ['2026-08-03 08:30:00', '2026-08-03 18:00:00'],
         ['schedule_type' => ScheduleType::FieldDuty],
     );
 
     expect($outcome->holdsPayroll)->toBeFalse()
-        ->and($outcome->workedMinutes)->toBeGreaterThan(0);
+        ->and($outcome->firstIn->format('H:i'))->toBe('08:30')
+        ->and($outcome->lastOut)->toBeNull()
+        ->and($outcome->flags)->toContain('first_punch_only');
+});
+
+it('judges a field duty arrival against the shift it is assigned', function () {
+    // ⚠⚠ Correction C17, the half of C13 that was wrong. Field duty used to
+    // switch off punctuality as well as pair-closing. Circular BdG-HQ-OD-26071901
+    // requires the Retail Sales Department inside the office by 08:15, so a
+    // field-duty schedule that carries a shift is judged on arrival like anyone
+    // else. Only a schedule with NO shift has no deadline to miss.
+    $outcome = engineRun(
+        ['2026-08-03 08:47:00'],
+        [
+            'schedule_type' => ScheduleType::FieldDuty,
+            'shift' => engineShift(['start' => '08:15']),
+        ],
+    );
+
+    expect($outcome->status)->toBe(AttendanceStatus::Late)
+        ->and($outcome->lateMinutes)->toBe(32)
+        ->and($outcome->holdsPayroll)->toBeFalse();
+});
+
+it('leaves a field duty schedule with no shift unjudged on time', function () {
+    $outcome = engineRun(
+        ['2026-08-03 11:30:00'],
+        ['schedule_type' => ScheduleType::FieldDuty, 'shift' => null],
+    );
+
+    expect($outcome->status)->toBe(AttendanceStatus::FieldDuty)
+        ->and($outcome->lateMinutes)->toBe(0);
 });
 
 // =============================================================================

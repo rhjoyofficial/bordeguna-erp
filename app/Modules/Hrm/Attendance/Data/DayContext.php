@@ -50,9 +50,26 @@ final readonly class DayContext
     }
 
     /**
-     * Flexible and field-duty schedules are judged on hours worked and manager
-     * confirmation, not punctuality (SCH-01 / POL-10), so lateness and early
-     * departure simply do not apply to them.
+     * Whether arrival time is judged at all.
+     *
+     * ⚠⚠ **Correction C17 (2026-08-16) — the two rules were fused, and one of
+     * them was wrong.** Field duty used to switch off punctuality *and* the
+     * pair-closing requirement together, on the reasoning that field staff are
+     * measured by outcome. Bor De Guna's internal circular BdG-HQ-OD-26071901
+     * (19-07-2026, in force from 20 July) says otherwise, and says it about
+     * exactly these people: every member of the Retail Sales Department must be
+     * **inside the office by 08:15** and seated for the 08:30 morning ritual.
+     * They then leave for the field and do not come back to the device.
+     *
+     * So the two questions are genuinely separate, and always were:
+     *   - "must they close the pair?" — no, they never return (C13)
+     *   - "is their arrival judged?"  — yes, by written company order
+     *
+     * The distinction is now carried by DATA rather than by the enum: a schedule
+     * with a shift has a deadline to be judged against, one without does not.
+     * That is why the shift-null guard below is the whole rule for field duty,
+     * and why assigning the Retail shift to a field-duty schedule is what turns
+     * the 08:15 deadline back on.
      */
     public function judgesPunctuality(): bool
     {
@@ -60,7 +77,34 @@ final readonly class DayContext
             return false;
         }
 
-        return ! in_array($this->scheduleType, [ScheduleType::Flexible, ScheduleType::FieldDuty, ScheduleType::Exempt], true);
+        return ! in_array($this->scheduleType, [ScheduleType::Flexible, ScheduleType::Exempt], true);
+    }
+
+    /**
+     * Whether hours worked mean anything for this day.
+     *
+     * For someone whose day is one morning punch there is no span to measure, so
+     * every hours-based rule (early departure, the half-day floor, the full-day
+     * minimum) would fire on a day they worked normally. Judging them on a
+     * number that was never captured is worse than not judging them at all.
+     */
+    public function judgesHoursWorked(): bool
+    {
+        return ! $this->countsFirstPunchOnly();
+    }
+
+    /**
+     * The first punch is the whole record: they arrive, they are counted, and
+     * anything the device catches afterwards is noise.
+     *
+     * Joy's instruction of 2026-08-16 for the Retail Sales Officers: "only count
+     * their first punch, they are advised to give one punch a day, if there is
+     * more then ignore them, because they come to office and go to the field,
+     * complete their work outside, come next day, so one punch is enough."
+     */
+    public function countsFirstPunchOnly(): bool
+    {
+        return $this->scheduleType === ScheduleType::FieldDuty;
     }
 
     /**

@@ -23,11 +23,25 @@ class ApplyGraceAndThresholds implements AttendanceStage
 {
     public function handle(AttendanceComputation $computation): AttendanceComputation
     {
-        if ($computation->status !== AttendanceStatus::Present) {
+        $context = $computation->context;
+
+        // ⚠ Correction C17: Field duty is admitted here as well as Present, but
+        // only where it came from the SCHEDULE. A Retail Sales Officer's day
+        // resolves to FieldDuty because no clock-out is expected of them, and
+        // the circular still holds them to an 08:15 arrival, so a stage that
+        // only ever looked at Present could never judge it.
+        //
+        // ⚠⚠ An approved movement (POL-10) also lands on FieldDuty, and that day
+        // has no punches at all. Admitting it here half-days every approved
+        // field visit on zero recorded hours — caught by the engine test, not by
+        // reading the code.
+        $judgeable = $computation->status === AttendanceStatus::Present
+            || ($computation->status === AttendanceStatus::FieldDuty && $context->countsFirstPunchOnly());
+
+        if (! $judgeable) {
             return $computation;
         }
 
-        $context = $computation->context;
         $shift = $context->shift;
 
         if (! $context->judgesPunctuality() || $shift === null) {
@@ -35,6 +49,14 @@ class ApplyGraceAndThresholds implements AttendanceStage
         }
 
         $computation = $this->applyLateness($computation, $shift);
+
+        // Nothing after arrival was captured for a first-punch-only schedule, so
+        // leaving early and working a short day are questions with no evidence
+        // either way. Asking them anyway would half-day every honest field day.
+        if (! $context->judgesHoursWorked()) {
+            return $computation->note('Only the first punch of the day counts on this schedule, so hours worked are not judged.');
+        }
+
         $computation = $this->applyEarlyDeparture($computation, $shift);
 
         return $this->applyHalfDay($computation);
