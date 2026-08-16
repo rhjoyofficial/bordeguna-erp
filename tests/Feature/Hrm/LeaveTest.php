@@ -510,3 +510,52 @@ it('does not leak leave across businesses', function () {
     app(BusinessContext::class)->set($other->id);
     expect(LeaveLedgerEntry::count())->toBe(0);
 });
+
+// =============================================================================
+// ⚠⚠ The screen listed leave and movements and offered no way to create either.
+// Both engine actions worked and both routes existed; nothing in the browser
+// reached them, so HR could read the history of a decision but never make one.
+// Found 2026-08-16 by trying to record a real leave request through the UI and
+// finding no form. These assert the props the forms are built from, because a
+// screen test that only checks the component name would have passed throughout.
+// =============================================================================
+
+it('gives the leave screen everything a create form needs', function () {
+    leaveHr()->get(route('hrm.leave.index'))
+        ->assertOk()
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->component('hrm/leave/index')
+            ->has('employees')
+            ->has('leave_types')
+            // Without these two the type and portion pickers cannot be drawn.
+            ->has('portions')
+            ->has('movement_types')
+        );
+});
+
+it('records a leave request straight from the screen', function () {
+    grantDays($this->casual, 10);
+
+    leaveHr()->post(route('hrm.leave.store'), [
+        'employee_id' => $this->employee->id,
+        'leave_type_id' => $this->casual->id,
+        'start_date' => '2026-08-05',
+        'end_date' => '2026-08-06',
+        'day_portion' => 'full_day',
+        'reason' => 'Cousin\'s marriage ceremony',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect(\App\Modules\Hrm\Models\LeaveRequest::where('employee_id', $this->employee->id)->count())->toBe(1);
+});
+
+it('records a movement straight from the screen', function () {
+    leaveHr()->post(route('hrm.movements.store'), [
+        'employee_id' => $this->employee->id,
+        'type' => 'official_work',
+        'movement_date' => '2026-08-11',
+        'place' => 'Barishal',
+        'reason' => 'Outside Dhaka on office work',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect(\App\Modules\Hrm\Models\Movement::where('employee_id', $this->employee->id)->count())->toBe(1);
+});
