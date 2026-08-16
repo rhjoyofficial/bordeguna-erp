@@ -67,6 +67,26 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
+/**
+ * A datetime-local value to the timestamp the API expects.
+ *
+ * ⚠⚠ This used to be `value.replace('T', ' ') + ':00'`, which appended seconds
+ * whether or not the value already had them. Feed it a time that DOES carry
+ * seconds and it built "2026-08-08 11:13:33:00" — not a timestamp, so the
+ * request failed validation and the dialog simply sat there.
+ *
+ * Seconds matter here more than anywhere else in the app: the commonest reason
+ * to amend a punch back is to restore what the DEVICE recorded, and the device
+ * records to the second. A form that can only say 11:13 cannot put 11:13:33
+ * back, so an "undo" would quietly land 33 seconds away from the original.
+ */
+function toTimestamp(value: string): string {
+    const [datePart, timePart = '00:00'] = value.split('T');
+    const [hh = '00', mm = '00', ss = '00'] = timePart.split(':');
+
+    return `${datePart} ${hh.padStart(2, '0')}:${mm.padStart(2, '0')}:${ss.padStart(2, '0')}`;
+}
+
 function CorrectionDialog({ types, directions, employees, prefill }: { types: CorrectionType[]; directions: { value: string; label: string }[]; employees: { id: number; name: string }[]; prefill?: { employee_id: number | null; attendance_date: string | null } }) {
     // Opens by itself when the Fix button on a held day sent us here, so the
     // journey from "this day blocks payroll" to "here is why, and here is the
@@ -106,7 +126,7 @@ function CorrectionDialog({ types, directions, employees, prefill }: { types: Co
                 attendance_date: date,
                 type,
                 punch_id: selected?.needs_punch && punchId !== '' ? Number(punchId) : null,
-                corrected_at: selected?.needs_time && correctedAt !== '' ? correctedAt.replace('T', ' ') + ':00' : null,
+                corrected_at: selected?.needs_time && correctedAt !== '' ? toTimestamp(correctedAt) : null,
                 direction: direction === '' ? null : direction,
                 reason,
                 override_reason: overrideReason === '' ? null : overrideReason,
@@ -197,6 +217,10 @@ function CorrectionDialog({ types, directions, employees, prefill }: { types: Co
                                 <Input
                                     id="corrected_at"
                                     type="datetime-local"
+                                    // step=1 puts a seconds field on the control. Without it the
+                                    // browser rounds to the minute and a device time cannot be
+                                    // restored exactly.
+                                    step={1}
                                     value={correctedAt}
                                     onChange={(e) => setCorrectedAt(e.target.value)}
                                 />

@@ -511,3 +511,27 @@ it('renders the corrections screen for HR', function () {
             ->has('corrections', 1)
             ->where('corrections.0.is_applied', true));
 });
+
+it('accepts a correction time that carries seconds', function () {
+    // ⚠⚠ The screen built the timestamp as value.replace('T',' ') + ':00', which
+    // appended seconds whether or not the value already had them. A time that
+    // carried seconds became "2026-08-08 11:13:33:00" - not a timestamp - and
+    // the request failed validation with nothing shown to the user.
+    //
+    // Seconds matter more here than anywhere: the commonest reason to amend a
+    // punch back is to restore what the DEVICE recorded, and the device records
+    // to the second. Found by using the form to undo a demonstration.
+    $punch = corrPunch('2026-08-08 11:13:33');
+
+    corrHr()->post(route('hrm.attendance.corrections.store'), [
+        'employee_id' => $this->employee->id,
+        'attendance_date' => '2026-08-08',
+        'type' => 'amend_punch',
+        'punch_id' => $punch->id,
+        'corrected_at' => '2026-08-08 09:00:17',
+        'reason' => 'Restoring a time that carries seconds.',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect(\App\Modules\Hrm\Models\AttendanceCorrection::latest('id')->first()->corrected_at->format('H:i:s'))
+        ->toBe('09:00:17');
+});
