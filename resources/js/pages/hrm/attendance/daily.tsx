@@ -37,6 +37,7 @@ interface DailyProps {
     days: Day[];
     summary: { total: number; provisional: number; holds: number; with_consequence: number };
     policy: { name: string; version: number; effective_from: string } | null;
+    department_policies: { name: string; version: number; department: string | null }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -50,7 +51,7 @@ function statusVariant(status: string): 'default' | 'secondary' | 'outline' {
     return 'secondary';
 }
 
-export default function DailyAttendance({ on, filters, days, summary, policy }: DailyProps) {
+export default function DailyAttendance({ on, filters, days, summary, policy, department_policies = [] }: DailyProps) {
     const [expanded, setExpanded] = useState<number | null>(null);
     const [busy, setBusy] = useState(false);
 
@@ -100,6 +101,16 @@ export default function DailyAttendance({ on, filters, days, summary, policy }: 
                 ) : (
                     <p className="text-xs text-muted-foreground">
                         Judged by “{policy.name}” v{policy.version}, in force from {policy.effective_from}.
+                        {department_policies.length > 0 && (
+                            <>
+                                {' '}
+                                Except{' '}
+                                {department_policies
+                                    .map((p) => `${p.department ?? 'a department'}, judged by “${p.name}” v${p.version}`)
+                                    .join('; ')}
+                                .
+                            </>
+                        )}
                     </p>
                 )}
 

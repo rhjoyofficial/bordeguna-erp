@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\Department;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\AssignSchedule;
@@ -344,4 +345,101 @@ it('blocks a user without the attendance permission', function () {
 
     $this->actingAs($this->staff)->withSession(['current_business_id' => $this->business->id])
         ->post(route('hrm.attendance.daily.process'), ['on' => '2026-08-03'])->assertForbidden();
+});
+
+// =============================================================================
+// Department-scoped policy — Bor De Guna's Retail circular BdG-HQ-OD-26071901
+// binds one department to an earlier deadline and a show-cause ladder, and must
+// not reach the office staff it never mentions.
+// =============================================================================
+
+it('judges a department by its own policy and everyone else by the business default', function () {
+    $retail = Department::create(['name' => 'Retail Sales Team', 'office_id' => $this->office->id]);
+
+    // Same bands as the default, but the consequence is disciplinary rather than
+    // a deduction — which is exactly what the circular promises.
+    $config = AttendancePolicySeeder::defaultConfig();
+    $config['grace_windows'] = [[
+        'key' => 'ordinary_late', 'label' => 'Ordinary late', 'from_minutes' => 0, 'to_minutes' => 15,
+        'tiers' => [['from_occurrence' => 1, 'consequence' => 'disciplinary']],
+    ]];
+
+    AttendancePolicy::create([
+        'department_id' => $retail->id,
+        'name' => 'Retail Sales attendance policy',
+        'version' => 1,
+        'config' => $config,
+        'effective_from' => '2026-01-01',
+    ]);
+
+    $this->employee->assignments()->update(['department_id' => $retail->id]);
+
+    procPunch('2026-08-03 09:10:00');
+    procPunch('2026-08-03 18:00:00');
+    app(ProcessAttendance::class)->forDay($this->employee->fresh(), '2026-08-03');
+
+    $day = DailyAttendance::where('employee_id', $this->employee->id)->onDate('2026-08-03')->first();
+
+    expect($day->consequence)->toBe(AttendanceConsequence::Disciplinary)
+        ->and($day->grace_window_key)->toBe('ordinary_late');
+
+    // A colleague outside the department keeps the business-wide ladder, where
+    // the first occurrence in the same band is excused.
+    $officeStaff = Employee::create([
+        'employee_code' => 'BDG-000002',
+        'first_name' => 'Rahim', 'last_name' => 'Uddin',
+        'employment_type' => 'permanent', 'status' => 'active',
+    ]);
+    EmployeeAssignment::create([
+        'employee_id' => $officeStaff->id,
+        'office_id' => $this->office->id,
+        'is_primary' => true,
+        'effective_from' => '2026-01-01',
+    ]);
+
+    app(RecordPunch::class)->handle($officeStaff, '2026-08-03 09:10:00', PunchSource::Biometric, []);
+    app(RecordPunch::class)->handle($officeStaff, '2026-08-03 18:00:00', PunchSource::Biometric, []);
+    app(ProcessAttendance::class)->forDay($officeStaff, '2026-08-03');
+
+    $otherDay = DailyAttendance::where('employee_id', $officeStaff->id)->onDate('2026-08-03')->first();
+
+    expect($otherDay->consequence)->toBe(AttendanceConsequence::None)
+        ->and($otherDay->grace_window_key)->not->toBe('ordinary_late');
+});
+
+it('reads the department as of the day being judged, not as of today', function () {
+    $retail = Department::create(['name' => 'Retail Sales Team', 'office_id' => $this->office->id]);
+
+    $config = AttendancePolicySeeder::defaultConfig();
+    $config['grace_windows'] = [[
+        'key' => 'ordinary_late', 'label' => 'Ordinary late', 'from_minutes' => 0, 'to_minutes' => 15,
+        'tiers' => [['from_occurrence' => 1, 'consequence' => 'disciplinary']],
+    ]];
+
+    AttendancePolicy::create([
+        'department_id' => $retail->id,
+        'name' => 'Retail Sales attendance policy',
+        'version' => 1,
+        'config' => $config,
+        'effective_from' => '2026-01-01',
+    ]);
+
+    // He transfers into Retail on 10 August. The 3rd is before that, so the day
+    // must still be judged by the policy that governed him when he lived it.
+    $this->employee->assignments()->update(['effective_to' => '2026-08-09']);
+    EmployeeAssignment::create([
+        'employee_id' => $this->employee->id,
+        'office_id' => $this->office->id,
+        'department_id' => $retail->id,
+        'is_primary' => true,
+        'effective_from' => '2026-08-10',
+    ]);
+
+    procPunch('2026-08-03 09:10:00');
+    procPunch('2026-08-03 18:00:00');
+    app(ProcessAttendance::class)->forDay($this->employee->fresh(), '2026-08-03');
+
+    $day = DailyAttendance::where('employee_id', $this->employee->id)->onDate('2026-08-03')->first();
+
+    expect($day->consequence)->toBe(AttendanceConsequence::None);
 });

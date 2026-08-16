@@ -4,9 +4,11 @@ namespace App\Modules\Hrm\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\EffectiveDated;
+use App\Modules\Foundation\Models\Department;
 use App\Modules\Hrm\Attendance\Policy\PolicyConfig;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -26,6 +28,7 @@ class AttendancePolicy extends Model
 
     protected $fillable = [
         'business_id',
+        'department_id',
         'name',
         'version',
         'config',
@@ -58,13 +61,34 @@ class AttendancePolicy extends Model
     }
 
     /**
-     * The policy that governed a given date, or null if none was in force yet.
+     * The policy that governed a given date for a given department, or null if
+     * none was in force yet.
+     *
+     * ⚠ Most specific wins, and it wins WHOLE. A department policy is not merged
+     * over the business default: a half-inherited rule set is one nobody can read
+     * off a single row, and "which policy judged this day" has to stay answerable
+     * from `policy_id` alone years later. Where a department has its own order,
+     * that order is the policy; everywhere else the business default applies.
      */
-    public static function inForceOn(Carbon|string $date): ?self
+    public static function inForceOn(Carbon|string $date, ?int $departmentId = null): ?self
     {
-        return static::activeOn($date)
+        $candidates = static::activeOn($date)
+            ->when(
+                $departmentId !== null,
+                fn ($query) => $query->where(fn ($q) => $q->whereNull('department_id')->orWhere('department_id', $departmentId)),
+                fn ($query) => $query->whereNull('department_id'),
+            )
+            // A department row sorts ahead of the business-wide one; after that
+            // the newest and highest version wins, exactly as before.
+            ->orderByRaw('department_id is null')
             ->orderByDesc('effective_from')
-            ->orderByDesc('version')
-            ->first();
+            ->orderByDesc('version');
+
+        return $candidates->first();
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class);
     }
 }

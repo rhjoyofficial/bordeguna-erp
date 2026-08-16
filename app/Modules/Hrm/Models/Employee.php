@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Spatie\Activitylog\LogOptions;
@@ -157,6 +158,21 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
     public function assignments(): HasMany
     {
         return $this->hasMany(EmployeeAssignment::class);
+    }
+
+    /**
+     * The department this employee sat in ON a given date.
+     *
+     * ⚠ Not `currentAssignment()`. Attendance is reprocessed for days long past,
+     * and a department-scoped policy judged by today's department would silently
+     * re-judge every day before a transfer under the new department's rules.
+     * Same transfer-date tie-break as the current lookup: newest wins.
+     */
+    public function departmentIdOn(Carbon|string $date): ?int
+    {
+        return $this->assignments()->where('is_primary', true)->activeOn($date)
+            ->orderByDesc('effective_from')->orderByDesc('id')
+            ->value('department_id');
     }
 
     /**

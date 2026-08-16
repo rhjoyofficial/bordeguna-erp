@@ -38,7 +38,9 @@ class DayContextBuilder
     {
         $date = $date->copy()->startOfDay();
 
-        $policy ??= AttendancePolicy::inForceOn($date);
+        // Department-aware, so a caller that does not pre-resolve the policy
+        // still gets the one that actually governs this person on this day.
+        $policy ??= AttendancePolicy::inForceOn($date, $employee->departmentIdOn($date));
         $assignment = $this->resolver->resolveFor($employee, $date);
 
         [$isWeeklyOff, $isHoliday, $holidayName] = $this->calendarContext($assignment, $date);

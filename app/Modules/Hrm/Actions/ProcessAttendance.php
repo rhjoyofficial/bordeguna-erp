@@ -47,7 +47,10 @@ class ProcessAttendance
             return null;
         }
 
-        $policy = AttendancePolicy::inForceOn($date);
+        // Resolved per employee-day, because a department may carry its own
+        // order (Bor De Guna's Retail circular) and because the department is
+        // read AS OF the date, not as of now.
+        $policy = AttendancePolicy::inForceOn($date, $employee->departmentIdOn($date));
         $outcome = $this->engine->process($this->builder->build($employee, $date, $policy));
 
         return $this->store($employee, $outcome, $policy);

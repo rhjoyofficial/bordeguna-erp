@@ -36,7 +36,16 @@ class DailyAttendanceController extends Controller
             ->sortBy(fn (DailyAttendance $day) => $day->employee?->fullName())
             ->values();
 
-        $policy = AttendancePolicy::inForceOn($on);
+        // ⚠ A department may carry its own order, so "the policy in force" is no
+        // longer one row. Naming only the business default here would put a
+        // policy name above a grid half of whose rows were judged by another.
+        $policies = AttendancePolicy::with('department')
+            ->activeOn($on)
+            ->orderByRaw('department_id is null')
+            ->orderByDesc('version')
+            ->get();
+
+        $policy = $policies->firstWhere('department_id', null) ?? $policies->first();
 
         return Inertia::render('hrm/attendance/daily', [
             'on' => $on->toDateString(),
@@ -53,6 +62,12 @@ class DailyAttendanceController extends Controller
                 'version' => $policy->version,
                 'effective_from' => Carbon::parse($policy->effective_from)->toDateString(),
             ],
+            'department_policies' => $policies->whereNotNull('department_id')->values()
+                ->map(fn (AttendancePolicy $p) => [
+                    'name' => $p->name,
+                    'version' => $p->version,
+                    'department' => $p->department?->name,
+                ]),
         ]);
     }
 
