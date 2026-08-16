@@ -23,6 +23,7 @@ use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
+use App\Modules\Hrm\Support\DateOfBirthRule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -89,7 +90,7 @@ class EmployeeController extends Controller
             'personal_email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'national_id' => ['nullable', 'string', 'max:100'],
-            'date_of_birth' => ['nullable', 'date', 'before:today'],
+            'date_of_birth' => DateOfBirthRule::rules(),
             'office_id' => ['nullable', Rule::exists('offices', 'id')->where('business_id', $businessId)],
             'designation_id' => ['nullable', Rule::exists('designations', 'id')->where('business_id', $businessId)],
         ]);

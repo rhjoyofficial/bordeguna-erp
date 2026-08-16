@@ -12,6 +12,7 @@ use App\Modules\Hrm\Enums\EmploymentType;
 use App\Modules\Hrm\Enums\MfsProvider;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Enums\SeparationType;
+use App\Modules\Hrm\Support\DateOfBirthRule;
 use App\Modules\Hrm\Support\SelfScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -264,7 +265,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
             'permanent_address' => ['nullable', 'string', 'max:1000'],
             'national_id' => ['nullable', 'string', 'max:100'],
             'birth_certificate_no' => ['nullable', 'string', 'max:100'],
-            'date_of_birth' => ['nullable', 'date', 'before:today'],
+            'date_of_birth' => DateOfBirthRule::rules(),
             'joining_date' => ['nullable', 'date'],
             'confirmation_date' => ['nullable', 'date'],
             'contract_end_date' => ['nullable', 'date'],

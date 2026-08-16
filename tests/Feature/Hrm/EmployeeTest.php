@@ -143,3 +143,35 @@ it('rejects an invalid employment type', function () {
     empOwner()->post(route('hrm.employees.store'), ['first_name' => 'X', 'last_name' => 'Y', 'employment_type' => 'wizard'])
         ->assertSessionHasErrors('employment_type');
 });
+
+// =============================================================================
+// A date of birth is the key to the employee's own payslip (SAL-07 / C9b), so a
+// plausible-looking wrong one locks them out with no error anywhere.
+// =============================================================================
+
+it('refuses a date of birth that would make an employee four months old', function () {
+    // ⚠⚠ The real input, 2026-08-16: "11 April 2026" was offered for a serving
+    // employee. The rule in force was `before:today`, and that date IS before
+    // today, so nothing would have stopped it being saved and believed.
+    empOwner()->post(route('hrm.employees.store'), [
+        'first_name' => 'Test', 'last_name' => 'Person',
+        'employment_type' => 'permanent',
+        'date_of_birth' => '2026-04-11',
+    ])->assertSessionHasErrors('date_of_birth');
+});
+
+it('refuses a date of birth older than any working life', function () {
+    empOwner()->post(route('hrm.employees.store'), [
+        'first_name' => 'Test', 'last_name' => 'Person',
+        'employment_type' => 'permanent',
+        'date_of_birth' => '1890-01-01',
+    ])->assertSessionHasErrors('date_of_birth');
+});
+
+it('accepts an ordinary date of birth', function () {
+    empOwner()->post(route('hrm.employees.store'), [
+        'first_name' => 'Test', 'last_name' => 'Person',
+        'employment_type' => 'permanent',
+        'date_of_birth' => '1992-12-27',
+    ])->assertSessionHasNoErrors();
+});
