@@ -20,6 +20,7 @@ final readonly class AttendanceOutcome
      * @param  array<int, string>  $notes
      * @param  array<int, string>  $flags
      * @param  array<int, array{in: string, out: string|null, minutes: int}>  $pairs
+     * @param  array<string, mixed>|null  $meal  the meal resolver's structured result (C21) — how the break was resolved, from what, and any overrun
      */
     public function __construct(
         public int $employeeId,
@@ -41,6 +42,7 @@ final readonly class AttendanceOutcome
         public array $pairs,
         public array $notes,
         public array $flags,
+        public ?array $meal = null,
     ) {}
 
     public function workedHours(): float
@@ -68,6 +70,7 @@ final readonly class AttendanceOutcome
             'early_leave_minutes' => $this->earlyLeaveMinutes,
             'grace_window' => $this->graceWindowKey,
             'occurrence_number' => $this->occurrenceNumber,
+            'meal' => $this->meal,
         ];
     }
 }

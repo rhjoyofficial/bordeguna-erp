@@ -10,8 +10,10 @@ use App\Modules\Hrm\Attendance\Data\PunchPair;
 use App\Modules\Hrm\Attendance\Stages\ApplyGraceAndThresholds;
 use App\Modules\Hrm\Attendance\Stages\ApplyOccurrencePolicy;
 use App\Modules\Hrm\Attendance\Stages\CalculateWorkedTime;
+use App\Modules\Hrm\Attendance\Stages\CollapseRepeatScans;
 use App\Modules\Hrm\Attendance\Stages\DetermineStatus;
 use App\Modules\Hrm\Attendance\Stages\PairPunches;
+use App\Modules\Hrm\Attendance\Stages\ResolveMealBreak;
 use App\Modules\Hrm\Enums\AttendanceStatus;
 
 /**
@@ -22,12 +24,14 @@ use App\Modules\Hrm\Enums\AttendanceStatus;
  * DayContextBuilder — pipeline stages 1-3) and everything it decides is
  * derived here in a fixed order:
  *
- *   4. pair the punches
- *   5. calculate worked and payable time
- *   6. determine the baseline status
- *   7. apply grace, lateness and half-day thresholds
- *   8. apply the occurrence-tier consequence
- *   9. produce the result
+ *   4a. collapse repeat scans (C20 — one cleaned list for every later stage)
+ *   4b. pair the punches
+ *   4c. resolve the meal break (C21 — reads the middle punches, never pairs)
+ *   5.  calculate worked and payable time
+ *   6.  determine the baseline status
+ *   7.  apply grace, lateness and half-day thresholds
+ *   8.  apply the occurrence-tier consequence
+ *   9.  produce the result
  *
  * Because of that, a day can be recalculated at any time and reproduce exactly
  * the same answer from the same inputs — which is what makes an attendance
@@ -45,7 +49,9 @@ class AttendanceEngine
     public function __construct(?array $stages = null)
     {
         $this->stages = $stages ?? [
+            new CollapseRepeatScans,
             new PairPunches,
+            new ResolveMealBreak,
             new CalculateWorkedTime,
             new DetermineStatus,
             new ApplyGraceAndThresholds,
@@ -98,6 +104,7 @@ class AttendanceEngine
             ], $computation->pairs),
             notes: $computation->notes,
             flags: array_values(array_unique($computation->flags)),
+            meal: $computation->meal,
         );
     }
 }

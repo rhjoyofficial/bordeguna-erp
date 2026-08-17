@@ -22,7 +22,7 @@ final readonly class PolicyConfig
         public float $fullDayMinimumHours,
         public ?int $halfDayArrivalAfterMinutes,
         public bool $countHolidayWorkWithoutApproval,
-        public int $duplicateScanWindowSeconds = 300,
+        public int $duplicateScanWindowSeconds = 60,
     ) {}
 
     /**
@@ -52,7 +52,15 @@ final readonly class PolicyConfig
             // the raw record keeps both scans and the engine collapses them at
             // derivation time, which is also the only layer a rule change can
             // be re-run against.
-            (int) ($config['duplicate_scan_window_seconds'] ?? 300),
+            //
+            // ⚠ Correction C18 (2026-08-17): 300 → 60. Five minutes was safe
+            // when a day had two punches; with four, an employee who punches
+            // out for lunch and returns three minutes later for a forgotten
+            // phone would have the return scan silently discarded. Sixty
+            // seconds still absorbs the device's 1-2 second re-reads.
+            // ⚠ A policy row that stored 300 explicitly keeps 300 — check the
+            // live rows' config at deploy time, per POL-12 as a new version.
+            (int) ($config['duplicate_scan_window_seconds'] ?? 60),
         );
     }
 

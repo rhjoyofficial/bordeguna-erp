@@ -21,6 +21,7 @@ use App\Modules\Hrm\Reporting\Definitions\DailyAttendanceReport;
 use App\Modules\Hrm\Reporting\Definitions\EarningsDeductionsBreakdownReport;
 use App\Modules\Hrm\Reporting\Definitions\ImportExceptionReport;
 use App\Modules\Hrm\Reporting\Definitions\LoanBalanceReport;
+use App\Modules\Hrm\Reporting\Definitions\MealBreakComplianceReport;
 use App\Modules\Hrm\Reporting\Definitions\MonthlyAttendanceRegisterReport;
 use App\Modules\Hrm\Reporting\Definitions\OrganisationSummaryReport;
 use App\Modules\Hrm\Reporting\Definitions\OvertimeReport;
@@ -51,6 +52,8 @@ class HrmServiceProvider extends ServiceProvider
         AbsenceAndLeaveReport::class,
         OvertimeReport::class,
         ImportExceptionReport::class,
+        // C24 — meal counting lives here, never in the engine's consequence.
+        MealBreakComplianceReport::class,
         OrganisationSummaryReport::class,
 
         // RPT-02 — payroll. #9 (bank advice) is absent on purpose: Correction

@@ -34,6 +34,9 @@ class CalculateWorkedTime implements AttendanceStage
             BreakPolicy::FixedDeduction => $shift?->breakMinutes ?? 0,
             // Already excluded: only time inside a span was counted.
             BreakPolicy::ActualPunches => 0,
+            // Correction C21: ResolveMealBreak already measured or fell back;
+            // this stage only subtracts what the resolver decided.
+            BreakPolicy::MealWindow => $computation->breakMinutes,
         };
 
         $payable = max(0, $worked - $break);

@@ -48,6 +48,13 @@ class DailyAttendanceController extends Controller
             ->when($employeeId, fn ($query) => $query->where('employee_id', $employeeId))
             ->when($request->boolean('review'), fn ($query) => $query->needingReview())
             ->when($onlyHolds, fn ($query) => $query->where('holds_payroll', true))
+            // "Meal exceptions only": any day the meal resolver flagged. The
+            // flags live in one JSON column, so a LIKE per flag beats seven
+            // schema columns nobody else reads.
+            ->when($request->boolean('meals'), fn ($query) => $query->where(
+                fn ($q) => collect(DailyAttendance::MEAL_FLAGS)
+                    ->each(fn (string $flag) => $q->orWhere('flags', 'like', '%"'.$flag.'"%')),
+            ))
             ->get()
             // Date first, then person, so a range reads as a diary rather than a
             // heap. A single day is unchanged: one date, sorted by name.
@@ -73,6 +80,7 @@ class DailyAttendanceController extends Controller
                 'employee_id' => $employeeId,
                 'review' => $request->boolean('review'),
                 'holds' => $onlyHolds,
+                'meals' => $request->boolean('meals'),
             ],
             'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
                 ->orderBy('first_name')->orderBy('last_name')->get()
@@ -200,6 +208,8 @@ class DailyAttendanceController extends Controller
             'first_in' => $day->first_in?->format('H:i:s'),
             'last_out' => $day->last_out?->format('H:i:s'),
             'worked_hours' => round($day->worked_minutes / 60, 2),
+            'break_minutes' => $day->break_minutes,
+            'meal' => $day->calculation['meal'] ?? null,
             'payable_hours' => round($day->payable_minutes / 60, 2),
             'late_minutes' => $day->late_minutes,
             'early_leave_minutes' => $day->early_leave_minutes,

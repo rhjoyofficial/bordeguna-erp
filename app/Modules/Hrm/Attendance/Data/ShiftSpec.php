@@ -27,6 +27,15 @@ final readonly class ShiftSpec
         public ?int $earlyLeaveThresholdMinutes,
         public bool $isOvernight,
         public int $crossMidnightWindowMinutes,
+        // The meal window (Correction C21), frozen to instants like start/end.
+        // Null whenever the mode is not MealWindow — the columns exist on every
+        // shift but only carry meaning under that mode.
+        public ?Carbon $mealWindowStart = null,
+        public ?Carbon $mealWindowEnd = null,
+        public ?int $mealStandardMinutes = null,
+        public ?int $mealAllowanceMinutes = null,
+        public bool $mealDeductWhenNotPunched = true,
+        public int $mealShortDayToleranceMinutes = 5,
     ) {}
 
     public static function forDate(Shift $shift, Carbon $date): self
@@ -40,6 +49,9 @@ final readonly class ShiftSpec
             $end->addDay();
         }
 
+        $mealStart = $shift->timeValue('meal_window_start');
+        $mealEnd = $shift->timeValue('meal_window_end');
+
         return new self(
             $shift->name,
             $start,
@@ -52,11 +64,29 @@ final readonly class ShiftSpec
             $shift->early_leave_threshold_minutes,
             (bool) $shift->is_overnight,
             (int) ($shift->cross_midnight_window_minutes ?? 0),
+            $mealStart !== null ? $day->copy()->setTimeFromTimeString($mealStart) : null,
+            $mealEnd !== null ? $day->copy()->setTimeFromTimeString($mealEnd) : null,
+            $shift->meal_standard_minutes,
+            $shift->meal_allowance_minutes,
+            (bool) ($shift->meal_deduct_when_not_punched ?? true),
+            (int) ($shift->meal_short_day_tolerance_minutes ?? 5),
         );
     }
 
     public function scheduledMinutes(): int
     {
         return max(0, $this->start->diffInMinutes($this->end));
+    }
+
+    /**
+     * Whether the meal window can actually be applied: the mode alone is not
+     * enough, since a half-configured window must fail loudly rather than
+     * silently produce zero-break days.
+     */
+    public function hasCompleteMealConfig(): bool
+    {
+        return $this->mealWindowStart !== null
+            && $this->mealWindowEnd !== null
+            && $this->mealStandardMinutes !== null;
     }
 }

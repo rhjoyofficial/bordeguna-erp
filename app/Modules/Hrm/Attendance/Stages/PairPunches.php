@@ -26,23 +26,14 @@ class PairPunches implements AttendanceStage
     public function handle(AttendanceComputation $computation): AttendanceComputation
     {
         $context = $computation->context;
-        $raw = $context->punches;
 
-        if ($raw === []) {
+        if ($context->punches === []) {
             return $computation->note('No punches captured for this day.');
         }
 
-        $punches = $this->withoutDuplicateScans($raw, $context->policy->duplicateScanWindowSeconds);
-        $collapsed = count($raw) - count($punches);
-
-        if ($collapsed > 0) {
-            $computation = $computation->note(sprintf(
-                '%d repeat scan%s within %d seconds treated as the same event; the punches themselves are unchanged.',
-                $collapsed,
-                $collapsed === 1 ? '' : 's',
-                $context->policy->duplicateScanWindowSeconds,
-            ));
-        }
+        // Correction C20: the de-bounce now lives in CollapseRepeatScans, so
+        // this stage and the meal resolver read one list produced once.
+        $punches = $computation->cleanPunches;
 
         if ($context->countsFirstPunchOnly() && count($punches) > 1) {
             $computation = $computation->note(sprintf(
@@ -87,39 +78,6 @@ class PairPunches implements AttendanceStage
                 count($pairs),
                 count($pairs) === 1 ? '' : 's',
             ));
-    }
-
-    /**
-     * Collapse a cluster of scans into the single event it really was.
-     *
-     * Each punch is compared with the last one KEPT, not with its immediate
-     * predecessor: comparing against the predecessor lets a chain of scans four
-     * minutes apart swallow an entire day, one link at a time. The earliest of
-     * a cluster is the one retained, because that is when the person actually
-     * presented themselves.
-     *
-     * @param  array<int, PunchRecord>  $punches  ordered by time
-     * @return array<int, PunchRecord>
-     */
-    private function withoutDuplicateScans(array $punches, int $windowSeconds): array
-    {
-        if ($windowSeconds <= 0) {
-            return $punches;
-        }
-
-        $kept = [];
-
-        foreach ($punches as $punch) {
-            $last = end($kept);
-
-            if ($last !== false && $last->at->diffInSeconds($punch->at) <= $windowSeconds) {
-                continue;
-            }
-
-            $kept[] = $punch;
-        }
-
-        return $kept;
     }
 
     /**

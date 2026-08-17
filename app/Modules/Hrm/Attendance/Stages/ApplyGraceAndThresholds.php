@@ -5,6 +5,7 @@ namespace App\Modules\Hrm\Attendance\Stages;
 use App\Modules\Hrm\Attendance\Contracts\AttendanceStage;
 use App\Modules\Hrm\Attendance\Data\AttendanceComputation;
 use App\Modules\Hrm\Enums\AttendanceStatus;
+use App\Modules\Hrm\Enums\BreakPolicy;
 
 /**
  * Stage 7 — lateness, early departure and the half-day rules (POL-02/04/05).
@@ -150,16 +151,40 @@ class ApplyGraceAndThresholds implements AttendanceStage
                 ));
         }
 
-        if ($hours < $policy->fullDayMinimumHours) {
+        $minimum = $this->fullDayMinimumHours($computation);
+
+        if ($hours < $minimum) {
             return $computation
                 ->flag('short_day')
                 ->note(sprintf(
                     'Payable %s is under the full-day minimum of %s hours.',
                     number_format($hours, 2),
-                    number_format($policy->fullDayMinimumHours, 2),
+                    number_format($minimum, 2),
                 ));
         }
 
         return $computation;
+    }
+
+    /**
+     * ⚠ Correction C23. The Office shift is 540 scheduled minutes; deduct a 60
+     * minute meal and a perfect day lands on exactly 480 = exactly the flat
+     * 8-hour minimum, passing by zero margin — a 61-minute lunch would flag
+     * `short_day` on essentially every day and drown the flag in noise within
+     * a week. Under the meal-window mode the minimum is therefore DERIVED from
+     * the shift (scheduled span − standard meal − a small tolerance, decision
+     * D4), so it survives the next time somebody edits the shift hours, which
+     * a hand-set number would not.
+     */
+    private function fullDayMinimumHours(AttendanceComputation $computation): float
+    {
+        $shift = $computation->context->shift;
+
+        if ($shift?->breakPolicy === BreakPolicy::MealWindow
+            && $shift->mealStandardMinutes !== null) {
+            return max(0, $shift->scheduledMinutes() - $shift->mealStandardMinutes - $shift->mealShortDayToleranceMinutes) / 60;
+        }
+
+        return $computation->context->policy->fullDayMinimumHours;
     }
 }

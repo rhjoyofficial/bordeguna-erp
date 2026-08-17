@@ -20,6 +20,23 @@ class DailyAttendance extends Model
 {
     use BelongsToBusiness, HasFactory;
 
+    /**
+     * Every flag the meal resolver can raise (C21/C24). One list, referenced by
+     * the grid filter and the compliance report, so a new flag added in the
+     * resolver is added here once rather than discovered missing in two screens.
+     */
+    public const MEAL_FLAGS = [
+        'meal_not_punched',
+        'meal_punch_incomplete',
+        'meal_punches_unreadable',
+        'meal_multiple_exits',
+        'meal_overrun',
+        'meal_late_return',
+        'punch_outside_meal_window',
+        'meal_config_incomplete',
+        'meal_window_outside_shift',
+    ];
+
     protected $fillable = [
         'business_id',
         'employee_id',

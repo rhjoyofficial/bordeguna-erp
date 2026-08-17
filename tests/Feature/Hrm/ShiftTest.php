@@ -3,7 +3,9 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Enums\BreakPolicy;
 use App\Modules\Hrm\Models\Shift;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -117,8 +119,67 @@ it('renders the shifts page for a scheduler', function () {
 
     schOwner()->get(route('hrm.shifts.index'))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/shifts/index')
             ->has('shifts', 1)
             ->where('shifts.0.name', 'General'));
+});
+
+it('requires the full meal window set when the meal mode is chosen, and stores it', function () {
+    // Half-configured must be impossible to save (MEAL-BREAK-ARCHITECTURE.md
+    // Part 5) — discovered at save time, not a month later in the numbers.
+    schOwner()->from('/hrm/shifts')->post(route('hrm.shifts.store'), shiftPayload([
+        'break_policy' => 'meal_window',
+    ]))->assertSessionHasErrors(['meal_window_start', 'meal_window_end', 'meal_standard_minutes']);
+
+    schOwner()->post(route('hrm.shifts.store'), shiftPayload([
+        'break_policy' => 'meal_window',
+        'meal_window_start' => '12:30',
+        'meal_window_end' => '15:00',
+        'meal_standard_minutes' => 60,
+        'meal_allowance_minutes' => 60,
+        'meal_deduct_when_not_punched' => true,
+        'meal_short_day_tolerance_minutes' => 5,
+    ]))->assertRedirect()->assertSessionHasNoErrors();
+
+    $shift = Shift::sole();
+    expect($shift->break_policy)->toBe(BreakPolicy::MealWindow);
+    expect($shift->timeValue('meal_window_start'))->toBe('12:30');
+    expect($shift->meal_standard_minutes)->toBe(60);
+    expect($shift->meal_deduct_when_not_punched)->toBeTrue();
+});
+
+it('rejects a meal window that contradicts itself or the shift', function () {
+    $base = [
+        'break_policy' => 'meal_window',
+        'meal_window_start' => '12:30',
+        'meal_window_end' => '15:00',
+        'meal_standard_minutes' => 60,
+    ];
+
+    // Window ends before it starts.
+    schOwner()->from('/hrm/shifts')->post(route('hrm.shifts.store'), shiftPayload(array_merge($base, [
+        'meal_window_end' => '12:00',
+    ])))->assertSessionHasErrors('meal_window_end');
+
+    // Window outside the shift hours.
+    schOwner()->from('/hrm/shifts')->post(route('hrm.shifts.store'), shiftPayload(array_merge($base, [
+        'start_time' => '13:00',
+    ])))->assertSessionHasErrors('meal_window_start');
+
+    // Standard longer than the window itself (2.5 h window, 200 min standard).
+    schOwner()->from('/hrm/shifts')->post(route('hrm.shifts.store'), shiftPayload(array_merge($base, [
+        'meal_standard_minutes' => 200,
+    ])))->assertSessionHasErrors('meal_standard_minutes');
+
+    // The meal mode is not available on an overnight shift.
+    schOwner()->from('/hrm/shifts')->post(route('hrm.shifts.store'), shiftPayload(array_merge($base, [
+        'is_overnight' => true,
+        'end_time' => '06:00',
+        'meal_window_start' => '23:30',
+        'meal_window_end' => '23:45',
+        'meal_standard_minutes' => 15,
+    ])))->assertSessionHasErrors('break_policy');
+
+    expect(Shift::count())->toBe(0);
 });

@@ -23,6 +23,8 @@ final readonly class AttendanceComputation
      * @param  array<int, PunchPair>  $pairs
      * @param  array<int, string>  $notes
      * @param  array<int, string>  $flags
+     * @param  array<int, PunchRecord>  $cleanPunches  the day's punches after repeat-scan collapse (Correction C20) — the single list every later stage reads
+     * @param  array<string, mixed>|null  $meal  the meal resolver's structured result (Correction C21), for provenance and the grid
      */
     public function __construct(
         public DayContext $context,
@@ -42,6 +44,8 @@ final readonly class AttendanceComputation
         public bool $hasOpenPair = false,
         public array $notes = [],
         public array $flags = [],
+        public array $cleanPunches = [],
+        public ?array $meal = null,
     ) {}
 
     public static function start(DayContext $context): self
@@ -72,6 +76,8 @@ final readonly class AttendanceComputation
             $changes['hasOpenPair'] ?? $this->hasOpenPair,
             $changes['notes'] ?? $this->notes,
             $changes['flags'] ?? $this->flags,
+            $changes['cleanPunches'] ?? $this->cleanPunches,
+            array_key_exists('meal', $changes) ? $changes['meal'] : $this->meal,
         );
     }
 

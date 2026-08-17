@@ -26,6 +26,7 @@ use App\Modules\Hrm\Reporting\Definitions\PayrollVarianceReport;
 use App\Modules\Hrm\Reporting\Definitions\SettlementWorksheetReport;
 use App\Modules\Hrm\Reporting\Definitions\UnpaidSalaryReport;
 use App\Modules\Hrm\Reporting\ReportParameters;
+use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Hrm\Reporting\ReportRunner;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -522,7 +523,7 @@ it('registers fourteen of the fifteen reports, with only the bank advice missing
     //
     // Pinning it here means a later slice cannot quietly add an invented bank
     // format, and cannot quietly drop the worksheet either.
-    $keys = app(\App\Modules\Hrm\Reporting\ReportRegistry::class)->all()->keys();
+    $keys = app(ReportRegistry::class)->all()->keys();
 
     expect($keys)->not->toContain('payroll_bank_advice')
         ->and($keys)->toContain('payroll_settlement_worksheet')
@@ -536,5 +537,10 @@ it('registers fourteen of the fifteen reports, with only the bank advice missing
         // ⚠ The count is deliberate, not incidental: it is what stops a later
         // slice quietly adding an invented bank format. Raise it only when you
         // meant to add a report, and say which one here.
-        ->and($keys)->toHaveCount(16);
+        //
+        // 17: the meal break compliance report (2026-08-17). C24 keeps the meal
+        // engine free of consequences, so THIS report is where overruns and
+        // late returns are counted for any show-cause decision.
+        ->and($keys)->toContain('attendance_meal_compliance')
+        ->and($keys)->toHaveCount(17);
 });

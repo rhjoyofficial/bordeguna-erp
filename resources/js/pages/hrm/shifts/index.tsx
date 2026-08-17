@@ -26,6 +26,12 @@ interface Shift {
     grace_minutes: number;
     break_minutes: number;
     break_policy: string | null;
+    meal_window_start: string | null;
+    meal_window_end: string | null;
+    meal_standard_minutes: number | null;
+    meal_allowance_minutes: number | null;
+    meal_deduct_when_not_punched: boolean;
+    meal_short_day_tolerance_minutes: number | null;
     minimum_payable_hours: string | null;
     late_threshold_minutes: number | null;
     early_leave_threshold_minutes: number | null;
@@ -50,6 +56,12 @@ type FormState = {
     grace_minutes: string;
     break_minutes: string;
     break_policy: string;
+    meal_window_start: string;
+    meal_window_end: string;
+    meal_standard_minutes: string;
+    meal_allowance_minutes: string;
+    meal_deduct_when_not_punched: boolean;
+    meal_short_day_tolerance_minutes: string;
     minimum_payable_hours: string;
     late_threshold_minutes: string;
     early_leave_threshold_minutes: string;
@@ -65,6 +77,12 @@ function blankForm(): FormState {
         grace_minutes: '15',
         break_minutes: '60',
         break_policy: 'fixed_deduction',
+        meal_window_start: '12:30',
+        meal_window_end: '15:00',
+        meal_standard_minutes: '60',
+        meal_allowance_minutes: '60',
+        meal_deduct_when_not_punched: true,
+        meal_short_day_tolerance_minutes: '5',
         minimum_payable_hours: '',
         late_threshold_minutes: '',
         early_leave_threshold_minutes: '',
@@ -82,6 +100,12 @@ function formFrom(shift: Shift): FormState {
         grace_minutes: str(shift.grace_minutes),
         break_minutes: str(shift.break_minutes),
         break_policy: shift.break_policy ?? 'fixed_deduction',
+        meal_window_start: shift.meal_window_start ?? '12:30',
+        meal_window_end: shift.meal_window_end ?? '15:00',
+        meal_standard_minutes: str(shift.meal_standard_minutes ?? 60),
+        meal_allowance_minutes: str(shift.meal_allowance_minutes ?? ''),
+        meal_deduct_when_not_punched: shift.meal_deduct_when_not_punched ?? true,
+        meal_short_day_tolerance_minutes: str(shift.meal_short_day_tolerance_minutes ?? 5),
         minimum_payable_hours: str(shift.minimum_payable_hours),
         late_threshold_minutes: str(shift.late_threshold_minutes),
         early_leave_threshold_minutes: str(shift.early_leave_threshold_minutes),
@@ -107,6 +131,12 @@ function ShiftDialog({ shift, trigger, breakPolicies }: { shift?: Shift; trigger
             grace_minutes: Number(form.grace_minutes || 0),
             break_minutes: Number(form.break_minutes || 0),
             break_policy: form.break_policy,
+            meal_window_start: form.break_policy === 'meal_window' ? form.meal_window_start : null,
+            meal_window_end: form.break_policy === 'meal_window' ? form.meal_window_end : null,
+            meal_standard_minutes: form.break_policy === 'meal_window' ? numberOrNull(form.meal_standard_minutes) : null,
+            meal_allowance_minutes: form.break_policy === 'meal_window' ? numberOrNull(form.meal_allowance_minutes) : null,
+            meal_deduct_when_not_punched: form.meal_deduct_when_not_punched,
+            meal_short_day_tolerance_minutes: form.break_policy === 'meal_window' ? numberOrNull(form.meal_short_day_tolerance_minutes) : null,
             minimum_payable_hours: numberOrNull(form.minimum_payable_hours),
             late_threshold_minutes: numberOrNull(form.late_threshold_minutes),
             early_leave_threshold_minutes: numberOrNull(form.early_leave_threshold_minutes),
@@ -187,6 +217,47 @@ function ShiftDialog({ shift, trigger, breakPolicies }: { shift?: Shift; trigger
                             {errors.break_policy && <p className="text-xs text-destructive">{errors.break_policy}</p>}
                         </div>
                     </div>
+                    {form.break_policy === 'meal_window' && (
+                        <div className="grid gap-4 rounded-lg border border-sidebar-border/70 p-3 dark:border-sidebar-border">
+                            <p className="text-xs text-muted-foreground">
+                                Lunch is read from punches inside this window. Missing or unreadable lunch punches fall back to the
+                                standard break and raise a review flag. Lunch never blocks payroll.
+                            </p>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="meal_window_start">Meal window start</Label>
+                                    <Input
+                                        id="meal_window_start"
+                                        type="time"
+                                        value={form.meal_window_start}
+                                        onChange={(e) => set('meal_window_start', e.target.value)}
+                                    />
+                                    {errors.meal_window_start && <p className="text-xs text-destructive">{errors.meal_window_start}</p>}
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="meal_window_end">Meal window end</Label>
+                                    <Input
+                                        id="meal_window_end"
+                                        type="time"
+                                        value={form.meal_window_end}
+                                        onChange={(e) => set('meal_window_end', e.target.value)}
+                                    />
+                                    {errors.meal_window_end && <p className="text-xs text-destructive">{errors.meal_window_end}</p>}
+                                </div>
+                                <NumberField field="meal_standard_minutes" label="Standard meal (min)" required />
+                                <NumberField field="meal_allowance_minutes" label="Allowance before flag (min)" />
+                                <NumberField field="meal_short_day_tolerance_minutes" label="Short-day tolerance (min)" />
+                            </div>
+                            <label className="flex items-center gap-2 text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={form.meal_deduct_when_not_punched}
+                                    onChange={(e) => set('meal_deduct_when_not_punched', e.target.checked)}
+                                />
+                                Deduct the standard meal when lunch is not punched
+                            </label>
+                        </div>
+                    )}
                     <label className="flex items-center gap-2 text-sm">
                         <input type="checkbox" checked={form.is_overnight} onChange={(e) => set('is_overnight', e.target.checked)} />
                         Overnight shift (crosses midnight)

@@ -21,6 +21,8 @@ interface Day {
     first_in: string | null;
     last_out: string | null;
     worked_hours: number;
+    break_minutes: number;
+    meal: { resolved_from: string; minutes: number; spans?: { out: string; in: string; minutes: number }[]; overrun_minutes?: number; cause?: string } | null;
     payable_hours: number;
     late_minutes: number;
     early_leave_minutes: number;
@@ -36,7 +38,7 @@ interface Day {
 
 interface DailyProps {
     on: string;
-    filters: { from: string; to: string; employee_id: number | null; review: boolean; holds: boolean };
+    filters: { from: string; to: string; employee_id: number | null; review: boolean; holds: boolean; meals: boolean };
     employees: { id: number; name: string }[];
     days: Day[];
     summary: { total: number; provisional: number; holds: number; with_consequence: number };
@@ -113,6 +115,10 @@ export default function DailyAttendance({ on, filters, employees = [], days, sum
                             <input type="checkbox" checked={filters.holds} onChange={(e) => reload({ holds: e.target.checked })} />
                             Holding payroll only
                         </label>
+                        <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={filters.meals} onChange={(e) => reload({ meals: e.target.checked })} />
+                            Meal exceptions only
+                        </label>
                         {/* Process and finalise act on ONE day, so they are offered only
                             when one day is being looked at. Offering them over a range
                             would suggest they do something they do not. */}
@@ -164,6 +170,7 @@ export default function DailyAttendance({ on, filters, employees = [], days, sum
                                     <th className="py-2">Status</th>
                                     <th className="py-2">In / Out</th>
                                     <th className="py-2">Worked</th>
+                                    <th className="py-2">Meal</th>
                                     <th className="py-2">Payable</th>
                                     <th className="py-2">Late</th>
                                     <th className="py-2">Consequence</th>
@@ -198,6 +205,18 @@ export default function DailyAttendance({ on, filters, employees = [], days, sum
                                                 {day.first_in ?? '—'} / {day.last_out ?? '—'}
                                             </td>
                                             <td className="py-2 text-muted-foreground">{day.worked_hours}h</td>
+                                            <td className="py-2 font-mono text-xs text-muted-foreground">
+                                                {day.meal === null
+                                                    ? '—'
+                                                    : day.meal.resolved_from === 'punches' && day.meal.spans?.length
+                                                      ? `${day.meal.spans[0].out.slice(0, 5)}-${day.meal.spans[0].in.slice(0, 5)} (${day.meal.minutes}m)`
+                                                      : `${day.meal.minutes}m fallback`}
+                                                {day.meal?.overrun_minutes !== undefined && (
+                                                    <Badge variant="outline" className="ml-1">
+                                                        +{day.meal.overrun_minutes}m
+                                                    </Badge>
+                                                )}
+                                            </td>
                                             <td className="py-2">{day.payable_hours}h</td>
                                             <td className="py-2 text-muted-foreground">
                                                 {day.late_minutes > 0 ? `${day.late_minutes}m` : '—'}
@@ -238,7 +257,7 @@ export default function DailyAttendance({ on, filters, employees = [], days, sum
                                         </tr>
                                         {expanded === day.id && (
                                             <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                                <td colSpan={isRange ? 9 : 8} className="py-3">
+                                                <td colSpan={isRange ? 10 : 9} className="py-3">
                                                     <div className="text-xs">
                                                         <p className="mb-1 font-medium">How this day was decided</p>
                                                         <ul className="ml-4 list-disc space-y-1 text-muted-foreground">
