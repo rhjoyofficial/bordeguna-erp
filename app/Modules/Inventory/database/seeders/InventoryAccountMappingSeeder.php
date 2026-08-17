@@ -54,6 +54,13 @@ class InventoryAccountMappingSeeder extends Seeder
         // quantity, and it is the reason value-only movements exist at all.
         'inventory.adjustment.revaluation' => 'inventory_write_off',
 
+        // ⚠ Production waste EXPENSED by the per-run override (C-MFG-4/5).
+        // Absorbed waste - the default - never reaches the ledger at all.
+        // Defaulted to the same loss account as the adjustments so nothing is
+        // invented; separating "production wastage" is one mapping row, and
+        // the mapping is the right place for that argument to happen.
+        'inventory.production_wastage' => 'inventory_write_off',
+
         // ⚠ Where a fraction of a paisa goes when four decimals meet two.
         'accounting.rounding_difference' => 'rounding_difference',
     ];

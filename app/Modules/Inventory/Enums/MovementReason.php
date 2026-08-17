@@ -24,4 +24,11 @@ enum MovementReason: string
     // sends back are not a receipt and not an adjustment - they restore the
     // very layers a sale consumed, and the reason says so.
     case SalesReturn = 'sales_return';
+    // ⚠⚠ Re-checked on 2026-08-17, immediately before adding this: still
+    // nothing in the codebase `match`es on MovementReason (only the model
+    // cast references the enum), and no reason-label map exists in the
+    // frontend. Stock consumed by a production run and the batch it
+    // produces are neither a usage nor a receipt: the value did not leave
+    // the business and did not arrive from outside, it changed shape.
+    case Production = 'production';
 }

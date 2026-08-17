@@ -36,6 +36,7 @@ class StockMovement extends Model
         'unit_cost',
         'value_delta',
         'transfer_group_id',
+        'production_run_id',
         'reverses_movement_id',
         'performed_by',
         'note',

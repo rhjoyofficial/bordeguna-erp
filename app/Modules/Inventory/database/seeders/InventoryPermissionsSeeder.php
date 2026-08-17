@@ -22,6 +22,9 @@ class InventoryPermissionsSeeder extends Seeder
             'inventory.stock.request',
             'inventory.stock.approve',
             'inventory.reports.view',
+            // D-MFG-4: one-step confirm by the authorised user. A run mirrors
+            // physical work already done; the control is the yield report.
+            'inventory.production.manage',
         ],
         'Manager' => [
             'inventory.catalog.manage',
@@ -30,6 +33,7 @@ class InventoryPermissionsSeeder extends Seeder
             'inventory.stock.request',
             'inventory.stock.approve',
             'inventory.reports.view',
+            'inventory.production.manage',
         ],
         'Staff' => [
             'inventory.stock.record',

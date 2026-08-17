@@ -33,6 +33,12 @@ class Product extends Model
         'type',
         'description',
         'low_stock_threshold',
+        // C-MFG-14: the net content of ONE stock unit, in a declared unit - a
+        // 5 L pack contains 5 of "Litre". PURELY a yield-check input for
+        // production runs: no arithmetic anywhere converts with it (C-MFG-2),
+        // and null means the check is silently off for this product.
+        'content_quantity',
+        'content_unit_id',
         'is_active',
     ];
 
@@ -41,6 +47,7 @@ class Product extends Model
         return [
             'type' => ProductType::class,
             'low_stock_threshold' => 'decimal:4',
+            'content_quantity' => 'decimal:4',
             'is_active' => 'boolean',
         ];
     }
@@ -114,6 +121,12 @@ class Product extends Model
     public function unitConversions(): HasMany
     {
         return $this->hasMany(ProductUnitConversion::class);
+    }
+
+    /** The unit `content_quantity` is declared in (C-MFG-14). */
+    public function contentUnit(): BelongsTo
+    {
+        return $this->belongsTo(UnitOfMeasure::class, 'content_unit_id');
     }
 
     /** Whether a receipt of this product has to convert before it becomes stock. */

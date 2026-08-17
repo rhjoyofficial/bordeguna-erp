@@ -20,6 +20,8 @@ class StockBatch extends Model
         'warehouse_id',
         'batch_number',
         'expiry_date',
+        'manufactured_date',
+        'mrp',
         'unit_cost',
         'conversion_factor',
         'initial_quantity',
@@ -35,6 +37,11 @@ class StockBatch extends Model
         return [
             'status' => StockBatchStatus::class,
             'expiry_date' => 'date',
+            // C-MFG-13: set by the production run, null on purchase-created
+            // batches. `mrp` is informational label data ONLY - nothing prices
+            // off a batch; the selling price resolver reads product_prices.
+            'manufactured_date' => 'date',
+            'mrp' => 'decimal:4',
             'received_at' => 'datetime',
             'unit_cost' => 'decimal:4',
             // ⚠⚠ EIGHT places, and COPIED here rather than resolved from

@@ -10,15 +10,19 @@
  * five sanctioned documents is, by construction, stock moving with no ledger
  * entry behind it.
  *
- * The five, and what each posts:
+ * The six, and what each posts:
  *   Goods receipt        Dr Stock on Hand / Cr Goods Received Not Invoiced
  *   Delivery             Dr Goods Delivered Not Invoiced / Cr Stock on Hand
  *   Inventory adjustment Dr the loss account / Cr Stock on Hand
  *   Stock transfer       ⚠ nothing, correctly - no value changes
  *   Opening stock        Dr Stock on Hand / Cr Opening Balance Equity
+ *   Production run       ⚠ nothing when fully absorbed (value changed shape,
+ *                        not amount); Dr wastage loss / Cr Stock on Hand when
+ *                        waste is expensed; a rounding residue when the output
+ *                        batch's 4dp unit cost cannot carry the exact value
  *
- * ⚠ This test is what stops a sixth path appearing next quarter. Closing the
- * holes without it is a one-time cleanup rather than a rule.
+ * ⚠ This test is what stops an unsanctioned path appearing next quarter.
+ * Closing the holes without it is a one-time cleanup rather than a rule.
  *
  * See INVENTORY-ENTRY-POINTS-DESIGN.md §4.
  */
@@ -107,6 +111,11 @@ $sanctioned = [
     // ⚠ Opening stock: Dr Stock on Hand / Cr Opening Balance Equity, posted as
     // an OpeningBalance journal. The fifth sanctioned document (C-FLOW-5).
     'Modules/Inventory/Actions/RecordOpeningStock.php',
+    // ⚠ The production run: consumes input lines FIFO, produces one output
+    // batch at the consumed cost. Fully absorbed it posts NOTHING correctly
+    // (value changed shape, not amount); expensed waste posts Dr production
+    // wastage / Cr Stock on Hand. The sixth sanctioned document (C-MFG-6).
+    'Modules/Inventory/Actions/RecordProductionRun.php',
     // ⚠ Demo data for demo businesses, not a business path. Explicitly allowed
     // so the rule stays about production behaviour rather than fixtures.
     'Modules/Inventory/database/seeders/InventoryDemoDataSeeder.php',

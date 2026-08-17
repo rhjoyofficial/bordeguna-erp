@@ -37,6 +37,11 @@ class RecordStockIn
         ?string $purchaseQuantity = null,
         ?int $purchaseUnitId = null,
         ?string $conversionFactor = null,
+        // ⚠ The production pair, supplied ONLY by the production run (C-MFG-13).
+        // Null for every purchased batch: a goods receipt does not know when the
+        // supplier manufactured, and `mrp` is label data the run declares.
+        ?string $manufacturedDate = null,
+        ?string $mrp = null,
     ): StockMovement {
         if (! $product->type->isStocked()) {
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
@@ -45,12 +50,14 @@ class RecordStockIn
         // When the goods actually arrived, not when somebody typed them in.
         $receivedAt = EffectiveDate::resolve($occurredAt, 'received_at');
 
-        return DB::transaction(function () use ($product, $warehouse, $quantity, $unitCost, $performedBy, $batchNumber, $expiryDate, $note, $reason, $reasonId, $receivedAt, $purchaseQuantity, $purchaseUnitId, $conversionFactor) {
+        return DB::transaction(function () use ($product, $warehouse, $quantity, $unitCost, $performedBy, $batchNumber, $expiryDate, $note, $reason, $reasonId, $receivedAt, $purchaseQuantity, $purchaseUnitId, $conversionFactor, $manufacturedDate, $mrp) {
             $batch = StockBatch::create([
                 'product_id' => $product->id,
                 'warehouse_id' => $warehouse->id,
                 'batch_number' => $batchNumber,
                 'expiry_date' => $expiryDate,
+                'manufactured_date' => $manufacturedDate,
+                'mrp' => $mrp,
                 'unit_cost' => $unitCost,
                 'initial_quantity' => $quantity,
                 'current_quantity' => $quantity,

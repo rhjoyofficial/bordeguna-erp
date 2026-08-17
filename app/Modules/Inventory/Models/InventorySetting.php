@@ -15,18 +15,32 @@ class InventorySetting extends Model
     protected $fillable = [
         'business_id',
         'adjustment_approval_threshold',
+        'production_yield_tolerance_percent',
     ];
 
     protected function casts(): array
     {
         return [
             'adjustment_approval_threshold' => 'decimal:4',
+            'production_yield_tolerance_percent' => 'decimal:4',
         ];
     }
 
     public static function forCurrentBusiness(): self
     {
         return static::firstOrCreate([]);
+    }
+
+    /**
+     * D-MFG-5: how far a production run's implied yield may deviate before it is
+     * flagged. Null means the approved default of 5. Flag-only either way - the
+     * tolerance never blocks a run.
+     */
+    public function productionYieldTolerancePercent(): string
+    {
+        return $this->production_yield_tolerance_percent !== null
+            ? (string) $this->production_yield_tolerance_percent
+            : '5';
     }
 
     /**
