@@ -29,6 +29,8 @@ interface Product {
     unit: string;
     purchase_unit: string | null;
     low_stock_threshold: string | null;
+    content_quantity: string | null;
+    content_unit_id: number | null;
     is_active: boolean;
     current_quantity: string | null;
     average_unit_cost: string | null;
@@ -48,6 +50,8 @@ const EMPTY = {
     tax_class_id: '',
     description: '',
     low_stock_threshold: '',
+    content_quantity: '',
+    content_unit_id: '',
 };
 
 interface Option {
@@ -107,6 +111,8 @@ export default function ProductsIndex({
             tax_class_id: product.tax_class_id === null ? '' : String(product.tax_class_id),
             description: product.description ?? '',
             low_stock_threshold: product.low_stock_threshold ?? '',
+            content_quantity: product.content_quantity ?? '',
+            content_unit_id: product.content_unit_id === null ? '' : String(product.content_unit_id),
         });
     };
 
@@ -259,6 +265,36 @@ export default function ProductsIndex({
                             placeholder="optional"
                         />
                         <InputError message={errors.low_stock_threshold} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="content_quantity">Net content per unit</Label>
+                        <Input
+                            id="content_quantity"
+                            value={data.content_quantity}
+                            onChange={(e) => setData('content_quantity', e.target.value)}
+                            placeholder="e.g. 5 for a 5 L pack"
+                        />
+                        <InputError message={errors.content_quantity} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="content_unit_id">Content unit</Label>
+                        <select
+                            id="content_unit_id"
+                            className={selectClass}
+                            value={data.content_unit_id}
+                            onChange={(e) => setData('content_unit_id', e.target.value)}
+                        >
+                            <option value="">Not declared</option>
+                            {units.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                    {u.name} ({u.abbreviation})
+                                </option>
+                            ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">
+                            Only powers the production yield check. Nothing converts with it.
+                        </p>
+                        <InputError message={errors.content_unit_id} />
                     </div>
                     <div className="grid gap-2 col-span-2 sm:col-span-3 lg:col-span-6">
                         <Label htmlFor="description">Description</Label>

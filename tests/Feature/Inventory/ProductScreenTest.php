@@ -82,6 +82,11 @@ beforeEach(function () {
         'tax_class_id' => $this->taxClass->id,
         'description' => 'Sealed jar, 500g net.',
         'low_stock_threshold' => '12',
+        // ⚠ Caught by the structural guard below the moment the pair was added
+        // to Product::$fillable for the production yield check (C-MFG-14) -
+        // the third time the guard has done exactly its job.
+        'content_quantity' => '0.5',
+        'content_unit_id' => $this->purchaseUnit->id,
     ];
 });
 

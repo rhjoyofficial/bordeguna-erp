@@ -1,0 +1,319 @@
+import InputError from '@/components/input-error';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import AppLayout from '@/layouts/app-layout';
+import { type BreadcrumbItem } from '@/types';
+import { Head, router, usePage } from '@inertiajs/react';
+
+interface LineRow {
+    id: number;
+    product: string | null;
+    sku: string | null;
+    unit: string | null;
+    quantity_consumed: string;
+    waste_quantity: string;
+    consumed_value: string | null;
+    waste_value: string | null;
+}
+
+interface MovementRow {
+    id: number;
+    product: string | null;
+    direction: string;
+    quantity: string;
+    unit_cost: string;
+    batch_number: string | null;
+    reverses_movement_id: number | null;
+    occurred_at: string | null;
+}
+
+interface YieldCheck {
+    checked: boolean;
+    reason?: string;
+    content_unit?: string | null;
+    expected_content?: string;
+    net_consumed?: string;
+    deviation_percent?: number;
+    tolerance_percent?: number;
+    flagged?: boolean;
+}
+
+interface Run {
+    id: number;
+    run_number: string;
+    status: string;
+    warehouse: string | null;
+    output_product: string | null;
+    output_sku: string | null;
+    output_unit: string | null;
+    output_quantity: string;
+    output_expiry_date: string | null;
+    output_mrp: string | null;
+    expense_waste: boolean;
+    consumed_value: string | null;
+    waste_value: string | null;
+    yield_check: YieldCheck | null;
+    occurred_at: string | null;
+    note: string | null;
+    created_by: string | null;
+    confirmed_by: string | null;
+    confirmed_at: string | null;
+    reversed_by: string | null;
+    reversed_at: string | null;
+    output_batch: {
+        batch_number: string | null;
+        unit_cost: string;
+        manufactured_date: string | null;
+        expiry_date: string | null;
+        mrp: string | null;
+        current_quantity: string;
+    } | null;
+    lines: LineRow[];
+    movements: MovementRow[];
+}
+
+const money = (value: string | null) =>
+    value === null ? '-' : Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const percent = (waste: string, consumed: string) => {
+    const w = Number(waste);
+    const c = Number(consumed);
+
+    return c > 0 ? `${((w / c) * 100).toFixed(1)}%` : '-';
+};
+
+export default function ProductionRunShow({
+    run,
+    journal,
+    canReverse,
+}: {
+    run: Run;
+    journal: { id: number; journal_number: string } | null;
+    canReverse: boolean;
+}) {
+    const { errors } = usePage().props as { errors: Record<string, string> };
+
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Inventory', href: '/inventory' },
+        { title: 'Production', href: '/inventory/production-runs' },
+        { title: run.run_number, href: `/inventory/production-runs/${run.id}` },
+    ];
+
+    const wastePercentByValue =
+        run.consumed_value && Number(run.consumed_value) > 0 && run.waste_value !== null
+            ? `${((Number(run.waste_value) / Number(run.consumed_value)) * 100).toFixed(2)}%`
+            : '-';
+
+    return (
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={run.run_number} />
+            <div className="flex flex-col gap-6 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h1 className="flex items-center gap-3 text-xl font-semibold">
+                            {run.run_number}
+                            <Badge variant={run.status === 'confirmed' ? 'default' : run.status === 'draft' ? 'secondary' : 'destructive'}>
+                                {run.status}
+                            </Badge>
+                            {run.yield_check?.flagged && <Badge variant="destructive">yield deviation</Badge>}
+                        </h1>
+                        <p className="text-sm text-muted-foreground">
+                            {run.warehouse} · {run.occurred_at} · entered by {run.created_by}
+                            {run.confirmed_by && ` · confirmed by ${run.confirmed_by}`}
+                            {run.reversed_by && ` · reversed by ${run.reversed_by} at ${run.reversed_at}`}
+                        </p>
+                        {run.note && <p className="mt-1 text-sm">{run.note}</p>}
+                    </div>
+                    <div className="flex gap-2">
+                        {run.status === 'draft' && (
+                            <>
+                                <Button onClick={() => router.post(`/inventory/production-runs/${run.id}/confirm`)}>Confirm run</Button>
+                                <Button variant="destructive" onClick={() => router.delete(`/inventory/production-runs/${run.id}`)}>
+                                    Delete draft
+                                </Button>
+                            </>
+                        )}
+                        {run.status === 'confirmed' && (
+                            <Button
+                                variant="destructive"
+                                disabled={!canReverse}
+                                title={
+                                    canReverse
+                                        ? 'Restores every consumed portion and consumes the produced batch back.'
+                                        : 'The output batch has already been partly sold or consumed.'
+                                }
+                                onClick={() => router.post(`/inventory/production-runs/${run.id}/reverse`)}
+                            >
+                                Reverse run
+                            </Button>
+                        )}
+                    </div>
+                </div>
+
+                <InputError message={errors.run} />
+
+                <div className="grid gap-4 md:grid-cols-4">
+                    <div className="rounded-lg border p-4">
+                        <p className="text-sm text-muted-foreground">Output</p>
+                        <p className="font-medium">
+                            {run.output_quantity} {run.output_unit} · {run.output_product}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{run.output_sku}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                        <p className="text-sm text-muted-foreground">Consumed value (FIFO)</p>
+                        <p className="font-medium tabular-nums">{money(run.consumed_value)}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                        <p className="text-sm text-muted-foreground">Waste value · share of consumed</p>
+                        <p className="font-medium tabular-nums">
+                            {money(run.waste_value)} · {wastePercentByValue}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            {run.expense_waste ? 'Expensed to the loss account' : 'Absorbed into the output cost'}
+                        </p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                        <p className="text-sm text-muted-foreground">Output batch cost</p>
+                        <p className="font-medium tabular-nums">{run.output_batch ? money(run.output_batch.unit_cost) : '-'}</p>
+                        <p className="text-xs text-muted-foreground">per {run.output_unit ?? 'unit'}</p>
+                    </div>
+                </div>
+
+                {run.output_batch && (
+                    <div className="rounded-lg border p-4">
+                        <h2 className="font-medium">Output batch</h2>
+                        <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-5">
+                            <div>
+                                <span className="text-muted-foreground">Batch no.</span> {run.output_batch.batch_number}
+                            </div>
+                            <div>
+                                <span className="text-muted-foreground">MFG</span> {run.output_batch.manufactured_date ?? '-'}
+                            </div>
+                            <div>
+                                <span className="text-muted-foreground">EXP</span> {run.output_batch.expiry_date ?? '-'}
+                            </div>
+                            <div>
+                                <span className="text-muted-foreground">MRP</span> {run.output_batch.mrp ? money(run.output_batch.mrp) : '-'}
+                            </div>
+                            <div>
+                                <span className="text-muted-foreground">On hand</span> {run.output_batch.current_quantity}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {run.yield_check && (
+                    <div className={`rounded-lg border p-4 ${run.yield_check.flagged ? 'border-destructive/50 bg-destructive/5' : ''}`}>
+                        <h2 className="font-medium">Yield check</h2>
+                        {run.yield_check.checked ? (
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Expected content {run.yield_check.expected_content} {run.yield_check.content_unit} · consumed net of
+                                waste {run.yield_check.net_consumed} {run.yield_check.content_unit} · deviation{' '}
+                                <span className={run.yield_check.flagged ? 'font-medium text-destructive' : ''}>
+                                    {run.yield_check.deviation_percent}%
+                                </span>{' '}
+                                against a tolerance of {run.yield_check.tolerance_percent}%.{' '}
+                                {run.yield_check.flagged
+                                    ? 'Consumption the declared content and recorded waste do not explain — worth a look, never a block.'
+                                    : 'Within tolerance.'}
+                            </p>
+                        ) : (
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Not checked: {run.yield_check.reason === 'no_declared_content'
+                                    ? 'the output product declares no net content.'
+                                    : 'no input line is stocked in the declared content unit.'}
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                <div className="rounded-lg border">
+                    <h2 className="border-b p-3 font-medium">Inputs consumed</h2>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-muted/50 text-left">
+                                <tr>
+                                    <th className="p-3">Product</th>
+                                    <th className="p-3 text-right">Consumed</th>
+                                    <th className="p-3 text-right">Waste</th>
+                                    <th className="p-3 text-right">Waste %</th>
+                                    <th className="p-3 text-right">Consumed value</th>
+                                    <th className="p-3 text-right">Waste value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {run.lines.map((line) => (
+                                    <tr key={line.id} className="border-t">
+                                        <td className="p-3">
+                                            {line.product} <span className="text-xs text-muted-foreground">{line.sku}</span>
+                                        </td>
+                                        <td className="p-3 text-right tabular-nums">
+                                            {line.quantity_consumed} {line.unit}
+                                        </td>
+                                        <td className="p-3 text-right tabular-nums">
+                                            {line.waste_quantity} {line.unit}
+                                        </td>
+                                        <td className="p-3 text-right tabular-nums">{percent(line.waste_quantity, line.quantity_consumed)}</td>
+                                        <td className="p-3 text-right tabular-nums">{money(line.consumed_value)}</td>
+                                        <td className="p-3 text-right tabular-nums">{money(line.waste_value)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {run.movements.length > 0 && (
+                    <div className="rounded-lg border">
+                        <h2 className="border-b p-3 font-medium">Stock movements (batch traceability)</h2>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-muted/50 text-left">
+                                    <tr>
+                                        <th className="p-3">Product</th>
+                                        <th className="p-3">Direction</th>
+                                        <th className="p-3 text-right">Quantity</th>
+                                        <th className="p-3 text-right">Batch cost</th>
+                                        <th className="p-3">Batch</th>
+                                        <th className="p-3">Undoes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {run.movements.map((movement) => (
+                                        <tr key={movement.id} className="border-t">
+                                            <td className="p-3">{movement.product}</td>
+                                            <td className="p-3">{movement.direction}</td>
+                                            <td className="p-3 text-right tabular-nums">{movement.quantity}</td>
+                                            <td className="p-3 text-right tabular-nums">{money(movement.unit_cost)}</td>
+                                            <td className="p-3">{movement.batch_number ?? '-'}</td>
+                                            <td className="p-3 text-muted-foreground">
+                                                {movement.reverses_movement_id ? `#${movement.reverses_movement_id}` : '-'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                <div className="rounded-lg border p-4 text-sm">
+                    <h2 className="font-medium">Accounting</h2>
+                    {journal ? (
+                        <p className="mt-1 text-muted-foreground">
+                            Posted journal <span className="font-medium">{journal.journal_number}</span> — see Accounting →
+                            Journals.
+                        </p>
+                    ) : (
+                        <p className="mt-1 text-muted-foreground">
+                            {run.status === 'draft'
+                                ? 'Nothing posts until the run is confirmed.'
+                                : 'No journal — correctly. A fully absorbed run moves value from inputs into the output batch without changing any account balance.'}
+                        </p>
+                    )}
+                </div>
+            </div>
+        </AppLayout>
+    );
+}

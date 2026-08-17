@@ -4,6 +4,8 @@ use App\Modules\Inventory\Http\Controllers\CategoryController;
 use App\Modules\Inventory\Http\Controllers\InventoryDashboardController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockController;
 use App\Modules\Inventory\Http\Controllers\ProductController;
+use App\Modules\Inventory\Http\Controllers\ProductionRunController;
+use App\Modules\Inventory\Http\Controllers\ProductionYieldController;
 use App\Modules\Inventory\Http\Controllers\StockController;
 use App\Modules\Inventory\Http\Controllers\StockRequestController;
 use App\Modules\Inventory\Http\Controllers\UnitOfMeasureController;
@@ -58,6 +60,23 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     Route::get('stock/transfers', [StockController::class, 'transfersIndex'])->name('stock.transfers.index');
     // authorizes inventory.stock.adjust internally
     Route::post('stock/transfers/{stockTransfer}/receive', [StockController::class, 'receiveTransfer'])->name('stock.transfers.receive');
+
+    // Manufacturing phase 1: the production run (C-MFG). One permission for
+    // the whole document - D-MFG-4's one-step confirm by the authorised user.
+    Route::middleware('can:inventory.production.manage')->group(function () {
+        Route::get('production-runs', [ProductionRunController::class, 'index'])->name('production-runs.index');
+        Route::get('production-runs/new', [ProductionRunController::class, 'create'])->name('production-runs.create');
+        Route::post('production-runs', [ProductionRunController::class, 'store'])->name('production-runs.store');
+        Route::get('production-runs/{run}', [ProductionRunController::class, 'show'])->name('production-runs.show');
+        Route::post('production-runs/{run}/confirm', [ProductionRunController::class, 'confirm'])->name('production-runs.confirm');
+        Route::post('production-runs/{run}/reverse', [ProductionRunController::class, 'reverse'])->name('production-runs.reverse');
+        Route::delete('production-runs/{run}', [ProductionRunController::class, 'destroy'])->name('production-runs.destroy');
+    });
+
+    // The yield report reads like every other inventory report.
+    Route::middleware('can:inventory.reports.view')->group(function () {
+        Route::get('production-yield', [ProductionYieldController::class, 'index'])->name('production-yield');
+    });
 
     // Approval queue — index/store/approve/reject each authorize internally
     Route::get('stock-requests', [StockRequestController::class, 'index'])->name('stock-requests.index');

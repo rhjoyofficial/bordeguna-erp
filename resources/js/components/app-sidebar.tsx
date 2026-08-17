@@ -16,6 +16,7 @@ import {
     ClipboardList,
     Coins,
     Contact,
+    Factory,
     FileBarChart,
     FileText,
     FileUp,
@@ -89,6 +90,11 @@ export function AppSidebar() {
                 { title: 'Inventory', url: '/inventory', icon: Boxes },
                 { title: 'Products', url: '/inventory/products', icon: PackageSearch },
                 { title: 'Stock', url: '/inventory/stock', icon: ClipboardList },
+                // Manufacturing phase 1: the production run and the report that
+                // notices a drifting yield - shipped WITH their screens in one
+                // commit, the reachability rule this file records.
+                { title: 'Production', url: '/inventory/production-runs', icon: Factory },
+                { title: 'Production yield', url: '/inventory/production-yield', icon: FileBarChart },
                 { title: 'Stock requests', url: '/inventory/stock-requests', icon: ClipboardList },
                 { title: 'Warehouses', url: '/inventory/warehouses', icon: Warehouse },
                 { title: 'Categories', url: '/inventory/categories', icon: Tags },

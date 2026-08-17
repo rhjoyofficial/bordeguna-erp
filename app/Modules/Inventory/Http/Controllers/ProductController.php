@@ -69,6 +69,10 @@ class ProductController extends Controller
                 // goods receipt, and that has to be visible without opening it.
                 'purchase_unit' => $product->purchaseUnit?->abbreviation,
                 'low_stock_threshold' => $product->low_stock_threshold,
+                // C-MFG-14: shown so the edit form can preselect the declared
+                // content, exactly as the other ids above.
+                'content_quantity' => $product->content_quantity,
+                'content_unit_id' => $product->content_unit_id,
                 'is_active' => $product->is_active,
                 'current_quantity' => $product->type->isStocked() ? $product->currentStockQuantity() : null,
                 'average_unit_cost' => $product->type->isStocked() ? $product->averageUnitCost() : null,
@@ -177,6 +181,15 @@ class ProductController extends Controller
             'tax_class_id' => ['nullable', Rule::exists('tax_classes', 'id')->where('business_id', $businessId)],
             'description' => ['nullable', 'string'],
             'low_stock_threshold' => ['nullable', 'numeric', 'min:0'],
+            // C-MFG-14: the net content of ONE stock unit, declared with its
+            // unit or not at all - a quantity with no unit measures nothing,
+            // and a unit with no quantity is a promise. Purely a yield-check
+            // input for production runs; nothing converts with it (C-MFG-2).
+            'content_quantity' => ['nullable', 'numeric', 'gt:0', 'required_with:content_unit_id'],
+            'content_unit_id' => [
+                'nullable', 'required_with:content_quantity',
+                Rule::exists('units_of_measure', 'id')->where('business_id', $businessId),
+            ],
         ]);
     }
 }
