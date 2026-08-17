@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Modules\Foundation\Http\Middleware\EnsurePageBusinessMatches;
 use App\Modules\Foundation\Http\Middleware\ResolveCurrentBusiness;
@@ -56,6 +57,10 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $middleware->web(append: [
+            // C-SEC-1. A deactivated user is rejected on every request, not
+            // only at login - a session must not outlive the decision to
+            // revoke it. Global for the same reason as the W3 guard below.
+            EnsureUserIsActive::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
             // W3. Refuses a mutating request whose PAGE was built for a

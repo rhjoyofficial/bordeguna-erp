@@ -8,7 +8,9 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
@@ -143,6 +145,28 @@ class UserManagementController extends Controller
         }
 
         $user->update(['is_active' => ! $user->is_active]);
+
+        if (! $user->is_active) {
+            // C-SEC-3. The remember cookie re-authenticates WITHOUT passing
+            // through the login guard, so an unchanged token would let this
+            // user mint fresh sessions after deactivation. Cycled, not
+            // cleared: an empty token has matched an empty cookie before.
+            $user->setRememberToken(Str::random(60));
+            $user->save();
+
+            // C-SEC-2. Revocation is immediate, not next-request: the database
+            // session driver makes this user's sessions enumerable, so they
+            // are deleted here rather than left for EnsureUserIsActive to
+            // reject one by one. Driver-guarded - on any other driver the
+            // per-request check is the guarantee instead, which is as far as
+            // that architecture allows. Reactivation restores NOTHING; the
+            // person logs in afresh.
+            if (config('session.driver') === 'database') {
+                DB::table(config('session.table', 'sessions'))
+                    ->where('user_id', $user->id)
+                    ->delete();
+            }
+        }
 
         return back()->with('success', $user->is_active ? "{$user->name} reactivated." : "{$user->name} deactivated.");
     }
