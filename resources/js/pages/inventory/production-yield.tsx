@@ -62,7 +62,7 @@ export default function ProductionYield({
                     <div>
                         <h1 className="text-xl font-semibold">Production yield</h1>
                         <p className="text-sm text-muted-foreground">
-                            Where a drifting yield gets noticed. Waste percentages here are value-based — the only ratio
+                            Where a drifting yield gets noticed. Waste percentages here are value-based: the only ratio
                             that adds up honestly across kilograms, litres and pieces. Per-unit figures live on each run.
                         </p>
                     </div>

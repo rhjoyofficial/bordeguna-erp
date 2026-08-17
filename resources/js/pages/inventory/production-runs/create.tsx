@@ -82,11 +82,11 @@ export default function ProductionRunCreate({
                 <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
                     <p className="font-medium">Record what physically happened, after it happened.</p>
                     <p className="mt-1 text-muted-foreground">
-                        Enter the quantities actually consumed and actually produced, each in its own unit — the system
+                        Enter the quantities actually consumed and actually produced, each in its own unit; the system
                         never converts between units. The output batch will cost exactly what the run consumed (FIFO),
                         divided by the output quantity. Waste is recorded for visibility and absorbed into the cost unless
-                        you explicitly expense it. One run produces <span className="font-medium">one</span> output — filling
-                        two pack sizes from one drum is two runs.
+                        you explicitly expense it. One run produces <span className="font-medium">one</span> output:
+                        filling two pack sizes from one drum is two runs.
                     </p>
                 </div>
 
@@ -255,7 +255,7 @@ export default function ProductionRunCreate({
                             onCheckedChange={(checked) => setData('expense_waste', checked === true)}
                         />
                         <Label htmlFor="expense_waste" className="font-normal">
-                            Expense the waste to the loss account (abnormal events only — normal waste stays in the pack
+                            Expense the waste to the loss account (abnormal events only; normal waste stays in the pack
                             cost)
                         </Label>
                     </div>

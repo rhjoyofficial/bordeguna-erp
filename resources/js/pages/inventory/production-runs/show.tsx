@@ -215,7 +215,7 @@ export default function ProductionRunShow({
                                 </span>{' '}
                                 against a tolerance of {run.yield_check.tolerance_percent}%.{' '}
                                 {run.yield_check.flagged
-                                    ? 'Consumption the declared content and recorded waste do not explain — worth a look, never a block.'
+                                    ? 'Consumption the declared content and recorded waste do not explain. Worth a look, never a block.'
                                     : 'Within tolerance.'}
                             </p>
                         ) : (
@@ -302,14 +302,14 @@ export default function ProductionRunShow({
                     <h2 className="font-medium">Accounting</h2>
                     {journal ? (
                         <p className="mt-1 text-muted-foreground">
-                            Posted journal <span className="font-medium">{journal.journal_number}</span> — see Accounting →
+                            Posted journal <span className="font-medium">{journal.journal_number}</span>, in Accounting →
                             Journals.
                         </p>
                     ) : (
                         <p className="mt-1 text-muted-foreground">
                             {run.status === 'draft'
                                 ? 'Nothing posts until the run is confirmed.'
-                                : 'No journal — correctly. A fully absorbed run moves value from inputs into the output batch without changing any account balance.'}
+                                : 'No journal, correctly. A fully absorbed run moves value from inputs into the output batch without changing any account balance.'}
                         </p>
                     )}
                 </div>
