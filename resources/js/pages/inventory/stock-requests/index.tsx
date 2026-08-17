@@ -124,7 +124,7 @@ export default function StockRequestsIndex({
                                                     </Button>
                                                 }
                                                 title="Reject stock request"
-                                                description={`${request.product.name} — ${request.quantity} at ${request.warehouse.name}. This cannot be undone.`}
+                                                description={`${request.product.name}: ${request.quantity} at ${request.warehouse.name}. This cannot be undone.`}
                                                 confirmLabel="Reject request"
                                                 destructive
                                                 withNote

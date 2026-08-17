@@ -56,7 +56,7 @@ function ProductWarehouseSelects({
                 <SearchableSelect
                     value={productId}
                     onChange={onProductChange}
-                    options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} — ${p.name}` : p.name }))}
+                    options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} - ${p.name}` : p.name }))}
                     placeholder="Select product"
                     searchPlaceholder="Search products…"
                 />

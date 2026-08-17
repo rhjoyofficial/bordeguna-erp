@@ -55,7 +55,7 @@ export default function StockTransfersIndex({
             <Head title="In-transit transfers" />
             <div className="flex flex-col gap-4 p-4">
                 <p className="text-sm text-muted-foreground">
-                    Stock dispatched from a source warehouse sits here until someone confirms it arrived — it does not count as destination
+                    Stock dispatched from a source warehouse sits here until someone confirms it arrived; it does not count as destination
                     stock until received.
                 </p>
 

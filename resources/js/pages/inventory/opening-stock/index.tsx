@@ -84,7 +84,7 @@ export default function OpeningStockIndex({
                         This posts <span className="font-medium">Stock on Hand</span> against{' '}
                         <span className="font-medium">Opening Balance Equity</span>. The unit costs entered here become the
                         cost layers FIFO consumes, so they decide the profit on every sale until this stock is sold through.
-                        It can be entered <span className="font-medium">once per warehouse</span> — afterwards, corrections
+                        It can be entered <span className="font-medium">once per warehouse</span>; afterwards, corrections
                         go through an inventory adjustment.
                     </p>
                 </div>

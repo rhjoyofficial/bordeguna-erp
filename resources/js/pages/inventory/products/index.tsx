@@ -394,7 +394,7 @@ export default function ProductsIndex({
                         {products.data.map((product) => (
                             <tr key={product.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2 font-mono text-xs">{product.sku}</td>
-                                <td className="py-2 font-mono text-xs text-muted-foreground">{product.barcode ?? '—'}</td>
+                                <td className="py-2 font-mono text-xs text-muted-foreground">{product.barcode ?? '-'}</td>
                                 <td className="py-2">
                                     {product.name}
                                     {!product.is_active && (
@@ -404,8 +404,8 @@ export default function ProductsIndex({
                                     )}
                                 </td>
                                 <td className="py-2 text-muted-foreground">{product.type.replace('_', ' ')}</td>
-                                <td className="py-2 text-muted-foreground">{product.category ?? '—'}</td>
-                                <td className="py-2 text-muted-foreground">{product.brand ?? '—'}</td>
+                                <td className="py-2 text-muted-foreground">{product.category ?? '-'}</td>
+                                <td className="py-2 text-muted-foreground">{product.brand ?? '-'}</td>
                                 <td className="py-2">
                                     {product.current_quantity !== null ? (
                                         <span className={product.is_below_threshold ? 'font-medium text-destructive' : ''}>
@@ -413,10 +413,10 @@ export default function ProductsIndex({
                                             {product.is_below_threshold && ' (low)'}
                                         </span>
                                     ) : (
-                                        '—'
+                                        '-'
                                     )}
                                 </td>
-                                <td className="py-2 text-muted-foreground">{product.average_unit_cost ?? '—'}</td>
+                                <td className="py-2 text-muted-foreground">{product.average_unit_cost ?? '-'}</td>
                                 <td className="py-2 text-right">
                                     <Button variant="ghost" size="sm" onClick={() => startEdit(product)}>
                                         Edit
