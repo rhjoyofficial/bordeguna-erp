@@ -45,6 +45,12 @@ class OpeningStockController extends Controller
                 ->orderBy('name')->get(['id', 'name', 'code']),
             'products' => Product::query()->where('is_active', true)->stocked()
                 ->orderBy('name')->get(['id', 'name', 'sku']),
+            // ⚠ ALL active warehouses, not just the ones still awaiting the
+            // document. The count sheet is printed before the count and the
+            // person printing it may well be checking one already recorded;
+            // the sheet itself says so in red rather than hiding the warehouse.
+            'countSheetWarehouses' => Warehouse::query()->where('is_active', true)
+                ->orderBy('name')->get(['id', 'name', 'code']),
         ]);
     }
 

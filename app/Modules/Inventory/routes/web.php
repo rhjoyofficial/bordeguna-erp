@@ -3,6 +3,7 @@
 use App\Modules\Inventory\Http\Controllers\CategoryController;
 use App\Modules\Inventory\Http\Controllers\InventoryDashboardController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockController;
+use App\Modules\Inventory\Http\Controllers\OpeningStockCountSheetController;
 use App\Modules\Inventory\Http\Controllers\ProductController;
 use App\Modules\Inventory\Http\Controllers\ProductionRunController;
 use App\Modules\Inventory\Http\Controllers\ProductionYieldController;
@@ -76,6 +77,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     // The yield report reads like every other inventory report.
     Route::middleware('can:inventory.reports.view')->group(function () {
         Route::get('production-yield', [ProductionYieldController::class, 'index'])->name('production-yield');
+
+        // The blank count sheet. A REPORT permission, not the opening stock
+        // one: this reveals nothing the products screen does not already show
+        // to everybody in the business, it writes nothing, and the person who
+        // carries it around the warehouse is not the person allowed to post
+        // the document it feeds.
+        Route::get('opening-stock/count-sheet', [OpeningStockCountSheetController::class, 'show'])->name('opening-stock.count-sheet');
     });
 
     // Approval queue — index/store/approve/reject each authorize internally

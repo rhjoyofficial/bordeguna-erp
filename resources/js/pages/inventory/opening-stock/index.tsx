@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useState } from 'react';
 
 const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
@@ -46,11 +46,21 @@ export default function OpeningStockIndex({
     openingStocks,
     warehouses,
     products,
+    countSheetWarehouses,
 }: {
     openingStocks: OpeningStock[];
     warehouses: { id: number; name: string; code: string }[];
     products: { id: number; name: string; sku: string }[];
+    countSheetWarehouses: { id: number; name: string; code: string }[];
 }) {
+    // Count-sheet picker. Deliberately NOT part of the posting form: it writes
+    // nothing, and sharing the form's state would let a stray warehouse change
+    // made while printing follow through into the document that posts.
+    const [sheetWarehouse, setSheetWarehouse] = useState(String(countSheetWarehouses[0]?.id ?? ''));
+    const [sheetDate, setSheetDate] = useState(new Date().toISOString().slice(0, 10));
+    const sheetUrl = (format: 'print' | 'csv') =>
+        `/inventory/opening-stock/count-sheet?warehouse=${sheetWarehouse}&as_at=${sheetDate}&format=${format}`;
+
     const { data, setData, post, errors, processing, reset } = useForm({
         warehouse_id: String(warehouses[0]?.id ?? ''),
         as_at: new Date().toISOString().slice(0, 10),
@@ -88,6 +98,52 @@ export default function OpeningStockIndex({
                         go through an inventory adjustment.
                     </p>
                 </div>
+
+                {countSheetWarehouses.length > 0 && (
+                    <div className="rounded-lg border p-4">
+                        <p className="text-sm font-medium">Count sheet</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Print a blank sheet to carry around the warehouse, then type the counted numbers back into the
+                            matching CSV. Nothing is pre-filled: no quantity and no cost, not even a zero. The SKUs and the
+                            warehouse code are printed for you because the import matches on exactly those, and a
+                            hand-typed SKU is the mistake this sheet exists to prevent.
+                        </p>
+                        <div className="mt-3 flex flex-wrap items-end gap-3">
+                            <div className="grid gap-2">
+                                <Label htmlFor="sheet_warehouse">Warehouse</Label>
+                                <select
+                                    id="sheet_warehouse"
+                                    className={selectClass}
+                                    value={sheetWarehouse}
+                                    onChange={(e) => setSheetWarehouse(e.target.value)}
+                                >
+                                    {countSheetWarehouses.map((w) => (
+                                        <option key={w.id} value={w.id}>
+                                            {w.name} ({w.code})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="sheet_date">Count as at</Label>
+                                <Input
+                                    id="sheet_date"
+                                    type="date"
+                                    value={sheetDate}
+                                    onChange={(e) => setSheetDate(e.target.value)}
+                                />
+                            </div>
+                            <Button asChild variant="outline">
+                                <a href={sheetUrl('print')} target="_blank" rel="noopener">
+                                    Print count sheet
+                                </a>
+                            </Button>
+                            <Button asChild variant="outline">
+                                <a href={sheetUrl('csv')}>Download CSV template</a>
+                            </Button>
+                        </div>
+                    </div>
+                )}
 
                 {warehouses.length === 0 ? (
                     <div className="rounded-lg border p-6 text-center text-muted-foreground">
