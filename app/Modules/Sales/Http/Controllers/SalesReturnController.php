@@ -3,7 +3,9 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Sales\Actions\RecordCustomerRefund;
 use App\Modules\Sales\Actions\RecordSalesReturn;
@@ -12,6 +14,7 @@ use App\Modules\Sales\Models\SalesReturn;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -142,28 +145,34 @@ class SalesReturnController extends Controller
 
         // ⚠ Return and instant refund are ONE transaction: nobody hands cash
         // over for a return that then fails to record.
-        $return = DB::transaction(function () use ($action, $refundAction, $delivery, $lines, $data, $request) {
-            $return = $action->handle(
-                delivery: $delivery,
-                lines: $lines,
-                createdBy: $request->user(),
-                returnedAt: $data['returned_at'] ?? null,
-                note: $data['note'] ?? null,
-            );
-
-            if (isset($data['refund'])) {
-                $refundAction->handle(
-                    salesReturn: $return,
-                    moneyAccount: MoneyAccount::findOrFail($data['refund']['money_account_id']),
-                    amount: (string) $data['refund']['amount'],
+        // ⚠ C-SLS-E1. A return dated into a closed month is refused; the whole
+        // transaction rolls back, so nothing partial survives the message.
+        try {
+            $return = DB::transaction(function () use ($action, $refundAction, $delivery, $lines, $data, $request) {
+                $return = $action->handle(
+                    delivery: $delivery,
+                    lines: $lines,
                     createdBy: $request->user(),
-                    refundedOn: $data['returned_at'] ?? null,
-                    reference: $return->return_number,
+                    returnedAt: $data['returned_at'] ?? null,
+                    note: $data['note'] ?? null,
                 );
-            }
 
-            return $return;
-        });
+                if (isset($data['refund'])) {
+                    $refundAction->handle(
+                        salesReturn: $return,
+                        moneyAccount: MoneyAccount::findOrFail($data['refund']['money_account_id']),
+                        amount: (string) $data['refund']['amount'],
+                        createdBy: $request->user(),
+                        refundedOn: $data['returned_at'] ?? null,
+                        reference: $return->return_number,
+                    );
+                }
+
+                return $return;
+            });
+        } catch (PeriodClosedException|MappingNotFound $e) {
+            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        }
 
         return redirect()->route('sales.returns.show', $return)
             ->with('success', "Return {$return->return_number} recorded.");
@@ -212,15 +221,23 @@ class SalesReturnController extends Controller
             'note' => ['nullable', 'string'],
         ]);
 
-        $action->handle(
-            salesReturn: $salesReturn,
-            moneyAccount: MoneyAccount::findOrFail($data['money_account_id']),
-            amount: (string) $data['amount'],
-            createdBy: $request->user(),
-            refundedOn: $data['refunded_on'],
-            reference: $data['reference'] ?? null,
-            note: $data['note'] ?? null,
-        );
+        // ⚠ C-SLS-E1. Cash going back into a closed month is refused; the date
+        // field is the one the user can actually change.
+        try {
+            $action->handle(
+                salesReturn: $salesReturn,
+                moneyAccount: MoneyAccount::findOrFail($data['money_account_id']),
+                amount: (string) $data['amount'],
+                createdBy: $request->user(),
+                refundedOn: $data['refunded_on'],
+                reference: $data['reference'] ?? null,
+                note: $data['note'] ?? null,
+            );
+        } catch (PeriodClosedException $e) {
+            throw ValidationException::withMessages(['refunded_on' => $e->getMessage()]);
+        } catch (MappingNotFound $e) {
+            throw ValidationException::withMessages(['money_account_id' => $e->getMessage()]);
+        }
 
         return back()->with('success', 'Refund recorded.');
     }

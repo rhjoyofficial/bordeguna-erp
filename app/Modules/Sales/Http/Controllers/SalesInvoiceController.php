@@ -3,16 +3,20 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
+use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -141,44 +145,65 @@ class SalesInvoiceController extends Controller
 
         $invoiceDate = $data['invoice_date'] ?? null;
 
-        $lines = collect($data['lines'])
-            ->filter(fn (array $line) => (float) $line['quantity'] > 0)
-            ->map(function (array $line) use ($deliveryLines, $resolver, $customer, $invoiceDate) {
-                $deliveryLine = isset($line['delivery_line_id']) ? $deliveryLines[$line['delivery_line_id']] ?? null : null;
+        try {
+            $lines = collect($data['lines'])
+                ->filter(fn (array $line) => (float) $line['quantity'] > 0)
+                ->map(function (array $line, int $index) use ($deliveryLines, $resolver, $customer, $invoiceDate) {
+                    $deliveryLine = isset($line['delivery_line_id']) ? $deliveryLines[$line['delivery_line_id']] ?? null : null;
 
-                // ⚠⚠ C-SO-4. When the screen does not override, the price is
-                // the ORDER price for an order-traced line, else the resolver
-                // at the INVOICE date. Decided here, on the server, exactly
-                // once - the create screen only previewed the same answer.
-                $unitPrice = isset($line['unit_price']) ? (string) $line['unit_price'] : null;
+                    // ⚠⚠ C-SO-4. When the screen does not override, the price is
+                    // the ORDER price for an order-traced line, else the resolver
+                    // at the INVOICE date. Decided here, on the server, exactly
+                    // once - the create screen only previewed the same answer.
+                    $unitPrice = isset($line['unit_price']) ? (string) $line['unit_price'] : null;
 
-                if ($unitPrice === null && $deliveryLine !== null) {
-                    $unitPrice = $deliveryLine->orderLine !== null
-                        ? (string) $deliveryLine->orderLine->unit_price
-                        : $resolver->resolve($deliveryLine->product, $customer, (string) $line['quantity'], $invoiceDate)->unitPrice;
-                }
+                    if ($unitPrice === null && $deliveryLine !== null) {
+                        $unitPrice = $deliveryLine->orderLine !== null
+                            ? (string) $deliveryLine->orderLine->unit_price
+                            : $resolver->resolve($deliveryLine->product, $customer, (string) $line['quantity'], $invoiceDate)->unitPrice;
+                    }
 
-                return [
-                    'deliveryLine' => $deliveryLine,
-                    'product' => $deliveryLine?->product,
-                    'description' => $line['description'] ?? null,
-                    'quantity' => (string) $line['quantity'],
-                    'unitPrice' => $unitPrice ?? '0',
-                    'discount' => isset($line['discount']) ? (string) $line['discount'] : '0',
-                ];
-            })
-            ->values()
-            ->all();
+                    // ⚠⚠ C-SLS-E2. A line billing no delivery never reaches the
+                    // resolver above, so an omitted price used to fall through to
+                    // zero and bill the customer nothing. A service line releases
+                    // no cost, so there is no COGS to make the mistake visible and
+                    // the books balance perfectly around the missing money.
+                    // ⚠ Refused on ABSENCE, never on value: an explicit 0 is a
+                    // free sample or a written off charge, which is a real thing a
+                    // business does and is not mine to forbid.
+                    if ($unitPrice === null) {
+                        throw ValidationException::withMessages([
+                            "lines.{$index}.unit_price" => 'This line bills no delivery, so it needs a price. Enter 0 if it is deliberately free.',
+                        ]);
+                    }
 
-        $invoice = $action->handle(
-            customer: $customer,
-            lines: $lines,
-            createdBy: $request->user(),
-            invoiceDate: $invoiceDate,
-            invoiceDiscount: (string) ($data['invoice_discount'] ?? '0'),
-            dueDate: $data['due_date'] ?? null,
-            note: $data['note'] ?? null,
-        );
+                    return [
+                        'deliveryLine' => $deliveryLine,
+                        'product' => $deliveryLine?->product,
+                        'description' => $line['description'] ?? null,
+                        'quantity' => (string) $line['quantity'],
+                        'unitPrice' => $unitPrice,
+                        'discount' => isset($line['discount']) ? (string) $line['discount'] : '0',
+                    ];
+                })
+                ->values()
+                ->all();
+
+            $invoice = $action->handle(
+                customer: $customer,
+                lines: $lines,
+                createdBy: $request->user(),
+                invoiceDate: $invoiceDate,
+                invoiceDiscount: (string) ($data['invoice_discount'] ?? '0'),
+                dueDate: $data['due_date'] ?? null,
+                note: $data['note'] ?? null,
+            );
+        } catch (NoSellingPriceException $e) {
+            // ⚠ C-SLS-E1. The message names the product and the date it looked on.
+            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        } catch (PeriodClosedException|MappingNotFound $e) {
+            throw ValidationException::withMessages(['invoice_date' => $e->getMessage()]);
+        }
 
         return redirect()->route('sales.invoices.show', $invoice)
             ->with('success', "Invoice {$invoice->invoice_number} raised.");

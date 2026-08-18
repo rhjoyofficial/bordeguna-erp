@@ -3,6 +3,9 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Exceptions\MappingNotFound;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordDelivery;
@@ -10,6 +13,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -82,17 +86,22 @@ class DeliveryController extends Controller
             ->whereIn('id', collect($data['lines'])->pluck('product_id'))
             ->get()->keyBy('id');
 
-        $delivery = $action->handle(
-            customer: Customer::findOrFail($data['customer_id']),
-            warehouse: Warehouse::findOrFail($data['warehouse_id']),
-            lines: collect($data['lines'])->map(fn (array $line) => [
-                'product' => $products[$line['product_id']],
-                'quantity' => (string) $line['quantity'],
-            ])->all(),
-            createdBy: $request->user(),
-            deliveredAt: $data['delivered_at'] ?? null,
-            note: $data['note'] ?? null,
-        );
+        // ⚠ C-SLS-E1, same three refusals as the order-traced challan.
+        try {
+            $delivery = $action->handle(
+                customer: Customer::findOrFail($data['customer_id']),
+                warehouse: Warehouse::findOrFail($data['warehouse_id']),
+                lines: collect($data['lines'])->map(fn (array $line) => [
+                    'product' => $products[$line['product_id']],
+                    'quantity' => (string) $line['quantity'],
+                ])->all(),
+                createdBy: $request->user(),
+                deliveredAt: $data['delivered_at'] ?? null,
+                note: $data['note'] ?? null,
+            );
+        } catch (InsufficientStockException|PeriodClosedException|MappingNotFound $e) {
+            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        }
 
         return back()->with('success', "Challan {$delivery->delivery_number} recorded.");
     }

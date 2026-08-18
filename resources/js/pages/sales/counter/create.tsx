@@ -287,7 +287,12 @@ export default function CounterSale({
                     </div>
                 </div>
 
-                <div>
+                <div className="space-y-2">
+                    {/* C-SLS-E1. Where a refused sale says why: no price in force,
+                        not enough stock, a closed month, a missing mapping. The
+                        till is the one screen where all four can happen, and
+                        before this every one of them arrived as a blank error. */}
+                    <InputError message={errors.lines} />
                     <Button type="submit" disabled={processing} size="lg">
                         {data.money_account_id ? 'Take payment and finish' : 'Finish on account'}
                     </Button>

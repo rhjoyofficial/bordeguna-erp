@@ -3,8 +3,11 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\ApproveSalesOrder;
@@ -14,12 +17,14 @@ use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\CustomerExposure;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Enums\SalesOrderStatus;
+use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -161,19 +166,26 @@ class SalesOrderController extends Controller
             ->whereIn('id', collect($data['lines'])->pluck('product_id'))
             ->get()->keyBy('id');
 
-        $order = $action->handle(
-            customer: Customer::findOrFail($data['customer_id']),
-            lines: collect($data['lines'])->map(fn (array $line) => [
-                'product' => $products[$line['product_id']],
-                'quantity' => (string) $line['quantity'],
-                'unit_price' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
-            ])->all(),
-            createdBy: $request->user(),
-            warehouse: isset($data['warehouse_id']) ? Warehouse::findOrFail($data['warehouse_id']) : null,
-            orderedAt: $data['ordered_at'] ?? null,
-            expectedDate: $data['expected_date'] ?? null,
-            note: $data['note'] ?? null,
-        );
+        // ⚠ C-SLS-E1. The server resolves every price that was not overridden,
+        // so a product the price file never reached refuses the order here. The
+        // exception names the product; say so on the form.
+        try {
+            $order = $action->handle(
+                customer: Customer::findOrFail($data['customer_id']),
+                lines: collect($data['lines'])->map(fn (array $line) => [
+                    'product' => $products[$line['product_id']],
+                    'quantity' => (string) $line['quantity'],
+                    'unit_price' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
+                ])->all(),
+                createdBy: $request->user(),
+                warehouse: isset($data['warehouse_id']) ? Warehouse::findOrFail($data['warehouse_id']) : null,
+                orderedAt: $data['ordered_at'] ?? null,
+                expectedDate: $data['expected_date'] ?? null,
+                note: $data['note'] ?? null,
+            );
+        } catch (NoSellingPriceException $e) {
+            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        }
 
         return redirect()->route('sales.orders.show', $order)
             ->with('success', "Sales order {$order->order_number} recorded.");
@@ -267,14 +279,21 @@ class SalesOrderController extends Controller
             ->values()
             ->all();
 
-        $delivery = $action->handle(
-            customer: $order->customer,
-            warehouse: Warehouse::findOrFail($data['warehouse_id']),
-            lines: $lines,
-            createdBy: $request->user(),
-            deliveredAt: $data['delivered_at'] ?? null,
-            note: $data['note'] ?? null,
-        );
+        // ⚠ C-SLS-E1. Delivering more than the warehouse holds, or into a month
+        // somebody has already reported on, is refused by the action. Both are
+        // ordinary mistakes a picker makes and neither deserves a blank screen.
+        try {
+            $delivery = $action->handle(
+                customer: $order->customer,
+                warehouse: Warehouse::findOrFail($data['warehouse_id']),
+                lines: $lines,
+                createdBy: $request->user(),
+                deliveredAt: $data['delivered_at'] ?? null,
+                note: $data['note'] ?? null,
+            );
+        } catch (InsufficientStockException|PeriodClosedException|MappingNotFound $e) {
+            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        }
 
         return back()->with('success', "Challan {$delivery->delivery_number} recorded against {$order->order_number}.");
     }

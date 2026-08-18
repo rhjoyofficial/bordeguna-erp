@@ -3,15 +3,20 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Exceptions\MappingNotFound;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordCounterSale;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
+use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -89,23 +94,34 @@ class CounterSaleController extends Controller
             ->whereIn('id', collect($data['lines'])->pluck('product_id'))
             ->get()->keyBy('id');
 
-        $sale = $action->handle(
-            customer: Customer::findOrFail($data['customer_id']),
-            warehouse: Warehouse::findOrFail($data['warehouse_id']),
-            lines: collect($data['lines'])->map(fn (array $line) => [
-                'product' => $products[$line['product_id']],
-                'quantity' => (string) $line['quantity'],
-                'unitPrice' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
-                'discount' => isset($line['discount']) ? (string) $line['discount'] : '0',
-            ])->all(),
-            createdBy: $request->user(),
-            moneyAccount: isset($data['money_account_id'])
-                ? MoneyAccount::findOrFail($data['money_account_id'])
-                : null,
-            invoiceDiscount: (string) ($data['invoice_discount'] ?? '0'),
-            reference: $data['reference'] ?? null,
-            note: $data['note'] ?? null,
-        );
+        // ⚠⚠ C-SLS-E1. Four different refusals can reach this counter: no price
+        // in force, not enough stock, a closed month, a missing mapping. Each
+        // already carried a message written for the person standing at the till;
+        // uncaught, every one of them arrived as a blank 500 instead. This
+        // changes nothing about which sales are refused, only whether the
+        // refusal can be read. The key is `lines` because that is what the
+        // counter screen renders.
+        try {
+            $sale = $action->handle(
+                customer: Customer::findOrFail($data['customer_id']),
+                warehouse: Warehouse::findOrFail($data['warehouse_id']),
+                lines: collect($data['lines'])->map(fn (array $line) => [
+                    'product' => $products[$line['product_id']],
+                    'quantity' => (string) $line['quantity'],
+                    'unitPrice' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
+                    'discount' => isset($line['discount']) ? (string) $line['discount'] : '0',
+                ])->all(),
+                createdBy: $request->user(),
+                moneyAccount: isset($data['money_account_id'])
+                    ? MoneyAccount::findOrFail($data['money_account_id'])
+                    : null,
+                invoiceDiscount: (string) ($data['invoice_discount'] ?? '0'),
+                reference: $data['reference'] ?? null,
+                note: $data['note'] ?? null,
+            );
+        } catch (NoSellingPriceException|InsufficientStockException|PeriodClosedException|MappingNotFound $e) {
+            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        }
 
         return redirect()
             ->route('sales.invoices.show', $sale->invoice->id)
