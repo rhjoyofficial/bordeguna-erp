@@ -208,3 +208,24 @@ it('leaves the caller in the business it found them in', function () {
 
     expect(app(BusinessContext::class)->id())->toBe($other->id);
 });
+
+// ⚠ C-INV-E2 in Accounting: the chart screen renders code/name/type/parent_id and
+// delete is a bare button, so a refusal under `account` was never once displayed.
+it('flashes an error when a system account cannot be deleted', function () {
+    (new ChartOfAccountsSeeder)->run();
+    app(BusinessContext::class)->set($this->business->id);
+
+    $owner = User::factory()->create();
+    $owner->businesses()->attach($this->business->id);
+    $owner->update(['is_super_admin' => true]);
+
+    $stock = Account::bySlug('stock_on_hand');
+
+    $response = $this->actingAs($owner)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->delete(route('accounting.accounts.destroy', $stock));
+
+    $response->assertRedirect();
+    expect(session('error'))->toContain('used by the system itself')
+        ->and(Account::bySlug('stock_on_hand'))->not->toBeNull();
+});

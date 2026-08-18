@@ -85,7 +85,17 @@ class AccountController extends Controller
 
     public function destroy(Account $account): RedirectResponse
     {
-        $account->assertDeletable();
+        // ⚠ C-INV-E2, the same defect in Accounting. `assertDeletable` refuses
+        // under the key `account`, and this screen renders code, name, type and
+        // parent_id but never `account`, while delete is a bare button with no
+        // form behind it at all. Both refusals were therefore invisible: the row
+        // simply stayed put. Flashed instead, which is guaranteed visible.
+        try {
+            $account->assertDeletable();
+        } catch (ValidationException $e) {
+            return back()->with('error', collect($e->errors())->flatten()->first());
+        }
+
         $account->delete();
 
         return back()->with('success', 'Account deleted.');

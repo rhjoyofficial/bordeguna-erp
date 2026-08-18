@@ -302,11 +302,16 @@ it('deactivates rather than deletes an account the system posts to', function ()
     $this->seed(ChartOfAccountsSeeder::class);
     $payable = Account::bySlug('accounts_payable');
 
+    // ⚠ C-INV-E2: this asserted an error under the key `account`, which the
+    // chart screen does not render, and delete is a bare button with no form
+    // behind it. The refusal was correct and completely invisible. It flashes
+    // now. What is refused has not changed.
     $this->actingAs($this->accountant)
         ->delete(route('accounting.accounts.destroy', $payable->id))
-        ->assertSessionHasErrors('account');
+        ->assertRedirect();
 
-    expect(Account::find($payable->id))->not->toBeNull();
+    expect(session('error'))->toContain('used by the system itself')
+        ->and(Account::find($payable->id))->not->toBeNull();
 
     // Deactivation is the supported way out, and it leaves the history readable.
     $this->actingAs($this->accountant)
@@ -326,9 +331,10 @@ it('refuses to delete a group that still has accounts under it', function () {
 
     $this->actingAs($this->accountant)
         ->delete(route('accounting.accounts.destroy', $parent->id))
-        ->assertSessionHasErrors('account');
+        ->assertRedirect();
 
-    expect(Account::find($parent->id))->not->toBeNull();
+    expect(session('error'))->toContain('has accounts under it')
+        ->and(Account::find($parent->id))->not->toBeNull();
 });
 
 it('deletes an ordinary account nobody is using', function () {
