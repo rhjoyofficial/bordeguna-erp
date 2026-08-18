@@ -16,12 +16,31 @@ use App\Modules\Purchasing\Enums\PaymentStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
+use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rules\Enum;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
+use RuntimeException;
 
+/**
+ * ⚠⚠ C-PUR-E1. Every refusal below already carried a message written for a
+ * person; none of them had anywhere to land, so each arrived as a blank 500.
+ * The hierarchy is worth stating once, because it decides these catch clauses:
+ * PeriodClosedException, MappingNotFound and InsufficientStockException all
+ * extend RuntimeException; MissingUnitConversionException extends
+ * DomainException. Catching RuntimeException, InvalidArgumentException and
+ * DomainException therefore nets every business refusal these actions raise,
+ * while ValidationException (which extends none of them) passes through
+ * untouched because it already renders correctly.
+ *
+ * ⚠ Two surfaces on purpose. A form submission gets a validation error on a key
+ * the form renders. A bare button has no form to attach one to, so it flashes
+ * to the global error toast, the way Foundation already refuses button actions.
+ */
 class PurchaseOrderController extends Controller
 {
     public function index(Request $request): Response
@@ -110,14 +129,18 @@ class PurchaseOrderController extends Controller
             'unit_cost' => $line['unit_cost'],
         ])->all();
 
-        $order = $action->handle(
-            supplier: Supplier::findOrFail($data['supplier_id']),
-            warehouse: Warehouse::findOrFail($data['warehouse_id']),
-            lines: $lines,
-            createdBy: $request->user(),
-            expectedDate: $data['expected_date'] ?? null,
-            note: $data['note'] ?? null,
-        );
+        try {
+            $order = $action->handle(
+                supplier: Supplier::findOrFail($data['supplier_id']),
+                warehouse: Warehouse::findOrFail($data['warehouse_id']),
+                lines: $lines,
+                createdBy: $request->user(),
+                expectedDate: $data['expected_date'] ?? null,
+                note: $data['note'] ?? null,
+            );
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        }
 
         return redirect()->route('purchasing.purchase-orders.show', $order)->with('success', "Purchase order {$order->po_number} created.");
     }
@@ -126,7 +149,13 @@ class PurchaseOrderController extends Controller
     {
         $this->authorize('purchasing.po.approve');
 
-        $action->handle($purchaseOrder, $request->user());
+        // ⚠ A bare button. Two managers pressing approve, or one double-click,
+        // is the ordinary way this refusal happens.
+        try {
+            $action->handle($purchaseOrder, $request->user());
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Purchase order approved.');
     }
@@ -137,7 +166,11 @@ class PurchaseOrderController extends Controller
 
         $data = $request->validate(['review_note' => ['nullable', 'string']]);
 
-        $action->handle($purchaseOrder, $request->user(), $data['review_note'] ?? null);
+        try {
+            $action->handle($purchaseOrder, $request->user(), $data['review_note'] ?? null);
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Purchase order rejected.');
     }
@@ -146,7 +179,13 @@ class PurchaseOrderController extends Controller
     {
         $this->authorize('purchasing.po.approve');
 
-        $action->handle($purchaseOrder);
+        // ⚠ "still has received stock on hand, return it before cancelling" is a
+        // real business refusal, not an error. It must be readable.
+        try {
+            $action->handle($purchaseOrder);
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Purchase order cancelled.');
     }
@@ -157,7 +196,11 @@ class PurchaseOrderController extends Controller
 
         $data = $request->validate(['payment_status' => ['required', new Enum(PaymentStatus::class)]]);
 
-        $action->handle($purchaseOrder, PaymentStatus::from($data['payment_status']));
+        try {
+            $action->handle($purchaseOrder, PaymentStatus::from($data['payment_status']));
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Payment status updated.');
     }
@@ -183,7 +226,17 @@ class PurchaseOrderController extends Controller
             ->filter(fn (array $entry) => $entry['line'] !== null)
             ->all();
 
-        $action->handle($purchaseOrder, $lineReceipts, $request->user(), $data['note'] ?? null);
+        // ⚠⚠ THE DENSEST REFUSAL CLUSTER IN THE SYSTEM, and step 2 of the first
+        // real morning. Receiving can be refused for over-receiving, for an
+        // order not open, for an empty receipt, for a missing unit conversion,
+        // for a closed period, and for a missing account mapping. Every one of
+        // those was a blank 500. Over-receiving is the commonest of them: a
+        // storekeeper types 50 where 20 remains.
+        try {
+            $action->handle($purchaseOrder, $lineReceipts, $request->user(), $data['note'] ?? null);
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        }
 
         return back()->with('success', 'Goods receipt recorded.');
     }
@@ -209,7 +262,14 @@ class PurchaseOrderController extends Controller
             ->filter(fn (array $entry) => $entry['line'] !== null)
             ->all();
 
-        $action->handle($purchaseOrder, $lineReturns, $request->user(), $data['note'] ?? null);
+        // ⚠ Returning reverses stock, so on top of its own refusals it inherits
+        // everything ReverseStockReceipt can raise, including insufficient stock
+        // when the goods have already moved on.
+        try {
+            $action->handle($purchaseOrder, $lineReturns, $request->user(), $data['note'] ?? null);
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        }
 
         return back()->with('success', 'Purchase return recorded.');
     }

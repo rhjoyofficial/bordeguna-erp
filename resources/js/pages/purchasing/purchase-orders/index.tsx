@@ -156,6 +156,9 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
                 </Button>
             </div>
 
+            {/* C-PUR-E1. Where a refused order says why. */}
+            <InputError message={errors.lines} />
+
             <Button disabled={processing} className="w-fit">
                 Create purchase order
             </Button>

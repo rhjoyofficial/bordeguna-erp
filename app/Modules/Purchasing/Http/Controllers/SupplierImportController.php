@@ -10,6 +10,7 @@ use App\Modules\Purchasing\Support\SupplierCsv;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
@@ -138,7 +139,14 @@ class SupplierImportController extends Controller
             return back()->with('success', 'Nothing to change. The supplier list already matches the file.');
         }
 
-        $applier->handle($plan);
+        // ⚠ C-PUR-E1. The applier refuses a plan carrying errors and refuses to
+        // import into no business at all. Both were blank 500s; the upload panel
+        // renders `file`, so that is where they belong.
+        try {
+            $applier->handle($plan);
+        } catch (RuntimeException $e) {
+            throw ValidationException::withMessages(['file' => $e->getMessage()]);
+        }
 
         return back()->with('success', sprintf(
             'Imported: %d created, %d updated.',
