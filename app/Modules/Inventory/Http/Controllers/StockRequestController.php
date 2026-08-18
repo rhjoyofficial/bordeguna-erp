@@ -11,11 +11,15 @@ use App\Modules\Inventory\Enums\StockRequestType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Inventory\Models\Warehouse;
+use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rules\Enum;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
+use RuntimeException;
 
 class StockRequestController extends Controller
 {
@@ -61,16 +65,22 @@ class StockRequestController extends Controller
             'note' => ['nullable', 'string'],
         ]);
 
-        $action->handle(
-            type: StockRequestType::from($data['type']),
-            product: Product::findOrFail($data['product_id']),
-            warehouse: Warehouse::findOrFail($data['warehouse_id']),
-            quantity: $data['quantity'],
-            reason: Reason::findOrFail($data['reason_id']),
-            requestedBy: $request->user(),
-            targetWarehouse: Warehouse::findOrFail($data['target_warehouse_id']),
-            note: $data['note'] ?? null,
-        );
+        // ⚠ C-INV-E1. Both of SubmitStockRequest's refusals are non-validation
+        // types, so neither could be read.
+        try {
+            $action->handle(
+                type: StockRequestType::from($data['type']),
+                product: Product::findOrFail($data['product_id']),
+                warehouse: Warehouse::findOrFail($data['warehouse_id']),
+                quantity: $data['quantity'],
+                reason: Reason::findOrFail($data['reason_id']),
+                requestedBy: $request->user(),
+                targetWarehouse: Warehouse::findOrFail($data['target_warehouse_id']),
+                note: $data['note'] ?? null,
+            );
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['stock' => $e->getMessage()]);
+        }
 
         return back()->with('success', 'Stock request submitted.');
     }
@@ -79,7 +89,13 @@ class StockRequestController extends Controller
     {
         $this->authorize('inventory.stock.approve');
 
-        $action->handle($stockRequest, $request->user());
+        // ⚠⚠ Approving a stock request DISPATCHES a transfer, so this bare
+        // button carries insufficient stock and the period lock with it.
+        try {
+            $action->handle($stockRequest, $request->user());
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Stock request approved.');
     }
@@ -90,7 +106,11 @@ class StockRequestController extends Controller
 
         $data = $request->validate(['review_note' => ['nullable', 'string']]);
 
-        $action->handle($stockRequest, $request->user(), $data['review_note'] ?? null);
+        try {
+            $action->handle($stockRequest, $request->user(), $data['review_note'] ?? null);
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Stock request rejected.');
     }

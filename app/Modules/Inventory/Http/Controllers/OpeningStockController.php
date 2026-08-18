@@ -7,10 +7,14 @@ use App\Modules\Inventory\Actions\RecordOpeningStock;
 use App\Modules\Inventory\Models\OpeningStock;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
+use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
+use RuntimeException;
 
 /**
  * What the warehouse already held on the day the books start.
@@ -62,19 +66,28 @@ class OpeningStockController extends Controller
             ->whereIn('id', collect($data['lines'])->pluck('product_id'))
             ->get()->keyBy('id');
 
-        $action->handle(
-            warehouse: Warehouse::findOrFail($data['warehouse_id']),
-            lines: collect($data['lines'])->map(fn (array $line) => [
-                'product' => $products[$line['product_id']],
-                'quantity' => (string) $line['quantity'],
-                'unitCost' => (string) $line['unit_cost'],
-                'batchNumber' => $line['batch_number'] ?? null,
-                'expiryDate' => $line['expiry_date'] ?? null,
-            ])->all(),
-            createdBy: $request->user(),
-            asAt: $data['as_at'],
-            note: $data['note'] ?? null,
-        );
+        // ⚠⚠ C-INV-E1. The one write of the whole cutover. A closed month, a
+        // future date, or a missing account mapping each refused it correctly
+        // and each arrived blank. `as_at` carries them because the date is what
+        // the person can actually change, and the mapping message names the key
+        // that is missing.
+        try {
+            $action->handle(
+                warehouse: Warehouse::findOrFail($data['warehouse_id']),
+                lines: collect($data['lines'])->map(fn (array $line) => [
+                    'product' => $products[$line['product_id']],
+                    'quantity' => (string) $line['quantity'],
+                    'unitCost' => (string) $line['unit_cost'],
+                    'batchNumber' => $line['batch_number'] ?? null,
+                    'expiryDate' => $line['expiry_date'] ?? null,
+                ])->all(),
+                createdBy: $request->user(),
+                asAt: $data['as_at'],
+                note: $data['note'] ?? null,
+            );
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['as_at' => $e->getMessage()]);
+        }
 
         return back()->with('success', 'Opening stock recorded.');
     }

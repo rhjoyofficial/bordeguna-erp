@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 use RuntimeException;
 
 /**
@@ -148,9 +149,15 @@ class ProductionRunController extends Controller
         if ($data['confirm'] ?? false) {
             try {
                 $run = $action->confirm($run, $request->user());
-            } catch (InsufficientStockException $e) {
+            } catch (RuntimeException|InvalidArgumentException|\DomainException $e) {
                 // ⚠ The draft survives - the typing is not lost to a stock
                 // shortfall - and the refusal reads as a sentence on its page.
+                // ⚠⚠ This caught only InsufficientStockException, so a closed
+                // month or a missing wastage mapping escaped as a blank 500 on
+                // the one-step confirm while the identical refusal on the
+                // separate confirm button below was already readable. Widened to
+                // match: InsufficientStockException is itself a RuntimeException,
+                // so this is a superset of what it caught before.
                 return redirect()
                     ->route('inventory.production-runs.show', $run)
                     ->withErrors(['run' => $e->getMessage()]);

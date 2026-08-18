@@ -18,11 +18,15 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockTransfer;
 use App\Modules\Inventory\Models\Warehouse;
+use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rules\Enum;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
+use RuntimeException;
 
 class StockController extends Controller
 {
@@ -93,18 +97,27 @@ class StockController extends Controller
             'note' => ['nullable', 'string'],
         ]);
 
-        $adjustment = $action->handle(
-            type: InventoryAdjustmentType::from($data['type']),
-            direction: AdjustmentDirection::from($data['direction']),
-            product: Product::findOrFail($data['product_id']),
-            warehouse: Warehouse::findOrFail($data['warehouse_id']),
-            quantity: $data['quantity'],
-            reason: Reason::findOrFail($data['reason_id']),
-            createdBy: $request->user(),
-            unitCost: $data['unit_cost'] ?? null,
-            note: $data['note'] ?? null,
-            effectiveDate: $data['effective_date'] ?? null,
-        );
+        // ⚠⚠ C-INV-E1. CreateInventoryAdjustment raises NO ValidationException at
+        // all: every one of its refusals is a DomainException or an
+        // InvalidArgumentException, and the period lock rides in on top. The
+        // whole action was therefore unreadable from this screen. `stock` is the
+        // form-level key the three stock forms now render.
+        try {
+            $adjustment = $action->handle(
+                type: InventoryAdjustmentType::from($data['type']),
+                direction: AdjustmentDirection::from($data['direction']),
+                product: Product::findOrFail($data['product_id']),
+                warehouse: Warehouse::findOrFail($data['warehouse_id']),
+                quantity: $data['quantity'],
+                reason: Reason::findOrFail($data['reason_id']),
+                createdBy: $request->user(),
+                unitCost: $data['unit_cost'] ?? null,
+                note: $data['note'] ?? null,
+                effectiveDate: $data['effective_date'] ?? null,
+            );
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['stock' => $e->getMessage()]);
+        }
 
         return back()->with('success', $adjustment->approvalRequest->isComplete()
             ? 'Stock adjustment saved.'
@@ -124,15 +137,21 @@ class StockController extends Controller
             'note' => ['nullable', 'string'],
         ]);
 
-        $action->handle(
-            product: Product::findOrFail($data['product_id']),
-            source: Warehouse::findOrFail($data['warehouse_id']),
-            target: Warehouse::findOrFail($data['target_warehouse_id']),
-            quantity: $data['quantity'],
-            reason: Reason::findOrFail($data['reason_id']),
-            performedBy: $request->user(),
-            note: $data['note'] ?? null,
-        );
+        // ⚠ Transferring consumes FIFO stock, so insufficient stock is the
+        // ordinary refusal here and it was a blank 500.
+        try {
+            $action->handle(
+                product: Product::findOrFail($data['product_id']),
+                source: Warehouse::findOrFail($data['warehouse_id']),
+                target: Warehouse::findOrFail($data['target_warehouse_id']),
+                quantity: $data['quantity'],
+                reason: Reason::findOrFail($data['reason_id']),
+                performedBy: $request->user(),
+                note: $data['note'] ?? null,
+            );
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['stock' => $e->getMessage()]);
+        }
 
         return back()->with('success', 'Stock transfer dispatched.');
     }
@@ -165,7 +184,13 @@ class StockController extends Controller
     {
         $this->authorize('inventory.stock.adjust');
 
-        $action->handle($stockTransfer, $request->user());
+        // ⚠ A bare button on the transfers screen. Receiving the same transfer
+        // twice is what two people at one gate actually do.
+        try {
+            $action->handle($stockTransfer, $request->user());
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Transfer received into stock.');
     }
@@ -174,7 +199,14 @@ class StockController extends Controller
     {
         $this->authorize('inventory.stock.approve');
 
-        $action->handle($adjustment, $request->user());
+        // ⚠⚠ Approval is what POSTS, so this one button carries the whole chain:
+        // stock movements, insufficient stock, the period lock and the account
+        // mappings. It is also a bare button, so it flashes.
+        try {
+            $action->handle($adjustment, $request->user());
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Inventory adjustment approved.');
     }
@@ -188,7 +220,11 @@ class StockController extends Controller
     {
         $this->authorize('inventory.stock.approve');
 
-        $action->handle($adjustment, $request->user(), $request->input('review_note'));
+        try {
+            $action->handle($adjustment, $request->user(), $request->input('review_note'));
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Inventory adjustment rejected.');
     }

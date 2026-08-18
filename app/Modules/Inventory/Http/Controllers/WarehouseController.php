@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -46,12 +45,15 @@ class WarehouseController extends Controller
 
     public function destroy(Warehouse $warehouse): RedirectResponse
     {
+        // ⚠ C-INV-E2. Same as units: a bare delete button renders no error key,
+        // so both refusals were invisible. "This warehouse still holds stock" is
+        // exactly the sentence somebody needs before the 31 August count.
         if ($warehouse->is_default) {
-            throw ValidationException::withMessages(['warehouse' => 'The default warehouse cannot be deleted.']);
+            return back()->with('error', 'The default warehouse cannot be deleted.');
         }
 
         if ($warehouse->stockBatches()->where('current_quantity', '>', 0)->exists()) {
-            throw ValidationException::withMessages(['warehouse' => 'This warehouse still holds stock and cannot be deleted.']);
+            return back()->with('error', 'This warehouse still holds stock and cannot be deleted.');
         }
 
         $warehouse->delete();

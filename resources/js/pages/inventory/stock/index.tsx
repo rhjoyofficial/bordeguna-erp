@@ -161,6 +161,9 @@ function DirectAdjustmentForm({ products, warehouses, reasons }: { products: Opt
                 <Input value={data.note} onChange={(e) => setData('note', e.target.value)} placeholder="any extra detail" />
                 <InputError message={errors.note} />
             </div>
+            {/* C-INV-E1. Where a refused stock movement says why. */}
+            <InputError message={(errors as Record<string, string>).stock} />
+
             <Button disabled={processing} className="col-span-full w-fit">
                 Apply adjustment
             </Button>
@@ -228,6 +231,9 @@ function DirectTransferForm({ products, warehouses, reasons }: { products: Optio
                 <Label>Note (optional)</Label>
                 <Input value={data.note} onChange={(e) => setData('note', e.target.value)} placeholder="any extra detail" />
             </div>
+            {/* C-INV-E1. Where a refused stock movement says why. */}
+            <InputError message={(errors as Record<string, string>).stock} />
+
             <Button disabled={processing} className="col-span-full w-fit">
                 Dispatch transfer
             </Button>
@@ -339,6 +345,9 @@ function RequestAdjustmentForm({
                 <Input value={data.note} onChange={(e) => setData('note', e.target.value)} placeholder="any extra detail" />
                 <InputError message={errors.note} />
             </div>
+            {/* C-INV-E1. Where a refused stock movement says why. */}
+            <InputError message={(errors as Record<string, string>).stock} />
+
             <Button disabled={processing} className="col-span-full w-fit">
                 Submit request
             </Button>

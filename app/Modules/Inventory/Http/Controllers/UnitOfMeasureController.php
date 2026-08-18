@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -45,8 +44,11 @@ class UnitOfMeasureController extends Controller
 
     public function destroy(UnitOfMeasure $unit): RedirectResponse
     {
+        // ⚠ C-INV-E2. Delete is a bare button with no form, so a validation
+        // error under `unit` was attached to a key nothing renders and the row
+        // simply stayed put with no explanation. Flashed instead.
         if ($unit->products()->exists()) {
-            throw ValidationException::withMessages(['unit' => 'This unit is used by existing products and cannot be deleted.']);
+            return back()->with('error', 'This unit is used by existing products and cannot be deleted.');
         }
 
         $unit->delete();

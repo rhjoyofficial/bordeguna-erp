@@ -97,16 +97,22 @@ class RecordOpeningStock
             ]);
         }
 
+        // ⚠⚠ C-INV-E2. These keys must match what the screen renders, or the
+        // refusal is real, correct, and completely invisible: the form appears
+        // to do nothing at all, which reads as a broken button rather than a
+        // rejected line. The screen names `lines.N.product_id` and
+        // `lines.N.unit_cost`, so these do too. The action's INPUT keys are a
+        // separate vocabulary and deliberately unchanged.
         foreach ($lines as $index => $line) {
             if (! $line['product']->type->isStocked()) {
                 throw ValidationException::withMessages([
-                    "lines.{$index}.product" => "{$line['product']->name} is a service and cannot hold stock.",
+                    "lines.{$index}.product_id" => "{$line['product']->name} is a service and cannot hold stock.",
                 ]);
             }
 
             if ((float) $line['unitCost'] < 0) {
                 throw ValidationException::withMessages([
-                    "lines.{$index}.unitCost" => 'A unit cost cannot be negative.',
+                    "lines.{$index}.unit_cost" => 'A unit cost cannot be negative.',
                 ]);
             }
         }

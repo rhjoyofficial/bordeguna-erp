@@ -79,8 +79,12 @@ class RecordSupplierCreditNote
                 $bill = SupplierBill::query()->whereKey($entry['bill']->id)->lockForUpdate()->firstOrFail();
 
                 if ($bill->supplier_id !== $supplier->id) {
+                    // ⚠ C-PUR-E2. `allocations` and not `allocations.N.bill`:
+                    // both screens render the top-level key and neither renders
+                    // a per-line bill key, so the old one was never displayed.
+                    // The message already names the bill, so nothing is lost.
                     throw ValidationException::withMessages([
-                        "allocations.{$index}.bill" => "Bill {$bill->bill_number} belongs to a different supplier.",
+                        'allocations' => "Bill {$bill->bill_number} belongs to a different supplier.",
                     ]);
                 }
 

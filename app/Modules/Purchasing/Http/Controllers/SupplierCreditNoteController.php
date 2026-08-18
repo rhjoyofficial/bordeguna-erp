@@ -110,8 +110,11 @@ class SupplierCreditNoteController extends Controller
             $bill = SupplierBill::find($row['supplier_bill_id']);
 
             if ($bill === null) {
+                // ⚠ C-PUR-E2. Neither screen renders a per-line bill key, so
+                // this landed nowhere. The line number goes into the sentence
+                // instead, which is what "WHICH line is wrong" needed anyway.
                 return back()->withErrors([
-                    "allocations.{$index}.supplier_bill_id" => 'That bill is not available in this business.',
+                    'allocations' => 'Line '.($index + 1).': that bill is not available in this business.',
                 ]);
             }
 

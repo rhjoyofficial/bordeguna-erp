@@ -209,6 +209,11 @@ export default function OpeningStockIndex({
                             </table>
                         </div>
 
+                        {/* C-INV-E2. The form-level refusals of the one write that
+                            matters most: an empty count, a closed month, a future
+                            date, a missing account mapping. */}
+                        <InputError message={(errors as Record<string, string>).lines} />
+
                         <div className="flex flex-wrap items-center justify-between gap-4">
                             <Button type="button" variant="outline" onClick={() => setData('lines', [...data.lines, emptyLine()])}>
                                 Add line
