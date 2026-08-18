@@ -2,6 +2,7 @@
 
 namespace App\Modules\Foundation\Providers;
 
+use App\Modules\Foundation\Console\Commands\CutoverPreflight;
 use App\Modules\Foundation\Console\Commands\TeardownSandbox;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Support\Facades\Gate;
@@ -19,7 +20,7 @@ class FoundationServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([TeardownSandbox::class]);
+            $this->commands([TeardownSandbox::class, CutoverPreflight::class]);
         }
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
 
