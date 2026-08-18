@@ -16,6 +16,7 @@ use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseReturnLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierBillLine;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Sales\Models\Customer;
@@ -325,9 +326,25 @@ final class SubledgerReconciliation
                 )),
         );
 
-        $billed = Money::sum(SupplierBill::query()->pluck('total')->map(
-            fn ($total) => Money::ofTaka((string) $total),
-        ));
+        // ⚠⚠ D-SB-2. THE BILL RELIEVES GRNI AT THE RECEIVED VALUE, NOT AT ITS
+        // OWN TOTAL, so this must derive on the same basis or every price
+        // variance reports a phantom break. Billed quantity times the PURCHASE
+        // ORDER's unit cost, exactly what `PostPurchaseJournals::forBill()`
+        // debits. The difference between that and the invoice is Purchase Price
+        // Variance and has nothing to do with GRNI.
+        //
+        // ⚠ Found by the full-cycle test: the ledger said GRNI was zero and this
+        // derived 1,000, because it was still valuing the bill at what the
+        // supplier charged rather than at what arrived.
+        $billed = Money::sum(
+            SupplierBillLine::query()->with('purchaseOrderLine')->get()
+                ->map(fn ($line) => $line->purchaseOrderLine === null
+                    ? Money::zero()
+                    : Money::ofProduct(
+                        (string) $line->quantity,
+                        (string) $line->purchaseOrderLine->unit_cost,
+                    )),
+        );
 
         $returned = Money::sum(
             PurchaseReturnLine::query()->with(['stockMovement', 'purchaseOrderLine'])->get()

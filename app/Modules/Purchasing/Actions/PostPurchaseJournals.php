@@ -142,13 +142,38 @@ class PostPurchaseJournals
             return null;
         }
 
+        // ⚠⚠ D-SB-2. GRNI IS RELIEVED AT THE RECEIVED VALUE, NOT AT THE BILL
+        // TOTAL. The receipt credited GRNI with billed quantity times the
+        // PURCHASE ORDER's price, so debiting it with the invoice total instead
+        // left the difference stranded there permanently, and the trial balance
+        // still tied while it happened. Same basis on both sides, so GRNI clears
+        // exactly whatever the supplier invoiced.
+        //
+        // ⚠ Bor De Guna is FIFO. The order carries an AGREED PRICE, not a
+        // standard cost, and nothing here revalues a batch or rewrites cost of
+        // goods sold. The variance is the gap between what was agreed and what
+        // was invoiced, and it is reported rather than absorbed.
+        $received = $this->receivedValueOf($bill);
+        $variance = Money::ofMinor($total->minor - $received->minor);
+
         // ⚠ The party is the SUPPLIER, which is what turns one Accounts Payable
         // balance into a subsidiary ledger somebody can act on: "who do we owe"
         // has to be answerable without opening every bill.
         $lines = [
-            JournalLineDraft::debit($grni->id, $total, $bill->bill_number),
-            JournalLineDraft::credit($payable->id, $total, $bill->bill_number, $bill->supplier),
+            JournalLineDraft::debit($grni->id, $received, $bill->bill_number),
         ];
+
+        // ⚠ Omitted entirely when the price matched. A zero-value line is noise
+        // on a report somebody has to read, and the commonest case is agreement.
+        if (! $variance->isZero()) {
+            $lines[] = JournalLineDraft::signed(
+                AccountMapping::resolve('purchasing.price_variance', $on)->id,
+                $variance,
+                "Price variance on {$bill->bill_number}",
+            );
+        }
+
+        $lines[] = JournalLineDraft::credit($payable->id, $total, $bill->bill_number, $bill->supplier);
 
         $lines = LedgerRounding::balance($lines, $on, "Rounding on bill {$bill->bill_number}");
 
@@ -342,6 +367,37 @@ class PostPurchaseJournals
             memo: "Supplier credit note {$creditNote->credit_note_number}",
             source: $creditNote,
         ), $postedBy);
+    }
+
+    /**
+     * What the goods on this bill were RECEIVED at, which is what GRNI holds.
+     *
+     * ⚠⚠ Valued from the PURCHASE ORDER LINE's unit cost, never from the stock
+     * movement. `forReceipt()` credits GRNI on exactly this basis and documents
+     * why: for a converted product, stock is valued at a derived per-unit cost
+     * while the invoice is per purchase unit, and crediting GRNI with the stock
+     * value left a residue on every converted delivery. The two sides have to
+     * agree or the whole point of clearing GRNI is lost.
+     *
+     * ⚠ A line with no purchase order line behind it contributes nothing, so a
+     * bill that reaches no goods relieves no GRNI and its whole value becomes
+     * variance. D-SB-3 keeps such lines off bills in the first place.
+     */
+    private function receivedValueOf(SupplierBill $bill): Money
+    {
+        $values = [];
+
+        foreach ($bill->lines()->with('purchaseOrderLine')->get() as $line) {
+            $poLine = $line->purchaseOrderLine;
+
+            if ($poLine === null) {
+                continue;
+            }
+
+            $values[] = Money::ofProduct((string) $line->quantity, (string) $poLine->unit_cost);
+        }
+
+        return Money::sum($values);
     }
 
     public function existingJournal(GoodsReceipt|SupplierBill|PurchaseReturn|SupplierPayment|SupplierCreditNote $document): ?Journal

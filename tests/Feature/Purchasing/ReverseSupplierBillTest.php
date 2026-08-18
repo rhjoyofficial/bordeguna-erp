@@ -1,0 +1,173 @@
+<?php
+
+use App\Models\User;
+use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Accounting\Support\LedgerIntegrity;
+use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Support\TenantScope;
+use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
+use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
+use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
+use App\Modules\Purchasing\Actions\RecordSupplierBill;
+use App\Modules\Purchasing\Actions\RecordSupplierPayment;
+use App\Modules\Purchasing\Actions\ReverseSupplierBill;
+use App\Modules\Purchasing\Models\Supplier;
+use Illuminate\Support\Carbon;
+
+/**
+ * D-SB-6: a posted bill is immutable and its correction is a reversal.
+ *
+ * ⚠⚠ The state this replaces: a posted bill could be DELETED outright, leaving
+ * its journal standing with nothing behind it and the purchase order line
+ * marked invoiced forever, so the goods could never be billed again. Nothing
+ * reconciled the two and the trial balance tied throughout.
+ */
+beforeEach(function () {
+    Carbon::setTestNow('2026-08-03 10:00:00');
+
+    $this->business = Business::create(['name' => 'Reverse Co', 'slug' => 'reverse-co', 'fiscal_year_start_month' => 7]);
+    TenantScope::enter($this->business->id);
+
+    $this->user = User::factory()->create();
+    $this->user->businesses()->attach($this->business->id);
+
+    $this->seed(ChartOfAccountsSeeder::class);
+    $this->seed(InventoryAccountMappingSeeder::class);
+    TenantScope::enter($this->business->id);
+
+    $unit = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Kilogram', 'abbreviation' => 'kg']);
+    $this->warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Mohammadpur', 'code' => 'MOH']);
+    $this->product = Product::create([
+        'business_id' => $this->business->id,
+        'unit_of_measure_id' => $unit->id,
+        'sku' => 'JAR-500',
+        'name' => 'Glass jar 500ml',
+        'type' => ProductType::RawMaterial,
+    ]);
+    $this->supplier = Supplier::create([
+        'business_id' => $this->business->id, 'name' => 'Dhaka Glassware', 'code' => 'SUP-001',
+    ]);
+
+    $this->order = app(CreatePurchaseOrder::class)->handle(
+        supplier: $this->supplier,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->product, 'quantity' => '100', 'unit_cost' => '25.00']],
+        createdBy: $this->user,
+    );
+    $this->order->approvalRequest->approve($this->user);
+    $this->order = $this->order->fresh(['lines', 'approvalRequest']);
+    $this->line = $this->order->lines->first();
+
+    app(RecordGoodsReceipt::class)->handle($this->order, [
+        ['line' => $this->line, 'quantity' => '100'],
+    ], $this->user);
+
+    $this->makeBill = fn (string $number = 'INV-1', string $unitCost = '25.00') => app(RecordSupplierBill::class)->handle(
+        supplier: $this->supplier,
+        billNumber: $number,
+        billDate: '2026-08-03',
+        lines: [['line' => $this->line->fresh(), 'quantity' => '100', 'unitCost' => $unitCost]],
+        createdBy: $this->user,
+        purchaseOrder: $this->order,
+    );
+
+    $this->balanceOn = fn (string $slug) => (int) JournalLine::where(
+        'account_id', Account::bySlug($slug)->id
+    )->sum('amount_minor');
+});
+
+afterEach(fn () => Carbon::setTestNow());
+
+it('unwinds Accounts Payable and GRNI and keeps the bill', function () {
+    $bill = ($this->makeBill)();
+
+    app(ReverseSupplierBill::class)->handle($bill, $this->user, 'Typed the wrong number');
+
+    expect(($this->balanceOn)('accounts_payable'))->toBe(0)
+        // GRNI goes back to what the receipt left there: 100 x 25 credited.
+        ->and(($this->balanceOn)('goods_received_not_invoiced'))->toBe(-250000)
+        ->and($bill->fresh()->isReversed())->toBeTrue()
+        ->and($bill->fresh()->reversal_note)->toBe('Typed the wrong number');
+});
+
+// ⚠⚠ The whole point: the goods become billable again.
+it('gives the invoiced quantity back so the goods can be billed again', function () {
+    $bill = ($this->makeBill)();
+
+    expect((float) $this->line->fresh()->quantity_invoiced)->toBe(100.0);
+
+    app(ReverseSupplierBill::class)->handle($bill, $this->user);
+
+    expect((float) $this->line->fresh()->quantity_invoiced)->toBe(0.0);
+
+    // And a corrected bill can now be recorded for the same goods.
+    $corrected = ($this->makeBill)('INV-1-CORRECTED');
+
+    expect((float) $corrected->total)->toBe(2500.0)
+        ->and((float) $this->line->fresh()->quantity_invoiced)->toBe(100.0);
+});
+
+it('never orphans a journal: the reversal is a new entry, not a deletion', function () {
+    $bill = ($this->makeBill)();
+    $original = Journal::where('source_type', $bill->getMorphClass())->sole();
+
+    app(ReverseSupplierBill::class)->handle($bill, $this->user);
+
+    expect(Journal::whereKey($original->id)->exists())->toBeTrue()
+        ->and(Journal::where('reverses_journal_id', $original->id)->exists())->toBeTrue()
+        ->and(LedgerIntegrity::verifyAllBusinesses()['problems'])->toBe([]);
+});
+
+it('unwinds the price variance too', function () {
+    $bill = ($this->makeBill)('INV-VAR', '27.00');
+
+    expect(($this->balanceOn)('purchase_price_variance'))->toBe(20000);
+
+    app(ReverseSupplierBill::class)->handle($bill, $this->user);
+
+    expect(($this->balanceOn)('purchase_price_variance'))->toBe(0)
+        ->and((int) JournalLine::sum('amount_minor'))->toBe(0);
+});
+
+// ⚠ Refused once money has moved. A credit note is the instrument then.
+it('refuses to reverse a bill that has been paid', function () {
+    $bill = ($this->makeBill)();
+
+    $cash = MoneyAccount::create([
+        'business_id' => $this->business->id,
+        'name' => 'Till',
+        'type' => 'cash',
+        'account_id' => Account::bySlug('cash_in_hand')->id,
+    ]);
+
+    app(RecordSupplierPayment::class)->handle(
+        supplier: $this->supplier,
+        moneyAccount: $cash,
+        paidOn: '2026-08-03',
+        allocations: [['bill' => $bill->fresh(), 'amount' => '2500.00']],
+        createdBy: $this->user,
+    );
+
+    expect(fn () => app(ReverseSupplierBill::class)->handle($bill->fresh(), $this->user))
+        ->toThrow(DomainException::class, 'already been paid');
+
+    // And nothing moved.
+    expect((float) $this->line->fresh()->quantity_invoiced)->toBe(100.0);
+});
+
+it('refuses to reverse the same bill twice', function () {
+    $bill = ($this->makeBill)();
+
+    app(ReverseSupplierBill::class)->handle($bill, $this->user);
+
+    expect(fn () => app(ReverseSupplierBill::class)->handle($bill->fresh(), $this->user))
+        ->toThrow(RuntimeException::class, 'already been reversed');
+});

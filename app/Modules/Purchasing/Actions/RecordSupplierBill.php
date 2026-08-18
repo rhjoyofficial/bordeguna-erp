@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Actions;
 
 use App\Models\User;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
@@ -75,7 +76,8 @@ class RecordSupplierBill
                 'total' => 0,
             ]);
 
-            $total = 0.0;
+            /** @var list<Money> $lineTotals */
+            $lineTotals = [];
 
             foreach ($lines as $entry) {
                 // ⚠ Re-read under a lock, the same lesson as I3: two people
@@ -83,39 +85,81 @@ class RecordSupplierBill
                 // the check below and the second would overwrite the first.
                 $line = PurchaseOrderLine::whereKey($entry['line']->id)->lockForUpdate()->firstOrFail();
 
-                $quantity = (float) $entry['quantity'];
-                $alreadyInvoiced = (float) $line->quantity_invoiced;
-                $received = (float) $line->quantity_received;
+                // ⚠⚠ D-SB-1. ONE BILL, ONE PURCHASE ORDER. The bill carries a
+                // single `purchase_order_id`, and nothing checked that the lines
+                // belonged to it, so a bill could name one order and invoice
+                // another order's goods. The header then said one thing and the
+                // lines did another, and the three-way match silently guarded
+                // the wrong order.
+                if ($purchaseOrder !== null && $line->purchase_order_id !== $purchaseOrder->id) {
+                    throw new InvalidArgumentException(
+                        "Line #{$line->id} belongs to a different purchase order. A bill covers exactly one order."
+                    );
+                }
 
-                // ⚠⚠ The three-way match. A supplier billing for twelve when
-                // eight arrived is the most common overpayment in a small
+                // ⚠ Integer-scaled, not float. Quantities are decimal(15,4), so
+                // four places are the whole domain and scaling by 10,000 makes
+                // every comparison exact. The float version could pass a bill
+                // for a hair more than arrived; the same lesson ConsumesFifoStock
+                // records, applied to the money side.
+                $quantity = $this->scaled($entry['quantity']);
+                $alreadyInvoiced = $this->scaled((string) $line->quantity_invoiced);
+                $received = $this->scaled((string) $line->quantity_received);
+                $returned = $this->scaled((string) $line->quantity_returned);
+
+                // ⚠⚠ The three-way match, D-SB-8. A supplier billing for twelve
+                // when eight arrived is the most common overpayment in a small
                 // business, and the system knows what arrived.
-                if ($alreadyInvoiced + $quantity > $received) {
-                    $remaining = $received - $alreadyInvoiced;
+                //
+                // ⚠⚠ RECEIVED MINUS RETURNED, not received. Goods that came in
+                // and went back are not billable, and the old check compared
+                // against arrivals alone, so a delivery that was returned in
+                // full could still be invoiced in full.
+                $billable = $received - $returned;
+
+                if ($alreadyInvoiced + $quantity > $billable) {
+                    $remaining = $this->unscaled(max(0, $billable - $alreadyInvoiced));
 
                     throw new InvalidArgumentException(
                         "Cannot invoice {$entry['quantity']} of line #{$line->id}: only {$remaining} of what was received is still uninvoiced."
                     );
                 }
 
-                $lineTotal = $quantity * (float) $entry['unitCost'];
-                $total += $lineTotal;
+                // ⚠ Through Money, rounded once per line, exactly as the
+                // payment and credit note actions already do. Summing floats and
+                // rounding at the end gives a different answer from rounding
+                // each line, and the bill total has to equal what the journal
+                // credits to Accounts Payable to the paisa.
+                $lineTotal = Money::ofProduct($entry['quantity'], $entry['unitCost']);
+                $lineTotals[] = $lineTotal;
 
                 $bill->lines()->create([
                     'purchase_order_line_id' => $line->id,
                     'quantity' => $entry['quantity'],
                     'unit_cost' => $entry['unitCost'],
-                    'line_total' => number_format($lineTotal, 4, '.', ''),
+                    'line_total' => $lineTotal->toTaka(),
                 ]);
 
-                $line->update(['quantity_invoiced' => number_format($alreadyInvoiced + $quantity, 4, '.', '')]);
+                $line->update([
+                    'quantity_invoiced' => $this->unscaled($alreadyInvoiced + $quantity),
+                ]);
             }
 
-            $bill->update(['total' => number_format($total, 4, '.', '')]);
+            $bill->update(['total' => Money::sum($lineTotals)->toTaka()]);
 
             $this->posting->forBill($bill->fresh(['lines', 'supplier']), $createdBy);
 
             return $bill->fresh('lines');
         });
+    }
+
+    private function scaled(string $quantity): int
+    {
+        return (int) round(((float) $quantity) * 10000);
+    }
+
+    private function unscaled(int $scaled): string
+    {
+        return number_format($scaled / 10000, 4, '.', '');
     }
 }

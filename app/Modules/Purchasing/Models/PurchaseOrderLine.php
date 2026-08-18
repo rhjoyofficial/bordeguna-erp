@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Models\Product;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -60,5 +61,37 @@ class PurchaseOrderLine extends Model
     public function quantityReturnable(): string
     {
         return (string) ((float) $this->quantity_received - (float) $this->quantity_returned);
+    }
+
+    /**
+     * What can still be put on a supplier bill for this line.
+     *
+     * ⚠⚠ D-SB-8. RECEIVED MINUS RETURNED MINUS ALREADY INVOICED. Goods that came
+     * in and went back are not billable, and comparing against arrivals alone
+     * let a delivery that was returned in full still be invoiced in full.
+     *
+     * ⚠ Never negative. A line whose returns exceed what is still uninvoiced
+     * reads as zero rather than as a negative allowance somebody could bill
+     * against.
+     */
+    public function billableQuantity(): string
+    {
+        $scale = fn (string $value) => (int) round(((float) $value) * 10000);
+
+        $billable = $scale((string) $this->quantity_received)
+            - $scale((string) $this->quantity_returned)
+            - $scale((string) $this->quantity_invoiced);
+
+        return number_format(max(0, $billable) / 10000, 4, '.', '');
+    }
+
+    /**
+     * ⚠ Purchasing had no equivalent of the sales side's uninvoiced scope, so
+     * every screen that wanted "what is still billable" would have written this
+     * comparison itself, differently each time.
+     */
+    public function scopeStillBillable(Builder $query): Builder
+    {
+        return $query->whereRaw('quantity_received - quantity_returned > quantity_invoiced');
     }
 }

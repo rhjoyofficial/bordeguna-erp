@@ -161,6 +161,15 @@ class ChartOfAccountsSeeder extends Seeder
         // count variance. They were built as the discriminator for exactly this.
         ['5200', 'Inventory Write-offs and Shrinkage', AccountType::Expense, '5000', true, 'inventory_write_off'],
         ['5300', 'Freight and Carriage Inward', AccountType::Expense, '5000', true, null],
+        // ⚠ D-SB-2. The gap between the price a purchase order agreed and the
+        // price the supplier actually invoiced. It sits under Cost of Sales
+        // rather than Operating Expenses so that a favourable variance reduces
+        // the cost of sales it belongs to, instead of appearing as negative
+        // overhead somewhere unrelated.
+        // ⚠⚠ A FAVOURABLE VARIANCE IS A CREDIT BALANCE ON AN EXPENSE ACCOUNT.
+        // That is correct for a variance account and looks like an error until
+        // somebody knows what it is, so the accountant is told once.
+        ['5400', 'Purchase Price Variance', AccountType::Expense, '5000', true, 'purchase_price_variance'],
 
         // ─── 6000 Operating Expenses ────────────────────────────────────────
         ['6000', 'Operating Expenses', AccountType::Expense, null, false, null],

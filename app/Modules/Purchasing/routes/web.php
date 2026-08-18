@@ -3,6 +3,7 @@
 use App\Modules\Purchasing\Http\Controllers\ExpenseVoucherController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\SupplierController;
+use App\Modules\Purchasing\Http\Controllers\SupplierBillController;
 use App\Modules\Purchasing\Http\Controllers\SupplierCreditNoteController;
 use App\Modules\Purchasing\Http\Controllers\SupplierImportController;
 use App\Modules\Purchasing\Http\Controllers\SupplierPaymentController;
@@ -53,6 +54,26 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         // because losing either one silently turns /payments/new into a 404.
         Route::get('payments/new', [SupplierPaymentController::class, 'create'])->name('payments.create');
         Route::post('payments', [SupplierPaymentController::class, 'store'])->name('payments.store');
+    });
+
+    // Supplier bills - the document Accounts Payable is a ledger of, and the
+    // step that lets GRNI clear. Same read/write split as payments and credit
+    // notes: anyone in the business may READ what the business has been billed,
+    // because a bill nobody can see is a bill nobody can question.
+    Route::get('bills', [SupplierBillController::class, 'index'])->name('bills.index');
+    Route::get('bills/{bill}', [SupplierBillController::class, 'show'])
+        ->whereNumber('bill')->name('bills.show');
+
+    Route::middleware('can:purchasing.bill.record')->group(function () {
+        // ⚠ D-SB-1: the form is always opened against ONE purchase order, which
+        // is why the route carries it rather than offering a blank bill.
+        Route::get('bills/new/{purchaseOrder}', [SupplierBillController::class, 'create'])
+            ->whereNumber('purchaseOrder')->name('bills.create');
+        Route::post('bills', [SupplierBillController::class, 'store'])->name('bills.store');
+        // ⚠ D-SB-6: correction is a reversal, never an edit and never a delete,
+        // so there is deliberately no PUT and no DELETE on a bill.
+        Route::post('bills/{bill}/reverse', [SupplierBillController::class, 'reverse'])
+            ->whereNumber('bill')->name('bills.reverse');
     });
 
     // Expense vouchers — rent, fuel, utilities, repairs.

@@ -146,13 +146,20 @@ it('catches a bill total that no longer matches its posting, in total and for th
 
     $problems = SubledgerReconciliation::reconcileAllBusinesses()['problems'];
 
-    // Three breaks from one corruption, and all three are true: the AP total,
-    // the supplier's own balance, and GRNI - because the bill's posting debited
-    // GRNI at the total the document no longer carries.
-    expect($problems)->toHaveCount(3)
+    // Two breaks from one corruption, and both are true: the Accounts Payable
+    // total and the supplier's own balance.
+    //
+    // ⚠⚠ GRNI IS DELIBERATELY NOT AMONG THEM ANY MORE. It used to be, because
+    // the bill's posting debited GRNI at the bill's own total, so corrupting
+    // that total moved GRNI too. Under D-SB-2 the bill relieves GRNI at the
+    // RECEIVED value - billed quantity times the purchase order's price - and
+    // the invoice total only decides Accounts Payable and the variance. GRNI no
+    // longer depends on the figure this test corrupts, which is the point of
+    // the change rather than a weakening of the check.
+    expect($problems)->toHaveCount(2)
         ->and(implode(' ', $problems))->toContain('Accounts Payable')
         ->and(implode(' ', $problems))->toContain('Dhaka Glassware')
-        ->and(implode(' ', $problems))->toContain('Goods Received Not Invoiced');
+        ->and(implode(' ', $problems))->not->toContain('Goods Received Not Invoiced');
 });
 
 it('catches a stock movement that no longer matches what was posted', function () {

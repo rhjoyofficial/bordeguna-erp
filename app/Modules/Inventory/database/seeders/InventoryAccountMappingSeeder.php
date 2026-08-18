@@ -36,6 +36,11 @@ class InventoryAccountMappingSeeder extends Seeder
         'inventory.goods_received_not_invoiced' => 'goods_received_not_invoiced',
         'purchasing.accounts_payable' => 'accounts_payable',
 
+        // ⚠ D-SB-2. Where the difference between the agreed order price and the
+        // invoiced price lands. Mapped rather than hard-coded so an accountant
+        // can re-point it without a deploy, exactly like every other key here.
+        'purchasing.price_variance' => 'purchase_price_variance',
+
         // Where value LEAVES stock without being sold. All six types default to
         // one loss account; separating damaged from expired is one row each,
         // and the mapping is the right place for that argument to happen.

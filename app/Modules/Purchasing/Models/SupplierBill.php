@@ -33,6 +33,9 @@ class SupplierBill extends Model
         'due_date',
         'total',
         'note',
+        'reversed_at',
+        'reversed_by',
+        'reversal_note',
         'created_by',
     ];
 
@@ -41,8 +44,18 @@ class SupplierBill extends Model
         return [
             'bill_date' => 'date',
             'due_date' => 'date',
+            'reversed_at' => 'datetime',
             'total' => 'decimal:4',
         ];
+    }
+
+    /**
+     * ⚠ D-SB-6. A reversed bill is kept, not deleted, so every screen and every
+     * guard asks this rather than checking for absence.
+     */
+    public function isReversed(): bool
+    {
+        return $this->reversed_at !== null;
     }
 
     public function getActivitylogOptions(): LogOptions

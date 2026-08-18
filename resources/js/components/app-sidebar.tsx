@@ -106,6 +106,7 @@ export function AppSidebar() {
             items: [
                 { title: 'Suppliers', url: '/purchasing/suppliers', icon: Truck },
                 { title: 'Purchase orders', url: '/purchasing/purchase-orders', icon: ShoppingCart },
+                { title: 'Bills', url: '/purchasing/bills', icon: ReceiptText },
                 { title: 'Payments', url: '/purchasing/payments', icon: Banknote },
                 { title: 'Credit notes', url: '/purchasing/credit-notes', icon: FileText },
                 // ⚠⚠ Same class of gap as Sales below: RecordExpenseVoucher was

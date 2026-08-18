@@ -43,6 +43,12 @@ class PurchasingPermissionsSeeder extends Seeder
             // Owner and Manager only, deliberately.
             'purchasing.credit_note.record',
             'purchasing.expense.record',
+            // ⚠ D-SB-5. Recording a supplier bill CREATES A LIABILITY. It moves
+            // no cash, so it sits between receiving goods (Staff hold that) and
+            // paying (Staff do not), and it follows the same reasoning as
+            // payment.record and credit_note.record: committing the business to
+            // money is a different job from handling goods. Owner and Manager.
+            'purchasing.bill.record',
             'purchasing.reports.view',
         ],
         'Manager' => [
@@ -54,6 +60,7 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.payment.record',
             'purchasing.credit_note.record',
             'purchasing.expense.record',
+            'purchasing.bill.record',
             'purchasing.reports.view',
         ],
         'Staff' => [
