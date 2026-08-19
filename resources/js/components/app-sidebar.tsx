@@ -48,6 +48,7 @@ import {
     Users,
     Wallet,
     Warehouse,
+    ClipboardCheck,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -65,6 +66,7 @@ export function AppSidebar() {
         canViewSales,
         canSell,
         canManagePrices,
+        canRecordOpeningStock,
         canViewCrm,
         canManageCrmSettings,
         canViewAssets,
@@ -96,6 +98,12 @@ export function AppSidebar() {
                 { title: 'Production', url: '/inventory/production-runs', icon: Factory },
                 { title: 'Production yield', url: '/inventory/production-yield', icon: FileBarChart },
                 { title: 'Stock requests', url: '/inventory/stock-requests', icon: ClipboardList },
+                // ⚠⚠ The cutover's one irreversible document, and it had no
+                // link at all until 19 Aug. Gated, because the route is:
+                // opening stock sets the FIFO layers behind every margin.
+                ...(canRecordOpeningStock
+                    ? [{ title: 'Opening stock', url: '/inventory/opening-stock', icon: ClipboardCheck }]
+                    : []),
                 { title: 'Warehouses', url: '/inventory/warehouses', icon: Warehouse },
                 { title: 'Categories', url: '/inventory/categories', icon: Tags },
                 { title: 'Units of measure', url: '/inventory/units', icon: Ruler },

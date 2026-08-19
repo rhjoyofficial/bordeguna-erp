@@ -97,27 +97,60 @@ it('leaves no user-facing page with no way to reach it', function () {
         // Decided by the controller's RETURN TYPE rather than by a list of
         // names, so a new lookup endpoint does not have to be remembered here.
         ->reject(fn ($route) => returnsJson($route))
-        ->map(fn ($route) => $route->uri())
-        ->reject(fn (string $uri) => str_contains($uri, '{')
-            || str_starts_with($uri, '_')
-            || in_array($uri, ['/', 'dashboard', 'up'], true))
-        ->filter(fn (string $uri) => str_contains($uri, '/'))
-        ->unique()
-        ->values();
+        ->reject(fn ($route) => str_contains($route->uri(), '{')
+            || str_starts_with($route->uri(), '_')
+            || in_array($route->uri(), ['/', 'dashboard', 'up'], true))
+        ->filter(fn ($route) => str_contains($route->uri(), '/'))
+        // ⚠ Keep the route NAME alongside the URI. Screens link with
+        // `route('sales.invoices.create')` far more often than with a literal
+        // path, and a guard that only knows about literals reports four
+        // perfectly reachable pages as orphans - which is worse than useless,
+        // because the next person turns the guard off.
+        ->groupBy(fn ($route) => $route->uri())
+        ->map(fn ($routes) => $routes->map(fn ($r) => $r->getName())->filter()->unique()->values()->all());
 
     expect($pages)->not->toBeEmpty();
 
     $sidebarSource = sidebarSource();
-    $pageSources = collect(glob(resource_path('js/pages/**/*.tsx'), GLOB_BRACE))
+
+    // ⚠⚠ 2026-08-19. THIS GUARD USED TO PASS FOR A PAGE NOTHING LINKED TO.
+    // Every Inertia page here declares a breadcrumb pointing at its own URL, so
+    // lumping all page sources into one haystack let a page vouch for itself.
+    // `inventory/opening-stock` - the cutover's one irreversible document, and
+    // from 602d600 the home of the printable count sheet - sat outside the
+    // sidebar for weeks with this test green, reachable only by typing the URL.
+    //
+    // The question is therefore not "is this URL mentioned anywhere" but "is it
+    // mentioned by something OTHER than the page that serves it". The page
+    // serving `a/b` lives under `js/pages/a/b/`, this codebase's own convention,
+    // so that prefix is what gets excluded.
+    $pageFiles = collect(glob(resource_path('js/pages/**/*.tsx'), GLOB_BRACE))
         ->merge(glob(resource_path('js/pages/**/**/*.tsx')))
         ->merge(glob(resource_path('js/pages/**/**/**/*.tsx')))
-        ->map(fn (string $file) => file_get_contents($file))
-        ->implode("\n");
+        ->unique()
+        ->values();
 
-    $haystack = $sidebarSource."\n".$pageSources;
+    $linkedFromElsewhere = function (array $names, string $uri) use ($pageFiles, $sidebarSource): bool {
+        $needles = collect($names)->map(fn (string $n) => "'".$n."'")->push('/'.$uri);
+
+        if ($needles->contains(fn (string $needle) => str_contains($sidebarSource, $needle))) {
+            return true;
+        }
+
+        $ownPrefix = str_replace(DIRECTORY_SEPARATOR, '/', resource_path('js/pages/'.$uri));
+
+        return $pageFiles
+            ->reject(fn (string $file) => str_starts_with(str_replace(DIRECTORY_SEPARATOR, '/', $file), $ownPrefix))
+            ->contains(function (string $file) use ($needles) {
+                $source = file_get_contents($file);
+
+                return $needles->contains(fn (string $needle) => str_contains($source, $needle));
+            });
+    };
 
     $unreachable = $pages
-        ->reject(fn (string $uri) => str_contains($haystack, '/'.$uri))
+        ->reject($linkedFromElsewhere)
+        ->keys()
         // Auth and settings pages are reached from the user menu, not the sidebar.
         ->reject(fn (string $uri) => str_starts_with($uri, 'settings/')
             || str_starts_with($uri, 'login')

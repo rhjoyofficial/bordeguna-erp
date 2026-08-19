@@ -88,6 +88,13 @@ class HandleInertiaRequests extends Middleware
             // and both CRM pages were live in production and absent from the
             // navigation and from every other screen, so the only way in was to
             // type the URL. The revenue side of the ERP was invisible.
+            // ⚠⚠ AND IT HAPPENED AGAIN, to the single most important screen of
+            // the cutover. Opening stock had a route, a screen and, from
+            // 602d600, the printable count sheet - and no navigation entry
+            // anywhere, so the only way in was to type the URL. It is written
+            // once per warehouse for the life of the business, and on 31 August
+            // the people doing it are entering everything by hand.
+            'canRecordOpeningStock' => fn () => (bool) $request->user()?->can('inventory.stock.adjust'),
             'canViewSales' => fn () => (bool) $request->user()?->can('sales.reports.view'),
             'canSell' => fn () => (bool) $request->user()?->can('sales.sell'),
             'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),
