@@ -15,6 +15,10 @@ class Category extends Model
         'business_id',
         'name',
         'slug',
+        // C-SKU-1. The SKU segment this category contributes, e.g. DAT, or a
+        // family path such as PK-JAR. Stored because it cannot be derived from
+        // the name: Nuts is MIX and Seeds is SED.
+        'code',
     ];
 
     public function products(): HasMany

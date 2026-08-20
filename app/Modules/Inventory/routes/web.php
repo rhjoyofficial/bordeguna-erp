@@ -24,6 +24,23 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     Route::get('warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
 
     Route::middleware('can:inventory.catalog.manage')->group(function () {
+        // C-SKU-2. Reads only, and writes nothing: it hands back a proposed SKU
+        // for whoever is filling the form in. Gated with the rest of catalogue
+        // management because it discloses the naming convention and whether a
+        // code is already taken.
+        //
+        // ⚠⚠ A GET ON PURPOSE. EnsurePageBusinessMatches stamps and checks every
+        // MUTATING request, and it does that through Inertia's own `before`
+        // hook - which a hand-written fetch does not pass through. A POST here
+        // would therefore be the one write-shaped request in the app that skips
+        // the tenant assertion §13 exists to enforce. It reads, so it is safe,
+        // so it is a GET, and the guard's own rule covers it: a stale GET shows
+        // stale data and writes nothing.
+        //
+        // ⚠ Deliberately NOT a page. The reachability guard skips it on its own
+        // because the controller declares a JsonResponse return type.
+        Route::get('products/sku-proposal', [ProductController::class, 'skuProposal'])->name('products.sku-proposal');
+
         Route::post('products', [ProductController::class, 'store'])->name('products.store');
         Route::put('products/{product}', [ProductController::class, 'update'])->name('products.update');
         Route::delete('products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');

@@ -15,17 +15,35 @@ class CategoryController extends Controller
     public function index(): Response
     {
         return Inertia::render('inventory/categories/index', [
-            'categories' => Category::orderBy('name')->get(),
+            'categories' => Category::orderBy('name')->get(['id', 'name', 'slug', 'code']),
         ]);
+    }
+
+    /**
+     * C-SKU-1. The code is the SKU segment this category contributes, and it is
+     * typed rather than derived: the live catalogue uses MIX for Nuts, SLT for
+     * Salts and SED for Seeds, none of which follow from the name.
+     *
+     * ⚠ A hyphen is allowed so a category can carry its whole family path, as
+     * `PK-JAR` does. Each segment is checked on its own, so a stray hyphen
+     * cannot produce an empty segment in the middle of a SKU.
+     */
+    private function rules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['nullable', 'string', 'max:16', 'regex:/^[A-Za-z0-9]{2,8}(-[A-Za-z0-9]{2,8})*$/'],
+        ];
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate(['name' => ['required', 'string', 'max:255']]);
+        $data = $request->validate($this->rules());
 
         Category::create([
             'name' => $data['name'],
             'slug' => Str::slug($data['name']),
+            'code' => self::code($data['code'] ?? null),
         ]);
 
         return back()->with('success', 'Category created.');
@@ -33,14 +51,27 @@ class CategoryController extends Controller
 
     public function update(Request $request, Category $category): RedirectResponse
     {
-        $data = $request->validate(['name' => ['required', 'string', 'max:255']]);
+        $data = $request->validate($this->rules());
 
         $category->update([
             'name' => $data['name'],
             'slug' => Str::slug($data['name']),
+            'code' => self::code($data['code'] ?? null),
         ]);
 
         return back()->with('success', 'Category updated.');
+    }
+
+    /**
+     * Upper-cased, or null when blank. ⚠ Blank must be NULL rather than an
+     * empty string: the SKU generator treats null as "this category has not
+     * said yet" and declines to propose, which is the honest answer.
+     */
+    private static function code(?string $value): ?string
+    {
+        $value = strtoupper(trim((string) $value));
+
+        return $value === '' ? null : $value;
     }
 
     public function destroy(Category $category): RedirectResponse

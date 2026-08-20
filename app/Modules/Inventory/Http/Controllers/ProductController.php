@@ -10,6 +10,8 @@ use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Support\SkuProposal;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -117,6 +119,72 @@ class ProductController extends Controller
         $product->update(['is_active' => false]);
 
         return back()->with('success', 'Product deactivated.');
+    }
+
+    /**
+     * C-SKU-2. Propose a SKU for what is currently typed into the form.
+     *
+     * ⚠⚠ THIS WRITES NOTHING. It answers with a string the screen drops into an
+     * editable field, and the user may ignore it. The SKU is the identity every
+     * importer matches on, so nothing may assign one on a person's behalf.
+     *
+     * ⚠ Brand and category are read through the scoped models, so another
+     * business's brand code can never leak into this business's SKU.
+     *
+     * ⚠⚠ A GET, and that is not a style choice: see the note on the route. A
+     * mutating verb here would be the one write-shaped request that escapes
+     * EnsurePageBusinessMatches, because the stamp rides on Inertia's visit hook
+     * and this call is a plain fetch.
+     */
+    public function skuProposal(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'type' => ['required', new Enum(ProductType::class)],
+            'brand_id' => ['nullable', 'integer'],
+            'category_id' => ['nullable', 'integer'],
+            // The product being edited, so its own SKU does not count as taken
+            // and the proposal does not come back numbered against itself.
+            'product_id' => ['nullable', 'integer'],
+        ]);
+
+        $businessId = app(BusinessContext::class)->id();
+
+        $brandCode = empty($data['brand_id'])
+            ? null
+            : Brand::whereKey($data['brand_id'])->value('code');
+
+        $categoryCode = empty($data['category_id'])
+            ? null
+            : Category::whereKey($data['category_id'])->value('code');
+
+        $currentSku = empty($data['product_id'])
+            ? null
+            : Product::whereKey($data['product_id'])->value('sku');
+
+        // ⚠⚠ Learn from this business's own catalogue before proposing anything.
+        // Beetroot is BET here, Black is BLK and Beef is BEF - abbreviations no
+        // rule reproduces. Proposing BLA next to the live BLK would split one
+        // product into two families.
+        $known = SkuProposal::learnFrom(
+            Product::where('business_id', $businessId)
+                ->get(['name', 'sku'])
+                ->map(fn (Product $p) => ['name' => $p->name, 'sku' => $p->sku])
+                ->all(),
+        );
+
+        $proposal = new SkuProposal(
+            fn (string $sku) => $sku !== $currentSku
+                && Product::where('business_id', $businessId)->where('sku', $sku)->exists(),
+            $known,
+        );
+
+        return response()->json($proposal->propose(
+            $data['name'],
+            ProductType::from($data['type']),
+            $brandCode,
+            $categoryCode,
+        ));
     }
 
     /**

@@ -95,6 +95,8 @@ export default function ProductsIndex({
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/inventory/products', initialFilters);
     const [editing, setEditing] = useState<Product | null>(null);
+    const [proposing, setProposing] = useState(false);
+    const [skuHint, setSkuHint] = useState<string | null>(null);
     const { data, setData, post, put, errors, processing, reset, clearErrors } = useForm(EMPTY);
 
     const startEdit = (product: Product) => {
@@ -120,6 +122,60 @@ export default function ProductsIndex({
         setEditing(null);
         clearErrors();
         reset();
+        setSkuHint(null);
+    };
+
+    /**
+     * C-SKU-2. Ask the server what this product's SKU would be, and drop the
+     * answer into the field.
+     *
+     * ⚠⚠ A PROPOSAL, NEVER AN ASSIGNMENT. Nothing here fires on its own, the
+     * field stays editable afterwards, and on an existing product the hint says
+     * out loud what changing a SKU costs - it is the identity every importer
+     * matches on.
+     */
+    const proposeSku = async () => {
+        setProposing(true);
+        setSkuHint(null);
+
+        try {
+            const query = new URLSearchParams({ name: data.name, type: data.type });
+
+            if (data.brand_id) query.set('brand_id', data.brand_id);
+            if (data.category_id) query.set('category_id', data.category_id);
+            if (editing) query.set('product_id', String(editing.id));
+
+            const response = await fetch(`${route('inventory.products.sku-proposal')}?${query.toString()}`, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+                setSkuHint('Could not build a SKU just now. Type one in.');
+                return;
+            }
+
+            const result: { sku: string | null; reason: string | null; note: string | null } = await response.json();
+
+            if (result.sku === null) {
+                setSkuHint(result.reason);
+                return;
+            }
+
+            setData('sku', result.sku);
+
+            const notes = [result.note];
+
+            if (editing) {
+                notes.push('This product already exists. Its SKU is what imports and price lists match on, so change it only if you mean to.');
+            }
+
+            setSkuHint(notes.filter(Boolean).join(' ') || null);
+        } catch {
+            setSkuHint('Could not build a SKU just now. Type one in.');
+        } finally {
+            setProposing(false);
+        }
     };
 
     const submit: FormEventHandler = (e) => {
@@ -143,9 +199,20 @@ export default function ProductsIndex({
             <div className="flex flex-col gap-6 p-4">
                 <form onSubmit={submit} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                     <div className="grid gap-2">
-                        <Label htmlFor="sku">SKU</Label>
-                        <Input id="sku" value={data.sku} onChange={(e) => setData('sku', e.target.value)} />
+                        <div className="flex items-baseline justify-between gap-2">
+                            <Label htmlFor="sku">SKU</Label>
+                            <button
+                                type="button"
+                                onClick={proposeSku}
+                                disabled={proposing}
+                                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+                            >
+                                {proposing ? 'working' : 'build it for me'}
+                            </button>
+                        </div>
+                        <Input id="sku" value={data.sku} onChange={(e) => setData('sku', e.target.value)} className="font-mono" />
                         <InputError message={errors.sku} />
+                        {skuHint && <p className="text-xs text-muted-foreground">{skuHint}</p>}
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="barcode">Barcode</Label>
