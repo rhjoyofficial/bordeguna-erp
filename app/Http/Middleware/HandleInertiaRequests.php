@@ -95,6 +95,9 @@ class HandleInertiaRequests extends Middleware
             // once per warehouse for the life of the business, and on 31 August
             // the people doing it are entering everything by hand.
             'canRecordOpeningStock' => fn () => (bool) $request->user()?->can('inventory.stock.adjust'),
+            // C-IMP-7. A screen nobody can find is a screen nobody has, and
+            // this project has shipped four of those.
+            'canImportCatalogue' => fn () => (bool) $request->user()?->can('inventory.catalogue.import'),
             'canViewSales' => fn () => (bool) $request->user()?->can('sales.reports.view'),
             'canSell' => fn () => (bool) $request->user()?->can('sales.sell'),
             'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),

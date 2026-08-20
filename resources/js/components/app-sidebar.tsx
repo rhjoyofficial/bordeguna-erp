@@ -42,6 +42,7 @@ import {
     Tags,
     TrendingUp,
     Truck,
+    Upload,
     Undo2,
     UserCircle,
     UserPlus,
@@ -67,6 +68,7 @@ export function AppSidebar() {
         canSell,
         canManagePrices,
         canRecordOpeningStock,
+        canImportCatalogue,
         canViewCrm,
         canManageCrmSettings,
         canViewAssets,
@@ -103,6 +105,12 @@ export function AppSidebar() {
                 // opening stock sets the FIFO layers behind every margin.
                 ...(canRecordOpeningStock
                     ? [{ title: 'Opening stock', url: '/inventory/opening-stock', icon: ClipboardCheck }]
+                    : []),
+                // C-IMP-7. The whole point of the import screen is that Joy
+                // stops sending files to be loaded for him, so it has to be
+                // findable without being told where it is.
+                ...(canImportCatalogue
+                    ? [{ title: 'Import products', url: '/inventory/products/import', icon: Upload }]
                     : []),
                 { title: 'Warehouses', url: '/inventory/warehouses', icon: Warehouse },
                 { title: 'Categories', url: '/inventory/categories', icon: Tags },

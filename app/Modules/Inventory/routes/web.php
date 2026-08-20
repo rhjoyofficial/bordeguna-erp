@@ -5,6 +5,7 @@ use App\Modules\Inventory\Http\Controllers\InventoryDashboardController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockCountSheetController;
 use App\Modules\Inventory\Http\Controllers\ProductController;
+use App\Modules\Inventory\Http\Controllers\ProductImportController;
 use App\Modules\Inventory\Http\Controllers\ProductionRunController;
 use App\Modules\Inventory\Http\Controllers\ProductionYieldController;
 use App\Modules\Inventory\Http\Controllers\StockController;
@@ -22,6 +23,20 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
     Route::get('units', [UnitOfMeasureController::class, 'index'])->name('units.index');
     Route::get('warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
+
+    // C-IMP-4. Importing is a different power from editing one row: replacing
+    // three hundred products at once deserves its own permission, and its own
+    // audit answer to "who did that".
+    Route::middleware('can:inventory.catalogue.import')->group(function () {
+        Route::get('products/import', [ProductImportController::class, 'create'])->name('products.import');
+        Route::post('products/import/preview', [ProductImportController::class, 'preview'])->name('products.import.preview');
+        Route::post('products/import', [ProductImportController::class, 'store'])->name('products.import.store');
+    });
+
+    // ⚠ Export is gated with VIEWING, not importing. Reading out what you can
+    // already see on the products screen is not a privileged act, and locking
+    // it would push people back to asking me for a file.
+    Route::get('products/export', [ProductImportController::class, 'export'])->name('products.export');
 
     Route::middleware('can:inventory.catalog.manage')->group(function () {
         // C-SKU-2. Reads only, and writes nothing: it hands back a proposed SKU

@@ -25,6 +25,9 @@ class InventoryPermissionsSeeder extends Seeder
             // D-MFG-4: one-step confirm by the authorised user. A run mirrors
             // physical work already done; the control is the yield report.
             'inventory.production.manage',
+            // C-IMP-4. Replacing three hundred products at once is not the same
+            // power as editing one row, so it is not the same permission.
+            'inventory.catalogue.import',
         ],
         'Manager' => [
             'inventory.catalog.manage',
@@ -34,7 +37,10 @@ class InventoryPermissionsSeeder extends Seeder
             'inventory.stock.approve',
             'inventory.reports.view',
             'inventory.production.manage',
+            'inventory.catalogue.import',
         ],
+        // ⚠ Staff deliberately does NOT get the import. Staff records stock and
+        // raises requests; rewriting the catalogue is a manager's act.
         'Staff' => [
             'inventory.stock.record',
             'inventory.stock.request',
