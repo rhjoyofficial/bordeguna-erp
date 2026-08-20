@@ -24,7 +24,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'New invoice', href: '/sales/invoices/create' },
 ];
 
-type LineDraft = { delivery_line_id: number; quantity: string; unit_price: string };
+type LineDraft = { delivery_line_id: number; quantity: string; unit_price: string; discount: string };
 
 /*
  * Billing what left on challans - one invoice may cover several challans, and
@@ -64,6 +64,7 @@ export default function InvoiceCreate({
             delivery_line_id: line.delivery_line_id,
             quantity: line.quantity_uninvoiced,
             unit_price: line.unit_price ?? '',
+            discount: '0',
         })),
     });
 
@@ -86,7 +87,14 @@ export default function InvoiceCreate({
     };
 
     const included = data.lines.filter((line) => parseFloat(line.quantity || '0') > 0);
-    const subtotal = included.reduce((sum, line) => sum + parseFloat(line.quantity || '0') * parseFloat(line.unit_price || '0'), 0);
+    // The subtotal is net of LINE discounts, because a line discount reduces the
+    // line and revenue is credited net of it. The whole-invoice discount below
+    // is a different animal: contra-revenue, posted to 4210 Discounts Allowed.
+    const subtotal = included.reduce(
+        (sum, line) =>
+            sum + parseFloat(line.quantity || '0') * parseFloat(line.unit_price || '0') - parseFloat(line.discount || '0'),
+        0,
+    );
     const total = subtotal - parseFloat(data.invoice_discount || '0');
 
     return (
@@ -120,6 +128,7 @@ export default function InvoiceCreate({
                                         <th className="p-3">Uninvoiced</th>
                                         <th className="p-3">Bill quantity</th>
                                         <th className="p-3">Unit price</th>
+                                        <th className="p-3">Discount</th>
                                         <th className="p-3">Why this price</th>
                                     </tr>
                                 </thead>
@@ -154,6 +163,14 @@ export default function InvoiceCreate({
                                                     />
                                                     <InputError message={errors[`lines.${index}.unit_price` as keyof typeof errors]} />
                                                 </td>
+                                                <td className="p-3">
+                                                    <Input
+                                                        className="max-w-28"
+                                                        value={draft?.discount ?? '0'}
+                                                        onChange={(e) => updateLine(line.delivery_line_id, { discount: e.target.value })}
+                                                    />
+                                                    <InputError message={errors[`lines.${index}.discount` as keyof typeof errors]} />
+                                                </td>
                                                 <td className="p-3 text-xs text-muted-foreground">{line.price_source}</td>
                                             </tr>
                                         );
@@ -176,6 +193,15 @@ export default function InvoiceCreate({
                                 <Label>Whole-invoice discount (optional)</Label>
                                 <Input value={data.invoice_discount} onChange={(e) => setData('invoice_discount', e.target.value)} />
                                 <InputError message={errors.invoice_discount} />
+                                {/*
+                                    C-DSC-2. The two discounts are not the same thing and putting one
+                                    in the other's box makes every per-product margin report wrong
+                                    while every total still balances.
+                                */}
+                                <p className="text-xs text-muted-foreground">
+                                    Money off one product goes in that product's Discount box above. Use this one only for money
+                                    off the whole bill.
+                                </p>
                             </div>
                             <div className="grid gap-2">
                                 <Label>Note (optional)</Label>

@@ -240,6 +240,74 @@ it('bills a challan at the order price, not the rule of the day', function () {
         ->and((float) $invoice->total)->toBe(25 * 850.0);
 });
 
+/**
+ * C-DSC-2, and Joy's own case: the pickles are printed MRP 1350 and sold at 999.
+ *
+ * ⚠⚠ The engine has always accepted a line discount and the controller has
+ * always validated it. The INVOICE SCREEN never sent one, so the only discount
+ * anyone could enter on a credit sale was the whole-invoice kind - which posts
+ * to 4210 Discounts Allowed and leaves the product's own margin reading as if it
+ * sold at full price. Every report would still have balanced.
+ */
+it('bills a line at its list price less a discount, and credits revenue net', function () {
+    app(RecordDelivery::class)->handle(
+        customer: $this->customer,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->product, 'quantity' => '1']],
+        createdBy: User::factory()->create(),
+    );
+
+    $response = ($this->asRole)('Staff')->get('/sales/invoices/create?customer_id='.$this->customer->id);
+    $billable = $response->original->getData()['page']['props']['billable'];
+
+    ($this->asRole)('Staff')->post('/sales/invoices', [
+        'customer_id' => $this->customer->id,
+        'lines' => [[
+            'delivery_line_id' => $billable[0]['delivery_line_id'],
+            'quantity' => '1',
+            'unit_price' => '1350',
+            'discount' => '351',
+        ]],
+    ])->assertRedirect();
+
+    $invoice = SalesInvoice::first();
+    $line = $invoice->lines->first();
+
+    // The list price is still on the line - the jar really is printed 1350 -
+    // and the concession is recorded beside it rather than hidden in the price.
+    expect((float) $line->unit_price)->toBe(1350.0)
+        ->and((float) $line->line_discount)->toBe(351.0)
+        ->and((float) $invoice->subtotal)->toBe(999.0)
+        ->and((float) $invoice->total)->toBe(999.0)
+        // ⚠ And NOT contra-revenue. A line discount reduces the line.
+        ->and((float) $invoice->invoice_discount)->toBe(0.0);
+});
+
+it('refuses a line discount bigger than the line, from the screen', function () {
+    app(RecordDelivery::class)->handle(
+        customer: $this->customer,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->product, 'quantity' => '1']],
+        createdBy: User::factory()->create(),
+    );
+
+    $billable = ($this->asRole)('Staff')
+        ->get('/sales/invoices/create?customer_id='.$this->customer->id)
+        ->original->getData()['page']['props']['billable'];
+
+    ($this->asRole)('Staff')->post('/sales/invoices', [
+        'customer_id' => $this->customer->id,
+        'lines' => [[
+            'delivery_line_id' => $billable[0]['delivery_line_id'],
+            'quantity' => '1',
+            'unit_price' => '1350',
+            'discount' => '1400',
+        ]],
+    ])->assertSessionHasErrors('lines.0.discount');
+
+    expect(SalesInvoice::count())->toBe(0);
+});
+
 it('bills a direct challan at the resolver price of the invoice date', function () {
     app(RecordDelivery::class)->handle(
         customer: $this->customer,

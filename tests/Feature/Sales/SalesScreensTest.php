@@ -110,12 +110,20 @@ it('sells over the counter and lands on the invoice', function () {
 
 // ⚠ The counter must quote from the SAME resolver the sale uses, or the price
 // on the screen and the price on the invoice can disagree.
+/**
+ * ⚠⚠ A GET since 2026-08-20, and the change fixed a silent production defect
+ * rather than tidying anything. As a POST the screen sent `X-CSRF-TOKEN` read
+ * from a meta tag this layout does not emit, so every call was rejected 419 and
+ * the counter never filled in a price. This test passed throughout, because it
+ * calls the endpoint directly and nothing here can press a button.
+ * See HandWrittenFetchTest.
+ */
 it('answers a price check from the real resolver', function () {
     ($this->asRole)('Staff')
-        ->postJson('/sales/counter/price', [
+        ->getJson('/sales/counter/price?'.http_build_query([
             'product_id' => $this->product->id,
             'quantity' => '1',
-        ])
+        ]))
         ->assertOk()
         ->assertJson(['unit_price' => '850.0000']);
 });

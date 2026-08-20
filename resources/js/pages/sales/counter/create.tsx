@@ -74,20 +74,23 @@ export default function CounterSale({
     const fetchPrice = async (index: number, productId: string, quantity: string) => {
         if (!productId || !quantity) return;
 
-        const response = await fetch(route('sales.counter.price'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '',
-            },
-            body: JSON.stringify({
-                product_id: productId,
-                quantity,
-                customer_id: data.customer_id || null,
-            }),
+        // ⚠⚠ A GET. This used to POST with an `X-CSRF-TOKEN` read from a meta tag
+        // the layout does not emit, so every call was rejected and the price
+        // silently never arrived. Reading needs no token.
+        const query = new URLSearchParams({ product_id: productId, quantity });
+
+        if (data.customer_id) query.set('customer_id', data.customer_id);
+
+        const response = await fetch(`${route('sales.counter.price')}?${query.toString()}`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
         });
 
-        if (!response.ok) return;
+        if (!response.ok) {
+            setLine(index, { explanation: 'Could not look the price up just now. Enter it by hand.' });
+
+            return;
+        }
 
         const body = await response.json();
         setLine(index, {

@@ -64,7 +64,19 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // ⚠ A price check for the counter screen, answered by the SAME resolver
         // the sale uses. A screen that computes its own price is a second
         // pricing engine that disagrees with the invoice.
-        Route::post('counter/price', [CounterSaleController::class, 'price'])->name('counter.price');
+        //
+        // ⚠⚠ WAS A POST, AND SILENTLY NEVER WORKED. The screen sent
+        // `X-CSRF-TOKEN` read from a `meta[name="csrf-token"]` tag that this
+        // application's layout does not emit, so the header was always empty,
+        // every call was rejected 419, and `if (!response.ok) return` swallowed
+        // it. The counter simply never filled in a price, with no error
+        // anywhere. Nothing caught it because no test can press a button, and
+        // the counter has never been used in production.
+        //
+        // It reads and writes nothing, so it is a GET: no CSRF token to forget,
+        // and no mutating fetch bypassing EnsurePageBusinessMatches, whose stamp
+        // rides on Inertia's visit hook and never reaches a hand-written fetch.
+        Route::get('counter/price', [CounterSaleController::class, 'price'])->name('counter.price');
         Route::post('deliveries', [DeliveryController::class, 'store'])->name('deliveries.store');
         // Delivering against an order, from the order's own screen.
         Route::post('orders/{order}/deliver', [SalesOrderController::class, 'deliver'])->name('orders.deliver');
