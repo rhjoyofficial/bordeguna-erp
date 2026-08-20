@@ -29,6 +29,8 @@ class SalesPermissionsSeeder extends Seeder
         'Owner' => [
             'sales.customers.manage',
             'sales.prices.manage',
+            // C-IMP-4. Loading a whole price list is a manager's act.
+            'sales.prices.import',
             'sales.sell',
             'sales.receipt.record',
             'sales.reports.view',
@@ -41,6 +43,8 @@ class SalesPermissionsSeeder extends Seeder
         'Manager' => [
             'sales.customers.manage',
             'sales.prices.manage',
+            // C-IMP-4. Loading a whole price list is a manager's act.
+            'sales.prices.import',
             'sales.sell',
             'sales.receipt.record',
             'sales.reports.view',

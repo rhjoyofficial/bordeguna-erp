@@ -3,6 +3,7 @@
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
+use App\Modules\Sales\Http\Controllers\PriceImportController;
 use App\Modules\Sales\Http\Controllers\ProductPriceController;
 use App\Modules\Sales\Http\Controllers\SalesInvoiceController;
 use App\Modules\Sales\Http\Controllers\SalesOrderController;
@@ -52,6 +53,17 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     });
 
     // ⚠⚠ Setting a price is a margin decision. Deliberately NOT given to Staff.
+    // C-IMP-4. Replacing the whole price list is not the same power as adding
+    // one rule: prices decide what every future sale is worth.
+    Route::middleware('can:sales.prices.import')->group(function () {
+        Route::get('prices/import', [PriceImportController::class, 'create'])->name('prices.import');
+        Route::post('prices/import/preview', [PriceImportController::class, 'preview'])->name('prices.import.preview');
+        Route::post('prices/import', [PriceImportController::class, 'store'])->name('prices.import.store');
+    });
+
+    // ⚠ Export is gated with viewing the price screen, not with importing.
+    Route::get('prices/export', [PriceImportController::class, 'export'])->name('prices.export');
+
     Route::middleware('can:sales.prices.manage')->group(function () {
         Route::post('prices', [ProductPriceController::class, 'store'])->name('prices.store');
         Route::post('prices/{productPrice}/close', [ProductPriceController::class, 'close'])->name('prices.close');

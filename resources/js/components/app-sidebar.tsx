@@ -69,6 +69,7 @@ export function AppSidebar() {
         canManagePrices,
         canRecordOpeningStock,
         canImportCatalogue,
+        canImportPrices,
         canViewCrm,
         canManageCrmSettings,
         canViewAssets,
@@ -115,6 +116,9 @@ export function AppSidebar() {
                 { title: 'Warehouses', url: '/inventory/warehouses', icon: Warehouse },
                 { title: 'Categories', url: '/inventory/categories', icon: Tags },
                 { title: 'Units of measure', url: '/inventory/units', icon: Ruler },
+                // C-IMP-7 again. This one was built on 9 August and had no way
+                // in until 20 August.
+                { title: 'Purchase units', url: '/inventory/unit-conversions', icon: Scale },
             ],
         },
         {
@@ -150,6 +154,11 @@ export function AppSidebar() {
                           ...(canViewSales ? [{ title: 'Sales orders', url: '/sales/orders', icon: ClipboardList }] : []),
                           ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
                           ...(canViewSales || canManagePrices ? [{ title: 'Selling prices', url: '/sales/prices', icon: BadgeDollarSign }] : []),
+                          // C-IMP-7. Reachable, or it is the fifth screen built
+                          // and never found.
+                          ...(canImportPrices
+                              ? [{ title: 'Import prices', url: '/sales/prices/import', icon: Upload }]
+                              : []),
                           ...(canViewSales ? [{ title: 'Invoices', url: '/sales/invoices', icon: FileText }] : []),
                           ...(canViewSales ? [{ title: 'Deliveries', url: '/sales/deliveries', icon: PackageCheck }] : []),
                           // Goods coming back - shipped WITH its screens in one

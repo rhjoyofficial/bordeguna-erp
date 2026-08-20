@@ -98,6 +98,7 @@ class HandleInertiaRequests extends Middleware
             // C-IMP-7. A screen nobody can find is a screen nobody has, and
             // this project has shipped four of those.
             'canImportCatalogue' => fn () => (bool) $request->user()?->can('inventory.catalogue.import'),
+            'canImportPrices' => fn () => (bool) $request->user()?->can('sales.prices.import'),
             'canViewSales' => fn () => (bool) $request->user()?->can('sales.reports.view'),
             'canSell' => fn () => (bool) $request->user()?->can('sales.sell'),
             'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),

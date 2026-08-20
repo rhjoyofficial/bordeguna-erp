@@ -10,6 +10,7 @@ use App\Modules\Inventory\Http\Controllers\ProductionRunController;
 use App\Modules\Inventory\Http\Controllers\ProductionYieldController;
 use App\Modules\Inventory\Http\Controllers\StockController;
 use App\Modules\Inventory\Http\Controllers\StockRequestController;
+use App\Modules\Inventory\Http\Controllers\UnitConversionController;
 use App\Modules\Inventory\Http\Controllers\UnitOfMeasureController;
 use App\Modules\Inventory\Http\Controllers\WarehouseController;
 use Illuminate\Support\Facades\Route;
@@ -37,6 +38,18 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     // already see on the products screen is not a privileged act, and locking
     // it would push people back to asking me for a file.
     Route::get('products/export', [ProductImportController::class, 'export'])->name('products.export');
+
+    // ⚠⚠ THE FOURTH UNREACHABLE ENGINE, closed 20 Aug. ProductUnitConversion has
+    // been built, tested and deployed since 9 August with no route, no
+    // controller and no caller for `record()` outside its own tests - so nobody
+    // could tell the system that mustard oil is bought by the kilogram and
+    // stocked by the litre, and every receipt for it would have thrown.
+    // Gated with catalogue management: a conversion is master data about how a
+    // product is bought, and it changes what every future receipt costs.
+    Route::middleware('can:inventory.catalog.manage')->group(function () {
+        Route::get('unit-conversions', [UnitConversionController::class, 'index'])->name('unit-conversions.index');
+        Route::post('unit-conversions', [UnitConversionController::class, 'store'])->name('unit-conversions.store');
+    });
 
     Route::middleware('can:inventory.catalog.manage')->group(function () {
         // C-SKU-2. Reads only, and writes nothing: it hands back a proposed SKU
