@@ -128,7 +128,7 @@ const requestStatusVariant: Record<string, 'secondary' | 'default' | 'destructiv
 };
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'My profile', href: '/hrm/my-profile' }];
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 function Field({ label, value }: { label: string; value: string | null }) {
     return (

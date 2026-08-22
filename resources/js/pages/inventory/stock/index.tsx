@@ -11,7 +11,7 @@ import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface StockRow {
     product_id: number;
@@ -79,7 +79,7 @@ function ReasonSelect({ reasons, value, onChange, error }: { reasons: Option[]; 
     return (
         <div className="grid gap-2">
             <Label>Reason</Label>
-            <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={value} onChange={(e) => onChange(e.target.value)}>
+            <select className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm" value={value} onChange={(e) => onChange(e.target.value)}>
                 <option value="">Select reason</option>
                 {reasons.map((r) => (
                     <option key={r.id} value={r.id}>
@@ -134,7 +134,7 @@ function DirectAdjustmentForm({ products, warehouses, reasons }: { products: Opt
             <div className="grid gap-2">
                 <Label>Direction</Label>
                 <select
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                     value={data.direction}
                     onChange={(e) => setData('direction', e.target.value)}
                 >
@@ -208,7 +208,7 @@ function DirectTransferForm({ products, warehouses, reasons }: { products: Optio
             <div className="grid gap-2">
                 <Label>To warehouse</Label>
                 <select
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                     value={data.target_warehouse_id}
                     onChange={(e) => setData('target_warehouse_id', e.target.value)}
                 >
@@ -278,7 +278,7 @@ function RequestAdjustmentForm({
             <div className="grid gap-2">
                 <Label>Request type</Label>
                 <select
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                     value={data.type}
                     onChange={(e) => setData({ ...data, type: e.target.value, reason_id: '' })}
                 >
@@ -299,7 +299,7 @@ function RequestAdjustmentForm({
                 <div className="grid gap-2">
                     <Label>To warehouse</Label>
                     <select
-                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                         value={data.target_warehouse_id}
                         onChange={(e) => setData('target_warehouse_id', e.target.value)}
                     >
@@ -317,7 +317,7 @@ function RequestAdjustmentForm({
                 <div className="grid gap-2">
                     <Label>Direction</Label>
                     <select
-                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                         value={data.direction}
                         onChange={(e) => setData('direction', e.target.value)}
                     >

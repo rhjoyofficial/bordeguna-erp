@@ -406,7 +406,7 @@ export default function PurchaseOrderShow({
                         <div className="flex items-center gap-2">
                             <Label className="text-xs text-muted-foreground">Payment:</Label>
                             <select
-                                className="h-9 rounded-md border border-input bg-background px-2 text-sm capitalize"
+                                className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm capitalize"
                                 value={order.payment_status}
                                 onChange={(e) => setPaymentStatus(e.target.value)}
                             >

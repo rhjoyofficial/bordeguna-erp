@@ -52,7 +52,7 @@ interface Props {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Salary', href: '/hrm/salary' }];
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 const money = (n: number | null) => (n === null ? '-' : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
 function ComponentDialog({ component, bases, types, trigger }: { component?: Component; bases: Props['bases']; types: Props['types']; trigger: React.ReactNode }) {

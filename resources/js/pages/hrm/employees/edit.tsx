@@ -53,7 +53,7 @@ interface EditProps {
     payment_methods: Option[];
 }
 
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 type FormData = Omit<EditableEmployee, 'id' | 'employee_code' | 'name'>;
 

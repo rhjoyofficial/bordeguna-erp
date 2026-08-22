@@ -65,7 +65,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Corrections', href: '/hrm/attendance/corrections' },
 ];
 
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 /**
  * A datetime-local value to the timestamp the API expects.

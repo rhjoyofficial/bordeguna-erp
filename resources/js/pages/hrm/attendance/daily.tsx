@@ -96,7 +96,7 @@ export default function DailyAttendance({ on, filters, employees = [], days, sum
                         </Label>
                         <Input id="to" type="date" className="w-40" value={filters.to} onChange={(e) => reload({ to: e.target.value })} />
                         <select
-                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                             value={filters.employee_id ?? ''}
                             onChange={(e) => reload({ employee_id: e.target.value || null })}
                         >

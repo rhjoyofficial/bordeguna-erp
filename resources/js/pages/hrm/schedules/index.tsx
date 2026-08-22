@@ -74,7 +74,7 @@ interface IndexProps {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Schedules', href: '/hrm/schedules' }];
 
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 type FormState = {
     scope_type: string;

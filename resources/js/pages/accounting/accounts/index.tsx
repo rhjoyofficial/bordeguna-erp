@@ -128,7 +128,7 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                             <Label htmlFor="type">Type</Label>
                             <select
                                 id="type"
-                                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                                 value={data.type}
                                 onChange={(e) => setData({ ...data, type: e.target.value, parent_id: '' })}
                             >
@@ -144,7 +144,7 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                             <Label htmlFor="parent_id">Sits under</Label>
                             <select
                                 id="parent_id"
-                                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                                 value={data.parent_id}
                                 onChange={(e) => setData('parent_id', e.target.value)}
                             >

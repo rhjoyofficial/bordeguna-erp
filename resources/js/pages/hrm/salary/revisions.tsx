@@ -75,7 +75,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Increments', href: '/hrm/salary-revisions' },
 ];
 
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 const cardClass = 'border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4';
 const rowClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b';
 

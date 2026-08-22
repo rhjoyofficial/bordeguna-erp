@@ -129,7 +129,7 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                         <Label htmlFor="journal_type">Kind</Label>
                         <select
                             id="journal_type"
-                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                             value={data.journal_type}
                             onChange={(e) => setData('journal_type', e.target.value)}
                         >

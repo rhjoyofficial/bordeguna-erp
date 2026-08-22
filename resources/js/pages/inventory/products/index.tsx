@@ -11,7 +11,7 @@ import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Product {
     id: number;
@@ -233,7 +233,7 @@ export default function ProductsIndex({
                         <Label htmlFor="type">Type</Label>
                         <select
                             id="type"
-                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                             value={data.type}
                             onChange={(e) => setData('type', e.target.value)}
                         >
@@ -248,7 +248,7 @@ export default function ProductsIndex({
                         <Label htmlFor="category_id">Category</Label>
                         <select
                             id="category_id"
-                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                             value={data.category_id}
                             onChange={(e) => setData('category_id', e.target.value)}
                         >
@@ -264,7 +264,7 @@ export default function ProductsIndex({
                         <Label htmlFor="brand_id">Brand</Label>
                         <select
                             id="brand_id"
-                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                             value={data.brand_id}
                             onChange={(e) => setData('brand_id', e.target.value)}
                         >
@@ -288,7 +288,7 @@ export default function ProductsIndex({
                         <Label htmlFor="unit_of_measure_id">Unit</Label>
                         <select
                             id="unit_of_measure_id"
-                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                             value={data.unit_of_measure_id}
                             onChange={(e) => setData('unit_of_measure_id', e.target.value)}
                         >
@@ -305,7 +305,7 @@ export default function ProductsIndex({
                         <Label htmlFor="tax_class_id">Tax class</Label>
                         <select
                             id="tax_class_id"
-                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                             value={data.tax_class_id}
                             onChange={(e) => setData('tax_class_id', e.target.value)}
                         >

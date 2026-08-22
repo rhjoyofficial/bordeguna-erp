@@ -64,7 +64,7 @@ interface IndexProps {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Punch log', href: '/hrm/attendance' }];
 
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 function ManualPunchDialog({ employees, directions, on }: { employees: { id: number; name: string }[]; directions: { value: string; label: string }[]; on: string }) {
     const [open, setOpen] = useState(false);

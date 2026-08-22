@@ -62,7 +62,7 @@ interface Props {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'My leave', href: '/hrm/my-leave' }];
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; portions: Props['portions'] }) {
     const [open, setOpen] = useState(false);

@@ -61,7 +61,7 @@ interface ClockProps {
     directions: { value: string; label: string }[];
 }
 
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 /**
  * An employee raising a correction on one of their own days (COR-01). It is a

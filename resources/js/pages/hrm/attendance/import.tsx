@@ -40,7 +40,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Import', href: '/hrm/attendance/import' },
 ];
 
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 export default function AttendanceImport({ batches, sources, unmapped_employees }: ImportProps) {
     const [file, setFile] = useState<File | null>(null);

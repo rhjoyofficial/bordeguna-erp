@@ -31,7 +31,7 @@ interface BusinessProps {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Business', href: '/settings/business' }];
 
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 

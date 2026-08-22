@@ -150,7 +150,7 @@ export default function MoneyAccountsIndex({
                             <Label htmlFor="type">Kind</Label>
                             <select
                                 id="type"
-                                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                                 value={data.type}
                                 onChange={(e) => setData('type', e.target.value)}
                             >
@@ -205,7 +205,7 @@ export default function MoneyAccountsIndex({
                             <Label htmlFor="account_id">Reports under</Label>
                             <select
                                 id="account_id"
-                                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
                                 value={data.account_id}
                                 onChange={(e) => setData('account_id', e.target.value)}
                             >

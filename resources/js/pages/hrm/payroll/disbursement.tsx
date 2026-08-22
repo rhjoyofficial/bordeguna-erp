@@ -79,7 +79,7 @@ interface Props {
 const cardClass = 'border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4';
 const rowClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b';
 const headClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground';
-const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
+const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 const money = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const today = () => new Date().toISOString().slice(0, 10);
