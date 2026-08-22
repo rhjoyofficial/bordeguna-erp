@@ -6,10 +6,12 @@ use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Warehouse extends Model
 {
-    use BelongsToBusiness, HasFactory;
+    use BelongsToBusiness, HasFactory, LogsActivity;
 
     protected $fillable = [
         'business_id',
@@ -39,6 +41,20 @@ class Warehouse extends Model
             'is_default' => 'boolean',
             'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * ⚠⚠ The CODE is the opening-stock import's matching key, written once per
+     * warehouse for the life of the business - and until this trait landed it
+     * could be changed with no trail while Product edits were logged. Same
+     * field set discipline as Product: identity and switches, nothing chatty.
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['name', 'code', 'is_default', 'is_active'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
     }
 
     public function stockBatches(): HasMany
