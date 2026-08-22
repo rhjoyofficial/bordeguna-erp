@@ -22,7 +22,11 @@ export type NavGroup = {
 // url. This keeps a section-overview item (e.g. /inventory) from lighting up
 // on every child route (/inventory/products) — the more specific item wins.
 function useActiveUrl(groups: NavGroup[]): string | null {
-    const current = usePage().url;
+    // Query string stripped before matching: the dashboard's chart range
+    // pills navigate to /dashboard?range=1y, and "?range=1y" is not a
+    // child path — without this the active pill vanishes on any filtered
+    // list or ranged view.
+    const current = usePage().url.split('?')[0];
     const matches = groups
         .flatMap((group) => group.items)
         .filter((item) => current === item.url || current.startsWith(item.url + '/'))
