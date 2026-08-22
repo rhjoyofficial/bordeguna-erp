@@ -4,26 +4,27 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
+import { Building2, KeyRound, ListChecks, Network, Palette, ShieldCheck, User, Users } from 'lucide-react';
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
     const { canManageUsers, canManageOrganization } = usePage<SharedData>().props;
     const currentPath = window.location.pathname;
 
     const sidebarNavItems: NavItem[] = [
-        { title: 'Profile', url: '/settings/profile', icon: null },
-        { title: 'Password', url: '/settings/password', icon: null },
-        { title: 'Appearance', url: '/settings/appearance', icon: null },
-        { title: 'Reasons', url: '/settings/reasons', icon: null },
+        { title: 'Profile', url: '/settings/profile', icon: User },
+        { title: 'Password', url: '/settings/password', icon: KeyRound },
+        { title: 'Appearance', url: '/settings/appearance', icon: Palette },
+        { title: 'Reasons', url: '/settings/reasons', icon: ListChecks },
         ...(canManageUsers
             ? [
-                  { title: 'Team', url: '/settings/team', icon: null },
-                  { title: 'Roles', url: '/settings/roles', icon: null },
+                  { title: 'Team', url: '/settings/team', icon: Users },
+                  { title: 'Roles', url: '/settings/roles', icon: ShieldCheck },
               ]
             : []),
         ...(canManageOrganization
             ? [
-                  { title: 'Business', url: '/settings/business', icon: null },
-                  { title: 'Organization', url: '/settings/organization', icon: null },
+                  { title: 'Business', url: '/settings/business', icon: Building2 },
+                  { title: 'Organization', url: '/settings/organization', icon: Network },
               ]
             : []),
     ];
@@ -42,10 +43,11 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                                 variant="ghost"
                                 asChild
                                 className={cn('w-full justify-start', {
-                                    'bg-muted': currentPath === item.url,
+                                    'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground': currentPath === item.url,
                                 })}
                             >
                                 <Link href={item.url} prefetch>
+                                    {item.icon && <item.icon className="h-4 w-4" />}
                                     {item.title}
                                 </Link>
                             </Button>
