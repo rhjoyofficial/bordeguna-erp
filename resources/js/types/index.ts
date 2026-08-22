@@ -64,6 +64,7 @@ export interface SharedData {
     canRecordOpeningStock: boolean;
     canImportCatalogue: boolean;
     canImportPrices: boolean;
+    canManageBom: boolean;
     canViewCrm: boolean;
     canManageCrmSettings: boolean;
     canViewAssets: boolean;

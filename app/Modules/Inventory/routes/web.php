@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Inventory\Http\Controllers\BillOfMaterialController;
 use App\Modules\Inventory\Http\Controllers\CategoryController;
 use App\Modules\Inventory\Http\Controllers\InventoryDashboardController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockController;
@@ -116,6 +117,23 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     Route::get('stock/transfers', [StockController::class, 'transfersIndex'])->name('stock.transfers.index');
     // authorizes inventory.stock.adjust internally
     Route::post('stock/transfers/{stockTransfer}/receive', [StockController::class, 'receiveTransfer'])->name('stock.transfers.receive');
+
+    // Slice D: the Bill of Materials (C-BOM). A recipe is master data about how
+    // a product is MADE, which is a different power from adjusting stock and
+    // from managing the catalogue - it decides what every future run suggests
+    // consuming. Its own permission, seeded, Owner and Manager.
+    //
+    // ⚠⚠ Nothing behind this group moves stock or posts a journal. The
+    // production run below remains the sixth and last sanctioned stock
+    // document.
+    Route::middleware('can:inventory.bom.manage')->group(function () {
+        Route::get('bills-of-material', [BillOfMaterialController::class, 'index'])->name('bills-of-material.index');
+        Route::post('bills-of-material', [BillOfMaterialController::class, 'store'])->name('bills-of-material.store');
+        Route::put('bills-of-material/{billOfMaterial}', [BillOfMaterialController::class, 'update'])->name('bills-of-material.update');
+        Route::post('bills-of-material/{billOfMaterial}/activate', [BillOfMaterialController::class, 'activate'])->name('bills-of-material.activate');
+        Route::post('bills-of-material/{billOfMaterial}/deactivate', [BillOfMaterialController::class, 'deactivate'])->name('bills-of-material.deactivate');
+        Route::delete('bills-of-material/{billOfMaterial}', [BillOfMaterialController::class, 'destroy'])->name('bills-of-material.destroy');
+    });
 
     // Manufacturing phase 1: the production run (C-MFG). One permission for
     // the whole document - D-MFG-4's one-step confirm by the authorised user.

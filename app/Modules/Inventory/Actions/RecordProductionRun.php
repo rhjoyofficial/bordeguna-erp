@@ -9,11 +9,13 @@ use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Enums\ProductionRunStatus;
+use App\Modules\Inventory\Models\BillOfMaterial;
 use App\Modules\Inventory\Models\InventorySetting;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\BomSuggestion;
 use App\Modules\Inventory\Support\EffectiveDate;
 use App\Modules\Inventory\Support\StockValue;
 use Illuminate\Support\Carbon;
@@ -55,6 +57,12 @@ class RecordProductionRun
      * Records the run as a draft. Nothing moves until confirm().
      *
      * @param  array<int, array{product: Product, quantity: string, waste?: string}>  $lines
+     * @param  BillOfMaterial|null  $billOfMaterial  C-BOM-2, provenance only: the
+     *                                               recipe this run was drafted
+     *                                               from. It is COPIED, never
+     *                                               read back - editing it later
+     *                                               must not change what this run
+     *                                               says it consumed.
      *
      * @throws ValidationException
      */
@@ -69,6 +77,7 @@ class RecordProductionRun
         ?string $outputMrp = null,
         bool $expenseWaste = false,
         ?string $note = null,
+        ?BillOfMaterial $billOfMaterial = null,
     ): ProductionRun {
         $date = EffectiveDate::resolve($occurredAt);
 
@@ -88,6 +97,14 @@ class RecordProductionRun
         if ($this->scaled($outputQuantity) <= 0) {
             throw ValidationException::withMessages([
                 'output_quantity' => 'The output quantity must be greater than zero.',
+            ]);
+        }
+
+        // ⚠ A recipe for a different product would write a standard quantity
+        // that no variance means anything against. Refused rather than ignored.
+        if ($billOfMaterial !== null && $billOfMaterial->output_product_id !== $outputProduct->id) {
+            throw ValidationException::withMessages([
+                'bill_of_material_id' => 'That recipe makes a different product.',
             ]);
         }
 
@@ -148,7 +165,13 @@ class RecordProductionRun
             }
         }
 
-        return DB::transaction(function () use ($warehouse, $outputProduct, $outputQuantity, $lines, $createdBy, $date, $outputExpiryDate, $outputMrp, $expenseWaste, $note) {
+        // C-BOM-3. What the recipe SUGGESTED for this output quantity, worked
+        // out here so the suggestion stored on the run can never disagree with
+        // the recipe it came from - the screen's pre-fill is a convenience, not
+        // the record.
+        $standards = $this->standardQuantities($billOfMaterial, $outputQuantity);
+
+        return DB::transaction(function () use ($warehouse, $outputProduct, $outputQuantity, $lines, $createdBy, $date, $outputExpiryDate, $outputMrp, $expenseWaste, $note, $billOfMaterial, $standards) {
             $run = ProductionRun::create([
                 'business_id' => $warehouse->business_id,
                 'warehouse_id' => $warehouse->id,
@@ -156,6 +179,10 @@ class RecordProductionRun
                 'status' => ProductionRunStatus::Draft,
                 'output_product_id' => $outputProduct->id,
                 'output_quantity' => $outputQuantity,
+                // C-BOM-2. Provenance. The version is denormalised so the run
+                // stays readable in an export, without a join.
+                'bill_of_material_id' => $billOfMaterial?->id,
+                'bill_of_material_version' => $billOfMaterial?->version,
                 'output_expiry_date' => $outputExpiryDate,
                 'output_mrp' => $outputMrp,
                 'expense_waste' => $expenseWaste,
@@ -169,12 +196,41 @@ class RecordProductionRun
                     'business_id' => $run->business_id,
                     'product_id' => $line['product']->id,
                     'quantity_consumed' => $line['quantity'],
+                    // ⚠ NULL where the recipe never mentioned this component,
+                    // which is a different fact from "suggested zero". A line
+                    // the operator added by hand is the interesting one.
+                    'standard_quantity' => $standards[$line['product']->id] ?? null,
                     'waste_quantity' => $line['waste'] ?? '0',
                 ]);
             }
 
             return $run->fresh(['lines.product', 'warehouse', 'outputProduct']);
         });
+    }
+
+    /**
+     * component product id → the quantity the recipe suggests for this run.
+     *
+     * @return array<int, string>
+     */
+    private function standardQuantities(?BillOfMaterial $billOfMaterial, string $outputQuantity): array
+    {
+        if ($billOfMaterial === null) {
+            return [];
+        }
+
+        $standards = [];
+
+        foreach ($billOfMaterial->lines as $line) {
+            $standards[$line->component_product_id] = BomSuggestion::forOutput(
+                quantityPerOutput: (string) $line->quantity_per_output,
+                outputQuantity: $outputQuantity,
+                recipeOutputQuantity: (string) $billOfMaterial->output_quantity,
+                wastagePercent: (string) $line->wastage_percent,
+            );
+        }
+
+        return $standards;
     }
 
     /**

@@ -13,6 +13,7 @@ import {
     CalendarDays,
     CalendarRange,
     CheckSquare,
+    ClipboardCheck,
     ClipboardList,
     Coins,
     Contact,
@@ -42,14 +43,13 @@ import {
     Tags,
     TrendingUp,
     Truck,
-    Upload,
     Undo2,
+    Upload,
     UserCircle,
     UserPlus,
     Users,
     Wallet,
     Warehouse,
-    ClipboardCheck,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -69,6 +69,7 @@ export function AppSidebar() {
         canManagePrices,
         canRecordOpeningStock,
         canImportCatalogue,
+        canManageBom,
         canImportPrices,
         canViewCrm,
         canManageCrmSettings,
@@ -104,15 +105,16 @@ export function AppSidebar() {
                 // ⚠⚠ The cutover's one irreversible document, and it had no
                 // link at all until 19 Aug. Gated, because the route is:
                 // opening stock sets the FIFO layers behind every margin.
-                ...(canRecordOpeningStock
-                    ? [{ title: 'Opening stock', url: '/inventory/opening-stock', icon: ClipboardCheck }]
-                    : []),
+                ...(canRecordOpeningStock ? [{ title: 'Opening stock', url: '/inventory/opening-stock', icon: ClipboardCheck }] : []),
                 // C-IMP-7. The whole point of the import screen is that Joy
                 // stops sending files to be loaded for him, so it has to be
                 // findable without being told where it is.
-                ...(canImportCatalogue
-                    ? [{ title: 'Import products', url: '/inventory/products/import', icon: Upload }]
-                    : []),
+                ...(canImportCatalogue ? [{ title: 'Import products', url: '/inventory/products/import', icon: Upload }] : []),
+                // C-BOM-9. Route, screen and this line shipped in one commit.
+                // The recipe screen posts nothing - it only decides what a run
+                // suggests - but a template nobody can find saves nobody any
+                // typing.
+                ...(canManageBom ? [{ title: 'Recipes (BOM)', url: '/inventory/bills-of-material', icon: ListTree }] : []),
                 { title: 'Warehouses', url: '/inventory/warehouses', icon: Warehouse },
                 { title: 'Categories', url: '/inventory/categories', icon: Tags },
                 { title: 'Units of measure', url: '/inventory/units', icon: Ruler },
@@ -156,9 +158,7 @@ export function AppSidebar() {
                           ...(canViewSales || canManagePrices ? [{ title: 'Selling prices', url: '/sales/prices', icon: BadgeDollarSign }] : []),
                           // C-IMP-7. Reachable, or it is the fifth screen built
                           // and never found.
-                          ...(canImportPrices
-                              ? [{ title: 'Import prices', url: '/sales/prices/import', icon: Upload }]
-                              : []),
+                          ...(canImportPrices ? [{ title: 'Import prices', url: '/sales/prices/import', icon: Upload }] : []),
                           ...(canViewSales ? [{ title: 'Invoices', url: '/sales/invoices', icon: FileText }] : []),
                           ...(canViewSales ? [{ title: 'Deliveries', url: '/sales/deliveries', icon: PackageCheck }] : []),
                           // Goods coming back - shipped WITH its screens in one

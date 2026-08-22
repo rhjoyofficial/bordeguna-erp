@@ -8,6 +8,7 @@ use App\Modules\Inventory\Actions\RecordProductionRun;
 use App\Modules\Inventory\Actions\ReverseProductionRun;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
+use App\Modules\Inventory\Models\BillOfMaterial;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
 use App\Modules\Inventory\Models\StockBatch;
@@ -90,6 +91,33 @@ class ProductionRunController extends Controller
                     'unit' => $product->unitOfMeasure?->abbreviation,
                 ]),
             'stockByProduct' => $stock,
+            // C-BOM-3. Suggested, then editable. The form pre-fills the
+            // consumption lines from the active recipe for whichever output
+            // product is chosen, and every line stays editable, removable and
+            // joinable by lines the recipe never mentioned.
+            //
+            // ⚠ The raw recipe is sent, not a pre-scaled one: the operator
+            // changes the output quantity after choosing the product, and a
+            // suggestion computed for a quantity nobody has typed yet is a
+            // suggestion for the wrong run. The RUN's stored standard is
+            // recomputed server-side either way (C-BOM-2), so this is a
+            // convenience and never the record.
+            'bomsByOutputProduct' => BillOfMaterial::query()
+                ->where('is_active', true)
+                ->with('lines')
+                ->get()
+                ->keyBy('output_product_id')
+                ->map(fn (BillOfMaterial $bom) => [
+                    'id' => $bom->id,
+                    'version' => $bom->version,
+                    'name' => $bom->name,
+                    'output_quantity' => $bom->output_quantity,
+                    'lines' => $bom->lines->map(fn ($line) => [
+                        'product_id' => $line->component_product_id,
+                        'quantity_per_output' => $line->quantity_per_output,
+                        'wastage_percent' => $line->wastage_percent,
+                    ])->all(),
+                ]),
         ]);
     }
 
@@ -111,6 +139,9 @@ class ProductionRunController extends Controller
             'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
             'output_product_id' => ['required', 'integer', 'exists:products,id'],
             'output_quantity' => ['required', 'numeric', 'gt:0'],
+            // C-BOM-2. Provenance. The run does not read the recipe back; the
+            // action copies the suggestion onto each line at this moment.
+            'bill_of_material_id' => ['nullable', 'integer', 'exists:bills_of_material,id'],
             'output_expiry_date' => ['nullable', 'date'],
             'output_mrp' => ['nullable', 'numeric', 'min:0'],
             'expense_waste' => ['boolean'],
@@ -142,6 +173,9 @@ class ProductionRunController extends Controller
             outputMrp: isset($data['output_mrp']) ? (string) $data['output_mrp'] : null,
             expenseWaste: (bool) ($data['expense_waste'] ?? false),
             note: $data['note'] ?? null,
+            billOfMaterial: isset($data['bill_of_material_id'])
+                ? BillOfMaterial::with('lines')->find($data['bill_of_material_id'])
+                : null,
         );
 
         // D-MFG-4: one-step confirm by the authorised user, straight from the
@@ -173,6 +207,7 @@ class ProductionRunController extends Controller
     {
         $run->load([
             'lines.product.unitOfMeasure',
+            'billOfMaterial:id,version,name',
             'warehouse:id,name',
             'outputProduct.unitOfMeasure',
             'outputBatch',
@@ -195,6 +230,11 @@ class ProductionRunController extends Controller
                 'output_sku' => $run->outputProduct?->sku,
                 'output_unit' => $run->outputProduct?->unitOfMeasure?->abbreviation,
                 'output_quantity' => $run->output_quantity,
+                'bill_of_material' => $run->billOfMaterial === null ? null : [
+                    'id' => $run->billOfMaterial->id,
+                    'version' => $run->bill_of_material_version ?? $run->billOfMaterial->version,
+                    'name' => $run->billOfMaterial->name,
+                ],
                 'output_expiry_date' => $run->output_expiry_date?->toDateString(),
                 'output_mrp' => $run->output_mrp,
                 'expense_waste' => $run->expense_waste,
@@ -222,6 +262,10 @@ class ProductionRunController extends Controller
                     'sku' => $line->product?->sku,
                     'unit' => $line->product?->unitOfMeasure?->abbreviation,
                     'quantity_consumed' => $line->quantity_consumed,
+                    // C-BOM-3. The whole point of having a standard: where the
+                    // operator departed from it, and by how much. Null means
+                    // the recipe never mentioned this component.
+                    'standard_quantity' => $line->standard_quantity,
                     'waste_quantity' => $line->waste_quantity,
                     'consumed_value' => $line->consumed_value,
                     'waste_value' => $line->waste_value,

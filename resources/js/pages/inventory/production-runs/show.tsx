@@ -11,6 +11,7 @@ interface LineRow {
     sku: string | null;
     unit: string | null;
     quantity_consumed: string;
+    standard_quantity: string | null;
     waste_quantity: string;
     consumed_value: string | null;
     waste_value: string | null;
@@ -47,6 +48,7 @@ interface Run {
     output_sku: string | null;
     output_unit: string | null;
     output_quantity: string;
+    bill_of_material: { id: number; version: number; name: string | null } | null;
     output_expiry_date: string | null;
     output_mrp: string | null;
     expense_waste: boolean;
@@ -117,7 +119,7 @@ export default function ProductionRunShow({
                             </Badge>
                             {run.yield_check?.flagged && <Badge variant="destructive">yield deviation</Badge>}
                         </h1>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {run.warehouse} · {run.occurred_at} · entered by {run.created_by}
                             {run.confirmed_by && ` · confirmed by ${run.confirmed_by}`}
                             {run.reversed_by && ` · reversed by ${run.reversed_by} at ${run.reversed_at}`}
@@ -154,29 +156,29 @@ export default function ProductionRunShow({
 
                 <div className="grid gap-4 md:grid-cols-4">
                     <div className="rounded-lg border p-4">
-                        <p className="text-sm text-muted-foreground">Output</p>
+                        <p className="text-muted-foreground text-sm">Output</p>
                         <p className="font-medium">
                             {run.output_quantity} {run.output_unit} · {run.output_product}
                         </p>
-                        <p className="text-xs text-muted-foreground">{run.output_sku}</p>
+                        <p className="text-muted-foreground text-xs">{run.output_sku}</p>
                     </div>
                     <div className="rounded-lg border p-4">
-                        <p className="text-sm text-muted-foreground">Consumed value (FIFO)</p>
+                        <p className="text-muted-foreground text-sm">Consumed value (FIFO)</p>
                         <p className="font-medium tabular-nums">{money(run.consumed_value)}</p>
                     </div>
                     <div className="rounded-lg border p-4">
-                        <p className="text-sm text-muted-foreground">Waste value · share of consumed</p>
+                        <p className="text-muted-foreground text-sm">Waste value · share of consumed</p>
                         <p className="font-medium tabular-nums">
                             {money(run.waste_value)} · {wastePercentByValue}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-muted-foreground text-xs">
                             {run.expense_waste ? 'Expensed to the loss account' : 'Absorbed into the output cost'}
                         </p>
                     </div>
                     <div className="rounded-lg border p-4">
-                        <p className="text-sm text-muted-foreground">Output batch cost</p>
+                        <p className="text-muted-foreground text-sm">Output batch cost</p>
                         <p className="font-medium tabular-nums">{run.output_batch ? money(run.output_batch.unit_cost) : '-'}</p>
-                        <p className="text-xs text-muted-foreground">per {run.output_unit ?? 'unit'}</p>
+                        <p className="text-muted-foreground text-xs">per {run.output_unit ?? 'unit'}</p>
                     </div>
                 </div>
 
@@ -207,10 +209,10 @@ export default function ProductionRunShow({
                     <div className={`rounded-lg border p-4 ${run.yield_check.flagged ? 'border-destructive/50 bg-destructive/5' : ''}`}>
                         <h2 className="font-medium">Yield check</h2>
                         {run.yield_check.checked ? (
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                Expected content {run.yield_check.expected_content} {run.yield_check.content_unit} · consumed net of
-                                waste {run.yield_check.net_consumed} {run.yield_check.content_unit} · deviation{' '}
-                                <span className={run.yield_check.flagged ? 'font-medium text-destructive' : ''}>
+                            <p className="text-muted-foreground mt-1 text-sm">
+                                Expected content {run.yield_check.expected_content} {run.yield_check.content_unit} · consumed net of waste{' '}
+                                {run.yield_check.net_consumed} {run.yield_check.content_unit} · deviation{' '}
+                                <span className={run.yield_check.flagged ? 'text-destructive font-medium' : ''}>
                                     {run.yield_check.deviation_percent}%
                                 </span>{' '}
                                 against a tolerance of {run.yield_check.tolerance_percent}%.{' '}
@@ -219,8 +221,9 @@ export default function ProductionRunShow({
                                     : 'Within tolerance.'}
                             </p>
                         ) : (
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                Not checked: {run.yield_check.reason === 'no_declared_content'
+                            <p className="text-muted-foreground mt-1 text-sm">
+                                Not checked:{' '}
+                                {run.yield_check.reason === 'no_declared_content'
                                     ? 'the output product declares no net content.'
                                     : 'no input line is stocked in the declared content unit.'}
                             </p>
@@ -229,13 +232,34 @@ export default function ProductionRunShow({
                 )}
 
                 <div className="rounded-lg border">
-                    <h2 className="border-b p-3 font-medium">Inputs consumed</h2>
+                    <h2 className="border-b p-3 font-medium">
+                        Inputs consumed
+                        {run.bill_of_material && (
+                            <span className="text-muted-foreground ml-2 text-sm font-normal">
+                                {/*
+                                    ⚠ C-BOM-2. Provenance. The recipe was COPIED at
+                                    the moment this run was drafted; it may well
+                                    have changed since, and this run still says what
+                                    it consumed.
+                                */}
+                                built from recipe v{run.bill_of_material.version}
+                                {run.bill_of_material.name ? ` (${run.bill_of_material.name})` : ''}, as it stood that day
+                            </span>
+                        )}
+                    </h2>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead className="bg-muted/50 text-left">
                                 <tr>
                                     <th className="p-3">Product</th>
                                     <th className="p-3 text-right">Consumed</th>
+                                    {/*
+                                        C-BOM-3. The whole point of having a
+                                        standard: where the operator departed
+                                        from it, and by how much.
+                                    */}
+                                    <th className="p-3 text-right">Recipe said</th>
+                                    <th className="p-3 text-right">Variance</th>
                                     <th className="p-3 text-right">Waste</th>
                                     <th className="p-3 text-right">Waste %</th>
                                     <th className="p-3 text-right">Consumed value</th>
@@ -246,10 +270,36 @@ export default function ProductionRunShow({
                                 {run.lines.map((line) => (
                                     <tr key={line.id} className="border-t">
                                         <td className="p-3">
-                                            {line.product} <span className="text-xs text-muted-foreground">{line.sku}</span>
+                                            {line.product} <span className="text-muted-foreground text-xs">{line.sku}</span>
                                         </td>
                                         <td className="p-3 text-right tabular-nums">
                                             {line.quantity_consumed} {line.unit}
+                                        </td>
+                                        <td className="text-muted-foreground p-3 text-right tabular-nums">
+                                            {line.standard_quantity === null ? '—' : `${line.standard_quantity} ${line.unit ?? ''}`}
+                                        </td>
+                                        <td className="p-3 text-right tabular-nums">
+                                            {(() => {
+                                                if (line.standard_quantity === null) {
+                                                    // Not "zero variance": the recipe never
+                                                    // mentioned this component, and a line
+                                                    // added by hand is the interesting one.
+                                                    return <span className="text-muted-foreground text-xs">added by hand</span>;
+                                                }
+
+                                                const variance = Number(line.quantity_consumed) - Number(line.standard_quantity);
+
+                                                if (Math.abs(variance) < 0.00005) {
+                                                    return <span className="text-muted-foreground">0</span>;
+                                                }
+
+                                                return (
+                                                    <span className={variance > 0 ? 'text-amber-600' : ''}>
+                                                        {variance > 0 ? '+' : ''}
+                                                        {Math.round(variance * 10000) / 10000} {line.unit}
+                                                    </span>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="p-3 text-right tabular-nums">
                                             {line.waste_quantity} {line.unit}
@@ -287,7 +337,7 @@ export default function ProductionRunShow({
                                             <td className="p-3 text-right tabular-nums">{movement.quantity}</td>
                                             <td className="p-3 text-right tabular-nums">{money(movement.unit_cost)}</td>
                                             <td className="p-3">{movement.batch_number ?? '-'}</td>
-                                            <td className="p-3 text-muted-foreground">
+                                            <td className="text-muted-foreground p-3">
                                                 {movement.reverses_movement_id ? `#${movement.reverses_movement_id}` : '-'}
                                             </td>
                                         </tr>
@@ -301,12 +351,11 @@ export default function ProductionRunShow({
                 <div className="rounded-lg border p-4 text-sm">
                     <h2 className="font-medium">Accounting</h2>
                     {journal ? (
-                        <p className="mt-1 text-muted-foreground">
-                            Posted journal <span className="font-medium">{journal.journal_number}</span>, in Accounting →
-                            Journals.
+                        <p className="text-muted-foreground mt-1">
+                            Posted journal <span className="font-medium">{journal.journal_number}</span>, in Accounting → Journals.
                         </p>
                     ) : (
-                        <p className="mt-1 text-muted-foreground">
+                        <p className="text-muted-foreground mt-1">
                             {run.status === 'draft'
                                 ? 'Nothing posts until the run is confirmed.'
                                 : 'No journal, correctly. A fully absorbed run moves value from inputs into the output batch without changing any account balance.'}

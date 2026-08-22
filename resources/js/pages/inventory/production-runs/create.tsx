@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
 const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
 
@@ -24,6 +24,39 @@ interface ProductOption {
     unit: string | null;
 }
 
+interface Bom {
+    id: number;
+    version: number;
+    name: string | null;
+    output_quantity: string;
+    lines: { product_id: number; quantity_per_output: string; wastage_percent: string }[];
+}
+
+/**
+ * ⚠⚠ C-BOM-3. A SUGGESTION, NEVER A DECISION. Everything computed here lands in
+ * an editable box; the run records what the operator says was actually
+ * consumed, and the server recomputes the STANDARD it is measured against from
+ * the recipe itself (C-BOM-2). So this arithmetic saves typing and is never the
+ * record.
+ *
+ * ⚠ C-BOM-4. No unit conversion. The number that comes out is in the
+ * component's own stock unit, because that is the unit the recipe was written
+ * in.
+ */
+const suggestQuantity = (line: Bom['lines'][number], bom: Bom, outputQuantity: number): string => {
+    const recipeOutput = Number(bom.output_quantity) || 0;
+
+    if (recipeOutput <= 0) {
+        return '';
+    }
+
+    const perUnit = Number(line.quantity_per_output) / recipeOutput;
+    const withWastage = perUnit * outputQuantity * (1 + Number(line.wastage_percent) / 100);
+
+    // Four places, the scale a quantity column holds. Mirrors BomSuggestion.
+    return String(Math.round((withWastage + Number.EPSILON) * 10000) / 10000);
+};
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Inventory', href: '/inventory' },
     { title: 'Production', href: '/inventory/production-runs' },
@@ -36,15 +69,18 @@ export default function ProductionRunCreate({
     warehouses,
     products,
     stockByProduct,
+    bomsByOutputProduct,
 }: {
     warehouses: { id: number; name: string; code: string }[];
     products: ProductOption[];
     stockByProduct: Record<string, Record<string, string>>;
+    bomsByOutputProduct: Record<string, Bom>;
 }) {
     const { data, setData, post, errors, processing, transform } = useForm({
         warehouse_id: String(warehouses[0]?.id ?? ''),
         output_product_id: '',
         output_quantity: '',
+        bill_of_material_id: '',
         output_expiry_date: '',
         output_mrp: '',
         occurred_at: new Date().toISOString().slice(0, 10),
@@ -56,6 +92,57 @@ export default function ProductionRunCreate({
 
     const productById = new Map(products.map((p) => [String(p.id), p]));
     const available = (productId: string) => stockByProduct[productId]?.[data.warehouse_id] ?? '0';
+
+    const bom: Bom | undefined = bomsByOutputProduct[data.output_product_id];
+
+    // What the recipe last wrote into the table. Used to tell "the operator has
+    // not touched these" from "the operator has edited them", so re-scaling on
+    // a changed output quantity never silently discards typed numbers.
+    const lastSuggested = useRef<string | null>(null);
+    const [recipeEdited, setRecipeEdited] = useState(false);
+
+    const recipeLines = (forBom: Bom, quantity: number): Line[] =>
+        forBom.lines.map((line) => ({
+            product_id: String(line.product_id),
+            quantity: suggestQuantity(line, forBom, quantity),
+            waste: '',
+        }));
+
+    const applyRecipe = (forBom: Bom, quantity: number) => {
+        const lines = recipeLines(forBom, quantity);
+        lastSuggested.current = JSON.stringify(lines);
+        setRecipeEdited(false);
+        setData((current) => ({ ...current, bill_of_material_id: String(forBom.id), lines }));
+    };
+
+    // C-BOM-3. Pre-fill on choosing the output, and re-scale when the output
+    // quantity changes - but ONLY while the table still holds exactly what the
+    // recipe last put there.
+    useEffect(() => {
+        if (!bom) {
+            if (data.bill_of_material_id !== '') {
+                setData('bill_of_material_id', '');
+            }
+
+            return;
+        }
+
+        const quantity = Number(data.output_quantity);
+
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            return;
+        }
+
+        const blank = data.lines.every((line) => line.product_id === '' && line.quantity === '');
+        const untouched = lastSuggested.current !== null && JSON.stringify(data.lines) === lastSuggested.current;
+
+        if (blank || untouched) {
+            applyRecipe(bom, quantity);
+        } else {
+            setRecipeEdited(true);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.output_product_id, data.output_quantity]);
 
     const setLine = (index: number, patch: Partial<Line>) => {
         const lines = [...data.lines];
@@ -70,6 +157,7 @@ export default function ProductionRunCreate({
             output_expiry_date: form.output_expiry_date || null,
             output_mrp: form.output_mrp || null,
             note: form.note || null,
+            bill_of_material_id: form.bill_of_material_id || null,
             lines: form.lines.map((line) => ({ ...line, waste: line.waste || '0' })),
         }));
         post(route('inventory.production-runs.store'));
@@ -81,12 +169,11 @@ export default function ProductionRunCreate({
             <div className="flex flex-col gap-6 p-4">
                 <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
                     <p className="font-medium">Record what physically happened, after it happened.</p>
-                    <p className="mt-1 text-muted-foreground">
-                        Enter the quantities actually consumed and actually produced, each in its own unit; the system
-                        never converts between units. The output batch will cost exactly what the run consumed (FIFO),
-                        divided by the output quantity. Waste is recorded for visibility and absorbed into the cost unless
-                        you explicitly expense it. One run produces <span className="font-medium">one</span> output:
-                        filling two pack sizes from one drum is two runs.
+                    <p className="text-muted-foreground mt-1">
+                        Enter the quantities actually consumed and actually produced, each in its own unit; the system never converts between units.
+                        The output batch will cost exactly what the run consumed (FIFO), divided by the output quantity. Waste is recorded for
+                        visibility and absorbed into the cost unless you explicitly expense it. One run produces{' '}
+                        <span className="font-medium">one</span> output: filling two pack sizes from one drum is two runs.
                     </p>
                 </div>
 
@@ -106,19 +193,14 @@ export default function ProductionRunCreate({
                                     </option>
                                 ))}
                             </select>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-muted-foreground text-xs">
                                 Inputs are consumed here and the output lands here. Move packs afterwards with a transfer.
                             </p>
                             <InputError message={errors.warehouse_id} />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="occurred_at">Date of the work</Label>
-                            <Input
-                                id="occurred_at"
-                                type="date"
-                                value={data.occurred_at}
-                                onChange={(e) => setData('occurred_at', e.target.value)}
-                            />
+                            <Input id="occurred_at" type="date" value={data.occurred_at} onChange={(e) => setData('occurred_at', e.target.value)} />
                             <InputError message={errors.occurred_at} />
                         </div>
                         <div className="grid gap-2">
@@ -127,16 +209,41 @@ export default function ProductionRunCreate({
                         </div>
                     </div>
 
+                    {bom && (
+                        <div className="rounded-lg border p-3 text-sm">
+                            <p className="font-medium">
+                                Recipe v{bom.version}
+                                {bom.name ? ` — ${bom.name}` : ''} is set for this product.
+                            </p>
+                            <p className="text-muted-foreground mt-1">
+                                {recipeEdited
+                                    ? 'The lines below have been edited, so they are left alone. The run records what you say was consumed; the recipe only saves typing.'
+                                    : 'The lines below are filled in from it and scale with the output quantity. Change, remove or add any of them — the run records what you say was consumed.'}
+                            </p>
+                            {Number(data.output_quantity) > 0 && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-2"
+                                    onClick={() => applyRecipe(bom, Number(data.output_quantity))}
+                                >
+                                    {recipeEdited ? 'Replace my lines with the recipe' : 'Re-apply the recipe'}
+                                </Button>
+                            )}
+                        </div>
+                    )}
+
                     <h2 className="mt-2 font-medium">Inputs consumed</h2>
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full text-sm">
                             <thead className="bg-muted/50 text-left">
                                 <tr>
                                     <th className="p-3">Product</th>
-                                    <th className="p-3 w-32">Available</th>
-                                    <th className="p-3 w-36">Consumed (incl. waste)</th>
-                                    <th className="p-3 w-32">Of which waste</th>
-                                    <th className="p-3 w-16"></th>
+                                    <th className="w-32 p-3">Available</th>
+                                    <th className="w-36 p-3">Consumed (incl. waste)</th>
+                                    <th className="w-32 p-3">Of which waste</th>
+                                    <th className="w-16 p-3"></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -160,7 +267,7 @@ export default function ProductionRunCreate({
                                                 </select>
                                                 <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
                                             </td>
-                                            <td className="p-3 tabular-nums text-muted-foreground">
+                                            <td className="text-muted-foreground p-3 tabular-nums">
                                                 {line.product_id ? `${available(line.product_id)} ${product?.unit ?? ''}` : '-'}
                                             </td>
                                             <td className="p-3">
@@ -168,7 +275,11 @@ export default function ProductionRunCreate({
                                                 <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">
-                                                <Input value={line.waste} onChange={(e) => setLine(index, { waste: e.target.value })} placeholder="0" />
+                                                <Input
+                                                    value={line.waste}
+                                                    onChange={(e) => setLine(index, { waste: e.target.value })}
+                                                    placeholder="0"
+                                                />
                                                 <InputError message={errors[`lines.${index}.waste` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">
@@ -177,7 +288,12 @@ export default function ProductionRunCreate({
                                                         type="button"
                                                         variant="ghost"
                                                         size="sm"
-                                                        onClick={() => setData('lines', data.lines.filter((_, i) => i !== index))}
+                                                        onClick={() =>
+                                                            setData(
+                                                                'lines',
+                                                                data.lines.filter((_, i) => i !== index),
+                                                            )
+                                                        }
                                                     >
                                                         Remove
                                                     </Button>
@@ -218,11 +334,7 @@ export default function ProductionRunCreate({
                             <Label htmlFor="output_quantity">
                                 Quantity{data.output_product_id ? ` (${productById.get(data.output_product_id)?.unit ?? ''})` : ''}
                             </Label>
-                            <Input
-                                id="output_quantity"
-                                value={data.output_quantity}
-                                onChange={(e) => setData('output_quantity', e.target.value)}
-                            />
+                            <Input id="output_quantity" value={data.output_quantity} onChange={(e) => setData('output_quantity', e.target.value)} />
                             <InputError message={errors.output_quantity} />
                         </div>
                         <div className="grid gap-2">
@@ -243,7 +355,7 @@ export default function ProductionRunCreate({
                                 onChange={(e) => setData('output_mrp', e.target.value)}
                                 placeholder="optional"
                             />
-                            <p className="text-xs text-muted-foreground">Never used as the selling price.</p>
+                            <p className="text-muted-foreground text-xs">Never used as the selling price.</p>
                             <InputError message={errors.output_mrp} />
                         </div>
                     </div>
@@ -255,17 +367,12 @@ export default function ProductionRunCreate({
                             onCheckedChange={(checked) => setData('expense_waste', checked === true)}
                         />
                         <Label htmlFor="expense_waste" className="font-normal">
-                            Expense the waste to the loss account (abnormal events only; normal waste stays in the pack
-                            cost)
+                            Expense the waste to the loss account (abnormal events only; normal waste stays in the pack cost)
                         </Label>
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <Checkbox
-                            id="confirm"
-                            checked={data.confirm}
-                            onCheckedChange={(checked) => setData('confirm', checked === true)}
-                        />
+                        <Checkbox id="confirm" checked={data.confirm} onCheckedChange={(checked) => setData('confirm', checked === true)} />
                         <Label htmlFor="confirm" className="font-normal">
                             Confirm immediately (uncheck to save as a draft)
                         </Label>

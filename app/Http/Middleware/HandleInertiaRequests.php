@@ -99,6 +99,9 @@ class HandleInertiaRequests extends Middleware
             // this project has shipped four of those.
             'canImportCatalogue' => fn () => (bool) $request->user()?->can('inventory.catalogue.import'),
             'canImportPrices' => fn () => (bool) $request->user()?->can('sales.prices.import'),
+            // C-BOM-9. Same rule again, and this file is now the register of
+            // how many times it has been needed.
+            'canManageBom' => fn () => (bool) $request->user()?->can('inventory.bom.manage'),
             'canViewSales' => fn () => (bool) $request->user()?->can('sales.reports.view'),
             'canSell' => fn () => (bool) $request->user()?->can('sales.sell'),
             'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),

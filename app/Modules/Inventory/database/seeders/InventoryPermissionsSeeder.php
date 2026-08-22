@@ -28,6 +28,11 @@ class InventoryPermissionsSeeder extends Seeder
             // C-IMP-4. Replacing three hundred products at once is not the same
             // power as editing one row, so it is not the same permission.
             'inventory.catalogue.import',
+            // C-BOM-9. A recipe decides what every future production run
+            // suggests consuming, which is master data about how a product is
+            // MADE - a different power from adjusting stock or editing the
+            // catalogue.
+            'inventory.bom.manage',
         ],
         'Manager' => [
             'inventory.catalog.manage',
@@ -38,6 +43,7 @@ class InventoryPermissionsSeeder extends Seeder
             'inventory.reports.view',
             'inventory.production.manage',
             'inventory.catalogue.import',
+            'inventory.bom.manage',
         ],
         // ⚠ Staff deliberately does NOT get the import. Staff records stock and
         // raises requests; rewriting the catalogue is a manager's act.

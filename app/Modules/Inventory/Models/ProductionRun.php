@@ -34,6 +34,8 @@ class ProductionRun extends Model
         'status',
         'output_product_id',
         'output_quantity',
+        'bill_of_material_id',
+        'bill_of_material_version',
         'output_batch_id',
         'output_expiry_date',
         'output_mrp',
@@ -55,6 +57,7 @@ class ProductionRun extends Model
         return [
             'status' => ProductionRunStatus::class,
             'output_quantity' => 'decimal:4',
+            'bill_of_material_version' => 'integer',
             'output_mrp' => 'decimal:4',
             'expense_waste' => 'boolean',
             'consumed_value' => 'decimal:4',
@@ -73,6 +76,15 @@ class ProductionRun extends Model
             ->logOnly(['run_number', 'status', 'warehouse_id', 'output_product_id', 'output_quantity', 'expense_waste', 'consumed_value', 'waste_value'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
+    }
+
+    /**
+     * C-BOM-2. Provenance only. Nothing recomputes a run from this - the run's
+     * own lines are what it consumed, and the recipe may have changed since.
+     */
+    public function billOfMaterial(): BelongsTo
+    {
+        return $this->belongsTo(BillOfMaterial::class);
     }
 
     public function warehouse(): BelongsTo

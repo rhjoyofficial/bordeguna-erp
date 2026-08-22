@@ -36,13 +36,7 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive'> = 
     reversed: 'destructive',
 };
 
-export default function ProductionRunsIndex({
-    runs,
-    filters,
-}: {
-    runs: Paginated<RunRow>;
-    filters: { status: string };
-}) {
+export default function ProductionRunsIndex({ runs, filters }: { runs: Paginated<RunRow>; filters: { status: string } }) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Production Runs" />
@@ -50,9 +44,9 @@ export default function ProductionRunsIndex({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h1 className="text-xl font-semibold">Production runs</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Consume inputs, produce one output batch at the consumed cost. Waste stays visible; the ledger
-                            only speaks when waste is expensed.
+                        <p className="text-muted-foreground text-sm">
+                            Consume inputs, produce one output batch at the consumed cost. Waste stays visible; the ledger only speaks when waste is
+                            expensed.
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -94,19 +88,15 @@ export default function ProductionRunsIndex({
                         <tbody>
                             {runs.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={9} className="p-6 text-center text-muted-foreground">
-                                        No production runs yet. The first one is the moment the gap between the drum and the
-                                        pack closes.
+                                    <td colSpan={9} className="text-muted-foreground p-6 text-center">
+                                        No production runs yet. The first one is the moment the gap between the drum and the pack closes.
                                     </td>
                                 </tr>
                             )}
                             {runs.data.map((run) => (
                                 <tr key={run.id} className="border-t">
                                     <td className="p-3">
-                                        <Link
-                                            href={`/inventory/production-runs/${run.id}`}
-                                            className="font-medium text-primary hover:underline"
-                                        >
+                                        <Link href={`/inventory/production-runs/${run.id}`} className="text-primary font-medium hover:underline">
                                             {run.run_number}
                                         </Link>
                                     </td>
@@ -114,7 +104,7 @@ export default function ProductionRunsIndex({
                                     <td className="p-3">{run.warehouse}</td>
                                     <td className="p-3">
                                         {run.output_product}
-                                        <span className="ml-1 text-xs text-muted-foreground">{run.output_sku}</span>
+                                        <span className="text-muted-foreground ml-1 text-xs">{run.output_sku}</span>
                                     </td>
                                     <td className="p-3 text-right tabular-nums">{run.output_quantity}</td>
                                     <td className="p-3 text-right tabular-nums">{money(run.consumed_value)}</td>
@@ -126,9 +116,7 @@ export default function ProductionRunsIndex({
                                             </Badge>
                                         )}
                                     </td>
-                                    <td className="p-3">
-                                        {run.yield_flagged ? <Badge variant="destructive">deviation</Badge> : '-'}
-                                    </td>
+                                    <td className="p-3">{run.yield_flagged ? <Badge variant="destructive">deviation</Badge> : '-'}</td>
                                     <td className="p-3">
                                         <Badge variant={STATUS_VARIANT[run.status] ?? 'secondary'}>{run.status}</Badge>
                                     </td>
