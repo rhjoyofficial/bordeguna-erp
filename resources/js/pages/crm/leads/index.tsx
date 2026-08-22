@@ -400,12 +400,12 @@ export default function LeadsIndex({
                             <ul className="mt-2 list-disc pl-5">
                                 {matches?.customers.map((c) => (
                                     <li key={`c-${c.id}`}>
-                                        <span className="font-medium">Customer:</span> {c.name} {c.code ? `(${c.code})` : ''} — {c.phone}
+                                        <span className="font-medium">Customer:</span> {c.name} {c.code ? `(${c.code})` : ''} - {c.phone}
                                     </li>
                                 ))}
                                 {matches?.leads.map((l) => (
                                     <li key={`l-${l.id}`}>
-                                        <span className="font-medium">Lead:</span> {l.name ?? '(no name)'} — {l.phone} — {l.status}
+                                        <span className="font-medium">Lead:</span> {l.name ?? '(no name)'} - {l.phone} - {l.status}
                                     </li>
                                 ))}
                             </ul>

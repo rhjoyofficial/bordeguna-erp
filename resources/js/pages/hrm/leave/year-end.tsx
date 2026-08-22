@@ -63,7 +63,7 @@ export default function YearEnd({ year, plan, totals, runs }: Props) {
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h2 className="text-lg font-medium">Leave year end — {year}</h2>
+                        <h2 className="text-lg font-medium">Leave year end - {year}</h2>
                         <p className="text-sm text-muted-foreground">
                             This is a projection. Nothing changes until you commit, and committing posts exactly what is shown here.
                         </p>
@@ -120,7 +120,7 @@ export default function YearEnd({ year, plan, totals, runs }: Props) {
 
                 {lapsing.length > 0 && (
                     <p className="text-sm text-muted-foreground">
-                        {lapsing.length} employee-balance{lapsing.length === 1 ? '' : 's'} would lose days. Tell them before you commit — they may
+                        {lapsing.length} employee-balance{lapsing.length === 1 ? '' : 's'} would lose days. Tell them before you commit - they may
                         still have time to take the leave.
                     </p>
                 )}

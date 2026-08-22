@@ -58,7 +58,7 @@ export default function Depreciation({
                     <h1 className="text-lg font-semibold">Depreciation</h1>
                     <p className="max-w-3xl text-sm text-muted-foreground">
                         One month's wear on everything the business owns, charged against that month's profit. Run it once the month
-                        has finished. Running the same month twice is harmless — each asset can only be charged once per month — but
+                        has finished. Running the same month twice is harmless - each asset can only be charged once per month - but
                         nothing here reverses a charge.
                     </p>
                 </div>

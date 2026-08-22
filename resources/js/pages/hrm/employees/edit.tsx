@@ -124,7 +124,7 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                             </select>
                             <InputError message={errors.employment_type} />
                         </div>
-                        {/* The attendance device's Enroll ID — imported punches are
+                        {/* The attendance device's Enroll ID - imported punches are
                             matched on this, so an employee without one is invisible
                             to the biometric import. */}
                         <Text field="biometric_enroll_id" label="Biometric enroll ID" />
@@ -185,7 +185,7 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                                 value={data.mfs_provider ?? ''}
                                 onChange={(e) => setData('mfs_provider', e.target.value)}
                             >
-                                <option value="">— None —</option>
+                                <option value="">- None -</option>
                                 {mfs_providers.map((provider) => (
                                     <option key={provider.value} value={provider.value}>
                                         {provider.label}
@@ -209,7 +209,7 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                                 value={data.salary_payment_method ?? ''}
                                 onChange={(e) => setData('salary_payment_method', e.target.value)}
                             >
-                                <option value="">— Not stated —</option>
+                                <option value="">- Not stated -</option>
                                 {payment_methods.map((method) => (
                                     <option key={method.value} value={method.value}>
                                         {method.label}
@@ -218,7 +218,7 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                             </select>
                             <InputError message={errors.salary_payment_method} />
                             <p className="text-xs text-muted-foreground">
-                                Payroll checks the account details this method actually needs, and disbursement groups the payslips by it — cash never
+                                Payroll checks the account details this method actually needs, and disbursement groups the payslips by it - cash never
                                 mixes with a bank transfer.
                             </p>
                         </div>

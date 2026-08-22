@@ -82,7 +82,7 @@ function LineTable({ title, lines, total }: { title: string; lines: Line[]; tota
                         {lines.map((line) => (
                             <tr key={`${line.code}-${line.source ?? ''}`} className={rowClass}>
                                 <td className="py-2">{line.label}</td>
-                                <td className="py-2 text-xs text-muted-foreground">{line.formula ?? '—'}</td>
+                                <td className="py-2 text-xs text-muted-foreground">{line.formula ?? '-'}</td>
                                 <td className="py-2 text-right whitespace-nowrap">{money(line.amount)}</td>
                             </tr>
                         ))}
@@ -102,12 +102,12 @@ function LineTable({ title, lines, total }: { title: string; lines: Line[]; tota
 export default function PayslipPage({ payslip_id, can_manage, password_hint, password_unavailable, document: doc }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Payroll', href: '/hrm/payroll' },
-        { title: `Payslip — ${doc.period.label ?? ''}`, href: `/hrm/payslips/${payslip_id}` },
+        { title: `Payslip - ${doc.period.label ?? ''}`, href: `/hrm/payslips/${payslip_id}` },
     ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Payslip — ${doc.period.label ?? ''}`} />
+            <Head title={`Payslip - ${doc.period.label ?? ''}`} />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -174,7 +174,7 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
                         ].map(([label, value]) => (
                             <div key={String(label)}>
                                 <div className="text-xs text-muted-foreground">{label}</div>
-                                <div>{value ?? '—'}</div>
+                                <div>{value ?? '-'}</div>
                             </div>
                         ))}
                     </div>
@@ -234,10 +234,10 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
                                             <td className="py-2 whitespace-nowrap">{event.date}</td>
                                             <td className="py-2">
                                                 {event.type}
-                                                {event.failure_reason && <span className="ml-1 text-destructive">— {event.failure_reason}</span>}
+                                                {event.failure_reason && <span className="ml-1 text-destructive">- {event.failure_reason}</span>}
                                             </td>
                                             <td className="py-2">{event.method}</td>
-                                            <td className="py-2">{event.reference ?? '—'}</td>
+                                            <td className="py-2">{event.reference ?? '-'}</td>
                                             <td className="py-2 text-right">{money(event.amount)}</td>
                                         </tr>
                                     ))}

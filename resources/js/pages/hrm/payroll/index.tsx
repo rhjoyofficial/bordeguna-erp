@@ -111,7 +111,7 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Payroll', href: '/hrm/payroll' 
 const money = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /**
- * A lifecycle step that needs a stated reason — reopening, cancelling, or
+ * A lifecycle step that needs a stated reason - reopening, cancelling, or
  * requesting an unlock. Each of these changes what somebody gets paid, so none
  * of them is a bare button.
  */
@@ -234,7 +234,7 @@ function LifecycleActions({ run }: { run: Run }) {
                 <ReasonDialog
                     label="Request unlock"
                     title="Request to reopen a locked payroll"
-                    description="This needs HR Head, Finance and Management approval in turn. The locked figures are never altered — an approved unlock opens a new version."
+                    description="This needs HR Head, Finance and Management approval in turn. The locked figures are never altered - an approved unlock opens a new version."
                     routeName="hrm.payroll.unlock.store"
                     runId={run.id}
                     destructive
@@ -360,7 +360,7 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
                             </span>
                         )}
                         {run.awaiting_approval && (
-                            <Badge variant="outline">Awaiting approval{run.approval_stage ? ` — ${run.approval_stage}` : ''}</Badge>
+                            <Badge variant="outline">Awaiting approval{run.approval_stage ? ` - ${run.approval_stage}` : ''}</Badge>
                         )}
                     </div>
                 )}
@@ -402,14 +402,14 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
 
                 {/*
                  * Warnings never block a calculation, so they are the one panel
-                 * that shows on a SUCCESSFUL run — and they sit immediately
+                 * that shows on a SUCCESSFUL run - and they sit immediately
                  * above the review and approval buttons on purpose. A caveat
                  * placed after the action it should inform is decoration.
                  */}
                 {run && run.validation_report && (run.validation_report.warning_count ?? 0) > 0 && (
                     <div className="rounded-xl border border-amber-500/50 bg-amber-50 p-4 dark:bg-amber-950/20">
                         <h3 className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                            {run.validation_report.warning_count} warning{run.validation_report.warning_count === 1 ? '' : 's'} — payroll still
+                            {run.validation_report.warning_count} warning{run.validation_report.warning_count === 1 ? '' : 's'} - payroll still
                             calculated
                         </h3>
                         <p className="mt-1 text-xs text-muted-foreground">
@@ -546,7 +546,7 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                    Payroll reads attendance, leave and salary as they were decided — it never recalculates them. Review, approval, disbursement and
+                    Payroll reads attendance, leave and salary as they were decided - it never recalculates them. Review, approval, disbursement and
                     locking arrive in the next slice.
                 </p>
             </div>

@@ -318,7 +318,7 @@ export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
 
                             <div className="border-sidebar-border/70 dark:border-sidebar-border border-t pt-3">
                                 <p className="mb-2 text-xs font-medium text-muted-foreground">
-                                    Working-day overrides — dates that ARE working days despite a weekly off or holiday
+                                    Working-day overrides - dates that ARE working days despite a weekly off or holiday
                                 </p>
                                 {calendar.working_day_overrides.length > 0 && (
                                     <table className="w-full min-w-[28rem] text-sm">

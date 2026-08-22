@@ -109,7 +109,7 @@ interface ShowProps {
     requestable: RequestableGroup[];
     mfs_providers: Option[];
     change_requests: ChangeRequestRow[];
-    /** ACL-02 lists the employee themselves among those who may see salary — their own only. */
+    /** ACL-02 lists the employee themselves among those who may see salary - their own only. */
     salary: Salary | null;
 }
 
@@ -134,7 +134,7 @@ function Field({ label, value }: { label: string; value: string | null }) {
     return (
         <div>
             <dt className="text-xs text-muted-foreground">{label}</dt>
-            <dd className="text-sm">{value ?? '—'}</dd>
+            <dd className="text-sm">{value ?? '-'}</dd>
         </div>
     );
 }
@@ -168,7 +168,7 @@ function RequestUpdateDialog({ group, mfsProviders }: { group: RequestableGroup;
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Request update — {group.label}</DialogTitle>
+                    <DialogTitle>Request update - {group.label}</DialogTitle>
                     <DialogDescription>
                         Your request is sent for approval; the change is applied only once approved. Nothing changes immediately.
                     </DialogDescription>
@@ -184,7 +184,7 @@ function RequestUpdateDialog({ group, mfsProviders }: { group: RequestableGroup;
                                     value={values[field.name]}
                                     onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
                                 >
-                                    <option value="">— None —</option>
+                                    <option value="">- None -</option>
                                     {mfsProviders.map((provider) => (
                                         <option key={provider.value} value={provider.value}>
                                             {provider.label}
@@ -303,7 +303,7 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                     <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                         <h3 className="mb-1 text-sm font-medium">My salary</h3>
                         <p className="mb-3 text-xs text-muted-foreground">
-                            In effect since {salary.effective_from}. These are your contractual figures — what a month actually pays also depends on
+                            In effect since {salary.effective_from}. These are your contractual figures - what a month actually pays also depends on
                             attendance, leave and any adjustments, and appears on your payslip.
                         </p>
                         <table className="w-full min-w-[28rem] text-sm">
@@ -380,7 +380,7 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                                             <span className="ml-2 text-xs text-muted-foreground">{formatBytes(document.size)}</span>
                                         </td>
                                         <td className="py-2 text-muted-foreground">
-                                            {document.expires_at ?? '—'}
+                                            {document.expires_at ?? '-'}
                                             {document.is_expired && (
                                                 <Badge variant="destructive" className="ml-2">
                                                     Expired

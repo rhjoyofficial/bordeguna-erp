@@ -116,7 +116,7 @@ function Field({ label, value }: { label: string; value: string | null }) {
     return (
         <div>
             <dt className="text-xs text-muted-foreground">{label}</dt>
-            <dd className="text-sm">{value ?? '—'}</dd>
+            <dd className="text-sm">{value ?? '-'}</dd>
         </div>
     );
 }
@@ -259,7 +259,7 @@ function TransferDialog({
                         <div className="grid gap-2">
                             <Label htmlFor="office_id">Office</Label>
                             <select id="office_id" className={selectClass} value={officeId} onChange={(e) => changeOffice(e.target.value)}>
-                                <option value="">— None —</option>
+                                <option value="">- None -</option>
                                 {offices.map((office) => (
                                     <option key={office.id} value={office.id}>
                                         {office.name}
@@ -276,7 +276,7 @@ function TransferDialog({
                                 onChange={(e) => changeDepartment(e.target.value)}
                                 disabled={officeId === ''}
                             >
-                                <option value="">— None —</option>
+                                <option value="">- None -</option>
                                 {departments.map((department) => (
                                     <option key={department.id} value={department.id}>
                                         {department.name}
@@ -287,7 +287,7 @@ function TransferDialog({
                         <div className="grid gap-2">
                             <Label htmlFor="section_id">Section</Label>
                             <select id="section_id" className={selectClass} value={sectionId} onChange={(e) => setSectionId(e.target.value)} disabled={departmentId === ''}>
-                                <option value="">— None —</option>
+                                <option value="">- None -</option>
                                 {sections.map((section) => (
                                     <option key={section.id} value={section.id}>
                                         {section.name}
@@ -298,7 +298,7 @@ function TransferDialog({
                         <div className="grid gap-2">
                             <Label htmlFor="designation_id">Designation</Label>
                             <select id="designation_id" className={selectClass} value={designationId} onChange={(e) => setDesignationId(e.target.value)}>
-                                <option value="">— None —</option>
+                                <option value="">- None -</option>
                                 {designations.map((designation) => (
                                     <option key={designation.id} value={designation.id}>
                                         {designation.name}
@@ -310,7 +310,7 @@ function TransferDialog({
                     <div className="grid gap-2">
                         <Label htmlFor="supervisor_id">Supervisor</Label>
                         <select id="supervisor_id" className={selectClass} value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)}>
-                            <option value="">— None —</option>
+                            <option value="">- None -</option>
                             {supervisors.map((supervisor) => (
                                 <option key={supervisor.id} value={supervisor.id}>
                                     {supervisor.name}
@@ -447,14 +447,14 @@ function DocumentsCard({ employeeId, documents, documentTypes }: { employeeId: n
                                     <span className="ml-2 text-xs text-muted-foreground">{formatBytes(document.size)}</span>
                                 </td>
                                 <td className="py-2 text-muted-foreground">
-                                    {document.expires_at ?? '—'}
+                                    {document.expires_at ?? '-'}
                                     {document.is_expired && (
                                         <Badge variant="destructive" className="ml-2">
                                             Expired
                                         </Badge>
                                     )}
                                 </td>
-                                <td className="py-2 text-muted-foreground">{document.uploaded_by ?? '—'}</td>
+                                <td className="py-2 text-muted-foreground">{document.uploaded_by ?? '-'}</td>
                                 <td className="py-2 text-right">
                                     <Button variant="ghost" size="sm" onClick={() => remove(document)}>
                                         Remove
@@ -585,14 +585,14 @@ export default function EmployeeShow({
                             {employee.assignments.map((assignment) => (
                                 <tr key={assignment.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                     <td className="py-2">
-                                        {assignment.office ?? '—'}
+                                        {assignment.office ?? '-'}
                                         {assignment.is_primary && <span className="ml-2 text-xs text-muted-foreground">(primary)</span>}
                                     </td>
-                                    <td className="py-2 text-muted-foreground">{assignment.department ?? '—'}</td>
-                                    <td className="py-2 text-muted-foreground">{assignment.section ?? '—'}</td>
-                                    <td className="py-2 text-muted-foreground">{assignment.designation ?? '—'}</td>
-                                    <td className="py-2 text-muted-foreground">{assignment.supervisor ?? '—'}</td>
-                                    <td className="py-2 text-muted-foreground">{assignment.effective_from ?? '—'}</td>
+                                    <td className="py-2 text-muted-foreground">{assignment.department ?? '-'}</td>
+                                    <td className="py-2 text-muted-foreground">{assignment.section ?? '-'}</td>
+                                    <td className="py-2 text-muted-foreground">{assignment.designation ?? '-'}</td>
+                                    <td className="py-2 text-muted-foreground">{assignment.supervisor ?? '-'}</td>
+                                    <td className="py-2 text-muted-foreground">{assignment.effective_from ?? '-'}</td>
                                     <td className="py-2 text-muted-foreground">{assignment.effective_to ?? 'Current'}</td>
                                 </tr>
                             ))}

@@ -20,11 +20,11 @@ export type NavGroup = {
 
 // The active item is the one whose url is the longest prefix of the current
 // url. This keeps a section-overview item (e.g. /inventory) from lighting up
-// on every child route (/inventory/products) — the more specific item wins.
+// on every child route (/inventory/products) - the more specific item wins.
 function useActiveUrl(groups: NavGroup[]): string | null {
     // Query string stripped before matching: the dashboard's chart range
     // pills navigate to /dashboard?range=1y, and "?range=1y" is not a
-    // child path — without this the active pill vanishes on any filtered
+    // child path - without this the active pill vanishes on any filtered
     // list or ranged view.
     const current = usePage().url.split('?')[0];
     const matches = groups
@@ -62,7 +62,7 @@ function NavGroupSection({ group, activeUrl }: { group: NavGroup; activeUrl: str
 
     return (
         // In icon mode the section labels/triggers are hidden, so force the
-        // items open there — otherwise a collapsed group would vanish entirely.
+        // items open there - otherwise a collapsed group would vanish entirely.
         <Collapsible open={isCollapsed ? true : open} onOpenChange={handleOpenChange} className="group/nav-section">
             <SidebarGroup className="px-2 py-0">
                 <SidebarGroupLabel asChild>

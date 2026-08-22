@@ -98,7 +98,7 @@ export default function ApprovalsIndex({ requests, counts }: ApprovalsIndexProps
                         {requests.length === 0 && (
                             <tr>
                                 <td colSpan={5} className="py-4 text-center text-muted-foreground">
-                                    Nothing pending — you're all caught up.
+                                    Nothing pending - you're all caught up.
                                 </td>
                             </tr>
                         )}

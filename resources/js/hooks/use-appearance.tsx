@@ -12,7 +12,7 @@ export type TopbarColor = 'default' | 'light' | 'dark' | 'primary';
  * Accent presets the user can toggle in Settings → Appearance or the theme
  * customizer. Each maps to a [data-accent] CSS-variable block in app.css
  * ('deep-green' is the brand default and has no block). Swatches are for the
- * picker UI only — light/dark variants live in the CSS.
+ * picker UI only - light/dark variants live in the CSS.
  */
 export const accents: { value: Accent; label: string; swatch: string }[] = [
     { value: 'deep-green', label: 'Deep Green', swatch: 'hsl(103, 72%, 26%)' },
@@ -23,7 +23,7 @@ export const accents: { value: Accent; label: string; swatch: string }[] = [
 
 /**
  * Sidebar/topbar surface presets, independent of accent and of light/dark
- * mode — each maps to a [data-sidebar-color] / [data-topbar-color] block in
+ * mode - each maps to a [data-sidebar-color] / [data-topbar-color] block in
  * app.css. 'default' has no block (the tinted-green surface, which already
  * switches with light/dark, applies untouched). 'primary' recolors the
  * surface from whatever accent is active, so its swatch below is only an
@@ -51,7 +51,7 @@ const applyTheme = (appearance: Appearance) => {
     document.documentElement.classList.toggle('dark', isDark);
 };
 
-// Shared shape for the three independent [data-*] overrides below — each
+// Shared shape for the three independent [data-*] overrides below - each
 // preset either sets or removes one attribute on <html>, 'default'/the
 // brand accent always meaning "remove it, let the base variables apply".
 function makeDatasetApplier<T extends string>(key: string, defaultValue: T) {

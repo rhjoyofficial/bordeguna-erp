@@ -104,7 +104,7 @@ function ManualPunchDialog({ employees, directions, on }: { employees: { id: num
                 <DialogHeader>
                     <DialogTitle>Record a punch manually</DialogTitle>
                     <DialogDescription>
-                        For the offline fallback — a manual register keyed in later. The punch is stored like any other and can never be edited
+                        For the offline fallback - a manual register keyed in later. The punch is stored like any other and can never be edited
                         afterwards, so the reason below is what explains it to an auditor.
                     </DialogDescription>
                 </DialogHeader>
@@ -112,7 +112,7 @@ function ManualPunchDialog({ employees, directions, on }: { employees: { id: num
                     <div className="grid gap-2">
                         <Label htmlFor="employee_id">Employee</Label>
                         <select id="employee_id" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-                            <option value="">— Select —</option>
+                            <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
                                     {e.name}
@@ -130,7 +130,7 @@ function ManualPunchDialog({ employees, directions, on }: { employees: { id: num
                         <div className="grid gap-2">
                             <Label htmlFor="direction">Direction (optional)</Label>
                             <select id="direction" className={selectClass} value={direction} onChange={(e) => setDirection(e.target.value)}>
-                                <option value="">— Unknown —</option>
+                                <option value="">- Unknown -</option>
                                 {directions.map((d) => (
                                     <option key={d.value} value={d.value}>
                                         {d.label}
@@ -255,7 +255,7 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                                                 </Badge>
                                             )}
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{punch.direction ?? '—'}</td>
+                                        <td className="py-2 text-muted-foreground">{punch.direction ?? '-'}</td>
                                         <td className="py-2 text-muted-foreground">{punch.source}</td>
                                         <td className="py-2 text-xs text-muted-foreground">
                                             {punch.device_identifier && <div>Device: {punch.device_identifier}</div>}
@@ -268,10 +268,10 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                                             )}
                                             {punch.ip_address && <div>IP: {punch.ip_address}</div>}
                                             {punch.review_reason && <div className="text-destructive">{punch.review_reason}</div>}
-                                            {!punch.device_identifier && !punch.has_location && !punch.ip_address && !punch.enroll_id && '—'}
+                                            {!punch.device_identifier && !punch.has_location && !punch.ip_address && !punch.enroll_id && '-'}
                                         </td>
                                         <td className="py-2 text-xs text-muted-foreground">
-                                            {punch.note ?? '—'}
+                                            {punch.note ?? '-'}
                                             {punch.recorded_by && <div>by {punch.recorded_by}</div>}
                                         </td>
                                     </tr>

@@ -9,15 +9,15 @@ import { Settings2 } from 'lucide-react';
 import { useState } from 'react';
 
 /**
- * The floating gear panel from the Dreams POS reference — every page under
+ * The floating gear panel from the Dreams POS reference - every page under
  * AppSidebarLayout gets one. Deliberately smaller than the reference: no
- * layout-variant thumbnails (Boxed/RTL/Horizontal/Detached — template-vendor
+ * layout-variant thumbnails (Boxed/RTL/Horizontal/Detached - template-vendor
  * breadth this ERP doesn't need), just the three independent color pickers
  * plus light/dark/system, matching Phase 1 of the plan.
  */
 export default function ThemeCustomizer() {
     const [open, setOpen] = useState(false);
-    // Bumped on reset to remount the pickers below — each owns its own
+    // Bumped on reset to remount the pickers below - each owns its own
     // useAppearance() instance and local state, so a reset that only touches
     // localStorage/the DOM (see resetThemePreferences) wouldn't otherwise be
     // reflected in their "active" swatch highlighting until next navigation.
@@ -43,7 +43,7 @@ export default function ThemeCustomizer() {
                 <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-sm">
                     <SheetHeader>
                         <SheetTitle>Theme customizer</SheetTitle>
-                        <SheetDescription>Personal to your account — saved to this browser.</SheetDescription>
+                        <SheetDescription>Personal to your account - saved to this browser.</SheetDescription>
                     </SheetHeader>
 
                     <div key={resetKey} className="mt-6 space-y-6 px-4 pb-6">

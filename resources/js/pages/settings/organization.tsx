@@ -52,8 +52,8 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Organization', href: '/settings
 
 /**
  * Optional clock-in geofence per office (ATT-05). Enforcement is opt-in, and a
- * punch outside the radius is always accepted and flagged for review — never
- * rejected — so switching this on adds review work, it does not block anyone.
+ * punch outside the radius is always accepted and flagged for review - never
+ * rejected - so switching this on adds review work, it does not block anyone.
  */
 function GeofenceRow({ office }: { office: OfficeUnit }) {
     const [latitude, setLatitude] = useState(office.geofence_latitude ?? '');
@@ -392,7 +392,7 @@ export default function Organization({ offices, designations }: OrganizationProp
                             <div>
                                 <h3 className="text-sm font-medium">Clock-in geofence</h3>
                                 <p className="text-sm text-muted-foreground">
-                                    Optional. When enforced, a self-service clock-in from outside the radius is still accepted and flagged for review —
+                                    Optional. When enforced, a self-service clock-in from outside the radius is still accepted and flagged for review -
                                     it is never rejected.
                                 </p>
                             </div>

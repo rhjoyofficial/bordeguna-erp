@@ -224,7 +224,7 @@ export default function SuppliersIndex({
                     <tbody>
                         {suppliers.data.map((supplier) => (
                             <tr key={supplier.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                <td className="py-2 font-medium">{supplier.code ?? '—'}</td>
+                                <td className="py-2 font-medium">{supplier.code ?? '-'}</td>
                                 <td className="py-2">
                                     {supplier.name}
                                     {!supplier.is_active && (
@@ -233,10 +233,10 @@ export default function SuppliersIndex({
                                         </Badge>
                                     )}
                                 </td>
-                                <td className="text-muted-foreground py-2">{supplier.contact_name ?? '—'}</td>
-                                <td className="text-muted-foreground py-2">{supplier.phone ?? '—'}</td>
-                                <td className="text-muted-foreground py-2">{supplier.email ?? '—'}</td>
-                                <td className="text-muted-foreground py-2">{supplier.payment_terms ?? '—'}</td>
+                                <td className="text-muted-foreground py-2">{supplier.contact_name ?? '-'}</td>
+                                <td className="text-muted-foreground py-2">{supplier.phone ?? '-'}</td>
+                                <td className="text-muted-foreground py-2">{supplier.email ?? '-'}</td>
+                                <td className="text-muted-foreground py-2">{supplier.payment_terms ?? '-'}</td>
                                 <td className="py-2 text-right">
                                     {mayManage && (
                                         <Button variant="ghost" size="sm" onClick={() => startEdit(supplier)}>

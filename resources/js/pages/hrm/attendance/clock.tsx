@@ -65,7 +65,7 @@ const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text
 
 /**
  * An employee raising a correction on one of their own days (COR-01). It is a
- * request, not a change — it routes to their manager and then HR.
+ * request, not a change - it routes to their manager and then HR.
  */
 function RequestCorrectionDialog({ day, types, directions }: { day: RecentDay; types: CorrectionType[]; directions: { value: string; label: string }[] }) {
     const [open, setOpen] = useState(false);
@@ -113,7 +113,7 @@ function RequestCorrectionDialog({ day, types, directions }: { day: RecentDay; t
                             <div className="grid gap-2">
                                 <Label htmlFor="cdir">Direction</Label>
                                 <select id="cdir" className={selectClass} value={direction} onChange={(e) => setDirection(e.target.value)}>
-                                    <option value="">— Unknown —</option>
+                                    <option value="">- Unknown -</option>
                                     {directions.map((d) => (
                                         <option key={d.value} value={d.value}>
                                             {d.label}
@@ -125,7 +125,7 @@ function RequestCorrectionDialog({ day, types, directions }: { day: RecentDay; t
                     )}
                     {selected?.needs_punch && (
                         <p className="text-xs text-muted-foreground">
-                            Amending or disregarding a specific punch needs HR to pick it — ask them, or choose “Add a missing punch”.
+                            Amending or disregarding a specific punch needs HR to pick it - ask them, or choose “Add a missing punch”.
                         </p>
                     )}
                     <div className="grid gap-2">
@@ -184,7 +184,7 @@ export default function Clock({ employee, today, punches, recent_days, my_correc
     const [locationError, setLocationError] = useState<string | null>(null);
 
     /**
-     * Location is captured in the browser and sent with the punch — the server
+     * Location is captured in the browser and sent with the punch - the server
      * requires it, so a denied permission is explained here rather than turning
      * into a validation error the employee cannot act on.
      */
@@ -277,7 +277,7 @@ export default function Clock({ employee, today, punches, recent_days, my_correc
                                 {punches.map((p) => (
                                     <tr key={p.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                         <td className="py-2 font-mono text-xs">{p.time}</td>
-                                        <td className="py-2">{p.direction ?? '—'}</td>
+                                        <td className="py-2">{p.direction ?? '-'}</td>
                                         <td className="py-2 text-muted-foreground">{p.source}</td>
                                         <td className="py-2">
                                             {p.needs_review ? (
@@ -323,11 +323,11 @@ export default function Clock({ employee, today, punches, recent_days, my_correc
                                             )}
                                         </td>
                                         <td className="py-2 font-mono text-xs text-muted-foreground">
-                                            {day.first_in ?? '—'} / {day.last_out ?? '—'}
+                                            {day.first_in ?? '-'} / {day.last_out ?? '-'}
                                         </td>
                                         <td className="py-2 text-right">
                                             {day.is_locked ? (
-                                                <span className="text-xs text-muted-foreground">Period closed — ask HR</span>
+                                                <span className="text-xs text-muted-foreground">Period closed - ask HR</span>
                                             ) : (
                                                 <RequestCorrectionDialog day={day} types={correction_types} directions={directions} />
                                             )}

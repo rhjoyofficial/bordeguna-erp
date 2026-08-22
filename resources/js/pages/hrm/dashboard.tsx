@@ -46,7 +46,7 @@ interface Props {
 /**
  * The HRM dashboard (RPT-04).
  *
- * It renders what the server sends and computes nothing — no KPI arithmetic
+ * It renders what the server sends and computes nothing - no KPI arithmetic
  * lives here, which is the separation the plan asked for. A widget the viewer
  * may not see never reaches this file at all: `DashboardRegistry` filters the
  * payload, so there is no client-side permission check to get wrong and no

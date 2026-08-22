@@ -8,7 +8,7 @@ import { useState } from 'react';
 export type SelectOption = { value: string; label: string };
 
 // A searchable combobox (shadcn Popover + cmdk) for pickers that outgrow a
-// plain <select> — products, suppliers, warehouses. Value is a string id, so
+// plain <select> - products, suppliers, warehouses. Value is a string id, so
 // it drops straight into Inertia useForm state where the native selects were.
 export function SearchableSelect({
     value,

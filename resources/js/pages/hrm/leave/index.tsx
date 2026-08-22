@@ -137,7 +137,7 @@ function LeaveDialog({ employees, leaveTypes, portions }: { employees: Option[];
                     <div className="grid gap-2">
                         <Label htmlFor="leave_employee">Employee</Label>
                         <select id="leave_employee" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-                            <option value="">— Select —</option>
+                            <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
                                     {e.name}
@@ -149,7 +149,7 @@ function LeaveDialog({ employees, leaveTypes, portions }: { employees: Option[];
                     <div className="grid gap-2">
                         <Label htmlFor="leave_type">Leave type</Label>
                         <select id="leave_type" className={selectClass} value={leaveTypeId} onChange={(e) => setLeaveTypeId(e.target.value)}>
-                            <option value="">— Select —</option>
+                            <option value="">- Select -</option>
                             {leaveTypes.map((t) => (
                                 <option key={t.id} value={t.id}>
                                     {t.name}
@@ -271,7 +271,7 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                     <div className="grid gap-2">
                         <Label htmlFor="mv_employee">Employee</Label>
                         <select id="mv_employee" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-                            <option value="">— Select —</option>
+                            <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
                                     {e.name}

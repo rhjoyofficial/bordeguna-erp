@@ -39,7 +39,7 @@ export default function MyPayslips({ employee, password_hint, password_unavailab
                 <div>
                     <h2 className="text-lg font-medium">My payslips</h2>
                     <p className="text-sm text-muted-foreground">
-                        {employee.name} — {employee.employee_code}. A payslip appears here once its payroll has been approved.
+                        {employee.name} - {employee.employee_code}. A payslip appears here once its payroll has been approved.
                     </p>
                 </div>
 

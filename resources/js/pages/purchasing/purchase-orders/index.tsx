@@ -124,7 +124,7 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
                             <SearchableSelect
                                 value={line.product_id}
                                 onChange={(v) => updateLine(index, { product_id: v })}
-                                options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} — ${p.name}` : p.name }))}
+                                options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} - ${p.name}` : p.name }))}
                                 placeholder="Select product"
                                 searchPlaceholder="Search products…"
                             />

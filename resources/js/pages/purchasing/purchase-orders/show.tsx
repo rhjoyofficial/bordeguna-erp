@@ -134,7 +134,7 @@ function ReceiveGoodsForm({ order }: { order: Order }) {
         lines: [],
     });
 
-    // Untouched lines default to the full remaining quantity — computed here
+    // Untouched lines default to the full remaining quantity - computed here
     // (not pre-seeded into `lines`) so it always reflects the current order
     // prop rather than whatever it was when this component first mounted.
     transform((formData) => ({
@@ -150,7 +150,7 @@ function ReceiveGoodsForm({ order }: { order: Order }) {
         post(route('purchasing.purchase-orders.receive', order.id), { onSuccess: () => reset() });
     };
 
-    // Upserts rather than only mapping existing entries — this component can
+    // Upserts rather than only mapping existing entries - this component can
     // stay mounted (returning null) from before anything was receivable, so
     // useForm's initial `lines` must not be relied on to already contain a
     // row for every current line.
@@ -171,7 +171,7 @@ function ReceiveGoodsForm({ order }: { order: Order }) {
     return (
         <form onSubmit={submit} className="flex flex-col gap-3 rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
             <h3 className="font-medium">Record goods receipt</h3>
-            <p className="text-sm text-muted-foreground">Defaults to the full remaining quantity — reduce a line for a partial shipment.</p>
+            <p className="text-sm text-muted-foreground">Defaults to the full remaining quantity - reduce a line for a partial shipment.</p>
             {receivableLines.map((line) => {
                 const entry = data.lines.find((e) => e.purchase_order_line_id === line.id);
 
@@ -218,7 +218,7 @@ function ReturnGoodsForm({ order }: { order: Order }) {
         lines: [],
     });
 
-    // Untouched lines default to 0 (skipped) — computed here rather than
+    // Untouched lines default to 0 (skipped) - computed here rather than
     // pre-seeded into `lines`, since this component can stay mounted from
     // before anything was returnable and must not rely on stale defaults
     // captured at that earlier mount.
@@ -252,7 +252,7 @@ function ReturnGoodsForm({ order }: { order: Order }) {
     return (
         <form onSubmit={submit} className="flex flex-col gap-3 rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
             <h3 className="font-medium">Return goods</h3>
-            <p className="text-sm text-muted-foreground">Reverses stock for whatever quantity is entered — leave a line at 0 to skip it.</p>
+            <p className="text-sm text-muted-foreground">Reverses stock for whatever quantity is entered - leave a line at 0 to skip it.</p>
             {returnableLines.map((line) => {
                 const entry = data.lines.find((e) => e.purchase_order_line_id === line.id);
 
@@ -375,7 +375,7 @@ export default function PurchaseOrderShow({
                             <tr key={line.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2">
                                     {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>
-                                    {line.product.type === 'service' && <span className="text-muted-foreground"> — service</span>}
+                                    {line.product.type === 'service' && <span className="text-muted-foreground"> - service</span>}
                                 </td>
                                 <td className="py-2">{line.quantity_ordered}</td>
                                 <td className="py-2">{line.quantity_received}</td>
@@ -426,13 +426,13 @@ export default function PurchaseOrderShow({
                         {order.goods_receipts.map((receipt) => (
                             <div key={receipt.id} className="rounded-xl border border-sidebar-border/70 p-3 text-sm dark:border-sidebar-border">
                                 <p className="text-muted-foreground">
-                                    {receipt.received_by.name} — {receipt.received_at}
-                                    {receipt.note && ` — ${receipt.note}`}
+                                    {receipt.received_by.name} - {receipt.received_at}
+                                    {receipt.note && ` - ${receipt.note}`}
                                 </p>
                                 <ul className="mt-1 list-disc pl-5">
                                     {receipt.lines.map((line) => (
                                         <li key={line.id}>
-                                            {line.purchase_order_line.product.name} ({line.purchase_order_line.product.sku}) —{' '}
+                                            {line.purchase_order_line.product.name} ({line.purchase_order_line.product.sku}) -{' '}
                                             {line.quantity_received}
                                         </li>
                                     ))}
@@ -453,8 +453,8 @@ export default function PurchaseOrderShow({
                                 className="rounded-xl border border-sidebar-border/70 p-3 text-sm dark:border-sidebar-border"
                             >
                                 <p className="text-muted-foreground">
-                                    {purchaseReturn.returned_by.name} — {purchaseReturn.returned_at}
-                                    {purchaseReturn.note && ` — ${purchaseReturn.note}`}
+                                    {purchaseReturn.returned_by.name} - {purchaseReturn.returned_at}
+                                    {purchaseReturn.note && ` - ${purchaseReturn.note}`}
                                 </p>
                                 <ul className="mt-1 list-disc pl-5">
                                     {/*
@@ -465,7 +465,7 @@ export default function PurchaseOrderShow({
                                      */}
                                     {aggregateReturnLines(purchaseReturn.lines).map((entry) => (
                                         <li key={entry.key}>
-                                            {entry.name} ({entry.sku}) — {entry.quantity}
+                                            {entry.name} ({entry.sku}) - {entry.quantity}
                                             {entry.batches > 1 && (
                                                 <span className="text-xs text-muted-foreground">
                                                     {' '}

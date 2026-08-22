@@ -127,7 +127,7 @@ export default function ProductImport({
                 {preview && (
                     <div className="flex flex-col gap-4">
                         <div className="text-sm text-muted-foreground">
-                            <span className="font-medium text-foreground">{preview.file_name}</span> — {preview.rows} row(s) read.
+                            <span className="font-medium text-foreground">{preview.file_name}</span> - {preview.rows} row(s) read.
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -147,7 +147,7 @@ export default function ProductImport({
                                     {preview.errors.map((e, i) => (
                                         <li key={i}>
                                             <span className="text-muted-foreground">line {e.line}</span>{' '}
-                                            <span className="font-mono text-xs">{e.sku}</span> — {e.message}
+                                            <span className="font-mono text-xs">{e.sku}</span> - {e.message}
                                         </li>
                                     ))}
                                 </ul>
@@ -161,7 +161,7 @@ export default function ProductImport({
                                     {preview.warnings.map((w, i) => (
                                         <li key={i}>
                                             <span className="text-muted-foreground">line {w.line}</span>{' '}
-                                            <span className="font-mono text-xs">{w.sku}</span> — {w.message}
+                                            <span className="font-mono text-xs">{w.sku}</span> - {w.message}
                                         </li>
                                     ))}
                                 </ul>
@@ -241,14 +241,14 @@ export default function ProductImport({
                         {preview.absent_from_file.length > 0 && (
                             <p className="text-sm text-muted-foreground">
                                 {preview.absent_from_file.length} product(s) already here are not mentioned in this file. They are left exactly
-                                as they are — nothing is deactivated or deleted by an import.
+                                as they are - nothing is deactivated or deleted by an import.
                             </p>
                         )}
 
                         <form onSubmit={submitApply} className="flex items-center gap-3 border-t border-sidebar-border/70 dark:border-sidebar-border pt-4">
                             <input type="hidden" value={apply.data.token} />
                             <Button disabled={apply.processing || blocked}>
-                                {apply.processing ? 'Importing' : `Apply — create ${preview.creates.length}, update ${preview.updates.length}`}
+                                {apply.processing ? 'Importing' : `Apply - create ${preview.creates.length}, update ${preview.updates.length}`}
                             </Button>
                             <span className="text-xs text-muted-foreground">
                                 Applies this exact file. If it changed since the preview, the import is refused.

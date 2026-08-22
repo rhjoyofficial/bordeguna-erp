@@ -319,7 +319,7 @@ export default function ShiftsIndex({ shifts, break_policies }: IndexProps) {
                                         </td>
                                         <td className="py-2 text-muted-foreground">{shift.grace_minutes}m</td>
                                         <td className="py-2 text-muted-foreground">{shift.break_minutes}m</td>
-                                        <td className="py-2 text-muted-foreground">{shift.minimum_payable_hours ?? '—'}</td>
+                                        <td className="py-2 text-muted-foreground">{shift.minimum_payable_hours ?? '-'}</td>
                                         <td className="py-2">
                                             <Badge variant={shift.is_active ? 'default' : 'secondary'}>{shift.is_active ? 'Active' : 'Inactive'}</Badge>
                                         </td>

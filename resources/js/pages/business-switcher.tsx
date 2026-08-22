@@ -35,15 +35,15 @@ export default function BusinessSwitcher({ businesses, current_business_id }: Pr
      *         data: { business_id: businessId },            // not a visit option
      *     } as never);
      *
-     * `useForm().post(url, options)` sends the FORM'S OWN data — which was
-     * empty — and `options` carries visit callbacks, not a payload. So it
+     * `useForm().post(url, options)` sends the FORM'S OWN data - which was
+     * empty - and `options` carries visit callbacks, not a payload. So it
      * POSTed `{}`, the controller's `business_id` validation rejected it, and
      * the user was silently returned to the same page having apparently
      * clicked nothing.
      *
      * ⚠ The `as never` cast is what hid it. TypeScript was correctly refusing
      * that object and the cast suppressed a compiler error that was telling the
-     * truth — which is why `tsc` stayed clean while the feature did not work.
+     * truth - which is why `tsc` stayed clean while the feature did not work.
      * **A cast that silences a type error is a claim that you know better than
      * the compiler. Here, it wasn't true.**
      *

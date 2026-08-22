@@ -112,11 +112,11 @@ function RequestDialog({ employees, types }: { employees: Props['employees']; ty
                     <div className="grid gap-2">
                         <Label htmlFor="loan_employee">Employee</Label>
                         <select id="loan_employee" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-                            <option value="">— Select —</option>
+                            <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
                                     {e.name}
-                                    {e.outstanding > 0 ? ` — ${money(e.outstanding)} outstanding` : ''}
+                                    {e.outstanding > 0 ? ` - ${money(e.outstanding)} outstanding` : ''}
                                 </option>
                             ))}
                         </select>
@@ -177,7 +177,7 @@ function RequestDialog({ employees, types }: { employees: Props['employees']; ty
                     {count > 0 && (
                         <p className="text-xs text-muted-foreground">
                             {count} installment{count === 1 ? '' : 's'} of {money(i)}
-                            {last !== i && count > 1 && <> — the last one is {money(last)}, carrying the remainder so the plan adds up exactly</>}.
+                            {last !== i && count > 1 && <> - the last one is {money(last)}, carrying the remainder so the plan adds up exactly</>}.
                         </p>
                     )}
 
@@ -245,7 +245,7 @@ function SettleDialog({ loan }: { loan: LoanRow }) {
                     <DialogTitle>Settle {loan.reference} early</DialogTitle>
                     <DialogDescription>
                         The employee pays off the remaining {money(loan.outstanding)} in one go. Remaining installments are cancelled but kept, so the
-                        original plan stays readable next to what happened. This is a debt paid early, not a debt forgiven — the amount must clear the
+                        original plan stays readable next to what happened. This is a debt paid early, not a debt forgiven - the amount must clear the
                         balance in full.
                     </DialogDescription>
                 </DialogHeader>
@@ -358,7 +358,7 @@ function LoanCard({ loan }: { loan: LoanRow }) {
                     <div className="overflow-x-auto">
                         <h4 className="mb-2 text-sm font-medium">Repayment schedule</h4>
                         {loan.installments.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No schedule yet — it is generated on approval.</p>
+                            <p className="text-sm text-muted-foreground">No schedule yet - it is generated on approval.</p>
                         ) : (
                             <table className="w-full text-sm">
                                 <thead>
@@ -389,7 +389,7 @@ function LoanCard({ loan }: { loan: LoanRow }) {
                     <div className="overflow-x-auto">
                         <h4 className="mb-2 text-sm font-medium">Ledger</h4>
                         <p className="mb-2 text-xs text-muted-foreground">
-                            The outstanding balance is the sum of these rows — never a stored number.
+                            The outstanding balance is the sum of these rows - never a stored number.
                         </p>
                         {loan.ledger.length === 0 ? (
                             <p className="text-sm text-muted-foreground">Nothing has moved yet.</p>

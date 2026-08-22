@@ -45,7 +45,7 @@ interface Props {
 }
 
 /**
- * The generic parameter screen. It knows nothing about any particular report —
+ * The generic parameter screen. It knows nothing about any particular report -
  * the server declares the parameters and this renders them, which is what lets
  * fifteen reports share one page.
  *

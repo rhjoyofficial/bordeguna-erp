@@ -9,7 +9,7 @@ type QuickLink = { title: string; url: string; icon: LucideIcon };
 /**
  * The "Add New" grid from the reference header. Most master-data creation
  * here happens in a panel on the index page (suppliers, customers,
- * products, POs, expenses), so those shortcuts land on the index — the
+ * products, POs, expenses), so those shortcuts land on the index - the
  * form is one more click, and there is no /create route to deep-link.
  * Opening stock is deliberately absent: the one irreversible cutover
  * document does not belong one click from a convenience menu.

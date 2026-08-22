@@ -57,7 +57,7 @@ export function SupplierImportPanel() {
                     </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                    Export, edit in a spreadsheet, import back — the same columns both ways.
+                    Export, edit in a spreadsheet, import back - the same columns both ways.
                 </p>
             </div>
 
@@ -99,7 +99,7 @@ export function SupplierImportPanel() {
 
                             {plan.warnings.length > 0 && (
                                 <div>
-                                    <p className="font-medium">Warnings — these do not stop the import:</p>
+                                    <p className="font-medium">Warnings - these do not stop the import:</p>
                                     <ul className="list-inside list-disc text-muted-foreground">
                                         {plan.warnings.map((w) => (
                                             <li key={w}>{w}</li>
@@ -114,7 +114,7 @@ export function SupplierImportPanel() {
                                     <ul className="list-inside list-disc text-muted-foreground">
                                         {plan.creates.map((c) => (
                                             <li key={c.code}>
-                                                {c.code} — {c.name}
+                                                {c.code} - {c.name}
                                             </li>
                                         ))}
                                     </ul>
@@ -127,7 +127,7 @@ export function SupplierImportPanel() {
                                     <ul className="list-inside list-disc text-muted-foreground">
                                         {plan.updates.map((u) => (
                                             <li key={u.code}>
-                                                {u.code} — {u.changes.join('; ')}
+                                                {u.code} - {u.changes.join('; ')}
                                             </li>
                                         ))}
                                     </ul>
@@ -135,7 +135,7 @@ export function SupplierImportPanel() {
                             )}
 
                             {/* ⚠ Named so the number is never a surprise. These are
-                                left completely alone — a supplier with purchase
+                                left completely alone - a supplier with purchase
                                 history must not vanish because somebody imported a
                                 shorter spreadsheet. */}
                             {plan.absentFromFile.length > 0 && (

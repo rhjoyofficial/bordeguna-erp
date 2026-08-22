@@ -76,7 +76,7 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                 <div>
                     <h2 className="text-lg font-medium">Import attendance</h2>
                     <p className="text-sm text-muted-foreground">
-                        Upload a ZKTeco / ZKTime.Net CSV export. Re-uploading the same file is safe — rows already captured are reported as duplicates,
+                        Upload a ZKTeco / ZKTime.Net CSV export. Re-uploading the same file is safe - rows already captured are reported as duplicates,
                         never imported twice.
                     </p>
                 </div>
@@ -178,7 +178,7 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                                                         size="sm"
                                                         onClick={() => setExpanded(expanded === batch.id ? null : batch.id)}
                                                     >
-                                                        {batch.failed_count} — {expanded === batch.id ? 'hide' : 'why?'}
+                                                        {batch.failed_count} - {expanded === batch.id ? 'hide' : 'why?'}
                                                     </Button>
                                                 ) : (
                                                     <span className="text-muted-foreground">0</span>

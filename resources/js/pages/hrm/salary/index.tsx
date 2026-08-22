@@ -53,7 +53,7 @@ interface Props {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Salary', href: '/hrm/salary' }];
 const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
-const money = (n: number | null) => (n === null ? '—' : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const money = (n: number | null) => (n === null ? '-' : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
 function ComponentDialog({ component, bases, types, trigger }: { component?: Component; bases: Props['bases']; types: Props['types']; trigger: React.ReactNode }) {
     const [open, setOpen] = useState(false);
@@ -179,7 +179,7 @@ export default function SalaryIndex({ can_manage, employees, components, types, 
                     <div>
                         <h2 className="text-lg font-medium">Salary structures</h2>
                         <p className="text-sm text-muted-foreground">
-                            {withStructure} of {employees.length} employees have a structure. These are contractual figures — what a month actually pays
+                            {withStructure} of {employees.length} employees have a structure. These are contractual figures - what a month actually pays
                             is calculated by payroll.
                         </p>
                     </div>
@@ -258,7 +258,7 @@ export default function SalaryIndex({ can_manage, employees, components, types, 
                                     </td>
                                     <td className="py-2 text-muted-foreground">{c.type_label}</td>
                                     <td className="py-2 text-muted-foreground">{c.basis_label}</td>
-                                    <td className="py-2 text-xs text-muted-foreground">{c.description ?? '—'}</td>
+                                    <td className="py-2 text-xs text-muted-foreground">{c.description ?? '-'}</td>
                                     <td className="py-2 text-right whitespace-nowrap">
                                         {can_manage && (
                                             <>
@@ -289,7 +289,7 @@ export default function SalaryIndex({ can_manage, employees, components, types, 
                         </tbody>
                     </table>
                     <p className="mt-3 text-xs text-muted-foreground">
-                        Income Tax and Provident Fund are entered manually — the statutory calculation rules (GOV-06) are not yet decided, so nothing is
+                        Income Tax and Provident Fund are entered manually - the statutory calculation rules (GOV-06) are not yet decided, so nothing is
                         computed for them automatically.
                     </p>
                 </div>

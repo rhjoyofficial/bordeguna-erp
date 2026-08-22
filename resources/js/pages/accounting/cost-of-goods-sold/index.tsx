@@ -174,7 +174,7 @@ export default function CostOfGoodsSoldIndex({
                                 <tr key={row.product_sku} className="border-t">
                                     <td className="p-2 font-mono text-xs">{row.product_sku}</td>
                                     <td className="p-2">{row.product_name}</td>
-                                    <td className="p-2">{row.brand ?? '—'}</td>
+                                    <td className="p-2">{row.brand ?? '-'}</td>
                                     <td className="p-2 text-right tabular-nums">{row.quantity}</td>
                                     <td className="p-2 text-right tabular-nums">{row.revenue}</td>
                                     <td className="p-2 text-right tabular-nums">{row.cost}</td>
@@ -186,7 +186,7 @@ export default function CostOfGoodsSoldIndex({
                                       to ignore.
                                     */}
                                     <td className="p-2 text-right tabular-nums">
-                                        {row.margin_percent === null ? '—' : `${row.margin_percent}%`}
+                                        {row.margin_percent === null ? '-' : `${row.margin_percent}%`}
                                     </td>
                                 </tr>
                             ))}

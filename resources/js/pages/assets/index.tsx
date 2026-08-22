@@ -74,7 +74,7 @@ export default function AssetsIndex({
                 <div>
                     <h1 className="text-lg font-semibold">Fixed assets</h1>
                     <p className="max-w-3xl text-sm text-muted-foreground">
-                        Things the business owns and uses rather than sells — a van, a chiller, a computer. Recorded here they stay
+                        Things the business owns and uses rather than sells - a van, a chiller, a computer. Recorded here they stay
                         on the balance sheet and wear down month by month. Bought through Purchasing instead, they become stock and
                         are written off as cost of sales the first time they are issued.
                     </p>

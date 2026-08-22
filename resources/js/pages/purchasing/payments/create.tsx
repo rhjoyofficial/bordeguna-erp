@@ -136,7 +136,7 @@ export default function PaymentCreate({
                             <option value="">Select a supplier</option>
                             {suppliers.map((supplier) => (
                                 <option key={supplier.id} value={supplier.id}>
-                                    {supplier.name} — {supplier.outstanding} owed
+                                    {supplier.name} - {supplier.outstanding} owed
                                 </option>
                             ))}
                         </select>

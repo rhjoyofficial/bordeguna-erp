@@ -138,7 +138,7 @@ export default function CrmSettingsIndex({
                     <div>
                         <h2 className="text-lg font-medium">Lead sources</h2>
                         <p className="text-sm text-muted-foreground">
-                            Where leads come from. The code is permanent — reporting groups by this row, not by the name, so a
+                            Where leads come from. The code is permanent - reporting groups by this row, not by the name, so a
                             source can be renamed without splitting its history.
                         </p>
                     </div>
@@ -231,7 +231,7 @@ export default function CrmSettingsIndex({
                     <div>
                         <h2 className="text-lg font-medium">Campaigns</h2>
                         <p className="text-sm text-muted-foreground">
-                            A named acquisition effort. The external id is the platform's own — Meta's campaign id, for example —
+                            A named acquisition effort. The external id is the platform's own - Meta's campaign id, for example -
                             and is stored as supplied.
                         </p>
                     </div>

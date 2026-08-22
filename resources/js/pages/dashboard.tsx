@@ -126,7 +126,7 @@ function KpiTile({ icon: Icon, label, value, tone }: { icon: LucideIcon; label: 
 
 /**
  * Grouped-bar sales vs purchases chart, hand-rolled like the purchase
- * trend it replaces — the project has no charting library and two bar
+ * trend it replaces - the project has no charting library and two bar
  * series do not justify adding one.
  */
 function TradeChart({ data }: { data: TradeChartPoint[] }) {

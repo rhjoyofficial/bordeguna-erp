@@ -188,7 +188,7 @@ function FailDialog({ payslip }: { payslip: PayslipRow }) {
                     <DialogTitle>Payment failed for {payslip.employee}</DialogTitle>
                     <DialogDescription>
                         The attempt is kept on record with its reason so it can be retried. Because nothing reached the employee, any loan installment
-                        and carry-forward recovery taken on this payslip is reversed — the installment becomes due again rather than quietly forgiven.
+                        and carry-forward recovery taken on this payslip is reversed - the installment becomes due again rather than quietly forgiven.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-2">
@@ -244,7 +244,7 @@ function BatchCard({ batch, formats }: { batch: BatchRow; formats: Props['format
                         {batch.confirmed_at ? <Badge>Confirmed</Badge> : <Badge variant="outline">Awaiting confirmation</Badge>}
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        {batch.payslip_count} payslip{batch.payslip_count === 1 ? '' : 's'} — {money(batch.paid_total)} of{' '}
+                        {batch.payslip_count} payslip{batch.payslip_count === 1 ? '' : 's'} - {money(batch.paid_total)} of{' '}
                         {money(batch.expected_total)} paid
                         {batch.confirmed_at && batch.confirmed_by ? ` · confirmed ${batch.confirmed_at} by ${batch.confirmed_by}` : ''}
                     </p>
@@ -393,10 +393,10 @@ function PayslipRowView({ payslip, methods }: { payslip: PayslipRow; methods: Pr
                                         <td className="py-1 whitespace-nowrap">{p.paid_on}</td>
                                         <td className="py-1">
                                             {p.type_label}
-                                            {p.failure_reason ? ` — ${p.failure_reason}` : ''}
+                                            {p.failure_reason ? ` - ${p.failure_reason}` : ''}
                                         </td>
                                         <td className="py-1">{p.method}</td>
-                                        <td className="py-1">{p.reference ?? '—'}</td>
+                                        <td className="py-1">{p.reference ?? '-'}</td>
                                         <td className="py-1 text-right">{money(p.amount)}</td>
                                         <td className="py-1 text-right">
                                             {p.type === 'paid' && (
@@ -432,7 +432,7 @@ function PayslipRowView({ payslip, methods }: { payslip: PayslipRow; methods: Pr
 export default function Disbursement({ run, batches, payslips, methods, formats }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Payroll', href: '/hrm/payroll' },
-        { title: `Disbursement — ${run.period ?? ''}`, href: `/hrm/payroll/${run.id}/disbursement` },
+        { title: `Disbursement - ${run.period ?? ''}`, href: `/hrm/payroll/${run.id}/disbursement` },
     ];
 
     const paid = payslips.reduce((sum, p) => sum + p.paid_total, 0);
@@ -440,16 +440,16 @@ export default function Disbursement({ run, batches, payslips, methods, formats 
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Disbursement — ${run.period ?? ''}`} />
+            <Head title={`Disbursement - ${run.period ?? ''}`} />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">
-                            Disbursement — {run.period} <span className="text-muted-foreground">v{run.version}</span>
+                            Disbursement - {run.period} <span className="text-muted-foreground">v{run.version}</span>
                         </h2>
                         <p className="text-sm text-muted-foreground">
                             {money(paid)} paid of {money(run.total_net)}
-                            {outstanding > 0 ? ` — ${money(outstanding)} still outstanding` : ' — nothing outstanding'}.
+                            {outstanding > 0 ? ` - ${money(outstanding)} still outstanding` : ' - nothing outstanding'}.
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -473,7 +473,7 @@ export default function Disbursement({ run, batches, payslips, methods, formats 
                 {!run.is_disbursed && (
                     <div className={cardClass}>
                         <p className="text-sm text-muted-foreground">
-                            This payroll is {run.status_label.toLowerCase()}. Nothing can be recorded as paid until it is disbursed — the loan and
+                            This payroll is {run.status_label.toLowerCase()}. Nothing can be recorded as paid until it is disbursed - the loan and
                             carry-forward postings this reconciles against do not exist before then.
                         </p>
                     </div>

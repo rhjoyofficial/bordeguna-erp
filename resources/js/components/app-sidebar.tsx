@@ -301,7 +301,7 @@ export function AppSidebar() {
             : []),
         // Reporting (W3). Shown to anyone who can reach at least one report;
         // the list itself is filtered per user server-side by ReportRegistry,
-        // which also re-applies ACL-02 — so a Department Manager sees the
+        // which also re-applies ACL-02 - so a Department Manager sees the
         // section, and no payroll report inside it.
         ...(canManageAttendance || canAccessSalary
             ? [
@@ -311,7 +311,7 @@ export function AppSidebar() {
                           // RPT-04. Same gate as Reports and for the same
                           // reason: the widget list is filtered per user
                           // server-side by DashboardRegistry, which re-applies
-                          // ACL-02 — so a Department Manager sees the section
+                          // ACL-02 - so a Department Manager sees the section
                           // and no payroll tile inside it.
                           { title: 'HR dashboard', url: '/hrm/dashboard', icon: LayoutDashboard },
                           { title: 'Reports', url: '/hrm/reports', icon: FileBarChart },

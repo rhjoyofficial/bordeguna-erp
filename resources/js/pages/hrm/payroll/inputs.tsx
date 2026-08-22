@@ -165,11 +165,11 @@ function OvertimeDialog({ employees, rules }: { employees: EmployeeOption[]; rul
                     <div className="grid gap-2">
                         <Label htmlFor="ot_employee">Employee</Label>
                         <select id="ot_employee" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-                            <option value="">— Select —</option>
+                            <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
                                     {e.name}
-                                    {e.overtime_eligible ? '' : ' — not overtime-eligible'}
+                                    {e.overtime_eligible ? '' : ' - not overtime-eligible'}
                                 </option>
                             ))}
                         </select>
@@ -200,7 +200,7 @@ function OvertimeDialog({ employees, rules }: { employees: EmployeeOption[]; rul
                             Worked on a holiday or weekly off
                             <span className="block text-xs text-muted-foreground">
                                 {isHoliday
-                                    ? `Compensated in leave, not money — about ${trim(compDays)} day(s) of compensatory leave.`
+                                    ? `Compensated in leave, not money - about ${trim(compDays)} day(s) of compensatory leave.`
                                     : `Paid overtime, capped at ${trim(rules.daily_max_hours)} hours a day and ${trim(rules.monthly_max_hours)} a month.`}
                             </span>
                         </span>
@@ -269,7 +269,7 @@ function BonusEventDialog({ periods, bases }: { periods: PeriodOption[]; bases: 
                 <DialogHeader>
                     <DialogTitle>Create a bonus event</DialogTitle>
                     <DialogDescription>
-                        A bonus is an occasion carrying its own rule — Eid, a festival, a one-off — and the payroll month it lands on. Award it to
+                        A bonus is an occasion carrying its own rule - Eid, a festival, a one-off - and the payroll month it lands on. Award it to
                         employees afterwards.
                     </DialogDescription>
                 </DialogHeader>
@@ -299,7 +299,7 @@ function BonusEventDialog({ periods, bases }: { periods: PeriodOption[]; bases: 
                     <div className="grid gap-2">
                         <Label htmlFor="bonus_period">Payroll month</Label>
                         <select id="bonus_period" className={selectClass} value={periodId} onChange={(e) => setPeriodId(e.target.value)}>
-                            <option value="">— Select —</option>
+                            <option value="">- Select -</option>
                             {periods.map((p) => (
                                 <option key={p.id} value={p.id}>
                                     {p.label}
@@ -445,7 +445,7 @@ function AdjustmentDialog({
                 <DialogHeader>
                     <DialogTitle>Record a payroll adjustment</DialogTitle>
                     <DialogDescription>
-                        Reason, evidence, approval and payroll month are all required — an adjustment is the one place an arbitrary sum can be moved by
+                        Reason, evidence, approval and payroll month are all required - an adjustment is the one place an arbitrary sum can be moved by
                         hand, so all four controls apply.
                     </DialogDescription>
                 </DialogHeader>
@@ -453,7 +453,7 @@ function AdjustmentDialog({
                     <div className="grid gap-2">
                         <Label htmlFor="adj_employee">Employee</Label>
                         <select id="adj_employee" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-                            <option value="">— Select —</option>
+                            <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
                                     {e.name}
@@ -468,7 +468,7 @@ function AdjustmentDialog({
                         <select id="adj_type" className={selectClass} value={type} onChange={(e) => setType(e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
-                                    {t.label} — {t.is_earning ? 'adds' : 'deducts'}
+                                    {t.label} - {t.is_earning ? 'adds' : 'deducts'}
                                 </option>
                             ))}
                         </select>
@@ -484,7 +484,7 @@ function AdjustmentDialog({
                         <div className="grid gap-2">
                             <Label htmlFor="adj_period">Payroll month</Label>
                             <select id="adj_period" className={selectClass} value={periodId} onChange={(e) => setPeriodId(e.target.value)}>
-                                <option value="">— Select —</option>
+                                <option value="">- Select -</option>
                                 {periods.map((p) => (
                                     <option key={p.id} value={p.id}>
                                         {p.label}
@@ -579,7 +579,7 @@ export default function PayrollInputs({
                     <div>
                         <h2 className="text-lg font-medium">Payroll inputs</h2>
                         <p className="text-sm text-muted-foreground">
-                            Everything a payslip pays that the salary structure does not describe. Nothing here calculates — each entry is an
+                            Everything a payslip pays that the salary structure does not describe. Nothing here calculates - each entry is an
                             authorisation the next payroll run picks up.
                         </p>
                     </div>
@@ -613,7 +613,7 @@ export default function PayrollInputs({
 
                 {negative_payslips.length > 0 && (
                     <div className={cardClass}>
-                        <h3 className="mb-1 text-sm font-medium text-destructive">Negative net — needs a decision</h3>
+                        <h3 className="mb-1 text-sm font-medium text-destructive">Negative net - needs a decision</h3>
                         <p className="mb-3 text-xs text-muted-foreground">
                             Deductions exceeded earnings, so these payslips are blocked. Carrying the shortfall forward records it as a balance;
                             recalculate the run afterwards and the credit squares the month, with recovery taken from the next one.
@@ -736,7 +736,7 @@ export default function PayrollInputs({
                                             {e.note && <div className="text-xs text-muted-foreground">{e.note}</div>}
                                         </td>
                                         <td className="py-2 text-muted-foreground">
-                                            {e.basis === 'fixed' ? money(e.value) : `${trim(e.value)}% — ${e.basis_label}`}
+                                            {e.basis === 'fixed' ? money(e.value) : `${trim(e.value)}% - ${e.basis_label}`}
                                         </td>
                                         <td className="py-2 text-muted-foreground">{e.period}</td>
                                         <td className="py-2 text-muted-foreground">
@@ -849,7 +849,7 @@ export default function PayrollInputs({
                     <div className={cardClass}>
                         <h3 className="mb-1 text-sm font-medium">Carry-forward balance</h3>
                         <p className="mb-3 text-xs text-muted-foreground">
-                            Outstanding: <span className={outstanding > 0 ? 'text-destructive' : ''}>{money(outstanding)}</span> — recovered in full
+                            Outstanding: <span className={outstanding > 0 ? 'text-destructive' : ''}>{money(outstanding)}</span> - recovered in full
                             from the next payroll.
                         </p>
                         {balances.length === 0 ? (

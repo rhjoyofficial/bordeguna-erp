@@ -64,7 +64,7 @@ export default function CrmReports({
                     <h1 className="text-lg font-semibold">CRM reports</h1>
                     <p className="max-w-3xl text-sm text-muted-foreground">
                         Every figure is worked out when you open this page, so nothing here can drift from the records it came
-                        from. Revenue and campaign return arrive with Sales — there are no invoices yet, and a column of zeros
+                        from. Revenue and campaign return arrive with Sales - there are no invoices yet, and a column of zeros
                         would be worse than an absent one.
                     </p>
                 </div>
@@ -76,7 +76,7 @@ export default function CrmReports({
                         <p className="text-sm text-muted-foreground">
                             {/* ⚠ The denominator is stated, not implied. */}
                             {funnel.converted} of {funnel.workable} leads converted
-                            {funnel.conversionRate !== null && ` — ${funnel.conversionRate}%`}
+                            {funnel.conversionRate !== null && ` - ${funnel.conversionRate}%`}
                             {funnel.duplicatesExcluded > 0 &&
                                 `. ${funnel.duplicatesExcluded} duplicate${funnel.duplicatesExcluded === 1 ? '' : 's'} excluded, so nobody is counted twice.`}
                         </p>

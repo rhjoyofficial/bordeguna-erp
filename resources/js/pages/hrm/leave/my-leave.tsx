@@ -90,7 +90,7 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                     <div className="grid gap-2">
                         <Label htmlFor="leave_type_id">Leave type</Label>
                         <select id="leave_type_id" className={selectClass} value={typeId} onChange={(e) => setTypeId(e.target.value)}>
-                            <option value="">— Select —</option>
+                            <option value="">- Select -</option>
                             {types.map((t) => (
                                 <option key={t.id} value={t.id}>
                                     {t.name}
@@ -263,7 +263,7 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h2 className="text-lg font-medium">My leave — {year}</h2>
+                        <h2 className="text-lg font-medium">My leave - {year}</h2>
                         <p className="text-sm text-muted-foreground">
                             {employee.name} · {employee.employee_code}
                         </p>

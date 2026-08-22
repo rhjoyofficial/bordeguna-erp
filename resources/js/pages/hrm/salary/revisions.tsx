@@ -94,7 +94,7 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
     const selected = employees.find((e) => String(e.id) === employeeId);
 
     // Pre-fill from the salary currently in force, so a raise is edited rather
-    // than retyped from nothing. Seeded on selection, never at mount — state
+    // than retyped from nothing. Seeded on selection, never at mount - state
     // seeded from props at mount freezes stale.
     const chooseEmployee = (id: string) => {
         setEmployeeId(id);
@@ -118,7 +118,7 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                 <DialogHeader>
                     <DialogTitle>Propose a salary revision</DialogTitle>
                     <DialogDescription>
-                        Nothing changes until this is approved — no salary structure exists while a proposal is pending. A backdated revision recomputes
+                        Nothing changes until this is approved - no salary structure exists while a proposal is pending. A backdated revision recomputes
                         the months already paid and posts the difference forward as an arrear; it never rewrites a closed payslip.
                     </DialogDescription>
                 </DialogHeader>
@@ -126,11 +126,11 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                     <div className="grid gap-2">
                         <Label htmlFor="rev_employee">Employee</Label>
                         <select id="rev_employee" className={selectClass} value={employeeId} onChange={(e) => chooseEmployee(e.target.value)}>
-                            <option value="">— Select —</option>
+                            <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id} disabled={!e.has_structure}>
                                     {e.name}
-                                    {e.has_structure ? '' : ' — no salary structure yet'}
+                                    {e.has_structure ? '' : ' - no salary structure yet'}
                                 </option>
                             ))}
                         </select>
@@ -147,7 +147,7 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                         <Input id="rev_from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
                         {isBackdated && (
                             <p className="text-xs text-muted-foreground">
-                                Backdated — every already-disbursed month from this date is re-priced and the difference posted as an arrear.
+                                Backdated - every already-disbursed month from this date is re-priced and the difference posted as an arrear.
                             </p>
                         )}
                         {errors.effective_from && <p className="text-xs text-destructive">{errors.effective_from}</p>}
@@ -294,7 +294,7 @@ export default function SalaryRevisions({ can_manage, filters, revisions, employ
                                         </td>
                                         <td className="py-2">
                                             {r.arrear_amount === 0 ? (
-                                                <span className="text-muted-foreground">—</span>
+                                                <span className="text-muted-foreground">-</span>
                                             ) : (
                                                 <>
                                                     <span className={r.arrear_amount < 0 ? 'text-destructive' : ''}>{money(r.arrear_amount)}</span>

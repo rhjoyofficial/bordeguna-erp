@@ -58,7 +58,7 @@ export default function UnitConversions({
     const purchaseUnit = useMemo(() => units.find((u) => String(u.id) === data.from_unit_id), [units, data.from_unit_id]);
 
     // Shown, never used to fill the other box in. The two numbers must be typed
-    // independently — that disagreement is the only thing standing between an
+    // independently - that disagreement is the only thing standing between an
     // inverted factor and a permanently wrong stock cost.
     const product1 = Number(data.stock_units_per_purchase_unit) * Number(data.purchase_units_per_stock_unit);
     const bothTyped = data.stock_units_per_purchase_unit !== '' && data.purchase_units_per_stock_unit !== '';
@@ -102,7 +102,7 @@ export default function UnitConversions({
                             <option value="">Choose a product</option>
                             {products.map((p) => (
                                 <option key={p.id} value={p.id}>
-                                    {p.sku} — {p.name}
+                                    {p.sku} - {p.name}
                                 </option>
                             ))}
                         </select>
@@ -112,7 +112,7 @@ export default function UnitConversions({
                                 {product.purchase_unit ? (
                                     <>
                                         , already bought in <strong>{product.purchase_unit}</strong>. A new row here changes the rate, not the
-                                        unit — changing the purchase unit is a new product.
+                                        unit - changing the purchase unit is a new product.
                                     </>
                                 ) : (
                                     '. It has no purchase unit yet.'
@@ -215,7 +215,7 @@ export default function UnitConversions({
                     first would make an inverted entry impossible to detect.
                 */}
                 <p className="max-w-3xl text-sm text-muted-foreground">
-                    Both directions are asked for on purpose. They are not the same number upside down by accident — for mustard oil, 1 kg is
+                    Both directions are asked for on purpose. They are not the same number upside down by accident - for mustard oil, 1 kg is
                     1.09 L while 1 L is 0.917 kg. Typing both is what catches an entry made the wrong way round, which would otherwise be about
                     21% wrong for ever and look perfectly correct in every report.
                 </p>

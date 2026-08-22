@@ -6,7 +6,7 @@ import { Bell, CheckSquare } from 'lucide-react';
 
 /**
  * The header bell. Today it carries the one live signal the backend
- * already shares on every request — pending approvals — and is only
+ * already shares on every request - pending approvals - and is only
  * rendered for users who can act on them. Low-stock and import-result
  * lines can join later without changing this shape; they are not shown
  * now because faking a feed with placeholder rows would be the

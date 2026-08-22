@@ -117,7 +117,7 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
                 {c.name}
                 {c.is_basic && ' (required)'}
                 {(c.is_percentage || c.is_priced_by_attendance) && (
-                    <span className="ml-1 text-xs text-muted-foreground">— {c.basis_label}</span>
+                    <span className="ml-1 text-xs text-muted-foreground">- {c.basis_label}</span>
                 )}
             </Label>
             <Input
@@ -280,13 +280,13 @@ export default function SalaryShow({ can_manage, employee, current, history, com
         { title: employee.employee_code, href: `/hrm/salary/${employee.id}` },
     ];
 
-    // Everything except the card already shown above — past revisions and any
+    // Everything except the card already shown above - past revisions and any
     // scheduled future one, which must stay visible.
     const others = history.filter((h) => h.id !== current?.id);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Salary — ${employee.name}`} />
+            <Head title={`Salary - ${employee.name}`} />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>

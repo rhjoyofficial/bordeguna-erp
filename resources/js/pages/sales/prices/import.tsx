@@ -98,7 +98,7 @@ export default function PriceImport({
                         green while every dealer sale still refuses.
                     */}
                     <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
-                        A price belongs to one group. Pricing a product for RETAIL only still refuses every DEALER and DISTRIBUTOR sale of it —
+                        A price belongs to one group. Pricing a product for RETAIL only still refuses every DEALER and DISTRIBUTOR sale of it -
                         there is no fallback between groups.
                     </p>
                 </div>
@@ -133,7 +133,7 @@ export default function PriceImport({
                 {preview && (
                     <div className="flex flex-col gap-4">
                         <div className="text-sm text-muted-foreground">
-                            <span className="font-medium text-foreground">{preview.file_name}</span> — {preview.rows} row(s), taking effect{' '}
+                            <span className="font-medium text-foreground">{preview.file_name}</span> - {preview.rows} row(s), taking effect{' '}
                             <span className="font-medium text-foreground">{preview.effective_from}</span>.
                         </div>
 
@@ -171,7 +171,7 @@ export default function PriceImport({
                                     {preview.errors.map((e, i) => (
                                         <li key={i}>
                                             <span className="text-muted-foreground">line {e.line}</span>{' '}
-                                            <span className="font-mono text-xs">{e.sku}</span> — {e.message}
+                                            <span className="font-mono text-xs">{e.sku}</span> - {e.message}
                                         </li>
                                     ))}
                                 </ul>
@@ -185,7 +185,7 @@ export default function PriceImport({
                                     {preview.warnings.map((w, i) => (
                                         <li key={i}>
                                             <span className="text-muted-foreground">line {w.line}</span>{' '}
-                                            <span className="font-mono text-xs">{w.sku}</span> — {w.message}
+                                            <span className="font-mono text-xs">{w.sku}</span> - {w.message}
                                         </li>
                                     ))}
                                 </ul>
@@ -201,7 +201,7 @@ export default function PriceImport({
                         {preview.supersedes.length > 0 && (
                             <div className="rounded-lg border border-sidebar-border/70 dark:border-sidebar-border">
                                 <p className="border-b border-sidebar-border/70 dark:border-sidebar-border p-3 text-sm font-medium">
-                                    Prices this would replace — the old rule is closed the day before, never edited or deleted
+                                    Prices this would replace - the old rule is closed the day before, never edited or deleted
                                 </p>
                                 <div className="max-h-72 overflow-y-auto">
                                     <table className="w-full text-sm">
@@ -264,7 +264,7 @@ export default function PriceImport({
                             <Button disabled={apply.processing || blocked}>
                                 {apply.processing
                                     ? 'Importing'
-                                    : `Apply from ${preview.effective_from} — ${preview.creates.length} new, ${preview.supersedes.length} replaced`}
+                                    : `Apply from ${preview.effective_from} - ${preview.creates.length} new, ${preview.supersedes.length} replaced`}
                             </Button>
                             <span className="text-xs text-muted-foreground">
                                 Applies this exact file on this exact date. Change either and the preview must be run again.

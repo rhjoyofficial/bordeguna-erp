@@ -224,7 +224,7 @@ export default function Roles({ roles, available_permissions }: RolesProps) {
                 <div className="space-y-8">
                     <HeadingSmall
                         title="Roles"
-                        description="Define roles and choose what each can do. Create roles like HR Admin or Payroll Officer as your team grows — the built-in Owner, Manager, and Staff roles cannot be renamed or deleted."
+                        description="Define roles and choose what each can do. Create roles like HR Admin or Payroll Officer as your team grows - the built-in Owner, Manager, and Staff roles cannot be renamed or deleted."
                     />
 
                     <CreateRoleForm availablePermissions={available_permissions} />

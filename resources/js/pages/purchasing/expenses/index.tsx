@@ -94,7 +94,7 @@ export default function ExpensesIndex({
                 <div>
                     <h1 className="text-lg font-semibold">Expenses</h1>
                     <p className="max-w-2xl text-sm text-muted-foreground">
-                        Rent, fuel, utilities, repairs — money spent on running the business rather than on stock. Each one is paid
+                        Rent, fuel, utilities, repairs - money spent on running the business rather than on stock. Each one is paid
                         at the moment it is recorded; a bill to be settled later is a supplier bill instead.
                     </p>
                 </div>
@@ -275,7 +275,7 @@ export default function ExpensesIndex({
                                         {voucher.lines.map((line) => (
                                             <div key={line.id}>
                                                 {line.account ?? '-'}
-                                                {line.description ? ` — ${line.description}` : ''}{' '}
+                                                {line.description ? ` - ${line.description}` : ''}{' '}
                                                 <span className="tabular-nums">{line.amount}</span>
                                             </div>
                                         ))}

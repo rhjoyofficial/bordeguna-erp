@@ -184,10 +184,10 @@ export default function InventoryValuationIndex({
                                             </div>
                                         )}
                                     </td>
-                                    <td className="p-2">{row.brand ?? '—'}</td>
+                                    <td className="p-2">{row.brand ?? '-'}</td>
                                     <td className="p-2">{row.warehouse}</td>
                                     <td className="p-2">
-                                        {row.batch_number ?? '—'}
+                                        {row.batch_number ?? '-'}
                                         {row.expiry_date && (
                                             <span className="text-muted-foreground block text-xs">
                                                 expires {row.expiry_date}
@@ -195,7 +195,7 @@ export default function InventoryValuationIndex({
                                         )}
                                     </td>
                                     <td className="p-2 text-right tabular-nums">{row.quantity}</td>
-                                    <td className="p-2 text-right tabular-nums">{row.unit_cost ?? '—'}</td>
+                                    <td className="p-2 text-right tabular-nums">{row.unit_cost ?? '-'}</td>
                                     <td className="p-2 text-right tabular-nums">{row.value}</td>
                                 </tr>
                             ))}

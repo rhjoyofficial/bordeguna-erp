@@ -72,7 +72,7 @@ const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text
  *
  * ⚠⚠ This used to be `value.replace('T', ' ') + ':00'`, which appended seconds
  * whether or not the value already had them. Feed it a time that DOES carry
- * seconds and it built "2026-08-08 11:13:33:00" — not a timestamp, so the
+ * seconds and it built "2026-08-08 11:13:33:00" - not a timestamp, so the
  * request failed validation and the dialog simply sat there.
  *
  * Seconds matter here more than anywhere else in the app: the commonest reason
@@ -156,7 +156,7 @@ function CorrectionDialog({ types, directions, employees, prefill }: { types: Co
                 <DialogHeader>
                     <DialogTitle>Record a correction</DialogTitle>
                     <DialogDescription>
-                        The original punches are never changed — a correction sits alongside them and the day is reprocessed against it. Recording one
+                        The original punches are never changed - a correction sits alongside them and the day is reprocessed against it. Recording one
                         here applies it immediately, which is the privileged HR path.
                     </DialogDescription>
                 </DialogHeader>
@@ -165,7 +165,7 @@ function CorrectionDialog({ types, directions, employees, prefill }: { types: Co
                         <div className="grid gap-2">
                             <Label htmlFor="employee_id">Employee</Label>
                             <select id="employee_id" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
-                                <option value="">— Select —</option>
+                                <option value="">- Select -</option>
                                 {employees.map((e) => (
                                     <option key={e.id} value={e.id}>
                                         {e.name}
@@ -196,7 +196,7 @@ function CorrectionDialog({ types, directions, employees, prefill }: { types: Co
                         <div className="grid gap-2">
                             <Label htmlFor="punch_id">Which punch</Label>
                             <select id="punch_id" className={selectClass} value={punchId} onChange={(e) => setPunchId(e.target.value)}>
-                                <option value="">— Select —</option>
+                                <option value="">- Select -</option>
                                 {punches.map((p) => (
                                     <option key={p.id} value={p.id}>
                                         {p.label}
@@ -229,7 +229,7 @@ function CorrectionDialog({ types, directions, employees, prefill }: { types: Co
                             <div className="grid gap-2">
                                 <Label htmlFor="direction">Direction</Label>
                                 <select id="direction" className={selectClass} value={direction} onChange={(e) => setDirection(e.target.value)}>
-                                    <option value="">— Unknown —</option>
+                                    <option value="">- Unknown -</option>
                                     {directions.map((d) => (
                                         <option key={d.value} value={d.value}>
                                             {d.label}
@@ -358,7 +358,7 @@ function UnlockDialog({ lock }: { lock: Lock }) {
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Reopen this period</DialogTitle>
-                    <DialogDescription>The lock is kept as history — reopening records who did it and why.</DialogDescription>
+                    <DialogDescription>The lock is kept as history - reopening records who did it and why.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-2">
                     <Label htmlFor="unlock_reason">Reason</Label>
@@ -430,7 +430,7 @@ export default function Corrections({ corrections, locks, types, directions, emp
                                             )}
                                         </td>
                                         <td className="py-2 text-xs text-muted-foreground">{c.reason}</td>
-                                        <td className="py-2 text-muted-foreground">{c.requested_by ?? '—'}</td>
+                                        <td className="py-2 text-muted-foreground">{c.requested_by ?? '-'}</td>
                                         <td className="py-2">
                                             {c.is_applied ? (
                                                 <Badge variant="default">Applied</Badge>
@@ -468,7 +468,7 @@ export default function Corrections({ corrections, locks, types, directions, emp
                                         <td className="py-2 whitespace-nowrap">
                                             {lock.period_start} → {lock.period_end}
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{lock.note ?? '—'}</td>
+                                        <td className="py-2 text-muted-foreground">{lock.note ?? '-'}</td>
                                         <td className="py-2">
                                             {lock.is_active ? (
                                                 <Badge variant="default">Locked</Badge>

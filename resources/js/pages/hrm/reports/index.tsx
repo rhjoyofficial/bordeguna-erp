@@ -11,7 +11,7 @@ interface ReportRow {
 
 interface Props {
     // Grouped server-side ('Attendance', 'Payroll'), already filtered to what
-    // this user may run — including Correction C10d's ACL-02 rule, which is why
+    // this user may run - including Correction C10d's ACL-02 rule, which is why
     // a Department Manager simply has no Payroll group rather than a disabled
     // one. Showing a report you may not run only invites the question.
     groups: Record<string, ReportRow[]>;

@@ -84,7 +84,7 @@ export default function EmployeeCreate({ employment_types, offices, designations
                     <div className="grid gap-2">
                         <Label htmlFor="office_id">Office</Label>
                         <select id="office_id" className={selectClass} value={data.office_id} onChange={(e) => setData('office_id', e.target.value)}>
-                            <option value="">— None —</option>
+                            <option value="">- None -</option>
                             {offices.map((office) => (
                                 <option key={office.id} value={office.id}>
                                     {office.name}
@@ -96,7 +96,7 @@ export default function EmployeeCreate({ employment_types, offices, designations
                     <div className="grid gap-2">
                         <Label htmlFor="designation_id">Designation</Label>
                         <select id="designation_id" className={selectClass} value={data.designation_id} onChange={(e) => setData('designation_id', e.target.value)}>
-                            <option value="">— None —</option>
+                            <option value="">- None -</option>
                             {designations.map((designation) => (
                                 <option key={designation.id} value={designation.id}>
                                     {designation.name}

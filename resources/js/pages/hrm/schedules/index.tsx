@@ -166,7 +166,7 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                 <DialogHeader>
                     <DialogTitle>Assign a schedule</DialogTitle>
                     <DialogDescription>
-                        Assign at the broadest level that fits — an employee-level assignment overrides their section, department, office and the
+                        Assign at the broadest level that fits - an employee-level assignment overrides their section, department, office and the
                         business-wide default. Set an end date for a temporary schedule (e.g. Ramadan) and the previous one resumes automatically.
                     </DialogDescription>
                 </DialogHeader>
@@ -192,7 +192,7 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                             <div className="grid gap-2">
                                 <Label htmlFor="scope_id">{scope.label}</Label>
                                 <select id="scope_id" className={selectClass} value={form.scope_id} onChange={(e) => set('scope_id', e.target.value)}>
-                                    <option value="">— Select —</option>
+                                    <option value="">- Select -</option>
                                     {targets.map((t) => (
                                         <option key={t.id} value={t.id}>
                                             {t.name}
@@ -224,7 +224,7 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                         <div className="grid gap-2">
                             <Label htmlFor="shift_id">Shift{type?.requires_shift ? '' : ' (optional)'}</Label>
                             <select id="shift_id" className={selectClass} value={form.shift_id} onChange={(e) => set('shift_id', e.target.value)}>
-                                <option value="">— None —</option>
+                                <option value="">- None -</option>
                                 {options.shifts.map((s) => (
                                     <option key={s.id} value={s.id}>
                                         {s.name}
@@ -243,7 +243,7 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                             value={form.holiday_calendar_id}
                             onChange={(e) => set('holiday_calendar_id', e.target.value)}
                         >
-                            <option value="">— Select —</option>
+                            <option value="">- Select -</option>
                             {options.calendars.map((c) => (
                                 <option key={c.id} value={c.id}>
                                     {c.name}
@@ -265,7 +265,7 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                             {errors.effective_from && <p className="text-xs text-destructive">{errors.effective_from}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="effective_to">Until (optional — temporary)</Label>
+                            <Label htmlFor="effective_to">Until (optional - temporary)</Label>
                             <Input id="effective_to" type="date" value={form.effective_to} onChange={(e) => set('effective_to', e.target.value)} />
                             {errors.effective_to && <p className="text-xs text-destructive">{errors.effective_to}</p>}
                         </div>
@@ -306,7 +306,7 @@ function EndDialog({ assignment }: { assignment: Assignment }) {
                 <DialogHeader>
                     <DialogTitle>End this schedule</DialogTitle>
                     <DialogDescription>
-                        The assignment stays as history — it just stops applying after this date. Anyone it covered falls back to the next broadest
+                        The assignment stays as history - it just stops applying after this date. Anyone it covered falls back to the next broadest
                         assignment.
                     </DialogDescription>
                 </DialogHeader>
@@ -389,7 +389,7 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                                             {row.name}
                                             <span className="ml-2 text-xs text-muted-foreground">{row.employee_code}</span>
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{row.placement ?? '—'}</td>
+                                        <td className="py-2 text-muted-foreground">{row.placement ?? '-'}</td>
                                         <td className="py-2">
                                             {row.schedule_type ?? <Badge variant="secondary">Unscheduled</Badge>}
                                         </td>
@@ -400,11 +400,11 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                                                     <span className="ml-2 text-xs">{row.shift_times}</span>
                                                 </>
                                             ) : (
-                                                '—'
+                                                '-'
                                             )}
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{row.calendar ?? '—'}</td>
-                                        <td className="py-2 text-xs text-muted-foreground">{row.source ?? '—'}</td>
+                                        <td className="py-2 text-muted-foreground">{row.calendar ?? '-'}</td>
+                                        <td className="py-2 text-xs text-muted-foreground">{row.source ?? '-'}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -439,8 +439,8 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                                             {a.target && <span className="ml-2 text-xs text-muted-foreground">{a.scope}</span>}
                                         </td>
                                         <td className="py-2 text-muted-foreground">{a.schedule_type}</td>
-                                        <td className="py-2 text-muted-foreground">{a.shift ?? '—'}</td>
-                                        <td className="py-2 text-muted-foreground">{a.calendar ?? '—'}</td>
+                                        <td className="py-2 text-muted-foreground">{a.shift ?? '-'}</td>
+                                        <td className="py-2 text-muted-foreground">{a.calendar ?? '-'}</td>
                                         <td className="py-2 text-muted-foreground">
                                             {a.effective_from} → {a.effective_to ?? 'Current'}
                                             {a.is_active && (
@@ -464,7 +464,7 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                                                 </Badge>
                                             )}
                                         </td>
-                                        <td className="py-2 text-xs text-muted-foreground">{a.note ?? '—'}</td>
+                                        <td className="py-2 text-xs text-muted-foreground">{a.note ?? '-'}</td>
                                         <td className="py-2 text-right whitespace-nowrap">
                                             {a.effective_to === null && <EndDialog assignment={a} />}
                                             {a.is_future && (

@@ -196,7 +196,7 @@ export default function Team({ members, assignable_roles }: TeamProps) {
                 <div className="space-y-8">
                     <HeadingSmall
                         title="Team"
-                        description="Add people to this business and control the roles they hold here. Removing someone keeps their account and history — it only revokes their access to this business."
+                        description="Add people to this business and control the roles they hold here. Removing someone keeps their account and history - it only revokes their access to this business."
                     />
 
                     <AddMemberForm assignableRoles={assignable_roles} />

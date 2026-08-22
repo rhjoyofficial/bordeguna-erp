@@ -185,7 +185,7 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                                                     disabled={account.system_owned && data.journal_type !== 'opening_balance'}
                                                 >
                                                     {account.label}
-                                                    {account.system_owned ? ' — maintained by another module' : ''}
+                                                    {account.system_owned ? ' - maintained by another module' : ''}
                                                 </option>
                                             ))}
                                         </select>

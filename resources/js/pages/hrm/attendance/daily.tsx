@@ -202,12 +202,12 @@ export default function DailyAttendance({ on, filters, employees = [], days, sum
                                                 )}
                                             </td>
                                             <td className="py-2 font-mono text-xs text-muted-foreground">
-                                                {day.first_in ?? '—'} / {day.last_out ?? '—'}
+                                                {day.first_in ?? '-'} / {day.last_out ?? '-'}
                                             </td>
                                             <td className="py-2 text-muted-foreground">{day.worked_hours}h</td>
                                             <td className="py-2 font-mono text-xs text-muted-foreground">
                                                 {day.meal === null
-                                                    ? '—'
+                                                    ? '-'
                                                     : day.meal.resolved_from === 'punches' && day.meal.spans?.length
                                                       ? `${day.meal.spans[0].out.slice(0, 5)}-${day.meal.spans[0].in.slice(0, 5)} (${day.meal.minutes}m)`
                                                       : `${day.meal.minutes}m fallback`}
@@ -219,7 +219,7 @@ export default function DailyAttendance({ on, filters, employees = [], days, sum
                                             </td>
                                             <td className="py-2">{day.payable_hours}h</td>
                                             <td className="py-2 text-muted-foreground">
-                                                {day.late_minutes > 0 ? `${day.late_minutes}m` : '—'}
+                                                {day.late_minutes > 0 ? `${day.late_minutes}m` : '-'}
                                                 {day.occurrence_number !== null && (
                                                     <span className="ml-1 text-xs">#{day.occurrence_number}</span>
                                                 )}
@@ -228,7 +228,7 @@ export default function DailyAttendance({ on, filters, employees = [], days, sum
                                                 {day.has_consequence ? (
                                                     <Badge variant="outline">{day.consequence}</Badge>
                                                 ) : (
-                                                    <span className="text-muted-foreground">—</span>
+                                                    <span className="text-muted-foreground">-</span>
                                                 )}
                                             </td>
                                             <td className="py-2 text-right whitespace-nowrap">

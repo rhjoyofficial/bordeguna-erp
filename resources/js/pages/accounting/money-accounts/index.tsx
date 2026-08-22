@@ -267,7 +267,7 @@ export default function MoneyAccountsIndex({
                                                account fails at the till with MappingNotFound, long
                                                after whoever created it has left this screen. */
                                             <span className="font-medium text-destructive">
-                                                Not set — payments and receipts from this account will fail
+                                                Not set - payments and receipts from this account will fail
                                             </span>
                                         )}
                                     </td>
