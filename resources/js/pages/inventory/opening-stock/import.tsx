@@ -128,8 +128,8 @@ export default function OpeningStockImport({
                     <p className="text-destructive font-medium">This document is written once per warehouse, for the life of the business.</p>
                     <p className="text-muted-foreground mt-1">
                         It posts <span className="text-foreground font-medium">Dr Stock on Hand / Cr Opening Balance Equity</span>, and the unit costs
-                        in it become the cost layers FIFO consumes — so they decide the reported profit on every sale until this stock is sold
-                        through. There is no second import to fix a mistake, only an inventory adjustment against the real company's books.
+                        in it become the cost layers FIFO consumes, so they decide the reported profit on every sale until this stock is sold through.
+                        There is no second import to fix a mistake, only an inventory adjustment against the real company's books.
                     </p>
                 </div>
 
@@ -138,7 +138,7 @@ export default function OpeningStockImport({
                         <p className="font-medium">Still awaiting a count</p>
                         <p className="text-muted-foreground mt-1">
                             {awaiting.length === 0
-                                ? 'None — every active warehouse already has its opening stock.'
+                                ? 'None. Every active warehouse already has its opening stock.'
                                 : awaiting.map((w) => `${w.name} (${w.code})`).join(', ')}
                         </p>
                     </div>
@@ -147,7 +147,7 @@ export default function OpeningStockImport({
                         <p className="text-muted-foreground mt-1">
                             {alreadyRecorded.length === 0
                                 ? 'None yet.'
-                                : `${alreadyRecorded.map((w) => `${w.name} (${w.code})`).join(', ')} — a file naming any of these is refused in full.`}
+                                : `${alreadyRecorded.map((w) => `${w.name} (${w.code})`).join(', ')}. A file naming any of these is refused in full.`}
                         </p>
                     </div>
                 </div>
@@ -167,7 +167,7 @@ export default function OpeningStockImport({
                         {stockedProducts} active stocked product(s) in the catalogue.
                     </p>
                     <p className="mt-2">
-                        Leave <span className="text-foreground font-medium">both</span> the quantity and the unit cost blank for anything not held —
+                        Leave <span className="text-foreground font-medium">both</span> the quantity and the unit cost blank for anything not held:
                         those rows count nothing and are listed back to you. A cost with no quantity is a half-filled row and is refused.
                     </p>
                 </div>
@@ -197,7 +197,7 @@ export default function OpeningStockImport({
                 {preview && (
                     <div className="flex flex-col gap-4">
                         <div className="text-muted-foreground text-sm">
-                            <span className="text-foreground font-medium">{preview.file_name}</span> — {preview.rows} row(s), counted as at{' '}
+                            <span className="text-foreground font-medium">{preview.file_name}</span>, {preview.rows} row(s), counted as at{' '}
                             <span className="text-foreground font-medium">{preview.as_at}</span>.
                         </div>
 
@@ -235,7 +235,7 @@ export default function OpeningStockImport({
                                     {preview.errors.map((e, i) => (
                                         <li key={i}>
                                             <span className="text-muted-foreground">line {e.line}</span>{' '}
-                                            <span className="font-mono text-xs">{e.sku}</span> — {e.message}
+                                            <span className="font-mono text-xs">{e.sku}</span>: {e.message}
                                         </li>
                                     ))}
                                 </ul>
@@ -249,7 +249,7 @@ export default function OpeningStockImport({
                                     {preview.warnings.map((w, i) => (
                                         <li key={i}>
                                             <span className="text-muted-foreground">line {w.line}</span>{' '}
-                                            <span className="font-mono text-xs">{w.sku}</span> — {w.message}
+                                            <span className="font-mono text-xs">{w.sku}</span>: {w.message}
                                         </li>
                                     ))}
                                 </ul>
@@ -292,7 +292,7 @@ export default function OpeningStockImport({
                             <div key={warehouse.code} className="rounded-lg border">
                                 <div className="flex flex-wrap items-baseline justify-between gap-2 border-b p-3">
                                     <p className="text-sm font-medium">
-                                        {warehouse.name} ({warehouse.code}) — {warehouse.lines} line(s)
+                                        {warehouse.name} ({warehouse.code}), {warehouse.lines} line(s)
                                     </p>
                                     <p className="text-sm tabular-nums">{warehouse.value}</p>
                                 </div>
@@ -332,7 +332,7 @@ export default function OpeningStockImport({
                         {/*
                             ⚠⚠ THE NUMBER THE ACCOUNTANT MUST AGREE WITH. If it differs
                             from the stock line on the opening trial balance, Opening
-                            Balance Equity never reaches zero — and that account
+                            Balance Equity never reaches zero, and that account
                             reaching zero is the only check that catches an opening
                             position which balances while being wrong.
                         */}
@@ -374,7 +374,7 @@ export default function OpeningStockImport({
                                 <Button variant="destructive" disabled={apply.processing || blocked || !apply.data.confirm_total}>
                                     {apply.processing
                                         ? 'Writing'
-                                        : `Write ${preview.warehouses.length} document(s) as at ${preview.as_at} — this cannot be undone`}
+                                        : `Write ${preview.warehouses.length} document(s) as at ${preview.as_at}. This cannot be undone`}
                                 </Button>
                                 <span className="text-muted-foreground text-xs">
                                     Applies this exact file on this exact date. Change either and the preview must be run again.

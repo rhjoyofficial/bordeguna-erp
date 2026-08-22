@@ -153,7 +153,7 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                     <p className="text-muted-foreground mt-1">
                         It only decides what a production run <span className="font-medium">suggests</span> consuming. Every suggested line stays
                         editable on the run, and the run records what was actually used. Quantities are in each component's own unit and nothing is
-                        ever converted — if a unit looks wrong, fix it on the product.
+                        ever converted. If a unit looks wrong, fix it on the product.
                     </p>
                     {/*
                         ⚠⚠ THE CONSUMABLES RULE. Anything in a recipe can stop a
@@ -163,7 +163,7 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                     */}
                     <p className="text-muted-foreground mt-2">
                         <span className="text-foreground font-medium">Only put something here if running out of it should stop the run.</span> Bulk
-                        product, jars, bottles, caps and boxes: yes. Shrink poly, inner poly, pouch film and labels: no — those are expensed when
+                        product, jars, bottles, caps and boxes: yes. Shrink poly, inner poly, pouch film and labels: no, those are expensed when
                         bought, never stocked, and a missing sticker must never hold up a shipment.
                     </p>
                 </div>

@@ -142,7 +142,7 @@ export default function OpeningStockIndex({
                             <Link className="underline underline-offset-2" href={route('inventory.opening-stock.import')}>
                                 Upload the filled CSV
                             </Link>{' '}
-                            instead of typing it in below — same document, same rules, with the whole file previewed before anything is written.
+                            instead of typing it in below. Same document, same rules, with the whole file previewed before anything is written.
                         </p>
                     </div>
                 )}

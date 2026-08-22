@@ -213,12 +213,12 @@ export default function ProductionRunCreate({
                         <div className="rounded-lg border p-3 text-sm">
                             <p className="font-medium">
                                 Recipe v{bom.version}
-                                {bom.name ? ` — ${bom.name}` : ''} is set for this product.
+                                {bom.name ? `, ${bom.name}` : ''} is set for this product.
                             </p>
                             <p className="text-muted-foreground mt-1">
                                 {recipeEdited
                                     ? 'The lines below have been edited, so they are left alone. The run records what you say was consumed; the recipe only saves typing.'
-                                    : 'The lines below are filled in from it and scale with the output quantity. Change, remove or add any of them — the run records what you say was consumed.'}
+                                    : 'The lines below are filled in from it and scale with the output quantity. Change, remove or add any of them: the run records what you say was consumed.'}
                             </p>
                             {Number(data.output_quantity) > 0 && (
                                 <Button

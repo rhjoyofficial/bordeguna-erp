@@ -276,7 +276,7 @@ export default function ProductionRunShow({
                                             {line.quantity_consumed} {line.unit}
                                         </td>
                                         <td className="text-muted-foreground p-3 text-right tabular-nums">
-                                            {line.standard_quantity === null ? '—' : `${line.standard_quantity} ${line.unit ?? ''}`}
+                                            {line.standard_quantity === null ? '-' : `${line.standard_quantity} ${line.unit ?? ''}`}
                                         </td>
                                         <td className="p-3 text-right tabular-nums">
                                             {(() => {
