@@ -206,6 +206,32 @@
     --chart-1: hsl(215, 40%, 42%);
 }
 
+/* Monochrome pair Joy asked for. "Black" is a true high-contrast mono:
+   near-black in light mode, near-white in dark. "White" is the paper
+   accent: a bright neutral chip with dark text in light mode (white on
+   white cannot exist, so it renders as the lightest visible neutral),
+   and a true white accent in dark mode. Foregrounds are declared with
+   every primary so no combination fades below contrast. */
+[data-accent='black'] {
+    --primary: hsl(224, 15%, 12%);
+    --primary-foreground: hsl(0, 0%, 98%);
+    --ring: hsl(224, 12%, 30%);
+    --sidebar-primary: hsl(224, 15%, 12%);
+    --sidebar-primary-foreground: hsl(0, 0%, 98%);
+    --sidebar-ring: hsl(224, 12%, 30%);
+    --chart-1: hsl(224, 12%, 32%);
+}
+
+[data-accent='white'] {
+    --primary: hsl(220, 18%, 96%);
+    --primary-foreground: hsl(224, 20%, 10%);
+    --ring: hsl(220, 10%, 62%);
+    --sidebar-primary: hsl(0, 0%, 100%);
+    --sidebar-primary-foreground: hsl(224, 20%, 10%);
+    --sidebar-ring: hsl(220, 10%, 62%);
+    --chart-1: hsl(220, 10%, 55%);
+}
+
 .dark[data-accent='forest'] {
     --primary: hsl(152, 45%, 50%);
     --primary-foreground: hsl(152, 70%, 6%);
@@ -234,6 +260,26 @@
     --sidebar-primary-foreground: hsl(215, 30%, 10%);
     --sidebar-ring: hsl(215, 25%, 68%);
     --chart-1: hsl(215, 45%, 62%);
+}
+
+.dark[data-accent='black'] {
+    --primary: hsl(222, 12%, 84%);
+    --primary-foreground: hsl(224, 18%, 10%);
+    --ring: hsl(222, 12%, 65%);
+    --sidebar-primary: hsl(222, 12%, 84%);
+    --sidebar-primary-foreground: hsl(224, 18%, 10%);
+    --sidebar-ring: hsl(222, 12%, 65%);
+    --chart-1: hsl(222, 12%, 70%);
+}
+
+.dark[data-accent='white'] {
+    --primary: hsl(0, 0%, 98%);
+    --primary-foreground: hsl(224, 20%, 10%);
+    --ring: hsl(0, 0%, 80%);
+    --sidebar-primary: hsl(0, 0%, 98%);
+    --sidebar-primary-foreground: hsl(224, 20%, 10%);
+    --sidebar-ring: hsl(0, 0%, 80%);
+    --chart-1: hsl(0, 0%, 82%);
 }
 
 /*

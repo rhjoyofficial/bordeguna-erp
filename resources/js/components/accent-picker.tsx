@@ -22,10 +22,10 @@ export default function AccentPicker({ className = '', ...props }: HTMLAttribute
                     )}
                 >
                     <span
-                        className="flex h-5 w-5 items-center justify-center rounded-full"
+                        className="flex h-5 w-5 items-center justify-center rounded-full border border-black/15"
                         style={{ backgroundColor: swatch }}
                     >
-                        {accent === value && <Check className="h-3.5 w-3.5 text-white" />}
+                        {accent === value && <Check className={cn('h-3.5 w-3.5', value === 'white' ? 'text-black' : 'text-white')} />}
                     </span>
                     {label}
                 </button>

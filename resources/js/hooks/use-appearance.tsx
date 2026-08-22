@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 export type Appearance = 'light' | 'dark' | 'system';
 
-export type Accent = 'deep-green' | 'forest' | 'emerald' | 'slate';
+export type Accent = 'deep-green' | 'forest' | 'emerald' | 'slate' | 'black' | 'white';
 
 export type SidebarColor = 'default' | 'light' | 'dark' | 'primary';
 
@@ -19,6 +19,8 @@ export const accents: { value: Accent; label: string; swatch: string }[] = [
     { value: 'forest', label: 'Forest', swatch: 'hsl(152, 60%, 22%)' },
     { value: 'emerald', label: 'Emerald', swatch: 'hsl(161, 84%, 26%)' },
     { value: 'slate', label: 'Slate', swatch: 'hsl(215, 28%, 25%)' },
+    { value: 'black', label: 'Black', swatch: 'hsl(224, 15%, 12%)' },
+    { value: 'white', label: 'White', swatch: 'hsl(0, 0%, 100%)' },
 ];
 
 /**
