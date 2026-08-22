@@ -4,6 +4,7 @@ use App\Modules\Inventory\Http\Controllers\CategoryController;
 use App\Modules\Inventory\Http\Controllers\InventoryDashboardController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockCountSheetController;
+use App\Modules\Inventory\Http\Controllers\OpeningStockImportController;
 use App\Modules\Inventory\Http\Controllers\ProductController;
 use App\Modules\Inventory\Http\Controllers\ProductImportController;
 use App\Modules\Inventory\Http\Controllers\ProductionRunController;
@@ -97,6 +98,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     Route::middleware('can:inventory.stock.adjust')->group(function () {
         Route::get('opening-stock', [OpeningStockController::class, 'index'])->name('opening-stock.index');
         Route::post('opening-stock', [OpeningStockController::class, 'store'])->name('opening-stock.store');
+
+        // C-IMP-8. The SAME permission as typing the document in by hand, not a
+        // new import permission. The opening stock screen already posts a whole
+        // warehouse in one submit, so a file is the same power through a
+        // different door - and a new permission would mean a seeder in the
+        // deploy of the week the count happens.
+        Route::get('opening-stock/import', [OpeningStockImportController::class, 'create'])->name('opening-stock.import');
+        Route::post('opening-stock/import/preview', [OpeningStockImportController::class, 'preview'])->name('opening-stock.import.preview');
+        Route::post('opening-stock/import', [OpeningStockImportController::class, 'store'])->name('opening-stock.import.store');
     });
     // storeAdjustment/storeTransfer authorize inventory.stock.adjust internally
     Route::post('stock/adjustments', [StockController::class, 'storeAdjustment'])->name('stock.adjustments.store');

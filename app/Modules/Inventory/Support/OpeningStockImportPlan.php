@@ -27,6 +27,25 @@ class OpeningStockImportPlan
     public array $warnings = [];
 
     /**
+     * C-OPN-6. Rows left blank on purpose: nothing counted, nothing written.
+     *
+     * ⚠ Reported, never hidden. A count sheet prints every stocked product in
+     * the business, so most files carry a long tail of blanks - and the one
+     * blank that was a forgotten shelf looks identical to the eighty that were
+     * genuinely empty. The screen shows the number and the SKUs so the person
+     * applying the document can recognise a shelf they know is not empty.
+     *
+     * @var list<array{line:int, sku:string, warehouse:string}>
+     */
+    public array $notCounted = [];
+
+    /**
+     * How many active, stocked products the business has, as the denominator
+     * for "counted 30 of 86".
+     */
+    public int $activeStockedProducts = 0;
+
+    /**
      * One entry per warehouse, each carrying the lines that will become its
      * single opening stock document.
      *
@@ -90,6 +109,27 @@ class OpeningStockImportPlan
             fn (array $line) => $line['value'],
             $this->warehouses[$warehouseId]['lines'] ?? [],
         ));
+    }
+
+    /**
+     * Distinct products this file actually counts, across every warehouse.
+     *
+     * ⚠ Distinct PRODUCTS, not lines: the same product counted in two
+     * warehouses, or in two named batch layers, is one product that has been
+     * counted, and comparing a line count against the catalogue size would
+     * report ninety of eighty-six.
+     */
+    public function countedProducts(): int
+    {
+        $ids = [];
+
+        foreach ($this->warehouses as $warehouse) {
+            foreach ($warehouse['lines'] as $line) {
+                $ids[$line['productId']] = true;
+            }
+        }
+
+        return count($ids);
     }
 
     public function wouldChangeAnything(): bool

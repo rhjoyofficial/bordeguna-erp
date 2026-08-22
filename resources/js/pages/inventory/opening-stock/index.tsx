@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 const selectClass = 'h-10 rounded-md border border-input bg-background px-3 text-sm';
@@ -74,10 +74,7 @@ export default function OpeningStockIndex({
         setData('lines', lines);
     };
 
-    const total = data.lines.reduce(
-        (sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_cost) || 0),
-        0,
-    );
+    const total = data.lines.reduce((sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_cost) || 0), 0);
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -90,23 +87,21 @@ export default function OpeningStockIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
                     <p className="font-medium">What the business already held on the day the books start.</p>
-                    <p className="mt-1 text-muted-foreground">
+                    <p className="text-muted-foreground mt-1">
                         This posts <span className="font-medium">Stock on Hand</span> against{' '}
-                        <span className="font-medium">Opening Balance Equity</span>. The unit costs entered here become the
-                        cost layers FIFO consumes, so they decide the profit on every sale until this stock is sold through.
-                        It can be entered <span className="font-medium">once per warehouse</span>; afterwards, corrections
-                        go through an inventory adjustment.
+                        <span className="font-medium">Opening Balance Equity</span>. The unit costs entered here become the cost layers FIFO consumes,
+                        so they decide the profit on every sale until this stock is sold through. It can be entered{' '}
+                        <span className="font-medium">once per warehouse</span>; afterwards, corrections go through an inventory adjustment.
                     </p>
                 </div>
 
                 {countSheetWarehouses.length > 0 && (
                     <div className="rounded-lg border p-4">
                         <p className="text-sm font-medium">Count sheet</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Print a blank sheet to carry around the warehouse, then type the counted numbers back into the
-                            matching CSV. Nothing is pre-filled: no quantity and no cost, not even a zero. The SKUs and the
-                            warehouse code are printed for you because the import matches on exactly those, and a
-                            hand-typed SKU is the mistake this sheet exists to prevent.
+                        <p className="text-muted-foreground mt-1 text-sm">
+                            Print a blank sheet to carry around the warehouse, then type the counted numbers back into the matching CSV. Nothing is
+                            pre-filled: no quantity and no cost, not even a zero. The SKUs and the warehouse code are printed for you because the
+                            import matches on exactly those, and a hand-typed SKU is the mistake this sheet exists to prevent.
                         </p>
                         <div className="mt-3 flex flex-wrap items-end gap-3">
                             <div className="grid gap-2">
@@ -126,12 +121,7 @@ export default function OpeningStockIndex({
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="sheet_date">Count as at</Label>
-                                <Input
-                                    id="sheet_date"
-                                    type="date"
-                                    value={sheetDate}
-                                    onChange={(e) => setSheetDate(e.target.value)}
-                                />
+                                <Input id="sheet_date" type="date" value={sheetDate} onChange={(e) => setSheetDate(e.target.value)} />
                             </div>
                             <Button asChild variant="outline">
                                 <a href={sheetUrl('print')} target="_blank" rel="noopener">
@@ -142,11 +132,23 @@ export default function OpeningStockIndex({
                                 <a href={sheetUrl('csv')}>Download CSV template</a>
                             </Button>
                         </div>
+                        {/*
+                            ⚠ The way in to the importer. Three screens have shipped
+                            unreachable on this project; a page linked from nowhere is
+                            a page nobody has.
+                        */}
+                        <p className="text-muted-foreground mt-3 text-sm">
+                            Counted it already?{' '}
+                            <Link className="underline underline-offset-2" href={route('inventory.opening-stock.import')}>
+                                Upload the filled CSV
+                            </Link>{' '}
+                            instead of typing it in below — same document, same rules, with the whole file previewed before anything is written.
+                        </p>
                     </div>
                 )}
 
                 {warehouses.length === 0 ? (
-                    <div className="rounded-lg border p-6 text-center text-muted-foreground">
+                    <div className="text-muted-foreground rounded-lg border p-6 text-center">
                         Every active warehouse already has its opening stock recorded.
                     </div>
                 ) : (
@@ -170,12 +172,7 @@ export default function OpeningStockIndex({
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="as_at">As at</Label>
-                                <Input
-                                    id="as_at"
-                                    type="date"
-                                    value={data.as_at}
-                                    onChange={(e) => setData('as_at', e.target.value)}
-                                />
+                                <Input id="as_at" type="date" value={data.as_at} onChange={(e) => setData('as_at', e.target.value)} />
                                 <InputError message={errors.as_at} />
                             </div>
                             <div className="grid gap-2">
@@ -189,12 +186,12 @@ export default function OpeningStockIndex({
                                 <thead className="bg-muted/50 text-left">
                                     <tr>
                                         <th className="p-3">Product</th>
-                                        <th className="p-3 w-28">Quantity</th>
-                                        <th className="p-3 w-32">Unit cost</th>
-                                        <th className="p-3 w-36">Batch</th>
-                                        <th className="p-3 w-40">Expiry</th>
-                                        <th className="p-3 w-32 text-right">Value</th>
-                                        <th className="p-3 w-16"></th>
+                                        <th className="w-28 p-3">Quantity</th>
+                                        <th className="w-32 p-3">Unit cost</th>
+                                        <th className="w-36 p-3">Batch</th>
+                                        <th className="w-40 p-3">Expiry</th>
+                                        <th className="w-32 p-3 text-right">Value</th>
+                                        <th className="w-16 p-3"></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -216,24 +213,15 @@ export default function OpeningStockIndex({
                                                 <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">
-                                                <Input
-                                                    value={line.quantity}
-                                                    onChange={(e) => setLine(index, { quantity: e.target.value })}
-                                                />
+                                                <Input value={line.quantity} onChange={(e) => setLine(index, { quantity: e.target.value })} />
                                                 <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">
-                                                <Input
-                                                    value={line.unit_cost}
-                                                    onChange={(e) => setLine(index, { unit_cost: e.target.value })}
-                                                />
+                                                <Input value={line.unit_cost} onChange={(e) => setLine(index, { unit_cost: e.target.value })} />
                                                 <InputError message={errors[`lines.${index}.unit_cost` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">
-                                                <Input
-                                                    value={line.batch_number}
-                                                    onChange={(e) => setLine(index, { batch_number: e.target.value })}
-                                                />
+                                                <Input value={line.batch_number} onChange={(e) => setLine(index, { batch_number: e.target.value })} />
                                             </td>
                                             <td className="p-3">
                                                 <Input
@@ -252,7 +240,10 @@ export default function OpeningStockIndex({
                                                         variant="ghost"
                                                         size="sm"
                                                         onClick={() =>
-                                                            setData('lines', data.lines.filter((_, i) => i !== index))
+                                                            setData(
+                                                                'lines',
+                                                                data.lines.filter((_, i) => i !== index),
+                                                            )
                                                         }
                                                     >
                                                         Remove
@@ -275,7 +266,7 @@ export default function OpeningStockIndex({
                                 Add line
                             </Button>
                             <div className="text-right">
-                                <p className="text-sm text-muted-foreground">Total opening value</p>
+                                <p className="text-muted-foreground text-sm">Total opening value</p>
                                 <p className="text-2xl font-semibold tabular-nums">{money(total)}</p>
                             </div>
                         </div>
@@ -306,7 +297,7 @@ export default function OpeningStockIndex({
                                         <td className="p-3 font-medium">{opening.warehouse?.name ?? '-'}</td>
                                         <td className="p-3">{opening.as_at?.slice(0, 10)}</td>
                                         <td className="p-3 text-right tabular-nums">{opening.lines.length}</td>
-                                        <td className="p-3 text-muted-foreground">{opening.note}</td>
+                                        <td className="text-muted-foreground p-3">{opening.note}</td>
                                     </tr>
                                 ))}
                             </tbody>

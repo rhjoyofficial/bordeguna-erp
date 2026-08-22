@@ -115,6 +115,17 @@ class ImportOpeningStock extends Command
         $this->line("Rows read: <options=bold>{$rowCount}</>");
         $this->line('Warehouses: <options=bold>'.count($plan->warehouses).'</>');
         $this->line('Lines to write: <options=bold>'.$plan->lineCount().'</>');
+
+        // C-OPN-6. Said out loud on both paths, because a blank left by mistake
+        // and a blank left because the shelf is empty look identical in a file.
+        if ($plan->notCounted !== []) {
+            $this->line('Rows left blank (nothing counted): <options=bold>'.count($plan->notCounted).'</>');
+        }
+
+        $this->line(
+            'Products counted: <options=bold>'.$plan->countedProducts().'</> of '
+            .$plan->activeStockedProducts.' active stocked product(s). The rest start at zero.'
+        );
         $this->newLine();
 
         foreach ($plan->warehouses as $entry) {

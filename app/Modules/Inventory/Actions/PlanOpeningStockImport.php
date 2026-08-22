@@ -34,6 +34,13 @@ use Illuminate\Support\Carbon;
  *          pieces is the mistake this column exists to catch.
  * C-OPN-5  A zero unit cost is allowed but WARNED. Donated or sampled goods are
  *          real; a whole file of them is a missing column.
+ * C-OPN-6  A row with NEITHER a quantity NOR a cost counts nothing, and is
+ *          reported rather than refused. The count sheet prints every stocked
+ *          product in the business, so a warehouse holding thirty of eighty-six
+ *          comes back with fifty-six deliberately blank lines; refusing them
+ *          would force the counter to delete rows by hand from the one file
+ *          that can never be re-imported. A blank quantity WITH a cost is still
+ *          an error, because that row is half-filled rather than left alone.
  */
 class PlanOpeningStockImport
 {
@@ -42,6 +49,14 @@ class PlanOpeningStockImport
         $plan = new OpeningStockImportPlan;
 
         $products = Product::query()->with('unitOfMeasure')->get()->keyBy(fn (Product $p) => strtoupper($p->sku));
+
+        // ⚠ The denominator behind "counted 30 of 86". A product the file never
+        // mentions is not an error - it is a product the business holds none of
+        // - but the person applying the document should be told how many those
+        // are, because a forgotten shelf looks exactly the same as an empty one.
+        $plan->activeStockedProducts = $products
+            ->filter(fn (Product $p) => $p->is_active && $p->type->isStocked())
+            ->count();
         $warehouses = Warehouse::query()->get()->keyBy(fn (Warehouse $w) => strtoupper((string) $w->code));
 
         // C-OPN-1. Read ONCE, up front, from the live database.
@@ -58,6 +73,16 @@ class PlanOpeningStockImport
 
             if ($sku === '') {
                 $plan->addError($line, '', 'The row has no SKU.');
+
+                continue;
+            }
+
+            // C-OPN-6. Checked BEFORE the SKU, warehouse and unit are resolved:
+            // a row that counts nothing writes nothing, so refusing it over a
+            // warehouse code or a unit abbreviation would be an error about a
+            // line that was never going to become a stock layer.
+            if (($values['quantity'] ?? '') === '' && ($values['unit_cost'] ?? '') === '') {
+                $plan->notCounted[] = ['line' => $line, 'sku' => $sku, 'warehouse' => $warehouseCode];
 
                 continue;
             }
@@ -116,7 +141,12 @@ class PlanOpeningStockImport
             $quantity = $values['quantity'] ?? '';
 
             if (! is_numeric($quantity) || (float) $quantity <= 0) {
-                $plan->addError($line, $sku, "quantity is '{$quantity}'. An opening stock line must count more than zero.");
+                // C-OPN-6. A blank quantity only reaches here when the row
+                // carries a cost, which is a half-filled line rather than an
+                // uncounted one.
+                $plan->addError($line, $sku, $quantity === ''
+                    ? 'This row has a unit cost but no quantity. Leave BOTH blank if nothing was counted; fill both if something was.'
+                    : "quantity is '{$quantity}'. An opening stock line must count more than zero.");
 
                 continue;
             }
