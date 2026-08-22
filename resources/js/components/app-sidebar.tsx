@@ -123,22 +123,6 @@ export function AppSidebar() {
                 { title: 'Purchase units', url: '/inventory/unit-conversions', icon: Scale },
             ],
         },
-        {
-            label: 'Purchasing',
-            items: [
-                { title: 'Suppliers', url: '/purchasing/suppliers', icon: Truck },
-                { title: 'Purchase orders', url: '/purchasing/purchase-orders', icon: ShoppingCart },
-                { title: 'Bills', url: '/purchasing/bills', icon: ReceiptText },
-                { title: 'Payments', url: '/purchasing/payments', icon: Banknote },
-                { title: 'Credit notes', url: '/purchasing/credit-notes', icon: FileText },
-                // ⚠⚠ Same class of gap as Sales below: RecordExpenseVoucher was
-                // built and tested with no route and no screen, so rent, fuel and
-                // utilities had nowhere to be entered and most of the P&L had no
-                // source at all. Reading the list is open to the business; only
-                // purchasing.expense.record may add one.
-                { title: 'Expenses', url: '/purchasing/expenses', icon: ReceiptText },
-            ],
-        },
         // ⚠⚠ SALES WAS DEPLOYED AND UNREACHABLE. Every page below was live in
         // production with no link to it anywhere in the application - not in this
         // sidebar and not from any other screen - so the entire revenue side of
@@ -168,6 +152,22 @@ export function AppSidebar() {
                   },
               ]
             : []),
+        {
+            label: 'Purchases',
+            items: [
+                { title: 'Suppliers', url: '/purchasing/suppliers', icon: Truck },
+                { title: 'Purchase orders', url: '/purchasing/purchase-orders', icon: ShoppingCart },
+                { title: 'Bills', url: '/purchasing/bills', icon: ReceiptText },
+                { title: 'Payments', url: '/purchasing/payments', icon: Banknote },
+                { title: 'Credit notes', url: '/purchasing/credit-notes', icon: FileText },
+                // ⚠⚠ Same class of gap as Sales above: RecordExpenseVoucher was
+                // built and tested with no route and no screen, so rent, fuel and
+                // utilities had nowhere to be entered and most of the P&L had no
+                // source at all. Reading the list is open to the business; only
+                // purchasing.expense.record may add one.
+                { title: 'Expenses', url: '/purchasing/expenses', icon: ReceiptText },
+            ],
+        },
         ...(canViewCrm
             ? [
                   {
@@ -199,44 +199,34 @@ export function AppSidebar() {
                   },
               ]
             : []),
-        ...(canManageEmployees
+        // One HRM section in the Dreams POS taxonomy, replacing the four
+        // one-and-three-item fragments (People / Scheduling / Attendance /
+        // Leave) it grew as. Same items, same per-permission gating - only
+        // the grouping changed, so a Staff user who can manage attendance
+        // and nothing else sees an HRM section holding exactly those four.
+        ...(canManageEmployees || canManageScheduling || canManageAttendance || canManageLeave
             ? [
                   {
-                      label: 'People',
-                      items: [{ title: 'Employees', url: '/hrm/employees', icon: Users }],
-                  },
-              ]
-            : []),
-        ...(canManageScheduling
-            ? [
-                  {
-                      label: 'Scheduling',
+                      label: 'HRM',
                       items: [
-                          { title: 'Schedules', url: '/hrm/schedules', icon: CalendarRange },
-                          { title: 'Shifts', url: '/hrm/shifts', icon: CalendarClock },
-                          { title: 'Calendars', url: '/hrm/calendars', icon: CalendarDays },
+                          ...(canManageEmployees ? [{ title: 'Employees', url: '/hrm/employees', icon: Users }] : []),
+                          ...(canManageScheduling
+                              ? [
+                                    { title: 'Schedules', url: '/hrm/schedules', icon: CalendarRange },
+                                    { title: 'Shifts', url: '/hrm/shifts', icon: CalendarClock },
+                                    { title: 'Calendars', url: '/hrm/calendars', icon: CalendarDays },
+                                ]
+                              : []),
+                          ...(canManageAttendance
+                              ? [
+                                    { title: 'Daily attendance', url: '/hrm/attendance/daily', icon: CalendarCheck },
+                                    { title: 'Punch log', url: '/hrm/attendance', icon: Fingerprint },
+                                    { title: 'Corrections', url: '/hrm/attendance/corrections', icon: PenSquare },
+                                    { title: 'Attendance import', url: '/hrm/attendance/import', icon: FileUp },
+                                ]
+                              : []),
+                          ...(canManageLeave ? [{ title: 'Leave & movement', url: '/hrm/leave', icon: Palmtree }] : []),
                       ],
-                  },
-              ]
-            : []),
-        ...(canManageAttendance
-            ? [
-                  {
-                      label: 'Attendance',
-                      items: [
-                          { title: 'Daily attendance', url: '/hrm/attendance/daily', icon: CalendarCheck },
-                          { title: 'Punch log', url: '/hrm/attendance', icon: Fingerprint },
-                          { title: 'Corrections', url: '/hrm/attendance/corrections', icon: PenSquare },
-                          { title: 'Import', url: '/hrm/attendance/import', icon: FileUp },
-                      ],
-                  },
-              ]
-            : []),
-        ...(canManageLeave
-            ? [
-                  {
-                      label: 'Leave',
-                      items: [{ title: 'Leave & movement', url: '/hrm/leave', icon: Palmtree }],
                   },
               ]
             : []),
@@ -268,7 +258,7 @@ export function AppSidebar() {
         ...(canViewAccounting
             ? [
                   {
-                      label: 'Accounting',
+                      label: 'Finance & Accounts',
                       items: [
                           // ⚠ The two statements first, and the trial balance
                           // after them. A trial balance answers "do the books
@@ -316,7 +306,7 @@ export function AppSidebar() {
         ...(canManageAttendance || canAccessSalary
             ? [
                   {
-                      label: 'Reporting',
+                      label: 'Reports',
                       items: [
                           // RPT-04. Same gate as Reports and for the same
                           // reason: the widget list is filtered per user
