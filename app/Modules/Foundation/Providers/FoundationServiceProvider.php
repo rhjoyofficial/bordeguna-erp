@@ -5,6 +5,9 @@ namespace App\Modules\Foundation\Providers;
 use App\Modules\Foundation\Console\Commands\CutoverPreflight;
 use App\Modules\Foundation\Console\Commands\TeardownSandbox;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\DatabaseTargetGuard;
+use Illuminate\Database\Events\MigrationsStarted;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -21,6 +24,25 @@ class FoundationServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             $this->commands([TeardownSandbox::class, CutoverPreflight::class]);
+
+            // ⚠⚠ Fires before the first migration in a run. Catches the case
+            // where DB_DATABASE was overridden per-command but the container's
+            // cached config ignored it, which put a migration on production on
+            // 2026-08-23. See DatabaseTargetGuard.
+            //
+            // ⚠ NOT registered under `testing`, and that exemption is load
+            // bearing rather than convenient: `--parallel` gives every process
+            // its own database (testing_1, testing_2, ...) while DB_DATABASE
+            // still names the base one, so the mismatch this guard exists to
+            // catch is the NORMAL state there. Registering it anyway failed
+            // dozens of unrelated tests with a QueryException. The assertion
+            // itself stays free of environment checks so it remains directly
+            // testable, which is how DatabaseTargetGuardTest proves it screams.
+            if (! $this->app->environment('testing')) {
+                Event::listen(MigrationsStarted::class, function (): void {
+                    DatabaseTargetGuard::assertConnectedToIntendedDatabase();
+                });
+            }
         }
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
 
