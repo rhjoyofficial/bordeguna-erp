@@ -63,11 +63,40 @@ class PendingApprovalNotification extends Notification implements ShouldQueue
     }
 
     /**
+     * ⚠⚠ IN-APP ONLY SINCE 2026-08-23, ON JOY'S INSTRUCTION: "do not send mail
+     * to request correction, ERP notification is enough." Every leave request,
+     * loan, correction, stock request and purchase order used to email its
+     * approver against a live SMTP host. The bell in the header and the
+     * approvals screen are where this belongs.
+     *
+     * ⚠ `toMail()` is KEPT below rather than deleted. The channel list is the
+     * switch; the message is the thing that would have to be rewritten from
+     * scratch if email is ever wanted again (a customer-facing deployment, an
+     * approver who is not a daily user). Deleting a working mail template to
+     * express a routing decision throws away the wrong half.
+     *
      * @return array<int, string>
      */
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return ['database'];
+    }
+
+    /**
+     * What the bell shows.
+     *
+     * ⚠ The URL is stored rather than rebuilt on read, so a notification still
+     * points where it pointed when it was raised, even if the route later moves.
+     *
+     * @return array<string, mixed>
+     */
+    public function toDatabase(object $notifiable): array
+    {
+        return [
+            'kind' => 'approval',
+            'summary' => $this->summary,
+            'url' => $this->url,
+        ];
     }
 
     public function toMail(object $notifiable): MailMessage

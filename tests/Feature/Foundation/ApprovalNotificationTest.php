@@ -99,7 +99,15 @@ it('emails stock approvers when a request is submitted, but not the submitter or
     Notification::assertNotSentTo($this->outsider, PendingApprovalNotification::class);
 });
 
-it('sends the pending-approval notification on the mail channel', function () {
+/**
+ * ⚠⚠ CHANGED 2026-08-23, DELIBERATELY. This test previously asserted the MAIL
+ * channel. Joy's instruction that day: "do not send mail to request correction,
+ * ERP notification is enough." Approvals now reach people through the bell in
+ * the header, which is why the assertion is inverted rather than deleted: the
+ * absence of mail is the requirement, and a test that merely stopped checking
+ * would let email creep back in unnoticed.
+ */
+it('sends the pending-approval notification in the app and never by mail', function () {
     Notification::fake();
 
     submitRequest();
@@ -107,7 +115,8 @@ it('sends the pending-approval notification on the mail channel', function () {
     Notification::assertSentTo(
         $this->approver,
         PendingApprovalNotification::class,
-        fn ($notification, array $channels) => in_array('mail', $channels, true),
+        fn ($notification, array $channels) => in_array('database', $channels, true)
+            && ! in_array('mail', $channels, true),
     );
 });
 

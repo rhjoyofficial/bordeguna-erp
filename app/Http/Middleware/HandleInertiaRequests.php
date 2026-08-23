@@ -60,6 +60,29 @@ class HandleInertiaRequests extends Middleware
             'current_business_id' => fn () => app(BusinessContext::class)->id(),
             'pendingApprovalsCount' => fn () => $this->actionableApprovalsCount($request),
             'canReviewApprovals' => fn () => $this->canReviewApprovals($request),
+            // The bell's own feed. In-app since 2026-08-23, when approval
+            // emails were switched off on Joy's instruction, so this is now the
+            // ONLY way an approver learns something is waiting.
+            //
+            // ⚠ Capped at five and shipped with a count, rather than the whole
+            // unread list. A dropdown is not an inbox, and serialising two
+            // hundred rows into every page load to render five of them is a
+            // cost paid on every request in the application.
+            'unreadNotificationsCount' => fn () => $request->user()?->unreadNotifications()->count() ?? 0,
+            'recentNotifications' => fn () => $request->user()
+                ?->unreadNotifications()
+                ->latest()
+                ->limit(5)
+                ->get()
+                ->map(fn ($n) => [
+                    'id' => $n->id,
+                    'summary' => $n->data['summary'] ?? 'Something needs your attention.',
+                    'url' => $n->data['url'] ?? null,
+                    'kind' => $n->data['kind'] ?? 'general',
+                    'at' => $n->created_at?->diffForHumans(),
+                ])
+                ->values()
+                ->all() ?? [],
             'canManageUsers' => fn () => (bool) $request->user()?->can('foundation.users.manage'),
             'canManageOrganization' => fn () => (bool) $request->user()?->can('foundation.organization.manage'),
             'canManageEmployees' => fn () => (bool) $request->user()?->can('hrm.employees.manage'),

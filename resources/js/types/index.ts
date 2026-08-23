@@ -49,6 +49,15 @@ export interface SharedData {
     flash: { success?: string | null; error?: string | null };
     pendingApprovalsCount: number;
     canReviewApprovals: boolean;
+    /** Stored, addressed to this user, and unread. In-app only since 23 Aug. */
+    unreadNotificationsCount: number;
+    recentNotifications: {
+        id: string;
+        summary: string;
+        url: string | null;
+        kind: string;
+        at: string | null;
+    }[];
     canManageUsers: boolean;
     canManageOrganization: boolean;
     canManageEmployees: boolean;

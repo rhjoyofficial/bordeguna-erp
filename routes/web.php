@@ -3,6 +3,7 @@
 use App\Http\Controllers\ApprovalInboxController;
 use App\Http\Controllers\AssistantController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -15,6 +16,11 @@ Route::middleware(['auth', 'business'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('approvals', [ApprovalInboxController::class, 'index'])->name('approvals.index');
+
+    // The bell's notifications. No index page on purpose: each one carries the
+    // url of the thing it is about, and the approvals queue is the work list.
+    Route::post('notifications/read', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+    Route::post('notifications/{notification}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
 
     // The floating chat guide. JSON in, JSON out - not a page, so the
     // reachability guard rightly ignores it; its way in is the message
