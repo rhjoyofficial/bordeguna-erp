@@ -76,7 +76,7 @@ function buyAndPay($test, Product $product, string $quantity, string $unitCost)
         lines: [['product' => $product, 'quantity' => $quantity, 'unit_cost' => $unitCost]],
         createdBy: $test->user,
     );
-    $order->approvalRequest->approve($test->user);
+    approveIfPending($order->approvalRequest, $test->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
     $line = $order->lines->first();
 

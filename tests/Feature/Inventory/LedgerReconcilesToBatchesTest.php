@@ -96,7 +96,7 @@ it('reconciles every batch to its own movements across a full trading day', func
         lines: [['product' => $this->product, 'quantity' => '10.5', 'unit_cost' => '120']],
         createdBy: $this->user,
     );
-    $order->approvalRequest->approve($this->user);
+    approveIfPending($order->approvalRequest, $this->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
 
     app(RecordGoodsReceipt::class)->handle($order, [

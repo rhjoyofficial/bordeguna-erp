@@ -126,7 +126,7 @@ function requestLoan(float $principal = 60000, float $installment = 5000, LoanTy
 function disbursedLoan(float $principal = 60000, float $installment = 5000): Loan
 {
     $loan = requestLoan($principal, $installment);
-    $loan->approvalRequest->approve(test()->hr);
+    approveIfPending($loan->approvalRequest, test()->hr);
 
     return app(DisburseLoan::class)->handle($loan);
 }
@@ -136,7 +136,7 @@ function disburseRun(PayrollRun $run): PayrollRun
 {
     $transition = app(TransitionPayrollRun::class);
     $transition->review($run, test()->hr);
-    $run->fresh()->approvalRequest->approve(test()->hr);
+    approveIfPending($run->fresh()->approvalRequest, test()->hr);
     $transition->markApproved($run->fresh(), test()->hr);
     $transition->disburse($run->fresh(), test()->hr);
 
@@ -175,7 +175,7 @@ it('creates nothing when a loan is rejected', function () {
 
 it('disburses at most once, however often it is applied', function () {
     $loan = requestLoan();
-    $loan->approvalRequest->approve($this->hr);
+    approveIfPending($loan->approvalRequest, $this->hr);
 
     app(DisburseLoan::class)->handle($loan);
     app(DisburseLoan::class)->handle($loan->fresh());
@@ -247,7 +247,7 @@ it('deducts nothing for a loan that was never disbursed', function () {
 
 it('labels a salary advance as a recovery rather than a loan repayment', function () {
     $advance = requestLoan(10000, 10000, LoanType::Advance);
-    $advance->approvalRequest->approve($this->hr);
+    approveIfPending($advance->approvalRequest, $this->hr);
     app(DisburseLoan::class)->handle($advance);
 
     $run = app(CalculatePayroll::class)->handle($this->period);
@@ -366,7 +366,7 @@ it('keeps loan recovery and carry-forward recovery as separate, explainable line
         $this->employee, PayrollAdjustmentType::Penalty, 80000, $this->period,
         'Disciplinary', UploadedFile::fake()->create('e.pdf', 5), $this->hr,
     );
-    $penalty->approvalRequest->approve($this->hr);
+    approveIfPending($penalty->approvalRequest, $this->hr);
 
     $run = app(CalculatePayroll::class)->handle($this->period);
     $payslip = $run->payslips()->sole();

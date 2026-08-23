@@ -79,7 +79,7 @@ function receiveKilograms($test, string $kilograms, string $costPerKilogram)
         createdBy: $test->user,
     );
 
-    $order->approvalRequest->approve($test->user);
+    approveIfPending($order->approvalRequest, $test->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
 
     app(RecordGoodsReceipt::class)->handle($order, [
@@ -271,7 +271,7 @@ it('does not convert a product bought in the unit it is stocked in', function ()
         lines: [['product' => $plain, 'quantity' => '50', 'unit_cost' => '2520']],
         createdBy: $this->user,
     );
-    $order->approvalRequest->approve($this->user);
+    approveIfPending($order->approvalRequest, $this->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
 
     app(RecordGoodsReceipt::class)->handle($order, [

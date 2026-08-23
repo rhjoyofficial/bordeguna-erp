@@ -125,7 +125,7 @@ function disbursedRun(PayrollPeriod $period): PayrollRun
     $run = app(CalculatePayroll::class)->handle($period);
     $transition = app(TransitionPayrollRun::class);
     $transition->review($run, test()->hr);
-    $run->fresh()->approvalRequest->approve(test()->hr);
+    approveIfPending($run->fresh()->approvalRequest, test()->hr);
     $transition->markApproved($run->fresh(), test()->hr);
     $transition->disburse($run->fresh(), test()->hr);
 

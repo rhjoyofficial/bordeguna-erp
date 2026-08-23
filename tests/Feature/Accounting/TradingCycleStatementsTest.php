@@ -134,7 +134,7 @@ it('produces a correct profit and loss and a balancing sheet from one real tradi
         lines: [['product' => $this->product, 'quantity' => '20', 'unit_cost' => '500']],
         createdBy: $this->user,
     );
-    $order->approvalRequest->approve($this->user);
+    approveIfPending($order->approvalRequest, $this->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
 
     app(RecordGoodsReceipt::class)->handle($order, [
@@ -256,7 +256,7 @@ it('shows a margin a manager can act on', function () {
         lines: [['product' => $this->product, 'quantity' => '20', 'unit_cost' => '500']],
         createdBy: $this->user,
     );
-    $order->approvalRequest->approve($this->user);
+    approveIfPending($order->approvalRequest, $this->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
     app(RecordGoodsReceipt::class)->handle($order, [
         ['line' => $order->lines->first(), 'quantity' => '20'],

@@ -63,7 +63,7 @@ function receivedPurchaseOrder(Business $business, Supplier $supplier, Warehouse
         lines: [['product' => $product, 'quantity' => $quantity, 'unit_cost' => $unitCost]],
         createdBy: $createdBy,
     );
-    $order->approvalRequest->approve($createdBy);
+    approveIfPending($order->approvalRequest, $createdBy);
     $order = $order->fresh(['lines', 'approvalRequest']);
 
     app(RecordGoodsReceipt::class)->handle($order, [['line' => $order->lines->first(), 'quantity' => $quantity]], $createdBy);
@@ -98,7 +98,7 @@ it('refuses to return anything against a cancelled purchase order', function () 
         lines: [['product' => $this->product, 'quantity' => '10', 'unit_cost' => '15']],
         createdBy: $this->manager,
     );
-    $order->approvalRequest->approve($this->manager);
+    approveIfPending($order->approvalRequest, $this->manager);
     $order = $order->fresh(['lines', 'approvalRequest']);
     $order->update(['status' => PurchaseOrderStatus::Cancelled]);
 

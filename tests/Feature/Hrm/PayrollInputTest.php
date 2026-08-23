@@ -214,7 +214,7 @@ it('credits compensatory leave for holiday work and pays nothing', function () {
 
 it('posts the compensatory credit exactly once, however often it is applied', function () {
     $assignment = app(RequestOvertime::class)->handle($this->employee, WORK_DATE, 8, true, 'Eid coverage', $this->hr);
-    $assignment->approvalRequest->approve($this->hr);
+    approveIfPending($assignment->approvalRequest, $this->hr);
 
     app(ApplyOvertimeAssignment::class)->handle($assignment);
     app(ApplyOvertimeAssignment::class)->handle($assignment->fresh());
@@ -372,7 +372,7 @@ it('gives every adjustment type its own payslip line rather than netting them', 
     $penalty = adjustment(PayrollAdjustmentType::Penalty, 400);
     // Second adjustment needs its own approval.
     foreach (PayrollAdjustment::all() as $a) {
-        $a->approvalRequest->approve($this->hr);
+        approveIfPending($a->approvalRequest, $this->hr);
     }
 
     $run = app(CalculatePayroll::class)->handle($this->period);
@@ -396,7 +396,7 @@ it('refuses an adjustment pointed at a payroll month that is already disbursed',
     $run = app(CalculatePayroll::class)->handle($this->period);
     $transition = app(TransitionPayrollRun::class);
     $transition->review($run, $this->hr);
-    $run->approvalRequest->approve($this->hr);
+    approveIfPending($run->approvalRequest, $this->hr);
     $transition->markApproved($run->fresh(), $this->hr);
     $transition->disburse($run->fresh(), $this->hr);
 
@@ -410,7 +410,7 @@ it('refuses an adjustment pointed at a payroll month that is already disbursed',
 function negativeRun()
 {
     $adjustment = adjustment(PayrollAdjustmentType::Recovery, 80000);
-    $adjustment->approvalRequest->approve(test()->hr);
+    approveIfPending($adjustment->approvalRequest, test()->hr);
 
     return app(CalculatePayroll::class)->handle(test()->period);
 }
@@ -479,7 +479,7 @@ it('recovers the balance in full from the next payroll and closes it on disburse
 
     $transition = app(TransitionPayrollRun::class);
     $transition->review($next->fresh(), $this->hr);
-    $next->fresh()->approvalRequest->approve($this->hr);
+    approveIfPending($next->fresh()->approvalRequest, $this->hr);
     $transition->markApproved($next->fresh(), $this->hr);
     $transition->disburse($next->fresh(), $this->hr);
 

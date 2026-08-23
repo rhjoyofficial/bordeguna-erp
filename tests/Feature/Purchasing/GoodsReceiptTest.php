@@ -49,7 +49,7 @@ function approvedPurchaseOrder(Business $business, Supplier $supplier, Warehouse
         createdBy: $createdBy,
     );
 
-    $order->approvalRequest->approve($createdBy);
+    approveIfPending($order->approvalRequest, $createdBy);
 
     return $order->fresh(['lines', 'approvalRequest']);
 }

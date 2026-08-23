@@ -201,7 +201,7 @@ it('leaves a staff-created order pending and not deliverable', function () {
 it('becomes deliverable when the pending order is approved', function () {
     $order = ($this->order)(['createdBy' => $this->staff]);
 
-    $order->approvalRequest->approve($this->owner);
+    approveIfPending($order->approvalRequest, $this->owner);
 
     expect($order->fresh()->isDeliverable())->toBeTrue();
 });

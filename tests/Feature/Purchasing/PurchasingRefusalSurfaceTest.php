@@ -84,7 +84,7 @@ beforeEach(function () {
             createdBy: $this->manager,
         );
 
-        $order->approvalRequest->approve($this->manager);
+        approveIfPending($order->approvalRequest, $this->manager);
 
         return $order->fresh(['lines', 'approvalRequest']);
     };

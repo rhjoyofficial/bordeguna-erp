@@ -4,6 +4,7 @@ namespace App\Modules\Foundation\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Exceptions\ApprovalAlreadyDecidedException;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -150,6 +151,8 @@ class ApprovalRequest extends Model
      */
     public function approve(User $reviewedBy, ?string $note = null): bool
     {
+        $this->assertStillPending();
+
         $this->recordDecision($reviewedBy, ApprovalStatus::Approved, $note);
 
         if ($this->current_stage >= $this->totalStages()) {
@@ -174,6 +177,8 @@ class ApprovalRequest extends Model
      */
     public function reject(User $reviewedBy, ?string $reviewNote = null): void
     {
+        $this->assertStillPending();
+
         $this->recordDecision($reviewedBy, ApprovalStatus::Rejected, $reviewNote);
 
         $this->update([
@@ -182,6 +187,47 @@ class ApprovalRequest extends Model
             'reviewed_at' => now(),
             'review_note' => $reviewNote,
         ]);
+    }
+
+    /**
+     * Refuse a second decision on a request somebody has already settled.
+     *
+     * ⚠⚠ THIS IS THE ONLY THING STANDING BETWEEN TWO APPROVERS AND CORRUPTED
+     * DATA. Both can hold the same pending request on screen. Without this,
+     * one approving and the other rejecting wrote a second decision row and
+     * overwrote `status`, while the underlying leave, loan or movement stayed
+     * in whatever state the FIRST decision applied. Nothing errored, which is
+     * why it went unnoticed.
+     *
+     * ⚠ Re-read from the database rather than trusting `$this->status`. The
+     * instance in memory was loaded when the page was rendered, possibly
+     * minutes ago, and it is exactly the stale copy the race runs through.
+     *
+     * ⚠⚠ `lockForUpdate` IS DELIBERATE AND IS NOT THE GUARD. It serialises two
+     * simultaneous requests on MySQL so the loser reads the winner's committed
+     * status. It is a NO-OP on SQLite, so the tests would still pass with it
+     * removed - the status comparison below is what actually refuses, and it is
+     * correct on both. Recorded because this project has been bitten by a
+     * `lockForUpdate` that silently did nothing before.
+     */
+    private function assertStillPending(): void
+    {
+        $current = static::query()
+            ->withoutGlobalScopes()
+            ->whereKey($this->getKey())
+            ->lockForUpdate()
+            ->first();
+
+        if ($current === null || $current->status !== ApprovalStatus::Pending) {
+            throw ApprovalAlreadyDecidedException::for($current ?? $this);
+        }
+
+        // The winner may have advanced the stage rather than finishing the
+        // request. Approving "the current stage" from a page that showed an
+        // earlier one is a decision nobody made.
+        if ($current->current_stage !== $this->current_stage) {
+            throw ApprovalAlreadyDecidedException::for($current);
+        }
     }
 
     private function recordDecision(User $decidedBy, ApprovalStatus $decision, ?string $note): void

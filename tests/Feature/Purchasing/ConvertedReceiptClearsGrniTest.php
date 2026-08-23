@@ -102,7 +102,7 @@ function receiveAndBill($test, string $kilograms, string $costPerKilogram): void
         lines: [['product' => $test->oil, 'quantity' => $kilograms, 'unit_cost' => $costPerKilogram]],
         createdBy: $test->user,
     );
-    $order->approvalRequest->approve($test->user);
+    approveIfPending($order->approvalRequest, $test->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
     $line = $order->lines->first();
 
@@ -185,7 +185,7 @@ it('clears GRNI when a converted delivery is received and then wholly returned',
         lines: [['product' => $this->oil, 'quantity' => '1000', 'unit_cost' => '319.99']],
         createdBy: $this->user,
     );
-    $order->approvalRequest->approve($this->user);
+    approveIfPending($order->approvalRequest, $this->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
     $line = $order->lines->first();
 

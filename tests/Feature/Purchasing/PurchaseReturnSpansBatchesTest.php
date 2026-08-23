@@ -75,7 +75,7 @@ function orderReceivedTwice($test, Product $product, string $first, string $seco
         lines: [['product' => $product, 'quantity' => $total, 'unit_cost' => $unitCost]],
         createdBy: $test->user,
     );
-    $order->approvalRequest->approve($test->user);
+    approveIfPending($order->approvalRequest, $test->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
 
     app(RecordGoodsReceipt::class)->handle($order, [['line' => $order->lines->first(), 'quantity' => $first]], $test->user);
@@ -160,7 +160,7 @@ it('credits Stock on Hand for BOTH batches, not just the first', function () {
         lines: [['product' => $jars, 'quantity' => '100', 'unit_cost' => '25.00']],
         createdBy: $this->user,
     );
-    $order->approvalRequest->approve($this->user);
+    approveIfPending($order->approvalRequest, $this->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
 
     app(RecordGoodsReceipt::class)->handle($order, [['line' => $order->lines->first(), 'quantity' => '40']], $this->user);
@@ -376,7 +376,7 @@ it('refuses a return whose deliveries straddle the recording of a conversion', f
         lines: [['product' => $oil, 'quantity' => '100', 'unit_cost' => '320.00']],
         createdBy: $this->user,
     );
-    $order->approvalRequest->approve($this->user);
+    approveIfPending($order->approvalRequest, $this->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
 
     // Delivery 1: no conversion exists yet, so nothing converts.

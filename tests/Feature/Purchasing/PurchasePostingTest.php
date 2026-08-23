@@ -64,7 +64,7 @@ beforeEach(function () {
         lines: [['product' => $this->product, 'quantity' => '100', 'unit_cost' => '25.00']],
         createdBy: $this->user,
     );
-    $this->order->approvalRequest->approve($this->user);
+    approveIfPending($this->order->approvalRequest, $this->user);
     $this->order = $this->order->fresh(['lines', 'approvalRequest']);
     $this->line = $this->order->lines->first();
 

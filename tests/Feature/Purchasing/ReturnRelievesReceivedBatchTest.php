@@ -66,7 +66,7 @@ function receivedOrder($test, string $quantity, string $unitCost)
         createdBy: $test->user,
     );
 
-    $order->approvalRequest->approve($test->user);
+    approveIfPending($order->approvalRequest, $test->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
 
     app(RecordGoodsReceipt::class)->handle($order, [
@@ -138,7 +138,7 @@ it('spreads a return across that order\'s own receipts when it was delivered in 
         lines: [['product' => $this->product, 'quantity' => '10', 'unit_cost' => '120']],
         createdBy: $this->user,
     );
-    $order->approvalRequest->approve($this->user);
+    approveIfPending($order->approvalRequest, $this->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
 
     app(RecordGoodsReceipt::class)->handle($order, [['line' => $order->lines->first(), 'quantity' => '4']], $this->user);

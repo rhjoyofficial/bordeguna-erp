@@ -158,7 +158,7 @@ function disRun(): PayrollRun
     $transition = app(TransitionPayrollRun::class);
 
     $transition->review($run, test()->hr);
-    $run->fresh()->approvalRequest->approve(test()->hr);
+    approveIfPending($run->fresh()->approvalRequest, test()->hr);
     $transition->markApproved($run->fresh(), test()->hr);
     $transition->disburse($run->fresh(), test()->hr);
 
@@ -176,7 +176,7 @@ function disLoan(float $principal = 60000, float $installment = 5000): Loan
         test()->employee, LoanType::Loan, $principal, $installment,
         test()->startYear, test()->startMonth, 'Family medical expenses', test()->hr,
     );
-    $loan->approvalRequest->approve(test()->hr);
+    approveIfPending($loan->approvalRequest, test()->hr);
 
     return app(DisburseLoan::class)->handle($loan);
 }

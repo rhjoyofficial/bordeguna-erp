@@ -9,6 +9,7 @@ use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Contracts\Session\Middleware\AuthenticatesSessions;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Application;
+use App\Modules\Foundation\Exceptions\ApprovalAlreadyDecidedException;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
@@ -99,5 +100,18 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        // Two approvers, one request. The loser of the race gets a sentence
+        // telling them what happened and where it stands, not a blank 500.
         //
+        // ⚠ Handled centrally rather than in each controller because approvals
+        // are raised from a dozen places (leave, loans, corrections, movements,
+        // bonuses, stock requests, purchase orders, change requests) and a
+        // guard that only some of them catch is a guard with holes in it.
+        $exceptions->render(function (ApprovalAlreadyDecidedException $e, $request) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $e->getMessage()], 409);
+            }
+
+            return back()->with('error', $e->getMessage());
+        });
     })->create();

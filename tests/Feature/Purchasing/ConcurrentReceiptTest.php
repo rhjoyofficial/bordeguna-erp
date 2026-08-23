@@ -67,7 +67,7 @@ function racedOrder($test, string $quantity = '10', string $unitCost = '15')
         createdBy: $test->user,
     );
 
-    $order->approvalRequest->approve($test->user);
+    approveIfPending($order->approvalRequest, $test->user);
 
     return $order->fresh(['lines', 'approvalRequest']);
 }

@@ -81,7 +81,7 @@ beforeEach(function () {
         lines: [['product' => $this->product, 'quantity' => '100', 'unit_cost' => '320.00']],
         createdBy: $this->manager,
     );
-    $this->order->approvalRequest->approve($this->manager);
+    approveIfPending($this->order->approvalRequest, $this->manager);
     $this->order = $this->order->fresh(['lines', 'approvalRequest']);
     $this->line = $this->order->lines->first();
 
@@ -217,7 +217,7 @@ it('refuses a line belonging to a different purchase order', function () {
         lines: [['product' => $this->product, 'quantity' => '10', 'unit_cost' => '320.00']],
         createdBy: $this->manager,
     );
-    $other->approvalRequest->approve($this->manager);
+    approveIfPending($other->approvalRequest, $this->manager);
     $otherLine = $other->fresh('lines')->lines->first();
 
     app(RecordGoodsReceipt::class)->handle($other->fresh('lines'), [

@@ -191,7 +191,7 @@ it('runs the whole cutover, and every report agrees with what the business did',
         lines: [['product' => $this->honey, 'quantity' => '60', 'unit_cost' => '320.00']],
         createdBy: $this->user,
     );
-    $order->approvalRequest->approve($this->user);
+    approveIfPending($order->approvalRequest, $this->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
     $orderLine = $order->lines->first();
 

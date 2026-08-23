@@ -107,7 +107,7 @@ beforeEach(function () {
             lines: [['product' => $this->product, 'quantity' => $quantity, 'unit_cost' => $unitCost]],
             createdBy: $this->user,
         );
-        $order->approvalRequest->approve($this->user);
+        approveIfPending($order->approvalRequest, $this->user);
         $order = $order->fresh(['lines', 'approvalRequest']);
 
         app(RecordGoodsReceipt::class)->handle(

@@ -81,7 +81,7 @@ it('completes purchase order to payment and reconciles every ledger', function (
         lines: [['product' => $this->product, 'quantity' => '100', 'unit_cost' => '320.00']],
         createdBy: $this->user,
     );
-    $order->approvalRequest->approve($this->user);
+    approveIfPending($order->approvalRequest, $this->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
     $line = $order->lines->first();
 
@@ -140,7 +140,7 @@ it('reconciles after a partial bill leaves GRNI genuinely outstanding', function
         lines: [['product' => $this->product, 'quantity' => '100', 'unit_cost' => '320.00']],
         createdBy: $this->user,
     );
-    $order->approvalRequest->approve($this->user);
+    approveIfPending($order->approvalRequest, $this->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
     $line = $order->lines->first();
 

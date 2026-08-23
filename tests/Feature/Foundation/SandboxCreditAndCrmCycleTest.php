@@ -76,7 +76,14 @@ beforeEach(function () {
         lines: [['product' => $honey, 'quantity' => '100', 'unit_cost' => '480.00']],
         createdBy: $this->user,
     );
-    $order->approvalRequest->approve($this->user);
+    // ⚠ NOT approved here. CreatePurchaseOrder self-approves when the creator
+    // holds purchasing.po.approve, and this user is an Owner, so the order is
+    // already Approved by the time it is returned. This line used to call
+    // approve() a second time; it wrote a duplicate decision row and reset
+    // reviewed_at, and nothing complained. The concurrency guard added on
+    // 2026-08-23 refuses it, which is how the double approval was noticed.
+    expect($order->approvalRequest->fresh()->isPending())->toBeFalse();
+
     $order = $order->fresh(['lines', 'approvalRequest']);
     $line = $order->lines->first();
 

@@ -67,7 +67,7 @@ beforeEach(function () {
         lines: [['product' => $this->product, 'quantity' => '100', 'unit_cost' => '320.00']],
         createdBy: $this->user,
     );
-    $this->order->approvalRequest->approve($this->user);
+    approveIfPending($this->order->approvalRequest, $this->user);
     $this->order = $this->order->fresh(['lines', 'approvalRequest']);
     $this->line = $this->order->lines->first();
 
@@ -173,7 +173,7 @@ it('keeps the variance exact on awkward decimals', function () {
         lines: [['product' => $this->product, 'quantity' => '3', 'unit_cost' => '0.29']],
         createdBy: $this->user,
     );
-    $order->approvalRequest->approve($this->user);
+    approveIfPending($order->approvalRequest, $this->user);
     $order = $order->fresh(['lines', 'approvalRequest']);
     $line = $order->lines->first();
 

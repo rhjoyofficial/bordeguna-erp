@@ -45,3 +45,29 @@ function something()
 {
     // ..
 }
+
+/**
+ * Approve a request only if it is still waiting for a decision.
+ *
+ * ⚠⚠ WHY THIS EXISTS. Several actions self-approve when the creator already
+ * holds the approve permission - CreatePurchaseOrder does, and most test users
+ * are Owners - so the object handed back is already Approved. Around thirty
+ * test setups then called `approve()` on it a second time. That used to be
+ * silent: a duplicate row in `approval_decisions` and a reset `reviewed_at`,
+ * with nothing to notice. The concurrency guard added on 2026-08-23 refuses it,
+ * which is how the double approval was found.
+ *
+ * ⚠ This is a TEST convenience only. Production never needs it: every approve
+ * action already checks `isPending()` first, which is exactly what this does.
+ */
+function approveIfPending(
+    \App\Modules\Foundation\Models\ApprovalRequest $request,
+    \App\Models\User $user,
+    ?string $note = null,
+): void {
+    $current = $request->fresh();
+
+    if ($current !== null && $current->isPending()) {
+        $current->approve($user, $note);
+    }
+}
