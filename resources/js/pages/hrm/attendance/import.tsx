@@ -81,25 +81,25 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                     </p>
                 </div>
 
+                {/* One folded line instead of a card of chips - the warning
+                    matters, the geometry did not (Joy: take less area). */}
                 {unmapped_employees.length > 0 && (
-                    <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                        <h3 className="text-sm font-medium">
-                            {unmapped_employees.length} employee{unmapped_employees.length === 1 ? '' : 's'} without a biometric enroll ID
-                        </h3>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                            Imported rows are matched on the device&apos;s enroll ID, so these employees will be skipped. Set it on the employee record.
+                    <details className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                        <summary className="cursor-pointer">
+                            {unmapped_employees.length} employee{unmapped_employees.length === 1 ? '' : 's'} without a biometric enroll ID will be
+                            skipped - open for who
+                        </summary>
+                        <p className="mt-1 text-xs">
+                            Imported rows are matched on the device&apos;s enroll ID. Set it on the employee record:{' '}
+                            {unmapped_employees.map((e) => `${e.name} (${e.employee_code})`).join(', ')}.
                         </p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                            {unmapped_employees.map((e) => (
-                                <Badge key={e.id} variant="secondary">
-                                    {e.name} ({e.employee_code})
-                                </Badge>
-                            ))}
-                        </div>
-                    </div>
+                    </details>
                 )}
 
-                <div className="border-sidebar-border/70 dark:border-sidebar-border grid gap-4 rounded-xl border p-4 sm:grid-cols-3">
+                {/* The whole form on one row on a desktop - file, source,
+                    device, go - instead of a three-column card plus a button
+                    row beneath it. */}
+                <div className="border-sidebar-border/70 dark:border-sidebar-border grid items-end gap-3 rounded-xl border p-3 sm:grid-cols-[1.7fr_1fr_1fr_auto]">
                     <div className="grid gap-2">
                         <Label htmlFor="file">Attendance file</Label>
                         <Input
@@ -128,11 +128,19 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                         <Input id="device" value={device} onChange={(e) => setDevice(e.target.value)} placeholder="e.g. K40-Gate-1" />
                         {errors.device_identifier && <p className="text-xs text-destructive">{errors.device_identifier}</p>}
                     </div>
-                    <div className="sm:col-span-3">
+                    <div>
                         <Button onClick={submit} disabled={!file || uploading}>
                             {uploading ? 'Importing…' : 'Import'}
                         </Button>
                     </div>
+                    {/* ⚠ The lesson of 23 Aug, printed where it is needed: an
+                        import lands PUNCHES, and the screens keep showing the
+                        old world until the days are reprocessed. Saying it here
+                        beats rediscovering it as "the import looks broken". */}
+                    <p className="text-muted-foreground text-xs sm:col-span-4">
+                        After importing, processed attendance updates on the nightly run. To see it now, open Daily attendance and press
+                        Recalculate for the imported dates.
+                    </p>
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">

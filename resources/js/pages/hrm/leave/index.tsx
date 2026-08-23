@@ -351,17 +351,34 @@ export default function LeaveIndex({
     const reload = (params: Record<string, string | number | null>) =>
         router.get(route('hrm.leave.index'), { year, ...filters, ...params }, { preserveState: true, preserveScroll: true, replace: true });
 
+    // ⚠ Compact by instruction (Joy, 23 Aug 2026: "design looks not good.
+    // always try to take less area"). Five stacked full-width sections became
+    // ONE tabbed card: the work list (requests) first, the rest a click away
+    // instead of a scroll away. Nothing was removed - only the geometry.
+    const [section, setSection] = useState<'requests' | 'movements' | 'types' | 'ledger'>('requests');
+
+    const sections = [
+        { key: 'requests' as const, label: `Requests (${requests.length})` },
+        { key: 'movements' as const, label: `Movements (${movements.length})` },
+        { key: 'types' as const, label: 'Leave types' },
+        ...(filters.employee_id !== null && ledger.length > 0 ? [{ key: 'ledger' as const, label: 'Balance ledger' }] : []),
+    ];
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Leave" />
-            <div className="flex flex-col gap-6 p-4">
+            <div className="flex flex-col gap-4 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-lg font-medium">Leave &amp; movement</h2>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <Label htmlFor="year" className="text-sm text-muted-foreground">
-                            Year
-                        </Label>
-                        <Input id="year" type="number" className="w-28" defaultValue={year} onBlur={(e) => reload({ year: Number(e.target.value) })} />
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                            id="year"
+                            type="number"
+                            className="w-24"
+                            aria-label="Year"
+                            defaultValue={year}
+                            onBlur={(e) => reload({ year: Number(e.target.value) })}
+                        />
                         <select
                             className={selectClass}
                             value={filters.employee_id ?? ''}
@@ -374,11 +391,7 @@ export default function LeaveIndex({
                                 </option>
                             ))}
                         </select>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => router.post(route('hrm.leave.quota'), { year }, { preserveScroll: true })}
-                        >
+                        <Button size="sm" variant="outline" onClick={() => router.post(route('hrm.leave.quota'), { year }, { preserveScroll: true })}>
                             Grant {year} quota
                         </Button>
                         <LeaveDialog employees={employees} leaveTypes={leave_types} portions={portions} />
@@ -389,135 +402,147 @@ export default function LeaveIndex({
                     </div>
                 </div>
 
-                <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">Leave types</h3>
-                    <table className="w-full min-w-[44rem] text-sm">
-                        <thead>
-                            <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
-                                <th className="py-2">Type</th>
-                                <th className="py-2">Annual quota</th>
-                                <th className="py-2">Draws on balance</th>
-                                <th className="py-2">Carries forward</th>
-                                <th className="py-2">Encashable</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {leave_types.map((t) => (
-                                <tr key={t.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                    <td className="py-2">{t.name}</td>
-                                    <td className="py-2 text-muted-foreground">{t.annual_quota}</td>
-                                    <td className="py-2 text-muted-foreground">{t.deducts_balance ? 'Yes' : 'No'}</td>
-                                    <td className="py-2 text-muted-foreground">
-                                        {t.can_carry_forward ? `Up to ${t.carry_forward_cap}` : 'No'}
-                                    </td>
-                                    <td className="py-2 text-muted-foreground">{t.can_encash ? 'On separation' : 'No'}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-
+                {/* One employee chosen: their balances as a chip row, not four cards. */}
                 {filters.employee_id !== null && balances.length > 0 && (
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="flex flex-wrap gap-2">
                         {balances
                             .filter((b) => b.deducts_balance)
                             .map((b) => (
-                                <div key={b.id} className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                                    <div className="text-sm font-medium">{b.name}</div>
-                                    <div className="mt-1 text-2xl font-medium">{b.balance}</div>
-                                    <div className="text-xs text-muted-foreground">
-                                        available · {b.taken} taken of {b.annual_quota}
-                                    </div>
-                                </div>
+                                <span key={b.id} className="border-border inline-flex items-baseline gap-2 rounded-full border px-3 py-1 text-sm">
+                                    {b.name}
+                                    <span className="font-semibold tabular-nums">{b.balance}</span>
+                                    <span className="text-muted-foreground text-xs">
+                                        {b.taken} taken of {b.annual_quota}
+                                    </span>
+                                </span>
                             ))}
                     </div>
                 )}
 
-                <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">Leave requests</h3>
-                    {requests.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No leave requests yet.</p>
-                    ) : (
-                        <table className="w-full min-w-[60rem] text-sm">
-                            <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
-                                    <th className="py-2">Employee</th>
-                                    <th className="py-2">Type</th>
-                                    <th className="py-2">Dates</th>
-                                    <th className="py-2">Days</th>
-                                    <th className="py-2">Reason</th>
-                                    <th className="py-2">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {requests.map((r) => (
-                                    <tr key={r.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                        <td className="py-2">
-                                            {r.employee}
-                                            <span className="ml-2 text-xs text-muted-foreground">{r.employee_code}</span>
-                                        </td>
-                                        <td className="py-2 text-muted-foreground">{r.leave_type}</td>
-                                        <td className="py-2 whitespace-nowrap">
-                                            {r.start_date}
-                                            {r.end_date !== r.start_date && ` → ${r.end_date}`}
-                                        </td>
-                                        <td className="py-2">
-                                            {r.days}
-                                            {r.unpaid_days > 0 && <span className="ml-1 text-xs text-destructive">({r.unpaid_days} unpaid)</span>}
-                                        </td>
-                                        <td className="py-2 text-xs text-muted-foreground">{r.reason}</td>
-                                        <td className="py-2">
-                                            <Badge variant={r.is_applied ? 'default' : 'secondary'}>{r.is_applied ? 'Approved' : r.status}</Badge>
-                                            {r.stage && !r.is_applied && <span className="ml-2 text-xs text-muted-foreground">at {r.stage}</span>}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-
-                <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">Movements</h3>
-                    {movements.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No movements yet.</p>
-                    ) : (
-                        <table className="w-full min-w-[48rem] text-sm">
-                            <tbody>
-                                {movements.map((m) => (
-                                    <tr key={m.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                        <td className="py-2 text-muted-foreground">{m.summary}</td>
-                                        <td className="py-2 text-xs text-muted-foreground">{m.reason}</td>
-                                        <td className="py-2">
-                                            <Badge variant={m.is_applied ? 'default' : 'secondary'}>{m.is_applied ? 'Approved' : m.status}</Badge>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-
-                {filters.employee_id !== null && ledger.length > 0 && (
-                    <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                        <h3 className="mb-3 text-sm font-medium">Balance ledger</h3>
-                        <table className="w-full min-w-[44rem] text-sm">
-                            <tbody>
-                                {ledger.map((entry) => (
-                                    <tr key={entry.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                        <td className="py-2 whitespace-nowrap">{entry.date}</td>
-                                        <td className="py-2">{entry.type}</td>
-                                        <td className="py-2 text-muted-foreground">{entry.entry_type}</td>
-                                        <td className={`py-2 ${entry.days < 0 ? 'text-destructive' : ''}`}>
-                                            {entry.days > 0 ? `+${entry.days}` : entry.days}
-                                        </td>
-                                        <td className="py-2 text-xs text-muted-foreground">{entry.note}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border">
+                    <div className="border-border flex gap-1 overflow-x-auto border-b px-3 pt-2">
+                        {sections.map((tab) => (
+                            <button
+                                key={tab.key}
+                                type="button"
+                                onClick={() => setSection(tab.key)}
+                                className={
+                                    section === tab.key
+                                        ? 'border-primary text-foreground -mb-px border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap'
+                                        : 'text-muted-foreground hover:text-foreground -mb-px border-b-2 border-transparent px-3 py-2 text-sm whitespace-nowrap'
+                                }
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
                     </div>
-                )}
+
+                    <div className="overflow-x-auto p-3">
+                        {section === 'requests' &&
+                            (requests.length === 0 ? (
+                                <p className="text-muted-foreground p-2 text-sm">No leave requests yet.</p>
+                            ) : (
+                                <table className="w-full min-w-[60rem] text-sm">
+                                    <thead>
+                                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                            <th className="py-1.5">Employee</th>
+                                            <th className="py-1.5">Type</th>
+                                            <th className="py-1.5">Dates</th>
+                                            <th className="py-1.5">Days</th>
+                                            <th className="py-1.5">Reason</th>
+                                            <th className="py-1.5">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {requests.map((r) => (
+                                            <tr key={r.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                                <td className="py-1.5">
+                                                    {r.employee}
+                                                    <span className="text-muted-foreground ml-2 text-xs">{r.employee_code}</span>
+                                                </td>
+                                                <td className="text-muted-foreground py-1.5">{r.leave_type}</td>
+                                                <td className="py-1.5 whitespace-nowrap">
+                                                    {r.start_date}
+                                                    {r.end_date !== r.start_date && ` → ${r.end_date}`}
+                                                </td>
+                                                <td className="py-1.5">
+                                                    {r.days}
+                                                    {r.unpaid_days > 0 && <span className="text-destructive ml-1 text-xs">({r.unpaid_days} unpaid)</span>}
+                                                </td>
+                                                <td className="text-muted-foreground py-1.5 text-xs">{r.reason}</td>
+                                                <td className="py-1.5">
+                                                    <Badge variant={r.is_applied ? 'default' : 'secondary'}>{r.is_applied ? 'Approved' : r.status}</Badge>
+                                                    {r.stage && !r.is_applied && <span className="text-muted-foreground ml-2 text-xs">at {r.stage}</span>}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ))}
+
+                        {section === 'movements' &&
+                            (movements.length === 0 ? (
+                                <p className="text-muted-foreground p-2 text-sm">No movements yet.</p>
+                            ) : (
+                                <table className="w-full min-w-[48rem] text-sm">
+                                    <tbody>
+                                        {movements.map((m) => (
+                                            <tr key={m.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                                <td className="text-muted-foreground py-1.5">{m.summary}</td>
+                                                <td className="text-muted-foreground py-1.5 text-xs">{m.reason}</td>
+                                                <td className="py-1.5">
+                                                    <Badge variant={m.is_applied ? 'default' : 'secondary'}>{m.is_applied ? 'Approved' : m.status}</Badge>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ))}
+
+                        {section === 'types' && (
+                            <table className="w-full min-w-[44rem] text-sm">
+                                <thead>
+                                    <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                        <th className="py-1.5">Type</th>
+                                        <th className="py-1.5">Annual quota</th>
+                                        <th className="py-1.5">Draws on balance</th>
+                                        <th className="py-1.5">Carries forward</th>
+                                        <th className="py-1.5">Encashable</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {leave_types.map((t) => (
+                                        <tr key={t.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                            <td className="py-1.5">{t.name}</td>
+                                            <td className="text-muted-foreground py-1.5">{t.annual_quota}</td>
+                                            <td className="text-muted-foreground py-1.5">{t.deducts_balance ? 'Yes' : 'No'}</td>
+                                            <td className="text-muted-foreground py-1.5">{t.can_carry_forward ? `Up to ${t.carry_forward_cap}` : 'No'}</td>
+                                            <td className="text-muted-foreground py-1.5">{t.can_encash ? 'On separation' : 'No'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+
+                        {section === 'ledger' && (
+                            <table className="w-full min-w-[44rem] text-sm">
+                                <tbody>
+                                    {ledger.map((entry) => (
+                                        <tr key={entry.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                            <td className="py-1.5 whitespace-nowrap">{entry.date}</td>
+                                            <td className="py-1.5">{entry.type}</td>
+                                            <td className="text-muted-foreground py-1.5">{entry.entry_type}</td>
+                                            <td className={`py-1.5 ${entry.days < 0 ? 'text-destructive' : ''}`}>
+                                                {entry.days > 0 ? `+${entry.days}` : entry.days}
+                                            </td>
+                                            <td className="text-muted-foreground py-1.5 text-xs">{entry.note}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
             </div>
         </AppLayout>
     );
