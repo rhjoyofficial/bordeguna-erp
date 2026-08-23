@@ -29,6 +29,7 @@ interface Punch {
 
 interface RecentDay {
     date: string;
+    fixes: { summary: string; by: string | null }[];
     status: string;
     first_in: string | null;
     last_out: string | null;
@@ -522,6 +523,18 @@ export default function Clock({
                                                 <Badge variant="outline" className="ml-2">
                                                     Needs fixing
                                                 </Badge>
+                                            )}
+                                            {/* Transparency about fixes: when HR corrects a day, the
+                                                row says what was done and by whom. */}
+                                            {(day.fixes ?? []).length > 0 && (
+                                                <span className="text-muted-foreground mt-0.5 block text-xs">
+                                                    {(day.fixes ?? []).map((fix, i) => (
+                                                        <span key={i} className="block">
+                                                            {fix.summary}
+                                                            {fix.by ? ' - by ' + fix.by : ''}
+                                                        </span>
+                                                    ))}
+                                                </span>
                                             )}
                                         </td>
                                         <td className="text-muted-foreground py-2 font-mono text-xs">

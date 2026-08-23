@@ -5,6 +5,9 @@ namespace App\Modules\Hrm\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Hrm\Actions\FinalizeAttendance;
 use App\Modules\Hrm\Actions\ProcessAttendance;
+use App\Modules\Hrm\Enums\CorrectionType;
+use App\Modules\Hrm\Enums\PunchDirection;
+use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\AttendancePolicy;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
@@ -61,6 +64,18 @@ class DailyAttendanceController extends Controller
             ->sortBy(fn (DailyAttendance $day) => $day->attendance_date->toDateString().'|'.$day->employee?->fullName())
             ->values();
 
+        // Every applied fix in the window, so a corrected row can say what was
+        // done and by whom - the trail Joy asked for ("the last all logs
+        // together for this"). One query, grouped, rather than one per row.
+        $fixes = AttendanceCorrection::with('requester:id,name')
+            ->whereNotNull('applied_at')
+            ->whereDate('attendance_date', '>=', $from->toDateString())
+            ->whereDate('attendance_date', '<=', $to->toDateString())
+            ->when($employeeId, fn ($query) => $query->where('employee_id', $employeeId))
+            ->orderBy('id')
+            ->get()
+            ->groupBy(fn (AttendanceCorrection $c) => $c->employee_id.'|'.Carbon::parse($c->attendance_date)->toDateString());
+
         // ⚠ A department may carry its own order, so "the policy in force" is no
         // longer one row. Naming only the business default here would put a
         // policy name above a grid half of whose rows were judged by another.
@@ -85,7 +100,21 @@ class DailyAttendanceController extends Controller
             'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
                 ->orderBy('first_name')->orderBy('last_name')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName().' ('.$e->employee_code.')']),
-            'days' => $days->map(fn (DailyAttendance $day) => $this->present($day)),
+            'days' => $days->map(fn (DailyAttendance $day) => $this->present($day, $fixes)),
+            // The fix dialog's vocabulary, same shapes the clock page uses.
+            // Anyone on this screen holds hrm.attendance.manage, so a
+            // correction filed here applies IMMEDIATELY and reprocesses the
+            // day (RequestCorrection's privileged path) - which is what Joy
+            // means by "can be fixed direct from here".
+            'correction_types' => collect(CorrectionType::cases())
+                ->map(fn (CorrectionType $t) => [
+                    'value' => $t->value,
+                    'label' => $t->label(),
+                    'needs_punch' => $t->needsPunch(),
+                    'needs_time' => $t->needsTime(),
+                ]),
+            'directions' => collect(PunchDirection::cases())
+                ->map(fn (PunchDirection $d) => ['value' => $d->value, 'label' => $d->label()]),
             'summary' => [
                 'total' => $days->count(),
                 'provisional' => $days->where('is_provisional', true)->count(),
@@ -192,9 +221,18 @@ class DailyAttendanceController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function present(DailyAttendance $day): array
+    private function present(DailyAttendance $day, \Illuminate\Support\Collection $fixes): array
     {
+        $key = $day->employee_id.'|'.$day->attendance_date->toDateString();
+
         return [
+            // What has already been done to this day, and by whom - shown on
+            // the row and, through the clock page, to the employee themselves.
+            'fixes' => ($fixes->get($key) ?? collect())->map(fn (AttendanceCorrection $c) => [
+                'summary' => $c->summaryLine(),
+                'by' => $c->requester?->name,
+                'at' => $c->applied_at?->format('Y-m-d H:i'),
+            ])->values(),
             'id' => $day->id,
             'date' => $day->attendance_date->toDateString(),
             'weekday' => $day->attendance_date->format('D'),

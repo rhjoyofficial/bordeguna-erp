@@ -5,10 +5,34 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Head, router } from '@inertiajs/react';
 import { Fragment, useState } from 'react';
 
+interface CorrectionTypeOption {
+    value: string;
+    label: string;
+    needs_punch: boolean;
+    needs_time: boolean;
+}
+
+interface Fix {
+    summary: string;
+    by: string | null;
+    at: string | null;
+}
+
 interface Day {
+    fixes: Fix[];
     id: number;
     date: string;
     weekday: string;
@@ -51,6 +75,8 @@ interface DailyProps {
     summary: { total: number; provisional: number; holds: number; with_consequence: number };
     policy: { name: string; version: number; effective_from: string } | null;
     department_policies: { name: string; version: number; department: string | null }[];
+    correction_types: CorrectionTypeOption[];
+    directions: { value: string; label: string }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -88,6 +114,160 @@ function Tile({ label, value, tone, hint }: { label: string; value: number; tone
 }
 
 /**
+ * Fix a day without leaving the grid (Joy, 23 Aug 2026: "can be fixed direct
+ * from here"). Everyone on this screen holds hrm.attendance.manage, so the
+ * correction filed here APPLIES IMMEDIATELY and the day is reprocessed - the
+ * same privileged path the Corrections screen uses, through the same endpoint,
+ * so there is exactly one way a correction happens.
+ */
+function FixDayDialog({
+    day,
+    types,
+    directions,
+}: {
+    day: Day;
+    types: CorrectionTypeOption[];
+    directions: { value: string; label: string }[];
+}) {
+    const [open, setOpen] = useState(false);
+    const [type, setType] = useState(types[0]?.value ?? 'add_punch');
+    const [punches, setPunches] = useState<{ id: number; label: string }[]>([]);
+    const [punchId, setPunchId] = useState('');
+    const [correctedAt, setCorrectedAt] = useState(`${day.date}T18:00`);
+    const [direction, setDirection] = useState('');
+    const [reason, setReason] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const selected = types.find((t) => t.value === type);
+
+    // The day's real punches, fetched when the dialog opens so amend and
+    // disregard can point at one - the same endpoint the Corrections screen
+    // uses.
+    const openDialog = (next: boolean) => {
+        setOpen(next);
+        if (next) {
+            fetch(
+                route('hrm.attendance.corrections.punches') + `?employee_id=${day.employee_id}&date=${day.date}`,
+                { headers: { Accept: 'application/json' }, credentials: 'same-origin' },
+            )
+                .then((response) => (response.ok ? response.json() : []))
+                .then((rows) => setPunches(rows))
+                .catch(() => setPunches([]));
+        }
+    };
+
+    const submit = () => {
+        setSaving(true);
+        router.post(
+            route('hrm.attendance.corrections.store'),
+            {
+                employee_id: day.employee_id,
+                attendance_date: day.date,
+                type,
+                punch_id: selected?.needs_punch ? punchId : null,
+                corrected_at: selected?.needs_time ? correctedAt.replace('T', ' ') + ':00' : null,
+                direction: direction === '' ? null : direction,
+                reason,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => setOpen(false),
+                onFinish: () => setSaving(false),
+            },
+        );
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={openDialog}>
+            <DialogTrigger asChild>
+                <Button variant="ghost" size="sm">
+                    Fix
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>
+                        Fix {day.date} for {day.employee}
+                    </DialogTitle>
+                    <DialogDescription>
+                        Applies immediately and reprocesses the day. The change is recorded with your name, and the
+                        employee sees it on their own page.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="fix-type">What is wrong</Label>
+                        <select id="fix-type" className={selectClass} value={type} onChange={(e) => setType(e.target.value)}>
+                            {types.map((t) => (
+                                <option key={t.value} value={t.value}>
+                                    {t.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    {selected?.needs_punch && (
+                        <div className="grid gap-2">
+                            <Label htmlFor="fix-punch">Which punch</Label>
+                            <select id="fix-punch" className={selectClass} value={punchId} onChange={(e) => setPunchId(e.target.value)}>
+                                <option value="">- Choose -</option>
+                                {punches.map((punch) => (
+                                    <option key={punch.id} value={punch.id}>
+                                        {punch.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                    {selected?.needs_time && (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="grid gap-2">
+                                <Label htmlFor="fix-time">Correct time</Label>
+                                <Input id="fix-time" type="datetime-local" value={correctedAt} onChange={(e) => setCorrectedAt(e.target.value)} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="fix-direction">Direction</Label>
+                                <select
+                                    id="fix-direction"
+                                    className={selectClass}
+                                    value={direction}
+                                    onChange={(e) => setDirection(e.target.value)}
+                                >
+                                    <option value="">- Unknown -</option>
+                                    {directions.map((d) => (
+                                        <option key={d.value} value={d.value}>
+                                            {d.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    )}
+                    <div className="grid gap-2">
+                        <Label htmlFor="fix-reason">Reason</Label>
+                        <Input id="fix-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What happened" />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button
+                        onClick={submit}
+                        disabled={
+                            saving ||
+                            reason.trim() === '' ||
+                            (selected?.needs_punch ? punchId === '' : false)
+                        }
+                    >
+                        Apply fix
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/**
  * A filter that is switched on says so in words, and can be switched off from
  * where it is doing the hiding. Three unlabelled checkboxes in a toolbar left
  * somebody staring at an empty grid wondering what happened to their day.
@@ -109,7 +289,17 @@ function FilterToggle({ label, active, onChange }: { label: string; active: bool
     );
 }
 
-export default function DailyAttendance({ on, filters, employees = [], days, summary, policy, department_policies = [] }: DailyProps) {
+export default function DailyAttendance({
+    on,
+    filters,
+    employees = [],
+    days,
+    summary,
+    policy,
+    department_policies = [],
+    correction_types = [],
+    directions = [],
+}: DailyProps) {
     const [expanded, setExpanded] = useState<number | null>(null);
     const [busy, setBusy] = useState(false);
 
@@ -313,6 +503,15 @@ export default function DailyAttendance({ on, filters, employees = [], days, sum
                                             </td>
                                             <td className="px-4 py-2.5 whitespace-nowrap">
                                                 <Badge variant={statusVariant(day.status_value)}>{day.status}</Badge>
+                                                {day.fixes.length > 0 && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="ml-2"
+                                                        title={day.fixes.map((f) => `${f.summary}${f.by ? ` (by ${f.by})` : ''}`).join('\n')}
+                                                    >
+                                                        Fixed
+                                                    </Badge>
+                                                )}
                                                 {day.is_provisional && <span className="text-muted-foreground ml-2 text-xs">provisional</span>}
                                                 {day.holds_payroll && (
                                                     <Badge variant="outline" className="ml-2 border-red-500/50 text-red-600 dark:text-red-400">
@@ -364,16 +563,10 @@ export default function DailyAttendance({ on, filters, employees = [], days, sum
                                                         Finalise
                                                     </Button>
                                                 )}
-                                                {/* A day held for a missing punch can only be cleared by an
-                                                    approved correction, so the row links straight to the form
-                                                    instead of leaving someone to find it. */}
-                                                {day.holds_payroll && (
-                                                    <Button variant="ghost" size="sm" asChild>
-                                                        <a href={`/hrm/attendance/corrections?employee_id=${day.employee_id}&date=${day.date}`}>
-                                                            Fix
-                                                        </a>
-                                                    </Button>
-                                                )}
+                                                {/* Any day can be fixed from its own row, not only held
+                                                    ones - the fix applies instantly and the day is
+                                                    reprocessed before this grid reloads. */}
+                                                <FixDayDialog day={day} types={correction_types} directions={directions} />
                                             </td>
                                         </tr>
                                         {expanded === day.id && (
@@ -386,6 +579,20 @@ export default function DailyAttendance({ on, filters, employees = [], days, sum
                                                                 <li key={i}>{note}</li>
                                                             ))}
                                                         </ul>
+                                                        {day.fixes.length > 0 && (
+                                                            <div className="mt-2">
+                                                                <p className="mb-1 font-medium">Fixes applied to this day</p>
+                                                                <ul className="text-muted-foreground ml-4 list-disc space-y-1">
+                                                                    {day.fixes.map((fix, i) => (
+                                                                        <li key={i}>
+                                                                            {fix.summary}
+                                                                            {fix.by ? ` - by ${fix.by}` : ''}
+                                                                            {fix.at ? ` at ${fix.at}` : ''}
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        )}
                                                         {day.flags.length > 0 && (
                                                             <div className="mt-2 flex flex-wrap gap-2">
                                                                 {day.flags.map((flag) => (
