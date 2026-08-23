@@ -1,0 +1,275 @@
+import Heading from '@/components/heading';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import AppLayout from '@/layouts/app-layout';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { useMemo } from 'react';
+
+type Discount = {
+    id: number;
+    product: string | null;
+    sku: string | null;
+    label: string | null;
+    group: string;
+    min_quantity: number;
+    unit_price: number;
+    effective_from: string | null;
+    effective_to: string | null;
+    is_winning: boolean;
+};
+
+type ProductRow = { id: number; sku: string; name: string; list_price: number | null };
+
+type PageProps = {
+    on: string;
+    discounts: Discount[];
+    products: ProductRow[];
+    groups: { id: number; name: string; code: string }[];
+};
+
+const selectClass =
+    'h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none';
+
+export default function Discounts() {
+    const { on, discounts, products, groups } = usePage<PageProps>().props;
+
+    const form = useForm({
+        product_id: '',
+        price_group_id: '',
+        unit_price: '',
+        min_quantity: '1',
+        effective_from: on,
+        effective_to: '',
+        discount_label: '',
+    });
+
+    const chosen = useMemo(
+        () => products.find((p) => String(p.id) === form.data.product_id) ?? null,
+        [products, form.data.product_id],
+    );
+
+    const saving = useMemo(() => {
+        if (!chosen?.list_price || !form.data.unit_price) return null;
+        const off = chosen.list_price - Number(form.data.unit_price);
+        if (!Number.isFinite(off) || off <= 0) return null;
+        return { amount: off, percent: (off / chosen.list_price) * 100 };
+    }, [chosen, form.data.unit_price]);
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        form.post('/sales/discounts', {
+            preserveScroll: true,
+            onSuccess: () => form.reset('unit_price', 'discount_label', 'effective_to'),
+        });
+    };
+
+    return (
+        <AppLayout>
+            <Head title="Discounts" />
+            <div className="px-4 py-6">
+                <Heading
+                    title="Discounts"
+                    description="Sell something below its list price for a period, or from a quantity up."
+                />
+
+                <div className="mb-6 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+                    A discount is an ordinary price rule with a lower number on it, so nothing else in the system has to
+                    learn a new idea. To sell 500 g of a 125 g pack, set a discount from <strong>4 packs</strong> up
+                    rather than creating a 500 g product.
+                </div>
+
+                <form onSubmit={submit} className="mb-8 space-y-4 rounded-lg border border-border p-4">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="product">Product</Label>
+                            <select
+                                id="product"
+                                className={selectClass}
+                                value={form.data.product_id}
+                                onChange={(e) => form.setData('product_id', e.target.value)}
+                            >
+                                <option value="">Choose a product</option>
+                                {products.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.name}
+                                        {p.list_price !== null ? ` (${p.list_price.toFixed(2)})` : ' (no price yet)'}
+                                    </option>
+                                ))}
+                            </select>
+                            {form.errors.product_id && (
+                                <p className="text-sm text-red-600">{form.errors.product_id}</p>
+                            )}
+                        </div>
+
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="unit_price">Discounted price</Label>
+                            <Input
+                                id="unit_price"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={form.data.unit_price}
+                                onChange={(e) => form.setData('unit_price', e.target.value)}
+                            />
+                            {chosen?.list_price != null && (
+                                <p className="text-xs text-muted-foreground">
+                                    List price is {chosen.list_price.toFixed(2)}
+                                    {saving && (
+                                        <>
+                                            {' '}
+                                            &middot; saves {saving.amount.toFixed(2)} ({saving.percent.toFixed(1)}%)
+                                        </>
+                                    )}
+                                </p>
+                            )}
+                            {form.errors.unit_price && <p className="text-sm text-red-600">{form.errors.unit_price}</p>}
+                        </div>
+
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="min_quantity">From this quantity up</Label>
+                            <Input
+                                id="min_quantity"
+                                type="number"
+                                step="1"
+                                min="1"
+                                value={form.data.min_quantity}
+                                onChange={(e) => form.setData('min_quantity', e.target.value)}
+                            />
+                            <p className="text-xs text-muted-foreground">1 means every sale. 4 means four or more.</p>
+                        </div>
+
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="group">Customer group</Label>
+                            <select
+                                id="group"
+                                className={selectClass}
+                                value={form.data.price_group_id}
+                                onChange={(e) => form.setData('price_group_id', e.target.value)}
+                            >
+                                <option value="">Everyone</option>
+                                {groups.map((g) => (
+                                    <option key={g.id} value={g.id}>
+                                        {g.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="from">Starts</Label>
+                            <Input
+                                id="from"
+                                type="date"
+                                value={form.data.effective_from}
+                                onChange={(e) => form.setData('effective_from', e.target.value)}
+                            />
+                            {form.errors.effective_from && (
+                                <p className="text-sm text-red-600">{form.errors.effective_from}</p>
+                            )}
+                        </div>
+
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="to">Ends (optional)</Label>
+                            <Input
+                                id="to"
+                                type="date"
+                                value={form.data.effective_to}
+                                onChange={(e) => form.setData('effective_to', e.target.value)}
+                            />
+                            <p className="text-xs text-muted-foreground">Leave empty to run until you end it.</p>
+                        </div>
+                    </div>
+
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="label">What to call it (optional)</Label>
+                        <Input
+                            id="label"
+                            placeholder="Eid offer"
+                            value={form.data.discount_label}
+                            onChange={(e) => form.setData('discount_label', e.target.value)}
+                        />
+                    </div>
+
+                    <Button type="submit" disabled={form.processing || !form.data.product_id || !form.data.unit_price}>
+                        Save discount
+                    </Button>
+                </form>
+
+                <h3 className="mb-3 text-sm font-medium">Discounts set</h3>
+                <div className="overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full text-sm">
+                        <thead className="bg-muted/50 text-left">
+                            <tr>
+                                <th className="p-3 font-medium">Product</th>
+                                <th className="p-3 font-medium">Name</th>
+                                <th className="p-3 font-medium">Who</th>
+                                <th className="p-3 text-right font-medium">From qty</th>
+                                <th className="p-3 text-right font-medium">Price</th>
+                                <th className="p-3 font-medium">Period</th>
+                                <th className="p-3 font-medium">Applying today</th>
+                                <th className="p-3" />
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {discounts.length === 0 && (
+                                <tr>
+                                    <td colSpan={8} className="p-6 text-center text-muted-foreground">
+                                        No discounts set. Everything sells at its list price.
+                                    </td>
+                                </tr>
+                            )}
+                            {discounts.map((d) => (
+                                <tr key={d.id} className="border-t border-border">
+                                    <td className="p-3">
+                                        <div className="font-medium">{d.product}</div>
+                                        <div className="text-xs text-muted-foreground">{d.sku}</div>
+                                    </td>
+                                    <td className="p-3">{d.label ?? <span className="text-muted-foreground">-</span>}</td>
+                                    <td className="p-3">{d.group}</td>
+                                    <td className="p-3 text-right">{d.min_quantity}</td>
+                                    <td className="p-3 text-right font-medium">{d.unit_price.toFixed(2)}</td>
+                                    <td className="p-3 whitespace-nowrap">
+                                        {d.effective_from}
+                                        {d.effective_to ? ` to ${d.effective_to}` : ' onwards'}
+                                    </td>
+                                    <td className="p-3">
+                                        {d.is_winning ? (
+                                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+                                                Yes
+                                            </span>
+                                        ) : (
+                                            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                                                No
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="p-3 text-right">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() =>
+                                                router.post(
+                                                    `/sales/discounts/${d.id}/close`,
+                                                    {},
+                                                    { preserveScroll: true },
+                                                )
+                                            }
+                                        >
+                                            End it
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+
+                <p className="mt-3 text-xs text-muted-foreground">
+                    "Applying today" is answered by the pricing engine itself, not guessed here. A discount can be saved
+                    and still lose to another rule, which is why the column exists.
+                </p>
+            </div>
+        </AppLayout>
+    );
+}

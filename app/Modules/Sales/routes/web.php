@@ -3,6 +3,7 @@
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
+use App\Modules\Sales\Http\Controllers\DiscountController;
 use App\Modules\Sales\Http\Controllers\PriceImportController;
 use App\Modules\Sales\Http\Controllers\ProductPriceController;
 use App\Modules\Sales\Http\Controllers\SalesInvoiceController;
@@ -67,6 +68,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     Route::middleware('can:sales.prices.manage')->group(function () {
         Route::post('prices', [ProductPriceController::class, 'store'])->name('prices.store');
         Route::post('prices/{productPrice}/close', [ProductPriceController::class, 'close'])->name('prices.close');
+
+        // Discounts. Same table, same resolver, a friendlier door: set a lower
+        // price for a period, optionally from a quantity up. Gated with the
+        // prices it writes, because that is exactly what it writes.
+        Route::get('discounts', [DiscountController::class, 'index'])->name('discounts.index');
+        Route::post('discounts', [DiscountController::class, 'store'])->name('discounts.store');
+        Route::post('discounts/{discount}/close', [DiscountController::class, 'close'])->name('discounts.close');
     });
 
     // Selling: the counter, and the distributor challan. Same engine.

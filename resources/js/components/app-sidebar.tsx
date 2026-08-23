@@ -34,6 +34,7 @@ import {
     PackageSearch,
     Palmtree,
     PenSquare,
+    Percent,
     ReceiptText,
     Repeat,
     Ruler,
@@ -141,6 +142,10 @@ export function AppSidebar() {
                           ...(canViewSales ? [{ title: 'Sales orders', url: '/sales/orders', icon: ClipboardList }] : []),
                           ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
                           ...(canViewSales || canManagePrices ? [{ title: 'Selling prices', url: '/sales/prices', icon: BadgeDollarSign }] : []),
+                          // Joy's own word for it, 23 Aug: a place to set a
+                          // discount price on any product. It writes ordinary
+                          // price rows, so nothing downstream learns a new idea.
+                          ...(canManagePrices ? [{ title: 'Discounts', url: '/sales/discounts', icon: Percent }] : []),
                           // C-IMP-7. Reachable, or it is the fifth screen built
                           // and never found.
                           ...(canImportPrices ? [{ title: 'Import prices', url: '/sales/prices/import', icon: Upload }] : []),

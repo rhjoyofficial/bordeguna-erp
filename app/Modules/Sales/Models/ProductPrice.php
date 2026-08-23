@@ -25,6 +25,8 @@ class ProductPrice extends Model
         'unit_price',
         'effective_from',
         'effective_to',
+        'is_discount',
+        'discount_label',
         'note',
         'created_by',
     ];
@@ -38,6 +40,7 @@ class ProductPrice extends Model
             // string has produced five separate defects on this project.
             'effective_from' => 'date',
             'effective_to' => 'date',
+            'is_discount' => 'boolean',
         ];
     }
 
