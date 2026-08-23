@@ -144,10 +144,16 @@ PROMPT;
      */
     public function reply(User $user, array $messages): string
     {
-        $client = new Client(apiKey: (string) config('services.anthropic.key'));
+        // ⚠ Resolved through AiCredentialResolver, not read from config here:
+        // a key added in Settings → AI providers must take effect without a
+        // deploy, and the environment variable stays the fallback so an
+        // installation that never opens that screen behaves exactly as before.
+        $resolver = app(AiCredentialResolver::class);
+
+        $client = new Client(apiKey: (string) $resolver->keyFor('anthropic'));
 
         $response = $client->messages->create(
-            model: (string) config('services.anthropic.model'),
+            model: $resolver->modelFor('anthropic'),
             maxTokens: 4096,
             system: $this->systemBlocks($user),
             messages: $messages,

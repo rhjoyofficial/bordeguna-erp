@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Anthropic\Core\Exceptions\APIStatusException;
+use App\Modules\Foundation\Support\AiCredentialResolver;
 use App\Modules\Foundation\Support\ErpAssistant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,9 +24,12 @@ class AssistantController extends Controller
             'messages.*.content' => ['required', 'string', 'max:4000'],
         ]);
 
-        if (! config('services.anthropic.key')) {
+        // ⚠ Asks whether a key exists, never for the key itself: a controller
+        // that holds a secret to make a yes/no decision is a controller that
+        // can leak one into an exception trace.
+        if (! app(AiCredentialResolver::class)->isConfigured('anthropic')) {
             return response()->json([
-                'reply' => 'The assistant is not configured yet. Ask the administrator to set the ANTHROPIC_API_KEY.',
+                'reply' => 'The assistant is not configured yet. An Owner can add a key under Settings, AI providers.',
             ], 503);
         }
 

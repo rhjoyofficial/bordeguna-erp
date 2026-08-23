@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\AiCredentialController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\ReasonController;
@@ -26,4 +27,11 @@ Route::middleware(['auth', 'business'])->group(function () {
     Route::post('settings/reasons', [ReasonController::class, 'store'])->name('reasons.store');
     Route::put('settings/reasons/{reason}', [ReasonController::class, 'update'])->name('reasons.update');
     Route::patch('settings/reasons/{reason}/toggle-active', [ReasonController::class, 'toggleActive'])->name('reasons.toggle-active');
+
+    // AI provider credentials. Owner-only via foundation.organization.manage;
+    // the secret is write-only and never comes back out (AiCredential).
+    Route::get('settings/ai-providers', [AiCredentialController::class, 'index'])->name('ai-providers.index');
+    Route::post('settings/ai-providers', [AiCredentialController::class, 'store'])->name('ai-providers.store');
+    Route::patch('settings/ai-providers/{credential}/toggle-active', [AiCredentialController::class, 'toggleActive'])->name('ai-providers.toggle-active');
+    Route::delete('settings/ai-providers/{credential}', [AiCredentialController::class, 'destroy'])->name('ai-providers.destroy');
 });
