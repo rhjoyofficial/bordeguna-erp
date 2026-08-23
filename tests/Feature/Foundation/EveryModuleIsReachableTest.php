@@ -124,9 +124,16 @@ it('leaves no user-facing page with no way to reach it', function () {
     // mentioned by something OTHER than the page that serves it". The page
     // serving `a/b` lives under `js/pages/a/b/`, this codebase's own convention,
     // so that prefix is what gets excluded.
+    // ⚠ Shared components count as "elsewhere" too, since 23 Aug 2026: the
+    // self-service and shift/schedule reorganisations moved real navigation
+    // out of the sidebar into tab components (SelfServiceTabs,
+    // ShiftScheduleTabs), and a link rendered on every page of a section is
+    // the opposite of unreachable. A component can never be the page that
+    // serves a URL, so none of them needs the own-prefix exclusion below.
     $pageFiles = collect(glob(resource_path('js/pages/**/*.tsx'), GLOB_BRACE))
         ->merge(glob(resource_path('js/pages/**/**/*.tsx')))
         ->merge(glob(resource_path('js/pages/**/**/**/*.tsx')))
+        ->merge(glob(resource_path('js/components/*.tsx')))
         ->unique()
         ->values();
 

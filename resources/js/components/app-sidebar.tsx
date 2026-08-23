@@ -85,10 +85,11 @@ export function AppSidebar() {
             items: [
                 { title: 'Dashboard', url: '/dashboard', icon: LayoutGrid },
                 ...(canReviewApprovals ? [{ title: 'Approvals', url: '/approvals', icon: CheckSquare, badge: pendingApprovalsCount }] : []),
+                // ⚠ ONE self-service entry, on Joy's reorganisation (23 Aug
+                // 2026): Clock in/out, My leave and My payslips live as tabs
+                // under My profile now (SelfServiceTabs), not as sidebar rows.
+                // Their routes are unchanged, so old bookmarks still land.
                 ...(hasEmployeeProfile ? [{ title: 'My profile', url: '/hrm/my-profile', icon: UserCircle }] : []),
-                ...(hasEmployeeProfile ? [{ title: 'Clock in/out', url: '/hrm/clock', icon: Fingerprint }] : []),
-                ...(hasEmployeeProfile ? [{ title: 'My leave', url: '/hrm/my-leave', icon: Palmtree }] : []),
-                ...(hasEmployeeProfile ? [{ title: 'My payslips', url: '/hrm/my-payslips', icon: ReceiptText }] : []),
                 { title: 'Switch business', url: '/businesses/switch', icon: Repeat },
             ],
         },
@@ -218,8 +219,10 @@ export function AppSidebar() {
                           ...(canManageEmployees ? [{ title: 'Employees', url: '/hrm/employees', icon: Users }] : []),
                           ...(canManageScheduling
                               ? [
-                                    { title: 'Schedules', url: '/hrm/schedules', icon: CalendarRange },
-                                    { title: 'Shifts', url: '/hrm/shifts', icon: CalendarClock },
+                                    // Merged into one section on Joy's instruction
+                                    // (23 Aug 2026); Shifts is a tab inside it and
+                                    // its route is unchanged.
+                                    { title: 'Shift & schedule', url: '/hrm/schedules', icon: CalendarRange },
                                     { title: 'Calendars', url: '/hrm/calendars', icon: CalendarDays },
                                 ]
                               : []),

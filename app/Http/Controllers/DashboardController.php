@@ -77,7 +77,7 @@ class DashboardController extends Controller
             'trade_chart_range' => $range,
 
             'recent_transactions' => $this->recentTransactions($canViewSales, $canViewPurchasing),
-            'recent_activity' => $this->recentActivity(),
+
         ]);
     }
 
@@ -272,33 +272,4 @@ class DashboardController extends Controller
         ];
     }
 
-    private function recentActivity(): array
-    {
-        return ActivityLogEntry::with('causer')
-            ->latest()
-            ->limit(8)
-            ->get()
-            ->map(fn (ActivityLogEntry $entry) => [
-                'id' => $entry->id,
-                'description' => trim($this->subjectLabel($entry->subject_type).' '.$entry->description),
-                'causer_name' => $entry->causer?->name,
-                'created_at' => $entry->created_at->diffForHumans(),
-            ])
-            ->all();
-    }
-
-    /**
-     * Turns "App\Modules\Purchasing\Models\PurchaseOrder" into "Purchase Order"
-     * so the feed reads "Purchase Order updated" instead of a bare "updated".
-     */
-    private function subjectLabel(?string $subjectType): string
-    {
-        if ($subjectType === null) {
-            return '';
-        }
-
-        $shortName = class_basename($subjectType);
-
-        return trim(preg_replace('/(?<!^)[A-Z]/', ' $0', $shortName));
-    }
 }

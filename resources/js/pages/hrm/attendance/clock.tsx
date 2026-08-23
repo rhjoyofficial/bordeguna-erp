@@ -1,3 +1,4 @@
+import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -310,6 +311,9 @@ export default function Clock({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Clock in/out" />
+            <div className="px-4 pt-4">
+                <SelfServiceTabs active="/hrm/clock" />
+            </div>
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h2 className="text-lg font-medium">{employee.name}</h2>

@@ -1,3 +1,4 @@
+import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -260,6 +261,9 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="My leave" />
+            <div className="px-4 pt-4">
+                <SelfServiceTabs active="/hrm/my-leave" />
+            </div>
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>

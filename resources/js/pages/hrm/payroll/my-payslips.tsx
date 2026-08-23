@@ -1,3 +1,4 @@
+import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -35,6 +36,9 @@ export default function MyPayslips({ employee, password_hint, password_unavailab
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="My payslips" />
+            <div className="px-4 pt-4">
+                <SelfServiceTabs active="/hrm/my-payslips" />
+            </div>
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h2 className="text-lg font-medium">My payslips</h2>

@@ -1,3 +1,4 @@
+import ShiftScheduleTabs from '@/components/shift-schedule-tabs';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -354,6 +355,9 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Schedules" />
+            <div className="px-4 pt-4">
+                <ShiftScheduleTabs active="/hrm/schedules" />
+            </div>
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-lg font-medium">Schedules</h2>

@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\ActivityLogEntry;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Support\Collection;
 
 /**
@@ -83,29 +84,23 @@ it('shows the switch on the destination dashboard and not on the source one', fu
         ->withSession(['current_business_id' => $from->id])
         ->post(route('businesses.switch.store'), ['business_id' => $to->id]);
 
-    // Now sitting in the destination.
-    $this->actingAs($user)
-        ->withSession(['current_business_id' => $to->id])
-        ->get('/dashboard')
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page->where(
-            'recent_activity',
-            fn ($activity) => collect($activity)->contains(
-                fn ($row) => str_contains($row['description'], 'Switched into To Co'),
-            ),
-        ));
+    // ⚠ 23 Aug 2026: the dashboard's Recent activity feed was removed on
+    // Joy's instruction, so the READER's side of this proof moved from the
+    // dashboard prop to the tenant-scoped log itself. The claim under test is
+    // unchanged - the entry belongs to the DESTINATION business and appears
+    // under no other - and it still fails if somebody strips the explicit
+    // business_id as redundant, which is the regression it exists to catch.
+    $seenFrom = fn (int $businessId) => tap(
+        app(BusinessContext::class),
+        fn ($context) => $context->set($businessId),
+    ) instanceof BusinessContext
+        ? ActivityLogEntry::query()->get()->contains(
+            fn ($row) => str_contains((string) $row->description, 'Switched into To Co'),
+        )
+        : false;
 
-    // Back in the source, the same entry must not be there.
-    $this->actingAs($user)
-        ->withSession(['current_business_id' => $from->id])
-        ->get('/dashboard')
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page->where(
-            'recent_activity',
-            fn ($activity) => collect($activity)->doesntContain(
-                fn ($row) => str_contains($row['description'], 'Switched into To Co'),
-            ),
-        ));
+    expect($seenFrom($to->id))->toBeTrue()
+        ->and($seenFrom($from->id))->toBeFalse();
 });
 
 it('records the middleware-resolved landing business as the source when the session had none', function () {

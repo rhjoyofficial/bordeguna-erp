@@ -1,3 +1,4 @@
+import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -218,6 +219,9 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="My profile" />
+            <div className="px-4 pt-4">
+                <SelfServiceTabs active="/hrm/my-profile" />
+            </div>
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>

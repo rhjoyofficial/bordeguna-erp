@@ -28,13 +28,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-interface RecentActivityItem {
-    id: number;
-    description: string | null;
-    causer_name: string | null;
-    created_at: string;
-}
-
 interface TradeChartPoint {
     label: string;
     sales: number | null;
@@ -73,7 +66,7 @@ interface DashboardProps {
         expenses: TransactionRow[] | null;
         returns: TransactionRow[] | null;
     };
-    recent_activity: RecentActivityItem[];
+
 }
 
 const CHART_RANGES = [
@@ -273,7 +266,7 @@ export default function Dashboard({
     trade_chart,
     trade_chart_range,
     recent_transactions,
-    recent_activity,
+
 }: DashboardProps) {
     const [bannerDismissed, setBannerDismissed] = useState(false);
 
@@ -380,31 +373,10 @@ export default function Dashboard({
                         </Card>
                     )}
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Recent activity</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {recent_activity.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">No recent activity.</p>
-                            ) : (
-                                <div className="space-y-3">
-                                    {recent_activity.map((entry) => (
-                                        <div
-                                            key={entry.id}
-                                            className="border-sidebar-border/70 dark:border-sidebar-border flex items-start justify-between gap-4 border-b pb-3 last:border-0 last:pb-0"
-                                        >
-                                            <div>
-                                                <p className="text-sm">{entry.description}</p>
-                                                {entry.causer_name && <p className="text-xs text-muted-foreground">by {entry.causer_name}</p>}
-                                            </div>
-                                            <span className="shrink-0 text-xs text-muted-foreground">{entry.created_at}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                    {/* Recent activity REMOVED on Joy's instruction, 23 Aug 2026
+                        ("delete the recent activities"). The activity log table
+                        itself stays - it is the audit trail - only this feed of
+                        it on the dashboard is gone. */}
                 </div>
 
                 <RecentTransactions transactions={recent_transactions} />
