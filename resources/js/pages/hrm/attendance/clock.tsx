@@ -1,7 +1,5 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
 import {
     Dialog,
     DialogClose,
@@ -14,6 +12,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import AppLayout from '@/layouts/app-layout';
+import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -69,8 +69,9 @@ interface ClockProps {
     employee: { name: string; employee_code: string; office: string | null };
     today: string;
     punches: Punch[];
-    filters: { from: string; to: string };
+    filters: { from: string; to: string; status: string; sort: string };
     summary: MySummary;
+    statuses: { value: string; label: string }[];
     recent_days: RecentDay[];
     my_corrections: MyCorrection[];
     correction_types: CorrectionType[];
@@ -83,7 +84,15 @@ const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-backg
  * An employee raising a correction on one of their own days (COR-01). It is a
  * request, not a change - it routes to their manager and then HR.
  */
-function RequestCorrectionDialog({ day, types, directions }: { day: RecentDay; types: CorrectionType[]; directions: { value: string; label: string }[] }) {
+function RequestCorrectionDialog({
+    day,
+    types,
+    directions,
+}: {
+    day: RecentDay;
+    types: CorrectionType[];
+    directions: { value: string; label: string }[];
+}) {
     const [open, setOpen] = useState(false);
     const [type, setType] = useState(types[0]?.value ?? 'add_punch');
     const [correctedAt, setCorrectedAt] = useState(`${day.date}T18:00`);
@@ -124,7 +133,7 @@ function RequestCorrectionDialog({ day, types, directions }: { day: RecentDay; t
                             <div className="grid gap-2">
                                 <Label htmlFor="ctime">Correct time</Label>
                                 <Input id="ctime" type="datetime-local" value={correctedAt} onChange={(e) => setCorrectedAt(e.target.value)} />
-                                {errors.corrected_at && <p className="text-xs text-destructive">{errors.corrected_at}</p>}
+                                {errors.corrected_at && <p className="text-destructive text-xs">{errors.corrected_at}</p>}
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="cdir">Direction</Label>
@@ -140,20 +149,25 @@ function RequestCorrectionDialog({ day, types, directions }: { day: RecentDay; t
                         </div>
                     )}
                     {selected?.needs_punch && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-muted-foreground text-xs">
                             Amending or disregarding a specific punch needs HR to pick it - ask them, or choose “Add a missing punch”.
                         </p>
                     )}
                     <div className="grid gap-2">
                         <Label htmlFor="creason">Reason</Label>
                         <Input id="creason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What happened" />
-                        {errors.reason && <p className="text-xs text-destructive">{errors.reason}</p>}
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="cevidence">Evidence (optional)</Label>
-                        <Input id="cevidence" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" onChange={(e) => setEvidence(e.target.files?.[0] ?? null)} />
+                        <Input
+                            id="cevidence"
+                            type="file"
+                            accept=".jpg,.jpeg,.png,.webp,.pdf"
+                            onChange={(e) => setEvidence(e.target.files?.[0] ?? null)}
+                        />
                     </div>
-                    {errors.attendance_date && <p className="text-xs text-destructive">{errors.attendance_date}</p>}
+                    {errors.attendance_date && <p className="text-destructive text-xs">{errors.attendance_date}</p>}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
@@ -199,7 +213,7 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Clock in/out', href: '/hrm/cloc
 function MyTile({ label, value, warn, bad }: { label: string; value: number; warn?: boolean; bad?: boolean }) {
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-lg border p-3">
-            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="text-muted-foreground text-xs">{label}</p>
             <p
                 className={
                     bad
@@ -221,6 +235,7 @@ export default function Clock({
     punches,
     filters,
     summary,
+    statuses,
     recent_days,
     my_corrections,
     correction_types,
@@ -230,6 +245,19 @@ export default function Clock({
     const [locationError, setLocationError] = useState<string | null>(null);
     const [myFrom, setMyFrom] = useState(filters.from);
     const [myTo, setMyTo] = useState(filters.to);
+    const [myStatus, setMyStatus] = useState(filters.status);
+    const [mySort, setMySort] = useState(filters.sort);
+
+    const statusLabel = statuses.find((s) => s.value === filters.status)?.label ?? null;
+
+    /**
+     * One place that reloads the history, so the sortable Date header and the
+     * Show button cannot drift into sending different sets of parameters. The
+     * override is for the header, which changes sort and reloads in one click
+     * rather than waiting for Show to be pressed.
+     */
+    const showHistory = (overrides: { from?: string; to?: string; status?: string; sort?: string } = {}) =>
+        router.get('/hrm/clock', { from: myFrom, to: myTo, status: myStatus, sort: mySort, ...overrides }, { preserveScroll: true });
 
     /**
      * Location is captured in the browser and sent with the punch - the server
@@ -285,7 +313,7 @@ export default function Clock({
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h2 className="text-lg font-medium">{employee.name}</h2>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                         {employee.employee_code}
                         {employee.office && ` · ${employee.office}`} · {today}
                     </p>
@@ -300,9 +328,9 @@ export default function Clock({
                     </Button>
                 </div>
 
-                {locationError && <p className="text-sm text-destructive">{locationError}</p>}
+                {locationError && <p className="text-destructive text-sm">{locationError}</p>}
 
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                     Your location, accuracy, IP address and device details are recorded with each punch. If you are away from your office the punch is
                     still accepted, and flagged for your manager to review.
                 </p>
@@ -310,11 +338,11 @@ export default function Clock({
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Today</h3>
                     {punches.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Nothing recorded yet today.</p>
+                        <p className="text-muted-foreground text-sm">Nothing recorded yet today.</p>
                     ) : (
                         <table className="w-full min-w-[32rem] text-sm">
                             <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                     <th className="py-2">Time</th>
                                     <th className="py-2">Direction</th>
                                     <th className="py-2">Source</th>
@@ -326,10 +354,10 @@ export default function Clock({
                                     <tr key={p.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                         <td className="py-2 font-mono text-xs">{p.time}</td>
                                         <td className="py-2">{p.direction ?? '-'}</td>
-                                        <td className="py-2 text-muted-foreground">{p.source}</td>
+                                        <td className="text-muted-foreground py-2">{p.source}</td>
                                         <td className="py-2">
                                             {p.needs_review ? (
-                                                <span className="text-xs text-muted-foreground">
+                                                <span className="text-muted-foreground text-xs">
                                                     <Badge variant="outline">Flagged</Badge>
                                                     {p.review_reason && <span className="ml-2">{p.review_reason}</span>}
                                                 </span>
@@ -355,7 +383,7 @@ export default function Clock({
 
                     <div className="mb-4 flex flex-wrap items-end gap-3">
                         <div className="grid gap-1.5">
-                            <label htmlFor="my-from" className="text-xs text-muted-foreground">
+                            <label htmlFor="my-from" className="text-muted-foreground text-xs">
                                 From
                             </label>
                             <input
@@ -363,11 +391,11 @@ export default function Clock({
                                 type="date"
                                 defaultValue={filters.from}
                                 onChange={(e) => setMyFrom(e.target.value)}
-                                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                             />
                         </div>
                         <div className="grid gap-1.5">
-                            <label htmlFor="my-to" className="text-xs text-muted-foreground">
+                            <label htmlFor="my-to" className="text-muted-foreground text-xs">
                                 To
                             </label>
                             <input
@@ -375,14 +403,41 @@ export default function Clock({
                                 type="date"
                                 defaultValue={filters.to}
                                 onChange={(e) => setMyTo(e.target.value)}
-                                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                             />
                         </div>
-                        <Button onClick={() => router.get('/hrm/clock', { from: myFrom, to: myTo }, { preserveScroll: true })}>
-                            Show
-                        </Button>
+                        <div className="grid gap-1.5">
+                            <label htmlFor="my-status" className="text-muted-foreground text-xs">
+                                Status
+                            </label>
+                            <select id="my-status" className={selectClass} value={myStatus} onChange={(e) => setMyStatus(e.target.value)}>
+                                <option value="">All statuses</option>
+                                {statuses.map((s) => (
+                                    <option key={s.value} value={s.value}>
+                                        {s.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="grid gap-1.5">
+                            <label htmlFor="my-sort" className="text-muted-foreground text-xs">
+                                Date order
+                            </label>
+                            <select id="my-sort" className={selectClass} value={mySort} onChange={(e) => setMySort(e.target.value)}>
+                                <option value="newest">Newest first</option>
+                                <option value="oldest">Oldest first</option>
+                            </select>
+                        </div>
+                        <Button onClick={() => showHistory()}>Show</Button>
                     </div>
 
+                    {/*
+                      ⚠ These tiles are the totals for the WHOLE period and never
+                      follow the status filter. "Late 3 of 14 days" only means
+                      anything while the 14 is the whole period; if the tiles
+                      narrowed too, picking Late would read as a perfect month.
+                      The list below is the thing that narrows, and it says so.
+                    */}
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                         <MyTile label="Days attended" value={summary.attended} />
                         <MyTile label="Present" value={summary.present} />
@@ -394,23 +449,60 @@ export default function Clock({
 
                     {summary.holds_payroll > 0 && (
                         <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
-                            {summary.holds_payroll} day{summary.holds_payroll === 1 ? '' : 's'} in this period still need
-                            a correction before payroll can include them. Use "Something wrong?" below.
+                            {summary.holds_payroll} day{summary.holds_payroll === 1 ? '' : 's'} in this period still need a correction before payroll
+                            can include them. Use "Something wrong?" below.
                         </p>
                     )}
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">
-                        Days from {filters.from} to {filters.to}
-                    </h3>
+                    <div className="mb-3 flex flex-wrap items-baseline gap-2">
+                        <h3 className="text-sm font-medium">
+                            {statusLabel ? `${statusLabel} days` : 'Days'} from {filters.from} to {filters.to}
+                        </h3>
+                        {statusLabel && (
+                            <span className="text-muted-foreground text-xs">
+                                Showing {statusLabel} only. The totals above still cover every day in this period.
+                                <button
+                                    type="button"
+                                    className="ml-2 underline underline-offset-2"
+                                    onClick={() => {
+                                        setMyStatus('');
+                                        showHistory({ status: '' });
+                                    }}
+                                >
+                                    Show all statuses
+                                </button>
+                            </span>
+                        )}
+                    </div>
                     {recent_days.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Nothing processed yet.</p>
+                        <p className="text-muted-foreground text-sm">
+                            {statusLabel
+                                ? `No ${statusLabel.toLowerCase()} days between ${filters.from} and ${filters.to}.`
+                                : 'Nothing processed yet.'}
+                        </p>
                     ) : (
                         <table className="w-full min-w-[40rem] text-sm">
                             <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
-                                    <th className="py-2">Date</th>
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
+                                    <th className="py-2">
+                                        {/* Clicking the column is the fastest way to flip the order, and the arrow says which way it is now. */}
+                                        <button
+                                            type="button"
+                                            className="hover:text-foreground inline-flex items-center gap-1 font-medium"
+                                            title="Sort by date"
+                                            onClick={() => {
+                                                const next = mySort === 'newest' ? 'oldest' : 'newest';
+                                                setMySort(next);
+                                                showHistory({ sort: next });
+                                            }}
+                                        >
+                                            Date
+                                            <span aria-hidden="true">{filters.sort === 'oldest' ? '↑' : '↓'}</span>
+                                            <span className="sr-only">{filters.sort === 'oldest' ? 'oldest first' : 'newest first'}</span>
+                                        </button>
+                                    </th>
                                     <th className="py-2">Status</th>
                                     <th className="py-2">In / Out</th>
                                     <th className="py-2 text-right">Something wrong?</th>
@@ -428,12 +520,12 @@ export default function Clock({
                                                 </Badge>
                                             )}
                                         </td>
-                                        <td className="py-2 font-mono text-xs text-muted-foreground">
+                                        <td className="text-muted-foreground py-2 font-mono text-xs">
                                             {day.first_in ?? '-'} / {day.last_out ?? '-'}
                                         </td>
                                         <td className="py-2 text-right">
                                             {day.is_locked ? (
-                                                <span className="text-xs text-muted-foreground">Period closed - ask HR</span>
+                                                <span className="text-muted-foreground text-xs">Period closed - ask HR</span>
                                             ) : (
                                                 <RequestCorrectionDialog day={day} types={correction_types} directions={directions} />
                                             )}
@@ -453,10 +545,10 @@ export default function Clock({
                                 {my_corrections.map((c) => (
                                     <tr key={c.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                         <td className="py-2 whitespace-nowrap">{c.date}</td>
-                                        <td className="py-2 text-muted-foreground">{c.summary}</td>
+                                        <td className="text-muted-foreground py-2">{c.summary}</td>
                                         <td className="py-2">
                                             <Badge variant={c.status === 'approved' ? 'default' : 'secondary'}>{c.status}</Badge>
-                                            {c.stage && <span className="ml-2 text-xs text-muted-foreground">at {c.stage}</span>}
+                                            {c.stage && <span className="text-muted-foreground ml-2 text-xs">at {c.stage}</span>}
                                         </td>
                                     </tr>
                                 ))}

@@ -5,6 +5,7 @@ namespace App\Modules\Hrm\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Hrm\Actions\RecordPunch;
 use App\Modules\Hrm\Actions\RequestCorrection;
+use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Enums\CorrectionType;
 use App\Modules\Hrm\Enums\PunchDirection;
 use App\Modules\Hrm\Enums\PunchSource;
@@ -46,6 +47,9 @@ class AttendanceClockController extends Controller
 
         $today = Carbon::today();
         [$from, $to] = $this->historyRange($request, $today);
+        $status = $this->historyStatus($request);
+        $statusValue = $status?->value;
+        $newestFirst = $this->historyNewestFirst($request);
 
         return Inertia::render('hrm/attendance/clock', [
             'employee' => [
@@ -73,19 +77,32 @@ class AttendanceClockController extends Controller
             'filters' => [
                 'from' => $from->toDateString(),
                 'to' => $to->toDateString(),
+                // Empty string, not null, so the screen can bind it straight to
+                // a native select whose "All statuses" option has no value.
+                'status' => $status?->value ?? '',
+                'sort' => $newestFirst ? 'newest' : 'oldest',
             ],
-            // The employee's own totals for that range: how many days late,
-            // absent, on leave, and the hours behind them. Same summariser the
-            // manager's screen uses, so the two cannot tell one person two
-            // different stories about the same fortnight.
+            // The dropdown's options come from the enum rather than a hardcoded
+            // list, so a new status appears on this screen the day it is added
+            // instead of being quietly unfilterable.
+            'statuses' => collect(AttendanceStatus::cases())
+                ->map(fn (AttendanceStatus $s) => ['value' => $s->value, 'label' => $s->label()]),
+            // ⚠⚠ THE SUMMARY DELIBERATELY IGNORES THE STATUS FILTER. These are
+            // the person's totals for the PERIOD, and "late 3 of 14 days" is
+            // only meaningful while the 14 is the whole period. If the tiles
+            // followed the filter, picking Late would show late 3, days 3, and
+            // read as a perfect month. The list below narrows; the totals here
+            // do not, and the list says so in its own heading.
             'summary' => $summariser->forEmployee($from, $to, $employee->id),
             // Processed days in range, so an employee sees a problem where they
             // would actually notice it and can raise a correction from the same
-            // screen (COR-01).
+            // screen (COR-01). This is the only thing the status filter and the
+            // date sort touch.
             'recent_days' => DailyAttendance::where('employee_id', $employee->id)
                 ->whereDate('attendance_date', '>=', $from->toDateString())
                 ->whereDate('attendance_date', '<=', $to->toDateString())
-                ->orderByDesc('attendance_date')
+                ->when($statusValue !== null, fn ($q) => $q->where('status', $statusValue))
+                ->orderBy('attendance_date', $newestFirst ? 'desc' : 'asc')
                 ->get()
                 ->map(fn (DailyAttendance $day) => [
                     'date' => $day->attendance_date->toDateString(),
@@ -141,6 +158,32 @@ class AttendanceClockController extends Controller
             : $to->copy()->subDays(14);
 
         return $from->gt($to) ? [$to, $from] : [$from, $to];
+    }
+
+    /**
+     * Which single status the history list is narrowed to, or null for all.
+     *
+     * ⚠ An unrecognised value is treated as "all statuses" rather than as an
+     * error. A hand-edited or stale URL should show the employee their days,
+     * not a validation page they cannot do anything about, and there is nothing
+     * to protect here: the query is already scoped to their own employee id.
+     *
+     * ⚠⚠ This narrows the LIST ONLY. Today's punch panel and the clock buttons
+     * are always about today, and the period totals stay over the whole range.
+     */
+    private function historyStatus(Request $request): ?AttendanceStatus
+    {
+        return AttendanceStatus::tryFrom($request->string('status')->toString());
+    }
+
+    /**
+     * Date order for the history list. Newest first is the default because the
+     * question an employee opens this page with is almost always about the last
+     * few days; oldest first is what you want when reading a month through.
+     */
+    private function historyNewestFirst(Request $request): bool
+    {
+        return $request->string('sort')->toString() !== 'oldest';
     }
 
     public function store(Request $request, RecordPunch $recordPunch): RedirectResponse

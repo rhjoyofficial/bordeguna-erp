@@ -196,3 +196,136 @@ it('lets an employee filter their own clock history to any range', function () {
             ->where('today', Carbon::today()->toDateString())
         );
 });
+
+/**
+ * The clock page's own filters. The range already worked; these cover the two
+ * that did not exist, and the line between them and the totals.
+ *
+ * ⚠ A status filter that also moved today's punch panel, or that quietly
+ * narrowed the period totals, would be worse than no filter at all: the first
+ * records attendance on the wrong day, the second turns "late 3 of 14" into
+ * "late 3 of 3" and reads as a perfect fortnight.
+ */
+function clockUser(): User
+{
+    $user = User::factory()->create();
+    $user->businesses()->attach(test()->business->id);
+    $user->assignRole('Staff');
+    test()->employee->update(['user_id' => $user->id]);
+
+    return $user;
+}
+
+it('narrows the clock history to one status without touching the totals or today', function () {
+    $user = clockUser();
+
+    day($this->employee->id, '2026-08-03', AttendanceStatus::Present);
+    day($this->employee->id, '2026-08-04', AttendanceStatus::Late, ['late_minutes' => 25]);
+    day($this->employee->id, '2026-08-05', AttendanceStatus::Late, ['late_minutes' => 35]);
+    day($this->employee->id, '2026-08-06', AttendanceStatus::Absent, ['worked_minutes' => 0, 'payable_minutes' => 0]);
+
+    $this->actingAs($user)->get('/hrm/clock?from=2026-08-01&to=2026-08-31&status=late')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            // The list is the only thing that narrows.
+            ->has('recent_days', 2)
+            ->where('recent_days.0.status', 'Late')
+            ->where('recent_days.1.status', 'Late')
+            // The totals still describe the whole period.
+            ->where('summary.days_recorded', 4)
+            ->where('summary.present', 1)
+            ->where('summary.absent', 1)
+            ->where('summary.late', 2)
+            // And today is still today.
+            ->where('today', Carbon::today()->toDateString())
+            ->where('filters.status', 'late')
+        );
+});
+
+it('shows every status when none is chosen', function () {
+    $user = clockUser();
+
+    day($this->employee->id, '2026-08-03', AttendanceStatus::Present);
+    day($this->employee->id, '2026-08-04', AttendanceStatus::Late, ['late_minutes' => 25]);
+    day($this->employee->id, '2026-08-05', AttendanceStatus::WeeklyOff, ['worked_minutes' => 0]);
+
+    $this->actingAs($user)->get('/hrm/clock?from=2026-08-01&to=2026-08-31')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('recent_days', 3)
+            ->where('filters.status', '')
+        );
+
+    // An explicitly empty status is the same thing, because that is what the
+    // "All statuses" option sends.
+    $this->actingAs($user)->get('/hrm/clock?from=2026-08-01&to=2026-08-31&status=')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('recent_days', 3));
+});
+
+it('treats an unrecognised status as all statuses rather than an error', function () {
+    $user = clockUser();
+
+    day($this->employee->id, '2026-08-03', AttendanceStatus::Present);
+    day($this->employee->id, '2026-08-04', AttendanceStatus::Late, ['late_minutes' => 25]);
+
+    // A stale or hand-edited URL should still show the employee their days.
+    $this->actingAs($user)->get('/hrm/clock?from=2026-08-01&to=2026-08-31&status=not_a_status')
+        ->assertOk()
+        ->assertSessionHasNoErrors()
+        ->assertInertia(fn ($page) => $page
+            ->has('recent_days', 2)
+            ->where('filters.status', '')
+        );
+});
+
+it('offers every status the enum has as a filter option', function () {
+    $user = clockUser();
+
+    $this->actingAs($user)->get('/hrm/clock')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('statuses', count(AttendanceStatus::cases())));
+});
+
+it('sorts the clock history newest first by default and oldest first on request', function () {
+    $user = clockUser();
+
+    day($this->employee->id, '2026-08-03', AttendanceStatus::Present);
+    day($this->employee->id, '2026-08-04', AttendanceStatus::Late, ['late_minutes' => 25]);
+    day($this->employee->id, '2026-08-05', AttendanceStatus::Present);
+
+    $this->actingAs($user)->get('/hrm/clock?from=2026-08-01&to=2026-08-31')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('recent_days.0.date', '2026-08-05')
+            ->where('recent_days.2.date', '2026-08-03')
+            ->where('filters.sort', 'newest')
+        );
+
+    $this->actingAs($user)->get('/hrm/clock?from=2026-08-01&to=2026-08-31&sort=oldest')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('recent_days.0.date', '2026-08-03')
+            ->where('recent_days.2.date', '2026-08-05')
+            ->where('filters.sort', 'oldest')
+        );
+});
+
+it('keeps both boundary days of the range when a status is chosen', function () {
+    $user = clockUser();
+
+    // ⚠ attendance_date is date-cast but stored with a time. A status filter
+    // added on top of a range is exactly where a bare >= creeps back in and
+    // drops the first or last day.
+    day($this->employee->id, '2026-08-01', AttendanceStatus::Late, ['late_minutes' => 10]);
+    day($this->employee->id, '2026-08-08', AttendanceStatus::Present);
+    day($this->employee->id, '2026-08-15', AttendanceStatus::Late, ['late_minutes' => 20]);
+
+    $this->actingAs($user)->get('/hrm/clock?from=2026-08-01&to=2026-08-15&status=late&sort=oldest')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('recent_days', 2)
+            ->where('recent_days.0.date', '2026-08-01')
+            ->where('recent_days.1.date', '2026-08-15')
+        );
+});
