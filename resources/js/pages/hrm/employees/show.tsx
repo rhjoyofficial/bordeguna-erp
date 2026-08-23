@@ -582,6 +582,11 @@ export default function EmployeeShow({
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                        <Link href={`/hrm/attendance/employees/${employee.id}`}>
+                            <Button variant="outline" size="sm">
+                                Attendance
+                            </Button>
+                        </Link>
                         <Badge variant={statusVariant[employee.status] ?? 'secondary'} className="capitalize">
                             {employee.status.replace('_', ' ')}
                         </Badge>

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 type Row = {
@@ -171,7 +171,14 @@ export default function AttendanceSummary() {
                             {rows.map((r) => (
                                 <tr key={r.employee_id} className="border-t border-border">
                                     <td className="p-3">
-                                        <div className="font-medium">{r.employee_name}</div>
+                                        {/* The row is the question; the person's own
+                                            page is the answer in full. */}
+                                        <Link
+                                            href={`/hrm/attendance/employees/${r.employee_id}?from=${filters.from}&to=${filters.to}`}
+                                            className="text-primary font-medium hover:underline"
+                                        >
+                                            {r.employee_name}
+                                        </Link>
                                         {r.employee_code && (
                                             <div className="text-xs text-muted-foreground">{r.employee_code}</div>
                                         )}

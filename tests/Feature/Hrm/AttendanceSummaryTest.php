@@ -329,3 +329,56 @@ it('keeps both boundary days of the range when a status is chosen', function () 
             ->where('recent_days.1.date', '2026-08-15')
         );
 });
+
+it('shows one employee on their own attendance page, defaulting to the payroll month so far', function () {
+    Carbon::setTestNow('2026-08-23 10:00:00');
+
+    // Inside the current cycle (24 Jul onward) and before it.
+    day($this->employee->id, '2026-07-25', AttendanceStatus::Late, ['late_minutes' => 30]);
+    day($this->employee->id, '2026-08-20', AttendanceStatus::Present);
+    day($this->employee->id, '2026-07-20', AttendanceStatus::Absent, ['worked_minutes' => 0]);
+
+    // Confine like the employee pages do: an assignment in this business.
+    \App\Modules\Hrm\Models\EmployeeAssignment::create([
+        'employee_id' => $this->employee->id,
+        'business_id' => $this->business->id,
+        'office_id' => \App\Modules\Foundation\Models\Office::create([
+            'business_id' => $this->business->id, 'name' => 'HQ',
+        ])->id,
+        'is_primary' => true,
+        'effective_from' => '2025-01-01',
+    ]);
+
+    $this->actingAs($this->owner)
+        ->get("/hrm/attendance/employees/{$this->employee->id}")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            // "Default last month 24 to today" - Joy's own phrase. The absent
+            // day on 20 July sits before the cycle and must not appear.
+            ->where('filters.from', '2026-07-24')
+            ->where('filters.to', '2026-08-23')
+            ->where('summary.late', 1)
+            ->where('summary.present', 1)
+            ->where('summary.absent', 0)
+            ->has('days', 2));
+
+    // An explicit range still wins.
+    $this->actingAs($this->owner)
+        ->get("/hrm/attendance/employees/{$this->employee->id}?from=2026-07-01&to=2026-07-31")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('summary.absent', 1)
+            ->has('days', 2));
+
+    Carbon::setTestNow();
+});
+
+it('keeps the per-employee page away from staff', function () {
+    $staff = User::factory()->create();
+    $staff->businesses()->attach($this->business->id);
+    $staff->assignRole('Staff');
+
+    $this->actingAs($staff)
+        ->get("/hrm/attendance/employees/{$this->employee->id}")
+        ->assertForbidden();
+});
