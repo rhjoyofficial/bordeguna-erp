@@ -9,6 +9,8 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Dashboard\AttendanceTrend;
 use App\Modules\Hrm\Dashboard\DashboardFilters;
 use App\Modules\Hrm\Dashboard\DashboardRegistry;
+use App\Modules\Hrm\Models\DailyAttendance;
+use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Reporting\ReportScope;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -56,6 +58,23 @@ class HrmDashboardController extends Controller
             // tiles use. A picture that disagrees with the numbers above it is
             // worse than no picture, because the picture is what gets believed.
             'trend' => AttendanceTrend::for($filters, app(BusinessContext::class)),
+            // The DreamsERP-style hero line: what actually needs this person.
+            // Real numbers only - the approvals count already rides in the
+            // shared props, so this adds the one figure it lacks.
+            'attention' => [
+                'holds' => DailyAttendance::where('holds_payroll', true)->count(),
+            ],
+            // Who sits where, for the distribution panel: active primary
+            // assignments per department. Real data, no invented departments.
+            'distribution' => EmployeeAssignment::query()
+                ->with('department:id,name')
+                ->where('is_primary', true)
+                ->active()
+                ->get()
+                ->groupBy(fn (EmployeeAssignment $a) => $a->department?->name ?? 'Unassigned')
+                ->map(fn ($group, $name) => ['department' => $name, 'count' => $group->count()])
+                ->sortByDesc('count')
+                ->values(),
             'filters' => [
                 'office_id' => $filters->officeId(),
                 'department_id' => $filters->departmentId(),

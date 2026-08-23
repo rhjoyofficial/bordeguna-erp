@@ -2,8 +2,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import {
+    AlertTriangle,
+    Banknote,
+    CalendarCheck,
+    CheckSquare,
+    Clock,
+    Coins,
+    LayoutGrid,
+    Palmtree,
+    UserX,
+    type LucideIcon,
+} from 'lucide-react';
 import { useState } from 'react';
 
 interface Option {
@@ -52,6 +64,8 @@ interface Trend {
 interface Props {
     widgets: Widget[];
     trend: Trend;
+    attention: { holds: number };
+    distribution: { department: string; count: number }[];
     filters: {
         office_id: number | null;
         department_id: number | null;
@@ -62,6 +76,18 @@ interface Props {
     departments: Option[];
     department_locked: boolean;
 }
+
+/** Each widget's face in the DreamsERP tile anatomy. Fallback for new ones. */
+const TILE_ICONS: Record<string, LucideIcon> = {
+    attendance_present_today: CalendarCheck,
+    attendance_absent_today: UserX,
+    attendance_late_today: Clock,
+    attendance_missing_punches: AlertTriangle,
+    attendance_on_leave: Palmtree,
+    payroll_current_status: Banknote,
+    payroll_salary_total: Coins,
+    approvals_pending: CheckSquare,
+};
 
 const SERIES = [
     { key: 'present' as const, label: 'Present', bar: 'bg-chart-2', dot: 'bg-chart-2' },
@@ -144,17 +170,65 @@ function AttendanceTrendChart({ trend }: { trend: Trend }) {
     );
 }
 
+/** One tile, DreamsERP anatomy: icon square, muted label, figure, note. */
+function WidgetTile({ widget, onDrilldown }: { widget: Widget; onDrilldown: (widget: Widget) => void }) {
+    const Icon = TILE_ICONS[widget.key] ?? LayoutGrid;
+
+    return (
+        <div className={`flex flex-col gap-2 rounded-xl border p-4 ${widget.stale ? 'border-dashed' : ''}`}>
+            <div className="flex items-center justify-between gap-2">
+                <span className="bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-lg">
+                    <Icon className="h-4.5 w-4.5" />
+                </span>
+                {widget.stale && (
+                    <span
+                        className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+                        title="These figures are only as current as the last attendance processing."
+                    >
+                        Not current
+                    </span>
+                )}
+            </div>
+
+            <p className="text-muted-foreground text-xs font-medium">{widget.title}</p>
+            <p className={`text-2xl font-semibold tabular-nums ${widget.stale ? 'text-muted-foreground' : ''}`}>{widget.display}</p>
+
+            {widget.delta_display && (
+                <p className="text-xs">
+                    <span className={widget.delta && widget.delta < 0 ? 'text-destructive' : ''}>{widget.delta_display}</span>
+                    {/* Blank wherever a percentage would be a fabrication (C10c / C11c). */}
+                    {widget.delta_percent && <span className="ml-1">({widget.delta_percent})</span>}
+                    {widget.delta_label && <span className="text-muted-foreground ml-1">{widget.delta_label}</span>}
+                </p>
+            )}
+
+            {widget.note && <p className="text-muted-foreground text-xs">{widget.note}</p>}
+
+            {widget.drilldown_report && (
+                <Button variant="link" className="h-auto justify-start p-0 text-xs" onClick={() => onDrilldown(widget)}>
+                    Show me these
+                </Button>
+            )}
+        </div>
+    );
+}
+
 /**
- * The HRM dashboard (RPT-04).
+ * The HRM dashboard (RPT-04), rearranged to the DreamsERP anatomy Joy chose
+ * (23 Aug 2026): a greeting hero that says what actually needs you, the
+ * attendance stat row, the period chart beside the department distribution,
+ * and the remaining permission-granted groups below.
  *
  * It renders what the server sends and computes nothing - no KPI arithmetic
  * lives here, which is the separation the plan asked for. A widget the viewer
  * may not see never reaches this file at all: `DashboardRegistry` filters the
  * payload, so there is no client-side permission check to get wrong and no
- * greyed-out tile hinting at a figure somebody is not allowed to know.
+ * greyed-out tile hinting at a figure somebody is not allowed to know. This
+ * file only ARRANGES what it was given.
  */
-export default function HrmDashboard({ widgets, trend, filters, offices, departments, department_locked }: Props) {
+export default function HrmDashboard({ widgets, trend, attention, distribution, filters, offices, departments, department_locked }: Props) {
     const [values, setValues] = useState(filters);
+    const { auth, pendingApprovalsCount, canManageEmployees } = usePage<SharedData>().props;
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'HRM', href: '/hrm/employees' },
@@ -181,17 +255,60 @@ export default function HrmDashboard({ widgets, trend, filters, offices, departm
         window.open(`/hrm/reports/${widget.drilldown_report}/run?${query.toString()}`, '_blank', 'noopener');
     };
 
-    const groups = widgets.reduce<Record<string, Widget[]>>((acc, widget) => {
-        (acc[widget.group] ??= []).push(widget);
-        return acc;
-    }, {});
+    // Attendance tiles form the stat row; the other groups render below,
+    // unchanged in meaning.
+    const statRow = widgets.filter((w) => w.group === 'Attendance');
+    const otherGroups = widgets
+        .filter((w) => w.group !== 'Attendance')
+        .reduce<Record<string, Widget[]>>((acc, widget) => {
+            (acc[widget.group] ??= []).push(widget);
+            return acc;
+        }, {});
+
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    const firstName = (auth?.user?.name ?? '').split(' ')[0] || 'there';
+
+    // Real counts, or an honest quiet day. No urgency theatre.
+    const attentionParts: string[] = [];
+    if (pendingApprovalsCount > 0) {
+        attentionParts.push(`${pendingApprovalsCount} approval${pendingApprovalsCount === 1 ? '' : 's'} waiting`);
+    }
+    if (attention.holds > 0) {
+        attentionParts.push(`${attention.holds} attendance day${attention.holds === 1 ? '' : 's'} holding payroll`);
+    }
+
+    const maxDept = Math.max(1, ...distribution.map((d) => d.count));
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="HR dashboard" />
 
             <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-end gap-4 rounded-lg border p-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-xl font-semibold">
+                            {greeting}, {firstName}
+                        </h1>
+                        <p className="text-muted-foreground text-sm">
+                            {attentionParts.length > 0 ? `You have ${attentionParts.join(' and ')}.` : 'Nothing is waiting on you right now.'}
+                        </p>
+                    </div>
+                    <div className="flex gap-2">
+                        {pendingApprovalsCount > 0 && (
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href="/approvals">Review approvals</Link>
+                            </Button>
+                        )}
+                        {canManageEmployees && (
+                            <Button size="sm" asChild>
+                                <Link href="/hrm/employees/create">Add employee</Link>
+                            </Button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap items-end gap-4 rounded-xl border p-4">
                     <div className="flex flex-col gap-1.5">
                         <Label htmlFor="range_from">From</Label>
                         <Input
@@ -254,66 +371,56 @@ export default function HrmDashboard({ widgets, trend, filters, offices, departm
                     <p className="text-muted-foreground text-sm">There are no dashboard figures available to you.</p>
                 )}
 
-                <div className="rounded-lg border p-4">
-                    <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-                        <h2 className="text-sm font-semibold">Attendance across the period</h2>
-                        <p className="text-muted-foreground text-xs">
-                            {filters.range_from} to {filters.range_to}
-                        </p>
+                {statRow.length > 0 && (
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+                        {statRow.map((widget) => (
+                            <WidgetTile key={widget.key} widget={widget} onDrilldown={drilldown} />
+                        ))}
                     </div>
-                    <AttendanceTrendChart trend={trend} />
+                )}
+
+                <div className="grid gap-6 lg:grid-cols-3">
+                    <div className="rounded-xl border p-4 lg:col-span-2">
+                        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+                            <h2 className="text-sm font-semibold">Attendance across the period</h2>
+                            <p className="text-muted-foreground text-xs">
+                                {filters.range_from} to {filters.range_to}
+                            </p>
+                        </div>
+                        <AttendanceTrendChart trend={trend} />
+                    </div>
+
+                    {/* Who sits where. Real assignments, drawn as bars because
+                        nine people in three departments needs no donut. */}
+                    <div className="rounded-xl border p-4">
+                        <h2 className="mb-4 text-sm font-semibold">Employee distribution</h2>
+                        {distribution.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">No active assignments yet.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {distribution.map((row) => (
+                                    <div key={row.department}>
+                                        <div className="mb-1 flex items-baseline justify-between text-sm">
+                                            <span>{row.department}</span>
+                                            <span className="text-muted-foreground tabular-nums">{row.count}</span>
+                                        </div>
+                                        <div className="bg-muted h-2 overflow-hidden rounded-full">
+                                            <div className="bg-chart-2 h-full rounded-full" style={{ width: `${(row.count / maxDept) * 100}%` }} />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {Object.entries(groups).map(([group, groupWidgets]) => (
+                {Object.entries(otherGroups).map(([group, groupWidgets]) => (
                     <div key={group} className="flex flex-col gap-3">
                         <h2 className="text-sm font-semibold">{group}</h2>
 
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                             {groupWidgets.map((widget) => (
-                                <div
-                                    key={widget.key}
-                                    className={`flex flex-col gap-2 rounded-lg border p-4 ${widget.stale ? 'border-dashed' : ''}`}
-                                >
-                                    <div className="flex items-center justify-between gap-2">
-                                        <p className="text-muted-foreground text-xs font-medium">{widget.title}</p>
-                                        {/*
-                                          C11b. The marker is visual and sits beside the title, because a
-                                          caveat nobody notices is not honesty. A dashed border and this
-                                          badge say "not settled" before anybody reads the note below.
-                                        */}
-                                        {widget.stale && (
-                                            <span
-                                                className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200"
-                                                title="These figures are only as current as the last attendance processing."
-                                            >
-                                                Not current
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    <p className={`text-2xl font-semibold tabular-nums ${widget.stale ? 'text-muted-foreground' : ''}`}>
-                                        {widget.display}
-                                    </p>
-
-                                    {widget.delta_display && (
-                                        <p className="text-xs">
-                                            <span className={widget.delta && widget.delta < 0 ? 'text-destructive' : ''}>
-                                                {widget.delta_display}
-                                            </span>
-                                            {/* Blank wherever a percentage would be a fabrication (C10c / C11c). */}
-                                            {widget.delta_percent && <span className="ml-1">({widget.delta_percent})</span>}
-                                            {widget.delta_label && <span className="text-muted-foreground ml-1">{widget.delta_label}</span>}
-                                        </p>
-                                    )}
-
-                                    {widget.note && <p className="text-muted-foreground text-xs">{widget.note}</p>}
-
-                                    {widget.drilldown_report && (
-                                        <Button variant="link" className="h-auto justify-start p-0 text-xs" onClick={() => drilldown(widget)}>
-                                            Show me these
-                                        </Button>
-                                    )}
-                                </div>
+                                <WidgetTile key={widget.key} widget={widget} onDrilldown={drilldown} />
                             ))}
                         </div>
                     </div>
