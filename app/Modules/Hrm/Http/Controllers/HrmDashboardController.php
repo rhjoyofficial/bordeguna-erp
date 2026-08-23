@@ -5,6 +5,8 @@ namespace App\Modules\Hrm\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Models\Department;
 use App\Modules\Foundation\Models\Office;
+use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Dashboard\AttendanceTrend;
 use App\Modules\Hrm\Dashboard\DashboardFilters;
 use App\Modules\Hrm\Dashboard\DashboardRegistry;
 use App\Modules\Hrm\Reporting\ReportScope;
@@ -50,6 +52,10 @@ class HrmDashboardController extends Controller
 
         return Inertia::render('hrm/dashboard', [
             'widgets' => $this->widgets->resolveFor($request->user(), $filters),
+            // ⚠ The chart, scoped by the SAME office and department clauses the
+            // tiles use. A picture that disagrees with the numbers above it is
+            // worse than no picture, because the picture is what gets believed.
+            'trend' => AttendanceTrend::for($filters, app(BusinessContext::class)),
             'filters' => [
                 'office_id' => $filters->officeId(),
                 'department_id' => $filters->departmentId(),

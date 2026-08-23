@@ -30,8 +30,28 @@ interface Widget {
     drilldown_parameters: Record<string, string | number>;
 }
 
+interface TrendPoint {
+    date: string;
+    label: string;
+    weekday: string;
+    present: number;
+    late: number;
+    absent: number;
+    leave: number;
+    off: number;
+}
+
+interface Trend {
+    points: TrendPoint[];
+    totals: Record<string, number>;
+    days: number;
+    truncated: boolean;
+    rows: number;
+}
+
 interface Props {
     widgets: Widget[];
+    trend: Trend;
     filters: {
         office_id: number | null;
         department_id: number | null;
@@ -43,6 +63,87 @@ interface Props {
     department_locked: boolean;
 }
 
+const SERIES = [
+    { key: 'present' as const, label: 'Present', bar: 'bg-chart-2', dot: 'bg-chart-2' },
+    { key: 'late' as const, label: 'Late', bar: 'bg-chart-4', dot: 'bg-chart-4' },
+    { key: 'absent' as const, label: 'Absent', bar: 'bg-destructive', dot: 'bg-destructive' },
+    { key: 'leave' as const, label: 'On leave', bar: 'bg-chart-3', dot: 'bg-chart-3' },
+];
+
+/**
+ * Attendance day by day. Stacked, because the question is "how was that day
+ * made up", not "how do four unrelated lines move".
+ *
+ * ⚠ Weekly off and holidays are drawn as a faint base rather than left out.
+ * A Friday with nine people off would otherwise be an empty column that reads
+ * as a catastrophe.
+ */
+function AttendanceTrendChart({ trend }: { trend: Trend }) {
+    if (trend.rows === 0) {
+        return (
+            <p className="text-muted-foreground text-sm">
+                No attendance has been processed in this period, so there is nothing to chart yet.
+            </p>
+        );
+    }
+
+    const max = Math.max(
+        1,
+        ...trend.points.map((p) => p.present + p.late + p.absent + p.leave + p.off),
+    );
+
+    return (
+        <div>
+            <div className="flex h-48 items-end gap-1 overflow-x-auto">
+                {trend.points.map((point) => {
+                    const total = point.present + point.late + point.absent + point.leave + point.off;
+
+                    return (
+                        <div key={point.date} className="flex h-full min-w-[10px] flex-1 flex-col items-center justify-end gap-1">
+                            <div
+                                className="flex w-full max-w-6 flex-col-reverse justify-start overflow-hidden rounded-t-sm"
+                                style={{ height: `${(total / max) * 100}%` }}
+                                title={`${point.date} (${point.weekday}): present ${point.present}, late ${point.late}, absent ${point.absent}, leave ${point.leave}, off ${point.off}`}
+                            >
+                                {SERIES.map((s) =>
+                                    point[s.key] > 0 ? (
+                                        <div
+                                            key={s.key}
+                                            className={s.bar}
+                                            style={{ height: `${(point[s.key] / Math.max(total, 1)) * 100}%` }}
+                                        />
+                                    ) : null,
+                                )}
+                                {point.off > 0 && (
+                                    <div className="bg-muted" style={{ height: `${(point.off / Math.max(total, 1)) * 100}%` }} />
+                                )}
+                            </div>
+                            <span className="text-muted-foreground text-[9px] whitespace-nowrap">{point.label}</span>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-4 text-xs">
+                {SERIES.map((s) => (
+                    <span key={s.key} className="flex items-center gap-1.5">
+                        <span className={`${s.dot} h-2.5 w-2.5 rounded-sm`} /> {s.label}
+                    </span>
+                ))}
+                <span className="flex items-center gap-1.5">
+                    <span className="bg-muted h-2.5 w-2.5 rounded-sm" /> Weekly off or holiday
+                </span>
+            </div>
+
+            {trend.truncated && (
+                <p className="text-muted-foreground mt-2 text-xs">
+                    Showing the last {trend.days} days of a longer range, so the bars stay readable.
+                </p>
+            )}
+        </div>
+    );
+}
+
 /**
  * The HRM dashboard (RPT-04).
  *
@@ -52,7 +153,7 @@ interface Props {
  * payload, so there is no client-side permission check to get wrong and no
  * greyed-out tile hinting at a figure somebody is not allowed to know.
  */
-export default function HrmDashboard({ widgets, filters, offices, departments, department_locked }: Props) {
+export default function HrmDashboard({ widgets, trend, filters, offices, departments, department_locked }: Props) {
     const [values, setValues] = useState(filters);
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -152,6 +253,16 @@ export default function HrmDashboard({ widgets, filters, offices, departments, d
                 {widgets.length === 0 && (
                     <p className="text-muted-foreground text-sm">There are no dashboard figures available to you.</p>
                 )}
+
+                <div className="rounded-lg border p-4">
+                    <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+                        <h2 className="text-sm font-semibold">Attendance across the period</h2>
+                        <p className="text-muted-foreground text-xs">
+                            {filters.range_from} to {filters.range_to}
+                        </p>
+                    </div>
+                    <AttendanceTrendChart trend={trend} />
+                </div>
 
                 {Object.entries(groups).map(([group, groupWidgets]) => (
                     <div key={group} className="flex flex-col gap-3">
