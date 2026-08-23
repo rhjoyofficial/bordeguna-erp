@@ -82,7 +82,21 @@ const CHART_RANGES = [
  * figure. Colors come from the existing --chart-1..4 tokens rather than
  * new tile colors, so every accent preset recolors the dashboard with it.
  */
-function StatTile({ icon: Icon, label, value, chartColor }: { icon: LucideIcon; label: string; value: string | number; chartColor: 1 | 2 | 3 | 4 }) {
+function StatTile({
+    icon: Icon,
+    label,
+    value,
+    chartColor,
+    viewAll,
+}: {
+    icon: LucideIcon;
+    label: string;
+    value: string | number;
+    chartColor: 1 | 2 | 3 | 4;
+    /** Where the whole story behind this number lives (Joy, 23 Aug 2026:
+        every money card gets its View All). */
+    viewAll?: string;
+}) {
     const iconBg = {
         1: 'bg-chart-1/15 text-chart-1',
         2: 'bg-chart-2/15 text-chart-2',
@@ -96,8 +110,15 @@ function StatTile({ icon: Icon, label, value, chartColor }: { icon: LucideIcon; 
                 <span className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-lg', iconBg)}>
                     <Icon className="h-5 w-5" />
                 </span>
-                <div className="min-w-0">
-                    <p className="text-muted-foreground truncate text-sm">{label}</p>
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-muted-foreground truncate text-sm">{label}</p>
+                        {viewAll && (
+                            <Link href={viewAll} className="text-primary text-xs whitespace-nowrap hover:underline">
+                                View all
+                            </Link>
+                        )}
+                    </div>
                     <p className="truncate text-xl font-semibold">{value}</p>
                 </div>
             </CardContent>
@@ -305,23 +326,56 @@ export default function Dashboard({
 
                 {hasTradeTiles && (
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        {total_sales !== null && <StatTile icon={Store} label="Total sales" value={total_sales} chartColor={1} />}
-                        {total_purchases !== null && <StatTile icon={ShoppingCart} label="Total purchases" value={total_purchases} chartColor={4} />}
+                        {total_sales !== null && (
+                            <StatTile icon={Store} label="Total sales" value={total_sales} chartColor={1} viewAll="/sales/invoices" />
+                        )}
+                        {total_purchases !== null && (
+                            <StatTile
+                                icon={ShoppingCart}
+                                label="Total purchases"
+                                value={total_purchases}
+                                chartColor={4}
+                                viewAll="/purchasing/purchase-orders"
+                            />
+                        )}
                         {total_sales_returns !== null && (
-                            <StatTile icon={Undo2} label="Sales returns" value={total_sales_returns} chartColor={3} />
+                            <StatTile icon={Undo2} label="Sales returns" value={total_sales_returns} chartColor={3} viewAll="/sales/returns" />
                         )}
                         {total_purchase_returns !== null && (
-                            <StatTile icon={ReceiptText} label="Purchase return credits" value={total_purchase_returns} chartColor={2} />
+                            <StatTile
+                                icon={ReceiptText}
+                                label="Purchase return credits"
+                                value={total_purchase_returns}
+                                chartColor={2}
+                                viewAll="/purchasing/bills"
+                            />
                         )}
                     </div>
                 )}
 
                 {hasMoneyTiles && (
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        {net_profit_month !== null && <StatTile icon={TrendingUp} label="Profit this month" value={net_profit_month} chartColor={1} />}
-                        {invoice_due !== null && <StatTile icon={HandCoins} label="Invoice due" value={invoice_due} chartColor={3} />}
-                        {total_expenses !== null && <StatTile icon={Coins} label="Total expenses" value={total_expenses} chartColor={4} />}
-                        {customer_refunds !== null && <StatTile icon={Banknote} label="Customer refunds" value={customer_refunds} chartColor={2} />}
+                        {/* Each money card opens the screen that explains it
+                            (Joy, 23 Aug 2026): the number is the headline, the
+                            View all is the story. */}
+                        {net_profit_month !== null && (
+                            <StatTile
+                                icon={TrendingUp}
+                                label="Profit this month"
+                                value={net_profit_month}
+                                chartColor={1}
+                                viewAll="/accounting/income-statement"
+                            />
+                        )}
+                        {invoice_due !== null && (
+                            <StatTile icon={HandCoins} label="Invoice due" value={invoice_due} chartColor={3} viewAll="/sales/invoices" />
+                        )}
+                        {total_expenses !== null && (
+                            <StatTile icon={Coins} label="Total expenses" value={total_expenses} chartColor={4} viewAll="/purchasing/expenses" />
+                        )}
+                        {customer_refunds !== null && (
+                            <StatTile icon={Banknote} label="Customer refunds" value={customer_refunds} chartColor={2} viewAll="/sales/returns" />
+                        )}
                     </div>
                 )}
 

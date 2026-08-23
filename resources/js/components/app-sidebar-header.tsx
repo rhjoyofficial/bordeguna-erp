@@ -2,6 +2,7 @@ import { Breadcrumbs } from '@/components/breadcrumbs';
 import HeaderFullscreenToggle from '@/components/header-fullscreen-toggle';
 import HeaderNotifications from '@/components/header-notifications';
 import HeaderQuickCreate from '@/components/header-quick-create';
+import HeaderSearch from '@/components/header-search';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { type BreadcrumbItem as BreadcrumbItemType } from '@/types';
 
@@ -13,6 +14,7 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
                 <Breadcrumbs breadcrumbs={breadcrumbs} />
             </div>
             <div className="flex items-center gap-1">
+                <HeaderSearch />
                 <HeaderQuickCreate />
                 <HeaderNotifications />
                 <HeaderFullscreenToggle />

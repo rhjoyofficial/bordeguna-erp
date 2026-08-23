@@ -3,6 +3,7 @@
 use App\Http\Controllers\ApprovalInboxController;
 use App\Http\Controllers\AssistantController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 
@@ -16,6 +17,10 @@ Route::middleware(['auth', 'business'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('approvals', [ApprovalInboxController::class, 'index'])->name('approvals.index');
+
+    // The header search. A GET on purpose (the hand-written-fetch trap: a GET
+    // needs no CSRF ceremony), JSON in and out, permission-filtered inside.
+    Route::get('search', GlobalSearchController::class)->name('search');
 
     // The bell's notifications. No index page on purpose: each one carries the
     // url of the thing it is about, and the approvals queue is the work list.
