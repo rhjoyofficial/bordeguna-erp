@@ -56,6 +56,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         'emergency_contact_name',
         'emergency_contact_phone',
         'emergency_contact_relationship',
+        'referred_by',
         'blood_group',
         'confirmation_date',
         'contract_end_date',
@@ -84,7 +85,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         'personal_email', 'phone', 'present_address', 'permanent_address',
         'national_id', 'birth_certificate_no', 'date_of_birth',
         'joining_date', 'confirmation_date', 'contract_end_date',
-        'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
+        'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship', 'referred_by',
         'blood_group',
         'bank_account_name', 'bank_account_number', 'bank_name', 'bank_branch', 'bank_routing_number',
         'mfs_provider', 'mfs_account_number', 'salary_payment_method',
@@ -272,6 +273,10 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
             'emergency_contact_name' => ['nullable', 'string', 'max:255'],
             'emergency_contact_phone' => ['nullable', 'string', 'max:50'],
             'emergency_contact_relationship' => ['nullable', 'string', 'max:100'],
+            // Free text, not an employee id: referrers are often outside the
+            // company (a relative, a mill contact), and a staff dropdown would
+            // refuse the most common case.
+            'referred_by' => ['nullable', 'string', 'max:255'],
             // Free text rather than an enum: rare groups and local notations vary,
             // and refusing a real blood group at data entry is worse than storing it.
             'blood_group' => ['nullable', 'string', 'max:8'],

@@ -45,6 +45,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('employees/{employee}/transfer', [EmployeeController::class, 'transfer'])->name('employees.transfer');
     Route::post('employees/{employee}/documents', [EmployeeController::class, 'uploadDocument'])->name('employees.documents.store');
     Route::delete('employees/{employee}/documents/{attachment}', [EmployeeController::class, 'destroyDocument'])->name('employees.documents.destroy');
+    Route::post('employees/{employee}/photo', [EmployeeController::class, 'uploadPhoto'])->name('employees.photo.store');
+    Route::delete('employees/{employee}/photo', [EmployeeController::class, 'destroyPhoto'])->name('employees.photo.destroy');
 
     // Scheduling — shift definitions (SCH-02). Each action authorizes
     // hrm.scheduling.manage; {shift} is business-scoped so binding 404s cross-tenant.

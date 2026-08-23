@@ -28,6 +28,7 @@ interface EditableEmployee {
     permanent_address: string | null;
     national_id: string | null;
     birth_certificate_no: string | null;
+    referred_by: string | null;
     date_of_birth: string | null;
     joining_date: string | null;
     confirmation_date: string | null;
@@ -59,7 +60,7 @@ type FormData = Omit<EditableEmployee, 'id' | 'employee_code' | 'name'>;
 
 const FIELD_KEYS: (keyof FormData)[] = [
     'first_name', 'last_name', 'employment_type', 'biometric_enroll_id', 'personal_email', 'phone',
-    'present_address', 'permanent_address', 'national_id', 'birth_certificate_no',
+    'present_address', 'permanent_address', 'national_id', 'birth_certificate_no', 'referred_by',
     'date_of_birth', 'joining_date', 'confirmation_date', 'contract_end_date',
     'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship', 'blood_group',
     'bank_account_name', 'bank_account_number', 'bank_name', 'bank_branch', 'bank_routing_number',
@@ -131,6 +132,9 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                         <Text field="national_id" label="National ID" />
                         <Text field="birth_certificate_no" label="Birth certificate no." />
                         <Text field="date_of_birth" label="Date of birth" type="date" />
+                        {/* Joy, 23 Aug 2026: who brought this person in. Free
+                            text - referrers are often outside the company. */}
+                        <Text field="referred_by" label="Referred by" />
                     </div>
                 </section>
 

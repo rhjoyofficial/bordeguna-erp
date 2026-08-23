@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 interface Option {
     value: string;
@@ -57,6 +57,8 @@ interface Document {
 }
 
 interface EmployeeDetail {
+    photo_url: string | null;
+    referred_by: string | null;
     id: number;
     employee_code: string;
     name: string;
@@ -117,6 +119,81 @@ function Field({ label, value }: { label: string; value: string | null }) {
         <div>
             <dt className="text-xs text-muted-foreground">{label}</dt>
             <dd className="text-sm">{value ?? '-'}</dd>
+        </div>
+    );
+}
+
+/**
+ * The face at the top of the file (Joy, 23 Aug 2026: "can add image"). Same
+ * mechanics as the business logo: a singleton attachment, replaced rather than
+ * accumulated, deliberately separate from the documents list below because a
+ * face is not a certificate.
+ */
+function ProfilePhoto({ employeeId, photoUrl, name }: { employeeId: number; photoUrl: string | null; name: string }) {
+    const fileRef = useRef<HTMLInputElement>(null);
+    const [busy, setBusy] = useState(false);
+
+    const initials = name
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase())
+        .join('');
+
+    const upload = (file?: File) => {
+        if (!file) return;
+        setBusy(true);
+        const form = new FormData();
+        form.append('photo', file);
+        router.post(route('hrm.employees.photo.store', employeeId), form, {
+            forceFormData: true,
+            preserveScroll: true,
+            onFinish: () => {
+                setBusy(false);
+                if (fileRef.current) fileRef.current.value = '';
+            },
+        });
+    };
+
+    return (
+        <div className="group relative">
+            {photoUrl ? (
+                <img
+                    src={photoUrl}
+                    alt={name}
+                    className="border-sidebar-border/70 dark:border-sidebar-border h-16 w-16 rounded-full border object-cover"
+                />
+            ) : (
+                <div className="bg-primary/10 text-primary flex h-16 w-16 items-center justify-center rounded-full text-lg font-semibold">
+                    {initials || '?'}
+                </div>
+            )}
+            <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => upload(e.target.files?.[0])}
+            />
+            <div className="mt-1 flex justify-center gap-2">
+                <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground text-[11px] underline-offset-2 hover:underline"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={busy}
+                >
+                    {photoUrl ? 'Change' : 'Add photo'}
+                </button>
+                {photoUrl && (
+                    <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground text-[11px] underline-offset-2 hover:underline"
+                        onClick={() => router.delete(route('hrm.employees.photo.destroy', employeeId), { preserveScroll: true })}
+                    >
+                        Remove
+                    </button>
+                )}
+            </div>
         </div>
     );
 }
@@ -492,11 +569,17 @@ export default function EmployeeShow({
             <Head title={employee.name} />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <h2 className="text-lg font-medium">{employee.name}</h2>
-                        <p className="text-sm text-muted-foreground">
-                            {employee.employee_code} · {employee.employment_type}
-                        </p>
+                    <div className="flex items-center gap-4">
+                        <ProfilePhoto employeeId={employee.id} photoUrl={employee.photo_url} name={employee.name} />
+                        <div>
+                            <h2 className="text-lg font-medium">{employee.name}</h2>
+                            <p className="text-sm text-muted-foreground">
+                                {employee.employee_code} · {employee.employment_type}
+                            </p>
+                            {employee.referred_by && (
+                                <p className="text-xs text-muted-foreground">Referred by {employee.referred_by}</p>
+                            )}
+                        </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         <Badge variant={statusVariant[employee.status] ?? 'secondary'} className="capitalize">

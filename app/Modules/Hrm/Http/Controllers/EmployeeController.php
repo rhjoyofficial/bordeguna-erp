@@ -171,10 +171,19 @@ class EmployeeController extends Controller
                     'effective_to' => $assignment->effective_to?->toDateString(),
                 ]),
                 // Documents (EMP-04) over the Phase 0 Attachment Engine. Viewing
+                'referred_by' => $employee->referred_by,
+                // The profile photo is an attachment in its own 'photo'
+                // collection - singleton, so replacing it never accumulates
+                // stale files - and it is EXCLUDED from the documents list
+                // below, because a face is not a certificate.
+                'photo_url' => $employee->attachmentInCollection('photo')?->url(),
                 // the files themselves goes through attachments.show, which
                 // enforces the Employee's canAccessAttachments gate on top of
                 // the business scope.
-                'documents' => $employee->attachments->map(fn (Attachment $document) => [
+                'documents' => $employee->attachments
+                    ->reject(fn (Attachment $document) => $document->collection === 'photo')
+                    ->values()
+                    ->map(fn (Attachment $document) => [
                     'id' => $document->id,
                     'category' => EmployeeDocumentType::tryFrom($document->collection ?? '')?->label() ?? 'Other',
                     'original_name' => $document->original_name,
@@ -382,5 +391,48 @@ class EmployeeController extends Controller
         $action->handle($attachment);
 
         return back()->with('success', 'Document removed.');
+    }
+
+    /**
+     * The profile photo (Joy's employee-details reorganisation, 23 Aug 2026).
+     *
+     * Same mechanics as the business logo: a singleton attachment in its own
+     * collection, so replacing it never accumulates stale files. Kept apart
+     * from documents because a face is not a certificate - it has no expiry,
+     * no category, and it renders at the top of the page rather than in a
+     * list.
+     */
+    public function uploadPhoto(Request $request, Employee $employee, StoreAttachment $action): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+
+        $request->validate([
+            'photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        $action->handle(
+            attachable: $employee,
+            file: $request->file('photo'),
+            collection: 'photo',
+            uploadedBy: $request->user(),
+            singleton: true,
+        );
+
+        return back()->with('success', 'Photo updated.');
+    }
+
+    public function destroyPhoto(Employee $employee, DeleteAttachment $action): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+
+        $photo = $employee->attachmentInCollection('photo');
+
+        if ($photo !== null) {
+            $action->handle($photo);
+        }
+
+        return back()->with('success', 'Photo removed.');
     }
 }
