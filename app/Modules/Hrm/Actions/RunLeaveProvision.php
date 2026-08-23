@@ -131,6 +131,19 @@ class RunLeaveProvision
      */
     public function commit(User $runBy, mixed $on = null, ?string $note = null): LeaveProvisionRun
     {
+        // ⚠⚠ DISABLED BY BUSINESS POLICY, 23 Aug 2026 (Joy's final decision):
+        // leave encashment is not enabled, so no provision run is recorded and
+        // no journal posts. Refused HERE, before anything is written, because
+        // commit() records the run row first and posts second - a refusal only
+        // in the posting would leave a half-done run behind. plan() and
+        // preview() stay available: a valuation is information, a posting is
+        // policy. The body below stays whole in commitWhenPolicyAllows so a
+        // reviewed policy change is one call away, not an archaeology dig.
+        throw new \RuntimeException(PostLeaveProvision::POSTING_DISABLED_REASON);
+    }
+
+    private function commitWhenPolicyAllows(User $runBy, mixed $on = null, ?string $note = null): LeaveProvisionRun
+    {
         $plan = $this->plan($on);
 
         return DB::transaction(function () use ($plan, $runBy, $note) {

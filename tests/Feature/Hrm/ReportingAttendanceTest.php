@@ -107,10 +107,22 @@ it('gives the register one column per day of the month it was actually asked for
     $july = collect($definition->columns(new ReportParameters(['month' => '2026-07'])))
         ->pluck('key')->filter(fn ($k) => (bool) preg_match('/^d\d+$/', $k))->values();
 
-    // The whole reason ReportDefinition::columns() takes its parameters. A fixed
-    // 31 columns would print three empty ones here every year.
-    expect($february)->toHaveCount(28)
-        ->and($july)->toHaveCount(31);
+    // The whole reason ReportDefinition::columns() takes its parameters - and
+    // since the 23 Aug 2026 cycle decision the count is the PAYROLL month's,
+    // not the calendar one. "February" runs 24 Jan to 23 Feb and holds 31 days
+    // (including January's 29th to 31st, which no calendar February has);
+    // "July" runs 24 Jun to 23 Jul and holds 30.
+    expect($february)->toHaveCount(31)
+        ->and($july)->toHaveCount(30);
+
+    // And the first column is the 24th, not the 1st: the labels carry the real
+    // day-of-month while the keys carry the position.
+    $labels = collect($definition->columns(new ReportParameters(['month' => '2026-07'])))
+        ->filter(fn ($c) => (bool) preg_match('/^d\d+$/', $c->key))
+        ->pluck('label')->values();
+
+    expect($labels->first())->toBe('24')
+        ->and($labels->last())->toBe('23');
 });
 
 it('puts an employee with no attendance at all on the register rather than omitting them', function () {
@@ -123,11 +135,13 @@ it('puts an employee with no attendance at all on the register rather than omitt
 
     $rows = ($this->rows)(app(MonthlyAttendanceRegisterReport::class), ['month' => '2026-06']);
 
+    // The June register covers 24 May to 23 June, so 15 June is position 23:
+    // eight days of May (24th to 31st) and then fifteen of June.
     expect($rows)->toHaveCount(2)
         ->and($rows[0]['employee_code'])->toBe('BDG-000001')
-        ->and($rows[0]['d15'])->toBe('P')
+        ->and($rows[0]['d23'])->toBe('P')
         ->and($rows[1]['employee_code'])->toBe('BDG-000002')
-        ->and($rows[1]['d15'])->toBe('')
+        ->and($rows[1]['d23'])->toBe('')
         ->and($rows[1]['present_days'])->toBe(0);
 
     expect($ghost->employee_code)->toBe('BDG-000002');
@@ -142,11 +156,12 @@ it('counts a late day as present as well as late, so the register still adds up 
 
     $rows = ($this->rows)(app(MonthlyAttendanceRegisterReport::class), ['month' => '2026-06']);
 
+    // 15/16/17 June are positions 23/24/25 in a register that starts 24 May.
     expect($rows[0]['present_days'])->toBe(2)
         ->and($rows[0]['late_days'])->toBe(1)
         ->and($rows[0]['absent_days'])->toBe(1)
-        ->and($rows[0]['d15'])->toBe('L')
-        ->and($rows[0]['d17'])->toBe('A');
+        ->and($rows[0]['d23'])->toBe('L')
+        ->and($rows[0]['d25'])->toBe('A');
 });
 
 it('holds only one register row in memory however many employees there are', function () {

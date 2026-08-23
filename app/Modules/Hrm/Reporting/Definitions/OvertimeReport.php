@@ -172,8 +172,8 @@ class OvertimeReport implements ReportDefinition
 
     private function query(ReportParameters $parameters): Builder
     {
-        $month = $parameters->month() ?? now()->startOfMonth();
-        $asAt = $month->copy()->endOfMonth()->toDateString();
+        $month = $parameters->monthStart();
+        $asAt = $parameters->monthEnd()->toDateString();
 
         return OvertimeAssignment::query()
             ->join('employees', 'employees.id', '=', 'overtime_assignments.employee_id')

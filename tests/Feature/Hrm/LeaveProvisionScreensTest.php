@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Department;
 use App\Modules\Foundation\Models\Office;
@@ -117,27 +118,23 @@ it('keeps the provision away from staff who may not manage payroll', function ()
     expect(LeaveProvisionRun::count())->toBe(0);
 });
 
-it('records a provision from the screen and shows its journal', function () {
+// ⚠⚠ CHANGED 23 Aug 2026, DELIBERATELY. This test used to record a run and
+// show its journal. Joy's final decision that day: leave encashment is NOT
+// enabled, unused leave carries no liability, and no provision journal may
+// ever post unless he changes the policy. The screen stays as a read-only
+// valuation; the Record path refuses before writing anything. The old posting
+// tests live in git history at this commit and come back with the policy.
+it('refuses to record a provision, because encashment is not enabled', function () {
     ($this->asRole)('Owner')->post('/hrm/leave-provision', ['note' => 'August true-up'])
-        ->assertRedirect();
+        ->assertRedirect()
+        ->assertSessionHas('error');
 
-    $run = LeaveProvisionRun::first();
-
-    expect($run)->not->toBeNull()
-        ->and((float) $run->total_liability)->toBe(12000.0)
-        ->and($run->note)->toBe('August true-up');
-
-    ($this->asRole)('Owner')->get("/hrm/leave-provision/{$run->id}")
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page
-            ->component('hrm/leave-provision/show')
-            ->where('run.id', $run->id)
-            ->has('journal.lines', 2));
+    // Nothing was written anywhere: no run, no journal, no liability.
+    expect(LeaveProvisionRun::count())->toBe(0)
+        ->and(Journal::count())->toBe(0);
 });
 
-// ⚠ The screen must show the same delta the engine will post, or the person
-// approving it is reviewing a different number from the one that lands.
-it('shows the remaining delta after a run, not the whole liability again', function () {
+it('still shows the valuation, clearly as information rather than a posting', function () {
     ($this->asRole)('Owner')->post('/hrm/leave-provision', [])->assertRedirect();
 
     ($this->asRole)('Owner')->get('/hrm/leave-provision')
@@ -146,6 +143,8 @@ it('shows the remaining delta after a run, not the whole liability again', funct
             // ⚠ 12000 not 12000.0: a whole-taka figure round-trips through JSON
             // as an int, and Inertia's `where` is a strict comparison.
             ->where('plan.totals.liability', 12000)
-            ->where('currentBalance', '12000.00')
-            ->has('runs', 1));
+            // The provision account still carries nothing, because the refused
+            // Record above posted nothing.
+            ->where('currentBalance', '0.00')
+            ->has('runs', 0));
 });

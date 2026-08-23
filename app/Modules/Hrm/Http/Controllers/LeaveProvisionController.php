@@ -50,19 +50,12 @@ class LeaveProvisionController extends Controller
     {
         $this->authorize('hrm.payroll.manage');
 
-        $data = $request->validate([
-            'valued_on' => ['nullable', 'date'],
-            'note' => ['nullable', 'string'],
-        ]);
-
-        $run = $action->commit(
-            runBy: $request->user(),
-            on: $data['valued_on'] ?? null,
-            note: $data['note'] ?? null,
-        );
-
-        return redirect()->route('hrm.leave-provision.show', $run)
-            ->with('success', 'Leave provision recorded.');
+        // ⚠⚠ Joy's final decision, 23 Aug 2026: leave encashment is not
+        // enabled, so no provision run is recorded and no journal ever posts.
+        // The screen stays readable as a valuation - what the liability WOULD
+        // be if the policy changed - but the Record path stops here, before
+        // anything is written. See PostLeaveProvision::POSTING_DISABLED_REASON.
+        return back()->with('error', PostLeaveProvision::POSTING_DISABLED_REASON);
     }
 
     public function show(LeaveProvisionRun $leaveProvision): Response

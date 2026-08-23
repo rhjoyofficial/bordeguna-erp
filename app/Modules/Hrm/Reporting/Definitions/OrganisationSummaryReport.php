@@ -149,7 +149,7 @@ class OrganisationSummaryReport implements ReportDefinition
     public function meta(ReportParameters $parameters): ReportMeta
     {
         $month = $parameters->month();
-        $lock = $month === null ? null : AttendancePeriodLock::covering($month->copy()->endOfMonth());
+        $lock = $month === null ? null : AttendancePeriodLock::covering($parameters->monthEnd());
 
         return new ReportMeta(
             title: 'Office and department summary',
@@ -161,8 +161,8 @@ class OrganisationSummaryReport implements ReportDefinition
 
     private function query(ReportParameters $parameters): Builder
     {
-        $month = $parameters->month() ?? now()->startOfMonth();
-        $end = $month->copy()->endOfMonth()->toDateString();
+        $month = $parameters->monthStart();
+        $end = $parameters->monthEnd()->toDateString();
 
         $present = implode("','", array_map(
             fn (AttendanceStatus $s) => $s->value,

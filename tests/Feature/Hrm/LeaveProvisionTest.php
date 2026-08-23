@@ -128,110 +128,6 @@ beforeEach(function () {
 
 afterEach(fn () => Carbon::setTestNow());
 
-it('prices banked leave at one day of Gross and posts the liability', function () {
-    $employee = ($this->makeEmployee)('E-001', 'Karim');
-    ($this->giveSalary)($employee, '30000');
-    ($this->grant)($employee, 12);
-
-    $run = ($this->run)();
-
-    // 12 days x (30,000 / 30) = 12,000.
-    expect((float) $run->total_liability)->toBe(12000.0)
-        ->and((float) $run->opening_balance)->toBe(0.0)
-        ->and((float) $run->delta)->toBe(12000.0)
-        ->and($run->employees_affected)->toBe(1);
-
-    // Dr 6130 Leave Encashment / Cr 2135 Provision (party = employee).
-    $journal = ($this->journalOf)($run);
-    $lines = JournalLine::where('journal_id', $journal->id)->get();
-
-    expect($lines)->toHaveCount(2)
-        ->and($lines->firstWhere('account_id', ($this->acct)('leave_encashment'))->amount_minor)->toBe(1200000)
-        ->and($lines->firstWhere('account_id', ($this->acct)('leave_provision'))->amount_minor)->toBe(-1200000);
-
-    // The provision side carries the employee, so it is a subsidiary ledger.
-    $provisionLine = $lines->firstWhere('account_id', ($this->acct)('leave_provision'));
-    expect($provisionLine->party_id)->toBe($employee->id);
-});
-
-it('ignores leave types that cannot be encashed', function () {
-    $employee = ($this->makeEmployee)('E-001', 'Karim');
-    ($this->giveSalary)($employee, '30000');
-    ($this->grant)($employee, 10, $this->notEncashable);
-
-    $run = ($this->run)();
-
-    // Casual leave lapsing unpaid is not a liability; providing for it would
-    // invent money.
-    expect((float) $run->total_liability)->toBe(0.0)
-        ->and(($this->journalOf)($run))->toBeNull();
-});
-
-// ⚠⚠ The heart of the design: a true-up aims at the computed truth, so it
-// posts only the movement and a second run on the same facts posts nothing.
-it('posts only the delta, and a rerun on the same facts posts nothing', function () {
-    $employee = ($this->makeEmployee)('E-001', 'Karim');
-    ($this->giveSalary)($employee, '30000');
-    ($this->grant)($employee, 12);
-
-    ($this->run)();
-
-    // Three days taken since.
-    LeaveLedgerEntry::create([
-        'business_id' => $this->business->id,
-        'employee_id' => $employee->id,
-        'leave_type_id' => $this->encashable->id,
-        'year' => 2026, 'entry_type' => 'taken',
-        'days' => -3, 'occurred_on' => '2026-08-05',
-    ]);
-
-    $second = ($this->run)();
-
-    expect((float) $second->total_liability)->toBe(9000.0)
-        ->and((float) $second->opening_balance)->toBe(12000.0)
-        ->and((float) $second->delta)->toBe(-3000.0);
-
-    // The release is a DEBIT to the provision and a CREDIT to the expense.
-    $lines = JournalLine::where('journal_id', ($this->journalOf)($second)->id)->get();
-    expect($lines->firstWhere('account_id', ($this->acct)('leave_provision'))->amount_minor)->toBe(300000)
-        ->and($lines->firstWhere('account_id', ($this->acct)('leave_encashment'))->amount_minor)->toBe(-300000);
-
-    // The account now carries exactly the computed liability.
-    expect(-($this->balance)('leave_provision'))->toBe(900000);
-
-    $third = ($this->run)();
-    expect((float) $third->delta)->toBe(0.0)
-        ->and(($this->journalOf)($third))->toBeNull();
-});
-
-it('raises the liability for days already banked when the salary rises', function () {
-    $employee = ($this->makeEmployee)('E-001', 'Karim');
-    $structure = ($this->giveSalary)($employee, '30000');
-    ($this->grant)($employee, 10);
-
-    ($this->run)();
-    expect(-($this->balance)('leave_provision'))->toBe(1000000);
-
-    // A raise: encashment pays at the rate in force when it is PAID.
-    $structure->update(['effective_to' => '2026-08-10']);
-    $newStructure = SalaryStructure::create([
-        'business_id' => $this->business->id,
-        'employee_id' => $employee->id,
-        'effective_from' => '2026-08-11',
-    ]);
-    SalaryStructureLine::create([
-        'salary_structure_id' => $newStructure->id,
-        'salary_component_id' => SalaryComponent::where('code', 'basic')->first()->id,
-        'value' => '36000',
-    ]);
-
-    $second = ($this->run)();
-
-    expect((float) $second->total_liability)->toBe(12000.0)
-        ->and((float) $second->delta)->toBe(2000.0);
-});
-
-// ⚠ A missing salary structure is an administrative gap, not a free liability.
 it('reports days it cannot price instead of valuing them at zero', function () {
     $priced = ($this->makeEmployee)('E-001', 'Karim');
     ($this->giveSalary)($priced, '30000');
@@ -251,79 +147,6 @@ it('reports days it cannot price instead of valuing them at zero', function () {
         ->and($row['explanation'])->toContain('could NOT be priced');
 });
 
-it('clamps a negative balance per type instead of netting it off another', function () {
-    $employee = ($this->makeEmployee)('E-001', 'Karim');
-    ($this->giveSalary)($employee, '30000');
-
-    $second = LeaveType::create([
-        'business_id' => $this->business->id, 'name' => 'Compensatory', 'code' => 'COMP',
-        'annual_quota' => 5, 'can_encash' => true,
-    ]);
-
-    ($this->grant)($employee, 10);
-    ($this->grant)($employee, -4, $second);
-
-    // 10 + max(0, -4) = 10 days, not 6: a negative balance is not a debt the
-    // employee owes back.
-    expect((float) ($this->run)()->total_liability)->toBe(10000.0);
-});
-
-it('drains the provision when an employee leaves', function () {
-    $stayer = ($this->makeEmployee)('E-001', 'Karim');
-    ($this->giveSalary)($stayer, '30000');
-    ($this->grant)($stayer, 6);
-
-    $leaver = ($this->makeEmployee)('E-002', 'Rahim');
-    ($this->giveSalary)($leaver, '30000');
-    ($this->grant)($leaver, 4);
-
-    ($this->run)();
-    expect(-($this->balance)('leave_provision'))->toBe(1000000);
-
-    $leaver->update(['separation_date' => '2026-08-11']);
-
-    $second = ($this->run)();
-
-    expect((float) $second->total_liability)->toBe(6000.0)
-        ->and((float) $second->delta)->toBe(-4000.0)
-        ->and(-($this->balance)('leave_provision'))->toBe(600000);
-
-    // The leaver's own party balance is back to zero - the subsidiary ledger
-    // agrees with the fact that nothing is owed to them under this head.
-    $leaverBalance = (int) JournalLine::where('account_id', ($this->acct)('leave_provision'))
-        ->where('party_id', $leaver->id)->sum('amount_minor');
-    expect($leaverBalance)->toBe(0);
-});
-
-it('keeps a per-employee balance for each person', function () {
-    $a = ($this->makeEmployee)('E-001', 'Karim');
-    ($this->giveSalary)($a, '30000');
-    ($this->grant)($a, 6);
-
-    $b = ($this->makeEmployee)('E-002', 'Rahim');
-    ($this->giveSalary)($b, '60000');
-    ($this->grant)($b, 3);
-
-    ($this->run)();
-
-    $forA = (int) JournalLine::where('account_id', ($this->acct)('leave_provision'))->where('party_id', $a->id)->sum('amount_minor');
-    $forB = (int) JournalLine::where('account_id', ($this->acct)('leave_provision'))->where('party_id', $b->id)->sum('amount_minor');
-
-    expect(-$forA)->toBe(600000)   // 6 x 1,000
-        ->and(-$forB)->toBe(600000); // 3 x 2,000
-});
-
-it('agrees with reconciliation after every run', function () {
-    $employee = ($this->makeEmployee)('E-001', 'Karim');
-    ($this->giveSalary)($employee, '30000');
-    ($this->grant)($employee, 12);
-
-    ($this->run)();
-
-    $result = SubledgerReconciliation::reconcileAllBusinesses();
-    expect($result['problems'])->toBeEmpty();
-});
-
 it('previews without changing anything', function () {
     $employee = ($this->makeEmployee)('E-001', 'Karim');
     ($this->giveSalary)($employee, '30000');
@@ -339,66 +162,35 @@ it('previews without changing anything', function () {
 
 // ⚠ The standing rule: an accounting feature must never stop an operational
 // process. Without the payroll anchor the leave book runs exactly as before.
-it('records the run but posts nothing when accounting is off', function () {
+
+// ⚠⚠ THE POSTING SUITE IS GONE, DELIBERATELY - 23 Aug 2026, Joy's final
+// decision: leave encashment is NOT enabled. Unused leave creates no financial
+// liability and no provision journal, and the ~133,566.67 BDT the engine
+// values must never be posted unless he explicitly changes the policy. The
+// valuation (plan/preview) stays, as information for HR; the posting refuses.
+// The ten tests that pinned the posting arithmetic live in git history at this
+// commit and come back with the policy, reviewed, not by accident.
+
+it('refuses to commit a provision run, because encashment is not enabled', function () {
     $employee = ($this->makeEmployee)('E-001', 'Karim');
     ($this->giveSalary)($employee, '30000');
     ($this->grant)($employee, 12);
 
-    AccountMapping::where('key', 'payroll.net_payable')->delete();
+    expect(fn () => ($this->run)())
+        ->toThrow(RuntimeException::class, 'Leave encashment is not enabled');
 
-    $run = ($this->run)();
-
-    expect((float) $run->total_liability)->toBe(12000.0)
-        ->and(($this->journalOf)($run))->toBeNull();
+    // Refused BEFORE anything was written: no run row, no journal, and the
+    // provision account still carries nothing.
+    expect(LeaveProvisionRun::count())->toBe(0)
+        ->and(Journal::count())->toBe(0)
+        ->and(($this->balance)('leave_provision') ?? 0)->toBe(0);
 });
 
-// ⚠⚠ The gap between the two views of the provision account: the run's delta
-// is measured against the WHOLE balance, the per-employee lines only against
-// party-tagged ones. C-LPE-4's pre-cutover catch-up lands exactly there, and
-// before this was closed the difference was swept into Rounding Differences -
-// real payroll expense misfiled, and the provision left overstated.
-it('trues up a provision balance that carries no employee, instead of rounding it away', function () {
-    $employee = ($this->makeEmployee)('E-001', 'Karim');
-    ($this->giveSalary)($employee, '30000');
-    ($this->grant)($employee, 12);
+it('refuses to post a journal for any run, at the posting seam too', function () {
+    // Both doors are locked independently. If a future caller reaches the
+    // posting action without going through commit(), the policy still holds.
+    $run = new LeaveProvisionRun;
 
-    AccountMapping::create([
-        'key' => 'accounting.rounding_difference',
-        'account_id' => ($this->acct)('rounding_difference'),
-        'effective_from' => '2020-01-01',
-    ]);
-
-    // The accountant's catch-up: Dr 6130 / Cr 2135, no party on either side.
-    app(PostJournal::class)->handle(
-        new JournalDraft(
-            date: Carbon::parse('2026-08-01'),
-            lines: [
-                JournalLineDraft::debit(($this->acct)('leave_encashment'), Money::ofTaka('5000')),
-                JournalLineDraft::credit(($this->acct)('leave_provision'), Money::ofTaka('5000')),
-            ],
-            memo: 'Pre-cutover leave provision catch-up',
-        ),
-        $this->user,
-    );
-
-    $run = ($this->run)();
-
-    expect((float) $run->total_liability)->toBe(12000.0)
-        ->and((float) $run->opening_balance)->toBe(5000.0)
-        ->and((float) $run->delta)->toBe(7000.0);
-
-    // The account lands on the COMPUTED liability, not liability plus stray.
-    expect(-($this->balance)('leave_provision'))->toBe(1200000)
-        // ...and not a paisa of it was filed as a rounding difference.
-        ->and(($this->balance)('rounding_difference'))->toBe(0);
-
-    // The unattributed 5,000 was released on its own party-less line.
-    $lines = JournalLine::where('journal_id', ($this->journalOf)($run)->id)
-        ->where('account_id', ($this->acct)('leave_provision'))->get();
-
-    expect($lines->firstWhere('party_id', $employee->id)->amount_minor)->toBe(-1200000)
-        ->and($lines->firstWhere('party_id', null)->amount_minor)->toBe(500000);
-
-    // And reconciliation agrees, which is the whole point of trueing up.
-    expect(SubledgerReconciliation::reconcileAllBusinesses()['problems'])->toBe([]);
+    expect(fn () => app(App\Modules\Hrm\Actions\PostLeaveProvision::class)->forRun($run, $this->user))
+        ->toThrow(RuntimeException::class, 'Leave encashment is not enabled');
 });

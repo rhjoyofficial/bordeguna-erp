@@ -5,6 +5,7 @@ namespace App\Modules\Hrm\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Support\AttendanceSummariser;
+use App\Modules\Hrm\Support\PayrollCycle;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -76,7 +77,11 @@ class AttendanceSummaryController extends Controller
         $to = $request->filled('to') ? Carbon::parse($request->string('to')->toString()) : $anchor;
         $from = $request->filled('from')
             ? Carbon::parse($request->string('from')->toString())
-            : $to->copy()->startOfMonth();
+            // The current PAYROLL month, not the calendar one - for Bor De Guna
+            // that is the 24th (Settings → Business), so the default answers
+            // "how is this person doing this pay month", which is the month the
+            // consequences and the payslip are counted in.
+            : PayrollCycle::containing($to)['start'];
 
         return $from->gt($to) ? [$to, $from] : [$from, $to];
     }

@@ -23,6 +23,7 @@ class Business extends Model
         'currency',
         'timezone',
         'fiscal_year_start_month',
+        'payroll_cycle_start_day',
         'slug',
         'is_active',
         // ⚠ `is_default` is deliberately absent. Which tenant a person lands in
@@ -64,6 +65,7 @@ class Business extends Model
             'is_active' => 'boolean',
             'is_default' => 'boolean',
             'fiscal_year_start_month' => 'integer',
+            'payroll_cycle_start_day' => 'integer',
             'prices_include_tax' => 'boolean',
             'vat_enabled' => 'boolean',
             'vat_effective_from' => 'date',

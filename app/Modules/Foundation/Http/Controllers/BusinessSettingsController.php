@@ -34,7 +34,7 @@ class BusinessSettingsController extends Controller
 
         return Inertia::render('settings/business', [
             'business' => $business->only([
-                'id', 'name', 'legal_name', 'address', 'phone', 'email', 'currency', 'timezone', 'fiscal_year_start_month',
+                'id', 'name', 'legal_name', 'address', 'phone', 'email', 'currency', 'timezone', 'fiscal_year_start_month', 'payroll_cycle_start_day',
             ]),
             'logo_url' => $logo?->url(),
             'currencies' => self::CURRENCIES,
@@ -57,6 +57,11 @@ class BusinessSettingsController extends Controller
             'currency' => ['required', Rule::in(self::CURRENCIES)],
             'timezone' => ['required', 'timezone'],
             'fiscal_year_start_month' => ['required', 'integer', 'between:1,12'],
+            // ⚠ Payroll and attendance ONLY - never an accounting period. Capped
+            // at 28 so every month of every year has the day; 1 means the plain
+            // calendar month. Changing it moves FUTURE payroll periods only:
+            // one already opened keeps the dates it was calculated on.
+            'payroll_cycle_start_day' => ['required', 'integer', 'between:1,28'],
         ]);
 
         $business->update($data);

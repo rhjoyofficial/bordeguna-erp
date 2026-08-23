@@ -175,7 +175,7 @@ class MealBreakComplianceReport implements ReportDefinition
     public function meta(ReportParameters $parameters): ReportMeta
     {
         $month = $parameters->month();
-        $lock = $month === null ? null : AttendancePeriodLock::covering($month->copy()->endOfMonth());
+        $lock = $month === null ? null : AttendancePeriodLock::covering($parameters->monthEnd());
 
         return new ReportMeta(
             title: 'Meal break compliance',
@@ -187,8 +187,8 @@ class MealBreakComplianceReport implements ReportDefinition
 
     private function query(ReportParameters $parameters): Builder
     {
-        $month = $parameters->month() ?? now()->startOfMonth();
-        $asAt = $month->copy()->endOfMonth()->toDateString();
+        $month = $parameters->monthStart();
+        $asAt = $parameters->monthEnd()->toDateString();
 
         return DailyAttendance::query()
             ->join('employees', 'employees.id', '=', 'daily_attendances.employee_id')

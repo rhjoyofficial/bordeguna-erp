@@ -112,10 +112,28 @@ class MonthlyAttendanceRegisterReport implements ReportDefinition
 
         // Before a month is chosen the screen is only describing the report, so
         // the longest possible month stands in for the real one.
-        $days = $parameters?->month()?->daysInMonth ?? 31;
+        //
+        // ⚠⚠ Columns are POSITIONS IN THE PAYROLL CYCLE, not days of a calendar
+        // month, since the 23 Aug 2026 cycle decision. "August" with start day
+        // 24 runs 24 July to 23 August: the first column is the 24th and the
+        // 1st sits in the middle. Keying cells by day-of-month looked fine on
+        // that example - every day number appears once - and then a
+        // February-labelled cycle (24 Jan to 23 Feb) put January's 29th to 31st
+        // into columns the February grid did not have. Position is the key;
+        // the real day-of-month is only the label.
+        if ($parameters === null) {
+            for ($day = 1; $day <= 31; $day++) {
+                $columns[] = ReportColumn::text('d'.$day, (string) $day, 4);
+            }
+        } else {
+            $start = $parameters->monthStart();
+            $end = $parameters->monthEnd();
 
-        for ($day = 1; $day <= $days; $day++) {
-            $columns[] = ReportColumn::text('d'.$day, (string) $day, 4);
+            $position = 1;
+            for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+                $columns[] = ReportColumn::text('d'.$position, (string) $date->day, 4);
+                $position++;
+            }
         }
 
         return [
@@ -154,6 +172,7 @@ class MonthlyAttendanceRegisterReport implements ReportDefinition
     {
         return LazyCollection::make(function () use ($parameters) {
             $current = null;
+            $cycleStart = $parameters->monthStart();
 
             // `toBase()` keeps the global scopes that were already applied but
             // hands back plain rows — no model hydration for 31,000 cells, and
@@ -172,7 +191,7 @@ class MonthlyAttendanceRegisterReport implements ReportDefinition
                     continue;
                 }
 
-                $this->fill($current, $record);
+                $this->fill($current, $record, $cycleStart);
             }
 
             if ($current !== null) {
@@ -195,7 +214,7 @@ class MonthlyAttendanceRegisterReport implements ReportDefinition
         // A register spans a month, so it is locked only if the whole month is.
         // Reporting "locked" when the last week is still open would be the more
         // reassuring answer and the wrong one.
-        $lock = $month === null ? null : AttendancePeriodLock::covering($month->copy()->endOfMonth());
+        $lock = $month === null ? null : AttendancePeriodLock::covering($parameters->monthEnd());
 
         return new ReportMeta(
             title: 'Monthly attendance register',
@@ -233,7 +252,8 @@ class MonthlyAttendanceRegisterReport implements ReportDefinition
             'worked_minutes' => 0,
         ];
 
-        $days = $parameters->month()?->daysInMonth ?? 31;
+        // One cell per cycle position, matching columns() exactly.
+        $days = (int) $parameters->monthStart()->diffInDays($parameters->monthEnd()) + 1;
 
         for ($day = 1; $day <= $days; $day++) {
             $row['d'.$day] = '';
@@ -245,7 +265,7 @@ class MonthlyAttendanceRegisterReport implements ReportDefinition
     /**
      * @param  array<string, mixed>  $row
      */
-    private function fill(array &$row, object $record): void
+    private function fill(array &$row, object $record, Carbon $cycleStart): void
     {
         $status = AttendanceStatus::tryFrom((string) $record->day_status);
 
@@ -253,7 +273,10 @@ class MonthlyAttendanceRegisterReport implements ReportDefinition
             return;
         }
 
-        $day = Carbon::parse((string) $record->attendance_date)->day;
+        // ⚠ Position in the cycle, not day-of-month - see columns(). Offset
+        // from the cycle start plus one, so 24 July is column d1 in an
+        // "August" register that starts on the 24th.
+        $day = (int) $cycleStart->diffInDays(Carbon::parse((string) $record->attendance_date)->startOfDay()) + 1;
         $row['d'.$day] = self::CODES[$status->value] ?? '';
 
         // A late day is a present day that also counts as late — POL-02 keeps
@@ -306,7 +329,7 @@ class MonthlyAttendanceRegisterReport implements ReportDefinition
      */
     private function employees(ReportParameters $parameters): Builder
     {
-        $asAt = ($parameters->month() ?? now())->copy()->endOfMonth()->toDateString();
+        $asAt = $parameters->monthEnd()->toDateString();
         $businessId = $this->context->id();
 
         return Employee::query()
@@ -333,13 +356,14 @@ class MonthlyAttendanceRegisterReport implements ReportDefinition
 
     private function query(ReportParameters $parameters): Builder
     {
-        $month = $parameters->month() ?? now()->startOfMonth();
+        $start = $parameters->monthStart();
+        $end = $parameters->monthEnd();
 
         return $this->employees($parameters)
-            ->leftJoin('daily_attendances', function ($join) use ($month) {
+            ->leftJoin('daily_attendances', function ($join) use ($start, $end) {
                 $join->on('daily_attendances.employee_id', '=', 'employees.id')
-                    ->whereDate('daily_attendances.attendance_date', '>=', $month->toDateString())
-                    ->whereDate('daily_attendances.attendance_date', '<=', $month->copy()->endOfMonth()->toDateString());
+                    ->whereDate('daily_attendances.attendance_date', '>=', $start->toDateString())
+                    ->whereDate('daily_attendances.attendance_date', '<=', $end->toDateString());
             })
             // ⚠ Employee first, then date. The row assembler depends on every
             // one employee's days arriving together and in order; reversing

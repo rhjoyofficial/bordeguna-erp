@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Dashboard;
 
 use App\Modules\Hrm\Reporting\ReportParameters;
 use App\Modules\Hrm\Reporting\ReportScope;
+use App\Modules\Hrm\Support\PayrollCycle;
 use Illuminate\Support\Carbon;
 
 /**
@@ -74,19 +75,25 @@ final class DashboardFilters
     }
 
     /**
-     * The range, defaulting to the current month.
+     * The range, defaulting to the current PAYROLL month.
      *
      * A dashboard opened with no filters must show something meaningful rather
-     * than nothing, and "this month" is the answer everybody means.
+     * than nothing, and "this month" is the answer everybody means - but since
+     * 23 Aug 2026 "this month" is the payroll cycle (24th to 23rd for Bor De
+     * Guna, per business setting), because that is the month attendance is
+     * judged and paid in. A calendar-month default would show a period no
+     * payslip will ever cover.
      */
     public function from(): Carbon
     {
-        return $this->parameters->from('range') ?? now()->startOfMonth();
+        return $this->parameters->from('range')
+            ?? $this->remember('cycle', fn () => PayrollCycle::containing(now()))['start']->copy();
     }
 
     public function to(): Carbon
     {
-        return $this->parameters->to('range') ?? now()->endOfMonth();
+        return $this->parameters->to('range')
+            ?? $this->remember('cycle', fn () => PayrollCycle::containing(now()))['end']->copy();
     }
 
     /**

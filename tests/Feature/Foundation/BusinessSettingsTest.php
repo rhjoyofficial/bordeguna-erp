@@ -46,6 +46,7 @@ function bizPayload(array $overrides = []): array
         'currency' => 'BDT',
         'timezone' => 'Asia/Dhaka',
         'fiscal_year_start_month' => 7,
+        'payroll_cycle_start_day' => 24,
     ], $overrides);
 }
 

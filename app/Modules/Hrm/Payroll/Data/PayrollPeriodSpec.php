@@ -27,11 +27,18 @@ final readonly class PayrollPeriodSpec
      * Correction C7b: the month labelled July 2026 covers 24 June to 23 July.
      * The literal reading of PAY-01 would overlap consecutive cycles by a day
      * and risk paying it twice.
+     *
+     * ⚠ Since 23 Aug 2026 the cutoff day is a per-business SETTING rather than
+     * the constant 24 (Joy: "our month start from the 24... can be changed from
+     * the settings"). This object stays pure - it computes from whatever day it
+     * is handed and reads nothing - so the default keeps the historical value
+     * and `PayrollPeriod::forMonth` passes the configured one. The bounds come
+     * from PayrollCycle so a period and a report can never disagree about what
+     * "August" covers.
      */
     public static function forMonth(int $year, int $month, int $cutoffDay = 24, int $divisorDays = 30): self
     {
-        $end = Carbon::create($year, $month, $cutoffDay - 1)->startOfDay();
-        $start = $end->copy()->startOfDay()->subMonthNoOverflow()->day($cutoffDay);
+        [$start, $end] = \App\Modules\Hrm\Support\PayrollCycle::forMonth($year, $month, $cutoffDay);
 
         return new self($year, $month, $start, $end, $divisorDays);
     }

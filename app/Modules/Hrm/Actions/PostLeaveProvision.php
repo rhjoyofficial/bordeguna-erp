@@ -58,7 +58,31 @@ class PostLeaveProvision
         return round(-((int) JournalLine::query()->where('account_id', $account->id)->sum('amount_minor')) / 100, 2);
     }
 
+    /**
+     * ⚠⚠ DISABLED BY BUSINESS POLICY, 23 Aug 2026 - JOY'S FINAL DECISION.
+     * Leave encashment is not enabled at Bor De Guna: unused leave creates no
+     * financial liability and no provision journal, and the ~133,566.67 BDT
+     * this engine computes must never be posted unless he explicitly changes
+     * the policy. Leave balances and expiry stay, for HR purposes only.
+     *
+     * The engine and the valuation stay in code because the policy could
+     * change; the POSTING is what the policy forbids, so the posting is what
+     * refuses. Deleting the whole feature to express a policy would throw
+     * away the half that still works.
+     */
+    public const POSTING_DISABLED_REASON = 'Leave encashment is not enabled at this business, so no provision is posted. Unused leave carries no financial liability (decided 23 Aug 2026). Leave balances remain tracked for HR.';
+
     public function forRun(LeaveProvisionRun $run, User $postedBy): ?Journal
+    {
+        throw new \RuntimeException(self::POSTING_DISABLED_REASON);
+    }
+
+    /**
+     * The pre-policy posting path, unreachable while the refusal above stands.
+     * Kept whole so re-enabling the policy is one method rename, reviewed,
+     * rather than an archaeology dig.
+     */
+    private function forRunWhenPolicyAllows(LeaveProvisionRun $run, User $postedBy): ?Journal
     {
         if ($run->is_dry_run || $this->existingJournal($run) !== null) {
             return null;

@@ -20,6 +20,7 @@ interface BusinessProfile {
     currency: string;
     timezone: string;
     fiscal_year_start_month: number;
+    payroll_cycle_start_day: number;
 }
 
 interface BusinessProps {
@@ -98,6 +99,7 @@ export default function Business({ business, logo_url, currencies, timezones }: 
         currency: business.currency,
         timezone: business.timezone,
         fiscal_year_start_month: business.fiscal_year_start_month,
+        payroll_cycle_start_day: business.payroll_cycle_start_day,
     });
 
     const submit: FormEventHandler = (e) => {
@@ -198,6 +200,27 @@ export default function Business({ business, logo_url, currencies, timezones }: 
                                     ))}
                                 </select>
                                 <InputError message={errors.fiscal_year_start_month} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="payroll_cycle_start_day">Payroll month starts on day</Label>
+                                <select
+                                    id="payroll_cycle_start_day"
+                                    className={selectClass}
+                                    value={data.payroll_cycle_start_day}
+                                    onChange={(e) => setData('payroll_cycle_start_day', Number(e.target.value))}
+                                >
+                                    {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
+                                        <option key={day} value={day}>
+                                            {day}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-muted-foreground text-xs">
+                                    With 24, the month named August runs 24 July to 23 August. This covers payroll,
+                                    attendance and HR reports only. Bills, invoices and the accounts keep their own
+                                    dates.
+                                </p>
+                                <InputError message={errors.payroll_cycle_start_day} />
                             </div>
                         </div>
 

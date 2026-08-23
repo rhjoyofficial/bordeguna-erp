@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Hrm\Payroll\Data\PayrollPeriodSpec;
+use App\Modules\Hrm\Support\PayrollCycle;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -66,10 +67,17 @@ class PayrollPeriod extends Model
 
     /**
      * Find or open the period for a month, with its C7b bounds.
+     *
+     * ⚠ The cutoff day comes from the business's own setting (Settings →
+     * Business, PayrollCycle::startDay), not the constant it used to be.
+     * `firstOrCreate` means an EXISTING period keeps the dates it was opened
+     * with even if the setting changes later - which is correct, because a
+     * payroll already calculated on 24-to-23 must not silently claim it
+     * covered different days.
      */
     public static function forMonth(int $year, int $month): self
     {
-        $spec = PayrollPeriodSpec::forMonth($year, $month);
+        $spec = PayrollPeriodSpec::forMonth($year, $month, PayrollCycle::startDay());
 
         return static::firstOrCreate(
             ['year' => $year, 'month' => $month],

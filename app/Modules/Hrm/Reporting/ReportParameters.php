@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Reporting;
 
+use App\Modules\Hrm\Support\PayrollCycle;
 use Illuminate\Support\Carbon;
 
 /**
@@ -69,6 +70,46 @@ final class ReportParameters
         return $this->has($key)
             ? Carbon::createFromFormat('Y-m-d', $this->values[$key].'-01')->startOfDay()
             : null;
+    }
+
+    /**
+     * The payroll-cycle bounds of the chosen month - the range a report means
+     * when it says "August".
+     *
+     * ⚠⚠ Joy's decision, 23 Aug 2026: the employee month runs from the
+     * configured start day (24 for Bor De Guna) to the day before it, so the
+     * report labelled August covers 24 July to 23 August - the same days the
+     * August payslip pays. Before this, every HRM report read the calendar
+     * month, so a report and the payslip beside it disagreed about what
+     * "August" was, and the report was the one that lied.
+     *
+     * ⚠ HRM reports ONLY. Accounting reports never touch ReportParameters and
+     * must keep their own document-dated periods; the cycle is a payroll fact,
+     * not an accounting one.
+     *
+     * Defaults to the cycle containing today when no month was chosen, so the
+     * `?? now()->startOfMonth()` fallback pattern collapses into this pair.
+     */
+    public function monthStart(string $key = 'month'): Carbon
+    {
+        $month = $this->month($key);
+
+        if ($month === null) {
+            return PayrollCycle::containing(now())['start'];
+        }
+
+        return PayrollCycle::forMonth((int) $month->year, (int) $month->month)[0];
+    }
+
+    public function monthEnd(string $key = 'month'): Carbon
+    {
+        $month = $this->month($key);
+
+        if ($month === null) {
+            return PayrollCycle::containing(now())['end'];
+        }
+
+        return PayrollCycle::forMonth((int) $month->year, (int) $month->month)[1];
     }
 
     public function from(string $key = 'range'): ?Carbon
