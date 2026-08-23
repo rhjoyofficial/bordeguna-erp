@@ -12,6 +12,7 @@ import {
     CalendarClock,
     CalendarDays,
     CalendarRange,
+    ChartColumn,
     CheckSquare,
     ClipboardCheck,
     ClipboardList,
@@ -220,6 +221,7 @@ export function AppSidebar() {
                           ...(canManageAttendance
                               ? [
                                     { title: 'Daily attendance', url: '/hrm/attendance/daily', icon: CalendarCheck },
+                                    { title: 'Attendance summary', url: '/hrm/attendance/summary', icon: ChartColumn },
                                     { title: 'Punch log', url: '/hrm/attendance', icon: Fingerprint },
                                     { title: 'Corrections', url: '/hrm/attendance/corrections', icon: PenSquare },
                                     { title: 'Attendance import', url: '/hrm/attendance/import', icon: FileUp },

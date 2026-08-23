@@ -51,10 +51,26 @@ interface CorrectionType {
     needs_time: boolean;
 }
 
+interface MySummary {
+    days_recorded: number;
+    attended: number;
+    present: number;
+    late: number;
+    absent: number;
+    missing_punch: number;
+    on_leave: number;
+    weekly_off: number;
+    late_minutes: number;
+    worked_hours: number;
+    holds_payroll: number;
+}
+
 interface ClockProps {
     employee: { name: string; employee_code: string; office: string | null };
     today: string;
     punches: Punch[];
+    filters: { from: string; to: string };
+    summary: MySummary;
     recent_days: RecentDay[];
     my_corrections: MyCorrection[];
     correction_types: CorrectionType[];
@@ -179,9 +195,41 @@ function RequestCorrectionDialog({ day, types, directions }: { day: RecentDay; t
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Clock in/out', href: '/hrm/clock' }];
 
-export default function Clock({ employee, today, punches, recent_days, my_corrections, correction_types, directions }: ClockProps) {
+/** One figure from the employee's own totals for the chosen period. */
+function MyTile({ label, value, warn, bad }: { label: string; value: number; warn?: boolean; bad?: boolean }) {
+    return (
+        <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p
+                className={
+                    bad
+                        ? 'text-2xl font-semibold text-red-600 dark:text-red-400'
+                        : warn
+                          ? 'text-2xl font-semibold text-amber-600 dark:text-amber-400'
+                          : 'text-2xl font-semibold'
+                }
+            >
+                {value}
+            </p>
+        </div>
+    );
+}
+
+export default function Clock({
+    employee,
+    today,
+    punches,
+    filters,
+    summary,
+    recent_days,
+    my_corrections,
+    correction_types,
+    directions,
+}: ClockProps) {
     const [busy, setBusy] = useState<string | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
+    const [myFrom, setMyFrom] = useState(filters.from);
+    const [myTo, setMyTo] = useState(filters.to);
 
     /**
      * Location is captured in the browser and sent with the punch - the server
@@ -296,8 +344,66 @@ export default function Clock({ employee, today, punches, recent_days, my_correc
                     )}
                 </div>
 
+                {/*
+                  ⚠ This range drives the history and the totals only. Clocking
+                  in and out above is always about today, because a screen where
+                  picking last March moved the punch button would be a way to
+                  record attendance on the wrong day.
+                */}
+                <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
+                    <h3 className="mb-3 text-sm font-medium">My attendance</h3>
+
+                    <div className="mb-4 flex flex-wrap items-end gap-3">
+                        <div className="grid gap-1.5">
+                            <label htmlFor="my-from" className="text-xs text-muted-foreground">
+                                From
+                            </label>
+                            <input
+                                id="my-from"
+                                type="date"
+                                defaultValue={filters.from}
+                                onChange={(e) => setMyFrom(e.target.value)}
+                                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                            />
+                        </div>
+                        <div className="grid gap-1.5">
+                            <label htmlFor="my-to" className="text-xs text-muted-foreground">
+                                To
+                            </label>
+                            <input
+                                id="my-to"
+                                type="date"
+                                defaultValue={filters.to}
+                                onChange={(e) => setMyTo(e.target.value)}
+                                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                            />
+                        </div>
+                        <Button onClick={() => router.get('/hrm/clock', { from: myFrom, to: myTo }, { preserveScroll: true })}>
+                            Show
+                        </Button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                        <MyTile label="Days attended" value={summary.attended} />
+                        <MyTile label="Present" value={summary.present} />
+                        <MyTile label="Late" value={summary.late} warn={summary.late > 0} />
+                        <MyTile label="Absent" value={summary.absent} bad={summary.absent > 0} />
+                        <MyTile label="On leave" value={summary.on_leave} />
+                        <MyTile label="Hours worked" value={summary.worked_hours} />
+                    </div>
+
+                    {summary.holds_payroll > 0 && (
+                        <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
+                            {summary.holds_payroll} day{summary.holds_payroll === 1 ? '' : 's'} in this period still need
+                            a correction before payroll can include them. Use "Something wrong?" below.
+                        </p>
+                    )}
+                </div>
+
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">Recent days</h3>
+                    <h3 className="mb-3 text-sm font-medium">
+                        Days from {filters.from} to {filters.to}
+                    </h3>
                     {recent_days.length === 0 ? (
                         <p className="text-sm text-muted-foreground">Nothing processed yet.</p>
                     ) : (

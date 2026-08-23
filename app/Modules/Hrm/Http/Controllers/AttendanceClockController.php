@@ -13,6 +13,7 @@ use App\Modules\Hrm\Models\AttendancePeriodLock;
 use App\Modules\Hrm\Models\AttendancePunch;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Support\AttendanceSummariser;
 use Illuminate\Validation\Rule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,7 +35,7 @@ use Inertia\Response;
  */
 class AttendanceClockController extends Controller
 {
-    public function show(Request $request): Response|RedirectResponse
+    public function show(Request $request, AttendanceSummariser $summariser): Response|RedirectResponse
     {
         $employee = Employee::forUser($request->user());
 
@@ -44,6 +45,7 @@ class AttendanceClockController extends Controller
         }
 
         $today = Carbon::today();
+        [$from, $to] = $this->historyRange($request, $today);
 
         return Inertia::render('hrm/attendance/clock', [
             'employee' => [
@@ -64,12 +66,25 @@ class AttendanceClockController extends Controller
                     'needs_review' => $punch->needs_review,
                     'review_reason' => $punch->review_reason,
                 ]),
-            // The last fortnight of processed days, so an employee sees a
-            // problem where they would actually notice it and can raise a
-            // correction from the same screen (COR-01).
+            // ⚠ The range the history covers. It DEFAULTS to the last fortnight,
+            // which is what this screen always showed, so nobody's habit breaks;
+            // the difference is that the fortnight is now a starting point rather
+            // than a ceiling, and any earlier period can be asked for.
+            'filters' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+            ],
+            // The employee's own totals for that range: how many days late,
+            // absent, on leave, and the hours behind them. Same summariser the
+            // manager's screen uses, so the two cannot tell one person two
+            // different stories about the same fortnight.
+            'summary' => $summariser->forEmployee($from, $to, $employee->id),
+            // Processed days in range, so an employee sees a problem where they
+            // would actually notice it and can raise a correction from the same
+            // screen (COR-01).
             'recent_days' => DailyAttendance::where('employee_id', $employee->id)
-                ->whereDate('attendance_date', '>=', $today->copy()->subDays(14)->toDateString())
-                ->whereDate('attendance_date', '<=', $today->toDateString())
+                ->whereDate('attendance_date', '>=', $from->toDateString())
+                ->whereDate('attendance_date', '<=', $to->toDateString())
                 ->orderByDesc('attendance_date')
                 ->get()
                 ->map(fn (DailyAttendance $day) => [
@@ -103,6 +118,29 @@ class AttendanceClockController extends Controller
             'directions' => collect(PunchDirection::cases())
                 ->map(fn (PunchDirection $d) => ['value' => $d->value, 'label' => $d->label()]),
         ]);
+    }
+
+    /**
+     * The history window on the employee's own clock page.
+     *
+     * ⚠⚠ TODAY'S PUNCH PANEL IS NOT AFFECTED BY THIS. Clocking in and out is
+     * always about today, and a screen where picking last March quietly moved
+     * the punch button to last March would be a way to record attendance on the
+     * wrong day. Only the history list and the totals follow the range.
+     *
+     * ⚠ The default is the last fortnight ending today, exactly what this page
+     * showed before the filter existed.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function historyRange(Request $request, Carbon $today): array
+    {
+        $to = $request->filled('to') ? Carbon::parse($request->string('to')->toString()) : $today->copy();
+        $from = $request->filled('from')
+            ? Carbon::parse($request->string('from')->toString())
+            : $to->copy()->subDays(14);
+
+        return $from->gt($to) ? [$to, $from] : [$from, $to];
     }
 
     public function store(Request $request, RecordPunch $recordPunch): RedirectResponse
