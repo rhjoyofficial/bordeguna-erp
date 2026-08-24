@@ -21,6 +21,11 @@ use Spatie\Permission\PermissionRegistrar;
  * grain: a figure with no predecessor shows its change and **no percentage**.
  */
 beforeEach(function () {
+    // ⚠ Frozen mid-cycle, as in DashboardTest: from the 24th the live 24-23
+    // payroll cycle wears next month's label, and these fixtures key runs by
+    // now()'s calendar month.
+    \Illuminate\Support\Carbon::setTestNow('2026-08-10 10:00:00');
+
     $this->business = Business::create(['name' => 'Pay Co', 'slug' => 'pay-co']);
     app(BusinessContext::class)->set($this->business->id);
 
@@ -59,6 +64,8 @@ beforeEach(function () {
 
     $this->filtersFor = fn (User $user, array $values = []) => DashboardFilters::make($values, ReportScope::for($user));
 });
+
+afterEach(fn () => \Illuminate\Support\Carbon::setTestNow());
 
 /*
 |--------------------------------------------------------------------------

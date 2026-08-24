@@ -30,6 +30,12 @@ use Spatie\Permission\PermissionRegistrar;
  * across scopes (C11e).
  */
 beforeEach(function () {
+    // ⚠ Frozen mid-cycle. These tests key their data by now()->startOfMonth(),
+    // and from the 24th of a month the live 24-23 payroll cycle carries NEXT
+    // month's label, so on 24 Aug 2026 every tile read a period these fixtures
+    // never populated. Eighth member of the date-boundary defect family.
+    \Illuminate\Support\Carbon::setTestNow('2026-08-10 10:00:00');
+
     $this->business = Business::create(['name' => 'Dash Co', 'slug' => 'dash-co']);
     app(BusinessContext::class)->set($this->business->id);
 
@@ -103,6 +109,8 @@ beforeEach(function () {
 
     $this->filtersFor = fn (User $user, array $values = []) => DashboardFilters::make($values, ReportScope::for($user));
 });
+
+afterEach(fn () => \Illuminate\Support\Carbon::setTestNow());
 
 /*
 |--------------------------------------------------------------------------
