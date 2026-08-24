@@ -81,13 +81,25 @@ class AttendanceImportController extends Controller
             $validated['device_identifier'] ?? null,
         );
 
-        return back()->with('success', sprintf(
+        $message = sprintf(
             '%s: %d imported, %d duplicate, %d failed of %d rows.',
             $batch->filename,
             $batch->imported_count,
             $batch->duplicate_count,
             $batch->failed_count,
             $batch->total_rows,
-        ));
+        );
+
+        // The screens change the moment the import lands now - say so, and
+        // when the recompute stopped early, say exactly where and why.
+        if ($batch->recomputedDays !== null) {
+            $message .= sprintf(' %d day%s recomputed.', $batch->recomputedDays, $batch->recomputedDays === 1 ? '' : 's');
+        }
+
+        if ($batch->processingError !== null) {
+            $message .= ' '.$batch->processingError;
+        }
+
+        return back()->with('success', $message);
     }
 }

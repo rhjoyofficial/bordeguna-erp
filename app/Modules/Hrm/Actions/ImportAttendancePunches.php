@@ -10,6 +10,7 @@ use App\Modules\Hrm\Support\AttendanceFileReader;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Imports a biometric attendance export (ATT-01/02/08).
@@ -17,7 +18,7 @@ use Illuminate\Support\Facades\DB;
  * Idempotent by construction: every row goes through RecordPunch, whose dedup
  * key is device + employee + timestamp, so re-running the same export imports
  * nothing new. Duplicates are **reported, never silently ignored and never
- * allowed to block the file** — the rest of the rows still import, which is
+ * allowed to block the file** - the rest of the rows still import, which is
  * what ATT-08 asks for and what makes a partially-overlapping export (the
  * normal case when HR re-pulls a date range) usable.
  *
@@ -30,6 +31,7 @@ class ImportAttendancePunches
         private readonly AttendanceCsvParser $parser,
         private readonly AttendanceFileReader $reader,
         private readonly RecordPunch $recordPunch,
+        private readonly ProcessAttendance $processAttendance,
     ) {}
 
     /**
@@ -82,10 +84,11 @@ class ImportAttendancePunches
         $duplicates = 0;
         $failed = 0;
         $report = [];
+        $importedDates = [];
 
         DB::transaction(function () use (
             $parsed, $source, $deviceIdentifier, $employeesByEnroll,
-            &$imported, &$duplicates, &$failed, &$report
+            &$imported, &$duplicates, &$failed, &$report, &$importedDates
         ) {
             foreach ($parsed['rows'] as $row) {
                 $outcome = $this->importRow($row, $source, $deviceIdentifier, $employeesByEnroll);
@@ -96,7 +99,12 @@ class ImportAttendancePunches
                     default => $failed++,
                 };
 
-                if ($outcome['status'] !== 'imported') {
+                if ($outcome['status'] === 'imported') {
+                    // The date in the APP timezone, not the instant's own: a
+                    // parser path that yields a UTC instant would otherwise
+                    // file an early-morning punch under the previous day.
+                    $importedDates[$row['punched_at']->copy()->timezone(config('app.timezone'))->toDateString()] = true;
+                } else {
                     $report[] = [
                         'row' => $row['row'],
                         'status' => $outcome['status'],
@@ -107,7 +115,7 @@ class ImportAttendancePunches
             }
         });
 
-        return AttendanceImportBatch::create([
+        $batch = AttendanceImportBatch::create([
             'filename' => $filename,
             'source' => $source,
             'device_identifier' => $deviceIdentifier,
@@ -120,6 +128,63 @@ class ImportAttendancePunches
             'report' => array_slice($report, 0, 500),
             'uploaded_by' => Auth::id(),
         ]);
+
+        // ⚠⚠ The lesson this closes: an import lands PUNCHES, and every screen
+        // kept showing the old world until somebody ran the processing command
+        // or the 23:00 scheduler did - "imported but showing nothing", three
+        // times in one week. The engine now runs here, for exactly the dates
+        // this batch touched, the moment the punches are committed.
+        $this->recomputeImportedDays($batch, array_keys($importedDates));
+
+        return $batch;
+    }
+
+    /**
+     * Recompute the attendance days this batch brought new evidence for.
+     *
+     * Force on purpose: a new punch on an already-judged (even finalised) day
+     * IS new evidence for that day - the same semantics an approved correction
+     * already carries. Dates the batch did not touch are left alone, and days
+     * are processed in calendar order so the occurrence ladders count up
+     * exactly as they would have day by day.
+     *
+     * Runs AFTER the punch transaction committed, and a failure here never
+     * takes the import down with it: the punches are already safe, the error
+     * is reported, and the nightly run remains the sweep-up.
+     *
+     * @param  array<int, string>  $dates
+     */
+    private function recomputeImportedDays(AttendanceImportBatch $batch, array $dates): void
+    {
+        if ($dates === []) {
+            return;
+        }
+
+        sort($dates);
+
+        // Measured with the realistic case (300 rows over 31 days, 9
+        // employees): ~2s in the suite, well inside any request budget - a
+        // plain ordered loop beats queueing machinery here. A multi-month
+        // device dump just takes proportionally longer; nothing times out at
+        // this data size, and the nightly run would cover a genuine abort.
+        $recomputed = 0;
+
+        foreach ($dates as $date) {
+            try {
+                $this->processAttendance->forDate($date, force: true);
+                $recomputed++;
+            } catch (Throwable $e) {
+                $batch->processingError = sprintf(
+                    'Automatic recompute stopped at %s: %s The nightly run will finish the remaining days.',
+                    $date,
+                    rtrim($e->getMessage(), '.').'.',
+                );
+
+                break;
+            }
+        }
+
+        $batch->recomputedDays = $recomputed;
     }
 
     /**

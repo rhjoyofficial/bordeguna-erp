@@ -12,12 +12,23 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * The outcome of one attendance file import (ATT-08). Holds the per-row report
- * so a skipped line is explainable — "37 duplicates" on its own tells HR
+ * so a skipped line is explainable - "37 duplicates" on its own tells HR
  * nothing about whether the export was double-run or the file was wrong.
  */
 class AttendanceImportBatch extends Model
 {
     use BelongsToBusiness, HasFactory;
+
+    /**
+     * Outcome of the automatic post-import recompute, set by
+     * ImportAttendancePunches on the instance it returns. Declared (typed)
+     * properties, deliberately NOT Eloquent attributes: they describe what
+     * this request just did, are never persisted, and a reloaded batch
+     * honestly does not know them.
+     */
+    public ?int $recomputedDays = null;
+
+    public ?string $processingError = null;
 
     protected $fillable = [
         'business_id',

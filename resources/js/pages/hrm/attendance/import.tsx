@@ -75,9 +75,9 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h2 className="text-lg font-medium">Import attendance</h2>
-                    <p className="text-sm text-muted-foreground">
-                        Upload a ZKTeco / ZKTime.Net CSV export. Re-uploading the same file is safe - rows already captured are reported as duplicates,
-                        never imported twice.
+                    <p className="text-muted-foreground text-sm">
+                        Upload a ZKTeco / ZKTime.Net CSV export. Re-uploading the same file is safe - rows already captured are reported as
+                        duplicates, never imported twice.
                     </p>
                 </div>
 
@@ -108,10 +108,10 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                             accept=".csv,.txt,.xls,.xlsx,.ods,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                         />
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-muted-foreground text-xs">
                             Excel (.xls, .xlsx), OpenDocument (.ods) or CSV. Upload the device export as it comes.
                         </p>
-                        {errors.file && <p className="text-xs text-destructive">{errors.file}</p>}
+                        {errors.file && <p className="text-destructive text-xs">{errors.file}</p>}
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="source">Source</Label>
@@ -126,31 +126,31 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                     <div className="grid gap-2">
                         <Label htmlFor="device">Device (optional)</Label>
                         <Input id="device" value={device} onChange={(e) => setDevice(e.target.value)} placeholder="e.g. K40-Gate-1" />
-                        {errors.device_identifier && <p className="text-xs text-destructive">{errors.device_identifier}</p>}
+                        {errors.device_identifier && <p className="text-destructive text-xs">{errors.device_identifier}</p>}
                     </div>
                     <div>
                         <Button onClick={submit} disabled={!file || uploading}>
                             {uploading ? 'Importing…' : 'Import'}
                         </Button>
                     </div>
-                    {/* ⚠ The lesson of 23 Aug, printed where it is needed: an
-                        import lands PUNCHES, and the screens keep showing the
-                        old world until the days are reprocessed. Saying it here
-                        beats rediscovering it as "the import looks broken". */}
+                    {/* The 23 Aug lesson is CLOSED (24 Aug): importing now
+                        recomputes the imported days itself, so the screens
+                        change immediately. The line stays to say so, and to
+                        keep the nightly run's sweep-up role on record. */}
                     <p className="text-muted-foreground text-xs sm:col-span-4">
-                        After importing, processed attendance updates on the nightly run. To see it now, open Daily attendance and press
-                        Recalculate for the imported dates.
+                        Importing recomputes the affected days automatically, so Daily attendance shows the result right away. The nightly run still
+                        sweeps up anything else.
                     </p>
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Import history</h3>
                     {batches.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Nothing imported yet.</p>
+                        <p className="text-muted-foreground text-sm">Nothing imported yet.</p>
                     ) : (
                         <table className="w-full min-w-[56rem] text-sm">
                             <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                     <th className="py-2">File</th>
                                     <th className="py-2">Source</th>
                                     <th className="py-2">Rows</th>
@@ -167,7 +167,7 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                                             <td className="py-2">
                                                 {batch.filename}
                                                 {batch.device_identifier && (
-                                                    <span className="ml-2 text-xs text-muted-foreground">{batch.device_identifier}</span>
+                                                    <span className="text-muted-foreground ml-2 text-xs">{batch.device_identifier}</span>
                                                 )}
                                                 {batch.entirely_duplicate && (
                                                     <Badge variant="secondary" className="ml-2">
@@ -175,10 +175,10 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                                                     </Badge>
                                                 )}
                                             </td>
-                                            <td className="py-2 text-muted-foreground">{batch.source}</td>
-                                            <td className="py-2 text-muted-foreground">{batch.total_rows}</td>
+                                            <td className="text-muted-foreground py-2">{batch.source}</td>
+                                            <td className="text-muted-foreground py-2">{batch.total_rows}</td>
                                             <td className="py-2">{batch.imported_count}</td>
-                                            <td className="py-2 text-muted-foreground">{batch.duplicate_count}</td>
+                                            <td className="text-muted-foreground py-2">{batch.duplicate_count}</td>
                                             <td className="py-2">
                                                 {batch.failed_count > 0 ? (
                                                     <Button
@@ -192,7 +192,7 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                                                     <span className="text-muted-foreground">0</span>
                                                 )}
                                             </td>
-                                            <td className="py-2 text-xs text-muted-foreground">
+                                            <td className="text-muted-foreground py-2 text-xs">
                                                 {batch.uploaded_at}
                                                 {batch.uploaded_by && <div>by {batch.uploaded_by}</div>}
                                             </td>
@@ -207,7 +207,7 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                                                             batch.report.map((row, i) => (
                                                                 <div key={i} className="border-sidebar-border/40 border-b py-1">
                                                                     <span className="font-mono">Row {row.row}</span>
-                                                                    <span className="ml-2 text-muted-foreground">{row.status}</span>
+                                                                    <span className="text-muted-foreground ml-2">{row.status}</span>
                                                                     {row.enroll_id && <span className="ml-2">enroll {row.enroll_id}</span>}
                                                                     <span className="ml-2">{row.reason}</span>
                                                                 </div>
