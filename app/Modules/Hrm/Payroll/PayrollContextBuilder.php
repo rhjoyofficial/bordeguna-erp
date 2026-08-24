@@ -3,6 +3,7 @@
 namespace App\Modules\Hrm\Payroll;
 
 use App\Modules\Hrm\Enums\AttendanceStatus;
+use App\Modules\Hrm\Models\AttendanceWaiver;
 use App\Modules\Hrm\Models\BonusAward;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
@@ -90,6 +91,22 @@ class PayrollContextBuilder
             return AttendanceFacts::none();
         }
 
+        // Days a permitted person has forgiven (24 Aug 2026). The waiver
+        // changes PRICING only: a waived absent day leaves absentDays and a
+        // waived late-deduction day leaves deductibleDays, but neither joins
+        // presentDays or daysReportedForWork - forgiving the deduction does
+        // not invent attendance, so the per-present-day allowance and
+        // proration stay exactly as the engine found them.
+        $waivedDates = AttendanceWaiver::query()->active()
+            ->where('employee_id', $employee->id)
+            ->whereDate('attendance_date', '>=', $start->toDateString())
+            ->whereDate('attendance_date', '<=', $end->toDateString())
+            ->get()
+            ->map(fn (AttendanceWaiver $w) => $w->attendance_date->toDateString())
+            ->all();
+
+        $isWaived = fn (DailyAttendance $d) => in_array($d->attendance_date->toDateString(), $waivedDates, true);
+
         $present = $days->filter(fn (DailyAttendance $d) => in_array($d->status, [
             AttendanceStatus::Present, AttendanceStatus::Late, AttendanceStatus::FieldDuty,
         ], true))->count();
@@ -103,7 +120,7 @@ class PayrollContextBuilder
 
         return new AttendanceFacts(
             presentDays: $present + ($halfDays * 0.5),
-            absentDays: (float) $days->where('status', AttendanceStatus::Absent)->count(),
+            absentDays: (float) $days->filter(fn (DailyAttendance $d) => $d->status === AttendanceStatus::Absent && ! $isWaived($d))->count(),
             // LEV-07 splits a request into paid and unpaid portions, so the
             // paid part is whatever the leave days were not.
             paidLeaveDays: max(0.0, $onLeaveDays - $unpaidLeaveDays),
@@ -111,8 +128,9 @@ class PayrollContextBuilder
             lateOccurrences: $days->where('late_minutes', '>', 0)->count(),
             lateMinutes: (int) $days->sum('late_minutes'),
             // POL-03's ladder already decided this. A day carrying a deducting
-            // consequence forfeits one day's pay ("pro-rata one-day deduction").
-            deductibleDays: (float) $days->filter(fn (DailyAttendance $d) => $d->consequence->deducts())->count(),
+            // consequence forfeits one day's pay ("pro-rata one-day deduction")
+            // - unless a permitted person forgave that day.
+            deductibleDays: (float) $days->filter(fn (DailyAttendance $d) => $d->consequence->deducts() && ! $isWaived($d))->count(),
             // PAY-09.
             hasUnresolvedMissingPunch: $days->where('holds_payroll', true)->isNotEmpty(),
             // C14. Counted from the day itself rather than derived from

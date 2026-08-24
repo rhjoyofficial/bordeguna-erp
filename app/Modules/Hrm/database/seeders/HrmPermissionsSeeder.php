@@ -19,6 +19,11 @@ class HrmPermissionsSeeder extends Seeder
             'hrm.scheduling.manage',
             'hrm.attendance.manage',
             'hrm.attendance.approve',
+            // Forgiving a day's salary deduction (24 Aug 2026). Owner only,
+            // and deliberately NOT bundled with hrm.attendance.manage: the
+            // manage permission records what happened, this one decides
+            // money, and an audit needs to see the two held apart.
+            'hrm.attendance.waive',
             'hrm.leave.manage',
             'hrm.leave.approve',
             // Correction C5 / ACL-02: salary is visible to the employee

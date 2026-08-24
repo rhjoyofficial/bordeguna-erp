@@ -1,10 +1,6 @@
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
 import {
     Dialog,
     DialogClose,
@@ -15,6 +11,10 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import AppLayout from '@/layouts/app-layout';
+import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { Fragment, useState } from 'react';
 
@@ -31,8 +31,17 @@ interface Fix {
     at: string | null;
 }
 
+interface Waiver {
+    id: number;
+    reason: string;
+    by: string | null;
+    at: string | null;
+}
+
 interface Day {
     fixes: Fix[];
+    waiver: Waiver | null;
+    costs_money: boolean;
     id: number;
     date: string;
     weekday: string;
@@ -77,6 +86,7 @@ interface DailyProps {
     department_policies: { name: string; version: number; department: string | null }[];
     correction_types: CorrectionTypeOption[];
     directions: { value: string; label: string }[];
+    can_waive: boolean;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -90,6 +100,15 @@ function statusVariant(status: string): 'default' | 'secondary' | 'outline' {
     if (status === 'present' || status === 'field_duty') return 'default';
     if (status === 'absent' || status === 'missing_punch') return 'outline';
     return 'secondary';
+}
+
+/**
+ * Joy, 24 Aug 2026: a late day must catch the eye. The amber chip idiom the
+ * HR dashboard already uses, readable in both themes; every other status
+ * keeps its variant untouched.
+ */
+function statusBadgeClass(status: string): string {
+    return status === 'late' ? 'border-transparent bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200' : '';
 }
 
 /** One headline number for the range on screen. */
@@ -120,15 +139,7 @@ function Tile({ label, value, tone, hint }: { label: string; value: number; tone
  * same privileged path the Corrections screen uses, through the same endpoint,
  * so there is exactly one way a correction happens.
  */
-function FixDayDialog({
-    day,
-    types,
-    directions,
-}: {
-    day: Day;
-    types: CorrectionTypeOption[];
-    directions: { value: string; label: string }[];
-}) {
+function FixDayDialog({ day, types, directions }: { day: Day; types: CorrectionTypeOption[]; directions: { value: string; label: string }[] }) {
     const [open, setOpen] = useState(false);
     const [type, setType] = useState(types[0]?.value ?? 'add_punch');
     const [punches, setPunches] = useState<{ id: number; label: string }[]>([]);
@@ -146,10 +157,10 @@ function FixDayDialog({
     const openDialog = (next: boolean) => {
         setOpen(next);
         if (next) {
-            fetch(
-                route('hrm.attendance.corrections.punches') + `?employee_id=${day.employee_id}&date=${day.date}`,
-                { headers: { Accept: 'application/json' }, credentials: 'same-origin' },
-            )
+            fetch(route('hrm.attendance.corrections.punches') + `?employee_id=${day.employee_id}&date=${day.date}`, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            })
                 .then((response) => (response.ok ? response.json() : []))
                 .then((rows) => setPunches(rows))
                 .catch(() => setPunches([]));
@@ -190,8 +201,8 @@ function FixDayDialog({
                         Fix {day.date} for {day.employee}
                     </DialogTitle>
                     <DialogDescription>
-                        Applies immediately and reprocesses the day. The change is recorded with your name, and the
-                        employee sees it on their own page.
+                        Applies immediately and reprocesses the day. The change is recorded with your name, and the employee sees it on their own
+                        page.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
@@ -226,12 +237,7 @@ function FixDayDialog({
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="fix-direction">Direction</Label>
-                                <select
-                                    id="fix-direction"
-                                    className={selectClass}
-                                    value={direction}
-                                    onChange={(e) => setDirection(e.target.value)}
-                                >
+                                <select id="fix-direction" className={selectClass} value={direction} onChange={(e) => setDirection(e.target.value)}>
                                     <option value="">- Unknown -</option>
                                     {directions.map((d) => (
                                         <option key={d.value} value={d.value}>
@@ -251,15 +257,63 @@ function FixDayDialog({
                     <DialogClose asChild>
                         <Button variant="outline">Cancel</Button>
                     </DialogClose>
-                    <Button
-                        onClick={submit}
-                        disabled={
-                            saving ||
-                            reason.trim() === '' ||
-                            (selected?.needs_punch ? punchId === '' : false)
-                        }
-                    >
+                    <Button onClick={submit} disabled={saving || reason.trim() === '' || (selected?.needs_punch ? punchId === '' : false)}>
                         Apply fix
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/**
+ * Forgive one day's salary deduction (Joy, 24 Aug 2026). Shown only to
+ * holders of hrm.attendance.waive, and only on a day that costs money. The
+ * day's verdict does not change - absent stays absent on every screen - the
+ * deduction alone is removed from payroll, with the forgiver's name and
+ * reason on permanent record.
+ */
+function ForgiveDialog({ day }: { day: Day }) {
+    const [open, setOpen] = useState(false);
+    const [reason, setReason] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const submit = () => {
+        setSaving(true);
+        router.post(
+            route('hrm.attendance.waivers.store'),
+            { employee_id: day.employee_id, attendance_date: day.date, reason },
+            { preserveScroll: true, onSuccess: () => setOpen(false), onFinish: () => setSaving(false) },
+        );
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="ghost" size="sm">
+                    Forgive
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>
+                        Forgive {day.date} for {day.employee}
+                    </DialogTitle>
+                    <DialogDescription>
+                        Removes this day&apos;s salary deduction from payroll. The attendance record itself does not change - the day still reads{' '}
+                        {day.status.toLowerCase()} everywhere - and your name and reason stay on permanent record. It can be undone.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-2">
+                    <Label htmlFor="waive-reason">Reason</Label>
+                    <Input id="waive-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why this day is forgiven" />
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button onClick={submit} disabled={saving || reason.trim() === ''}>
+                        Forgive this day
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -299,6 +353,7 @@ export default function DailyAttendance({
     department_policies = [],
     correction_types = [],
     directions = [],
+    can_waive = false,
 }: DailyProps) {
     const [expanded, setExpanded] = useState<number | null>(null);
     const [busy, setBusy] = useState(false);
@@ -502,7 +557,18 @@ export default function DailyAttendance({
                                                 <span className="text-muted-foreground ml-2 text-xs">{day.employee_code}</span>
                                             </td>
                                             <td className="px-4 py-2.5 whitespace-nowrap">
-                                                <Badge variant={statusVariant(day.status_value)}>{day.status}</Badge>
+                                                <Badge variant={statusVariant(day.status_value)} className={statusBadgeClass(day.status_value)}>
+                                                    {day.status}
+                                                </Badge>
+                                                {day.waiver && (
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="ml-2 border-emerald-500/50 text-emerald-700 dark:text-emerald-400"
+                                                        title={`${day.waiver.reason}${day.waiver.by ? ` (by ${day.waiver.by})` : ''}${day.waiver.at ? ` at ${day.waiver.at}` : ''}`}
+                                                    >
+                                                        Forgiven
+                                                    </Badge>
+                                                )}
                                                 {day.fixes.length > 0 && (
                                                     <Badge
                                                         variant="outline"
@@ -567,6 +633,26 @@ export default function DailyAttendance({
                                                     ones - the fix applies instantly and the day is
                                                     reprocessed before this grid reloads. */}
                                                 <FixDayDialog day={day} types={correction_types} directions={directions} />
+                                                {/* Money actions, only for hrm.attendance.waive holders:
+                                                    forgive a costing day, or undo a forgiveness. */}
+                                                {can_waive && day.costs_money && !day.waiver && <ForgiveDialog day={day} />}
+                                                {can_waive && day.waiver && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        disabled={busy}
+                                                        onClick={() => {
+                                                            setBusy(true);
+                                                            router.post(
+                                                                route('hrm.attendance.waivers.revoke', day.waiver!.id),
+                                                                {},
+                                                                { preserveScroll: true, onFinish: () => setBusy(false) },
+                                                            );
+                                                        }}
+                                                    >
+                                                        Undo forgive
+                                                    </Button>
+                                                )}
                                             </td>
                                         </tr>
                                         {expanded === day.id && (
@@ -579,6 +665,13 @@ export default function DailyAttendance({
                                                                 <li key={i}>{note}</li>
                                                             ))}
                                                         </ul>
+                                                        {day.waiver && (
+                                                            <p className="mt-2 text-emerald-700 dark:text-emerald-400">
+                                                                Deduction forgiven{day.waiver.by ? ` by ${day.waiver.by}` : ''}
+                                                                {day.waiver.at ? ` at ${day.waiver.at}` : ''}: {day.waiver.reason} The day&apos;s
+                                                                record above is unchanged; only the salary deduction is removed.
+                                                            </p>
+                                                        )}
                                                         {day.fixes.length > 0 && (
                                                             <div className="mt-2">
                                                                 <p className="mb-1 font-medium">Fixes applied to this day</p>

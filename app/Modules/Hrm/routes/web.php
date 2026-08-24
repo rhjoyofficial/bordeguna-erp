@@ -6,6 +6,7 @@ use App\Modules\Hrm\Http\Controllers\AttendanceImportController;
 use App\Modules\Hrm\Http\Controllers\AttendancePolicyController;
 use App\Modules\Hrm\Http\Controllers\AttendancePunchController;
 use App\Modules\Hrm\Http\Controllers\AttendanceSummaryController;
+use App\Modules\Hrm\Http\Controllers\AttendanceWaiverController;
 use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
 use App\Modules\Hrm\Http\Controllers\DisbursementController;
 use App\Modules\Hrm\Http\Controllers\EmployeeAttendanceController;
@@ -100,6 +101,14 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::get('attendance/employees/{employee}', [EmployeeAttendanceController::class, 'show'])->name('attendance.employee.show');
     Route::post('attendance/daily/process', [DailyAttendanceController::class, 'process'])->name('attendance.daily.process');
     Route::post('attendance/daily/finalize', [DailyAttendanceController::class, 'finalize'])->name('attendance.daily.finalize');
+
+    // Forgiving a day's deduction (24 Aug 2026). Its own permission,
+    // deliberately NOT bundled with hrm.attendance.manage: recording what
+    // happened and deciding money are different powers - see the controller.
+    Route::middleware('can:hrm.attendance.waive')->group(function () {
+        Route::post('attendance/waivers', [AttendanceWaiverController::class, 'store'])->name('attendance.waivers.store');
+        Route::post('attendance/waivers/{waiver}/revoke', [AttendanceWaiverController::class, 'revoke'])->name('attendance.waivers.revoke');
+    });
 
     // Corrections (COR-01..06). Approve/reject are their own endpoints because a
     // correction is its own approvable type with its own applier — the raw

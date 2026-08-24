@@ -9,6 +9,7 @@ use App\Modules\Hrm\Enums\CorrectionType;
 use App\Modules\Hrm\Enums\PunchDirection;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\AttendancePolicy;
+use App\Modules\Hrm\Models\AttendanceWaiver;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
 use Illuminate\Http\RedirectResponse;
@@ -76,6 +77,17 @@ class DailyAttendanceController extends Controller
             ->get()
             ->groupBy(fn (AttendanceCorrection $c) => $c->employee_id.'|'.Carbon::parse($c->attendance_date)->toDateString());
 
+        // Active waivers in the window, so a forgiven row can say so and the
+        // Forgive button knows not to offer itself twice. Same one-query,
+        // grouped shape as the fixes above.
+        $waivers = AttendanceWaiver::with('waiver:id,name')
+            ->active()
+            ->whereDate('attendance_date', '>=', $from->toDateString())
+            ->whereDate('attendance_date', '<=', $to->toDateString())
+            ->when($employeeId, fn ($query) => $query->where('employee_id', $employeeId))
+            ->get()
+            ->keyBy(fn (AttendanceWaiver $w) => $w->employee_id.'|'.$w->attendance_date->toDateString());
+
         // ⚠ A department may carry its own order, so "the policy in force" is no
         // longer one row. Naming only the business default here would put a
         // policy name above a grid half of whose rows were judged by another.
@@ -100,7 +112,10 @@ class DailyAttendanceController extends Controller
             'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
                 ->orderBy('first_name')->orderBy('last_name')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName().' ('.$e->employee_code.')']),
-            'days' => $days->map(fn (DailyAttendance $day) => $this->present($day, $fixes)),
+            'days' => $days->map(fn (DailyAttendance $day) => $this->present($day, $fixes, $waivers)),
+            // Forgiving money is its own permission, not part of managing
+            // attendance - the button only shows to those who hold it.
+            'can_waive' => $request->user()->can('hrm.attendance.waive'),
             // The fix dialog's vocabulary, same shapes the clock page uses.
             // Anyone on this screen holds hrm.attendance.manage, so a
             // correction filed here applies IMMEDIATELY and reprocesses the
@@ -221,11 +236,23 @@ class DailyAttendanceController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function present(DailyAttendance $day, \Illuminate\Support\Collection $fixes): array
+    private function present(DailyAttendance $day, \Illuminate\Support\Collection $fixes, \Illuminate\Support\Collection $waivers): array
     {
         $key = $day->employee_id.'|'.$day->attendance_date->toDateString();
+        $waiver = $waivers->get($key);
 
         return [
+            // Forgiveness, if any: who removed this day's deduction and why.
+            // The day's own verdict below stays untouched - that is the point.
+            'waiver' => $waiver === null ? null : [
+                'id' => $waiver->id,
+                'reason' => $waiver->reason,
+                'by' => $waiver->waiver?->name,
+                'at' => $waiver->created_at?->format('Y-m-d H:i'),
+            ],
+            // Whether this day's verdict costs money (an absent day, or a
+            // deducting consequence) - what the Forgive button keys on.
+            'costs_money' => $day->status->value === 'absent' || $day->consequence->deducts(),
             // What has already been done to this day, and by whom - shown on
             // the row and, through the clock page, to the employee themselves.
             'fixes' => ($fixes->get($key) ?? collect())->map(fn (AttendanceCorrection $c) => [
