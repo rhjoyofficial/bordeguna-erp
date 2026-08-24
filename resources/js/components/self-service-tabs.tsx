@@ -14,6 +14,9 @@ const TABS = [
     { title: 'Clock in/out', url: '/hrm/clock' },
     { title: 'My leave', url: '/hrm/my-leave' },
     { title: 'My payslips', url: '/hrm/my-payslips' },
+    // Show cause notices issued to this employee (Joy, 24 Aug 2026) - the
+    // employee's own printable copies of what HR put on record.
+    { title: 'My notices', url: '/hrm/my-notices' },
 ];
 
 export default function SelfServiceTabs({ active }: { active: string }) {

@@ -8,6 +8,7 @@ use App\Modules\Hrm\Attendance\DayContextBuilder;
 use App\Modules\Hrm\Models\AttendancePolicy;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Support\LatenessAlerts;
 use App\Modules\Hrm\Support\ScheduleResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -30,6 +31,7 @@ class ProcessAttendance
         private readonly DayContextBuilder $builder,
         private readonly AttendanceEngine $engine,
         private readonly ScheduleResolver $resolver,
+        private readonly LatenessAlerts $alerts,
     ) {}
 
     /**
@@ -145,10 +147,15 @@ class ProcessAttendance
 
         if ($existing !== null) {
             $existing->update($attributes);
-
-            return $existing;
+        } else {
+            $existing = DailyAttendance::create($attributes);
         }
 
-        return DailyAttendance::create($attributes);
+        // AFTER the day is written, never inside the engine: the alert is a
+        // side effect of the recorded truth, and its own table makes it fire
+        // once per employee/window/month no matter how often the day recomputes.
+        $this->alerts->maybeAlert($existing, $policy);
+
+        return $existing;
     }
 }

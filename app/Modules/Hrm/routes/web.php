@@ -25,6 +25,7 @@ use App\Modules\Hrm\Http\Controllers\SalaryController;
 use App\Modules\Hrm\Http\Controllers\SalaryRevisionController;
 use App\Modules\Hrm\Http\Controllers\ScheduleController;
 use App\Modules\Hrm\Http\Controllers\SelfLeaveController;
+use App\Modules\Hrm\Http\Controllers\ShowCauseNoticeController;
 use App\Modules\Hrm\Http\Controllers\SelfServiceController;
 use App\Modules\Hrm\Http\Controllers\ShiftController;
 use Illuminate\Support\Facades\Route;
@@ -109,6 +110,19 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
         Route::post('attendance/waivers', [AttendanceWaiverController::class, 'store'])->name('attendance.waivers.store');
         Route::post('attendance/waivers/{waiver}/revoke', [AttendanceWaiverController::class, 'revoke'])->name('attendance.waivers.revoke');
     });
+
+    // Show cause notices (Joy, 24 Aug 2026): HR's formal letter after a
+    // lateness review, and the employee's own copies. HR reads and issues
+    // under hrm.attendance.manage; my-notices is self-scope like my-profile.
+    // ⚠ The literal `my-notices` segments register before nothing conflicting,
+    // but the {notice} wildcard still gets whereNumber - the invoices lesson.
+    Route::get('notices', [ShowCauseNoticeController::class, 'index'])->name('notices.index');
+    Route::post('notices', [ShowCauseNoticeController::class, 'store'])->name('notices.store');
+    Route::get('notices/{notice}', [ShowCauseNoticeController::class, 'show'])
+        ->whereNumber('notice')->name('notices.show');
+    Route::get('my-notices', [ShowCauseNoticeController::class, 'selfIndex'])->name('my-notices.index');
+    Route::get('my-notices/{notice}', [ShowCauseNoticeController::class, 'selfShow'])
+        ->whereNumber('notice')->name('my-notices.show');
 
     // Corrections (COR-01..06). Approve/reject are their own endpoints because a
     // correction is its own approvable type with its own applier — the raw

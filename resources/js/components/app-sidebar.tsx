@@ -21,6 +21,7 @@ import {
     FileBarChart,
     FileText,
     FileUp,
+    FileWarning,
     Fingerprint,
     HandCoins,
     Landmark,
@@ -260,6 +261,10 @@ export function AppSidebar() {
                                     // Joy, 24 Aug 2026: the POL-03 ladders are
                                     // adjustable data now, not seeded constants.
                                     { title: 'Attendance policy', url: '/hrm/policies', icon: SlidersHorizontal },
+                                    // The formal letter after a lateness review
+                                    // (Joy, 24 Aug 2026); employees hold their
+                                    // copies under My profile.
+                                    { title: 'Show cause notices', url: '/hrm/notices', icon: FileWarning },
                                 ]
                               : []),
                           ...(canManageLeave ? [{ title: 'Leave & movement', url: '/hrm/leave', icon: Palmtree }] : []),

@@ -322,6 +322,113 @@ function ForgiveDialog({ day }: { day: Day }) {
 }
 
 /**
+ * Issue a show cause notice straight from the late day it is about
+ * (Joy, 24 Aug 2026). The subject and body arrive prefilled from the day's
+ * own facts - window, occurrence, date - and stay editable, because the
+ * template is a starting point and the letter is HR's.
+ */
+function ShowCauseDialog({ day, on }: { day: Day; on: string }) {
+    const month = new Date(day.date + 'T00:00:00').toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+    const defaultSubject = 'Show cause notice for repeated late arrival';
+    const defaultBody =
+        `Dear ${day.employee ?? 'employee'},\n\n` +
+        `Our attendance records show that on ${day.date} you arrived ${day.late_minutes} minutes after your shift start` +
+        (day.grace_window ? ` (${day.grace_window})` : '') +
+        (day.occurrence_number ? `, your ${ordinal(day.occurrence_number)} such occurrence in ${month}` : '') +
+        '.\n\nYou are requested to explain in writing, within 3 working days of receiving this notice, why disciplinary or salary consequences under the attendance policy should not be applied.\n\nIf no satisfactory explanation is received within this time, the consequences stated in the policy will apply.';
+
+    const [open, setOpen] = useState(false);
+    const [subject, setSubject] = useState(defaultSubject);
+    const [body, setBody] = useState(defaultBody);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const submit = () =>
+        router.post(
+            route('hrm.notices.store'),
+            {
+                employee_id: day.employee_id,
+                subject,
+                body,
+                context: {
+                    window_label: day.grace_window,
+                    occurrence: day.occurrence_number,
+                    month,
+                    dates: [day.date],
+                },
+            },
+            {
+                preserveScroll: true,
+                onError: (e: Record<string, string>) => setErrors(e),
+                onSuccess: () => setOpen(false),
+            },
+        );
+
+    return (
+        <Dialog
+            open={open}
+            onOpenChange={(next) => {
+                if (next) {
+                    // Re-seed on every open so the template always describes
+                    // the row it was opened from, not a previous one.
+                    setSubject(defaultSubject);
+                    setBody(defaultBody);
+                    setErrors({});
+                }
+                setOpen(next);
+            }}
+        >
+            <DialogTrigger asChild>
+                <Button variant="ghost" size="sm">
+                    Show cause
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>
+                        Show cause notice - {day.employee} ({on})
+                    </DialogTitle>
+                    <DialogDescription>
+                        Edit the letter as needed. Issuing puts it on permanent record and notifies the employee in the ERP; both of you can print a
+                        copy.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor={`sc_subject_${day.id}`}>Subject</Label>
+                        <Input id={`sc_subject_${day.id}`} value={subject} onChange={(e) => setSubject(e.target.value)} />
+                        {errors.subject && <p className="text-destructive text-xs">{errors.subject}</p>}
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor={`sc_body_${day.id}`}>Notice text</Label>
+                        <textarea
+                            id={`sc_body_${day.id}`}
+                            className="border-input bg-background min-h-48 w-full rounded-md border px-3 py-2 text-sm"
+                            value={body}
+                            onChange={(e) => setBody(e.target.value)}
+                        />
+                        {errors.body && <p className="text-destructive text-xs">{errors.body}</p>}
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button onClick={submit} disabled={subject.trim() === '' || body.trim() === ''}>
+                        Issue notice
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function ordinal(n: number): string {
+    const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');
+
+    return `${n}${suffix}`;
+}
+
+/**
  * A filter that is switched on says so in words, and can be switched off from
  * where it is doing the hiding. Three unlabelled checkboxes in a toolbar left
  * somebody staring at an empty grid wondering what happened to their day.
@@ -633,6 +740,10 @@ export default function DailyAttendance({
                                                     ones - the fix applies instantly and the day is
                                                     reprocessed before this grid reloads. */}
                                                 <FixDayDialog day={day} types={correction_types} directions={directions} />
+                                                {/* A late day can become a formal question from its own
+                                                    row - everyone here holds hrm.attendance.manage, the
+                                                    same gate the notices screen enforces. */}
+                                                {day.late_minutes > 0 && <ShowCauseDialog day={day} on={day.date} />}
                                                 {/* Money actions, only for hrm.attendance.waive holders:
                                                     forgive a costing day, or undo a forgiveness. */}
                                                 {can_waive && day.costs_money && !day.waiver && <ForgiveDialog day={day} />}
