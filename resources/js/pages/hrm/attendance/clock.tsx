@@ -29,21 +29,12 @@ interface Punch {
 
 interface RecentDay {
     date: string;
-    fixes: { summary: string; by: string | null }[];
     status: string;
     first_in: string | null;
     last_out: string | null;
     holds_payroll: boolean;
     is_provisional: boolean;
     is_locked: boolean;
-}
-
-interface MyCorrection {
-    id: number;
-    date: string;
-    summary: string;
-    status: string;
-    stage: string | null;
 }
 
 interface CorrectionType {
@@ -75,7 +66,6 @@ interface ClockProps {
     summary: MySummary;
     statuses: { value: string; label: string }[];
     recent_days: RecentDay[];
-    my_corrections: MyCorrection[];
     correction_types: CorrectionType[];
     directions: { value: string; label: string }[];
 }
@@ -231,18 +221,7 @@ function MyTile({ label, value, warn, bad }: { label: string; value: number; war
     );
 }
 
-export default function Clock({
-    employee,
-    today,
-    punches,
-    filters,
-    summary,
-    statuses,
-    recent_days,
-    my_corrections,
-    correction_types,
-    directions,
-}: ClockProps) {
+export default function Clock({ employee, today, punches, filters, summary, statuses, recent_days, correction_types, directions }: ClockProps) {
     const [busy, setBusy] = useState<string | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [myFrom, setMyFrom] = useState(filters.from);
@@ -524,18 +503,6 @@ export default function Clock({
                                                     Needs fixing
                                                 </Badge>
                                             )}
-                                            {/* Transparency about fixes: when HR corrects a day, the
-                                                row says what was done and by whom. */}
-                                            {(day.fixes ?? []).length > 0 && (
-                                                <span className="text-muted-foreground mt-0.5 block text-xs">
-                                                    {(day.fixes ?? []).map((fix, i) => (
-                                                        <span key={i} className="block">
-                                                            {fix.summary}
-                                                            {fix.by ? ' - by ' + fix.by : ''}
-                                                        </span>
-                                                    ))}
-                                                </span>
-                                            )}
                                         </td>
                                         <td className="text-muted-foreground py-2 font-mono text-xs">
                                             {day.first_in ?? '-'} / {day.last_out ?? '-'}
@@ -553,26 +520,6 @@ export default function Clock({
                         </table>
                     )}
                 </div>
-
-                {my_corrections.length > 0 && (
-                    <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                        <h3 className="mb-3 text-sm font-medium">My correction requests</h3>
-                        <table className="w-full min-w-[40rem] text-sm">
-                            <tbody>
-                                {my_corrections.map((c) => (
-                                    <tr key={c.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                        <td className="py-2 whitespace-nowrap">{c.date}</td>
-                                        <td className="text-muted-foreground py-2">{c.summary}</td>
-                                        <td className="py-2">
-                                            <Badge variant={c.status === 'approved' ? 'default' : 'secondary'}>{c.status}</Badge>
-                                            {c.stage && <span className="text-muted-foreground ml-2 text-xs">at {c.stage}</span>}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
             </div>
         </AppLayout>
     );

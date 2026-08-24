@@ -45,8 +45,16 @@ class NotifyStageApprovers
             }
         }
 
+        // ⚠ HR's own approvals respect the HR notification preference (Joy,
+        // 24 Aug 2026): permission decides who MAY approve, the preference
+        // decides whose attention is spent on it. Moin holds every permission
+        // as the boss and is deliberately left out of HR's daily traffic.
+        // Stock, purchasing and every other module notify unchanged.
+        $isHrApproval = str_contains($request->approvable_type, '\\Hrm\\');
+
         $recipients = User::whereIn('id', $userIds->unique()->all())
             ->where('is_active', true)
+            ->when($isHrApproval, fn ($query) => $query->where('receives_hr_notifications', true))
             ->whereHas('businesses', fn ($query) => $query->where('businesses.id', $businessId))
             ->where('id', '!=', $request->requested_by)
             ->get();

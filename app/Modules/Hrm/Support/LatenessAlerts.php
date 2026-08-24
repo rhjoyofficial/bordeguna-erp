@@ -90,8 +90,13 @@ class LatenessAlerts
         // - the nightly command loops businesses and this must not leak across.
         app(PermissionRegistrar::class)->setPermissionsTeamId($day->business_id);
 
+        // ⚠ Permission says who MAY act; the preference says who should be
+        // told. Joy, 24 Aug 2026: he and Musa run HR, and Moin - who holds
+        // every permission because he is the boss - is not to be disturbed by
+        // its daily traffic.
         $recipients = User::permission('hrm.attendance.manage')
             ->where('is_active', true)
+            ->where('receives_hr_notifications', true)
             ->whereHas('businesses', fn ($query) => $query->where('businesses.id', $day->business_id))
             ->get();
 

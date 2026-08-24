@@ -26,6 +26,7 @@ class User extends Authenticatable
         'password',
         'is_super_admin',
         'is_active',
+        'receives_hr_notifications',
     ];
 
     public function businesses(): BelongsToMany
@@ -55,6 +56,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_super_admin' => 'boolean',
             'is_active' => 'boolean',
+            'receives_hr_notifications' => 'boolean',
         ];
     }
 }

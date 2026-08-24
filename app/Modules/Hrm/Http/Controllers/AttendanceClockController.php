@@ -48,17 +48,13 @@ class AttendanceClockController extends Controller
         $today = Carbon::today();
         [$from, $to] = $this->historyRange($request, $today);
 
-        // Fixes applied to this person's days in the window, so their own row
-        // says what was changed and by whom (Joy, 23 Aug 2026: "employee will
-        // see on his profile what who did, on the attendance row").
-        $fixes = AttendanceCorrection::with('requester:id,name')
-            ->where('employee_id', $employee->id)
-            ->whereNotNull('applied_at')
-            ->whereDate('attendance_date', '>=', $from->toDateString())
-            ->whereDate('attendance_date', '<=', $to->toDateString())
-            ->orderBy('id')
-            ->get()
-            ->groupBy(fn (AttendanceCorrection $c) => Carbon::parse($c->attendance_date)->toDateString());
+        // ⚠ The per-day fix trail and the correction-request list were shown
+        // here from 23 Aug 2026 on Joy's request ("employee will see on his
+        // profile what who did"). He reversed it on 24 Aug: a profile carries
+        // no such narration while the ERP is starting fresh. The corrections
+        // themselves are untouched and HR still reads them on the attendance
+        // screens - only this employee-facing narration is gone, and it can
+        // come back when he asks for it.
         $status = $this->historyStatus($request);
         $statusValue = $status?->value;
         $newestFirst = $this->historyNewestFirst($request);
@@ -124,25 +120,6 @@ class AttendanceClockController extends Controller
                     'holds_payroll' => $day->holds_payroll,
                     'is_provisional' => $day->is_provisional,
                     'is_locked' => AttendancePeriodLock::isLocked($day->attendance_date),
-                    // What who did to this day - transparency is the point, so
-                    // the fix carries a name, not just an effect.
-                    'fixes' => ($fixes->get($day->attendance_date->toDateString()) ?? collect())
-                        ->map(fn (AttendanceCorrection $c) => [
-                            'summary' => $c->summaryLine(),
-                            'by' => $c->requester?->name,
-                        ])->values(),
-                ]),
-            'my_corrections' => AttendanceCorrection::where('employee_id', $employee->id)
-                ->with('approvalRequest.workflow.stages')
-                ->orderByDesc('id')->limit(10)->get()
-                ->map(fn (AttendanceCorrection $c) => [
-                    'id' => $c->id,
-                    'date' => Carbon::parse($c->attendance_date)->toDateString(),
-                    'summary' => $c->summaryLine(),
-                    'status' => $c->approvalRequest?->status->value ?? ($c->isApplied() ? 'applied' : 'pending'),
-                    'stage' => $c->approvalRequest && $c->approvalRequest->totalStages() > 1
-                        ? $c->approvalRequest->currentStage()?->name
-                        : null,
                 ]),
             'correction_types' => collect(CorrectionType::cases())
                 ->map(fn (CorrectionType $t) => [
