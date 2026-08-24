@@ -542,5 +542,10 @@ it('registers fourteen of the fifteen reports, with only the bank advice missing
         // engine free of consequences, so THIS report is where overruns and
         // late returns are counted for any show-cause decision.
         ->and($keys)->toContain('attendance_meal_compliance')
-        ->and($keys)->toHaveCount(17);
+        // 18: the yearly lateness register (Joy, 24 Aug 2026: "all this late
+        // will be recorded and show end of the year report"). The year-end
+        // companion to the show cause notices - what was late, what it cost,
+        // and which months lost their earned leave day because of it.
+        ->and($keys)->toContain('attendance_lateness_register')
+        ->and($keys)->toHaveCount(18);
 });

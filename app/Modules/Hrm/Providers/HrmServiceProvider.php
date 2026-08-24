@@ -21,6 +21,7 @@ use App\Modules\Hrm\Reporting\Definitions\CostAllocationReport;
 use App\Modules\Hrm\Reporting\Definitions\DailyAttendanceReport;
 use App\Modules\Hrm\Reporting\Definitions\EarningsDeductionsBreakdownReport;
 use App\Modules\Hrm\Reporting\Definitions\ImportExceptionReport;
+use App\Modules\Hrm\Reporting\Definitions\LatenessRegisterReport;
 use App\Modules\Hrm\Reporting\Definitions\LoanBalanceReport;
 use App\Modules\Hrm\Reporting\Definitions\MealBreakComplianceReport;
 use App\Modules\Hrm\Reporting\Definitions\MonthlyAttendanceRegisterReport;
@@ -50,6 +51,10 @@ class HrmServiceProvider extends ServiceProvider
         DailyAttendanceReport::class,
         MonthlyAttendanceRegisterReport::class,
         AttendanceExceptionReport::class,
+        // Joy, 24 Aug 2026: "all this late will be recorded and show end of the
+        // year report". Filed with attendance rather than payroll - it counts
+        // lateness, and the money on it is a consequence rather than a salary.
+        LatenessRegisterReport::class,
         AbsenceAndLeaveReport::class,
         OvertimeReport::class,
         ImportExceptionReport::class,
