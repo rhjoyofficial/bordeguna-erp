@@ -74,6 +74,23 @@ class LeaveController extends Controller
                     'annual_quota' => (float) $t->annual_quota,
                     'carry_forward_cap' => $t->can_carry_forward ? $t->effectiveCarryForwardCap() : null,
                 ]),
+            // The Leave types tab edits rules, so it must also list INACTIVE
+            // types - a type nobody can see is a type nobody can reactivate.
+            // `leave_types` above stays active-only: it feeds the request form.
+            'type_settings' => LeaveType::orderBy('name')->get()
+                ->map(fn (LeaveType $t) => [
+                    'id' => $t->id, 'name' => $t->name, 'code' => $t->code,
+                    'annual_quota' => (float) $t->annual_quota,
+                    'is_paid' => $t->is_paid,
+                    'deducts_balance' => $t->deducts_balance,
+                    'allows_half_day' => $t->allows_half_day,
+                    'can_carry_forward' => $t->can_carry_forward,
+                    'carry_forward_cap' => $t->carry_forward_cap !== null ? (float) $t->carry_forward_cap : null,
+                    'effective_cap' => $t->can_carry_forward ? $t->effectiveCarryForwardCap() : null,
+                    'can_encash' => $t->can_encash,
+                    'is_active' => $t->is_active,
+                    'is_system' => in_array($t->code, ['unpaid', LeaveType::COMPENSATORY], true),
+                ]),
             'portions' => collect(LeaveDayPortion::cases())
                 ->map(fn (LeaveDayPortion $p) => ['value' => $p->value, 'label' => $p->label()]),
             'movement_types' => collect(MovementType::cases())

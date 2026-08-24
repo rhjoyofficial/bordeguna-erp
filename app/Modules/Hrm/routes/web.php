@@ -13,6 +13,7 @@ use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\HrmDashboardController;
 use App\Modules\Hrm\Http\Controllers\LeaveController;
 use App\Modules\Hrm\Http\Controllers\LeaveProvisionController;
+use App\Modules\Hrm\Http\Controllers\LeaveTypeController;
 use App\Modules\Hrm\Http\Controllers\LoanController;
 use App\Modules\Hrm\Http\Controllers\PayrollController;
 use App\Modules\Hrm\Http\Controllers\PayrollInputController;
@@ -122,6 +123,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('leave/{leaveRequest}/approve', [LeaveController::class, 'approve'])->name('leave.approve');
     Route::post('leave/{leaveRequest}/reject', [LeaveController::class, 'reject'])->name('leave.reject');
     Route::post('leave/quota', [LeaveController::class, 'grantQuota'])->name('leave.quota');
+
+    // Leave-type rules (SmartHR gap G19) — edited from the Leave types tab.
+    // ⚠ `leave/types` must be registered before any `leave/{leaveRequest}`
+    // pattern would swallow it; kept inside the leave block on purpose.
+    Route::post('leave/types', [LeaveTypeController::class, 'store'])->name('leave.types.store');
+    Route::put('leave/types/{leaveType}', [LeaveTypeController::class, 'update'])->name('leave.types.update');
+    Route::patch('leave/types/{leaveType}/toggle-active', [LeaveTypeController::class, 'toggleActive'])->name('leave.types.toggle-active');
 
     Route::post('movements', [LeaveController::class, 'storeMovement'])->name('movements.store');
     Route::post('movements/{movement}/approve', [LeaveController::class, 'approveMovement'])->name('movements.approve');

@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogClose,
@@ -55,6 +56,22 @@ interface Balance {
     carry_forward_cap: number | null;
 }
 
+interface TypeSetting {
+    id: number;
+    name: string;
+    code: string;
+    annual_quota: number;
+    is_paid: boolean;
+    deducts_balance: boolean;
+    allows_half_day: boolean;
+    can_carry_forward: boolean;
+    carry_forward_cap: number | null;
+    effective_cap: number | null;
+    can_encash: boolean;
+    is_active: boolean;
+    is_system: boolean;
+}
+
 interface Props {
     year: number;
     filters: { employee_id: number | null };
@@ -64,6 +81,7 @@ interface Props {
     ledger: { id: number; date: string; type: string | null; entry_type: string; days: number; note: string | null }[];
     employees: { id: number; name: string }[];
     leave_types: Balance[];
+    type_settings: TypeSetting[];
     portions: { value: string; label: string }[];
     movement_types: { value: string; label: string }[];
 }
@@ -84,7 +102,15 @@ type Option = { id: number; name: string };
  * the approval queue, which is the point. A day stops counting as absent
  * because somebody with authority said so, not because somebody typed it.
  */
-function LeaveDialog({ employees, leaveTypes, portions }: { employees: Option[]; leaveTypes: Balance[]; portions: { value: string; label: string }[] }) {
+function LeaveDialog({
+    employees,
+    leaveTypes,
+    portions,
+}: {
+    employees: Option[];
+    leaveTypes: Balance[];
+    portions: { value: string; label: string }[];
+}) {
     const [open, setOpen] = useState(false);
     const [employeeId, setEmployeeId] = useState('');
     const [leaveTypeId, setLeaveTypeId] = useState('');
@@ -129,8 +155,8 @@ function LeaveDialog({ employees, leaveTypes, portions }: { employees: Option[];
                 <DialogHeader>
                     <DialogTitle>Record a leave request</DialogTitle>
                     <DialogDescription>
-                        Holidays and weekly offs inside the range are not charged, so applying across one costs only the working days it covers.
-                        This goes to the approval queue; the attendance days change once it is approved.
+                        Holidays and weekly offs inside the range are not charged, so applying across one costs only the working days it covers. This
+                        goes to the approval queue; the attendance days change once it is approved.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
@@ -144,7 +170,7 @@ function LeaveDialog({ employees, leaveTypes, portions }: { employees: Option[];
                                 </option>
                             ))}
                         </select>
-                        {errors.employee_id && <p className="text-xs text-destructive">{errors.employee_id}</p>}
+                        {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="leave_type">Leave type</Label>
@@ -158,22 +184,22 @@ function LeaveDialog({ employees, leaveTypes, portions }: { employees: Option[];
                             ))}
                         </select>
                         {type?.deducts_balance && type.annual_quota === 0 && (
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-muted-foreground text-xs">
                                 This type draws on a balance but its quota is 0, so the balance will go negative unless a quota is granted first.
                             </p>
                         )}
-                        {errors.leave_type_id && <p className="text-xs text-destructive">{errors.leave_type_id}</p>}
+                        {errors.leave_type_id && <p className="text-destructive text-xs">{errors.leave_type_id}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-3">
                         <div className="grid gap-2">
                             <Label htmlFor="leave_start">From</Label>
                             <Input id="leave_start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                            {errors.start_date && <p className="text-xs text-destructive">{errors.start_date}</p>}
+                            {errors.start_date && <p className="text-destructive text-xs">{errors.start_date}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="leave_end">To</Label>
                             <Input id="leave_end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-                            {errors.end_date && <p className="text-xs text-destructive">{errors.end_date}</p>}
+                            {errors.end_date && <p className="text-destructive text-xs">{errors.end_date}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="leave_portion">Portion</Label>
@@ -194,7 +220,7 @@ function LeaveDialog({ employees, leaveTypes, portions }: { employees: Option[];
                             onChange={(e) => setReason(e.target.value)}
                             placeholder="e.g. Cousin's marriage ceremony"
                         />
-                        {errors.reason && <p className="text-xs text-destructive">{errors.reason}</p>}
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                 </div>
                 <DialogFooter>
@@ -263,8 +289,8 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                 <DialogHeader>
                     <DialogTitle>Record a movement</DialogTitle>
                     <DialogDescription>
-                        For a day worked away from the device: official work outside the office, field duty, or work on a holiday or weekly off.
-                        One movement covers one date, so a trip of several days needs one per day.
+                        For a day worked away from the device: official work outside the office, field duty, or work on a holiday or weekly off. One
+                        movement covers one date, so a trip of several days needs one per day.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
@@ -278,7 +304,7 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                                 </option>
                             ))}
                         </select>
-                        {errors.employee_id && <p className="text-xs text-destructive">{errors.employee_id}</p>}
+                        {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
@@ -294,7 +320,7 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                         <div className="grid gap-2">
                             <Label htmlFor="mv_date">Date</Label>
                             <Input id="mv_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                            {errors.movement_date && <p className="text-xs text-destructive">{errors.movement_date}</p>}
+                            {errors.movement_date && <p className="text-destructive text-xs">{errors.movement_date}</p>}
                         </div>
                     </div>
                     <div className="grid gap-2">
@@ -309,7 +335,7 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                         <div className="grid gap-2">
                             <Label htmlFor="mv_to">To time (optional)</Label>
                             <Input id="mv_to" type="time" value={toTime} onChange={(e) => setToTime(e.target.value)} />
-                            {errors.to_time && <p className="text-xs text-destructive">{errors.to_time}</p>}
+                            {errors.to_time && <p className="text-destructive text-xs">{errors.to_time}</p>}
                         </div>
                     </div>
                     <div className="grid gap-2">
@@ -320,7 +346,7 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                             onChange={(e) => setReason(e.target.value)}
                             placeholder="e.g. Outside Dhaka on office work in Barishal"
                         />
-                        {errors.reason && <p className="text-xs text-destructive">{errors.reason}</p>}
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                 </div>
                 <DialogFooter>
@@ -329,6 +355,154 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                     </DialogClose>
                     <Button onClick={submit} disabled={employeeId === '' || date === '' || reason.trim() === ''}>
                         Record
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/**
+ * Create or edit a leave type's rules (SmartHR gap G19). One dialog serves
+ * both: with a `type` it edits, without one it creates.
+ *
+ * The code field only exists on create - the engine addresses types by code
+ * (unpaid fallback, compensatory credit), so a rename would detach them.
+ * Encashment is not offered at all: switched off by policy on 23 Aug 2026,
+ * and a settled question does not get a toggle.
+ */
+function LeaveTypeDialog({ type }: { type?: TypeSetting }) {
+    const [open, setOpen] = useState(false);
+    const [name, setName] = useState(type?.name ?? '');
+    const [code, setCode] = useState('');
+    const [quota, setQuota] = useState(type ? String(type.annual_quota) : '0');
+    const [isPaid, setIsPaid] = useState(type?.is_paid ?? true);
+    const [deductsBalance, setDeductsBalance] = useState(type?.deducts_balance ?? true);
+    const [allowsHalfDay, setAllowsHalfDay] = useState(type?.allows_half_day ?? true);
+    const [carryForward, setCarryForward] = useState(type?.can_carry_forward ?? false);
+    const [cap, setCap] = useState(type?.carry_forward_cap != null ? String(type.carry_forward_cap) : '');
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // Re-seed the fields on every open: after a save Inertia refreshes the
+    // row props but a mounted dialog's state would otherwise show the past.
+    const onOpenChange = (next: boolean) => {
+        if (next) {
+            setName(type?.name ?? '');
+            setCode('');
+            setQuota(type ? String(type.annual_quota) : '0');
+            setIsPaid(type?.is_paid ?? true);
+            setDeductsBalance(type?.deducts_balance ?? true);
+            setAllowsHalfDay(type?.allows_half_day ?? true);
+            setCarryForward(type?.can_carry_forward ?? false);
+            setCap(type?.carry_forward_cap != null ? String(type.carry_forward_cap) : '');
+            setErrors({});
+        }
+        setOpen(next);
+    };
+
+    const submit = () => {
+        const payload = {
+            name,
+            ...(type ? {} : { code }),
+            annual_quota: Number(quota),
+            is_paid: isPaid,
+            deducts_balance: deductsBalance,
+            allows_half_day: allowsHalfDay,
+            can_carry_forward: carryForward,
+            carry_forward_cap: carryForward && cap !== '' ? Number(cap) : null,
+        };
+        const options = {
+            preserveScroll: true,
+            onError: (e: Record<string, string>) => setErrors(e),
+            onSuccess: () => setOpen(false),
+        };
+        if (type) {
+            router.put(route('hrm.leave.types.update', type.id), payload, options);
+        } else {
+            router.post(route('hrm.leave.types.store'), payload, options);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogTrigger asChild>
+                {type ? (
+                    <Button size="sm" variant="outline">
+                        Edit
+                    </Button>
+                ) : (
+                    <Button size="sm">New leave type</Button>
+                )}
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{type ? `Edit ${type.name}` : 'New leave type'}</DialogTitle>
+                    <DialogDescription>
+                        These rules apply from the next request and the next quota grant; days already taken or granted keep the terms they were
+                        recorded under.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4">
+                    <div className={type ? 'grid gap-2' : 'grid gap-4 sm:grid-cols-2'}>
+                        <div className="grid gap-2">
+                            <Label htmlFor="lt_name">Name</Label>
+                            <Input id="lt_name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Study Leave" />
+                            {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
+                        </div>
+                        {!type && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="lt_code">Code</Label>
+                                <Input id="lt_code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. study" />
+                                <p className="text-muted-foreground text-xs">Lowercase, permanent once created.</p>
+                                {errors.code && <p className="text-destructive text-xs">{errors.code}</p>}
+                            </div>
+                        )}
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="lt_quota">Annual quota (days)</Label>
+                        <Input id="lt_quota" type="number" min="0" step="0.5" value={quota} onChange={(e) => setQuota(e.target.value)} />
+                        {errors.annual_quota && <p className="text-destructive text-xs">{errors.annual_quota}</p>}
+                    </div>
+                    <div className="grid gap-2">
+                        <label className="flex items-center gap-2 text-sm">
+                            <Checkbox checked={isPaid} onCheckedChange={(v) => setIsPaid(v === true)} />
+                            Paid leave
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                            <Checkbox checked={deductsBalance} onCheckedChange={(v) => setDeductsBalance(v === true)} />
+                            Draws on a balance
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                            <Checkbox checked={allowsHalfDay} onCheckedChange={(v) => setAllowsHalfDay(v === true)} />
+                            Half days allowed
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                            <Checkbox checked={carryForward} onCheckedChange={(v) => setCarryForward(v === true)} />
+                            Unused balance carries into next year
+                        </label>
+                    </div>
+                    {carryForward && (
+                        <div className="grid gap-2">
+                            <Label htmlFor="lt_cap">Carry-forward cap (days)</Label>
+                            <Input
+                                id="lt_cap"
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                value={cap}
+                                onChange={(e) => setCap(e.target.value)}
+                                placeholder={`Empty = twice the quota (${Number(quota || 0) * 2})`}
+                            />
+                            {errors.carry_forward_cap && <p className="text-destructive text-xs">{errors.carry_forward_cap}</p>}
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button onClick={submit} disabled={name.trim() === '' || (!type && code.trim() === '')}>
+                        {type ? 'Save' : 'Create'}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -345,6 +519,7 @@ export default function LeaveIndex({
     ledger,
     employees,
     leave_types,
+    type_settings = [],
     portions = [],
     movement_types = [],
 }: Props) {
@@ -444,7 +619,7 @@ export default function LeaveIndex({
                             ) : (
                                 <table className="w-full min-w-[60rem] text-sm">
                                     <thead>
-                                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                             <th className="py-1.5">Employee</th>
                                             <th className="py-1.5">Type</th>
                                             <th className="py-1.5">Dates</th>
@@ -467,12 +642,18 @@ export default function LeaveIndex({
                                                 </td>
                                                 <td className="py-1.5">
                                                     {r.days}
-                                                    {r.unpaid_days > 0 && <span className="text-destructive ml-1 text-xs">({r.unpaid_days} unpaid)</span>}
+                                                    {r.unpaid_days > 0 && (
+                                                        <span className="text-destructive ml-1 text-xs">({r.unpaid_days} unpaid)</span>
+                                                    )}
                                                 </td>
                                                 <td className="text-muted-foreground py-1.5 text-xs">{r.reason}</td>
                                                 <td className="py-1.5">
-                                                    <Badge variant={r.is_applied ? 'default' : 'secondary'}>{r.is_applied ? 'Approved' : r.status}</Badge>
-                                                    {r.stage && !r.is_applied && <span className="text-muted-foreground ml-2 text-xs">at {r.stage}</span>}
+                                                    <Badge variant={r.is_applied ? 'default' : 'secondary'}>
+                                                        {r.is_applied ? 'Approved' : r.status}
+                                                    </Badge>
+                                                    {r.stage && !r.is_applied && (
+                                                        <span className="text-muted-foreground ml-2 text-xs">at {r.stage}</span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
@@ -491,7 +672,9 @@ export default function LeaveIndex({
                                                 <td className="text-muted-foreground py-1.5">{m.summary}</td>
                                                 <td className="text-muted-foreground py-1.5 text-xs">{m.reason}</td>
                                                 <td className="py-1.5">
-                                                    <Badge variant={m.is_applied ? 'default' : 'secondary'}>{m.is_applied ? 'Approved' : m.status}</Badge>
+                                                    <Badge variant={m.is_applied ? 'default' : 'secondary'}>
+                                                        {m.is_applied ? 'Approved' : m.status}
+                                                    </Badge>
                                                 </td>
                                             </tr>
                                         ))}
@@ -500,28 +683,73 @@ export default function LeaveIndex({
                             ))}
 
                         {section === 'types' && (
-                            <table className="w-full min-w-[44rem] text-sm">
-                                <thead>
-                                    <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
-                                        <th className="py-1.5">Type</th>
-                                        <th className="py-1.5">Annual quota</th>
-                                        <th className="py-1.5">Draws on balance</th>
-                                        <th className="py-1.5">Carries forward</th>
-                                        <th className="py-1.5">Encashable</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {leave_types.map((t) => (
-                                        <tr key={t.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                            <td className="py-1.5">{t.name}</td>
-                                            <td className="text-muted-foreground py-1.5">{t.annual_quota}</td>
-                                            <td className="text-muted-foreground py-1.5">{t.deducts_balance ? 'Yes' : 'No'}</td>
-                                            <td className="text-muted-foreground py-1.5">{t.can_carry_forward ? `Up to ${t.carry_forward_cap}` : 'No'}</td>
-                                            <td className="text-muted-foreground py-1.5">{t.can_encash ? 'On separation' : 'No'}</td>
+                            <div className="flex flex-col gap-3">
+                                <div className="flex justify-end">
+                                    <LeaveTypeDialog />
+                                </div>
+                                <table className="w-full min-w-[56rem] text-sm">
+                                    <thead>
+                                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
+                                            <th className="py-1.5">Type</th>
+                                            <th className="py-1.5">Annual quota</th>
+                                            <th className="py-1.5">Paid</th>
+                                            <th className="py-1.5">Draws on balance</th>
+                                            <th className="py-1.5">Half days</th>
+                                            <th className="py-1.5">Carries forward</th>
+                                            <th className="py-1.5">Encashable</th>
+                                            <th className="py-1.5"></th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {type_settings.map((t) => (
+                                            <tr
+                                                key={t.id}
+                                                className={`border-sidebar-border/70 dark:border-sidebar-border border-b ${t.is_active ? '' : 'opacity-50'}`}
+                                            >
+                                                <td className="py-1.5">
+                                                    {t.name}
+                                                    <span className="text-muted-foreground ml-2 text-xs">{t.code}</span>
+                                                    {!t.is_active && (
+                                                        <Badge variant="secondary" className="ml-2">
+                                                            Inactive
+                                                        </Badge>
+                                                    )}
+                                                </td>
+                                                <td className="text-muted-foreground py-1.5">{t.annual_quota}</td>
+                                                <td className="text-muted-foreground py-1.5">{t.is_paid ? 'Yes' : 'No'}</td>
+                                                <td className="text-muted-foreground py-1.5">{t.deducts_balance ? 'Yes' : 'No'}</td>
+                                                <td className="text-muted-foreground py-1.5">{t.allows_half_day ? 'Yes' : 'No'}</td>
+                                                <td className="text-muted-foreground py-1.5">
+                                                    {t.can_carry_forward ? `Up to ${t.effective_cap}` : 'No'}
+                                                </td>
+                                                <td className="text-muted-foreground py-1.5">{t.can_encash ? 'On separation' : 'No'}</td>
+                                                <td className="py-1.5">
+                                                    <div className="flex justify-end gap-2">
+                                                        <LeaveTypeDialog type={t} />
+                                                        {/* The unpaid fallback and the compensatory credit
+                                                            are engine destinations - no off switch. */}
+                                                        {!t.is_system && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() =>
+                                                                    router.patch(
+                                                                        route('hrm.leave.types.toggle-active', t.id),
+                                                                        {},
+                                                                        { preserveScroll: true },
+                                                                    )
+                                                                }
+                                                            >
+                                                                {t.is_active ? 'Deactivate' : 'Reactivate'}
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
 
                         {section === 'ledger' && (
