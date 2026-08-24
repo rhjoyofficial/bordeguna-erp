@@ -3,6 +3,7 @@
 use App\Modules\Hrm\Http\Controllers\AttendanceClockController;
 use App\Modules\Hrm\Http\Controllers\AttendanceCorrectionController;
 use App\Modules\Hrm\Http\Controllers\AttendanceImportController;
+use App\Modules\Hrm\Http\Controllers\AttendancePolicyController;
 use App\Modules\Hrm\Http\Controllers\AttendancePunchController;
 use App\Modules\Hrm\Http\Controllers\AttendanceSummaryController;
 use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
@@ -108,6 +109,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('attendance/corrections', [AttendanceCorrectionController::class, 'store'])->name('attendance.corrections.store');
     Route::post('attendance/corrections/{correction}/approve', [AttendanceCorrectionController::class, 'approve'])->name('attendance.corrections.approve');
     Route::post('attendance/corrections/{correction}/reject', [AttendanceCorrectionController::class, 'reject'])->name('attendance.corrections.reject');
+
+    // Attendance policy as data (POL-03/12). A revision closes the current
+    // version and opens the next from a chosen date - never an edit in place,
+    // so a finalised day keeps the version that judged it.
+    Route::get('policies', [AttendancePolicyController::class, 'index'])->name('policies.index');
+    Route::post('policies/{policy}/revise', [AttendancePolicyController::class, 'revise'])->name('policies.revise');
 
     // Period locks (COR-05) — the deadline COR-02 hangs on.
     Route::post('attendance/period-locks', [AttendanceCorrectionController::class, 'lock'])->name('attendance.locks.store');

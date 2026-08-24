@@ -9,7 +9,6 @@ import {
     BookOpen,
     Boxes,
     CalendarCheck,
-    CalendarClock,
     CalendarDays,
     CalendarRange,
     ChartColumn,
@@ -41,6 +40,7 @@ import {
     Scale,
     ShieldCheck,
     ShoppingCart,
+    SlidersHorizontal,
     Store,
     Tag,
     Tags,
@@ -243,6 +243,9 @@ export function AppSidebar() {
                                     { title: 'Punch log', url: '/hrm/attendance', icon: Fingerprint },
                                     { title: 'Corrections', url: '/hrm/attendance/corrections', icon: PenSquare },
                                     { title: 'Attendance import', url: '/hrm/attendance/import', icon: FileUp },
+                                    // Joy, 24 Aug 2026: the POL-03 ladders are
+                                    // adjustable data now, not seeded constants.
+                                    { title: 'Attendance policy', url: '/hrm/policies', icon: SlidersHorizontal },
                                 ]
                               : []),
                           ...(canManageLeave ? [{ title: 'Leave & movement', url: '/hrm/leave', icon: Palmtree }] : []),
