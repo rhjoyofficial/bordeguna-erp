@@ -7,6 +7,7 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
+use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordCounterSale;
@@ -29,14 +30,27 @@ use Inertia\Response;
  */
 class CounterSaleController extends Controller
 {
-    public function create(): Response
+    public function create(ResolveSellingPrice $resolver): Response
     {
+        $products = Product::query()->where('is_active', true)->stocked()
+            ->orderBy('name')->get(['id', 'name', 'sku', 'category_id']);
+
         return Inertia::render('sales/counter/create', [
             'warehouses' => Warehouse::query()->where('is_active', true)
                 ->orderByDesc('is_default')->orderBy('name')
                 ->get(['id', 'name', 'code', 'is_default']),
-            'products' => Product::query()->where('is_active', true)->stocked()
-                ->orderBy('name')->get(['id', 'name', 'sku']),
+            'products' => $products,
+            // Only categories the grid actually shows - a filter chip that can
+            // never match anything is furniture.
+            'categories' => Category::query()
+                ->whereIn('id', $products->pluck('category_id')->filter()->unique())
+                ->orderBy('name')->get(['id', 'name']),
+            // What the walk-in pays today, on every card, answered by the SAME
+            // resolver the sale uses (one query for the whole grid). Display
+            // only: the cart re-resolves per customer and quantity, so a card
+            // is a shelf label, never the till.
+            'cardPrices' => collect($resolver->findMany($products, Customer::walkIn()))
+                ->map(fn ($resolved) => (float) $resolved->unitPrice),
             'customers' => Customer::query()->active()->orderBy('name')
                 ->get(['id', 'name', 'code', 'is_system', 'price_group_id']),
             'moneyAccounts' => MoneyAccount::query()->where('is_active', true)

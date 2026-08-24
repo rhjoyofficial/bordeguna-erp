@@ -361,3 +361,60 @@ it('never resolves a price belonging to another business', function () {
 
     expect($this->resolver->find($this->product))->toBeNull();
 });
+
+// ⚠ findMany feeds the counter's card grid. Its guarantee is not a price -
+// it is AGREEMENT: whatever find() answers one product at a time, findMany()
+// must answer for the whole catalogue, absences included, because a card
+// showing a different number than the cart is a customer arguing at the till.
+it('answers findMany exactly as find, product by product, absences included', function () {
+    $unit = UnitOfMeasure::first();
+    $ghee = Product::create([
+        'business_id' => $this->business->id,
+        'unit_of_measure_id' => $unit->id,
+        'sku' => 'SKU-GHEE', 'name' => 'Ghee 250g',
+        'type' => ProductType::FinishedGood,
+    ]);
+    $unpriced = Product::create([
+        'business_id' => $this->business->id,
+        'unit_of_measure_id' => $unit->id,
+        'sku' => 'SKU-NEW', 'name' => 'Unpriced Jar',
+        'type' => ProductType::FinishedGood,
+    ]);
+
+    ($this->price)(['unit_price' => '850']);
+    ($this->price)(['unit_price' => '800', 'price_group_id' => $this->groups['RETAIL']->id]);
+    ProductPrice::create([
+        'business_id' => $this->business->id,
+        'product_id' => $ghee->id,
+        'unit_price' => '1200',
+        'effective_from' => '2026-01-01',
+    ]);
+
+    $retailCustomer = Customer::create([
+        'business_id' => $this->business->id,
+        'name' => 'Walk-in-ish',
+        'type' => CustomerType::Retail,
+        'price_group_id' => $this->groups['RETAIL']->id,
+    ]);
+
+    $products = collect([$this->product, $ghee, $unpriced]);
+
+    foreach ([null, $retailCustomer] as $customer) {
+        $many = $this->resolver->findMany($products, $customer);
+
+        foreach ($products as $product) {
+            $single = $this->resolver->find($product, $customer);
+
+            expect(array_key_exists($product->id, $many))->toBe($single !== null);
+
+            if ($single !== null) {
+                expect($many[$product->id]->unitPrice)->toBe($single->unitPrice);
+            }
+        }
+    }
+
+    // The two customers really do see different numbers on the first product,
+    // so the agreement above compared something capable of disagreeing.
+    expect($this->resolver->findMany($products)[$this->product->id]->unitPrice)->toBe('850.0000')
+        ->and($this->resolver->findMany($products, $retailCustomer)[$this->product->id]->unitPrice)->toBe('800.0000');
+});

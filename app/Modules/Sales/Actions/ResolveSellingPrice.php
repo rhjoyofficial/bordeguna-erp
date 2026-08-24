@@ -55,16 +55,52 @@ class ResolveSellingPrice
         string $quantity = '1',
         mixed $on = null,
     ): ?ResolvedPrice {
-        $date = $this->asDate($on);
-        $wanted = $this->scale($quantity);
-
         $candidates = ProductPrice::query()
             ->where('product_id', $product->id)
-            ->inForceOn($date)
-            ->get()
-            ->filter(fn (ProductPrice $rule) => $this->applies($rule, $customer, $wanted));
+            ->inForceOn($this->asDate($on))
+            ->get();
 
-        if ($candidates->isEmpty()) {
+        return $this->winnerAmong($candidates, $customer, $quantity);
+    }
+
+    /**
+     * The same decision as find(), answered for a whole catalogue in ONE query
+     * - the counter's product grid needs a price on every card, and 150 cards
+     * must not mean 150 queries.
+     *
+     * ⚠ Not a second engine: the rules load differently, but the winner is
+     * picked by the same winnerAmong() every single-product resolve uses, so
+     * the card and the cart cannot disagree by construction.
+     *
+     * @param  \Illuminate\Support\Collection<int, Product>|\Illuminate\Database\Eloquent\Collection<int, Product>  $products
+     * @return array<int, ResolvedPrice> keyed by product id; a product with no
+     *                                   price in force is simply absent
+     */
+    public function findMany($products, ?Customer $customer = null, string $quantity = '1', mixed $on = null): array
+    {
+        $rules = ProductPrice::query()
+            ->whereIn('product_id', $products->pluck('id'))
+            ->inForceOn($this->asDate($on))
+            ->get()
+            ->groupBy('product_id');
+
+        return $products
+            ->mapWithKeys(fn (Product $product) => [
+                $product->id => $this->winnerAmong($rules->get($product->id, collect()), $customer, $quantity),
+            ])
+            ->filter()
+            ->all();
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, ProductPrice>  $candidates
+     */
+    private function winnerAmong($candidates, ?Customer $customer, string $quantity): ?ResolvedPrice
+    {
+        $wanted = $this->scale($quantity);
+        $applicable = $candidates->filter(fn (ProductPrice $rule) => $this->applies($rule, $customer, $wanted));
+
+        if ($applicable->isEmpty()) {
             return null;
         }
 
@@ -72,7 +108,7 @@ class ResolveSellingPrice
         // ordering key is derived - specificity is a match over two nullable
         // columns - and expressing it as a CASE expression would put the rule in
         // two places, one of which is a string no test can reach.
-        $winner = $candidates
+        $winner = $applicable
             ->sort(fn (ProductPrice $a, ProductPrice $b) => $this->rank($a) <=> $this->rank($b))
             ->last();
 
