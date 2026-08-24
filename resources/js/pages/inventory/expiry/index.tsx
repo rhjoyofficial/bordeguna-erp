@@ -38,18 +38,20 @@ export default function ExpiryIndex({ expired, expiring, soon_days }: { expired:
                     <h2 className="text-lg font-medium">Stock expiry</h2>
                     <p className="text-muted-foreground text-xs">
                         Expired stock is never sold (the FIFO picker refuses it by date), and the nightly job proposes a write-off for each expired
-                        batch on <Link href="/inventory/stock" className="text-primary hover:underline">the stock screen</Link>.
+                        batch on{' '}
+                        <Link href="/inventory/stock" className="text-primary hover:underline">
+                            the stock screen
+                        </Link>
+                        .
                     </p>
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border">
                     <div className="border-border flex gap-1 border-b px-3 pt-2">
-                        {(
-                            [
-                                { key: 'expired' as const, label: `Expired (${expired.length})` },
-                                { key: 'expiring' as const, label: `Expiring within ${soon_days} days (${expiring.length})` },
-                            ]
-                        ).map((t) => (
+                        {[
+                            { key: 'expired' as const, label: `Expired (${expired.length})` },
+                            { key: 'expiring' as const, label: `Expiring within ${soon_days} days (${expiring.length})` },
+                        ].map((t) => (
                             <button
                                 key={t.key}
                                 type="button"

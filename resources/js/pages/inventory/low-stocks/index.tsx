@@ -39,12 +39,10 @@ export default function LowStocksIndex({ low, out, without_threshold }: { low: R
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border">
                     <div className="border-border flex gap-1 border-b px-3 pt-2">
-                        {(
-                            [
-                                { key: 'low' as const, label: `Low stock (${low.length})` },
-                                { key: 'out' as const, label: `Out of stock (${out.length})` },
-                            ]
-                        ).map((t) => (
+                        {[
+                            { key: 'low' as const, label: `Low stock (${low.length})` },
+                            { key: 'out' as const, label: `Out of stock (${out.length})` },
+                        ].map((t) => (
                             <button
                                 key={t.key}
                                 type="button"

@@ -75,36 +75,36 @@ export default function BrandsIndex({ brands }: { brands: Brand[] }) {
                 </div>
 
                 <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+                    <div className="grid gap-2">
+                        <Label htmlFor="name">{editing ? `Editing ${editing.name}` : 'New brand'}</Label>
+                        <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. LaLaDia" />
+                        <InputError message={errors.name} />
+                    </div>
+                    {!editing && (
                         <div className="grid gap-2">
-                            <Label htmlFor="name">{editing ? `Editing ${editing.name}` : 'New brand'}</Label>
-                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. LaLaDia" />
-                            <InputError message={errors.name} />
+                            <Label htmlFor="code">SKU code</Label>
+                            <Input
+                                id="code"
+                                value={data.code}
+                                onChange={(e) => setData('code', e.target.value.toUpperCase())}
+                                placeholder="e.g. LLD"
+                                className="w-32 font-mono"
+                            />
+                            <InputError message={errors.code} />
                         </div>
-                        {!editing && (
-                            <div className="grid gap-2">
-                                <Label htmlFor="code">SKU code</Label>
-                                <Input
-                                    id="code"
-                                    value={data.code}
-                                    onChange={(e) => setData('code', e.target.value.toUpperCase())}
-                                    placeholder="e.g. LLD"
-                                    className="w-32 font-mono"
-                                />
-                                <InputError message={errors.code} />
-                            </div>
-                        )}
-                        <div className="grid gap-2">
-                            <Label htmlFor="note">Note</Label>
-                            <Input id="note" value={data.note} onChange={(e) => setData('note', e.target.value)} placeholder="optional" />
-                            <InputError message={errors.note} />
-                        </div>
-                        <Button disabled={processing}>{editing ? 'Save' : 'Add'}</Button>
-                        {editing && (
-                            <Button type="button" variant="ghost" onClick={cancel}>
-                                Cancel
-                            </Button>
-                        )}
-                    </form>
+                    )}
+                    <div className="grid gap-2">
+                        <Label htmlFor="note">Note</Label>
+                        <Input id="note" value={data.note} onChange={(e) => setData('note', e.target.value)} placeholder="optional" />
+                        <InputError message={errors.note} />
+                    </div>
+                    <Button disabled={processing}>{editing ? 'Save' : 'Add'}</Button>
+                    {editing && (
+                        <Button type="button" variant="ghost" onClick={cancel}>
+                            Cancel
+                        </Button>
+                    )}
+                </form>
 
                 <table className="w-full text-sm">
                     <thead>
