@@ -559,3 +559,45 @@ it('records a movement straight from the screen', function () {
 
     expect(\App\Modules\Hrm\Models\Movement::where('employee_id', $this->employee->id)->count())->toBe(1);
 });
+
+// =============================================================================
+// ⚠⚠ "Draws on no balance" is not "unpaid". Until 24 Aug 2026 the LEV-07 split
+// marked EVERY non-balance type entirely unpaid, so a Special Leave day the
+// boss granted as paid - and a maternity day - carried a Leave Without Pay
+// deduction into payroll. Found live, the day Joy granted exactly such a day.
+// =============================================================================
+
+it('charges nothing and deducts nothing for a paid type that draws on no balance', function () {
+    $special = LeaveType::where('code', 'special')->first();
+    $special->update(['is_active' => true]);
+
+    $request = app(RequestLeave::class)->handle(
+        $this->employee, $special, '2026-08-10', '2026-08-10',
+        LeaveDayPortion::FullDay, 'Bereavement - paid day granted by the office', $this->hr,
+    );
+
+    expect((float) $request->unpaid_days)->toBe(0.0)
+        ->and((float) $request->days)->toBe(1.0);
+});
+
+it('treats maternity as paid even though it draws on no balance', function () {
+    $maternity = LeaveType::where('code', 'maternity')->first();
+
+    $request = app(RequestLeave::class)->handle(
+        $this->employee, $maternity, '2026-08-03', '2026-08-05',
+        LeaveDayPortion::FullDay, 'Maternity', $this->hr,
+    );
+
+    expect((float) $request->unpaid_days)->toBe(0.0);
+});
+
+it('still marks the Unpaid type entirely unpaid', function () {
+    $unpaid = LeaveType::where('code', 'unpaid')->first();
+
+    $request = app(RequestLeave::class)->handle(
+        $this->employee, $unpaid, '2026-08-10', '2026-08-10',
+        LeaveDayPortion::FullDay, 'No balance behind it', $this->hr,
+    );
+
+    expect((float) $request->unpaid_days)->toBe(1.0);
+});

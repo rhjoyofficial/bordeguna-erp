@@ -97,15 +97,23 @@ class RequestLeave
 
     /**
      * LEV-07: split the request into what the balance covers and what becomes
-     * unpaid. A type that draws on no balance (Unpaid Leave itself) is entirely
-     * unpaid by definition.
+     * unpaid.
+     *
+     * ⚠⚠ "Draws on no balance" and "unpaid" are two different facts, and this
+     * method conflated them until 24 Aug 2026: every non-balance type was
+     * treated as entirely unpaid, so a Special Leave day the boss granted as
+     * PAID - and a maternity day the law grants as paid - carried a Leave
+     * Without Pay deduction into payroll. Found the day Joy granted exactly
+     * such a day. A non-balance type is now unpaid only when the type itself
+     * says it is (is_paid=false, the Unpaid type); a paid non-balance type
+     * charges no quota and deducts no salary.
      *
      * @return array{0: float, 1: float}
      */
     private function split(Employee $employee, LeaveType $type, Carbon $start, float $days): array
     {
         if (! $type->deducts_balance) {
-            return [0.0, $days];
+            return $type->is_paid ? [0.0, 0.0] : [0.0, $days];
         }
 
         $available = max(0.0, $this->balances->for($employee->id, $type->id, (int) $start->year));
