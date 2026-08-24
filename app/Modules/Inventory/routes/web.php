@@ -29,13 +29,19 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     Route::get('low-stocks', [LowStockController::class, 'index'])->name('low-stocks.index');
     Route::get('expiry', [ExpiryController::class, 'index'])->name('expiry.index');
 
-    // Catalog: anyone in the business can view (needed to record stock movements);
-    // only inventory.catalog.manage may create/edit/deactivate.
-    Route::get('products', [ProductController::class, 'index'])->name('products.index');
-    Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
-    Route::get('brands', [BrandController::class, 'index'])->name('brands.index');
-    Route::get('units', [UnitOfMeasureController::class, 'index'])->name('units.index');
-    Route::get('warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
+    // Catalog viewing WAS open to the whole business ("needed to record stock
+    // movements") - written before the zero-permission Self-service role
+    // existed (24 Aug 2026), which turned "the whole business" into people
+    // meant to reach only their own profile. Now gated with the same
+    // reports.view every stock-recording role already holds; writes keep
+    // their own inventory.catalog.manage gate below.
+    Route::middleware('can:inventory.reports.view')->group(function () {
+        Route::get('products', [ProductController::class, 'index'])->name('products.index');
+        Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
+        Route::get('brands', [BrandController::class, 'index'])->name('brands.index');
+        Route::get('units', [UnitOfMeasureController::class, 'index'])->name('units.index');
+        Route::get('warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
+    });
 
     // C-IMP-4. Importing is a different power from editing one row: replacing
     // three hundred products at once deserves its own permission, and its own
@@ -48,8 +54,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
 
     // ⚠ Export is gated with VIEWING, not importing. Reading out what you can
     // already see on the products screen is not a privileged act, and locking
-    // it would push people back to asking me for a file.
-    Route::get('products/export', [ProductImportController::class, 'export'])->name('products.export');
+    // it would push people back to asking me for a file. "Viewing" now means
+    // the same reports.view gate the products screen itself carries.
+    Route::middleware('can:inventory.reports.view')->group(function () {
+        Route::get('products/export', [ProductImportController::class, 'export'])->name('products.export');
+    });
 
     // ⚠⚠ THE FOURTH UNREACHABLE ENGINE, closed 20 Aug. ProductUnitConversion has
     // been built, tested and deployed since 9 August with no route, no
@@ -105,8 +114,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::delete('warehouses/{warehouse}', [WarehouseController::class, 'destroy'])->name('warehouses.destroy');
     });
 
-    // Stock movements
-    Route::get('stock', [StockController::class, 'index'])->name('stock.index');
+    // Stock movements. Reading the stock book is gated like the catalog above
+    // (same 24 Aug 2026 closure); the write routes keep their own gates.
+    Route::middleware('can:inventory.reports.view')->group(function () {
+        Route::get('stock', [StockController::class, 'index'])->name('stock.index');
+    });
     // ⛔ C-FLOW-5: the generic 'receive stock' and 'record usage' routes are GONE.
     // They moved stock and posted NOTHING, so value entered and left the
     // warehouse without ever reaching the ledger. Stock now arrives through a
@@ -131,7 +143,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     Route::post('stock/adjustments/{adjustment}/approve', [StockController::class, 'approveAdjustment'])->name('stock.adjustments.approve');
     Route::post('stock/adjustments/{adjustment}/reject', [StockController::class, 'rejectAdjustment'])->name('stock.adjustments.reject');
     Route::post('stock/transfers', [StockController::class, 'storeTransfer'])->name('stock.transfers.store');
-    Route::get('stock/transfers', [StockController::class, 'transfersIndex'])->name('stock.transfers.index');
+    Route::middleware('can:inventory.reports.view')->group(function () {
+        Route::get('stock/transfers', [StockController::class, 'transfersIndex'])->name('stock.transfers.index');
+    });
     // authorizes inventory.stock.adjust internally
     Route::post('stock/transfers/{stockTransfer}/receive', [StockController::class, 'receiveTransfer'])->name('stock.transfers.receive');
 

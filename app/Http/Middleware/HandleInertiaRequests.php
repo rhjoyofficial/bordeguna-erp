@@ -125,6 +125,16 @@ class HandleInertiaRequests extends Middleware
             // C-BOM-9. Same rule again, and this file is now the register of
             // how many times it has been needed.
             'canManageBom' => fn () => (bool) $request->user()?->can('inventory.bom.manage'),
+            // ⚠ Inventory and Purchases were the last two ungated sidebar
+            // groups: "anyone in the business can view" was written when
+            // everyone in the business was trusted staff. The Self-service
+            // role (24 Aug 2026, zero permissions) ended that assumption -
+            // Joy's people saw the stock book and the supplier bills from an
+            // account meant to reach only their own profile. Every real role
+            // already holds these view permissions, so nothing changes for
+            // anyone else.
+            'canViewInventory' => fn () => (bool) $request->user()?->can('inventory.reports.view'),
+            'canViewPurchasing' => fn () => (bool) $request->user()?->can('purchasing.reports.view'),
             'canViewSales' => fn () => (bool) $request->user()?->can('sales.reports.view'),
             'canSell' => fn () => (bool) $request->user()?->can('sales.sell'),
             'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),

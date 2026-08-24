@@ -69,6 +69,8 @@ export function AppSidebar() {
         canAccessSalary,
         canManagePayroll,
         canViewAccounting,
+        canViewInventory,
+        canViewPurchasing,
         canViewSales,
         canSell,
         canManagePrices,
@@ -96,46 +98,54 @@ export function AppSidebar() {
                 { title: 'Switch business', url: '/businesses/switch', icon: Repeat },
             ],
         },
-        {
-            label: 'Inventory',
-            items: [
-                { title: 'Inventory', url: '/inventory', icon: Boxes },
-                { title: 'Products', url: '/inventory/products', icon: PackageSearch },
-                { title: 'Stock', url: '/inventory/stock', icon: ClipboardList },
-                // DreamsPOS gaps INV-2/INV-3 (Joy, 24 Aug): what needs
-                // reordering, and which batches are past or near their date.
-                { title: 'Low stocks', url: '/inventory/low-stocks', icon: TrendingDown },
-                { title: 'Stock expiry', url: '/inventory/expiry', icon: Timer },
-                // Manufacturing phase 1: the production run and the report that
-                // notices a drifting yield - shipped WITH their screens in one
-                // commit, the reachability rule this file records.
-                { title: 'Production', url: '/inventory/production-runs', icon: Factory },
-                { title: 'Production yield', url: '/inventory/production-yield', icon: FileBarChart },
-                { title: 'Stock requests', url: '/inventory/stock-requests', icon: ClipboardList },
-                // ⚠⚠ The cutover's one irreversible document, and it had no
-                // link at all until 19 Aug. Gated, because the route is:
-                // opening stock sets the FIFO layers behind every margin.
-                ...(canRecordOpeningStock ? [{ title: 'Opening stock', url: '/inventory/opening-stock', icon: ClipboardCheck }] : []),
-                // C-IMP-7. The whole point of the import screen is that Joy
-                // stops sending files to be loaded for him, so it has to be
-                // findable without being told where it is.
-                ...(canImportCatalogue ? [{ title: 'Import products', url: '/inventory/products/import', icon: Upload }] : []),
-                // C-BOM-9. Route, screen and this line shipped in one commit.
-                // The recipe screen posts nothing - it only decides what a run
-                // suggests - but a template nobody can find saves nobody any
-                // typing.
-                ...(canManageBom ? [{ title: 'Recipes (BOM)', url: '/inventory/bills-of-material', icon: ListTree }] : []),
-                { title: 'Warehouses', url: '/inventory/warehouses', icon: Warehouse },
-                { title: 'Categories', url: '/inventory/categories', icon: Tags },
-                // INV-4: the brands table existed with only a seeder writing
-                // to it - master data Joy could not enter himself.
-                { title: 'Brands', url: '/inventory/brands', icon: Tag },
-                { title: 'Units of measure', url: '/inventory/units', icon: Ruler },
-                // C-IMP-7 again. This one was built on 9 August and had no way
-                // in until 20 August.
-                { title: 'Purchase units', url: '/inventory/unit-conversions', icon: Scale },
-            ],
-        },
+        // ⚠ The last two ungated groups, closed 24 Aug 2026: "open to the
+        // business" was written before the zero-permission Self-service role
+        // existed, and a self-service login could read the stock book and the
+        // supplier bills. Every real role holds the view permissions.
+        ...(canViewInventory
+            ? [
+                  {
+                      label: 'Inventory',
+                      items: [
+                          { title: 'Inventory', url: '/inventory', icon: Boxes },
+                          { title: 'Products', url: '/inventory/products', icon: PackageSearch },
+                          { title: 'Stock', url: '/inventory/stock', icon: ClipboardList },
+                          // DreamsPOS gaps INV-2/INV-3 (Joy, 24 Aug): what needs
+                          // reordering, and which batches are past or near their date.
+                          { title: 'Low stocks', url: '/inventory/low-stocks', icon: TrendingDown },
+                          { title: 'Stock expiry', url: '/inventory/expiry', icon: Timer },
+                          // Manufacturing phase 1: the production run and the report that
+                          // notices a drifting yield - shipped WITH their screens in one
+                          // commit, the reachability rule this file records.
+                          { title: 'Production', url: '/inventory/production-runs', icon: Factory },
+                          { title: 'Production yield', url: '/inventory/production-yield', icon: FileBarChart },
+                          { title: 'Stock requests', url: '/inventory/stock-requests', icon: ClipboardList },
+                          // ⚠⚠ The cutover's one irreversible document, and it had no
+                          // link at all until 19 Aug. Gated, because the route is:
+                          // opening stock sets the FIFO layers behind every margin.
+                          ...(canRecordOpeningStock ? [{ title: 'Opening stock', url: '/inventory/opening-stock', icon: ClipboardCheck }] : []),
+                          // C-IMP-7. The whole point of the import screen is that Joy
+                          // stops sending files to be loaded for him, so it has to be
+                          // findable without being told where it is.
+                          ...(canImportCatalogue ? [{ title: 'Import products', url: '/inventory/products/import', icon: Upload }] : []),
+                          // C-BOM-9. Route, screen and this line shipped in one commit.
+                          // The recipe screen posts nothing - it only decides what a run
+                          // suggests - but a template nobody can find saves nobody any
+                          // typing.
+                          ...(canManageBom ? [{ title: 'Recipes (BOM)', url: '/inventory/bills-of-material', icon: ListTree }] : []),
+                          { title: 'Warehouses', url: '/inventory/warehouses', icon: Warehouse },
+                          { title: 'Categories', url: '/inventory/categories', icon: Tags },
+                          // INV-4: the brands table existed with only a seeder writing
+                          // to it - master data Joy could not enter himself.
+                          { title: 'Brands', url: '/inventory/brands', icon: Tag },
+                          { title: 'Units of measure', url: '/inventory/units', icon: Ruler },
+                          // C-IMP-7 again. This one was built on 9 August and had no way
+                          // in until 20 August.
+                          { title: 'Purchase units', url: '/inventory/unit-conversions', icon: Scale },
+                      ],
+                  },
+              ]
+            : []),
         // ⚠⚠ SALES WAS DEPLOYED AND UNREACHABLE. Every page below was live in
         // production with no link to it anywhere in the application - not in this
         // sidebar and not from any other screen - so the entire revenue side of
@@ -169,22 +179,26 @@ export function AppSidebar() {
                   },
               ]
             : []),
-        {
-            label: 'Purchases',
-            items: [
-                { title: 'Suppliers', url: '/purchasing/suppliers', icon: Truck },
-                { title: 'Purchase orders', url: '/purchasing/purchase-orders', icon: ShoppingCart },
-                { title: 'Bills', url: '/purchasing/bills', icon: ReceiptText },
-                { title: 'Payments', url: '/purchasing/payments', icon: Banknote },
-                { title: 'Credit notes', url: '/purchasing/credit-notes', icon: FileText },
-                // ⚠⚠ Same class of gap as Sales above: RecordExpenseVoucher was
-                // built and tested with no route and no screen, so rent, fuel and
-                // utilities had nowhere to be entered and most of the P&L had no
-                // source at all. Reading the list is open to the business; only
-                // purchasing.expense.record may add one.
-                { title: 'Expenses', url: '/purchasing/expenses', icon: ReceiptText },
-            ],
-        },
+        ...(canViewPurchasing
+            ? [
+                  {
+                      label: 'Purchases',
+                      items: [
+                          { title: 'Suppliers', url: '/purchasing/suppliers', icon: Truck },
+                          { title: 'Purchase orders', url: '/purchasing/purchase-orders', icon: ShoppingCart },
+                          { title: 'Bills', url: '/purchasing/bills', icon: ReceiptText },
+                          { title: 'Payments', url: '/purchasing/payments', icon: Banknote },
+                          { title: 'Credit notes', url: '/purchasing/credit-notes', icon: FileText },
+                          // ⚠⚠ Same class of gap as Sales above: RecordExpenseVoucher was
+                          // built and tested with no route and no screen, so rent, fuel and
+                          // utilities had nowhere to be entered and most of the P&L had no
+                          // source at all. Reading the list is open to the business; only
+                          // purchasing.expense.record may add one.
+                          { title: 'Expenses', url: '/purchasing/expenses', icon: ReceiptText },
+                      ],
+                  },
+              ]
+            : []),
         ...(canViewCrm
             ? [
                   {

@@ -21,11 +21,16 @@ beforeEach(function () {
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
 
-    Permission::firstOrCreate(['name' => 'sales.reports.view', 'guard_name' => 'web']);
-    Permission::firstOrCreate(['name' => 'hrm.employees.manage', 'guard_name' => 'web']);
+    // Since the 24 Aug 2026 closure, even the Products group needs
+    // inventory.reports.view - Staff here models the real Staff role, which
+    // holds it; a zero-permission login is SelfServiceVisibilityTest's job.
+    foreach (['sales.reports.view', 'hrm.employees.manage', 'inventory.reports.view'] as $name) {
+        Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
+    }
     Role::firstOrCreate(['name' => 'Owner', 'business_id' => $this->business->id, 'guard_name' => 'web'])
-        ->givePermissionTo(['sales.reports.view', 'hrm.employees.manage']);
-    Role::firstOrCreate(['name' => 'Staff', 'business_id' => $this->business->id, 'guard_name' => 'web']);
+        ->givePermissionTo(['sales.reports.view', 'hrm.employees.manage', 'inventory.reports.view']);
+    Role::firstOrCreate(['name' => 'Staff', 'business_id' => $this->business->id, 'guard_name' => 'web'])
+        ->givePermissionTo(['inventory.reports.view']);
 
     $this->owner = User::factory()->create();
     $this->owner->businesses()->attach($this->business->id);

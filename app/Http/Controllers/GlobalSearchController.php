@@ -41,19 +41,25 @@ class GlobalSearchController extends Controller
         $user = $request->user();
         $groups = [];
 
-        $products = Product::query()
-            ->where(fn ($w) => $w->where('name', 'like', $like)->orWhere('sku', 'like', $like))
-            ->orderBy('name')
-            ->limit(self::PER_GROUP)
-            ->get(['id', 'name', 'sku'])
-            ->map(fn (Product $p) => [
-                'label' => $p->name,
-                'sub' => $p->sku,
-                'url' => '/inventory/products?search='.urlencode($q),
-            ]);
+        // ⚠ Products and Suppliers were the two ungated groups here - "open to
+        // the business" predates the zero-permission Self-service role
+        // (24 Aug 2026). Each group now wears the permission its destination
+        // screen enforces, so search can never show what a click would refuse.
+        if ($user->can('inventory.reports.view')) {
+            $products = Product::query()
+                ->where(fn ($w) => $w->where('name', 'like', $like)->orWhere('sku', 'like', $like))
+                ->orderBy('name')
+                ->limit(self::PER_GROUP)
+                ->get(['id', 'name', 'sku'])
+                ->map(fn (Product $p) => [
+                    'label' => $p->name,
+                    'sub' => $p->sku,
+                    'url' => '/inventory/products?search='.urlencode($q),
+                ]);
 
-        if ($products->isNotEmpty()) {
-            $groups[] = ['title' => 'Products', 'items' => $products->values()];
+            if ($products->isNotEmpty()) {
+                $groups[] = ['title' => 'Products', 'items' => $products->values()];
+            }
         }
 
         if ($user->can('sales.reports.view')) {
@@ -88,19 +94,21 @@ class GlobalSearchController extends Controller
             }
         }
 
-        $suppliers = Supplier::query()
-            ->where('name', 'like', $like)
-            ->orderBy('name')
-            ->limit(self::PER_GROUP)
-            ->get(['id', 'name'])
-            ->map(fn (Supplier $s) => [
-                'label' => $s->name,
-                'sub' => 'Supplier',
-                'url' => '/purchasing/suppliers?search='.urlencode($q),
-            ]);
+        if ($user->can('purchasing.reports.view')) {
+            $suppliers = Supplier::query()
+                ->where('name', 'like', $like)
+                ->orderBy('name')
+                ->limit(self::PER_GROUP)
+                ->get(['id', 'name'])
+                ->map(fn (Supplier $s) => [
+                    'label' => $s->name,
+                    'sub' => 'Supplier',
+                    'url' => '/purchasing/suppliers?search='.urlencode($q),
+                ]);
 
-        if ($suppliers->isNotEmpty()) {
-            $groups[] = ['title' => 'Suppliers', 'items' => $suppliers->values()];
+            if ($suppliers->isNotEmpty()) {
+                $groups[] = ['title' => 'Suppliers', 'items' => $suppliers->values()];
+            }
         }
 
         if ($user->can('hrm.employees.manage')) {

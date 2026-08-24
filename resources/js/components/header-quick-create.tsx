@@ -15,18 +15,28 @@ type QuickLink = { title: string; url: string; icon: LucideIcon };
  * document does not belong one click from a convenience menu.
  */
 export default function HeaderQuickCreate() {
-    const { canSell, canViewSales, canManageEmployees } = usePage<SharedData>().props;
+    const { canSell, canViewInventory, canViewPurchasing, canViewSales, canManageEmployees } = usePage<SharedData>().props;
 
+    // Every shortcut wears the same permission its destination now enforces
+    // server-side (24 Aug 2026) - an ungated shortcut here was how a
+    // Self-service login still saw Product/Purchase order/Supplier on every
+    // device after the sidebar was gated.
     const links: QuickLink[] = [
         ...(canSell ? [{ title: 'Counter sale', url: '/sales/counter', icon: Store }] : []),
-        { title: 'Product', url: '/inventory/products', icon: PackageSearch },
-        { title: 'Purchase order', url: '/purchasing/purchase-orders', icon: ShoppingCart },
-        { title: 'Expense', url: '/purchasing/expenses', icon: ReceiptText },
+        ...(canViewInventory ? [{ title: 'Product', url: '/inventory/products', icon: PackageSearch }] : []),
+        ...(canViewPurchasing ? [{ title: 'Purchase order', url: '/purchasing/purchase-orders', icon: ShoppingCart }] : []),
+        ...(canViewPurchasing ? [{ title: 'Expense', url: '/purchasing/expenses', icon: ReceiptText }] : []),
         ...(canViewSales ? [{ title: 'Invoice', url: '/sales/invoices/create', icon: FileText }] : []),
         ...(canViewSales ? [{ title: 'Customer', url: '/sales/customers', icon: Contact }] : []),
-        { title: 'Supplier', url: '/purchasing/suppliers', icon: Truck },
+        ...(canViewPurchasing ? [{ title: 'Supplier', url: '/purchasing/suppliers', icon: Truck }] : []),
         ...(canManageEmployees ? [{ title: 'Employee', url: '/hrm/employees/create', icon: Users }] : []),
     ];
+
+    // A Self-service login earns no shortcut at all - an empty "Add New" menu
+    // is a button that opens nothing.
+    if (links.length === 0) {
+        return null;
+    }
 
     return (
         <DropdownMenu>
