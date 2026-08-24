@@ -21,6 +21,7 @@ interface EditableEmployee {
     first_name: string | null;
     last_name: string | null;
     employment_type: string | null;
+    probation_months: number | string | null;
     biometric_enroll_id: string | null;
     personal_email: string | null;
     phone: string | null;
@@ -59,12 +60,34 @@ const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-backg
 type FormData = Omit<EditableEmployee, 'id' | 'employee_code' | 'name'>;
 
 const FIELD_KEYS: (keyof FormData)[] = [
-    'first_name', 'last_name', 'employment_type', 'biometric_enroll_id', 'personal_email', 'phone',
-    'present_address', 'permanent_address', 'national_id', 'birth_certificate_no', 'referred_by',
-    'date_of_birth', 'joining_date', 'confirmation_date', 'contract_end_date',
-    'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship', 'blood_group',
-    'bank_account_name', 'bank_account_number', 'bank_name', 'bank_branch', 'bank_routing_number',
-    'mfs_provider', 'mfs_account_number', 'salary_payment_method',
+    'first_name',
+    'last_name',
+    'employment_type',
+    'probation_months',
+    'biometric_enroll_id',
+    'personal_email',
+    'phone',
+    'present_address',
+    'permanent_address',
+    'national_id',
+    'birth_certificate_no',
+    'referred_by',
+    'date_of_birth',
+    'joining_date',
+    'confirmation_date',
+    'contract_end_date',
+    'emergency_contact_name',
+    'emergency_contact_phone',
+    'emergency_contact_relationship',
+    'blood_group',
+    'bank_account_name',
+    'bank_account_number',
+    'bank_name',
+    'bank_branch',
+    'bank_routing_number',
+    'mfs_provider',
+    'mfs_account_number',
+    'salary_payment_method',
 ];
 
 export default function EmployeeEdit({ employee, employment_types, mfs_providers, payment_methods }: EditProps) {
@@ -81,9 +104,7 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         // Store blanks as null, not empty strings, so absence is unambiguous.
-        transform((payload) =>
-            Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, value === '' ? null : value])),
-        );
+        transform((payload) => Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, value === '' ? null : value])));
         patch(route('hrm.employees.update', employee.id));
     };
 
@@ -101,7 +122,7 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
             <form onSubmit={submit} className="flex max-w-3xl flex-col gap-8 p-4">
                 <div>
                     <h2 className="text-lg font-medium">Edit {employee.name}</h2>
-                    <p className="text-sm text-muted-foreground">{employee.employee_code} · master record</p>
+                    <p className="text-muted-foreground text-sm">{employee.employee_code} · master record</p>
                 </div>
 
                 <section className="grid gap-4">
@@ -125,6 +146,9 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                             </select>
                             <InputError message={errors.employment_type} />
                         </div>
+                        {/* Blank = the 6-month company default; a number only for
+                            the person whose offer letter says otherwise. */}
+                        <Text field="probation_months" label="Probation length in months (blank = 6)" type="number" />
                         {/* The attendance device's Enroll ID - imported punches are
                             matched on this, so an employee without one is invisible
                             to the biometric import. */}
@@ -221,7 +245,7 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                                 ))}
                             </select>
                             <InputError message={errors.salary_payment_method} />
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-muted-foreground text-xs">
                                 Payroll checks the account details this method actually needs, and disbursement groups the payslips by it - cash never
                                 mixes with a bank transfer.
                             </p>

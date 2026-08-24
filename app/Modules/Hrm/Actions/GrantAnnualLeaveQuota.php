@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Actions;
 
+use App\Modules\Hrm\Enums\EmploymentType;
 use App\Modules\Hrm\Enums\LeaveLedgerEntryType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\LeaveLedgerEntry;
@@ -33,6 +34,14 @@ use Illuminate\Support\Facades\Auth;
 class GrantAnnualLeaveQuota
 {
     /**
+     * A probationer's whole annual entitlement (Joy, 24 Aug 2026): sick leave
+     * only, a FLAT 3 days - deliberately NOT pro-rated by joining date, because
+     * pro-rating 3 days hands a new joiner a balance like 1.4 that nobody can
+     * take or explain. Everything else waits for confirmation.
+     */
+    public const PROBATION_SICK_DAYS = 3.0;
+
+    /**
      * @return array{granted: int, skipped: int}
      */
     public function handle(int $year): array
@@ -57,6 +66,55 @@ class GrantAnnualLeaveQuota
         $skipped = 0;
 
         foreach ($employees as $employee) {
+            // On probation: the flat sick grant is the whole entitlement.
+            if ($employee->employment_type === EmploymentType::Probation) {
+                $sick = $types->firstWhere('code', 'sick');
+
+                if ($sick === null) {
+                    continue;
+                }
+
+                $entry = LeaveLedgerEntry::once(
+                    sprintf('grant:%d:%d:%d', $year, $employee->id, $sick->id),
+                    [
+                        'employee_id' => $employee->id,
+                        'leave_type_id' => $sick->id,
+                        'year' => $year,
+                        'entry_type' => LeaveLedgerEntryType::Grant,
+                        'days' => self::PROBATION_SICK_DAYS,
+                        'occurred_on' => Carbon::create($year, 1, 1)->toDateString(),
+                        'note' => sprintf('Probation quota for %d: sick leave only, flat %.1f days.', $year, self::PROBATION_SICK_DAYS),
+                        'created_by' => Auth::id(),
+                    ],
+                );
+
+                $entry === null ? $skipped++ : $granted++;
+
+                continue;
+            }
+
+            // Confirmed DURING this year via the confirm action: their year
+            // came in two pieces - the probation sick grant they already hold,
+            // and the pro-rated permanent entitlements ConfirmEmployee granted
+            // on the day. A re-run of THIS action must not add a third piece:
+            // it would key casual under 'grant:' while the confirm grant sits
+            // under 'confirm:', and the idempotency that protects every other
+            // rerun would wave the duplicate straight through.
+            //
+            // ⚠ Detected by the confirm entries EXISTING, not by the
+            // confirmation_date falling in this year - a historically entered
+            // confirmation date (Musa's 2026-03-01, typed in as master data)
+            // has no confirm entries, and skipping on the date alone would
+            // leave that employee with no grant at all.
+            $confirmedByAction = LeaveLedgerEntry::query()
+                ->where('employee_id', $employee->id)
+                ->where('source_key', 'like', sprintf('confirm:%d:%d:%%', $year, $employee->id))
+                ->exists();
+
+            if ($confirmedByAction) {
+                continue;
+            }
+
             foreach ($types as $type) {
                 $entry = LeaveLedgerEntry::once(
                     sprintf('grant:%d:%d:%d', $year, $employee->id, $type->id),

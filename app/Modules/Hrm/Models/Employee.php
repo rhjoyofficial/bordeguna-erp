@@ -41,6 +41,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         'first_name',
         'last_name',
         'employment_type',
+        'probation_months',
         'status',
         'separation_type',
         'separation_date',
@@ -81,7 +82,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
      * @var list<string>
      */
     public const EDITABLE_FIELDS = [
-        'first_name', 'last_name', 'employment_type', 'biometric_enroll_id',
+        'first_name', 'last_name', 'employment_type', 'probation_months', 'biometric_enroll_id',
         'personal_email', 'phone', 'present_address', 'permanent_address',
         'national_id', 'birth_certificate_no', 'date_of_birth',
         'joining_date', 'confirmation_date', 'contract_end_date',
@@ -95,6 +96,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
     {
         return [
             'employment_type' => EmploymentType::class,
+            'probation_months' => 'integer',
             'status' => EmployeeStatus::class,
             'separation_type' => SeparationType::class,
             'mfs_provider' => MfsProvider::class,
@@ -139,6 +141,34 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
     public function canSeparate(): bool
     {
         return $this->status !== EmployeeStatus::Separated;
+    }
+
+    /**
+     * The company default probation length. A different length for one person
+     * is data on their record (probation_months), never a second constant.
+     */
+    public const DEFAULT_PROBATION_MONTHS = 6;
+
+    public function isOnProbation(): bool
+    {
+        return $this->employment_type === EmploymentType::Probation
+            && $this->status !== EmployeeStatus::Separated;
+    }
+
+    /**
+     * When this employee's probation is due to end: joining date plus their
+     * own probation_months, or the 6-month default. Null when the joining
+     * date is unknown - a due date invented from nothing would only look
+     * authoritative. This is a DUE date; becoming permanent is the explicit
+     * confirm action, which also grants the permanent leave entitlements.
+     */
+    public function probationDueOn(): ?Carbon
+    {
+        if ($this->joining_date === null) {
+            return null;
+        }
+
+        return $this->joining_date->copy()->addMonthsNoOverflow($this->probation_months ?? self::DEFAULT_PROBATION_MONTHS);
     }
 
     public function user(): BelongsTo
@@ -216,6 +246,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         'first_name' => 'First name',
         'last_name' => 'Last name',
         'employment_type' => 'Employment type',
+        'probation_months' => 'Probation length (months)',
         'biometric_enroll_id' => 'Biometric enroll ID',
         'personal_email' => 'Personal email',
         'phone' => 'Phone',
@@ -253,6 +284,9 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'employment_type' => ['required', new Enum(EmploymentType::class)],
+            // Joy, 24 Aug 2026: probation is 6 months by default but "can vary
+            // of employees sometimes" - blank means the default.
+            'probation_months' => ['nullable', 'integer', 'min:1', 'max:24'],
             // The biometric device's Enroll ID (ATT-02). Unique across the whole
             // employee master: two people sharing one enroll ID would silently
             // merge their imported attendance.

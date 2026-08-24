@@ -95,6 +95,8 @@ interface EmployeeDetail {
 interface ShowProps {
     employee: EmployeeDetail;
     transitionable_statuses: Option[];
+    can_confirm: boolean;
+    probation_due: string | null;
     can_separate: boolean;
     separation_types: Option[];
     can_transfer: boolean;
@@ -117,7 +119,7 @@ const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-backg
 function Field({ label, value }: { label: string; value: string | null }) {
     return (
         <div>
-            <dt className="text-xs text-muted-foreground">{label}</dt>
+            <dt className="text-muted-foreground text-xs">{label}</dt>
             <dd className="text-sm">{value ?? '-'}</dd>
         </div>
     );
@@ -195,6 +197,53 @@ function ProfilePhoto({ employeeId, photoUrl, name }: { employeeId: number; phot
                 )}
             </div>
         </div>
+    );
+}
+
+/**
+ * Ends probation. One action on the server flips the type to permanent AND
+ * grants this year's pro-rated leave entitlements - the dialog says so,
+ * because a button that quietly moves leave balances is a support call.
+ */
+function ConfirmDialog({ employeeId, name, probationDue }: { employeeId: number; name: string; probationDue: string | null }) {
+    const [open, setOpen] = useState(false);
+    const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+
+    const submit = () => {
+        router.post(
+            route('hrm.employees.confirm', employeeId),
+            { confirmation_date: date },
+            { preserveScroll: true, onSuccess: () => setOpen(false) },
+        );
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm">Confirm as permanent</Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Confirm {name} as permanent</DialogTitle>
+                    <DialogDescription>
+                        Ends the probation{probationDue ? ` (due ${probationDue})` : ''} and grants this year's permanent leave from the confirmation
+                        date: casual pro-rata, and sick topped up from the probation 3 days. Balances already used stay used.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-2">
+                    <Label htmlFor="confirmation_date">Confirmation date</Label>
+                    <Input id="confirmation_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button onClick={submit} disabled={date === ''}>
+                        Confirm
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -363,7 +412,13 @@ function TransferDialog({
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="section_id">Section</Label>
-                            <select id="section_id" className={selectClass} value={sectionId} onChange={(e) => setSectionId(e.target.value)} disabled={departmentId === ''}>
+                            <select
+                                id="section_id"
+                                className={selectClass}
+                                value={sectionId}
+                                onChange={(e) => setSectionId(e.target.value)}
+                                disabled={departmentId === ''}
+                            >
                                 <option value="">- None -</option>
                                 {sections.map((section) => (
                                     <option key={section.id} value={section.id}>
@@ -374,7 +429,12 @@ function TransferDialog({
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="designation_id">Designation</Label>
-                            <select id="designation_id" className={selectClass} value={designationId} onChange={(e) => setDesignationId(e.target.value)}>
+                            <select
+                                id="designation_id"
+                                className={selectClass}
+                                value={designationId}
+                                onChange={(e) => setDesignationId(e.target.value)}
+                            >
                                 <option value="">- None -</option>
                                 {designations.map((designation) => (
                                     <option key={designation.id} value={designation.id}>
@@ -465,12 +525,7 @@ function UploadDocumentDialog({ employeeId, documentTypes }: { employeeId: numbe
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="file">File</Label>
-                        <Input
-                            id="file"
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png,.webp"
-                            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                        />
+                        <Input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="expires_at">Expiry date (optional)</Label>
@@ -501,11 +556,11 @@ function DocumentsCard({ employeeId, documents, documentTypes }: { employeeId: n
                 <UploadDocumentDialog employeeId={employeeId} documentTypes={documentTypes} />
             </div>
             {documents.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No documents yet.</p>
+                <p className="text-muted-foreground text-sm">No documents yet.</p>
             ) : (
                 <table className="w-full min-w-[42rem] text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">Type</th>
                             <th className="py-2">File</th>
                             <th className="py-2">Expiry</th>
@@ -521,9 +576,9 @@ function DocumentsCard({ employeeId, documents, documentTypes }: { employeeId: n
                                     <a href={document.url} target="_blank" rel="noopener noreferrer" className="text-primary underline">
                                         {document.original_name}
                                     </a>
-                                    <span className="ml-2 text-xs text-muted-foreground">{formatBytes(document.size)}</span>
+                                    <span className="text-muted-foreground ml-2 text-xs">{formatBytes(document.size)}</span>
                                 </td>
-                                <td className="py-2 text-muted-foreground">
+                                <td className="text-muted-foreground py-2">
                                     {document.expires_at ?? '-'}
                                     {document.is_expired && (
                                         <Badge variant="destructive" className="ml-2">
@@ -531,7 +586,7 @@ function DocumentsCard({ employeeId, documents, documentTypes }: { employeeId: n
                                         </Badge>
                                     )}
                                 </td>
-                                <td className="py-2 text-muted-foreground">{document.uploaded_by ?? '-'}</td>
+                                <td className="text-muted-foreground py-2">{document.uploaded_by ?? '-'}</td>
                                 <td className="py-2 text-right">
                                     <Button variant="ghost" size="sm" onClick={() => remove(document)}>
                                         Remove
@@ -549,6 +604,8 @@ function DocumentsCard({ employeeId, documents, documentTypes }: { employeeId: n
 export default function EmployeeShow({
     employee,
     transitionable_statuses,
+    can_confirm,
+    probation_due,
     can_separate,
     separation_types,
     can_transfer,
@@ -573,12 +630,10 @@ export default function EmployeeShow({
                         <ProfilePhoto employeeId={employee.id} photoUrl={employee.photo_url} name={employee.name} />
                         <div>
                             <h2 className="text-lg font-medium">{employee.name}</h2>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-muted-foreground text-sm">
                                 {employee.employee_code} · {employee.employment_type}
                             </p>
-                            {employee.referred_by && (
-                                <p className="text-xs text-muted-foreground">Referred by {employee.referred_by}</p>
-                            )}
+                            {employee.referred_by && <p className="text-muted-foreground text-xs">Referred by {employee.referred_by}</p>}
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -595,6 +650,7 @@ export default function EmployeeShow({
                                 {target.value === 'active' ? 'Set active' : `Set ${target.label.toLowerCase()}`}
                             </Button>
                         ))}
+                        {can_confirm && <ConfirmDialog employeeId={employee.id} name={employee.name} probationDue={probation_due} />}
                         <Button variant="outline" size="sm" asChild>
                             <Link href={route('hrm.employees.edit', employee.id)}>Edit</Link>
                         </Button>
@@ -606,8 +662,8 @@ export default function EmployeeShow({
                 </div>
 
                 {employee.status === 'separated' && (
-                    <div className="border-destructive/40 rounded-xl border bg-destructive/5 p-4">
-                        <h3 className="mb-3 text-sm font-medium text-destructive">Separation</h3>
+                    <div className="border-destructive/40 bg-destructive/5 rounded-xl border p-4">
+                        <h3 className="text-destructive mb-3 text-sm font-medium">Separation</h3>
                         <dl className="grid gap-4 sm:grid-cols-3">
                             <Field label="Type" value={employee.separation_type} />
                             <Field label="Last working date" value={employee.separation_date} />
@@ -659,7 +715,7 @@ export default function EmployeeShow({
                     <h3 className="mb-3 text-sm font-medium">Assignment history</h3>
                     <table className="w-full min-w-[46rem] text-sm">
                         <thead>
-                            <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                            <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                 <th className="py-2">Office</th>
                                 <th className="py-2">Department</th>
                                 <th className="py-2">Section</th>
@@ -674,14 +730,14 @@ export default function EmployeeShow({
                                 <tr key={assignment.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                     <td className="py-2">
                                         {assignment.office ?? '-'}
-                                        {assignment.is_primary && <span className="ml-2 text-xs text-muted-foreground">(primary)</span>}
+                                        {assignment.is_primary && <span className="text-muted-foreground ml-2 text-xs">(primary)</span>}
                                     </td>
-                                    <td className="py-2 text-muted-foreground">{assignment.department ?? '-'}</td>
-                                    <td className="py-2 text-muted-foreground">{assignment.section ?? '-'}</td>
-                                    <td className="py-2 text-muted-foreground">{assignment.designation ?? '-'}</td>
-                                    <td className="py-2 text-muted-foreground">{assignment.supervisor ?? '-'}</td>
-                                    <td className="py-2 text-muted-foreground">{assignment.effective_from ?? '-'}</td>
-                                    <td className="py-2 text-muted-foreground">{assignment.effective_to ?? 'Current'}</td>
+                                    <td className="text-muted-foreground py-2">{assignment.department ?? '-'}</td>
+                                    <td className="text-muted-foreground py-2">{assignment.section ?? '-'}</td>
+                                    <td className="text-muted-foreground py-2">{assignment.designation ?? '-'}</td>
+                                    <td className="text-muted-foreground py-2">{assignment.supervisor ?? '-'}</td>
+                                    <td className="text-muted-foreground py-2">{assignment.effective_from ?? '-'}</td>
+                                    <td className="text-muted-foreground py-2">{assignment.effective_to ?? 'Current'}</td>
                                 </tr>
                             ))}
                         </tbody>

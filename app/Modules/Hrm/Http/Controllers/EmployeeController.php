@@ -11,6 +11,7 @@ use App\Modules\Foundation\Models\Designation;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Models\Section;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Actions\ConfirmEmployee;
 use App\Modules\Hrm\Actions\CreateEmployee;
 use App\Modules\Hrm\Actions\SeparateEmployee;
 use App\Modules\Hrm\Actions\TransferEmployee;
@@ -196,6 +197,9 @@ class EmployeeController extends Controller
             ],
             'transitionable_statuses' => collect($employee->transitionableStatuses())
                 ->map(fn (EmployeeStatus $status) => ['value' => $status->value, 'label' => $status->label()]),
+            // Probation: the confirm button and the due date it argues from.
+            'can_confirm' => $employee->isOnProbation(),
+            'probation_due' => $employee->isOnProbation() ? $employee->probationDueOn()?->toDateString() : null,
             'can_separate' => $employee->canSeparate(),
             'separation_types' => collect(SeparationType::cases())
                 ->map(fn (SeparationType $type) => ['value' => $type->value, 'label' => $type->label()]),
@@ -288,6 +292,29 @@ class EmployeeController extends Controller
         $employee->update(['status' => $data['status']]);
 
         return back()->with('success', 'Employee status updated.');
+    }
+
+    /**
+     * End probation (Joy's Q2/Q3 decisions): flips to permanent and grants the
+     * pro-rated permanent leave entitlements in the same action, so the flip
+     * and the money-adjacent grant can never happen separately.
+     */
+    public function confirm(Request $request, Employee $employee, ConfirmEmployee $action): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+
+        if (! $employee->isOnProbation()) {
+            return back()->with('error', 'Only an active employee on probation can be confirmed.');
+        }
+
+        $data = $request->validate([
+            'confirmation_date' => ['required', 'date'],
+        ]);
+
+        $action->handle($employee, $data['confirmation_date']);
+
+        return back()->with('success', "{$employee->fullName()} confirmed as permanent; this year's leave granted pro-rata.");
     }
 
     public function separate(Request $request, Employee $employee, SeparateEmployee $action): RedirectResponse
