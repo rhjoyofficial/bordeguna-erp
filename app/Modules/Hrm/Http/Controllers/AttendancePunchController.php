@@ -215,7 +215,7 @@ class AttendancePunchController extends Controller
     private function employeeOptions()
     {
         return Employee::whereHas('assignments', fn ($query) => $query->active()->where('is_primary', true))
-            ->orderBy('first_name')->orderBy('last_name')->get()
+            ->orderBy('employee_code')->get()
             ->map(fn (Employee $employee) => [
                 'id' => $employee->id,
                 'name' => $employee->fullName().' ('.$employee->employee_code.')',

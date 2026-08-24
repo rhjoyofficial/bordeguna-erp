@@ -48,7 +48,7 @@ class ScheduleController extends Controller
         $employees = Employee::whereHas('assignments', fn ($query) => $query->activeOn($on)->where('is_primary', true))
             ->with(['assignments' => fn ($query) => $query->activeOn($on)->where('is_primary', true)
                 ->with(['office:id,name', 'department:id,name', 'section:id,name'])])
-            ->orderBy('first_name')->orderBy('last_name')->get();
+            ->orderBy('employee_code')->get();
 
         $resolved = $resolver->resolveMany($employees, $on);
 
@@ -255,7 +255,7 @@ class ScheduleController extends Controller
                     ]),
                 ]),
             'employees' => Employee::whereHas('assignments', fn ($query) => $query->active()->where('is_primary', true))
-                ->orderBy('first_name')->orderBy('last_name')->get()
+                ->orderBy('employee_code')->get()
                 ->map(fn (Employee $employee) => [
                     'id' => $employee->id,
                     'name' => $employee->fullName().' ('.$employee->employee_code.')',

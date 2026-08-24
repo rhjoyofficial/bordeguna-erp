@@ -175,3 +175,37 @@ it('accepts an ordinary date of birth', function () {
         'date_of_birth' => '1992-12-27',
     ])->assertSessionHasNoErrors();
 });
+
+// ⚠ Joy, 24 Aug 2026: "employee lists must order by employee_code, nothing
+// else". Every listing and picker follows it, so the same person sits in the
+// same place on every screen. Asserted on the index because that is the list
+// people read most, and because name order is the tempting default a future
+// change would drift back to - the codes here are deliberately in the opposite
+// order to the names.
+it('lists employees in employee code order, never by name', function () {
+    $names = [['BDG-000003', 'Ayesha'], ['BDG-000001', 'Zahir'], ['BDG-000002', 'Mahmud']];
+
+    foreach ($names as [$code, $first]) {
+        $employee = Employee::create([
+            'employee_code' => $code,
+            'first_name' => $first,
+            'last_name' => 'Khan',
+            'employment_type' => 'permanent',
+            'status' => 'active',
+        ]);
+        EmployeeAssignment::create([
+            'employee_id' => $employee->id,
+            'business_id' => $this->business->id,
+            'is_primary' => true,
+            'effective_from' => '2026-01-01',
+        ]);
+    }
+
+    empOwner()->get(route('hrm.employees.index'))
+        ->assertOk()
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->component('hrm/employees/index')
+            ->where('employees.0.employee_code', 'BDG-000001')
+            ->where('employees.1.employee_code', 'BDG-000002')
+            ->where('employees.2.employee_code', 'BDG-000003'));
+});

@@ -60,7 +60,7 @@ class RunLeaveProvision
                 ->where('business_id', $this->context->id())
                 ->activeOn($date)
                 ->where('is_primary', true))
-            ->orderBy('first_name')->orderBy('last_name')
+            ->orderBy('employee_code')
             ->get();
 
         $rows = [];

@@ -61,7 +61,7 @@ class SalaryRevisionController extends Controller
                     'requested_by' => $r->requester?->name,
                 ]),
             'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
-                ->orderBy('first_name')->get()
+                ->orderBy('employee_code')->get()
                 ->map(function (Employee $e) {
                     $structure = SalaryStructure::activeFor($e->id);
                     $breakdown = $structure?->breakdown();

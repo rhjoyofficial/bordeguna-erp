@@ -384,7 +384,7 @@ class PayrollInputController extends Controller
     private function employeeOptions()
     {
         return Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
-            ->orderBy('first_name')->get()
+            ->orderBy('employee_code')->get()
             ->map(fn (Employee $e) => [
                 'id' => $e->id,
                 'name' => $e->fullName().' ('.$e->employee_code.')',

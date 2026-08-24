@@ -181,7 +181,7 @@ class ValidatePayrollRun
         return Employee::whereHas('assignments', fn ($query) => $query
             ->activeOn($period->end_date)
             ->where('is_primary', true))
-            ->orderBy('first_name')->orderBy('last_name')->get();
+            ->orderBy('employee_code')->get();
     }
 
     /**

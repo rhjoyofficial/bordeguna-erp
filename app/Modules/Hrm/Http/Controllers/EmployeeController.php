@@ -41,9 +41,13 @@ class EmployeeController extends Controller
         // Employees are central; "who works here" is the set with a currently
         // active primary assignment in this business (the assignments relation
         // is business-scoped, so this is automatically the current tenant).
+        // ⚠ EMPLOYEE CODE ORDER, EVERYWHERE (Joy, 24 Aug 2026: "employee lists
+        // must order by employee_code, nothing else"). Every listing and picker
+        // in the application follows this, so the same person sits in the same
+        // place on every screen and a name spelled two ways cannot move them.
         $employees = Employee::whereHas('assignments', fn ($query) => $query->active()->where('is_primary', true))
             ->with(['assignments' => fn ($query) => $query->active()->where('is_primary', true)->with(['office:id,name', 'designation:id,name'])])
-            ->orderBy('first_name')->orderBy('last_name')->get()
+            ->orderBy('employee_code')->get()
             ->map(function (Employee $employee) {
                 $assignment = $employee->assignments->first();
 
@@ -222,7 +226,7 @@ class EmployeeController extends Controller
                 ]),
             'designations' => Designation::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'supervisors' => Employee::whereHas('assignments', fn ($query) => $query->active()->where('is_primary', true))
-                ->where('id', '!=', $employee->id)->orderBy('first_name')->orderBy('last_name')->get()
+                ->where('id', '!=', $employee->id)->orderBy('employee_code')->get()
                 ->map(fn (Employee $candidate) => ['id' => $candidate->id, 'name' => $candidate->fullName().' ('.$candidate->employee_code.')']),
             'document_types' => collect(EmployeeDocumentType::cases())
                 ->map(fn (EmployeeDocumentType $type) => ['value' => $type->value, 'label' => $type->label()]),

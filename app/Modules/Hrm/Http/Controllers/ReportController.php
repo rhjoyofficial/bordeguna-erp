@@ -289,7 +289,7 @@ class ReportController extends Controller
                 ->map(fn (Office $o) => ['value' => $o->id, 'label' => $o->name])->all(),
             ReportParameterType::Department => Department::orderBy('name')->get(['id', 'name'])
                 ->map(fn (Department $d) => ['value' => $d->id, 'label' => $d->name])->all(),
-            ReportParameterType::Employee => Employee::orderBy('first_name')->get()
+            ReportParameterType::Employee => Employee::orderBy('employee_code')->get()
                 ->map(fn (Employee $e) => ['value' => $e->id, 'label' => $e->fullName().' ('.$e->employee_code.')'])->all(),
             ReportParameterType::PayrollRun => PayrollRun::with('period')->orderByDesc('id')->limit(60)->get()
                 ->map(fn (PayrollRun $r) => [

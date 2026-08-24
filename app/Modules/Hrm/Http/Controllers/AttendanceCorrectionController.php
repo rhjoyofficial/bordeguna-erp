@@ -73,7 +73,7 @@ class AttendanceCorrectionController extends Controller
             'directions' => collect(PunchDirection::cases())
                 ->map(fn (PunchDirection $d) => ['value' => $d->value, 'label' => $d->label()]),
             'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
-                ->orderBy('first_name')->get()
+                ->orderBy('employee_code')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName().' ('.$e->employee_code.')']),
         ]);
     }

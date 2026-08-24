@@ -211,6 +211,11 @@ class MealBreakComplianceReport implements ReportDefinition
                 $parameters->int('employee_id'),
                 fn (Builder $q, int $id) => $q->where('daily_attendances.employee_id', $id),
             )
+            // ⚠ Deliberately NOT swept into employee_code order with the rest of
+            // the application (Joy, 24 Aug 2026): this is a report's own
+            // streaming sort, and grouping by the joined id is what keeps one
+            // employee's days arriving together without a second join column in
+            // the order. The employee_code the reader sees is on every row.
             ->orderBy('daily_attendances.employee_id')
             ->orderBy('daily_attendances.attendance_date')
             ->select([

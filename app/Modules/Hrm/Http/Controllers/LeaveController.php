@@ -62,7 +62,7 @@ class LeaveController extends Controller
                 ])
                 : collect(),
             'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
-                ->orderBy('first_name')->get()
+                ->orderBy('employee_code')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName().' ('.$e->employee_code.')']),
             'leave_types' => LeaveType::active()->orderBy('name')->get()
                 ->map(fn (LeaveType $t) => [

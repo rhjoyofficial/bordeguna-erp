@@ -35,7 +35,7 @@ class ShowCauseNoticeController extends Controller
                 ->orderByDesc('issued_at')->limit(100)->get()
                 ->map(fn (ShowCauseNotice $notice) => $this->present($notice)),
             'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
-                ->orderBy('first_name')->get()
+                ->orderBy('employee_code')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName().' ('.$e->employee_code.')']),
         ]);
     }

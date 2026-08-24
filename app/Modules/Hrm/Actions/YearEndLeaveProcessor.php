@@ -51,7 +51,7 @@ class YearEndLeaveProcessor
         $employees = Employee::whereHas('assignments', fn ($query) => $query
             ->activeOn(Carbon::create($year, 12, 31))
             ->where('is_primary', true))
-            ->orderBy('first_name')->orderBy('last_name')->get();
+            ->orderBy('employee_code')->get();
 
         $rows = [];
         $employeesAffected = [];

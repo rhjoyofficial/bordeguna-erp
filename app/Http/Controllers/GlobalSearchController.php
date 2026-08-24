@@ -118,7 +118,7 @@ class GlobalSearchController extends Controller
                     ->where('first_name', 'like', $like)
                     ->orWhere('last_name', 'like', $like)
                     ->orWhere('employee_code', 'like', $like))
-                ->orderBy('first_name')
+                ->orderBy('employee_code')
                 ->limit(self::PER_GROUP)
                 ->get(['id', 'first_name', 'last_name', 'employee_code'])
                 ->map(fn (Employee $e) => [

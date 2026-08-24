@@ -110,7 +110,7 @@ class DailyAttendanceController extends Controller
                 'meals' => $request->boolean('meals'),
             ],
             'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
-                ->orderBy('first_name')->orderBy('last_name')->get()
+                ->orderBy('employee_code')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName().' ('.$e->employee_code.')']),
             'days' => $days->map(fn (DailyAttendance $day) => $this->present($day, $fixes, $waivers)),
             // Forgiving money is its own permission, not part of managing

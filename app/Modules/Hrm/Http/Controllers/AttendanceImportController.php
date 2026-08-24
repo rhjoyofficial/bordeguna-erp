@@ -50,7 +50,7 @@ class AttendanceImportController extends Controller
             // as a wall of "no employee mapped" failures.
             'unmapped_employees' => Employee::whereHas('assignments', fn ($query) => $query->active()->where('is_primary', true))
                 ->whereNull('biometric_enroll_id')
-                ->orderBy('first_name')->get()
+                ->orderBy('employee_code')->get()
                 ->map(fn (Employee $employee) => [
                     'id' => $employee->id,
                     'name' => $employee->fullName(),

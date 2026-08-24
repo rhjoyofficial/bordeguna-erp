@@ -37,7 +37,7 @@ class SalaryController extends Controller
         $this->authorizeSalaryRead($request);
 
         $employees = Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
-            ->orderBy('first_name')->orderBy('last_name')->get();
+            ->orderBy('employee_code')->get();
 
         return Inertia::render('hrm/salary/index', [
             'can_manage' => (bool) $request->user()?->can('hrm.salary.manage'),

@@ -53,7 +53,7 @@ class LoanController extends Controller
             'filters' => ['employee_id' => $employeeId],
             'loans' => $loans->map(fn (Loan $loan) => $this->present($loan)),
             'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
-                ->orderBy('first_name')->get()
+                ->orderBy('employee_code')->get()
                 ->map(fn (Employee $e) => [
                     'id' => $e->id,
                     'name' => $e->fullName().' ('.$e->employee_code.')',
