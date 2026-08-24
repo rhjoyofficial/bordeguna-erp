@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\RequestPayrollUnlock;
+use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Actions\TransitionPayrollRun;
 use App\Modules\Hrm\Jobs\CalculatePayrollRunJob;
 use App\Modules\Hrm\Models\PayrollPeriod;
@@ -117,9 +118,15 @@ class PayrollController extends Controller
         $period = PayrollPeriod::forMonth($validated['year'], $validated['month']);
         $existing = $period->latestRun();
 
-        if ($existing !== null && ! $existing->isRerunnable()) {
+        // ⚠ Cancelled is deliberately allowed through: a cancelled run is a
+        // voided version, and CalculatePayroll::openRun answers it with a
+        // fresh version+1 (WFL-06). This guard once refused it too, which
+        // left a period whose latest run was cancelled permanently unable to
+        // generate - Joy's real August run was blocked exactly this way on
+        // 24 Aug 2026. Reviewed/Approved still require the reopen ceremony.
+        if ($existing !== null && ! $existing->isRerunnable() && $existing->status !== PayrollStatus::Cancelled) {
             return back()->with('error', sprintf(
-                'This payroll is %s. Reopen it first — WFL-05 does not allow a direct re-run past Calculated.',
+                'This payroll is %s. Reopen it first - WFL-05 does not allow a direct re-run past Calculated.',
                 $existing->status->label(),
             ));
         }

@@ -560,3 +560,19 @@ it('still warns on a run that is blocked for a different reason', function () {
     expect($run->hasValidationIssues())->toBeTrue()
         ->and($run->hasValidationWarnings())->toBeTrue();
 });
+
+// ⚠ A cancelled run is a VOIDED version, not a wall. This guard once refused
+// it alongside Reviewed/Approved, which left a period whose latest run was
+// cancelled permanently unable to generate - Joy's real August 2026 payroll
+// was blocked exactly this way on 24 Aug. openRun answers a cancelled latest
+// with a fresh version+1 (WFL-06); the screen must let it through.
+it('lets a period whose latest run was cancelled generate a fresh version', function () {
+    Queue::fake();
+
+    $this->period->runs()->create(['version' => 1, 'status' => PayrollStatus::Cancelled]);
+
+    cycleHr()->post(route('hrm.payroll.calculate'), ['year' => 2026, 'month' => 7])
+        ->assertRedirect()->assertSessionHasNoErrors()->assertSessionHas('success');
+
+    Queue::assertPushed(CalculatePayrollRunJob::class);
+});
