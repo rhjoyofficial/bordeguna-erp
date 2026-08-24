@@ -42,7 +42,10 @@ import {
     ShieldCheck,
     ShoppingCart,
     Store,
+    Tag,
     Tags,
+    Timer,
+    TrendingDown,
     TrendingUp,
     Truck,
     Undo2,
@@ -99,6 +102,10 @@ export function AppSidebar() {
                 { title: 'Inventory', url: '/inventory', icon: Boxes },
                 { title: 'Products', url: '/inventory/products', icon: PackageSearch },
                 { title: 'Stock', url: '/inventory/stock', icon: ClipboardList },
+                // DreamsPOS gaps INV-2/INV-3 (Joy, 24 Aug): what needs
+                // reordering, and which batches are past or near their date.
+                { title: 'Low stocks', url: '/inventory/low-stocks', icon: TrendingDown },
+                { title: 'Stock expiry', url: '/inventory/expiry', icon: Timer },
                 // Manufacturing phase 1: the production run and the report that
                 // notices a drifting yield - shipped WITH their screens in one
                 // commit, the reachability rule this file records.
@@ -120,6 +127,9 @@ export function AppSidebar() {
                 ...(canManageBom ? [{ title: 'Recipes (BOM)', url: '/inventory/bills-of-material', icon: ListTree }] : []),
                 { title: 'Warehouses', url: '/inventory/warehouses', icon: Warehouse },
                 { title: 'Categories', url: '/inventory/categories', icon: Tags },
+                // INV-4: the brands table existed with only a seeder writing
+                // to it - master data Joy could not enter himself.
+                { title: 'Brands', url: '/inventory/brands', icon: Tag },
                 { title: 'Units of measure', url: '/inventory/units', icon: Ruler },
                 // C-IMP-7 again. This one was built on 9 August and had no way
                 // in until 20 August.

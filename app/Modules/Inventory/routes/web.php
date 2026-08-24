@@ -1,8 +1,11 @@
 <?php
 
 use App\Modules\Inventory\Http\Controllers\BillOfMaterialController;
+use App\Modules\Inventory\Http\Controllers\BrandController;
 use App\Modules\Inventory\Http\Controllers\CategoryController;
+use App\Modules\Inventory\Http\Controllers\ExpiryController;
 use App\Modules\Inventory\Http\Controllers\InventoryDashboardController;
+use App\Modules\Inventory\Http\Controllers\LowStockController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockCountSheetController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockImportController;
@@ -20,10 +23,17 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inventory.')->group(function () {
     Route::get('/', [InventoryDashboardController::class, 'index'])->name('dashboard');
 
+    // Report screens (DreamsPOS gaps INV-2/INV-3): what needs reordering, and
+    // which batches are past or near their date. Both authorize
+    // inventory.reports.view internally, like the dashboard above.
+    Route::get('low-stocks', [LowStockController::class, 'index'])->name('low-stocks.index');
+    Route::get('expiry', [ExpiryController::class, 'index'])->name('expiry.index');
+
     // Catalog: anyone in the business can view (needed to record stock movements);
     // only inventory.catalog.manage may create/edit/deactivate.
     Route::get('products', [ProductController::class, 'index'])->name('products.index');
     Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
+    Route::get('brands', [BrandController::class, 'index'])->name('brands.index');
     Route::get('units', [UnitOfMeasureController::class, 'index'])->name('units.index');
     Route::get('warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
 
@@ -78,6 +88,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
         Route::put('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
         Route::delete('categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+
+        // Brands (DreamsPOS gap INV-4): the table existed since 8 Aug with only
+        // a seeder writing to it, so Joy could not add a brand himself. Retire
+        // by deactivation, never delete - products point at brands RESTRICT.
+        Route::post('brands', [BrandController::class, 'store'])->name('brands.store');
+        Route::put('brands/{brand}', [BrandController::class, 'update'])->name('brands.update');
+        Route::patch('brands/{brand}/toggle-active', [BrandController::class, 'toggleActive'])->name('brands.toggle-active');
 
         Route::post('units', [UnitOfMeasureController::class, 'store'])->name('units.store');
         Route::put('units/{unit}', [UnitOfMeasureController::class, 'update'])->name('units.update');

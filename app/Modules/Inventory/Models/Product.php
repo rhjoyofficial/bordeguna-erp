@@ -206,11 +206,26 @@ class Product extends Model
 
     public function isBelowLowStockThreshold(): bool
     {
-        if ($this->low_stock_threshold === null) {
+        return self::stockLevelIsLow($this->low_stock_threshold, (float) $this->currentStockQuantity());
+    }
+
+    /**
+     * THE low-stock rule, in one place: reaching the reorder point IS the
+     * alert (at or below threshold), and a product with no threshold is never
+     * "low" - a default nobody set would page somebody about nothing.
+     *
+     * Static so the low-stocks screen, which aggregates batches in one grouped
+     * query instead of asking each product, still applies the SAME comparison
+     * the dashboard does. Two screens disagreeing about "low" is the
+     * chart-vs-tiles drift this project keeps paying for.
+     */
+    public static function stockLevelIsLow(mixed $threshold, float $quantity): bool
+    {
+        if ($threshold === null) {
             return false;
         }
 
-        return (float) $this->currentStockQuantity() < (float) $this->low_stock_threshold;
+        return $quantity <= (float) $threshold;
     }
 
     public function scopeStocked(Builder $query): Builder
