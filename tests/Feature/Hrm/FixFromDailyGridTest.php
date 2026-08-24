@@ -107,7 +107,13 @@ it('shows the fix trail on the daily grid row', function () {
             ->has('directions'));
 });
 
-it('shows the employee what who did, on their own attendance row', function () {
+// ⚠⚠ REVERSED BY JOY ON 24 AUG 2026, one day after he asked for it. The
+// employee's own row used to name the fix and the person who made it; he
+// decided a profile carries no such narration while the ERP is starting
+// fresh ("this kinds of text disturbing"), and that it can come back when
+// he asks. The correction itself is untouched and HR still reads the trail
+// on the daily grid - the test above pins that half and stays.
+it('keeps the fix trail off the employee\'s own profile', function () {
     $user = User::factory()->create();
     $user->businesses()->attach($this->business->id);
     $user->assignRole('Staff');
@@ -126,8 +132,14 @@ it('shows the employee what who did, on their own attendance row', function () {
         ->get('/hrm/clock?from=2026-08-15&to=2026-08-23')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('recent_days.0.fixes.0.by', 'Musa Islam')
-            ->where('recent_days.0.fixes.0.summary', fn ($summary) => str_contains($summary, '18:05')));
+            // The day is still there, and still corrected - it simply does
+            // not narrate who changed what.
+            ->has('recent_days')
+            ->missing('recent_days.0.fixes')
+            ->missing('my_corrections'));
+
+    // The correction itself survived the screen losing its voice.
+    expect(AttendanceCorrection::where('employee_id', $this->employee->id)->count())->toBe(1);
 });
 
 it('still routes a non-privileged request through approval instead of applying it', function () {
