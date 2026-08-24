@@ -37,6 +37,13 @@ interface GraceWindow {
     requires_review: boolean;
 }
 
+interface ElAccrual {
+    enabled: boolean;
+    days_per_month: number;
+    max_ordinary_lates: number;
+    max_serious_lates: number;
+}
+
 interface PolicyConfig {
     grace_windows: GraceWindow[];
     early_leave_grace_minutes: number;
@@ -45,6 +52,7 @@ interface PolicyConfig {
     half_day_arrival_after_minutes: number | null;
     count_holiday_work_without_approval: boolean;
     duplicate_scan_window_seconds: number;
+    el_accrual: ElAccrual;
 }
 
 interface CurrentPolicy {
@@ -99,7 +107,7 @@ const ladderText = (w: GraceWindow, consequences: Option[]) => {
  * version from a chosen date. Days already judged keep the version that judged
  * them - the note in the dialog says so because that is the whole design.
  */
-function ReviseDialog({ policy, consequences }: { policy: CurrentPolicy; consequences: Option[] }) {
+function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: CurrentPolicy; consequences: Option[]; isDefaultScope: boolean }) {
     const [open, setOpen] = useState(false);
     const [effectiveFrom, setEffectiveFrom] = useState('');
     const [general, setGeneral] = useState({
@@ -109,6 +117,14 @@ function ReviseDialog({ policy, consequences }: { policy: CurrentPolicy; consequ
         half_day_arrival_after_minutes: '',
         count_holiday_work_without_approval: false,
         duplicate_scan_window_seconds: '60',
+    });
+    // One accrual rule for the business, so only the company-default card edits
+    // it; a department revision leaves the stored rule untouched.
+    const [accrual, setAccrual] = useState({
+        enabled: false,
+        days_per_month: '1',
+        max_ordinary_lates: '3',
+        max_serious_lates: '1',
     });
     const [windows, setWindows] = useState<GraceWindow[]>([]);
     const { errors } = usePage().props as { errors: Record<string, string> };
@@ -124,6 +140,12 @@ function ReviseDialog({ policy, consequences }: { policy: CurrentPolicy; consequ
                 half_day_arrival_after_minutes: c.half_day_arrival_after_minutes === null ? '' : String(c.half_day_arrival_after_minutes),
                 count_holiday_work_without_approval: c.count_holiday_work_without_approval,
                 duplicate_scan_window_seconds: String(c.duplicate_scan_window_seconds),
+            });
+            setAccrual({
+                enabled: c.el_accrual?.enabled ?? false,
+                days_per_month: String(c.el_accrual?.days_per_month ?? 1),
+                max_ordinary_lates: String(c.el_accrual?.max_ordinary_lates ?? 3),
+                max_serious_lates: String(c.el_accrual?.max_serious_lates ?? 1),
             });
             setWindows(JSON.parse(JSON.stringify(c.grace_windows)) as GraceWindow[]);
         }
@@ -149,6 +171,16 @@ function ReviseDialog({ policy, consequences }: { policy: CurrentPolicy; consequ
                 half_day_arrival_after_minutes: general.half_day_arrival_after_minutes === '' ? null : Number(general.half_day_arrival_after_minutes),
                 count_holiday_work_without_approval: general.count_holiday_work_without_approval,
                 duplicate_scan_window_seconds: Number(general.duplicate_scan_window_seconds),
+                ...(isDefaultScope
+                    ? {
+                          el_accrual: {
+                              enabled: accrual.enabled,
+                              days_per_month: Number(accrual.days_per_month),
+                              max_ordinary_lates: Number(accrual.max_ordinary_lates),
+                              max_serious_lates: Number(accrual.max_serious_lates),
+                          },
+                      }
+                    : {}),
                 grace_windows: windows.map((w) => ({
                     ...w,
                     from_minutes: Number(w.from_minutes),
@@ -231,6 +263,45 @@ function ReviseDialog({ policy, consequences }: { policy: CurrentPolicy; consequ
                             Count holiday work without approval
                         </label>
                     </div>
+
+                    {isDefaultScope && (
+                        <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-lg border p-3">
+                            <label className="flex items-center gap-2 text-sm font-semibold">
+                                <Checkbox checked={accrual.enabled} onCheckedChange={(v) => setAccrual({ ...accrual, enabled: v === true })} />
+                                Earn one leave day per month
+                            </label>
+                            <p className="text-muted-foreground mt-1 text-xs">
+                                Credited to permanent employees on the 1st for the month just ended, and withheld when that month ran past either
+                                allowance. One rule for the whole business.
+                            </p>
+                            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                                <div className="grid gap-1">
+                                    <Label className="text-xs">Days per month</Label>
+                                    <Input
+                                        value={accrual.days_per_month}
+                                        onChange={(e) => setAccrual({ ...accrual, days_per_month: e.target.value })}
+                                    />
+                                    <InputError message={errors['el_accrual.days_per_month']} />
+                                </div>
+                                <div className="grid gap-1">
+                                    <Label className="text-xs">Ordinary lates allowed</Label>
+                                    <Input
+                                        value={accrual.max_ordinary_lates}
+                                        onChange={(e) => setAccrual({ ...accrual, max_ordinary_lates: e.target.value })}
+                                    />
+                                    <InputError message={errors['el_accrual.max_ordinary_lates']} />
+                                </div>
+                                <div className="grid gap-1">
+                                    <Label className="text-xs">Serious lates allowed</Label>
+                                    <Input
+                                        value={accrual.max_serious_lates}
+                                        onChange={(e) => setAccrual({ ...accrual, max_serious_lates: e.target.value })}
+                                    />
+                                    <InputError message={errors['el_accrual.max_serious_lates']} />
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold">Lateness windows</h3>
@@ -388,7 +459,9 @@ export default function PolicyIndex({ scopes, consequences }: { scopes: Scope[];
                                     </Badge>
                                 )}
                             </div>
-                            {scope.current && <ReviseDialog policy={scope.current} consequences={consequences} />}
+                            {scope.current && (
+                                <ReviseDialog policy={scope.current} consequences={consequences} isDefaultScope={scope.department_id === null} />
+                            )}
                         </div>
 
                         {scope.current === null ? (
@@ -423,6 +496,19 @@ export default function PolicyIndex({ scopes, consequences }: { scopes: Scope[];
                                         ))}
                                     </tbody>
                                 </table>
+                                {scope.department_id === null && (
+                                    <p className="text-muted-foreground mt-3 text-sm">
+                                        {scope.current.config.el_accrual?.enabled ? (
+                                            <>
+                                                Earned leave: {scope.current.config.el_accrual.days_per_month} day per month to permanent employees,
+                                                withheld above {scope.current.config.el_accrual.max_ordinary_lates} ordinary or{' '}
+                                                {scope.current.config.el_accrual.max_serious_lates} serious lates in the month.
+                                            </>
+                                        ) : (
+                                            'Earned leave accrual is off.'
+                                        )}
+                                    </p>
+                                )}
                             </>
                         )}
 

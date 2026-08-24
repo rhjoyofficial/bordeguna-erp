@@ -110,6 +110,14 @@ class AttendancePolicyController extends Controller
             'grace_windows.*.tiers' => ['required', 'array', 'min:1'],
             'grace_windows.*.tiers.*.from_occurrence' => ['required', 'integer', 'min:1', 'max:60'],
             'grace_windows.*.tiers.*.consequence' => ['required', new EnumRule(AttendanceConsequence::class)],
+            // The earned-leave accrual rule (Joy, 24 Aug 2026). Optional in the
+            // request: only the company-default card offers these fields, and a
+            // department revision must not silently blank them.
+            'el_accrual' => ['sometimes', 'array'],
+            'el_accrual.enabled' => ['required_with:el_accrual', 'boolean'],
+            'el_accrual.days_per_month' => ['required_with:el_accrual', 'numeric', 'gt:0', 'max:31'],
+            'el_accrual.max_ordinary_lates' => ['required_with:el_accrual', 'integer', 'min:0', 'max:60'],
+            'el_accrual.max_serious_lates' => ['required_with:el_accrual', 'integer', 'min:0', 'max:60'],
         ], [
             'effective_from.after' => 'The new version must start after the current one ('.$policy->effective_from->toDateString().').',
             'full_day_minimum_hours.gt' => 'A full day must require more hours than a half day allows.',
@@ -125,6 +133,11 @@ class AttendancePolicyController extends Controller
             'half_day_arrival_after_minutes' => $data['half_day_arrival_after_minutes'] ?? null,
             'count_holiday_work_without_approval' => $data['count_holiday_work_without_approval'],
             'duplicate_scan_window_seconds' => $data['duplicate_scan_window_seconds'],
+            // ⚠ Carried forward when the form did not send it. A department
+            // policy's revision dialog has no accrual fields, and a revision
+            // that dropped the rule would switch the accrual off for the whole
+            // business by omission.
+            'el_accrual' => $data['el_accrual'] ?? $policy->toConfig()->elAccrual->toArray(),
         ])->toArray();
 
         DB::transaction(function () use ($policy, $data, $config, $request) {

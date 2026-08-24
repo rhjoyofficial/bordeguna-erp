@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Hrm\Console\Commands\AccrueEarnedLeave;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
 use App\Modules\Inventory\Actions\ProposeExpiredStockWriteOffs;
 use Illuminate\Foundation\Inspiring;
@@ -44,6 +45,19 @@ Artisan::command('inspire', function () {
 // process the same employee-day from two directions at once.
 Schedule::command(ProcessAttendanceDaily::class)
     ->dailyAt('23:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// The monthly earned-leave accrual (Joy, 24 Aug 2026). Runs on the 1st for the
+// month that just ended, at 01:00 - comfortably after the 23:00 attendance
+// processing has settled the final day of that month, because the lateness
+// counts it reads are exactly what that run produces.
+//
+// ⚠ It COMMITS rather than previewing. The job adds days, it is idempotent per
+// employee and month, and a scheduled job that needs a flag to act is a job
+// that never acts.
+Schedule::command(AccrueEarnedLeave::class)
+    ->monthlyOn(1, '01:00')
     ->withoutOverlapping()
     ->runInBackground();
 

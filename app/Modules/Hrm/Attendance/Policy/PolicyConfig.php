@@ -23,6 +23,9 @@ final readonly class PolicyConfig
         public ?int $halfDayArrivalAfterMinutes,
         public bool $countHolidayWorkWithoutApproval,
         public int $duplicateScanWindowSeconds = 60,
+        // Monthly EL accrual (Joy, 24 Aug 2026); read from the company-default
+        // policy only, disabled unless a revision switches it on.
+        public ElAccrualConfig $elAccrual = new ElAccrualConfig,
     ) {}
 
     /**
@@ -61,6 +64,7 @@ final readonly class PolicyConfig
             // ⚠ A policy row that stored 300 explicitly keeps 300 — check the
             // live rows' config at deploy time, per POL-12 as a new version.
             (int) ($config['duplicate_scan_window_seconds'] ?? 60),
+            ElAccrualConfig::fromArray($config['el_accrual'] ?? []),
         );
     }
 
@@ -91,6 +95,7 @@ final readonly class PolicyConfig
             'half_day_arrival_after_minutes' => $this->halfDayArrivalAfterMinutes,
             'count_holiday_work_without_approval' => $this->countHolidayWorkWithoutApproval,
             'duplicate_scan_window_seconds' => $this->duplicateScanWindowSeconds,
+            'el_accrual' => $this->elAccrual->toArray(),
         ];
     }
 }

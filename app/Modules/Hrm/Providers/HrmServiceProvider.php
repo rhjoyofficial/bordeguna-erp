@@ -3,6 +3,7 @@
 namespace App\Modules\Hrm\Providers;
 
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Console\Commands\AccrueEarnedLeave;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
 use App\Modules\Hrm\Console\Commands\RunLeaveYearEnd;
 use App\Modules\Hrm\Dashboard\DashboardRegistry;
@@ -123,7 +124,7 @@ class HrmServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([RunLeaveYearEnd::class, ProcessAttendanceDaily::class]);
+            $this->commands([RunLeaveYearEnd::class, ProcessAttendanceDaily::class, AccrueEarnedLeave::class]);
         }
     }
 }
