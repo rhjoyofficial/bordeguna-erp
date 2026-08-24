@@ -80,6 +80,26 @@ enum PayrollStatus: string
     }
 
     /**
+     * A version that was thrown away rather than paid.
+     *
+     * ⚠⚠ Neither of these is a decision to protect: the run is void, the
+     * period is unpaid, and the only sane next step is a fresh version -
+     * which `CalculatePayroll::openRun` already produces. Treating them as
+     * "past Calculated" made the period a DEAD END, because a rejected run
+     * is not rerunnable and not reopenable either, so the refusal advised a
+     * door that does not exist. It stranded Joy's real August payroll twice
+     * on 24 Aug 2026: once cancelled, then once rejected.
+     *
+     * The rejected version itself is never rewritten - it stays as the
+     * record that this payroll was turned down, which is the whole reason
+     * WFL-02 gave it its own state instead of sending it back to Draft.
+     */
+    public function isVoided(): bool
+    {
+        return in_array($this, [self::Cancelled, self::Rejected], true);
+    }
+
+    /**
      * Past this point the figures are the record — WFL-05 forbids a direct
      * re-run, and WFL-06 sends corrections forward as adjustments.
      */

@@ -566,13 +566,25 @@ it('still warns on a run that is blocked for a different reason', function () {
 // cancelled permanently unable to generate - Joy's real August 2026 payroll
 // was blocked exactly this way on 24 Aug. openRun answers a cancelled latest
 // with a fresh version+1 (WFL-06); the screen must let it through.
-it('lets a period whose latest run was cancelled generate a fresh version', function () {
+it('lets a period whose latest run was voided generate a fresh version', function (string $status) {
     Queue::fake();
 
-    $this->period->runs()->create(['version' => 1, 'status' => PayrollStatus::Cancelled]);
+    $this->period->runs()->create(['version' => 1, 'status' => $status]);
 
     cycleHr()->post(route('hrm.payroll.calculate'), ['year' => 2026, 'month' => 7])
         ->assertRedirect()->assertSessionHasNoErrors()->assertSessionHas('success');
 
     Queue::assertPushed(CalculatePayrollRunJob::class);
+})->with(['cancelled', 'rejected']);
+
+// ⚠ The other side of the same guard: once the money is the record there is
+// no re-run at all, and the refusal must say what to do instead rather than
+// naming a reopen that would not help.
+it('refuses a disbursed payroll and points at the arrear instead', function () {
+    $this->period->runs()->create(['version' => 1, 'status' => PayrollStatus::Disbursed]);
+
+    cycleHr()->post(route('hrm.payroll.calculate'), ['year' => 2026, 'month' => 7])
+        ->assertRedirect();
+
+    expect(session('error'))->toContain('arrear');
 });

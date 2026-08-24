@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\RequestPayrollUnlock;
-use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Actions\TransitionPayrollRun;
 use App\Modules\Hrm\Jobs\CalculatePayrollRunJob;
 use App\Modules\Hrm\Models\PayrollPeriod;
@@ -118,17 +117,20 @@ class PayrollController extends Controller
         $period = PayrollPeriod::forMonth($validated['year'], $validated['month']);
         $existing = $period->latestRun();
 
-        // ⚠ Cancelled is deliberately allowed through: a cancelled run is a
-        // voided version, and CalculatePayroll::openRun answers it with a
-        // fresh version+1 (WFL-06). This guard once refused it too, which
-        // left a period whose latest run was cancelled permanently unable to
-        // generate - Joy's real August run was blocked exactly this way on
-        // 24 Aug 2026. Reviewed/Approved still require the reopen ceremony.
-        if ($existing !== null && ! $existing->isRerunnable() && $existing->status !== PayrollStatus::Cancelled) {
-            return back()->with('error', sprintf(
-                'This payroll is %s. Reopen it first - WFL-05 does not allow a direct re-run past Calculated.',
-                $existing->status->label(),
-            ));
+        // ⚠⚠ A VOIDED run (cancelled or rejected) is allowed straight through:
+        // it is a thrown-away version, not a decision to protect, and
+        // CalculatePayroll::openRun answers it with a fresh version+1 (WFL-06)
+        // while the void one stays as the record. This guard used to refuse
+        // both, which made the period a DEAD END - neither state is
+        // reopenable, so "reopen it first" named a door that does not exist.
+        // It stranded Joy's real August payroll twice on 24 Aug 2026.
+        if ($existing !== null && ! $existing->isRerunnable() && ! $existing->status->isVoided()) {
+            // Say what to actually do, which differs by state: before the money
+            // moves a reopen re-versions (WFL-06); after it, corrections ride
+            // the next payroll as an arrear (WFL-05) and no re-run exists.
+            return back()->with('error', $existing->status->isReopenable()
+                ? sprintf('This payroll is %s. Reopen it first - WFL-06 turns a reopen into a new version.', $existing->status->label())
+                : sprintf('This payroll is %s and the figures are the record. WFL-05 allows no re-run; a correction goes to the next payroll as an arrear.', $existing->status->label()));
         }
 
         CalculatePayrollRunJob::dispatch(
