@@ -43,6 +43,12 @@ interface PayslipRow {
     is_blocked: boolean;
     batch: string | null;
     payments: PaymentRow[];
+    email: {
+        address: string | null;
+        sent_at: string | null;
+        error: string | null;
+        reachable: boolean;
+    };
 }
 
 interface BatchRow {
@@ -74,6 +80,12 @@ interface Props {
     payslips: PayslipRow[];
     methods: { value: string; label: string }[];
     formats: { key: string; name: string; description: string }[];
+    email_summary: {
+        sendable: number;
+        unreachable: string[];
+        sent: number;
+        failed: number;
+    };
 }
 
 const cardClass = 'border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4';
@@ -117,8 +129,8 @@ function PayDialog({ payslip, methods }: { payslip: PayslipRow; methods: Props['
                     <div className="grid gap-2">
                         <Label htmlFor="pay_amount">Amount</Label>
                         <Input id="pay_amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                        {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
-                        {errors.payslip && <p className="text-xs text-destructive">{errors.payslip}</p>}
+                        {errors.amount && <p className="text-destructive text-xs">{errors.amount}</p>}
+                        {errors.payslip && <p className="text-destructive text-xs">{errors.payslip}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
@@ -194,8 +206,8 @@ function FailDialog({ payslip }: { payslip: PayslipRow }) {
                 <div className="grid gap-2">
                     <Label htmlFor="fail_reason">What went wrong</Label>
                     <Input id="fail_reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Account closed" />
-                    {errors.reason && <p className="text-xs text-destructive">{errors.reason}</p>}
-                    {errors.payslip && <p className="text-xs text-destructive">{errors.payslip}</p>}
+                    {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
+                    {errors.payslip && <p className="text-destructive text-xs">{errors.payslip}</p>}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
@@ -243,13 +255,13 @@ function BatchCard({ batch, formats }: { batch: BatchRow; formats: Props['format
                         <Badge variant="secondary">{batch.method_label}</Badge>
                         {batch.confirmed_at ? <Badge>Confirmed</Badge> : <Badge variant="outline">Awaiting confirmation</Badge>}
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <p className="text-muted-foreground mt-1 text-sm">
                         {batch.payslip_count} payslip{batch.payslip_count === 1 ? '' : 's'} - {money(batch.paid_total)} of{' '}
                         {money(batch.expected_total)} paid
                         {batch.confirmed_at && batch.confirmed_by ? ` · confirmed ${batch.confirmed_at} by ${batch.confirmed_by}` : ''}
                     </p>
                     {batch.advice_file && (
-                        <p className="mt-1 text-xs text-muted-foreground">
+                        <p className="text-muted-foreground mt-1 text-xs">
                             Advice on file: {batch.advice_file}
                             {batch.advice_reference ? ` (${batch.advice_reference})` : ''}
                         </p>
@@ -271,7 +283,7 @@ function BatchCard({ batch, formats }: { batch: BatchRow; formats: Props['format
                 </div>
             </div>
 
-            <p className="mt-2 text-xs text-muted-foreground">{formats.find((f) => f.key === format)?.description}</p>
+            <p className="text-muted-foreground mt-2 text-xs">{formats.find((f) => f.key === format)?.description}</p>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <div className="grid gap-2">
@@ -356,8 +368,17 @@ function PayslipRowView({ payslip, methods }: { payslip: PayslipRow; methods: Pr
                 <td className="py-2">
                     <button className="text-left hover:underline" onClick={() => setOpen((v) => !v)}>
                         {payslip.employee}
-                        <span className="block text-xs text-muted-foreground">{payslip.employee_code}</span>
+                        <span className="text-muted-foreground block text-xs">{payslip.employee_code}</span>
                     </button>
+                    {payslip.email.error ? (
+                        <span className="text-destructive block text-xs">Email failed: {payslip.email.error}</span>
+                    ) : payslip.email.sent_at ? (
+                        <span className="text-muted-foreground block text-xs">
+                            Emailed {payslip.email.sent_at} to {payslip.email.address}
+                        </span>
+                    ) : !payslip.email.reachable ? (
+                        <span className="text-muted-foreground block text-xs">No email address</span>
+                    ) : null}
                 </td>
                 <td className="py-2">{payslip.method}</td>
                 <td className="py-2 text-right">{money(payslip.net)}</td>
@@ -365,7 +386,7 @@ function PayslipRowView({ payslip, methods }: { payslip: PayslipRow; methods: Pr
                 <td className="py-2 pr-4 text-right">{money(payslip.outstanding)}</td>
                 <td className="py-2">
                     <Badge variant={statusVariant(payslip.payment_status)}>{payslip.payment_status_label}</Badge>
-                    {payslip.failure_reason && <span className="ml-2 text-xs text-destructive">{payslip.failure_reason}</span>}
+                    {payslip.failure_reason && <span className="text-destructive ml-2 text-xs">{payslip.failure_reason}</span>}
                 </td>
                 <td className="py-2">
                     <div className="flex flex-wrap justify-end gap-1">
@@ -429,7 +450,7 @@ function PayslipRowView({ payslip, methods }: { payslip: PayslipRow; methods: Pr
     );
 }
 
-export default function Disbursement({ run, batches, payslips, methods, formats }: Props) {
+export default function Disbursement({ run, batches, payslips, methods, formats, email_summary }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Payroll', href: '/hrm/payroll' },
         { title: `Disbursement - ${run.period ?? ''}`, href: `/hrm/payroll/${run.id}/disbursement` },
@@ -447,7 +468,7 @@ export default function Disbursement({ run, batches, payslips, methods, formats 
                         <h2 className="text-lg font-medium">
                             Disbursement - {run.period} <span className="text-muted-foreground">v{run.version}</span>
                         </h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {money(paid)} paid of {money(run.total_net)}
                             {outstanding > 0 ? ` - ${money(outstanding)} still outstanding` : ' - nothing outstanding'}.
                         </p>
@@ -464,15 +485,43 @@ export default function Disbursement({ run, batches, payslips, methods, formats 
                                 Accounting detail
                             </Button>
                         </a>
-                        <Button size="sm" variant="outline" onClick={() => router.post(route('hrm.payroll.email-payslips', run.id), {}, { preserveScroll: true })}>
-                            Email all payslips
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={email_summary.sendable === 0}
+                            onClick={() => router.post(route('hrm.payroll.email-payslips', run.id), {}, { preserveScroll: true })}
+                        >
+                            {/* ⚠ The count is on the button because "queued" after
+                                the fact is not the moment somebody needs it. */}
+                            Email {email_summary.sendable} payslip{email_summary.sendable === 1 ? '' : 's'}
                         </Button>
                     </div>
                 </div>
 
+                {(email_summary.unreachable.length > 0 || email_summary.sent > 0 || email_summary.failed > 0) && (
+                    <div className={cardClass}>
+                        <p className="text-sm font-medium">Payslips by email</p>
+                        <p className="text-muted-foreground text-sm">
+                            Each PDF is password protected: the employee's own code followed by their date of birth as ddmmyyyy.
+                        </p>
+                        <ul className="mt-2 space-y-1 text-sm">
+                            {email_summary.sent > 0 && <li>{email_summary.sent} sent.</li>}
+                            {email_summary.failed > 0 && (
+                                <li className="text-destructive">{email_summary.failed} failed. The reason is on the person's row below.</li>
+                            )}
+                            {email_summary.unreachable.length > 0 && (
+                                <li>
+                                    No email address on record for {email_summary.unreachable.join(', ')}. They are skipped rather than queued, so
+                                    hand those payslips over in person or add an address to the employee first.
+                                </li>
+                            )}
+                        </ul>
+                    </div>
+                )}
+
                 {!run.is_disbursed && (
                     <div className={cardClass}>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             This payroll is {run.status_label.toLowerCase()}. Nothing can be recorded as paid until it is disbursed - the loan and
                             carry-forward postings this reconciles against do not exist before then.
                         </p>
@@ -483,7 +532,7 @@ export default function Disbursement({ run, batches, payslips, methods, formats 
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <h3 className="font-medium">Batches</h3>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-muted-foreground text-sm">
                                 One per payment method, so cash never mixes with a bank transfer. Confirming a batch records a payment for every
                                 payslip in it, exactly as confirming them one at a time would.
                             </p>
@@ -497,7 +546,7 @@ export default function Disbursement({ run, batches, payslips, methods, formats 
 
                     {batches.length === 0 ? (
                         <div className={cardClass}>
-                            <p className="text-sm text-muted-foreground">No batches yet.</p>
+                            <p className="text-muted-foreground text-sm">No batches yet.</p>
                         </div>
                     ) : (
                         batches.map((batch) => <BatchCard key={batch.id} batch={batch} formats={formats} />)

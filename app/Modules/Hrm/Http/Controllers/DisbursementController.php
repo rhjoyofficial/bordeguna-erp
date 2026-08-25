@@ -17,6 +17,7 @@ use App\Modules\Hrm\Models\PayslipPayment;
 use App\Modules\Hrm\Payroll\Disbursement\AccountingExport;
 use App\Modules\Hrm\Payroll\Disbursement\DisbursementFormatRegistry;
 use App\Modules\Hrm\Payroll\Disbursement\DisbursementRegister;
+use App\Modules\Hrm\Support\PayslipAddress;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -87,6 +88,16 @@ class DisbursementController extends Controller
                     'payment_status_label' => $payslip->paymentStatus()->label(),
                     'failure_reason' => $payslip->currentFailure()?->failure_reason,
                     'is_blocked' => $payslip->is_blocked,
+                    // ⚠⚠ The job has always written these three and NOTHING read
+                    // them here. A payslip that failed to send was discovered by
+                    // the employee complaining, which is the opposite of what
+                    // recording an outcome is for.
+                    'email' => [
+                        'address' => $payslip->emailed_to ?? PayslipAddress::for($payslip),
+                        'sent_at' => $payslip->emailed_at?->format('j M Y, g:i a'),
+                        'error' => $payslip->email_error,
+                        'reachable' => PayslipAddress::for($payslip) !== null,
+                    ],
                     'batch' => $payslip->batches->first()?->reference,
                     'payments' => $payslip->payments->map(fn (PayslipPayment $p) => [
                         'id' => $p->id,
@@ -102,6 +113,18 @@ class DisbursementController extends Controller
                 ]),
             'methods' => SalaryPaymentMethod::options(),
             'formats' => $formats->options(),
+            // Counted before anybody presses send, because "8 queued" tells HR
+            // nothing about the ninth person.
+            'email_summary' => [
+                'sendable' => $run->payslips->reject->is_blocked
+                    ->filter(fn (Payslip $p) => PayslipAddress::for($p) !== null)->count(),
+                'unreachable' => $run->payslips->reject->is_blocked
+                    ->filter(fn (Payslip $p) => PayslipAddress::for($p) === null)
+                    ->map(fn (Payslip $p) => $p->employee?->fullName())
+                    ->values(),
+                'sent' => $run->payslips->filter(fn (Payslip $p) => $p->emailed_at !== null)->count(),
+                'failed' => $run->payslips->filter(fn (Payslip $p) => filled($p->email_error))->count(),
+            ],
         ]);
     }
 

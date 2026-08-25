@@ -448,13 +448,20 @@ it('keeps the disbursement screen behind hrm.payroll.manage', function () {
 
 // --- DIS-04: email -----------------------------------------------------------------
 
-it('queues one job per payslip when a run is emailed', function () {
+it('queues one job per payslip that has somewhere to go, and names the rest', function () {
     Queue::fake();
     $run = disRun();
 
-    disHr()->post(route('hrm.payroll.email-payslips', $run))->assertRedirect();
+    // ⚠ Karim has a login; Rahim, the cash employee, has neither a login nor a
+    // personal address. This assertion used to expect two jobs, one of which
+    // could only ever fail with "no email address on record" - a fact HR then
+    // had to go looking for. The skip is now reported instead.
+    disHr()->post(route('hrm.payroll.email-payslips', $run))
+        ->assertRedirect()
+        ->assertSessionHas('warning', fn ($message) => str_contains($message, '1 payslip(s) queued')
+            && str_contains($message, 'Rahim Uddin'));
 
-    Queue::assertPushed(SendPayslipEmail::class, 2);
+    Queue::assertPushed(SendPayslipEmail::class, 1);
 });
 
 // --- DIS-06 / C9d: the register, and DIS-05's accounting export ---------------------

@@ -11,6 +11,7 @@ use App\Modules\Hrm\Models\Payslip;
 use App\Modules\Hrm\Payroll\Payslip\PayslipDocument;
 use App\Modules\Hrm\Payroll\Payslip\PayslipPassword;
 use App\Modules\Hrm\Payroll\Payslip\PayslipPdf;
+use App\Modules\Hrm\Support\PayslipAddress;
 use App\Modules\Hrm\Support\SelfScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -131,13 +132,31 @@ class PayslipController extends Controller
         $this->guardFinished($run->status);
 
         $queued = 0;
+        $skipped = [];
 
         foreach ($run->payslips()->where('is_blocked', false)->get() as $payslip) {
+            // ⚠ Not queued at all when there is nowhere to send. Dispatching a
+            // job whose only possible outcome is "no email address on record"
+            // buries the one fact HR needs inside a failure they have to go
+            // looking for.
+            if (PayslipAddress::for($payslip) === null) {
+                $skipped[] = $payslip->employee?->fullName() ?? ('payslip #'.$payslip->id);
+
+                continue;
+            }
+
             SendPayslipEmail::dispatch($payslip->business_id, $payslip->id, $request->user()->id);
             $queued++;
         }
 
-        return back()->with('success', sprintf('%d payslip(s) queued for emailing.', $queued));
+        $message = sprintf('%d payslip(s) queued for emailing.', $queued);
+
+        if ($skipped !== []) {
+            $message .= ' No email address on record for '.implode(', ', $skipped)
+                .'; hand those over in person or add an address first.';
+        }
+
+        return back()->with($skipped === [] ? 'success' : 'warning', $message);
     }
 
     /**

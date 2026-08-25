@@ -7,6 +7,7 @@ use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Mail\PayslipMail;
 use App\Modules\Hrm\Models\Payslip;
 use App\Modules\Hrm\Payroll\Payslip\PayslipPdf;
+use App\Modules\Hrm\Support\PayslipAddress;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -98,17 +99,11 @@ class SendPayslipEmail implements ShouldQueue
     }
 
     /**
-     * The employee's own address first, the login account second. A personal
-     * address is where a payslip belongs; a work login may be shared or
-     * disabled the day someone leaves, which is exactly when a final payslip
-     * still has to reach them.
+     * ⚠ Moved to PayslipAddress so the screen offering the button and the job
+     * doing the sending answer "can this person be reached" the same way.
      */
     private function addressFor(Payslip $payslip): ?string
     {
-        $employee = $payslip->employee;
-
-        return filled($employee?->personal_email)
-            ? $employee->personal_email
-            : ($employee?->user?->email ?: null);
+        return PayslipAddress::for($payslip);
     }
 }
