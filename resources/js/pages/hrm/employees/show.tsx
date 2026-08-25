@@ -87,7 +87,16 @@ interface EmployeeDetail {
     bank_routing_number: string | null;
     mfs_provider: string | null;
     mfs_account_number: string | null;
-    user: { name: string; email: string } | null;
+    user: {
+        id: number;
+        name: string;
+        email: string;
+        is_active: boolean;
+        // Set only while a set-password link is outstanding and unused. It
+        // going null is how the screen says "they have set their password".
+        password_link_sent_at: string | null;
+        password_link_expired: boolean;
+    } | null;
     assignments: Assignment[];
     documents: Document[];
 }
@@ -104,6 +113,8 @@ interface ShowProps {
     designations: NamedOption[];
     supervisors: NamedOption[];
     document_types: Option[];
+    can_manage_login: boolean;
+    password_link_lifetime: number;
 }
 
 const statusVariant: Record<string, 'secondary' | 'default' | 'outline' | 'destructive'> = {
@@ -601,6 +612,81 @@ function DocumentsCard({ employeeId, documents, documentTypes }: { employeeId: n
     );
 }
 
+function LoginAccountCard({ employee, lifetimeMinutes }: { employee: EmployeeDetail; lifetimeMinutes: number }) {
+    const [email, setEmail] = useState('');
+    const [sending, setSending] = useState(false);
+
+    const createLogin = () => {
+        setSending(true);
+        router.post(route('hrm.employees.login-account', employee.id), { email: email.trim().toLowerCase() }, { onFinish: () => setSending(false) });
+    };
+
+    const resend = () => {
+        if (employee.user === null) return;
+        setSending(true);
+        router.post(route('users.password-link', employee.user.id), {}, { onFinish: () => setSending(false) });
+    };
+
+    return (
+        <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
+            <h3 className="mb-1 text-sm font-medium">Login account</h3>
+
+            {employee.user === null ? (
+                <>
+                    <p className="text-muted-foreground mb-3 text-sm">
+                        {employee.name} cannot sign in yet. Give an email address and they get a link where they choose their own password. You never
+                        type it.
+                    </p>
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="login-email">Their email address</Label>
+                            <Input
+                                id="login-email"
+                                type="email"
+                                className="sm:w-80"
+                                placeholder="name@example.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                            />
+                        </div>
+                        <Button size="sm" disabled={sending || email.trim() === ''} onClick={createLogin}>
+                            Create login and email the link
+                        </Button>
+                    </div>
+                </>
+            ) : (
+                <>
+                    <dl className="mb-3 grid gap-4 sm:grid-cols-3">
+                        <Field label="Signs in as" value={employee.user.email} />
+                        <Field label="Account" value={employee.user.is_active ? 'Active' : 'Deactivated'} />
+                        <Field
+                            label="Password"
+                            value={
+                                employee.user.password_link_sent_at === null
+                                    ? 'Set by them'
+                                    : employee.user.password_link_expired
+                                      ? 'Link expired, never used'
+                                      : 'Link sent, not used yet'
+                            }
+                        />
+                    </dl>
+                    {employee.user.password_link_sent_at !== null && (
+                        <p className={`mb-3 text-xs ${employee.user.password_link_expired ? 'text-destructive' : 'text-muted-foreground'}`}>
+                            Password link sent {employee.user.password_link_sent_at}
+                            {employee.user.password_link_expired
+                                ? ' has expired without being used. Send another.'
+                                : `, valid for ${lifetimeMinutes} minutes from then.`}
+                        </p>
+                    )}
+                    <Button size="sm" variant="outline" disabled={sending} onClick={resend}>
+                        {employee.user.password_link_sent_at === null ? 'Send password link' : 'Resend password link'}
+                    </Button>
+                </>
+            )}
+        </div>
+    );
+}
+
 export default function EmployeeShow({
     employee,
     transitionable_statuses,
@@ -613,6 +699,8 @@ export default function EmployeeShow({
     designations,
     supervisors,
     document_types,
+    can_manage_login,
+    password_link_lifetime,
 }: ShowProps) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employees', href: '/hrm/employees' },
@@ -688,6 +776,10 @@ export default function EmployeeShow({
                         <Field label="Contract end date" value={employee.contract_end_date} />
                     </dl>
                 </div>
+
+                {can_manage_login && employee.status !== 'separated' && (
+                    <LoginAccountCard employee={employee} lifetimeMinutes={password_link_lifetime} />
+                )}
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Emergency contact</h3>

@@ -4,6 +4,7 @@ namespace App\Modules\Foundation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Foundation\Actions\SendPasswordSetupLink;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use Carbon\Carbon;
@@ -199,7 +200,7 @@ class UserManagementController extends Controller
      * one who ever knows it. Used both for a brand-new account and for a
      * link that was never opened before it expired.
      */
-    public function sendPasswordLink(Request $request, User $user): RedirectResponse
+    public function sendPasswordLink(Request $request, User $user, SendPasswordSetupLink $mailer): RedirectResponse
     {
         $this->authorize('foundation.users.manage');
 
@@ -210,24 +211,20 @@ class UserManagementController extends Controller
             return back()->with('error', "{$user->name} is deactivated. Reactivate them first, or the link leads to a login they cannot pass.");
         }
 
-        // Mail can be down, misconfigured or refused by the SMTP host. Without
-        // this the admin gets a blank 500 and no idea whether it was sent.
-        try {
-            $status = PasswordBroker::sendResetLink(['email' => $user->email]);
-        } catch (\Throwable $e) {
-            report($e);
-
-            return back()->with('error', "Could not email {$user->email}. The mail server refused the message. Check the mail settings or try again.");
-        }
+        $status = $mailer->handle($user);
 
         return match ($status) {
             PasswordBroker::RESET_LINK_SENT => back()->with(
                 'success',
-                "Password link emailed to {$user->email}. It expires in ".(int) config('auth.passwords.users.expire', 60).' minutes.'
+                "Password link emailed to {$user->email}. It expires in {$mailer->lifetimeMinutes()} minutes."
             ),
             PasswordBroker::RESET_THROTTLED => back()->with(
                 'error',
                 'A link was just sent to this person. Wait a minute before sending another.'
+            ),
+            SendPasswordSetupLink::MAIL_FAILED => back()->with(
+                'error',
+                "Could not email {$user->email}. The mail server refused the message. Check the mail settings or try again."
             ),
             default => back()->with('error', "Could not send a link to {$user->email}."),
         };

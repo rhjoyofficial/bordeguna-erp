@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\DeleteAttachment;
+use App\Modules\Foundation\Actions\SendPasswordSetupLink;
 use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\Department;
@@ -13,6 +14,7 @@ use App\Modules\Foundation\Models\Section;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ConfirmEmployee;
 use App\Modules\Hrm\Actions\CreateEmployee;
+use App\Modules\Hrm\Actions\CreateEmployeeLogin;
 use App\Modules\Hrm\Actions\SeparateEmployee;
 use App\Modules\Hrm\Actions\TransferEmployee;
 use App\Modules\Hrm\Actions\UpdateEmployee;
@@ -25,8 +27,11 @@ use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Support\DateOfBirthRule;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Inertia\Inertia;
@@ -111,7 +116,7 @@ class EmployeeController extends Controller
         return redirect()->route('hrm.employees.show', $employee)->with('success', "Employee {$employee->employee_code} created.");
     }
 
-    public function show(Employee $employee): Response
+    public function show(Request $request, Employee $employee): Response
     {
         $this->authorize('hrm.employees.manage');
 
@@ -120,7 +125,9 @@ class EmployeeController extends Controller
         abort_unless($employee->assignments()->exists(), 404);
 
         $employee->load([
-            'user:id,name,email',
+            // is_active is read by the login card: a deactivated account is
+            // a link that leads nowhere, and the card has to say so.
+            'user:id,name,email,is_active',
             'assignments' => fn ($query) => $query->latest('effective_from')->with([
                 'office:id,name', 'department:id,name', 'section:id,name', 'designation:id,name',
                 'supervisor:id,first_name,last_name,employee_code',
@@ -129,6 +136,12 @@ class EmployeeController extends Controller
         ]);
 
         $businessId = app(BusinessContext::class)->id();
+
+        $linkLifetime = app(SendPasswordSetupLink::class)->lifetimeMinutes();
+
+        $passwordLinkSentAt = $employee->user === null ? null : DB::table('password_reset_tokens')
+            ->where('email', $employee->user->email)->value('created_at');
+        $passwordLinkSentAt = $passwordLinkSentAt === null ? null : Carbon::parse($passwordLinkSentAt);
 
         return Inertia::render('hrm/employees/show', [
             'employee' => [
@@ -161,7 +174,17 @@ class EmployeeController extends Controller
                 'mfs_provider' => $employee->mfs_provider?->label(),
                 'mfs_account_number' => $employee->mfs_account_number,
                 'salary_payment_method' => $employee->salary_payment_method?->label(),
-                'user' => $employee->user ? ['name' => $employee->user->name, 'email' => $employee->user->email] : null,
+                'user' => $employee->user ? [
+                    'id' => $employee->user->id,
+                    'name' => $employee->user->name,
+                    'email' => $employee->user->email,
+                    'is_active' => $employee->user->is_active,
+                    // An unused reset token is the only honest evidence that a
+                    // set-password link is still outstanding: Laravel deletes
+                    // the row the moment the password is chosen.
+                    'password_link_sent_at' => $passwordLinkSentAt?->timezone(config('app.timezone'))->format('j M Y, g:i a'),
+                    'password_link_expired' => $passwordLinkSentAt?->addMinutes($linkLifetime)->isPast() ?? false,
+                ] : null,
                 'assignments' => $employee->assignments->map(fn (EmployeeAssignment $assignment) => [
                     'id' => $assignment->id,
                     'is_primary' => $assignment->is_primary,
@@ -189,16 +212,20 @@ class EmployeeController extends Controller
                     ->reject(fn (Attachment $document) => $document->collection === 'photo')
                     ->values()
                     ->map(fn (Attachment $document) => [
-                    'id' => $document->id,
-                    'category' => EmployeeDocumentType::tryFrom($document->collection ?? '')?->label() ?? 'Other',
-                    'original_name' => $document->original_name,
-                    'size' => $document->size,
-                    'expires_at' => $document->expires_at?->toDateString(),
-                    'is_expired' => $document->isExpired(),
-                    'uploaded_by' => $document->uploadedBy?->name,
-                    'url' => $document->url(),
-                ]),
+                        'id' => $document->id,
+                        'category' => EmployeeDocumentType::tryFrom($document->collection ?? '')?->label() ?? 'Other',
+                        'original_name' => $document->original_name,
+                        'size' => $document->size,
+                        'expires_at' => $document->expires_at?->toDateString(),
+                        'is_expired' => $document->isExpired(),
+                        'uploaded_by' => $document->uploadedBy?->name,
+                        'url' => $document->url(),
+                    ]),
             ],
+            // Creating a login is two acts (a user, and the join to this
+            // record), so the card only appears for someone allowed both.
+            'can_manage_login' => $request->user()->can('foundation.users.manage'),
+            'password_link_lifetime' => $linkLifetime,
             'transitionable_statuses' => collect($employee->transitionableStatuses())
                 ->map(fn (EmployeeStatus $status) => ['value' => $status->value, 'label' => $status->label()]),
             // Probation: the confirm button and the due date it argues from.
@@ -296,6 +323,56 @@ class EmployeeController extends Controller
         $employee->update(['status' => $data['status']]);
 
         return back()->with('success', 'Employee status updated.');
+    }
+
+    /**
+     * Creates this employee's login and emails them a link to set their own
+     * password, in one press.
+     *
+     * Two permissions, because it is two acts: a user account exists after it
+     * (foundation.users.manage) and an employee record is joined to it
+     * (hrm.employees.manage). Splitting them across two screens is what left
+     * every account here unlinked and every self-service screen empty.
+     */
+    public function createLoginAccount(
+        Request $request,
+        Employee $employee,
+        CreateEmployeeLogin $action,
+        SendPasswordSetupLink $mailer,
+    ): RedirectResponse {
+        $this->authorize('hrm.employees.manage');
+        $this->authorize('foundation.users.manage');
+
+        if ($employee->user_id !== null) {
+            return back()->with('error', "{$employee->fullName()} already has a login. Send them a new password link instead.");
+        }
+
+        if ($employee->status === EmployeeStatus::Separated) {
+            return back()->with('error', "{$employee->fullName()} has left. A separated employee is not given a new way in.");
+        }
+
+        $data = $request->validate([
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255'],
+        ]);
+
+        $result = $action->handle($employee, $data['email'], app(BusinessContext::class)->id());
+
+        $status = $mailer->handle($result['user']);
+
+        if ($status !== Password::RESET_LINK_SENT) {
+            // The account and the join are real and saved; only the email
+            // failed. Say exactly that, or the next person presses the button
+            // again and wonders why it refuses.
+            return back()->with('error', "Login created for {$employee->fullName()}, but the email to {$data['email']} did not go out. Send the password link again from this page.");
+        }
+
+        $message = "Login created for {$employee->fullName()} and a password link emailed to {$data['email']}. It expires in {$mailer->lifetimeMinutes()} minutes.";
+
+        if (! $result['role_assigned'] && ! $result['reused_existing_account']) {
+            $message .= ' They hold no role yet: set one on Settings, Team.';
+        }
+
+        return back()->with('success', $message);
     }
 
     /**
