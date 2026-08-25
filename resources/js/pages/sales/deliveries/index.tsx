@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 
 const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
@@ -63,6 +63,7 @@ export default function DeliveriesIndex({
                                 <th className="p-3">From</th>
                                 <th className="p-3 text-right">Lines</th>
                                 <th className="p-3"></th>
+                                <th className="p-3 text-right">Print</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -78,11 +79,22 @@ export default function DeliveriesIndex({
                                             {delivery.fully_invoiced ? 'Invoiced' : 'Awaiting invoice'}
                                         </Badge>
                                     </td>
+                                    <td className="p-3 text-right">
+                                        {/* The only way to reach the challan. An engine
+                                            with no door is one this project has shipped
+                                            five times already. */}
+                                        <Link
+                                            href={`/sales/deliveries/${delivery.id}/print`}
+                                            className="text-sm font-medium underline underline-offset-4"
+                                        >
+                                            Challan
+                                        </Link>
+                                    </td>
                                 </tr>
                             ))}
                             {deliveries.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={7} className="text-muted-foreground p-6 text-center">
                                         No delivery challans yet.
                                     </td>
                                 </tr>

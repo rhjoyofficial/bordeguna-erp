@@ -120,6 +120,16 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     Route::middleware('can:sales.reports.view')->group(function () {
         Route::get('invoices/{invoice}', [SalesInvoiceController::class, 'show'])
             ->whereNumber('invoice')->name('invoices.show');
+
+        // The two documents that leave the building. Reading them is the same
+        // permission as reading the record they print, and they are separate
+        // pages rather than a print stylesheet over the internal view: the
+        // internal view carries the journal and the cost released, which is
+        // nobody's business outside.
+        Route::get('invoices/{invoice}/print', [SalesInvoiceController::class, 'print'])
+            ->whereNumber('invoice')->name('invoices.print');
+        Route::get('deliveries/{delivery}/print', [DeliveryController::class, 'print'])
+            ->whereNumber('delivery')->name('deliveries.print');
     });
 
     Route::middleware('can:sales.receipt.record')->group(function () {

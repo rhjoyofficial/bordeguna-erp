@@ -7,6 +7,7 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
@@ -238,6 +239,29 @@ class SalesInvoiceController extends Controller
             'journal' => $journal,
             'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
+        ]);
+    }
+
+    /**
+     * The copy the customer is handed.
+     *
+     * ⚠⚠ THE BROWSER'S PRINT DIALOG IS THE DOWNLOAD BUTTON, the same decision the
+     * show-cause notice took: save-as-PDF is built into every browser, and a PDF
+     * library here would be a second renderer to keep in step with this one.
+     *
+     * ⚠ Read-only and separate from `show()` on purpose. `show()` is the
+     * internal view and carries the journal, the cost released and the money
+     * accounts; none of that belongs on a document that leaves the building.
+     */
+    public function print(SalesInvoice $invoice): Response
+    {
+        $invoice->load(['customer', 'lines.product:id,name,sku']);
+
+        return Inertia::render('sales/invoices/print', [
+            'invoice' => $invoice,
+            'outstanding' => $invoice->outstanding()->toTaka(),
+            'received' => $invoice->receivedTotal()->toTaka(),
+            'issuer' => BusinessIdentity::forCurrent()->toArray(),
         ]);
     }
 

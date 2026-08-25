@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
@@ -67,6 +68,28 @@ class DeliveryController extends Controller
             'products' => Product::query()->where('is_active', true)->stocked()
                 ->orderBy('name')->get(['id', 'name', 'sku']),
             'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    /**
+     * The challan that travels with the goods.
+     *
+     * ⚠⚠ THE DELIVERY HAD NO VIEW OF ANY KIND before this: an engine, an index
+     * row and a journal, but nothing anybody could hand to the person receiving
+     * the goods. A challan is not a nicety in this trade, it is what gets signed
+     * at the door.
+     *
+     * ⚠ NO MONEY ON IT, deliberately. A challan says what left the warehouse; a
+     * delivery line has no price column at all, and printing one would invite
+     * the recipient to treat it as a bill.
+     */
+    public function print(Delivery $delivery): Response
+    {
+        $delivery->load(['customer', 'warehouse:id,code,name', 'lines.product:id,name,sku', 'lines.orderLine.order:id,order_number']);
+
+        return Inertia::render('sales/deliveries/print', [
+            'delivery' => $delivery,
+            'issuer' => BusinessIdentity::forCurrent()->toArray(),
         ]);
     }
 

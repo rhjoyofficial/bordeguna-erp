@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
@@ -94,7 +94,12 @@ export default function InvoiceShow({
                             {invoice.customer?.name} · {invoice.invoice_date?.slice(0, 10)}
                         </p>
                     </div>
-                    <Badge variant={isSettled ? 'secondary' : 'outline'}>{isSettled ? 'Paid' : 'Unpaid'}</Badge>
+                    <div className="flex items-center gap-3">
+                        <Badge variant={isSettled ? 'secondary' : 'outline'}>{isSettled ? 'Paid' : 'Unpaid'}</Badge>
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={`/sales/invoices/${invoice.id}/print`}>Print / send</Link>
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
@@ -113,9 +118,7 @@ export default function InvoiceShow({
                             {invoice.lines.map((line) => (
                                 <tr key={line.id} className="border-t">
                                     <td className="p-3">{line.product?.name ?? line.description ?? '-'}</td>
-                                    <td className="p-3 text-muted-foreground">
-                                        {line.delivery_line?.delivery?.delivery_number ?? '-'}
-                                    </td>
+                                    <td className="text-muted-foreground p-3">{line.delivery_line?.delivery?.delivery_number ?? '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{line.quantity}</td>
                                     <td className="p-3 text-right tabular-nums">{line.unit_price}</td>
                                     <td className="p-3 text-right tabular-nums">{line.line_discount}</td>
@@ -148,7 +151,7 @@ export default function InvoiceShow({
                             <span>Outstanding</span>
                             <span className="tabular-nums">{outstanding}</span>
                         </div>
-                        <div className="mt-2 flex justify-between text-muted-foreground">
+                        <div className="text-muted-foreground mt-2 flex justify-between">
                             <span>Cost of these goods</span>
                             <span className="tabular-nums">{costReleased}</span>
                         </div>
@@ -208,7 +211,7 @@ export default function InvoiceShow({
                                     <tr key={allocation.id} className="border-t">
                                         <td className="p-3">{allocation.receipt?.received_on?.slice(0, 10)}</td>
                                         <td className="p-3">{allocation.receipt?.money_account?.name}</td>
-                                        <td className="p-3 text-muted-foreground">{allocation.receipt?.reference}</td>
+                                        <td className="text-muted-foreground p-3">{allocation.receipt?.reference}</td>
                                         <td className="p-3 text-right tabular-nums">{allocation.amount}</td>
                                     </tr>
                                 ))}
@@ -238,13 +241,9 @@ export default function InvoiceShow({
                                         <td className="p-3">
                                             {line.account?.code} {line.account?.name}
                                         </td>
-                                        <td className="p-3 text-muted-foreground">{line.memo}</td>
-                                        <td className="p-3 text-right tabular-nums">
-                                            {line.amount_minor > 0 ? taka(line.amount_minor) : ''}
-                                        </td>
-                                        <td className="p-3 text-right tabular-nums">
-                                            {line.amount_minor < 0 ? taka(-line.amount_minor) : ''}
-                                        </td>
+                                        <td className="text-muted-foreground p-3">{line.memo}</td>
+                                        <td className="p-3 text-right tabular-nums">{line.amount_minor > 0 ? taka(line.amount_minor) : ''}</td>
+                                        <td className="p-3 text-right tabular-nums">{line.amount_minor < 0 ? taka(-line.amount_minor) : ''}</td>
                                     </tr>
                                 ))}
                             </tbody>
