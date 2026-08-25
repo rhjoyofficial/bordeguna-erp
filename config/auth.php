@@ -94,7 +94,13 @@ return [
         'users' => [
             'provider' => 'users',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
-            'expire' => 60,
+            // 24 hours, Joy's decision 25 Aug 2026. An hour was the default and
+            // it beat two employees in a row: the link is used as an invitation
+            // to staff who read email at night, not only as a reset for someone
+            // sitting at the screen. Applies to every reset link, not just
+            // invitations, so a stolen mailbox stays useful to a thief for a day
+            // rather than an hour.
+            'expire' => 1440,
             'throttle' => 60,
         ],
     ],

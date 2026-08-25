@@ -137,7 +137,8 @@ class EmployeeController extends Controller
 
         $businessId = app(BusinessContext::class)->id();
 
-        $linkLifetime = app(SendPasswordSetupLink::class)->lifetimeMinutes();
+        $mailer = app(SendPasswordSetupLink::class);
+        $linkLifetime = $mailer->lifetimeMinutes();
 
         $passwordLinkSentAt = $employee->user === null ? null : DB::table('password_reset_tokens')
             ->where('email', $employee->user->email)->value('created_at');
@@ -225,7 +226,7 @@ class EmployeeController extends Controller
             // Creating a login is two acts (a user, and the join to this
             // record), so the card only appears for someone allowed both.
             'can_manage_login' => $request->user()->can('foundation.users.manage'),
-            'password_link_lifetime' => $linkLifetime,
+            'password_link_lifetime' => $mailer->lifetimeLabel(),
             'transitionable_statuses' => collect($employee->transitionableStatuses())
                 ->map(fn (EmployeeStatus $status) => ['value' => $status->value, 'label' => $status->label()]),
             // Probation: the confirm button and the due date it argues from.
@@ -366,7 +367,7 @@ class EmployeeController extends Controller
             return back()->with('error', "Login created for {$employee->fullName()}, but the email to {$data['email']} did not go out. Send the password link again from this page.");
         }
 
-        $message = "Login created for {$employee->fullName()} and a password link emailed to {$data['email']}. It expires in {$mailer->lifetimeMinutes()} minutes.";
+        $message = "Login created for {$employee->fullName()} and a password link emailed to {$data['email']}. It is valid for {$mailer->lifetimeLabel()}.";
 
         if (! $result['role_assigned'] && ! $result['reused_existing_account']) {
             $message .= ' They hold no role yet: set one on Settings, Team.';

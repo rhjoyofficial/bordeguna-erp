@@ -30,7 +30,7 @@ interface Member {
 interface TeamProps {
     members: Member[];
     assignable_roles: string[];
-    password_link_expires_after: number;
+    password_link_lifetime: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Team', href: '/settings/team' }];
@@ -117,7 +117,7 @@ function AddMemberForm({ assignableRoles }: { assignableRoles: string[] }) {
     );
 }
 
-function MemberRow({ member, assignableRoles, linkExpiresAfter }: { member: Member; assignableRoles: string[]; linkExpiresAfter: number }) {
+function MemberRow({ member, assignableRoles, linkLifetime }: { member: Member; assignableRoles: string[]; linkLifetime: string }) {
     const [editing, setEditing] = useState(false);
     // Seeded from the current member each time edit opens (not once at mount),
     // so re-editing after an update never carries a stale role set.
@@ -152,7 +152,7 @@ function MemberRow({ member, assignableRoles, linkExpiresAfter }: { member: Memb
                         <p className={`text-xs ${member.password_link_expired ? 'text-destructive' : 'text-muted-foreground'}`}>
                             {member.password_link_expired
                                 ? `Password link sent ${member.password_link_sent_at} has EXPIRED and was never used. Send another.`
-                                : `Password link sent ${member.password_link_sent_at}, not used yet (valid ${linkExpiresAfter} minutes).`}
+                                : `Password link sent ${member.password_link_sent_at}, not used yet (valid ${linkLifetime}).`}
                         </p>
                     )}
                 </div>
@@ -177,7 +177,7 @@ function MemberRow({ member, assignableRoles, linkExpiresAfter }: { member: Memb
                                 </Button>
                             }
                             title={`Email a password link to ${member.name}?`}
-                            description={`An email goes to ${member.email} with a link where they choose their own password. The link is valid for ${linkExpiresAfter} minutes and can only be used once. Nobody here sees or types their password.`}
+                            description={`An email goes to ${member.email} with a link where they choose their own password. The link is valid for ${linkLifetime} and can only be used once. Nobody here sees or types their password.`}
                             confirmLabel="Send link"
                             onConfirm={sendPasswordLink}
                         />
@@ -233,7 +233,7 @@ function MemberRow({ member, assignableRoles, linkExpiresAfter }: { member: Memb
     );
 }
 
-export default function Team({ members, assignable_roles, password_link_expires_after }: TeamProps) {
+export default function Team({ members, assignable_roles, password_link_lifetime }: TeamProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Team" />
@@ -253,12 +253,7 @@ export default function Team({ members, assignable_roles, password_link_expires_
                             <p className="text-muted-foreground text-sm">No members yet.</p>
                         ) : (
                             members.map((member) => (
-                                <MemberRow
-                                    key={member.id}
-                                    member={member}
-                                    assignableRoles={assignable_roles}
-                                    linkExpiresAfter={password_link_expires_after}
-                                />
+                                <MemberRow key={member.id} member={member} assignableRoles={assignable_roles} linkLifetime={password_link_lifetime} />
                             ))
                         )}
                     </div>

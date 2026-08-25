@@ -39,4 +39,27 @@ class SendPasswordSetupLink
     {
         return (int) config('auth.passwords.users.expire', 60);
     }
+
+    /**
+     * The same lifetime as a person would say it. Nobody reads "1440 minutes"
+     * and thinks "tomorrow morning".
+     */
+    public function lifetimeLabel(): string
+    {
+        $minutes = $this->lifetimeMinutes();
+
+        if ($minutes % 1440 === 0) {
+            $days = intdiv($minutes, 1440);
+
+            return $days === 1 ? '24 hours' : "{$days} days";
+        }
+
+        if ($minutes % 60 === 0) {
+            $hours = intdiv($minutes, 60);
+
+            return $hours === 1 ? '1 hour' : "{$hours} hours";
+        }
+
+        return "{$minutes} minutes";
+    }
 }

@@ -114,7 +114,7 @@ interface ShowProps {
     supervisors: NamedOption[];
     document_types: Option[];
     can_manage_login: boolean;
-    password_link_lifetime: number;
+    password_link_lifetime: string;
 }
 
 const statusVariant: Record<string, 'secondary' | 'default' | 'outline' | 'destructive'> = {
@@ -612,7 +612,7 @@ function DocumentsCard({ employeeId, documents, documentTypes }: { employeeId: n
     );
 }
 
-function LoginAccountCard({ employee, lifetimeMinutes }: { employee: EmployeeDetail; lifetimeMinutes: number }) {
+function LoginAccountCard({ employee, lifetime }: { employee: EmployeeDetail; lifetime: string }) {
     const [email, setEmail] = useState('');
     const [sending, setSending] = useState(false);
 
@@ -675,7 +675,7 @@ function LoginAccountCard({ employee, lifetimeMinutes }: { employee: EmployeeDet
                             Password link sent {employee.user.password_link_sent_at}
                             {employee.user.password_link_expired
                                 ? ' has expired without being used. Send another.'
-                                : `, valid for ${lifetimeMinutes} minutes from then.`}
+                                : `, valid for ${lifetime} from then.`}
                         </p>
                     )}
                     <Button size="sm" variant="outline" disabled={sending} onClick={resend}>
@@ -777,9 +777,7 @@ export default function EmployeeShow({
                     </dl>
                 </div>
 
-                {can_manage_login && employee.status !== 'separated' && (
-                    <LoginAccountCard employee={employee} lifetimeMinutes={password_link_lifetime} />
-                )}
+                {can_manage_login && employee.status !== 'separated' && <LoginAccountCard employee={employee} lifetime={password_link_lifetime} />}
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Emergency contact</h3>

@@ -50,7 +50,8 @@ class UserManagementController extends Controller
             ->whereIn('email', $business->users()->pluck('users.email'))
             ->pluck('created_at', 'email');
 
-        $expiresAfter = (int) config('auth.passwords.users.expire', 60);
+        $mailer = app(SendPasswordSetupLink::class);
+        $expiresAfter = $mailer->lifetimeMinutes();
 
         $members = $business
             ->users()->orderBy('name')->get()
@@ -74,7 +75,7 @@ class UserManagementController extends Controller
         return Inertia::render('settings/team', [
             'members' => $members,
             'assignable_roles' => Role::where('business_id', $businessId)->orderBy('name')->pluck('name'),
-            'password_link_expires_after' => $expiresAfter,
+            'password_link_lifetime' => $mailer->lifetimeLabel(),
         ]);
     }
 
@@ -216,7 +217,7 @@ class UserManagementController extends Controller
         return match ($status) {
             PasswordBroker::RESET_LINK_SENT => back()->with(
                 'success',
-                "Password link emailed to {$user->email}. It expires in {$mailer->lifetimeMinutes()} minutes."
+                "Password link emailed to {$user->email}. It is valid for {$mailer->lifetimeLabel()}."
             ),
             PasswordBroker::RESET_THROTTLED => back()->with(
                 'error',
