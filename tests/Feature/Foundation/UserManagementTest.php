@@ -3,6 +3,9 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -156,4 +159,68 @@ it('rejects a duplicate email when adding a member', function () {
         ->post(route('users.store'), [
             'name' => 'Dupe', 'email' => $this->staff->email, 'password' => 'password123', 'roles' => ['Staff'],
         ])->assertSessionHasErrors('email');
+});
+
+it('emails a member a link to set their own password', function () {
+    Notification::fake();
+
+    $this->actingAs($this->owner)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->post(route('users.password-link', $this->staff))
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    Notification::assertSentTo($this->staff, ResetPassword::class);
+    expect(DB::table('password_reset_tokens')->where('email', $this->staff->email)->exists())->toBeTrue();
+});
+
+it('refuses to send a password link to a deactivated member', function () {
+    Notification::fake();
+    $this->staff->update(['is_active' => false]);
+
+    $this->actingAs($this->owner)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->post(route('users.password-link', $this->staff))
+        ->assertRedirect()
+        ->assertSessionHas('error');
+
+    Notification::assertNothingSent();
+});
+
+it('does not let a member without user management send password links', function () {
+    Notification::fake();
+
+    $this->actingAs($this->staff)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->post(route('users.password-link', $this->owner))
+        ->assertForbidden();
+
+    Notification::assertNothingSent();
+});
+
+it('does not send a password link to someone outside this business', function () {
+    Notification::fake();
+    $outsider = User::factory()->create();
+    $outsider->businesses()->attach($this->otherBusiness->id);
+
+    $this->actingAs($this->owner)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->post(route('users.password-link', $outsider))
+        ->assertNotFound();
+
+    Notification::assertNothingSent();
+});
+
+it('shows the team screen who still has an unused password link', function () {
+    $this->actingAs($this->owner)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->post(route('users.password-link', $this->staff));
+
+    $this->actingAs($this->owner)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->get(route('users.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where('members', fn ($members) => collect($members)
+                ->firstWhere('id', $this->staff->id)['password_link_sent_at'] !== null)
+        );
 });

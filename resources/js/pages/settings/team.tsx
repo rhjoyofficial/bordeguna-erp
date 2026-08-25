@@ -20,16 +20,32 @@ interface Member {
     is_super_admin: boolean;
     roles: string[];
     is_self: boolean;
+    // Set only while an unused set-password link is outstanding. Laravel
+    // deletes the token the moment it is used, so null means either "never
+    // sent" or "already used to set a password".
+    password_link_sent_at: string | null;
+    password_link_expired: boolean;
 }
 
 interface TeamProps {
     members: Member[];
     assignable_roles: string[];
+    password_link_expires_after: number;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Team', href: '/settings/team' }];
 
-function RolePicker({ available, selected, onToggle, idPrefix }: { available: string[]; selected: string[]; onToggle: (role: string) => void; idPrefix: string }) {
+function RolePicker({
+    available,
+    selected,
+    onToggle,
+    idPrefix,
+}: {
+    available: string[];
+    selected: string[];
+    onToggle: (role: string) => void;
+    idPrefix: string;
+}) {
     return (
         <div className="flex flex-wrap gap-3">
             {available.map((role) => (
@@ -55,8 +71,7 @@ function AddMemberForm({ assignableRoles }: { assignableRoles: string[] }) {
         post(route('users.store'), { onSuccess: () => reset() });
     };
 
-    const toggleRole = (role: string) =>
-        setData('roles', data.roles.includes(role) ? data.roles.filter((r) => r !== role) : [...data.roles, role]);
+    const toggleRole = (role: string) => setData('roles', data.roles.includes(role) ? data.roles.filter((r) => r !== role) : [...data.roles, role]);
 
     return (
         <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
@@ -69,12 +84,24 @@ function AddMemberForm({ assignableRoles }: { assignableRoles: string[] }) {
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} placeholder="email@example.com" />
+                    <Input
+                        id="email"
+                        type="email"
+                        value={data.email}
+                        onChange={(e) => setData('email', e.target.value)}
+                        placeholder="email@example.com"
+                    />
                     <InputError message={errors.email} />
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="password">Initial password</Label>
-                    <Input id="password" type="password" value={data.password} onChange={(e) => setData('password', e.target.value)} placeholder="Set an initial password" />
+                    <Input
+                        id="password"
+                        type="password"
+                        value={data.password}
+                        onChange={(e) => setData('password', e.target.value)}
+                        placeholder="Set an initial password"
+                    />
                     <InputError message={errors.password} />
                 </div>
             </div>
@@ -90,7 +117,7 @@ function AddMemberForm({ assignableRoles }: { assignableRoles: string[] }) {
     );
 }
 
-function MemberRow({ member, assignableRoles }: { member: Member; assignableRoles: string[] }) {
+function MemberRow({ member, assignableRoles, linkExpiresAfter }: { member: Member; assignableRoles: string[]; linkExpiresAfter: number }) {
     const [editing, setEditing] = useState(false);
     // Seeded from the current member each time edit opens (not once at mount),
     // so re-editing after an update never carries a stale role set.
@@ -106,20 +133,28 @@ function MemberRow({ member, assignableRoles }: { member: Member; assignableRole
     const save = () => router.put(route('users.update', member.id), { roles }, { onSuccess: () => setEditing(false) });
     const toggleActive = () => router.patch(route('users.toggle-active', member.id));
     const remove = () => router.delete(route('users.destroy', member.id));
+    const sendPasswordLink = () => router.post(route('users.password-link', member.id));
 
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 border-b py-3 last:border-0">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <p className="font-medium">
-                        {member.name} {member.is_self && <span className="text-xs text-muted-foreground">(you)</span>}
+                        {member.name} {member.is_self && <span className="text-muted-foreground text-xs">(you)</span>}
                         {!member.is_active && (
-                            <Badge variant="outline" className="ml-2 text-muted-foreground">
+                            <Badge variant="outline" className="text-muted-foreground ml-2">
                                 Deactivated
                             </Badge>
                         )}
                     </p>
-                    <p className="text-sm text-muted-foreground">{member.email}</p>
+                    <p className="text-muted-foreground text-sm">{member.email}</p>
+                    {member.password_link_sent_at && (
+                        <p className={`text-xs ${member.password_link_expired ? 'text-destructive' : 'text-muted-foreground'}`}>
+                            {member.password_link_expired
+                                ? `Password link sent ${member.password_link_sent_at} has EXPIRED and was never used. Send another.`
+                                : `Password link sent ${member.password_link_sent_at}, not used yet (valid ${linkExpiresAfter} minutes).`}
+                        </p>
+                    )}
                 </div>
                 {!editing && (
                     <div className="flex flex-wrap items-center gap-2">
@@ -130,11 +165,22 @@ function MemberRow({ member, assignableRoles }: { member: Member; assignableRole
                                 </Badge>
                             ))
                         ) : (
-                            <span className="text-sm text-muted-foreground">No roles</span>
+                            <span className="text-muted-foreground text-sm">No roles</span>
                         )}
                         <Button variant="ghost" size="sm" onClick={startEdit}>
                             Edit roles
                         </Button>
+                        <ConfirmDialog
+                            trigger={
+                                <Button variant="ghost" size="sm">
+                                    {member.password_link_sent_at ? 'Resend password link' : 'Send password link'}
+                                </Button>
+                            }
+                            title={`Email a password link to ${member.name}?`}
+                            description={`An email goes to ${member.email} with a link where they choose their own password. The link is valid for ${linkExpiresAfter} minutes and can only be used once. Nobody here sees or types their password.`}
+                            confirmLabel="Send link"
+                            onConfirm={sendPasswordLink}
+                        />
                         {!member.is_self && (
                             <>
                                 <ConfirmDialog
@@ -171,7 +217,7 @@ function MemberRow({ member, assignableRoles }: { member: Member; assignableRole
                 )}
             </div>
             {editing && (
-                <div className="flex flex-col gap-3 rounded-lg bg-muted/40 p-3">
+                <div className="bg-muted/40 flex flex-col gap-3 rounded-lg p-3">
                     <RolePicker available={assignableRoles} selected={roles} onToggle={toggleRole} idPrefix={`edit-${member.id}`} />
                     <div className="flex gap-2">
                         <Button size="sm" onClick={save} disabled={roles.length === 0}>
@@ -187,7 +233,7 @@ function MemberRow({ member, assignableRoles }: { member: Member; assignableRole
     );
 }
 
-export default function Team({ members, assignable_roles }: TeamProps) {
+export default function Team({ members, assignable_roles, password_link_expires_after }: TeamProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Team" />
@@ -202,11 +248,18 @@ export default function Team({ members, assignable_roles }: TeamProps) {
                     <AddMemberForm assignableRoles={assignable_roles} />
 
                     <div>
-                        <h3 className="mb-1 text-sm font-medium text-muted-foreground">Members</h3>
+                        <h3 className="text-muted-foreground mb-1 text-sm font-medium">Members</h3>
                         {members.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No members yet.</p>
+                            <p className="text-muted-foreground text-sm">No members yet.</p>
                         ) : (
-                            members.map((member) => <MemberRow key={member.id} member={member} assignableRoles={assignable_roles} />)
+                            members.map((member) => (
+                                <MemberRow
+                                    key={member.id}
+                                    member={member}
+                                    assignableRoles={assignable_roles}
+                                    linkExpiresAfter={password_link_expires_after}
+                                />
+                            ))
                         )}
                     </div>
                 </div>

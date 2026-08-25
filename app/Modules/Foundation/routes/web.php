@@ -17,6 +17,7 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     Route::post('settings/team', [UserManagementController::class, 'store'])->name('users.store');
     Route::put('settings/team/{user}', [UserManagementController::class, 'update'])->name('users.update');
     Route::patch('settings/team/{user}/toggle-active', [UserManagementController::class, 'toggleActive'])->name('users.toggle-active');
+    Route::post('settings/team/{user}/password-link', [UserManagementController::class, 'sendPasswordLink'])->name('users.password-link');
     Route::delete('settings/team/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
 
     // Role & permission management — same admin permission as team management.

@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password as PasswordBroker;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -38,7 +40,18 @@ class UserManagementController extends Controller
         // Load the business from the resolved tenant context, not via the
         // acting user's membership — a Super Admin managing a team need not be
         // a member of it (access is already gated above).
-        $members = Business::findOrFail($businessId)
+        $business = Business::findOrFail($businessId);
+
+        // A row in password_reset_tokens means a set-password link is out and
+        // has NOT been used yet (Laravel deletes the row on use), so this is
+        // the honest answer to "did they set their password?", not a guess.
+        $pendingLinks = DB::table('password_reset_tokens')
+            ->whereIn('email', $business->users()->pluck('users.email'))
+            ->pluck('created_at', 'email');
+
+        $expiresAfter = (int) config('auth.passwords.users.expire', 60);
+
+        $members = $business
             ->users()->orderBy('name')->get()
             ->map(fn (User $user) => [
                 'id' => $user->id,
@@ -49,11 +62,18 @@ class UserManagementController extends Controller
                 // Team-aware: getRoleNames() returns only the current business's roles.
                 'roles' => $user->getRoleNames()->values(),
                 'is_self' => $user->id === $request->user()->id,
+                'password_link_sent_at' => isset($pendingLinks[$user->email])
+                    ? Carbon::parse($pendingLinks[$user->email])->timezone(config('app.timezone'))->format('j M Y, g:i a')
+                    : null,
+                'password_link_expired' => isset($pendingLinks[$user->email])
+                    ? Carbon::parse($pendingLinks[$user->email])->addMinutes($expiresAfter)->isPast()
+                    : false,
             ]);
 
         return Inertia::render('settings/team', [
             'members' => $members,
             'assignable_roles' => Role::where('business_id', $businessId)->orderBy('name')->pluck('name'),
+            'password_link_expires_after' => $expiresAfter,
         ]);
     }
 
@@ -169,6 +189,48 @@ class UserManagementController extends Controller
         }
 
         return back()->with('success', $user->is_active ? "{$user->name} reactivated." : "{$user->name} deactivated.");
+    }
+
+    /**
+     * Emails this member a link to set their own password.
+     *
+     * The admin never sees or types the password: the link is the standard
+     * password-reset token, so the person choosing the password is the only
+     * one who ever knows it. Used both for a brand-new account and for a
+     * link that was never opened before it expired.
+     */
+    public function sendPasswordLink(Request $request, User $user): RedirectResponse
+    {
+        $this->authorize('foundation.users.manage');
+
+        $businessId = app(BusinessContext::class)->id();
+        $this->ensureMember($user, $businessId);
+
+        if (! $user->is_active) {
+            return back()->with('error', "{$user->name} is deactivated. Reactivate them first, or the link leads to a login they cannot pass.");
+        }
+
+        // Mail can be down, misconfigured or refused by the SMTP host. Without
+        // this the admin gets a blank 500 and no idea whether it was sent.
+        try {
+            $status = PasswordBroker::sendResetLink(['email' => $user->email]);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', "Could not email {$user->email}. The mail server refused the message. Check the mail settings or try again.");
+        }
+
+        return match ($status) {
+            PasswordBroker::RESET_LINK_SENT => back()->with(
+                'success',
+                "Password link emailed to {$user->email}. It expires in ".(int) config('auth.passwords.users.expire', 60).' minutes.'
+            ),
+            PasswordBroker::RESET_THROTTLED => back()->with(
+                'error',
+                'A link was just sent to this person. Wait a minute before sending another.'
+            ),
+            default => back()->with('error', "Could not send a link to {$user->email}."),
+        };
     }
 
     private function ensureMember(User $user, int $businessId): void
