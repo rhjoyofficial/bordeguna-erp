@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
@@ -44,7 +44,10 @@ interface DuplicateMatch {
     customers: { id: number; name: string; code: string | null; phone: string | null; type: string }[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'CRM', href: '/crm/leads' }, { title: 'Leads', href: '/crm/leads' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'CRM', href: '/crm/leads' },
+    { title: 'Leads', href: '/crm/leads' },
+];
 
 const EMPTY = {
     name: '',
@@ -172,9 +175,7 @@ export default function LeadsIndex({
     };
 
     // Only campaigns belonging to the chosen source, so the two axes cannot disagree.
-    const campaignsForSource = campaigns.filter(
-        (c) => !data.lead_source_id || String(c.lead_source_id) === data.lead_source_id,
-    );
+    const campaignsForSource = campaigns.filter((c) => !data.lead_source_id || String(c.lead_source_id) === data.lead_source_id);
 
     const hasMatches = matches !== null && (matches.leads.length > 0 || matches.customers.length > 0);
 
@@ -269,7 +270,7 @@ export default function LeadsIndex({
                         <Label htmlFor="address">Address</Label>
                         <textarea
                             id="address"
-                            className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            className="border-input bg-background min-h-20 rounded-md border px-3 py-2 text-sm"
                             value={data.address}
                             onChange={(e) => setData('address', e.target.value)}
                         />
@@ -279,7 +280,7 @@ export default function LeadsIndex({
                         <Label htmlFor="qualification_note">Qualification note</Label>
                         <textarea
                             id="qualification_note"
-                            className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            className="border-input bg-background min-h-20 rounded-md border px-3 py-2 text-sm"
                             value={data.qualification_note}
                             onChange={(e) => setData('qualification_note', e.target.value)}
                         />
@@ -289,7 +290,7 @@ export default function LeadsIndex({
                         <Label htmlFor="note">Note</Label>
                         <textarea
                             id="note"
-                            className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            className="border-input bg-background min-h-20 rounded-md border px-3 py-2 text-sm"
                             value={data.note}
                             onChange={(e) => setData('note', e.target.value)}
                         />
@@ -300,7 +301,7 @@ export default function LeadsIndex({
                         ⚠ Appending only. Recording a source on an EDIT adds a new
                         touch to the acquisition history; it never overwrites the
                         original one. */}
-                    <div className="md:col-span-4 border-t pt-4">
+                    <div className="border-t pt-4 md:col-span-4">
                         <p className="mb-2 text-sm font-medium">
                             Attribution {editing && <span className="text-muted-foreground">(adds a new touch, never overwrites)</span>}
                         </p>
@@ -391,11 +392,11 @@ export default function LeadsIndex({
                     </div>
 
                     {hasMatches && (
-                        <div className="md:col-span-4 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
+                        <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm md:col-span-4">
                             <p className="font-medium">This phone number already exists.</p>
                             <p className="text-muted-foreground">
-                                A household may share a number, so this is a warning and not a block. Use an existing record
-                                where it is the same person.
+                                A household may share a number, so this is a warning and not a block. Use an existing record where it is the same
+                                person.
                             </p>
                             <ul className="mt-2 list-disc pl-5">
                                 {matches?.customers.map((c) => (
@@ -421,7 +422,7 @@ export default function LeadsIndex({
                                 <Button type="button" variant="ghost" onClick={cancel}>
                                     Cancel
                                 </Button>
-                                <span className="self-center text-sm text-muted-foreground">Editing lead #{editing.id}</span>
+                                <span className="text-muted-foreground self-center text-sm">Editing lead #{editing.id}</span>
                             </>
                         )}
                     </div>
@@ -482,15 +483,22 @@ export default function LeadsIndex({
                             {leads.data.map((lead) => (
                                 <tr key={lead.id} className="border-t">
                                     <td className="p-3">
-                                        <div className="font-medium">{lead.name ?? '(no name)'}</div>
-                                        <div className="text-xs text-muted-foreground">
+                                        {/* ⚠⚠ The only route to a lead's own history from
+                                            this list. Everything CRM records - calls, notes,
+                                            product interests, follow-ups - was reachable ONLY
+                                            from the follow-up queue, so a lead with no open
+                                            task had a history nobody could open. */}
+                                        <Link href={`/crm/lead/${lead.id}/timeline`} className="font-medium underline-offset-4 hover:underline">
+                                            {lead.name ?? '(no name)'}
+                                        </Link>
+                                        <div className="text-muted-foreground text-xs">
                                             {lead.phone ?? '-'} {lead.email ? `· ${lead.email}` : ''}
                                         </div>
                                     </td>
                                     <td className="p-3">
                                         <Badge variant="secondary">{lead.status_label}</Badge>
                                         {lead.converted_customer && (
-                                            <div className="mt-1 text-xs text-muted-foreground">→ {lead.converted_customer}</div>
+                                            <div className="text-muted-foreground mt-1 text-xs">→ {lead.converted_customer}</div>
                                         )}
                                     </td>
                                     <td className="p-3">{lead.brand ?? '-'}</td>

@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
@@ -284,7 +284,16 @@ export default function CustomersIndex({
                             {customers.data.map((customer) => (
                                 <tr key={customer.id} className="border-t">
                                     <td className="p-3">
-                                        <div className="font-medium">{customer.name}</div>
+                                        {/* ⚠⚠ A converted lead's history had NO door on this
+                                            side at all: every call, note and product interest
+                                            recorded before they became a customer was
+                                            unreachable the moment they did. */}
+                                        <Link
+                                            href={`/crm/customer/${customer.id}/timeline`}
+                                            className="font-medium underline-offset-4 hover:underline"
+                                        >
+                                            {customer.name}
+                                        </Link>
                                         {customer.code && <div className="text-muted-foreground text-xs">{customer.code}</div>}
                                     </td>
                                     <td className="p-3">

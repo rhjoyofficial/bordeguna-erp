@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Crm\Console\Commands\NotifyFollowUpsDue;
 use App\Modules\Hrm\Console\Commands\AccrueEarnedLeave;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
 use App\Modules\Inventory\Actions\ProposeExpiredStockWriteOffs;
@@ -68,3 +69,14 @@ Schedule::call(fn () => app(ProposeExpiredStockWriteOffs::class)->handle())
     ->dailyAt('23:30')
     ->name('inventory:propose-expired-write-offs')
     ->withoutOverlapping();
+
+// The CRM follow-up digest (25 Aug 2026). Tasks carried a due date from the
+// first day and nothing ever read one: the queue had to be opened by somebody
+// who already remembered to open it.
+//
+// ⚠ 08:30 Dhaka, before the shop opens rather than at midnight, so the message
+// is waiting at the start of the working day instead of ageing overnight.
+Schedule::command(NotifyFollowUpsDue::class)
+    ->dailyAt('08:30')
+    ->withoutOverlapping()
+    ->runInBackground();
