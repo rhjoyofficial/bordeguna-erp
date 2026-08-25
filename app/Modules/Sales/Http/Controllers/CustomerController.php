@@ -49,6 +49,10 @@ class CustomerController extends Controller
             // and both price identically by construction.
             'priceGroups' => PriceGroup::query()->active()
                 ->orderBy('id')->get(['id', 'code', 'name']),
+            // Reading the list is open to anyone who may see sales; changing it
+            // in bulk is not, so the import panel is hidden rather than left to
+            // 403 on press.
+            'mayManage' => request()->user()?->can('sales.customers.manage') ?? false,
         ]);
     }
 

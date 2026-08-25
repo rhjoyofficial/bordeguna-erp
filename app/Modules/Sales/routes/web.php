@@ -2,6 +2,7 @@
 
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
+use App\Modules\Sales\Http\Controllers\CustomerImportController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
 use App\Modules\Sales\Http\Controllers\DiscountController;
 use App\Modules\Sales\Http\Controllers\PriceImportController;
@@ -51,6 +52,14 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::post('customers', [CustomerController::class, 'store'])->name('customers.store');
         Route::put('customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
         Route::delete('customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
+
+        // The list in and out of a spreadsheet. Same permission as editing one
+        // by hand: a file that sets price groups and credit limits is the same
+        // financial decision taken in bulk.
+        Route::get('customers/template', [CustomerImportController::class, 'template'])->name('customers.template');
+        Route::get('customers/export', [CustomerImportController::class, 'export'])->name('customers.export');
+        Route::post('customers/import/review', [CustomerImportController::class, 'review'])->name('customers.import.review');
+        Route::post('customers/import/apply', [CustomerImportController::class, 'apply'])->name('customers.import.apply');
     });
 
     // ⚠⚠ Setting a price is a margin decision. Deliberately NOT given to Staff.

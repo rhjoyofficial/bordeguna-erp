@@ -1,3 +1,4 @@
+import { CustomerImportPanel } from '@/components/customer-import-panel';
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
@@ -69,11 +70,13 @@ export default function CustomersIndex({
     filters: initialFilters,
     types,
     priceGroups,
+    mayManage,
 }: {
     customers: Paginated<Customer>;
     filters: { search: string; type: string; status: string };
     types: { value: string; label: string }[];
     priceGroups: PriceGroup[];
+    mayManage: boolean;
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/customers', initialFilters);
 
@@ -125,6 +128,8 @@ export default function CustomersIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Customers" />
             <div className="flex flex-col gap-6 p-4">
+                {mayManage && <CustomerImportPanel />}
+
                 <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
                     <div className="grid gap-2">
                         <Label htmlFor="name">Name</Label>
@@ -210,7 +215,7 @@ export default function CustomersIndex({
                         <Label htmlFor="address">Address</Label>
                         <textarea
                             id="address"
-                            className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            className="border-input bg-background min-h-20 rounded-md border px-3 py-2 text-sm"
                             value={data.address}
                             onChange={(e) => setData('address', e.target.value)}
                         />
@@ -220,7 +225,7 @@ export default function CustomersIndex({
                         <Label htmlFor="note">Note</Label>
                         <textarea
                             id="note"
-                            className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            className="border-input bg-background min-h-20 rounded-md border px-3 py-2 text-sm"
                             value={data.note}
                             onChange={(e) => setData('note', e.target.value)}
                         />
@@ -235,9 +240,7 @@ export default function CustomersIndex({
                                 <Button type="button" variant="ghost" onClick={cancel}>
                                     Cancel
                                 </Button>
-                                <span className="self-center text-sm text-muted-foreground">
-                                    Editing {editing.name}
-                                </span>
+                                <span className="text-muted-foreground self-center text-sm">Editing {editing.name}</span>
                             </>
                         )}
                     </div>
@@ -282,7 +285,7 @@ export default function CustomersIndex({
                                 <tr key={customer.id} className="border-t">
                                     <td className="p-3">
                                         <div className="font-medium">{customer.name}</div>
-                                        {customer.code && <div className="text-xs text-muted-foreground">{customer.code}</div>}
+                                        {customer.code && <div className="text-muted-foreground text-xs">{customer.code}</div>}
                                     </td>
                                     <td className="p-3">
                                         <Badge variant="secondary">{customer.type}</Badge>
