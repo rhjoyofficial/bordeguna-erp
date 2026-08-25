@@ -4,7 +4,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Bot, Building2, KeyRound, ListChecks, Network, Palette, ShieldCheck, User, Users } from 'lucide-react';
+import { Bot, Building2, KeyRound, ListChecks, Network, Palette, ScrollText, ShieldCheck, User, Users } from 'lucide-react';
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
     const { canManageUsers, canManageOrganization } = usePage<SharedData>().props;
@@ -26,6 +26,9 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                   { title: 'Business', url: '/settings/business', icon: Building2 },
                   { title: 'Organization', url: '/settings/organization', icon: Network },
                   { title: 'AI providers', url: '/settings/ai-providers', icon: Bot },
+                  // ⚠ The trail was written from day one and had no door. This
+                  // link is the door.
+                  { title: 'Audit trail', url: '/settings/audit', icon: ScrollText },
               ]
             : []),
     ];
