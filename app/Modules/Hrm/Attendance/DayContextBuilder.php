@@ -90,7 +90,19 @@ class DayContextBuilder
             ->applied()
             ->onDate($date)
             ->get()
-            ->contains(fn (Movement $movement) => $movement->type->authorisesHolidayWork() === $holidayWork);
+            ->contains(function (Movement $movement) use ($holidayWork) {
+                if ($holidayWork) {
+                    return $movement->type->authorisesHolidayWork();
+                }
+
+                // ⚠⚠ C-WFH-2: asks whether the movement stands in for punches,
+                // NOT merely whether it is a non-holiday type. Work from home is
+                // a non-holiday movement that must never attend the day by
+                // itself - the person at home clocks in like everybody else.
+                // Written as "not holiday work" this returned true for WFH and
+                // silently marked every remote day present.
+                return $movement->type->authorisesPresenceWithoutPunches();
+            });
     }
 
     /**

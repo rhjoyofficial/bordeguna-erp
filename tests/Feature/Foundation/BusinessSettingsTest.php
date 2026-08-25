@@ -47,6 +47,7 @@ function bizPayload(array $overrides = []): array
         'timezone' => 'Asia/Dhaka',
         'fiscal_year_start_month' => 7,
         'payroll_cycle_start_day' => 24,
+        'wfh_monthly_cap' => 5,
     ], $overrides);
 }
 

@@ -7,7 +7,10 @@ use App\Modules\Foundation\Actions\NotifyStageApprovers;
 use App\Modules\Hrm\Enums\MovementType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\Movement;
+use App\Modules\Hrm\Support\WorkFromHomeAllowance;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Raises a movement request — field duty, official work, or work on a holiday
@@ -18,13 +21,18 @@ use Illuminate\Support\Facades\DB;
  */
 class RequestMovement
 {
-    public function __construct(private readonly NotifyStageApprovers $notify) {}
+    public function __construct(
+        private readonly NotifyStageApprovers $notify,
+        private readonly WorkFromHomeAllowance $allowance,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data  from_time/to_time/place/reason
      */
     public function handle(Employee $employee, MovementType $type, string $date, array $data, User $requestedBy): Movement
     {
+        $this->assertWithinWorkFromHomeCap($employee, $type, $date);
+
         return DB::transaction(function () use ($employee, $type, $date, $data, $requestedBy) {
             $movement = Movement::create([
                 'employee_id' => $employee->id,
@@ -42,5 +50,38 @@ class RequestMovement
 
             return $movement->fresh();
         });
+    }
+
+    /**
+     * C-WFH-4: the monthly cap on working from home.
+     *
+     * ⚠⚠ ENFORCED IN THE ACTION, not in the two controllers that call it. HR
+     * raises movements on one screen and employees raise their own on another;
+     * a cap living in a request rule would hold on whichever screen somebody
+     * remembered to put it, which is how a cap becomes advice.
+     *
+     * ⚠ A cap of zero means work from home is not allowed here, and the message
+     * says that rather than reporting "0 of 0 used", which reads like a bug.
+     */
+    private function assertWithinWorkFromHomeCap(Employee $employee, MovementType $type, string $date): void
+    {
+        if (! $type->isWorkFromHome()) {
+            return;
+        }
+
+        $when = Carbon::parse($date);
+        $summary = $this->allowance->summaryFor($employee, $when);
+
+        if ($summary['cap'] === 0) {
+            throw ValidationException::withMessages([
+                'type' => 'Work from home is not allowed in this business. The monthly limit is set to zero in Settings, Business.',
+            ]);
+        }
+
+        if ($summary['remaining'] < 1) {
+            throw ValidationException::withMessages([
+                'movement_date' => "{$employee->fullName()} has already used all {$summary['cap']} work-from-home day(s) for {$summary['month']}, counting requests still awaiting approval.",
+            ]);
+        }
     }
 }

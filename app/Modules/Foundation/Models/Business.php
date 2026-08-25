@@ -24,6 +24,7 @@ class Business extends Model
         'timezone',
         'fiscal_year_start_month',
         'payroll_cycle_start_day',
+        'wfh_monthly_cap',
         'slug',
         'is_active',
         // ⚠ `is_default` is deliberately absent. Which tenant a person lands in

@@ -34,7 +34,7 @@ class BusinessSettingsController extends Controller
 
         return Inertia::render('settings/business', [
             'business' => $business->only([
-                'id', 'name', 'legal_name', 'address', 'phone', 'email', 'currency', 'timezone', 'fiscal_year_start_month', 'payroll_cycle_start_day',
+                'id', 'name', 'legal_name', 'address', 'phone', 'email', 'currency', 'timezone', 'fiscal_year_start_month', 'payroll_cycle_start_day', 'wfh_monthly_cap',
             ]),
             'logo_url' => $logo?->url(),
             'currencies' => self::CURRENCIES,
@@ -62,6 +62,9 @@ class BusinessSettingsController extends Controller
             // calendar month. Changing it moves FUTURE payroll periods only:
             // one already opened keeps the dates it was calculated on.
             'payroll_cycle_start_day' => ['required', 'integer', 'between:1,28'],
+            // C-WFH-4. Zero is allowed and means work from home is not offered
+            // here; the upper bound is a month, because a "cap" of 40 is not one.
+            'wfh_monthly_cap' => ['required', 'integer', 'between:0,31'],
         ]);
 
         $business->update($data);
@@ -104,4 +107,3 @@ class BusinessSettingsController extends Controller
         return back()->with('success', 'Logo removed.');
     }
 }
-

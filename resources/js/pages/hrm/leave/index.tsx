@@ -250,6 +250,17 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
     const [type, setType] = useState(types[0]?.value ?? 'official_work');
     const [date, setDate] = useState('');
     const [place, setPlace] = useState('');
+
+    // ⚠ "Home" is filled in rather than demanded: the place of a work-from-home
+    // day is not a question worth asking. It stays editable, because somebody
+    // will legitimately want to write "Home, Savar".
+    const chooseType = (value: string) => {
+        setType(value);
+
+        if (value === 'work_from_home' && place.trim() === '') {
+            setPlace('Home');
+        }
+    };
     const [fromTime, setFromTime] = useState('');
     const [toTime, setToTime] = useState('');
     const [reason, setReason] = useState('');
@@ -289,8 +300,10 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                 <DialogHeader>
                     <DialogTitle>Record a movement</DialogTitle>
                     <DialogDescription>
-                        For a day worked away from the device: official work outside the office, field duty, or work on a holiday or weekly off. One
-                        movement covers one date, so a trip of several days needs one per day.
+                        For a day worked away from the device: official work outside the office, field duty, work on a holiday or weekly off, or a day
+                        worked from home. One movement covers one date, so a trip of several days needs one per day.{' '}
+                        {/* ⚠⚠ C-WFH-2 said out loud on the screen that raises the request. */}
+                        <span className="font-medium">Working from home still needs a clock in and clock out.</span>
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
@@ -309,7 +322,7 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="mv_type">Type</Label>
-                            <select id="mv_type" className={selectClass} value={type} onChange={(e) => setType(e.target.value)}>
+                            <select id="mv_type" className={selectClass} value={type} onChange={(e) => chooseType(e.target.value)}>
                                 {types.map((t) => (
                                     <option key={t.value} value={t.value}>
                                         {t.label}

@@ -127,6 +127,9 @@ it('lets an Owner change the day in Settings and refuses a day past the 28th', f
         'currency' => 'BDT',
         'timezone' => 'Asia/Dhaka',
         'fiscal_year_start_month' => 7,
+        // The whole profile form posts together, so a new field on it belongs
+        // in every payload that stands in for the form.
+        'wfh_monthly_cap' => 5,
     ];
 
     // The 29th exists in some months only, so a cycle anchored there would

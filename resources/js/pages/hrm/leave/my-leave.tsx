@@ -98,18 +98,26 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                                 </option>
                             ))}
                         </select>
-                        {errors.leave_type_id && <p className="text-xs text-destructive">{errors.leave_type_id}</p>}
+                        {errors.leave_type_id && <p className="text-destructive text-xs">{errors.leave_type_id}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="start_date">From</Label>
-                            <Input id="start_date" type="date" value={start} onChange={(e) => { setStart(e.target.value); if (end === '') setEnd(e.target.value); }} />
-                            {errors.start_date && <p className="text-xs text-destructive">{errors.start_date}</p>}
+                            <Input
+                                id="start_date"
+                                type="date"
+                                value={start}
+                                onChange={(e) => {
+                                    setStart(e.target.value);
+                                    if (end === '') setEnd(e.target.value);
+                                }}
+                            />
+                            {errors.start_date && <p className="text-destructive text-xs">{errors.start_date}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="end_date">To</Label>
                             <Input id="end_date" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
-                            {errors.end_date && <p className="text-xs text-destructive">{errors.end_date}</p>}
+                            {errors.end_date && <p className="text-destructive text-xs">{errors.end_date}</p>}
                         </div>
                     </div>
                     <div className="grid gap-2">
@@ -121,12 +129,12 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                                 </option>
                             ))}
                         </select>
-                        {errors.day_portion && <p className="text-xs text-destructive">{errors.day_portion}</p>}
+                        {errors.day_portion && <p className="text-destructive text-xs">{errors.day_portion}</p>}
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="reason">Reason</Label>
                         <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
-                        {errors.reason && <p className="text-xs text-destructive">{errors.reason}</p>}
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                 </div>
                 <DialogFooter>
@@ -169,6 +177,15 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
     const [reason, setReason] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
 
+    // ⚠ Same as the HR form: the place of a day at home is not worth asking.
+    const chooseType = (value: string) => {
+        setType(value);
+
+        if (value === 'work_from_home' && place.trim() === '') {
+            setPlace('Home');
+        }
+    };
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -180,13 +197,17 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
                 <DialogHeader>
                     <DialogTitle>Request a movement</DialogTitle>
                     <DialogDescription>
-                        For field duty, official work outside the office, or working on a holiday. A movement draws on no leave balance.
+                        For field duty, official work outside the office, working on a holiday, or a day worked from home. A movement draws on no
+                        leave balance.{' '}
+                        {/* ⚠⚠ C-WFH-2. The one thing a person requesting a day at
+                            home has to know before the day arrives. */}
+                        <span className="font-medium">A day at home still needs your clock in and clock out.</span>
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="mtype">Type</Label>
-                        <select id="mtype" className={selectClass} value={type} onChange={(e) => setType(e.target.value)}>
+                        <select id="mtype" className={selectClass} value={type} onChange={(e) => chooseType(e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
                                     {t.label}
@@ -198,7 +219,7 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
                         <div className="grid gap-2">
                             <Label htmlFor="movement_date">Date</Label>
                             <Input id="movement_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                            {errors.movement_date && <p className="text-xs text-destructive">{errors.movement_date}</p>}
+                            {errors.movement_date && <p className="text-destructive text-xs">{errors.movement_date}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="from_time">From (optional)</Label>
@@ -207,7 +228,7 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
                         <div className="grid gap-2">
                             <Label htmlFor="to_time">To (optional)</Label>
                             <Input id="to_time" type="time" value={to} onChange={(e) => setTo(e.target.value)} />
-                            {errors.to_time && <p className="text-xs text-destructive">{errors.to_time}</p>}
+                            {errors.to_time && <p className="text-destructive text-xs">{errors.to_time}</p>}
                         </div>
                     </div>
                     <div className="grid gap-2">
@@ -217,7 +238,7 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
                     <div className="grid gap-2">
                         <Label htmlFor="mreason">Reason</Label>
                         <Input id="mreason" value={reason} onChange={(e) => setReason(e.target.value)} />
-                        {errors.reason && <p className="text-xs text-destructive">{errors.reason}</p>}
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                 </div>
                 <DialogFooter>
@@ -268,7 +289,7 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">My leave - {year}</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {employee.name} · {employee.employee_code}
                         </p>
                     </div>
@@ -285,11 +306,11 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                             <div key={b.id} className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
                                 <div className="text-sm font-medium">{b.name}</div>
                                 <div className="mt-1 text-2xl font-medium">{b.balance}</div>
-                                <div className="text-xs text-muted-foreground">
+                                <div className="text-muted-foreground text-xs">
                                     days available · {b.taken} taken of {b.annual_quota}
                                 </div>
                                 {b.can_carry_forward && b.carry_forward_cap !== null && (
-                                    <div className="mt-2 text-xs text-muted-foreground">
+                                    <div className="text-muted-foreground mt-2 text-xs">
                                         Carries forward up to {b.carry_forward_cap} days; anything above lapses at year end.
                                     </div>
                                 )}
@@ -300,7 +321,7 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">My requests</h3>
                     {requests.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No leave requested yet.</p>
+                        <p className="text-muted-foreground text-sm">No leave requested yet.</p>
                     ) : (
                         <table className="w-full min-w-[44rem] text-sm">
                             <tbody>
@@ -311,13 +332,13 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                                             {r.end_date !== r.start_date && ` → ${r.end_date}`}
                                         </td>
                                         <td className="py-2">{r.leave_type}</td>
-                                        <td className="py-2 text-muted-foreground">
+                                        <td className="text-muted-foreground py-2">
                                             {r.days} day{r.days === 1 ? '' : 's'}
-                                            {r.unpaid_days > 0 && <span className="ml-1 text-destructive">({r.unpaid_days} unpaid)</span>}
+                                            {r.unpaid_days > 0 && <span className="text-destructive ml-1">({r.unpaid_days} unpaid)</span>}
                                         </td>
                                         <td className="py-2">
                                             <Badge variant={r.status === 'approved' ? 'default' : 'secondary'}>{r.status}</Badge>
-                                            {r.stage && <span className="ml-2 text-xs text-muted-foreground">at {r.stage}</span>}
+                                            {r.stage && <span className="text-muted-foreground ml-2 text-xs">at {r.stage}</span>}
                                         </td>
                                     </tr>
                                 ))}
@@ -333,7 +354,7 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                             <tbody>
                                 {movements.map((m) => (
                                     <tr key={m.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                        <td className="py-2 text-muted-foreground">{m.summary}</td>
+                                        <td className="text-muted-foreground py-2">{m.summary}</td>
                                         <td className="py-2">
                                             <Badge variant={m.status === 'approved' ? 'default' : 'secondary'}>{m.status}</Badge>
                                         </td>
@@ -347,7 +368,7 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">How my balance got here</h3>
                     {ledger.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Nothing recorded for {year} yet.</p>
+                        <p className="text-muted-foreground text-sm">Nothing recorded for {year} yet.</p>
                     ) : (
                         <table className="w-full min-w-[44rem] text-sm">
                             <tbody>
@@ -355,11 +376,11 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                                     <tr key={entry.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                         <td className="py-2 whitespace-nowrap">{entry.date}</td>
                                         <td className="py-2">{entry.type}</td>
-                                        <td className="py-2 text-muted-foreground">{entry.entry_type}</td>
+                                        <td className="text-muted-foreground py-2">{entry.entry_type}</td>
                                         <td className={`py-2 ${entry.days < 0 ? 'text-destructive' : ''}`}>
                                             {entry.days > 0 ? `+${entry.days}` : entry.days}
                                         </td>
-                                        <td className="py-2 text-xs text-muted-foreground">{entry.note}</td>
+                                        <td className="text-muted-foreground py-2 text-xs">{entry.note}</td>
                                     </tr>
                                 ))}
                             </tbody>
