@@ -757,6 +757,11 @@ export default function EmployeeShow({
                             <Field label="Last working date" value={employee.separation_date} />
                             <Field label="Reason" value={employee.separation_reason} />
                         </dl>
+                        {/* An approved requirement (EMP-08) that fell between two
+                            phases and had no door until now. */}
+                        <Button variant="outline" size="sm" className="mt-3" asChild>
+                            <Link href={`/hrm/employees/${employee.id}/settlement`}>Final settlement statement</Link>
+                        </Button>
                     </div>
                 )}
 

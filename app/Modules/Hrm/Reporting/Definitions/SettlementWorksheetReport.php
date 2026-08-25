@@ -11,6 +11,7 @@ use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportMeta;
 use App\Modules\Hrm\Reporting\ReportParameter;
 use App\Modules\Hrm\Reporting\ReportParameters;
+use App\Modules\Hrm\Support\SettlementFigures;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\LazyCollection;
@@ -192,39 +193,13 @@ class SettlementWorksheetReport implements ReportDefinition
     {
         $businessId = $this->context->id();
 
-        // ⚠ Every figure is a subquery over a ledger, not a stored total — the
-        // loan balance, the leave balance and what has been paid are all sums by
-        // construction elsewhere in the system, and re-deriving them any other
-        // way here would create a second opinion about a leaver's money.
-        $loan = DB::raw('(select coalesce(sum(loan_ledger_entries.amount), 0)'
-            .' from loan_ledger_entries'
-            .' where loan_ledger_entries.employee_id = employees.id) as loan_outstanding');
-
-        $unpaid = DB::raw('(select coalesce(sum(payslips.net - ('
-            .'select coalesce(sum(case payslip_payments.event_type'
-            ." when 'paid' then payslip_payments.amount"
-            ." when 'reversed' then -payslip_payments.amount"
-            .' else 0 end), 0) from payslip_payments'
-            .' where payslip_payments.payslip_id = payslips.id)), 0)'
-            .' from payslips where payslips.employee_id = employees.id'
-            .' and payslips.net > (select coalesce(sum(case payslip_payments.event_type'
-            ." when 'paid' then payslip_payments.amount"
-            ." when 'reversed' then -payslip_payments.amount"
-            .' else 0 end), 0) from payslip_payments'
-            .' where payslip_payments.payslip_id = payslips.id)) as unpaid_salary');
-
-        // C6a: only leave types marked encashable count. Carried in days, and a
-        // negative balance is not a debt to the employee — clamped at zero.
-        // ⚠ A CASE rather than MAX(0, x) or GREATEST(): MySQL's MAX is an
-        // aggregate and would not take two arguments, SQLite's is scalar and
-        // would. Writing the portable form once is cheaper than discovering the
-        // difference in production, where this report is the one that runs.
-        $leave = DB::raw('(select case when coalesce(sum(leave_ledger_entries.days), 0) < 0'
-            .' then 0 else coalesce(sum(leave_ledger_entries.days), 0) end'
-            .' from leave_ledger_entries'
-            .' join leave_types on leave_types.id = leave_ledger_entries.leave_type_id'
-            .' where leave_ledger_entries.employee_id = employees.id'
-            .' and leave_types.can_encash = 1) as encashable_leave_days');
+        // ⚠⚠ The SQL lives in SettlementFigures, which the settlement statement
+        // also reads. Two derivations of a leaver's money is the one thing this
+        // report's original note said must not happen, and the statement built
+        // later would have been exactly that second opinion.
+        $loan = DB::raw(SettlementFigures::loanOutstandingSql().' as loan_outstanding');
+        $unpaid = DB::raw(SettlementFigures::unpaidSalarySql().' as unpaid_salary');
+        $leave = DB::raw(SettlementFigures::encashableLeaveDaysSql().' as encashable_leave_days');
 
         return Employee::query()
             // Tenancy: `Employee` carries no BelongsToBusiness, and a global

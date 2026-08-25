@@ -26,6 +26,7 @@ use App\Modules\Hrm\Http\Controllers\SalaryRevisionController;
 use App\Modules\Hrm\Http\Controllers\ScheduleController;
 use App\Modules\Hrm\Http\Controllers\SelfLeaveController;
 use App\Modules\Hrm\Http\Controllers\SelfServiceController;
+use App\Modules\Hrm\Http\Controllers\SettlementController;
 use App\Modules\Hrm\Http\Controllers\ShiftController;
 use App\Modules\Hrm\Http\Controllers\ShowCauseNoticeController;
 use Illuminate\Support\Facades\Route;
@@ -47,6 +48,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::patch('employees/{employee}', [EmployeeController::class, 'update'])->name('employees.update');
     Route::patch('employees/{employee}/status', [EmployeeController::class, 'status'])->name('employees.status');
     Route::post('employees/{employee}/login-account', [EmployeeController::class, 'createLoginAccount'])->name('employees.login-account');
+
+    // The final settlement statement. Pay data, so it sits behind the payroll
+    // permission rather than the employee one, and it pays nobody.
+    Route::get('employees/{employee}/settlement', [SettlementController::class, 'show'])->name('employees.settlement');
     Route::post('employees/{employee}/confirm', [EmployeeController::class, 'confirm'])->name('employees.confirm');
     Route::post('employees/{employee}/separation', [EmployeeController::class, 'separate'])->name('employees.separate');
     Route::post('employees/{employee}/transfer', [EmployeeController::class, 'transfer'])->name('employees.transfer');
