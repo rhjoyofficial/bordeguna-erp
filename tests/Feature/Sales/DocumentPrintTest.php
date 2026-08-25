@@ -2,7 +2,10 @@
 
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
@@ -10,14 +13,17 @@ use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -187,4 +193,58 @@ it('shuts both documents to somebody with no sales role at all', function () {
 
     $asOutsider()->get(route('sales.invoices.print', $this->invoice))->assertForbidden();
     $asOutsider()->get(route('sales.deliveries.print', $this->delivery))->assertForbidden();
+});
+
+it('prints a money receipt from the payment, not from one of its invoices', function () {
+    // ⚠⚠ One payment can settle several bills. Printed through an invoice, the
+    // paper would name that bill and state an amount covering all of them.
+    $account = MoneyAccount::create([
+        'business_id' => $this->business->id,
+        'name' => 'Cash box',
+        'type' => 'cash',
+        'account_id' => Account::bySlug('cash_in_hand')->id,
+    ]);
+
+    $receipt = app(RecordCustomerReceipt::class)->handle(
+        customer: $this->customer,
+        moneyAccount: $account,
+        receivedOn: '2026-09-01',
+        allocations: [['invoice' => $this->invoice, 'amount' => '2070']],
+        createdBy: $this->owner,
+        reference: 'bKash 4471',
+    );
+
+    ($this->asOwner)()->get(route('sales.receipts.print', $receipt))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('sales/receipts/print')
+            ->where('receipt.amount', fn ($amount) => (float) $amount === 2070.0)
+            ->where('receipt.reference', 'bKash 4471')
+            ->where('receipt.money_account.name', 'Cash box')
+            ->where('receipt.allocations.0.invoice.invoice_number', $this->invoice->invoice_number)
+        );
+});
+
+it('puts the uploaded logo on the documents, which is what it was for', function () {
+    // ⚠⚠ The logo could be uploaded from the day Settings shipped and appeared
+    // NOWHERE except the settings screen that uploaded it.
+    Storage::fake('local');
+
+    app(StoreAttachment::class)->handle(
+        attachable: $this->business,
+        file: UploadedFile::fake()->image('logo.png', 200, 80),
+        collection: 'logo',
+        uploadedBy: $this->owner,
+        singleton: true,
+    );
+
+    ($this->asOwner)()->get(route('sales.invoices.print', $this->invoice))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('issuer.logo_url', fn ($url) => $url !== null));
+});
+
+it('prints documents with no logo at all when none was uploaded', function () {
+    ($this->asOwner)()->get(route('sales.deliveries.print', $this->delivery))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('issuer.logo_url', null));
 });

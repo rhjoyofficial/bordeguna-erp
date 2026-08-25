@@ -13,6 +13,7 @@ use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Http\RedirectResponse;
@@ -261,6 +262,28 @@ class SalesInvoiceController extends Controller
             'invoice' => $invoice,
             'outstanding' => $invoice->outstanding()->toTaka(),
             'received' => $invoice->receivedTotal()->toTaka(),
+            'issuer' => BusinessIdentity::forCurrent()->toArray(),
+        ]);
+    }
+
+    /**
+     * The money receipt, which is the paper that proves a payment was made.
+     *
+     * ⚠ A receipt may settle SEVERAL invoices at once, so it is printed from
+     * the receipt and not from any one of them. Printing it per invoice would
+     * hand the customer a document that names one bill and states an amount
+     * covering three.
+     */
+    public function printReceipt(CustomerReceipt $receipt): Response
+    {
+        $receipt->load([
+            'customer',
+            'moneyAccount:id,name,type',
+            'allocations.invoice:id,invoice_number,invoice_date,total',
+        ]);
+
+        return Inertia::render('sales/receipts/print', [
+            'receipt' => $receipt,
             'issuer' => BusinessIdentity::forCurrent()->toArray(),
         ]);
     }

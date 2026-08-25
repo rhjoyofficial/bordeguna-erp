@@ -1,0 +1,123 @@
+import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
+import { Button } from '@/components/ui/button';
+import AppLayout from '@/layouts/app-layout';
+import { type BreadcrumbItem } from '@/types';
+import { Head, Link } from '@inertiajs/react';
+
+interface Receipt {
+    id: number;
+    received_on: string;
+    amount: string;
+    reference: string | null;
+    note: string | null;
+    customer: { id: number; name: string; code: string | null; address: string | null; phone: string | null } | null;
+    money_account: { id: number; name: string; type: string } | null;
+    allocations: {
+        id: number;
+        amount: string;
+        invoice: { id: number; invoice_number: string; invoice_date: string; total: string } | null;
+    }[];
+}
+
+const money = (value: string | number) => Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * The money receipt.
+ *
+ * ⚠⚠ Printed from the RECEIPT, not from an invoice. One payment can settle
+ * several bills, and a receipt reached through one of them would name that bill
+ * while stating an amount covering three.
+ */
+export default function ReceiptPrint({ receipt, issuer }: { receipt: Receipt; issuer: Issuer }) {
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Invoices', href: '/sales/invoices' },
+        { title: 'Money receipt', href: `/sales/receipts/${receipt.id}/print` },
+    ];
+
+    const firstInvoice = receipt.allocations[0]?.invoice;
+
+    return (
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={`Money receipt ${receipt.id}`} />
+
+            <div className="flex flex-col gap-4 p-4">
+                <div className="flex items-center justify-between print:hidden">
+                    <Button variant="outline" size="sm" asChild>
+                        <Link href={firstInvoice ? `/sales/invoices/${firstInvoice.id}` : '/sales/invoices'}>Back</Link>
+                    </Button>
+                    <Button size="sm" onClick={() => window.print()}>
+                        Print / save as PDF
+                    </Button>
+                </div>
+
+                <div className="border-sidebar-border/70 dark:border-sidebar-border mx-auto w-full max-w-2xl rounded-xl border bg-white p-8 text-black dark:bg-white print:max-w-none print:border-0 print:p-0">
+                    <DocumentLetterhead issuer={issuer} title="Money receipt" subtitle={`No. ${receipt.id}`} />
+
+                    <div className="mt-6 flex flex-wrap justify-between gap-6 text-sm">
+                        <div>
+                            <p className="text-black/60">Received from</p>
+                            <p className="font-medium">{receipt.customer?.name ?? 'Walk-in customer'}</p>
+                            {receipt.customer?.code && <p className="text-black/60">{receipt.customer.code}</p>}
+                            {receipt.customer?.phone && <p className="text-black/70">{receipt.customer.phone}</p>}
+                        </div>
+                        <div className="text-right">
+                            <p>
+                                <span className="text-black/60">Date: </span>
+                                {receipt.received_on?.slice(0, 10)}
+                            </p>
+                            {receipt.money_account && (
+                                <p>
+                                    <span className="text-black/60">Paid into: </span>
+                                    {receipt.money_account.name}
+                                </p>
+                            )}
+                            {receipt.reference && (
+                                <p>
+                                    <span className="text-black/60">Reference: </span>
+                                    {receipt.reference}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="mt-6 rounded-md border border-black/20 p-4">
+                        <p className="text-sm text-black/60">Amount received</p>
+                        <p className="text-2xl font-semibold">BDT {money(receipt.amount)}</p>
+                    </div>
+
+                    {receipt.allocations.length > 0 && (
+                        <div className="mt-6">
+                            <p className="mb-2 text-sm text-black/60">Settling</p>
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-y border-black/20 text-left">
+                                        <th className="py-2 pr-2 font-medium">Invoice</th>
+                                        <th className="py-2 pr-2 font-medium">Dated</th>
+                                        <th className="py-2 pr-2 text-right font-medium">Invoice total</th>
+                                        <th className="py-2 text-right font-medium">Applied</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {receipt.allocations.map((allocation) => (
+                                        <tr key={allocation.id} className="border-b border-black/10">
+                                            <td className="py-2 pr-2">{allocation.invoice?.invoice_number ?? '-'}</td>
+                                            <td className="py-2 pr-2">{allocation.invoice?.invoice_date?.slice(0, 10) ?? '-'}</td>
+                                            <td className="py-2 pr-2 text-right">{allocation.invoice ? money(allocation.invoice.total) : '-'}</td>
+                                            <td className="py-2 text-right">{money(allocation.amount)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {receipt.note && <p className="mt-6 text-sm whitespace-pre-line text-black/70">{receipt.note}</p>}
+
+                    <div className="mt-16 flex justify-end text-sm">
+                        <div className="w-56 border-t border-black/40 pt-2 text-center text-black/60">For {issuer.name}</div>
+                    </div>
+                </div>
+            </div>
+        </AppLayout>
+    );
+}

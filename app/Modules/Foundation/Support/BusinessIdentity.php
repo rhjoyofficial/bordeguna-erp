@@ -28,6 +28,7 @@ class BusinessIdentity
         public readonly ?string $address,
         public readonly ?string $phone,
         public readonly ?string $email,
+        public readonly ?string $logoUrl,
         public readonly array $missing,
     ) {}
 
@@ -41,12 +42,18 @@ class BusinessIdentity
             }
         }
 
+        // ⚠⚠ The logo could be uploaded from the first day of Settings and
+        // appeared NOWHERE except the settings screen that uploaded it. A
+        // letterhead is what it was for.
+        $logo = $business->attachmentInCollection('logo');
+
         return new self(
             name: (string) $business->name,
             legalName: blank($business->legal_name) ? null : (string) $business->legal_name,
             address: blank($business->address) ? null : (string) $business->address,
             phone: blank($business->phone) ? null : (string) $business->phone,
             email: blank($business->email) ? null : (string) $business->email,
+            logoUrl: $logo?->url(),
             missing: $missing,
         );
     }
@@ -62,12 +69,12 @@ class BusinessIdentity
         $business = Business::withoutGlobalScopes()->find($id);
 
         return $business === null
-            ? new self('', null, null, null, null, ['address', 'phone', 'email'])
+            ? new self('', null, null, null, null, null, ['address', 'phone', 'email'])
             : self::for($business);
     }
 
     /**
-     * @return array{name:string, legal_name:?string, address:?string, phone:?string, email:?string, missing:list<string>}
+     * @return array{name:string, legal_name:?string, address:?string, phone:?string, email:?string, logo_url:?string, missing:list<string>}
      */
     public function toArray(): array
     {
@@ -77,6 +84,7 @@ class BusinessIdentity
             'address' => $this->address,
             'phone' => $this->phone,
             'email' => $this->email,
+            'logo_url' => $this->logoUrl,
             'missing' => $this->missing,
         ];
     }

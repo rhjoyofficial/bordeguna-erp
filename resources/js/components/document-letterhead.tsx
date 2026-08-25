@@ -6,6 +6,7 @@ export interface Issuer {
     address: string | null;
     phone: string | null;
     email: string | null;
+    logo_url: string | null;
     missing: string[];
 }
 
@@ -34,11 +35,16 @@ export function DocumentLetterhead({ issuer, title, subtitle }: { issuer: Issuer
             )}
 
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-black/20 pb-4">
-                <div>
-                    <p className="text-xl font-semibold">{issuer.legal_name ?? issuer.name}</p>
-                    {issuer.legal_name && <p className="text-sm text-black/60">{issuer.name}</p>}
-                    {issuer.address && <p className="mt-1 max-w-xs text-sm whitespace-pre-line text-black/70">{issuer.address}</p>}
-                    <p className="text-sm text-black/70">{[issuer.phone, issuer.email].filter(Boolean).join(' · ')}</p>
+                <div className="flex items-start gap-4">
+                    {/* ⚠ Bounded, never stretched: a logo uploaded at any size has
+                        to sit on a page beside text without pushing it around. */}
+                    {issuer.logo_url && <img src={issuer.logo_url} alt="" className="h-16 w-auto max-w-[9rem] object-contain" />}
+                    <div>
+                        <p className="text-xl font-semibold">{issuer.legal_name ?? issuer.name}</p>
+                        {issuer.legal_name && <p className="text-sm text-black/60">{issuer.name}</p>}
+                        {issuer.address && <p className="mt-1 max-w-xs text-sm whitespace-pre-line text-black/70">{issuer.address}</p>}
+                        <p className="text-sm text-black/70">{[issuer.phone, issuer.email].filter(Boolean).join(' · ')}</p>
+                    </div>
                 </div>
                 <div className="text-right">
                     <p className="text-sm font-semibold tracking-widest uppercase">{title}</p>

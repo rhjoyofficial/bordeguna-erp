@@ -130,6 +130,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
             ->whereNumber('invoice')->name('invoices.print');
         Route::get('deliveries/{delivery}/print', [DeliveryController::class, 'print'])
             ->whereNumber('delivery')->name('deliveries.print');
+        Route::get('receipts/{receipt}/print', [SalesInvoiceController::class, 'printReceipt'])
+            ->whereNumber('receipt')->name('receipts.print');
     });
 
     Route::middleware('can:sales.receipt.record')->group(function () {

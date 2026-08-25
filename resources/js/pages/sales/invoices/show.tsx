@@ -213,6 +213,16 @@ export default function InvoiceShow({
                                         <td className="p-3">{allocation.receipt?.money_account?.name}</td>
                                         <td className="text-muted-foreground p-3">{allocation.receipt?.reference}</td>
                                         <td className="p-3 text-right tabular-nums">{allocation.amount}</td>
+                                        <td className="p-3 text-right">
+                                            {allocation.receipt && (
+                                                <Link
+                                                    href={`/sales/receipts/${allocation.receipt.id}/print`}
+                                                    className="text-sm font-medium underline underline-offset-4"
+                                                >
+                                                    Receipt
+                                                </Link>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
