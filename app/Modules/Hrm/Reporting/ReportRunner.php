@@ -7,6 +7,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use Illuminate\Support\Carbon;
+use InvalidArgumentException;
 
 /**
  * Turns a definition plus its parameters into a resolved `ReportDataset`.
@@ -33,6 +34,8 @@ class ReportRunner
 
     public function run(ReportDefinition $definition, ReportParameters $parameters, ?User $user = null): ReportDataset
     {
+        $this->assertRequiredParameters($definition, $parameters);
+
         $totals = new ReportTotals($definition->totalColumns($parameters));
 
         $rows = $definition->rows($parameters)->map(function (array $row) use ($totals) {
@@ -50,6 +53,36 @@ class ReportRunner
             meta: $this->meta($definition, $parameters, $user),
             totals: $totals,
         );
+    }
+
+    /**
+     * A required parameter is required of every caller, not only of the form.
+     *
+     * ⚠⚠ FOUND IN THE CUTOVER REHEARSAL. The salary sheet filters payslips by
+     * `run_id` only WHEN one is given, and a payroll period holds one set of
+     * payslips per version: the rejected August v2 still carries its nine, next
+     * to the nine of the live v3. Run without the parameter, the sheet returned
+     * eighteen rows and totalled 489,830.66 for a month whose real net pay is
+     * 239,048.66 - a money document, printed for signatures, quietly doubled.
+     *
+     * The screen validates from the same declarations and was never at risk.
+     * This is the rule living with the engine instead of with one of its
+     * callers, the same reasoning the supplier importer applies when it refuses
+     * a plan with errors rather than trusting whoever called it.
+     */
+    private function assertRequiredParameters(ReportDefinition $definition, ReportParameters $parameters): void
+    {
+        foreach ($definition->parameters() as $parameter) {
+            if (! $parameter->required) {
+                continue;
+            }
+
+            if ($parameters->get($parameter->key) === null) {
+                throw new InvalidArgumentException(
+                    "The {$definition->key()} report needs {$parameter->key} and was run without it."
+                );
+            }
+        }
     }
 
     /**

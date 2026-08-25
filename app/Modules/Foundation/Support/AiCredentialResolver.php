@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Support;
 
 use App\Modules\Foundation\Models\AiCredential;
+use Illuminate\Contracts\Encryption\DecryptException;
 
 /**
  * The one place that turns a provider name into a usable API key.
@@ -40,7 +41,19 @@ class AiCredentialResolver
             ->first();
 
         if ($row !== null) {
-            $secret = (string) $row->secret;
+            // ⚠⚠ A STORED KEY THAT CANNOT BE DECRYPTED IS NOT A KEY. The
+            // encrypted column is only readable with the APP_KEY that wrote it,
+            // so a restore onto a fresh server (the documented recovery drill)
+            // leaves rows nobody can read. Unguarded, the DecryptException
+            // travelled all the way out: Settings > AI providers answered 500,
+            // which is the one screen that could have replaced the key. It is
+            // treated as "nothing configured" instead, which is exactly what it
+            // is, and the environment fallback below still applies.
+            try {
+                $secret = (string) $row->secret;
+            } catch (DecryptException) {
+                $secret = '';
+            }
 
             if ($secret !== '') {
                 return $secret;
