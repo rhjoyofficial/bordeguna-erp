@@ -3,7 +3,9 @@
 namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Actions\RejectApprovable;
+use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\ApprovePurchaseOrder;
@@ -65,6 +67,48 @@ class PurchaseOrderController extends Controller
             'products' => Product::where('is_active', true)->orderBy('name')->get(['id', 'name', 'sku']),
             'can_create' => request()->user()->can('purchasing.po.create'),
             'filters' => $filters,
+        ]);
+    }
+
+    /**
+     * The order as the supplier receives it.
+     *
+     * ⚠⚠ THE LINE UNIT IS THE PURCHASE UNIT and it is printed. Mustard oil is
+     * ordered in kilograms while the warehouse holds litres; an order that says
+     * "100" with no unit invites the supplier to send 100 of the wrong thing,
+     * and the internal screen already carries this warning for the same reason.
+     *
+     * ⚠ Money IS on this document, unlike a delivery challan: a purchase order
+     * is an offer to pay, and a supplier needs the rate they are being held to.
+     */
+    public function print(PurchaseOrder $purchaseOrder): Response
+    {
+        $this->authorize('purchasing.reports.view');
+
+        $purchaseOrder->load([
+            'supplier',
+            'warehouse:id,name,code',
+            'lines.product:id,name,sku,unit_of_measure_id,purchase_unit_id',
+            'lines.product.unitOfMeasure:id,abbreviation',
+            'lines.product.purchaseUnit:id,abbreviation',
+        ]);
+
+        $subtotal = $purchaseOrder->lines->reduce(
+            fn (Money $carry, $line) => $carry->plus(Money::ofProduct((string) $line->quantity_ordered, (string) $line->unit_cost)),
+            Money::zero(),
+        );
+
+        $tax = Money::ofTaka((string) ($purchaseOrder->tax_total ?? '0'));
+
+        return Inertia::render('purchasing/purchase-orders/print', [
+            'order' => $purchaseOrder,
+            // ⚠ Totalled on the server from the same Money type the ledger uses.
+            // A page that adds its own lines up is a page that can disagree with
+            // the bill this order becomes.
+            'subtotal' => $subtotal->toTaka(),
+            'tax' => $tax->toTaka(),
+            'total' => $subtotal->plus($tax)->toTaka(),
+            'issuer' => BusinessIdentity::forCurrent()->toArray(),
         ]);
     }
 

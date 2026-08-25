@@ -2,8 +2,8 @@
 
 use App\Modules\Purchasing\Http\Controllers\ExpenseVoucherController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
-use App\Modules\Purchasing\Http\Controllers\SupplierController;
 use App\Modules\Purchasing\Http\Controllers\SupplierBillController;
+use App\Modules\Purchasing\Http\Controllers\SupplierController;
 use App\Modules\Purchasing\Http\Controllers\SupplierCreditNoteController;
 use App\Modules\Purchasing\Http\Controllers\SupplierImportController;
 use App\Modules\Purchasing\Http\Controllers\SupplierPaymentController;
@@ -40,6 +40,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     Route::middleware('can:purchasing.reports.view')->group(function () {
         Route::get('purchase-orders', [PurchaseOrderController::class, 'index'])->name('purchase-orders.index');
         Route::get('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->name('purchase-orders.show');
+        // The copy the supplier receives. Same permission as reading the order.
+        Route::get('purchase-orders/{purchaseOrder}/print', [PurchaseOrderController::class, 'print'])->name('purchase-orders.print');
     });
     Route::post('purchase-orders', [PurchaseOrderController::class, 'store'])->name('purchase-orders.store');
     Route::post('purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve'])->name('purchase-orders.approve');

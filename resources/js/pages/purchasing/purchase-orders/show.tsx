@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 /**
@@ -47,8 +47,7 @@ const aggregateReturnLines = (
     return [...byLine.values()].map((e) => ({ ...e, quantity: String(Number(e.quantity.toFixed(4))) }));
 };
 
-const purchaseUnitOf = (line: Line): string | null =>
-    line.product.purchase_unit?.abbreviation ?? line.product.unit_of_measure?.abbreviation ?? null;
+const purchaseUnitOf = (line: Line): string | null => line.product.purchase_unit?.abbreviation ?? line.product.unit_of_measure?.abbreviation ?? null;
 
 interface Line {
     id: number;
@@ -169,9 +168,9 @@ function ReceiveGoodsForm({ order }: { order: Order }) {
     }
 
     return (
-        <form onSubmit={submit} className="flex flex-col gap-3 rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+        <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-xl border p-4">
             <h3 className="font-medium">Record goods receipt</h3>
-            <p className="text-sm text-muted-foreground">Defaults to the full remaining quantity - reduce a line for a partial shipment.</p>
+            <p className="text-muted-foreground text-sm">Defaults to the full remaining quantity - reduce a line for a partial shipment.</p>
             {receivableLines.map((line) => {
                 const entry = data.lines.find((e) => e.purchase_order_line_id === line.id);
 
@@ -179,19 +178,14 @@ function ReceiveGoodsForm({ order }: { order: Order }) {
                     <div key={line.id} className="grid grid-cols-[2fr_1fr] items-center gap-2">
                         <span>
                             {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>{' '}
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-muted-foreground text-xs">
                                 remaining {remaining(line)}
                                 {purchaseUnitOf(line) ? ` ${purchaseUnitOf(line)}` : ''}
                             </span>
                         </span>
                         <div className="flex items-center gap-2">
-                            <Input
-                                value={entry?.quantity ?? String(remaining(line))}
-                                onChange={(e) => updateQuantity(line.id, e.target.value)}
-                            />
-                            {purchaseUnitOf(line) && (
-                                <span className="w-10 shrink-0 text-sm text-muted-foreground">{purchaseUnitOf(line)}</span>
-                            )}
+                            <Input value={entry?.quantity ?? String(remaining(line))} onChange={(e) => updateQuantity(line.id, e.target.value)} />
+                            {purchaseUnitOf(line) && <span className="text-muted-foreground w-10 shrink-0 text-sm">{purchaseUnitOf(line)}</span>}
                         </div>
                     </div>
                 );
@@ -250,9 +244,9 @@ function ReturnGoodsForm({ order }: { order: Order }) {
     }
 
     return (
-        <form onSubmit={submit} className="flex flex-col gap-3 rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+        <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-xl border p-4">
             <h3 className="font-medium">Return goods</h3>
-            <p className="text-sm text-muted-foreground">Reverses stock for whatever quantity is entered - leave a line at 0 to skip it.</p>
+            <p className="text-muted-foreground text-sm">Reverses stock for whatever quantity is entered - leave a line at 0 to skip it.</p>
             {returnableLines.map((line) => {
                 const entry = data.lines.find((e) => e.purchase_order_line_id === line.id);
 
@@ -260,16 +254,14 @@ function ReturnGoodsForm({ order }: { order: Order }) {
                     <div key={line.id} className="grid grid-cols-[2fr_1fr] items-center gap-2">
                         <span>
                             {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>{' '}
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-muted-foreground text-xs">
                                 returnable {returnable(line)}
                                 {purchaseUnitOf(line) ? ` ${purchaseUnitOf(line)}` : ''}
                             </span>
                         </span>
                         <div className="flex items-center gap-2">
                             <Input value={entry?.quantity ?? '0'} onChange={(e) => updateQuantity(line.id, e.target.value)} />
-                            {purchaseUnitOf(line) && (
-                                <span className="w-10 shrink-0 text-sm text-muted-foreground">{purchaseUnitOf(line)}</span>
-                            )}
+                            {purchaseUnitOf(line) && <span className="text-muted-foreground w-10 shrink-0 text-sm">{purchaseUnitOf(line)}</span>}
                         </div>
                     </div>
                 );
@@ -319,7 +311,7 @@ export default function PurchaseOrderShow({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <h2 className="text-lg font-medium">{order.po_number}</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {order.supplier.name} → {order.warehouse.name}
                         </p>
                     </div>
@@ -330,11 +322,14 @@ export default function PurchaseOrderShow({
                         <Badge variant={statusVariant[order.status]} className="capitalize">
                             {order.status.replace('_', ' ')}
                         </Badge>
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={`/purchasing/purchase-orders/${order.id}/print`}>Print / send</Link>
+                        </Button>
                     </div>
                 </div>
 
                 {order.approval_request.status === 'pending' && can_approve && (
-                    <div className="flex gap-2 rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                    <div className="border-sidebar-border/70 dark:border-sidebar-border flex gap-2 rounded-xl border p-4">
                         <Button size="sm" onClick={approve}>
                             Approve
                         </Button>
@@ -357,12 +352,12 @@ export default function PurchaseOrderShow({
                 )}
 
                 {order.approval_request.status === 'rejected' && order.approval_request.review_note && (
-                    <p className="text-sm text-destructive">Rejected: {order.approval_request.review_note}</p>
+                    <p className="text-destructive text-sm">Rejected: {order.approval_request.review_note}</p>
                 )}
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">Product</th>
                             <th className="py-2">Ordered</th>
                             <th className="py-2">Received</th>
@@ -379,8 +374,8 @@ export default function PurchaseOrderShow({
                                 </td>
                                 <td className="py-2">{line.quantity_ordered}</td>
                                 <td className="py-2">{line.quantity_received}</td>
-                                <td className="py-2 text-muted-foreground">{line.quantity_returned}</td>
-                                <td className="py-2 text-muted-foreground">{line.unit_cost}</td>
+                                <td className="text-muted-foreground py-2">{line.quantity_returned}</td>
+                                <td className="text-muted-foreground py-2">{line.unit_cost}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -404,9 +399,9 @@ export default function PurchaseOrderShow({
                     )}
                     {can_update_payment && order.approval_request.status === 'approved' && (
                         <div className="flex items-center gap-2">
-                            <Label className="text-xs text-muted-foreground">Payment:</Label>
+                            <Label className="text-muted-foreground text-xs">Payment:</Label>
                             <select
-                                className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm capitalize"
+                                className="border-input bg-background h-9 w-full min-w-0 rounded-md border px-2 text-sm capitalize"
                                 value={order.payment_status}
                                 onChange={(e) => setPaymentStatus(e.target.value)}
                             >
@@ -424,7 +419,7 @@ export default function PurchaseOrderShow({
                     <div className="flex flex-col gap-2">
                         <h3 className="font-medium">Receipt history</h3>
                         {order.goods_receipts.map((receipt) => (
-                            <div key={receipt.id} className="rounded-xl border border-sidebar-border/70 p-3 text-sm dark:border-sidebar-border">
+                            <div key={receipt.id} className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
                                 <p className="text-muted-foreground">
                                     {receipt.received_by.name} - {receipt.received_at}
                                     {receipt.note && ` - ${receipt.note}`}
@@ -450,7 +445,7 @@ export default function PurchaseOrderShow({
                         {order.returns.map((purchaseReturn) => (
                             <div
                                 key={purchaseReturn.id}
-                                className="rounded-xl border border-sidebar-border/70 p-3 text-sm dark:border-sidebar-border"
+                                className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm"
                             >
                                 <p className="text-muted-foreground">
                                     {purchaseReturn.returned_by.name} - {purchaseReturn.returned_at}
@@ -467,10 +462,7 @@ export default function PurchaseOrderShow({
                                         <li key={entry.key}>
                                             {entry.name} ({entry.sku}) - {entry.quantity}
                                             {entry.batches > 1 && (
-                                                <span className="text-xs text-muted-foreground">
-                                                    {' '}
-                                                    (across {entry.batches} cost layers)
-                                                </span>
+                                                <span className="text-muted-foreground text-xs"> (across {entry.batches} cost layers)</span>
                                             )}
                                         </li>
                                     ))}
