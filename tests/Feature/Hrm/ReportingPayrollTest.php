@@ -547,5 +547,9 @@ it('registers fourteen of the fifteen reports, with only the bank advice missing
         // companion to the show cause notices - what was late, what it cost,
         // and which months lost their earned leave day because of it.
         ->and($keys)->toContain('attendance_lateness_register')
-        ->and($keys)->toHaveCount(18);
+        // 25 Aug 2026: the forgiveness register (Joy, "company can track how
+        // much company forgive, must need track"). Counted here so a report
+        // added by accident still shows up as a change somebody has to explain.
+        ->and($keys)->toContain('payroll_forgiveness_register')
+        ->and($keys)->toHaveCount(19);
 });

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Payroll\Data;
 
+use App\Modules\Hrm\Support\PayrollCycle;
 use Illuminate\Support\Carbon;
 
 /**
@@ -38,9 +39,33 @@ final readonly class PayrollPeriodSpec
      */
     public static function forMonth(int $year, int $month, int $cutoffDay = 24, int $divisorDays = 30): self
     {
-        [$start, $end] = \App\Modules\Hrm\Support\PayrollCycle::forMonth($year, $month, $cutoffDay);
+        [$start, $end] = PayrollCycle::forMonth($year, $month, $cutoffDay);
 
         return new self($year, $month, $start, $end, $divisorDays);
+    }
+
+    /**
+     * Which payroll month a calendar date falls in, the exact inverse of
+     * `forMonth`.
+     *
+     * ⚠⚠ THE 24-TO-23 BOUNDARY, WRITTEN ONCE. With a cutoff of 24, the 26th of
+     * August belongs to the payroll month named SEPTEMBER. Anything that groups
+     * money by "the month of the date" instead disagrees with payroll for the
+     * last week of every month, and this project has been bitten by exactly
+     * that. A cutoff of 1 makes this the plain calendar month, as it should.
+     */
+    public static function containing(Carbon $date, int $cutoffDay = 24, int $divisorDays = 30): self
+    {
+        $year = (int) $date->year;
+        $month = (int) $date->month;
+
+        if ($cutoffDay > 1 && $date->day >= $cutoffDay) {
+            $next = $date->copy()->startOfMonth()->addMonth();
+            $year = (int) $next->year;
+            $month = (int) $next->month;
+        }
+
+        return self::forMonth($year, $month, $cutoffDay, $divisorDays);
     }
 
     public function label(): string
