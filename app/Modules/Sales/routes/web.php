@@ -23,6 +23,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::get('orders', [SalesOrderController::class, 'index'])->name('orders.index');
         Route::get('orders/{order}', [SalesOrderController::class, 'show'])
             ->whereNumber('order')->name('orders.show');
+
+        // The sheet the warehouse walks around with. Reading it is the same
+        // permission as reading the order it picks.
+        Route::get('orders/{order}/pick-list', [SalesOrderController::class, 'pickList'])
+            ->whereNumber('order')->name('orders.pick-list');
     });
 
     // ⚠ Taking an order is order-book data entry, the same trust level as

@@ -118,11 +118,11 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
     }
 
     return (
-        <form onSubmit={submit} className="flex flex-col gap-3 rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+        <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-xl border p-4">
             <h3 className="font-medium">Record delivery against this order</h3>
-            <p className="text-sm text-muted-foreground">
-                Defaults to the full remaining quantity - reduce a line for a partial challan. Set a line to 0 to skip it. More than the
-                remaining quantity is refused; record any extra as a direct delivery line on the Deliveries screen.
+            <p className="text-muted-foreground text-sm">
+                Defaults to the full remaining quantity - reduce a line for a partial challan. Set a line to 0 to skip it. More than the remaining
+                quantity is refused; record any extra as a direct delivery line on the Deliveries screen.
             </p>
             <div className="grid max-w-sm gap-2">
                 <Label>Warehouse</Label>
@@ -143,14 +143,14 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
                     <div key={line.id} className="grid grid-cols-[2fr_1fr] items-center gap-2">
                         <span>
                             {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>{' '}
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-muted-foreground text-xs">
                                 remaining {remaining(line)}
                                 {unit ? ` ${unit}` : ''}
                             </span>
                         </span>
                         <div className="flex items-center gap-2">
                             <Input value={entry?.quantity ?? String(remaining(line))} onChange={(e) => updateQuantity(line.id, e.target.value)} />
-                            {unit && <span className="w-10 shrink-0 text-sm text-muted-foreground">{unit}</span>}
+                            {unit && <span className="text-muted-foreground w-10 shrink-0 text-sm">{unit}</span>}
                         </div>
                     </div>
                 );
@@ -195,9 +195,7 @@ export default function SalesOrderShow({
     // Every challan that served this order, deduplicated across lines.
     const challans = [
         ...new Map(
-            order.lines
-                .flatMap((line) => line.delivery_lines)
-                .map((deliveryLine) => [deliveryLine.delivery.id, deliveryLine.delivery]),
+            order.lines.flatMap((line) => line.delivery_lines).map((deliveryLine) => [deliveryLine.delivery.id, deliveryLine.delivery]),
         ).values(),
     ];
 
@@ -210,7 +208,7 @@ export default function SalesOrderShow({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <h2 className="text-lg font-medium">{order.order_number}</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {order.customer.name}
                             {order.warehouse ? ` - preferred warehouse ${order.warehouse.name}` : ''} - ordered {order.ordered_at}
                             {order.expected_date ? `, expected ${order.expected_date}` : ''}
@@ -223,23 +221,28 @@ export default function SalesOrderShow({
                         <Badge variant={statusVariant[order.status]} className="capitalize">
                             {order.status.replace('_', ' ')}
                         </Badge>
+                        {/* The one route to the picking sheet. An engine with no
+                            door is the mistake this project has made five times. */}
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={`/sales/orders/${order.id}/pick-list`}>Pick list</Link>
+                        </Button>
                     </div>
                 </div>
 
                 {/* ⚠ C-SO-3: shown beside the limit, enforced by nobody. */}
-                <div className="rounded-xl border border-sidebar-border/70 p-3 text-sm dark:border-sidebar-border">
+                <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
                     <p className="text-muted-foreground">
                         Customer exposure: open invoices {exposure.open_invoices} + undelivered orders {exposure.undelivered_orders} ={' '}
-                        <span className="font-medium text-foreground">{exposure.total}</span>
+                        <span className="text-foreground font-medium">{exposure.total}</span>
                         {exposure.credit_limit !== null && <> against a credit limit of {exposure.credit_limit}</>}
                     </p>
                     {overLimit && (
-                        <p className="mt-1 font-medium text-destructive">Over the credit limit. Shown for your judgement - nothing is blocked.</p>
+                        <p className="text-destructive mt-1 font-medium">Over the credit limit. Shown for your judgement - nothing is blocked.</p>
                     )}
                 </div>
 
                 {order.approval_request.status === 'pending' && can_approve && (
-                    <div className="flex gap-2 rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                    <div className="border-sidebar-border/70 dark:border-sidebar-border flex gap-2 rounded-xl border p-4">
                         <Button size="sm" onClick={approve}>
                             Approve
                         </Button>
@@ -262,16 +265,16 @@ export default function SalesOrderShow({
                 )}
 
                 {order.approval_request.status === 'pending' && !can_approve && (
-                    <p className="text-sm text-muted-foreground">Waiting for a manager to approve - goods cannot leave against a pending order.</p>
+                    <p className="text-muted-foreground text-sm">Waiting for a manager to approve - goods cannot leave against a pending order.</p>
                 )}
 
                 {order.approval_request.status === 'rejected' && order.approval_request.review_note && (
-                    <p className="text-sm text-destructive">Rejected: {order.approval_request.review_note}</p>
+                    <p className="text-destructive text-sm">Rejected: {order.approval_request.review_note}</p>
                 )}
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">Product</th>
                             <th className="py-2">Ordered</th>
                             <th className="py-2">Delivered</th>
@@ -290,14 +293,14 @@ export default function SalesOrderShow({
                                 <td className="py-2">{line.quantity_delivered}</td>
                                 <td className="py-2">{remaining(line)}</td>
                                 <td className="py-2">{line.unit_price}</td>
-                                <td className="py-2 text-muted-foreground">{line.price_note}</td>
+                                <td className="text-muted-foreground py-2">{line.price_note}</td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
 
                 {order.status === 'closed' && (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                         Closed short - the remaining quantities above are the recorded shortfall and are no longer owed.
                     </p>
                 )}
@@ -349,7 +352,7 @@ export default function SalesOrderShow({
                     <div className="flex flex-col gap-2">
                         <h3 className="font-medium">Challans against this order</h3>
                         {challans.map((challan) => (
-                            <div key={challan.id} className="rounded-xl border border-sidebar-border/70 p-3 text-sm dark:border-sidebar-border">
+                            <div key={challan.id} className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
                                 <Link href={route('sales.deliveries.index', { search: challan.delivery_number })} className="underline">
                                     {challan.delivery_number}
                                 </Link>{' '}
@@ -359,7 +362,7 @@ export default function SalesOrderShow({
                     </div>
                 )}
 
-                {order.note && <p className="text-sm whitespace-pre-line text-muted-foreground">{order.note}</p>}
+                {order.note && <p className="text-muted-foreground text-sm whitespace-pre-line">{order.note}</p>}
             </div>
         </AppLayout>
     );

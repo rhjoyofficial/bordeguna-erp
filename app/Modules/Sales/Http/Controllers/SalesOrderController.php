@@ -7,9 +7,11 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\PickPlan;
 use App\Modules\Sales\Actions\ApproveSalesOrder;
 use App\Modules\Sales\Actions\CancelSalesOrder;
 use App\Modules\Sales\Actions\CloseSalesOrder;
@@ -113,6 +115,70 @@ class SalesOrderController extends Controller
             ->filter(fn (array $row) => (float) $row['committed'] > 0)
             ->values()
             ->all();
+    }
+
+    /**
+     * The sheet the warehouse walks around with.
+     *
+     * ⚠⚠ WHAT IS LEFT TO PICK, not what was ordered. An order part-delivered
+     * last week must not send somebody back for the whole quantity, and the
+     * line's own `quantityRemaining()` is what the delivery screen will accept
+     * anyway.
+     *
+     * ⚠ The batches come from `PickPlan`, which reads the same FIFO scope the
+     * ledger consumes, so the shelf and the books agree about which goods left.
+     * It reserves nothing: between printing and picking somebody may sell the
+     * same box at the counter, and the sheet says so.
+     */
+    public function pickList(SalesOrder $order): Response
+    {
+        $order->load([
+            'customer',
+            'warehouse:id,name,code',
+            'lines.product:id,name,sku,unit_of_measure_id',
+            'lines.product.unitOfMeasure:id,abbreviation',
+        ]);
+
+        $warehouse = $order->warehouse;
+
+        $lines = $order->lines->map(function ($line) use ($warehouse) {
+            $toPick = (float) $line->quantityRemaining();
+
+            $plan = $warehouse === null
+                ? ['on_hand' => 0.0, 'shortfall' => $toPick, 'batches' => []]
+                : PickPlan::for($line->product, $warehouse, $toPick);
+
+            return [
+                'id' => $line->id,
+                'product' => $line->product?->name,
+                'sku' => $line->product?->sku,
+                'unit' => $line->product?->unitOfMeasure?->abbreviation,
+                'ordered' => (float) $line->quantity_ordered,
+                'delivered' => (float) $line->quantity_delivered,
+                'to_pick' => $toPick,
+                'on_hand' => $plan['on_hand'],
+                'shortfall' => $plan['shortfall'],
+                'batches' => $plan['batches'],
+            ];
+        })->values();
+
+        return Inertia::render('sales/orders/pick-list', [
+            'order' => [
+                'id' => $order->id,
+                'order_number' => $order->order_number,
+                'ordered_at' => $order->ordered_at?->toDateString(),
+                'expected_date' => $order->expected_date?->toDateString(),
+                'status' => $order->status->value,
+                'note' => $order->note,
+                'customer' => $order->customer?->only(['id', 'name', 'code', 'address', 'phone']),
+                'warehouse' => $order->warehouse?->only(['id', 'name', 'code']),
+            ],
+            'lines' => $lines,
+            // Nothing left to pick is worth saying on the page rather than
+            // leaving somebody to add the columns up themselves.
+            'nothing_to_pick' => $lines->every(fn (array $line) => $line['to_pick'] <= 0),
+            'issuer' => BusinessIdentity::forCurrent()->toArray(),
+        ]);
     }
 
     public function show(Request $request, SalesOrder $order): Response
