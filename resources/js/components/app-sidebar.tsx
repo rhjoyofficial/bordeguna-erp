@@ -40,6 +40,7 @@ import {
     Repeat,
     Ruler,
     Scale,
+    ScanBarcode,
     ShieldCheck,
     ShoppingCart,
     SlidersHorizontal,
@@ -131,6 +132,11 @@ export function AppSidebar() {
                           // stops sending files to be loaded for him, so it has to be
                           // findable without being told where it is.
                           ...(canImportCatalogue ? [{ title: 'Import products', url: '/inventory/products/import', icon: Upload }] : []),
+                          // ⚠⚠ Products have carried a `barcode` column since
+                          // 4 August with nothing to print it - data entered
+                          // that had no way back out. Gated on the same
+                          // permission as the catalogue it prints from.
+                          ...(canImportCatalogue ? [{ title: 'Barcode labels', url: '/inventory/labels', icon: ScanBarcode }] : []),
                           // C-BOM-9. Route, screen and this line shipped in one commit.
                           // The recipe screen posts nothing - it only decides what a run
                           // suggests - but a template nobody can find saves nobody any

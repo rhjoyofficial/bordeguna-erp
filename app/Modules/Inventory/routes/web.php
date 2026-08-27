@@ -4,6 +4,7 @@ use App\Modules\Inventory\Http\Controllers\BillOfMaterialController;
 use App\Modules\Inventory\Http\Controllers\BrandController;
 use App\Modules\Inventory\Http\Controllers\CategoryController;
 use App\Modules\Inventory\Http\Controllers\ExpiryController;
+use App\Modules\Inventory\Http\Controllers\LabelSheetController;
 use App\Modules\Inventory\Http\Controllers\InventoryDashboardController;
 use App\Modules\Inventory\Http\Controllers\LowStockController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockController;
@@ -47,6 +48,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     // three hundred products at once deserves its own permission, and its own
     // audit answer to "who did that".
     Route::middleware('can:inventory.catalogue.import')->group(function () {
+        // ⚠ Products have carried a `barcode` column since 4 August and nothing
+        // has ever rendered one. Same permission as the catalogue it prints
+        // from, so no seeder change.
+        Route::get('labels', [LabelSheetController::class, 'index'])->name('labels');
+        Route::get('labels/print', [LabelSheetController::class, 'print'])->name('labels.print');
         Route::get('products/import', [ProductImportController::class, 'create'])->name('products.import');
         Route::post('products/import/preview', [ProductImportController::class, 'preview'])->name('products.import.preview');
         Route::post('products/import', [ProductImportController::class, 'store'])->name('products.import.store');
