@@ -4,6 +4,7 @@ use App\Modules\Accounting\Http\Controllers\AccountController;
 use App\Modules\Accounting\Http\Controllers\AgeingController;
 use App\Modules\Accounting\Http\Controllers\BalanceSheetController;
 use App\Modules\Accounting\Http\Controllers\CashAndBankBookController;
+use App\Modules\Accounting\Http\Controllers\CashFlowController;
 use App\Modules\Accounting\Http\Controllers\CostOfGoodsSoldController;
 use App\Modules\Accounting\Http\Controllers\CustomerStatementController;
 use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
@@ -27,6 +28,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
     Route::middleware('can:accounting.view')->group(function () {
         Route::get('accounts', [AccountController::class, 'index'])->name('accounts.index');
         Route::get('money-accounts', [MoneyAccountController::class, 'index'])->name('money-accounts.index');
+        // ⚠ The third primary statement. A RANGE, not a date - unlike the
+        // balance sheet this is a film, not a photograph.
+        Route::get('cash-flow', [CashFlowController::class, 'index'])->name('cash-flow');
 
         // ⚠ Reading the ledger is `accounting.view`; WRITING to it is
         // `accounting.journal.post` below. Musa can read a journal and cannot

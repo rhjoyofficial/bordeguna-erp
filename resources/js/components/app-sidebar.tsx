@@ -57,6 +57,7 @@ import {
     Users,
     Wallet,
     Warehouse,
+    Waves,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -321,6 +322,11 @@ export function AppSidebar() {
                           { title: 'Profit & loss', url: '/accounting/income-statement', icon: TrendingUp },
                           { title: 'Balance sheet', url: '/accounting/balance-sheet', icon: FileBarChart },
                           { title: 'Trial balance', url: '/accounting/trial-balance', icon: Scale },
+                          // ⚠ The third primary statement, beside the two it
+                          // completes. P&L says whether we made money; the
+                          // balance sheet says what we hold; only this answers
+                          // "profitable, so why is there none in the bank".
+                          { title: 'Cash flow', url: '/accounting/cash-flow', icon: Waves },
                           // ⚠ The two ageings sit next to the statements rather
                           // than under Sales and Purchasing, because they are
                           // read against the balance sheet they must agree
