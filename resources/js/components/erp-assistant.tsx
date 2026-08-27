@@ -55,26 +55,77 @@ export default function ErpAssistant() {
         setDraft('');
         setBusy(true);
 
+        // The reply is appended one piece at a time, so an empty assistant
+        // bubble goes in first and is rewritten as text arrives.
+        setMessages((current) => [...current, { role: 'assistant', content: '' }]);
+
+        const replaceLast = (content: string) => setMessages((current) => [...current.slice(0, -1), { role: 'assistant', content }]);
+
         try {
             const response = await fetch('/assistant/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Accept: 'application/json',
+                    Accept: 'text/event-stream',
                     'X-XSRF-TOKEN': xsrfToken(),
                     ...(current_business_id ? { 'X-Business-Id': String(current_business_id) } : {}),
                 },
                 body: JSON.stringify({ messages: next.slice(-MAX_SENT) }),
             });
 
-            const payload = (await response.json().catch(() => null)) as { reply?: string } | null;
-            const reply = payload?.reply ?? 'The assistant is temporarily unavailable. Please try again in a minute.';
-            setMessages((current) => [...current, { role: 'assistant', content: reply }]);
+            // A validation refusal still answers in JSON, before the stream
+            // opens, so it is read the old way.
+            if (!response.ok || !response.body) {
+                const payload = (await response.json().catch(() => null)) as { reply?: string } | null;
+                replaceLast(payload?.reply ?? 'The assistant is temporarily unavailable. Please try again in a minute.');
+                return;
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let reply = '';
+
+            // Events are separated by a blank line. A chunk from the network
+            // is not a whole event, so nothing is parsed until that separator
+            // has actually been seen.
+            for (;;) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                let split = buffer.indexOf('\n\n');
+                while (split !== -1) {
+                    const block = buffer.slice(0, split);
+                    buffer = buffer.slice(split + 2);
+                    split = buffer.indexOf('\n\n');
+
+                    const event = /^event:\s*(.+)$/m.exec(block)?.[1]?.trim();
+                    const raw = /^data:\s*(.*)$/m.exec(block)?.[1] ?? '';
+                    let data: { text?: string; message?: string } = {};
+
+                    try {
+                        data = raw ? JSON.parse(raw) : {};
+                    } catch {
+                        continue;
+                    }
+
+                    if (event === 'text' && data.text) {
+                        reply += data.text;
+                        replaceLast(reply);
+                    } else if (event === 'error') {
+                        replaceLast(data.message ?? 'The assistant is temporarily unavailable. Please try again in a minute.');
+                        return;
+                    }
+                }
+            }
+
+            if (reply === '') {
+                replaceLast('I could not produce an answer. Please try rephrasing your question.');
+            }
         } catch {
-            setMessages((current) => [
-                ...current,
-                { role: 'assistant', content: 'Could not reach the server. Check your connection and try again.' },
-            ]);
+            replaceLast('Could not reach the server. Check your connection and try again.');
         } finally {
             setBusy(false);
         }
@@ -86,7 +137,7 @@ export default function ErpAssistant() {
                 type="button"
                 onClick={() => setOpen((value) => !value)}
                 aria-label="Open the ERP guide chat"
-                className="border-border bg-primary text-primary-foreground focus-visible:ring-ring fixed right-4 bottom-[4.5rem] z-40 flex h-11 w-11 items-center justify-center rounded-full border shadow-lg transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:outline-none"
+                className="border-border bg-primary text-primary-foreground focus-visible:ring-ring fixed right-4 bottom-4 z-40 flex h-11 w-11 items-center justify-center rounded-full border shadow-lg transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:outline-none"
             >
                 <MessageCircle className="h-5 w-5" />
             </button>

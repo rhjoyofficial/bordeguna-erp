@@ -29,7 +29,6 @@ type PageProps = {
     groups: { id: number; name: string; code: string }[];
 };
 
-
 export default function Discounts() {
     const { on, discounts, products, groups } = usePage<PageProps>().props;
 

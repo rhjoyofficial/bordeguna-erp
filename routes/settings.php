@@ -33,5 +33,7 @@ Route::middleware(['auth', 'business'])->group(function () {
     Route::get('settings/ai-providers', [AiCredentialController::class, 'index'])->name('ai-providers.index');
     Route::post('settings/ai-providers', [AiCredentialController::class, 'store'])->name('ai-providers.store');
     Route::patch('settings/ai-providers/{credential}/toggle-active', [AiCredentialController::class, 'toggleActive'])->name('ai-providers.toggle-active');
+    Route::patch('settings/ai-providers/{credential}/model', [AiCredentialController::class, 'updateModel'])->name('ai-providers.model');
+    Route::post('settings/ai-providers/{credential}/verify', [AiCredentialController::class, 'verify'])->name('ai-providers.verify');
     Route::delete('settings/ai-providers/{credential}', [AiCredentialController::class, 'destroy'])->name('ai-providers.destroy');
 });

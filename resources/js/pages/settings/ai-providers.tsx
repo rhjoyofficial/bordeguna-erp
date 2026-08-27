@@ -25,14 +25,18 @@ type Credential = {
 type PageProps = {
     credentials: Credential[];
     providers: Record<string, string>;
+    supported: Record<string, boolean>;
+    /** provider => { model id: display name }, asked of the provider itself. */
+    models: Record<string, Record<string, string>>;
     envFallback: Record<string, boolean>;
+    activeProvider: string | null;
     flash?: { success?: string };
 };
 
-
 export default function AiProviders() {
-    const { credentials, providers, envFallback } = usePage<PageProps>().props;
+    const { credentials, providers, supported, models, envFallback, activeProvider } = usePage<PageProps>().props;
     const [confirmingId, setConfirmingId] = useState<number | null>(null);
+    const [testingId, setTestingId] = useState<number | null>(null);
 
     const form = useForm({
         provider: 'anthropic',
@@ -40,6 +44,10 @@ export default function AiProviders() {
         model: '',
         secret: '',
     });
+
+    // What the chosen provider says it can run. Empty until a key for that
+    // provider exists, because the list is read using the key.
+    const choices = models[form.data.provider] ?? {};
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -56,6 +64,12 @@ export default function AiProviders() {
             <SettingsLayout>
                 <div className="space-y-6">
                     <HeadingSmall title="AI providers" description="Add an API key so the ERP guide and future AI features can work." />
+
+                    <p className="text-muted-foreground text-sm">
+                        {activeProvider
+                            ? `Messages are answered by ${providers[activeProvider] ?? activeProvider}. With keys for more than one provider saved, the first supported one answers.`
+                            : 'No provider can answer yet. Add a key below and the assistant switches itself on.'}
+                    </p>
 
                     <div className="border-border bg-muted/40 flex items-start gap-3 rounded-md border p-4 text-sm">
                         <ShieldCheck className="text-muted-foreground mt-0.5 size-4 shrink-0" />
@@ -81,12 +95,28 @@ export default function AiProviders() {
 
                             <div className="grid gap-2">
                                 <Label htmlFor="model">Model (optional)</Label>
-                                <Input
-                                    id="model"
-                                    value={form.data.model}
-                                    placeholder="claude-opus-5"
-                                    onChange={(e) => form.setData('model', e.target.value)}
-                                />
+                                {Object.keys(choices).length > 0 ? (
+                                    <SearchSelect id="model" value={form.data.model} onChange={(e) => form.setData('model', e.target.value)}>
+                                        <option value="">Provider default</option>
+                                        {Object.entries(choices).map(([id, name]) => (
+                                            <option key={id} value={id}>
+                                                {name}
+                                            </option>
+                                        ))}
+                                    </SearchSelect>
+                                ) : (
+                                    <Input
+                                        id="model"
+                                        value={form.data.model}
+                                        placeholder="Leave empty for the provider default"
+                                        onChange={(e) => form.setData('model', e.target.value)}
+                                    />
+                                )}
+                                <p className="text-muted-foreground text-xs">
+                                    {Object.keys(choices).length > 0
+                                        ? 'Chosen from what this provider says the key can run, so a model name cannot be mistyped.'
+                                        : 'Save the key first; the list of models it can run is then read from the provider.'}
+                                </p>
                                 {form.errors.model && <p className="text-sm text-red-600">{form.errors.model}</p>}
                             </div>
                         </div>
@@ -141,10 +171,62 @@ export default function AiProviders() {
                                     </p>
                                     <p className="text-muted-foreground text-xs">
                                         Ends {c.hint ?? '....'}
-                                        {c.model ? ` · ${c.model}` : ''}
                                         {c.created_by ? ` · added by ${c.created_by}` : ''}
                                         {c.updated_at ? ` · ${c.updated_at}` : ''}
                                     </p>
+
+                                    {/* The result of the last real call, not a guess from the
+                                        shape of the key. A key that has never been tested says
+                                        so rather than implying it works. */}
+                                    {c.verify_error ? (
+                                        <p className="text-destructive mt-1 text-xs">{c.verify_error}</p>
+                                    ) : c.verified_at ? (
+                                        <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Answered on {c.verified_at}</p>
+                                    ) : (
+                                        <p className="text-muted-foreground mt-1 text-xs">Not tested yet.</p>
+                                    )}
+
+                                    {supported[c.provider] === false && (
+                                        <p className="text-muted-foreground mt-1 text-xs">
+                                            This provider can hold a key, but the assistant cannot send messages through it yet.
+                                        </p>
+                                    )}
+
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <Label htmlFor={`model-${c.id}`} className="text-muted-foreground text-xs">
+                                            Model
+                                        </Label>
+                                        <div className="w-64">
+                                            {Object.keys(models[c.provider] ?? {}).length > 0 ? (
+                                                <SearchSelect
+                                                    id={`model-${c.id}`}
+                                                    value={c.model ?? ''}
+                                                    onChange={(e) =>
+                                                        router.patch(
+                                                            `/settings/ai-providers/${c.id}/model`,
+                                                            { model: e.target.value },
+                                                            { preserveScroll: true },
+                                                        )
+                                                    }
+                                                >
+                                                    <option value="">Provider default</option>
+                                                    {Object.entries(models[c.provider] ?? {}).map(([id, name]) => (
+                                                        <option key={id} value={id}>
+                                                            {name}
+                                                        </option>
+                                                    ))}
+                                                    {/* A model saved before it could be picked from a list may no
+                                                        longer be offered. It stays visible so the row shows what is
+                                                        actually stored rather than silently reading empty. */}
+                                                    {c.model && !(models[c.provider] ?? {})[c.model] && (
+                                                        <option value={c.model}>{c.model} (not offered by the provider)</option>
+                                                    )}
+                                                </SearchSelect>
+                                            ) : (
+                                                <p className="text-muted-foreground text-xs">{c.model ?? 'Provider default'}</p>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div className="flex items-center gap-2">
@@ -157,6 +239,22 @@ export default function AiProviders() {
                                     >
                                         {c.is_active ? 'In use' : 'Off'}
                                     </span>
+
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={testingId === c.id || !c.is_active || supported[c.provider] === false}
+                                        onClick={() => {
+                                            setTestingId(c.id);
+                                            router.post(
+                                                `/settings/ai-providers/${c.id}/verify`,
+                                                {},
+                                                { preserveScroll: true, onFinish: () => setTestingId(null) },
+                                            );
+                                        }}
+                                    >
+                                        {testingId === c.id ? 'Testing…' : 'Test'}
+                                    </Button>
 
                                     <Button
                                         variant="outline"

@@ -2,8 +2,9 @@
 
 namespace App\Modules\Foundation\Support;
 
-use Anthropic\Client;
 use App\Models\User;
+use App\Modules\Foundation\Support\Ai\AiProviders;
+use App\Modules\Foundation\Support\Ai\AssistantUnavailable;
 
 /**
  * The in-app ERP guide: a floating chat that answers questions about THIS
@@ -140,37 +141,62 @@ PROMPT;
     }
 
     /**
+     * One completed turn, as text.
+     *
+     * ⚠ Which provider answers is decided by AiProviders, not here. This class
+     * knows what to say and who may hear it; it does not know or care whether
+     * Claude or ChatGPT produced the words.
+     *
      * @param  array<int, array{role: string, content: string}>  $messages
+     *
+     * @throws AssistantUnavailable
      */
     public function reply(User $user, array $messages): string
     {
-        // ⚠ Resolved through AiCredentialResolver, not read from config here:
-        // a key added in Settings → AI providers must take effect without a
-        // deploy, and the environment variable stays the fallback so an
-        // installation that never opens that screen behaves exactly as before.
+        [$driver, $key, $model] = $this->provider();
+
+        return $driver->chat($key, $model, $this->systemBlocks($user), $messages);
+    }
+
+    /**
+     * The same turn, streamed a piece at a time.
+     *
+     * @param  array<int, array{role: string, content: string}>  $messages
+     * @param  callable(string): void  $onText
+     *
+     * @throws AssistantUnavailable
+     */
+    public function streamReply(User $user, array $messages, callable $onText): string
+    {
+        [$driver, $key, $model] = $this->provider();
+
+        return $driver->stream($key, $model, $this->systemBlocks($user), $messages, $onText);
+    }
+
+    /**
+     * The driver, key and model for the provider currently answering.
+     *
+     * ⚠ Resolved per call, not cached: a key added or switched in Settings must
+     * take effect on the next message, and a process-lifetime cache is the exact
+     * trap this project has been bitten by before.
+     *
+     * @return array{0: \App\Modules\Foundation\Support\Ai\AssistantDriver, 1: string, 2: string}
+     */
+    private function provider(): array
+    {
+        $providers = app(AiProviders::class);
+        $provider = $providers->activeProvider();
+
+        if ($provider === null) {
+            throw new AssistantUnavailable(
+                'The assistant is not configured yet. An Owner can add a key under Settings, AI providers.',
+            );
+        }
+
+        $driver = $providers->driverFor($provider);
         $resolver = app(AiCredentialResolver::class);
+        $model = $resolver->modelFor($provider);
 
-        $client = new Client(apiKey: (string) $resolver->keyFor('anthropic'));
-
-        $response = $client->messages->create(
-            model: $resolver->modelFor('anthropic'),
-            maxTokens: 4096,
-            system: $this->systemBlocks($user),
-            messages: $messages,
-        );
-
-        // A refusal or an empty reply is answered with an honest sentence,
-        // not an exception the panel would swallow.
-        if ($response->stopReason === 'refusal') {
-            return 'I cannot help with that. Ask me something about using this ERP.';
-        }
-
-        foreach ($response->content as $block) {
-            if ($block->type === 'text' && trim($block->text) !== '') {
-                return $block->text;
-            }
-        }
-
-        return 'I could not produce an answer. Please try rephrasing your question.';
+        return [$driver, (string) $resolver->keyFor($provider), $model !== '' ? $model : $driver->defaultModel()];
     }
 }
