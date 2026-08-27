@@ -4,6 +4,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
+    ArrowLeftRight,
     BadgeDollarSign,
     Banknote,
     BookOpen,
@@ -347,6 +348,12 @@ export function AppSidebar() {
                           { title: 'Journals', url: '/accounting/journals', icon: NotebookPen },
                           { title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen },
                           { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },
+                          // ⚠⚠ Directly under the screen that NAMES the accounts,
+                          // because this is the only way to move money between
+                          // them. Five accounts existed with no transfer document
+                          // at all, so a bank-to-till withdrawal could only be a
+                          // hand-written journal - which meant it went unrecorded.
+                          { title: 'Money transfer', url: '/accounting/money-transfers', icon: ArrowLeftRight },
                       ],
                   },
               ]

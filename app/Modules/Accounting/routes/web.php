@@ -11,6 +11,7 @@ use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
 use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
+use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
 use Illuminate\Support\Facades\Route;
@@ -92,5 +93,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::get('journals/new/manual', [JournalController::class, 'create'])->name('journals.create');
         Route::post('journals', [JournalController::class, 'store'])->name('journals.store');
         Route::post('journals/{journal}/reverse', [JournalController::class, 'reverse'])->name('journals.reverse');
+
+        // ⚠ A transfer posts a journal that moves money, so it belongs to the
+        // same permission rather than to a new one. The document exists so the
+        // move is NOT a bare journal: it names both accounts, carries the fee,
+        // and is numbered - which a hand-written journal never is.
+        Route::get('money-transfers', [MoneyTransferController::class, 'index'])->name('money-transfers.index');
+        Route::post('money-transfers', [MoneyTransferController::class, 'store'])->name('money-transfers.store');
     });
 });
