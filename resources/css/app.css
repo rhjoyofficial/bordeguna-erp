@@ -356,6 +356,22 @@
   businesses rendered in a swash script reads as a rendering fault rather than a
   brand.
 */
+/*
+  Inertia's navigation bar. Two pixels of grey at the very top is easy to miss on
+  a large monitor, which is why the system felt like it did nothing on a click.
+  Thicker, in the accent colour, with a soft glow so it registers peripherally.
+*/
+#nprogress .bar {
+    height: 3px;
+    background: var(--primary);
+}
+
+#nprogress .peg {
+    box-shadow:
+        0 0 10px var(--primary),
+        0 0 5px var(--primary);
+}
+
 .brand-name {
     font-family: var(--font-brand);
     /* The swash forms need a little more room than the interface face. */

@@ -6,10 +6,72 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { Head, router, useForm } from '@inertiajs/react';
+import { FormEventHandler, useState } from 'react';
 
 const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
+
+/**
+ * The receipts behind one voucher, and the way to add another.
+ *
+ * ⚠⚠ "No receipt" IS THE MESSAGE. A voucher with nothing attached says so in
+ * plain words rather than showing an empty space, because an empty space reads
+ * as "nothing to see" when it actually means "this payment has no proof".
+ */
+function EvidenceCell({ voucher, canRecord }: { voucher: Voucher; canRecord: boolean }) {
+    const [busy, setBusy] = useState(false);
+
+    const upload = (file: File | undefined) => {
+        if (!file) return;
+        setBusy(true);
+        router.post(
+            `/purchasing/expenses/${voucher.id}/evidence`,
+            { file },
+            { preserveScroll: true, forceFormData: true, onFinish: () => setBusy(false) },
+        );
+    };
+
+    return (
+        <div className="space-y-1">
+            {voucher.evidence.length === 0 ? (
+                <p className="text-destructive text-xs">No receipt</p>
+            ) : (
+                voucher.evidence.map((file) => (
+                    <div key={file.id} className="flex items-center gap-2">
+                        <a href={file.url} target="_blank" rel="noreferrer" className="text-xs underline">
+                            {file.name}
+                        </a>
+                        {canRecord && (
+                            <button
+                                type="button"
+                                className="text-muted-foreground hover:text-destructive text-xs"
+                                onClick={() => router.delete(`/purchasing/expenses/${voucher.id}/evidence/${file.id}`, { preserveScroll: true })}
+                            >
+                                remove
+                            </button>
+                        )}
+                    </div>
+                ))
+            )}
+
+            {canRecord && (
+                <label className="text-muted-foreground hover:text-foreground block cursor-pointer text-xs underline">
+                    {busy ? 'Uploading…' : 'Attach receipt'}
+                    <input
+                        type="file"
+                        className="hidden"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,.csv,.xls,.xlsx"
+                        onChange={(e) => upload(e.target.files?.[0])}
+                    />
+                </label>
+            )}
+
+            <a href={`/purchasing/expenses/${voucher.id}/print`} className="block text-xs underline">
+                Print voucher
+            </a>
+        </div>
+    );
+}
 
 interface VoucherLine {
     id: number;
@@ -30,6 +92,7 @@ interface Voucher {
     reference: string | null;
     note: string | null;
     lines: VoucherLine[];
+    evidence: { id: number; name: string; uploaded_by: string | null; url: string }[];
 }
 
 interface Option {
@@ -257,6 +320,7 @@ export default function ExpensesIndex({
                                 <th className="p-3">Paid from</th>
                                 <th className="p-3">Spent on</th>
                                 <th className="p-3 text-right">Amount</th>
+                                <th className="p-3">Receipt</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -275,6 +339,9 @@ export default function ExpensesIndex({
                                         ))}
                                     </td>
                                     <td className="p-3 text-right tabular-nums">{voucher.total}</td>
+                                    <td className="p-3">
+                                        <EvidenceCell voucher={voucher} canRecord={canRecord} />
+                                    </td>
                                 </tr>
                             ))}
                             {vouchers.data.length === 0 && (

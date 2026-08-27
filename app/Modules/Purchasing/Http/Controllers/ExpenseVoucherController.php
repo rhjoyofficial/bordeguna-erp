@@ -7,7 +7,11 @@ use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Actions\DeleteAttachment;
+use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\RecordExpenseVoucher;
@@ -42,7 +46,7 @@ class ExpenseVoucherController extends Controller
         $businessId = app(BusinessContext::class)->id();
 
         $vouchers = ExpenseVoucher::query()
-            ->with(['moneyAccount:id,name', 'supplier:id,name', 'lines.account:id,code,name'])
+            ->with(['moneyAccount:id,name', 'supplier:id,name', 'lines.account:id,code,name', 'attachments.uploadedBy:id,name'])
             ->orderByDesc('spent_on')
             ->orderByDesc('id')
             ->paginate(20)
@@ -61,6 +65,15 @@ class ExpenseVoucherController extends Controller
             'total' => Money::ofTaka((string) $voucher->total)->toTaka(),
             'reference' => $voucher->reference,
             'note' => $voucher->note,
+            // The receipts behind the number. Names and links only: the file
+            // itself streams through the attachment route, which is
+            // business-scoped, so nothing here widens who can read it.
+            'evidence' => $voucher->attachments->map(fn (Attachment $file) => [
+                'id' => $file->id,
+                'name' => $file->original_name ?? $file->file_name,
+                'uploaded_by' => $file->uploadedBy?->name,
+                'url' => route('attachments.show', $file->id),
+            ])->values()->all(),
             'lines' => $voucher->lines->map(fn ($line) => [
                 'id' => $line->id,
                 'account' => $line->account?->label(),
@@ -106,6 +119,95 @@ class ExpenseVoucherController extends Controller
                 ->all(),
 
             'today' => now()->toDateString(),
+        ]);
+    }
+
+    /**
+     * Attach the receipt, bill or screenshot the money was paid against.
+     *
+     * ⚠⚠ EVIDENCE IS ADDED AFTER THE VOUCHER, DELIBERATELY. A voucher IS the
+     * money leaving, and holding the payment hostage to somebody finding the
+     * receipt first would mean either a voucher recorded late or a receipt
+     * invented to get past the form. The document is recorded when the money
+     * moves; the proof is attached when it is in hand.
+     *
+     * ⚠ Several files allowed, not one. A month of hosting is an invoice AND a
+     * card statement line; an electricity bill is the bill AND the paid stamp.
+     */
+    public function uploadEvidence(Request $request, ExpenseVoucher $voucher, StoreAttachment $store): RedirectResponse
+    {
+        $this->authorize('purchasing.expense.record');
+
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp,csv,xls,xlsx', 'max:5120'],
+        ]);
+
+        $store->handle(
+            $voucher,
+            $request->file('file'),
+            ExpenseVoucher::EVIDENCE_COLLECTION,
+            $request->user(),
+        );
+
+        return back()->with('success', "Receipt attached to {$voucher->voucher_number}.");
+    }
+
+    /**
+     * ⚠ Removing a receipt is allowed but logged, because the alternative is a
+     * wrong file attached to a payment forever. The voucher itself stays: money
+     * that left the business is not deleted because its paperwork changed.
+     */
+    public function deleteEvidence(ExpenseVoucher $voucher, Attachment $attachment, DeleteAttachment $delete): RedirectResponse
+    {
+        $this->authorize('purchasing.expense.record');
+
+        abort_unless(
+            $attachment->attachable_type === $voucher->getMorphClass() && $attachment->attachable_id === $voucher->id,
+            404,
+        );
+
+        $delete->handle($attachment);
+
+        return back()->with('success', 'Receipt removed.');
+    }
+
+    /**
+     * The voucher as paper: one copy for the office file, one for whoever was
+     * paid.
+     *
+     * ⚠⚠ TWO COPIES ON ONE SHEET, NOT TWO PRINTS. In a Bangladeshi office the
+     * payee signs the copy that stays behind; printing them separately means
+     * the signed one and the given one can differ. Same sheet, same numbers,
+     * one press.
+     *
+     * ⚠ Behind the same permission that can VIEW expenses, not the one that
+     * records them: a document is no more secret than the record it prints.
+     */
+    public function print(ExpenseVoucher $voucher): Response
+    {
+        $this->authorize('purchasing.reports.view');
+
+        $voucher->load(['moneyAccount:id,name', 'supplier:id,name', 'lines.account:id,code,name', 'createdBy:id,name']);
+
+        return Inertia::render('purchasing/expenses/print', [
+            // ⚠ The same identity object every other printed document uses, so
+            // a letterhead can never drift between one document and another.
+            'issuer' => BusinessIdentity::forCurrent()->toArray(),
+            'voucher' => [
+                'voucher_number' => $voucher->voucher_number,
+                'spent_on' => $voucher->spent_on?->toDateString(),
+                'paid_from' => $voucher->moneyAccount?->name,
+                'payee' => $voucher->payee(),
+                'reference' => $voucher->reference,
+                'note' => $voucher->note,
+                'total' => Money::ofTaka((string) $voucher->total)->toTaka(),
+                'recorded_by' => $voucher->createdBy?->name,
+                'lines' => $voucher->lines->map(fn ($line) => [
+                    'account' => $line->account?->label(),
+                    'description' => $line->description,
+                    'amount' => Money::ofTaka((string) $line->amount)->toTaka(),
+                ])->values()->all(),
+            ],
         ]);
     }
 

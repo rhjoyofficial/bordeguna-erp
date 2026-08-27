@@ -1,3 +1,4 @@
+import { BusyButton } from '@/components/busy-button';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -129,9 +130,9 @@ function ApprovalButtons({ approveUrl, rejectUrl, status }: { approveUrl: string
             <Button size="sm" variant="ghost" onClick={() => router.post(rejectUrl, {}, { preserveScroll: true })}>
                 Reject
             </Button>
-            <Button size="sm" onClick={() => router.post(approveUrl, {}, { preserveScroll: true })}>
+            <BusyButton size="sm" busyLabel="Approving…" onClick={() => router.post(approveUrl, {}, { preserveScroll: true })}>
                 Approve
-            </Button>
+            </BusyButton>
         </div>
     );
 }

@@ -1,3 +1,4 @@
+import { BusyButton } from '@/components/busy-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -193,26 +194,28 @@ function LifecycleActions({ run }: { run: Run }) {
         <div className="flex flex-wrap items-center gap-3">
             {run.status === 'calculated' && (
                 <>
-                    <Button size="sm" onClick={() => post('hrm.payroll.review')} disabled={run.blocked_count > 0}>
+                    <BusyButton size="sm" onClick={() => post('hrm.payroll.review')} disabled={run.blocked_count > 0}>
                         Review &amp; send for approval
-                    </Button>
+                    </BusyButton>
                     {run.blocked_count > 0 && <span className="text-destructive text-xs">Resolve the blocked lines first.</span>}
                 </>
             )}
             {run.awaiting_approval && (
                 <>
-                    <Button size="sm" onClick={() => post('hrm.payroll.approve')}>
+                    {/* ⚠⚠ The single most expensive double press in this system:
+                        approving authorises nine salaries. */}
+                    <BusyButton size="sm" busyLabel="Approving…" onClick={() => post('hrm.payroll.approve')}>
                         Approve
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => post('hrm.payroll.reject')}>
+                    </BusyButton>
+                    <BusyButton size="sm" variant="outline" onClick={() => post('hrm.payroll.reject')}>
                         Reject
-                    </Button>
+                    </BusyButton>
                 </>
             )}
             {run.status === 'approved' && (
-                <Button size="sm" onClick={() => post('hrm.payroll.disburse')}>
+                <BusyButton size="sm" busyLabel="Recording…" onClick={() => post('hrm.payroll.disburse')}>
                     Mark disbursed
-                </Button>
+                </BusyButton>
             )}
             {(run.status === 'disbursed' || run.status === 'locked' || run.status === 'approved') && (
                 <a href={route('hrm.payroll.disbursement', run.id)}>
@@ -222,9 +225,9 @@ function LifecycleActions({ run }: { run: Run }) {
                 </a>
             )}
             {run.status === 'disbursed' && (
-                <Button size="sm" onClick={() => post('hrm.payroll.lock')}>
+                <BusyButton size="sm" onClick={() => post('hrm.payroll.lock')}>
                     Lock
-                </Button>
+                </BusyButton>
             )}
             {run.is_reopenable && (
                 <ReasonDialog

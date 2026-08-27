@@ -54,8 +54,23 @@ createInertiaApp({
 
         root.render(<App {...props} />);
     },
+    /*
+     * The only "preloader" this ERP has, and the right one for it.
+     *
+     * ⚠⚠ A FULL-SCREEN SPINNER WOULD BE WRONG HERE. Inertia delivers a page
+     * complete with its data, so there is no half-loaded screen to cover and
+     * nothing for a skeleton to stand in for - the old page stays usable until
+     * the new one is ready. A bar at the top says "working" without hiding what
+     * somebody is still reading, and without blocking the whole interface
+     * because one report is slow.
+     *
+     * ⚠ The 250 ms delay is load-bearing: below it the response usually wins,
+     * and a bar that flashes on every click makes a fast system look nervous.
+     */
     progress: {
-        color: '#4B5563',
+        color: 'var(--primary)',
+        delay: 250,
+        showSpinner: false,
     },
 });
 

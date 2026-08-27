@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Models;
 
 use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Models\MoneyAccount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,7 +21,18 @@ use Spatie\Activitylog\Traits\LogsActivity;
  */
 class ExpenseVoucher extends Model
 {
-    use BelongsToBusiness, LogsActivity;
+    use BelongsToBusiness, HasAttachments, LogsActivity;
+
+    /**
+     * The receipts, bills and screenshots proving the money was really spent.
+     *
+     * ⚠⚠ THE VOUCHER WAS THE ONE MONEY DOCUMENT WITH NOWHERE TO PUT THE PROOF.
+     * Supplier bills, disbursement batches, adjustments and employee records
+     * could all carry a file; the document covering rent, electricity, hosting
+     * and every small cash payment could not. A voucher without its receipt is
+     * a number somebody typed.
+     */
+    public const EVIDENCE_COLLECTION = 'evidence';
 
     protected $fillable = [
         'business_id',

@@ -111,9 +111,14 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     // question. Recording one moves money and needs the permission.
     Route::middleware('can:purchasing.reports.view')->group(function () {
         Route::get('expenses', [ExpenseVoucherController::class, 'index'])->name('expenses.index');
+        // ⚠ Printing sits with viewing, not recording: a voucher on paper is no
+        // more secret than the voucher on the screen it was read from.
+        Route::get('expenses/{voucher}/print', [ExpenseVoucherController::class, 'print'])->name('expenses.print');
     });
 
     Route::middleware('can:purchasing.expense.record')->group(function () {
         Route::post('expenses', [ExpenseVoucherController::class, 'store'])->name('expenses.store');
+        Route::post('expenses/{voucher}/evidence', [ExpenseVoucherController::class, 'uploadEvidence'])->name('expenses.evidence.store');
+        Route::delete('expenses/{voucher}/evidence/{attachment}', [ExpenseVoucherController::class, 'deleteEvidence'])->name('expenses.evidence.destroy');
     });
 });

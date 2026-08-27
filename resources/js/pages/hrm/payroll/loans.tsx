@@ -1,3 +1,4 @@
+import { BusyButton } from '@/components/busy-button';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -322,9 +323,13 @@ function LoanCard({ loan }: { loan: LoanRow }) {
                             >
                                 Reject
                             </Button>
-                            <Button size="sm" onClick={() => router.post(route('hrm.loans.approve', loan.id), {}, { preserveScroll: true })}>
+                            <BusyButton
+                                size="sm"
+                                busyLabel="Approving…"
+                                onClick={() => router.post(route('hrm.loans.approve', loan.id), {}, { preserveScroll: true })}
+                            >
                                 Approve &amp; disburse
-                            </Button>
+                            </BusyButton>
                         </>
                     )}
                     {loan.can_settle && <SettleDialog loan={loan} />}
