@@ -64,6 +64,10 @@ interface EmployeeDetail {
     employee_code: string;
     name: string;
     employment_type: string;
+    may_clock_in_remotely: boolean;
+    remote_clock_in_granted_by: string | null;
+    remote_clock_in_granted_at: string | null;
+    remote_clock_in_reason: string | null;
     status: string;
     separation_type: string | null;
     separation_date: string | null;
@@ -604,6 +608,80 @@ function DocumentsCard({ employeeId, documents, documentTypes }: { employeeId: n
     );
 }
 
+/**
+ * Standing permission to clock in from away from the office.
+ *
+ * ⚠ This is not the same as approving a day out. Field duty and official work
+ * already do that for a particular date; this is for a person whose job is
+ * simply not at a desk, so nobody has to approve the same thing every morning.
+ */
+function RemoteClockInCard({ employee }: { employee: EmployeeDetail }) {
+    const [reason, setReason] = useState(employee.remote_clock_in_reason ?? '');
+    const [saving, setSaving] = useState(false);
+
+    const set = (allowed: boolean) => {
+        setSaving(true);
+        router.patch(
+            route('hrm.employees.remote-clock-in', employee.id),
+            { may_clock_in_remotely: allowed, reason },
+            { preserveScroll: true, onFinish: () => setSaving(false) },
+        );
+    };
+
+    return (
+        <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
+            <h3 className="mb-1 text-sm font-medium">Clocking in from outside the office</h3>
+
+            {employee.may_clock_in_remotely ? (
+                <>
+                    <p className="text-muted-foreground mb-3 text-sm">
+                        {employee.name} may clock in and out from anywhere. Their punches still record where they came from, and still show the
+                        distance from the office, but they are not raised for review.
+                        {employee.remote_clock_in_granted_by
+                            ? ` Allowed by ${employee.remote_clock_in_granted_by}${employee.remote_clock_in_granted_at ? ` on ${employee.remote_clock_in_granted_at}` : ''}.`
+                            : ''}
+                    </p>
+                    {employee.remote_clock_in_reason && (
+                        <p className="text-muted-foreground mb-3 text-sm">Reason given: {employee.remote_clock_in_reason}</p>
+                    )}
+                    <Button variant="outline" size="sm" disabled={saving} onClick={() => set(false)}>
+                        Withdraw this permission
+                    </Button>
+                </>
+            ) : (
+                <>
+                    <p className="text-muted-foreground mb-3 text-sm">
+                        {employee.name} is expected to clock in at the office. If they clock in from somewhere else, the punch is still accepted and
+                        recorded, but it is raised for review. Allow it for people whose work is genuinely away from a desk.
+                    </p>
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div className="grid gap-2">
+                            <Label htmlFor="remote-reason">Why (optional)</Label>
+                            <Input
+                                id="remote-reason"
+                                value={reason}
+                                placeholder="Field sales, deliveries, site visits"
+                                onChange={(e) => setReason(e.target.value)}
+                                className="w-72"
+                            />
+                        </div>
+                        <Button size="sm" disabled={saving} onClick={() => set(true)}>
+                            Allow clocking in from anywhere
+                        </Button>
+                    </div>
+                </>
+            )}
+
+            {/* ⚠ Said plainly, because it is the difference between this feature
+                working and doing nothing at all: without office coordinates
+                there is no fence to be outside of. */}
+            <p className="text-muted-foreground mt-3 text-xs">
+                This only has an effect once the office has coordinates and its geofence is switched on, under Settings, Organization.
+            </p>
+        </div>
+    );
+}
+
 function LoginAccountCard({ employee, lifetime }: { employee: EmployeeDetail; lifetime: string }) {
     const [email, setEmail] = useState('');
     const [sending, setSending] = useState(false);
@@ -775,6 +853,8 @@ export default function EmployeeShow({
                 </div>
 
                 {can_manage_login && employee.status !== 'separated' && <LoginAccountCard employee={employee} lifetime={password_link_lifetime} />}
+
+                {employee.status !== 'separated' && <RemoteClockInCard employee={employee} />}
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Emergency contact</h3>

@@ -13,6 +13,7 @@ use App\Modules\Hrm\Http\Controllers\EmployeeAttendanceController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\HrmDashboardController;
+use App\Modules\Hrm\Http\Controllers\HolidayWorkController;
 use App\Modules\Hrm\Http\Controllers\LeaveController;
 use App\Modules\Hrm\Http\Controllers\LeaveProvisionController;
 use App\Modules\Hrm\Http\Controllers\LeaveTypeController;
@@ -48,6 +49,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::patch('employees/{employee}', [EmployeeController::class, 'update'])->name('employees.update');
     Route::patch('employees/{employee}/status', [EmployeeController::class, 'status'])->name('employees.status');
     Route::post('employees/{employee}/login-account', [EmployeeController::class, 'createLoginAccount'])->name('employees.login-account');
+    Route::patch('employees/{employee}/remote-clock-in', [EmployeeController::class, 'setRemoteClockIn'])->name('employees.remote-clock-in');
 
     // The final settlement statement. Pay data, so it sits behind the payroll
     // permission rather than the employee one, and it pays nobody.
@@ -168,6 +170,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::put('leave/types/{leaveType}', [LeaveTypeController::class, 'update'])->name('leave.types.update');
     Route::patch('leave/types/{leaveType}/toggle-active', [LeaveTypeController::class, 'toggleActive'])->name('leave.types.toggle-active');
 
+    Route::get('holiday-work', [HolidayWorkController::class, 'index'])->name('holiday-work.index');
+    Route::post('holiday-work', [HolidayWorkController::class, 'store'])->name('holiday-work.store');
+    Route::get('holiday-work/report', [HolidayWorkController::class, 'report'])->name('holiday-work.report');
     Route::post('movements', [LeaveController::class, 'storeMovement'])->name('movements.store');
     Route::post('movements/{movement}/approve', [LeaveController::class, 'approveMovement'])->name('movements.approve');
     Route::post('movements/{movement}/reject', [LeaveController::class, 'rejectMovement'])->name('movements.reject');

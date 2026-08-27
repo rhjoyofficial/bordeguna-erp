@@ -61,6 +61,10 @@ class EmployeeController extends Controller
                     'employee_code' => $employee->employee_code,
                     'name' => $employee->fullName(),
                     'employment_type' => $employee->employment_type->label(),
+                'may_clock_in_remotely' => (bool) $employee->may_clock_in_remotely,
+                'remote_clock_in_granted_by' => $employee->remoteClockInGrantedBy?->name,
+                'remote_clock_in_granted_at' => $employee->remote_clock_in_granted_at?->toDayDateTimeString(),
+                'remote_clock_in_reason' => $employee->remote_clock_in_reason,
                     'status' => $employee->status->value,
                     'office' => $assignment?->office?->name,
                     'designation' => $assignment?->designation?->name,
@@ -128,6 +132,8 @@ class EmployeeController extends Controller
             // is_active is read by the login card: a deactivated account is
             // a link that leads nowhere, and the card has to say so.
             'user:id,name,email,is_active',
+            // Read by the remote clock-in card, which must name who granted it.
+            'remoteClockInGrantedBy:id,name',
             'assignments' => fn ($query) => $query->latest('effective_from')->with([
                 'office:id,name', 'department:id,name', 'section:id,name', 'designation:id,name',
                 'supervisor:id,first_name,last_name,employee_code',
@@ -335,6 +341,51 @@ class EmployeeController extends Controller
      * (hrm.employees.manage). Splitting them across two screens is what left
      * every account here unlinked and every self-service screen empty.
      */
+    /**
+     * Grant or withdraw standing permission to clock in from away from the office.
+     *
+     * ⚠⚠ THIS IS THE APPROVAL PHASE JOY ASKED FOR. Until it is granted, a person
+     * clocking in from outside their office geofence raises a punch that needs
+     * review; once granted, the punch is still located and still shows its
+     * distance, but nobody is asked to approve a field salesman for doing his
+     * job every single morning.
+     *
+     * ⚠ It does NOT authorise the day. The attendance engine decides Present,
+     * Late or Absent from the punches exactly as before - this only settles
+     * whether being somewhere else is a question.
+     */
+    public function setRemoteClockIn(Request $request, Employee $employee): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+
+        abort_unless($employee->assignments()->exists(), 404);
+
+        $data = $request->validate([
+            'may_clock_in_remotely' => ['required', 'boolean'],
+            'reason' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        if ($employee->status === EmployeeStatus::Separated) {
+            return back()->with('error', "{$employee->fullName()} has left, so their clock-in permissions are not changed.");
+        }
+
+        $granting = (bool) $data['may_clock_in_remotely'];
+
+        $employee->update([
+            'may_clock_in_remotely' => $granting,
+            // ⚠ Cleared on withdrawal rather than left behind: "granted by X on
+            // the 3rd" sitting under a permission nobody holds any more reads
+            // as though they still hold it.
+            'remote_clock_in_granted_by' => $granting ? $request->user()->id : null,
+            'remote_clock_in_granted_at' => $granting ? now() : null,
+            'remote_clock_in_reason' => $granting ? (($data['reason'] ?? null) ?: null) : null,
+        ]);
+
+        return back()->with('success', $granting
+            ? "{$employee->fullName()} may now clock in from outside the office."
+            : "{$employee->fullName()} may no longer clock in from outside the office.");
+    }
+
     public function createLoginAccount(
         Request $request,
         Employee $employee,

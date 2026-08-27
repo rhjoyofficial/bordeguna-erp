@@ -267,7 +267,15 @@ export function AppSidebar() {
                                     { title: 'Show cause notices', url: '/hrm/notices', icon: FileWarning },
                                 ]
                               : []),
-                          ...(canManageLeave ? [{ title: 'Leave & movement', url: '/hrm/leave', icon: Palmtree }] : []),
+                          ...(canManageLeave
+                              ? [
+                                    { title: 'Leave & movement', url: '/hrm/leave', icon: Palmtree },
+                                    // ⚠ Linked deliberately. Five engines in this system
+                                    // have shipped complete and unreachable; a route with
+                                    // no menu entry is a feature nobody uses.
+                                    { title: 'Holiday work', url: '/hrm/holiday-work', icon: CalendarCheck },
+                                ]
+                              : []),
                       ],
                   },
               ]

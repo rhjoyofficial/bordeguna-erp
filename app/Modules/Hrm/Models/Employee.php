@@ -37,6 +37,10 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
     protected $fillable = [
         'employee_code',
         'biometric_enroll_id',
+        'may_clock_in_remotely',
+        'remote_clock_in_granted_by',
+        'remote_clock_in_granted_at',
+        'remote_clock_in_reason',
         'user_id',
         'first_name',
         'last_name',
@@ -92,10 +96,23 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         'mfs_provider', 'mfs_account_number', 'salary_payment_method',
     ];
 
+    /**
+     * Who granted this person standing permission to clock in remotely.
+     *
+     * ⚠ Null both when nobody has granted it and when it was withdrawn: the
+     * grant details are cleared with the permission itself.
+     */
+    public function remoteClockInGrantedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'remote_clock_in_granted_by');
+    }
+
     protected function casts(): array
     {
         return [
             'employment_type' => EmploymentType::class,
+            'may_clock_in_remotely' => 'boolean',
+            'remote_clock_in_granted_at' => 'datetime',
             'probation_months' => 'integer',
             'status' => EmployeeStatus::class,
             'separation_type' => SeparationType::class,

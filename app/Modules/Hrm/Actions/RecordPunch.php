@@ -43,7 +43,7 @@ class RecordPunch
 
         $direction = $attributes['direction'] ?? null;
 
-        [$outsideGeofence, $reviewReason] = $this->reviewFlags($employee, $source, $attributes);
+        [$outsideGeofence, $reviewReason, $distance] = $this->reviewFlags($employee, $source, $attributes);
 
         return AttendancePunch::create([
             'employee_id' => $employee->id,
@@ -58,6 +58,7 @@ class RecordPunch
             'ip_address' => $attributes['ip_address'] ?? null,
             'user_agent' => $attributes['user_agent'] ?? null,
             'device_metadata' => $attributes['device_metadata'] ?? null,
+            'distance_from_office_meters' => $distance,
             'is_outside_geofence' => $outsideGeofence,
             'needs_review' => $outsideGeofence || $reviewReason !== null,
             'review_reason' => $reviewReason,
@@ -74,12 +75,15 @@ class RecordPunch
      * exception is a Phase-2c correction.
      *
      * @param  array<string, mixed>  $attributes
-     * @return array{0: bool, 1: string|null}
+     * @return array{0: bool, 1: string|null, 2: float|null}
      */
     private function reviewFlags(Employee $employee, PunchSource $source, array $attributes): array
     {
         if (! $source->requiresProof()) {
-            return [false, null];
+            // ⚠ A biometric punch is its own proof of location: the machine is
+            // bolted to the office wall. There is nothing to measure and
+            // nothing to ask about.
+            return [false, null, null];
         }
 
         $office = $employee->currentAssignment()?->office;
@@ -88,8 +92,9 @@ class RecordPunch
             $office,
             isset($attributes['latitude']) ? (float) $attributes['latitude'] : null,
             isset($attributes['longitude']) ? (float) $attributes['longitude'] : null,
+            (bool) $employee->may_clock_in_remotely,
         );
 
-        return [$verdict['outside'], $verdict['reason']];
+        return [$verdict['outside'], $verdict['reason'], $verdict['distance']];
     }
 }
