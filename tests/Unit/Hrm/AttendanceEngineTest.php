@@ -329,6 +329,35 @@ it('does not count holiday work without approval', function () {
     expect($outcome->flags)->toContain('unapproved_holiday_work');
 });
 
+it('raises a holiday punch that was never clocked out, instead of ignoring it', function () {
+    // ⚠⚠ THE 26 AUGUST 2026 CASE. Two people clocked in on Eid-e-Milad-un-Nabi
+    // and never clocked out. Worked minutes were 0, so the holiday branch
+    // returned before it could flag anything: the day looked exactly like a day
+    // nobody came in at all. Nothing credited them and nothing asked anyone.
+    $outcome = engineRun(
+        ['2026-08-03 09:00:00'],
+        ['is_holiday' => true, 'holiday_name' => 'Eid-e-Milad-un-Nabi'],
+    );
+
+    expect($outcome->status)->toBe(AttendanceStatus::Holiday)
+        // ⚠ Still uncounted, deliberately: with no out punch the hours are
+        // genuinely unknown, and guessing them would put invented numbers into
+        // payroll. The point is that a human is now asked.
+        ->and($outcome->payableMinutes)->toBe(0)
+        ->and($outcome->flags)->toContain('unapproved_holiday_work')
+        ->and($outcome->flags)->toContain('needs_review');
+});
+
+it('leaves a holiday with no punches at all completely alone', function () {
+    // The counterweight to the test above: a genuine day off must not become
+    // provisional, or every holiday would block payroll for all nine people.
+    $outcome = engineRun([], ['is_holiday' => true, 'holiday_name' => 'Victory Day']);
+
+    expect($outcome->status)->toBe(AttendanceStatus::Holiday)
+        ->and($outcome->flags)->not->toContain('needs_review')
+        ->and($outcome->isProvisional)->toBeFalse();
+});
+
 it('counts holiday work once it is approved', function () {
     $outcome = engineRun(
         ['2026-08-03 09:00:00', '2026-08-03 18:00:00'],

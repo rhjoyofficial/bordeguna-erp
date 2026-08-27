@@ -109,6 +109,24 @@ class DetermineStatus implements AttendanceStage
         $computation = $computation->with(['status' => $status])->note($label.'.');
 
         if ($computation->workedMinutes === 0) {
+            // ⚠⚠ A PUNCH WITH NOTHING TO PAIR IT TO IS STILL SOMEBODY AT WORK.
+            // This branch used to return here unconditionally, so a person who
+            // clocked in on a holiday and never clocked out produced a day that
+            // was indistinguishable from a day nobody touched: no credit, no
+            // flag, no review, nothing for anyone to notice. On 26 August 2026
+            // (Eid-e-Milad-un-Nabi) two people did exactly that and the system
+            // said nothing about either of them.
+            //
+            // ⚠ It is deliberately NOT credited and NOT approved here: worked
+            // minutes are genuinely unknown, and inventing them would put made
+            // up numbers into payroll. It is raised for a human to settle.
+            if ($computation->firstIn !== null && ! $context->assumesPresence()) {
+                return $computation
+                    ->flag('unapproved_holiday_work')
+                    ->flag('needs_review')
+                    ->note('Clocked in on a non-working day but never clocked out, so the hours are unknown and nothing is counted. Approve holiday work, or correct the punches, to settle it (POL-09).');
+            }
+
             return $computation;
         }
 
