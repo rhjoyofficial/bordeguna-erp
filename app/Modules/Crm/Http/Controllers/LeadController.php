@@ -15,6 +15,7 @@ use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Brand;
+use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -98,6 +99,25 @@ class LeadController extends Controller
             'lost_reasons' => Reason::forContext('lead_lost')->active()->orderBy('name')->get(['id', 'name']),
             'agents' => $this->businessUsers($businessId),
             'can_assign' => $request->user()->can('crm.leads.assign'),
+            // ⚠⚠ Without this prop the convert endpoint had NO caller. The route,
+            // the action, the permission and seventeen tests all shipped on
+            // 9 August; the screen was never brought forward, so no lead in this
+            // system could become a customer. `ConvertLead` is the only writer of
+            // `converted_customer_id`, so the funnel simply had no exit.
+            'can_convert' => $request->user()->can('crm.leads.convert'),
+            // ⚠ System and inactive customers are excluded because `ConvertLead`
+            // REFUSES both - offering a choice the action will reject would be a
+            // form that fails on submit for reasons the user cannot see.
+            'customers' => Customer::where('is_system', false)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'code', 'name', 'phone']),
+            // ⚠⚠ Straight from the enum, never typed by hand. A case mismatch
+            // here - `Distributor` against `distributor` - once charged a
+            // distributor the retail price without anyone noticing.
+            'customer_types' => collect(CustomerType::cases())
+                ->map(fn (CustomerType $type) => ['value' => $type->value, 'label' => $type->label()])
+                ->values(),
         ]);
     }
 

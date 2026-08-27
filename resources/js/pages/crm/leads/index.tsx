@@ -38,6 +38,13 @@ interface Option {
     lead_source_id?: number;
 }
 
+interface CustomerOption {
+    id: number;
+    code: string | null;
+    name: string;
+    phone: string | null;
+}
+
 interface DuplicateMatch {
     leads: { id: number; name: string | null; phone: string | null; status: string }[];
     customers: { id: number; name: string; code: string | null; phone: string | null; type: string }[];
@@ -84,6 +91,9 @@ export default function LeadsIndex({
     lost_reasons,
     agents,
     can_assign,
+    can_convert,
+    customers,
+    customer_types,
 }: {
     leads: Paginated<Lead>;
     filters: { search: string; status: string; brand_id: string; assigned_to_user_id: string };
@@ -95,6 +105,9 @@ export default function LeadsIndex({
     lost_reasons: Option[];
     agents: Option[];
     can_assign: boolean;
+    can_convert: boolean;
+    customers: CustomerOption[];
+    customer_types: { value: string; label: string }[];
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/crm/leads', initialFilters);
 
@@ -171,6 +184,76 @@ export default function LeadsIndex({
         clearErrors();
         setMatches(null);
         reset();
+    };
+
+    /**
+     * ⚠⚠ CONVERSION IS THE FUNNEL'S ONLY EXIT. `ConvertLead` is the single
+     * writer of `converted_customer_id`, so until this form existed a lead
+     * could never become a customer through the UI at all.
+     *
+     * ⚠ Every rule - already converted, lost, duplicate code, duplicate phone,
+     * system or inactive customer - lives in the action and comes back as a
+     * validation error. Nothing is re-checked here, because a second set of
+     * rules would be a second opinion.
+     */
+    const [converting, setConverting] = useState<Lead | null>(null);
+    const [convertMode, setConvertMode] = useState<'existing' | 'new'>('new');
+    const convertForm = useForm({
+        customer_id: '',
+        code: '',
+        name: '',
+        type: '',
+        phone: '',
+        email: '',
+        address: '',
+        note: '',
+    });
+
+    const beginConvert = (lead: Lead) => {
+        setConverting(lead);
+        setConvertMode('new');
+        convertForm.clearErrors();
+        // The lead already knows who this is; only the permanent code is new.
+        convertForm.setData({
+            customer_id: '',
+            code: '',
+            name: lead.name ?? '',
+            type: '',
+            phone: lead.phone ?? '',
+            email: lead.email ?? '',
+            address: lead.address ?? '',
+            note: '',
+        });
+    };
+
+    const cancelConvert = () => {
+        setConverting(null);
+        convertForm.clearErrors();
+        convertForm.reset();
+    };
+
+    /**
+     * ⚠ Switching mode CLEARS the other side. Leaving a stale `customer_id`
+     * behind would send the request down the "link to existing" branch while
+     * the user was looking at a new-customer form.
+     */
+    const switchConvertMode = (mode: 'existing' | 'new') => {
+        setConvertMode(mode);
+        convertForm.clearErrors();
+        convertForm.setData('customer_id', '');
+    };
+
+    const submitConvert: FormEventHandler = (e) => {
+        e.preventDefault();
+
+        if (!converting) {
+            return;
+        }
+
+        convertForm.post(route('crm.leads.convert', converting.id), {
+            preserveScroll: true,
+            onSuccess: () => cancelConvert(),
+        });
     };
 
     // Only campaigns belonging to the chosen source, so the two axes cannot disagree.
@@ -450,6 +533,147 @@ export default function LeadsIndex({
                     </SearchSelect>
                 </FilterBar>
 
+                {converting && (
+                    <form onSubmit={submitConvert} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
+                        <div className="md:col-span-4">
+                            <h2 className="font-medium">Convert {converting.name ?? `lead #${converting.id}`} to a customer</h2>
+                            <p className="text-muted-foreground text-sm">
+                                The lead is kept, never deleted, and its history stays where it is. Nothing financial happens here - no invoice,
+                                no price, no stock.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2 md:col-span-4">
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={convertMode === 'new' ? 'default' : 'outline'}
+                                onClick={() => switchConvertMode('new')}
+                            >
+                                Create a new customer
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant={convertMode === 'existing' ? 'default' : 'outline'}
+                                onClick={() => switchConvertMode('existing')}
+                            >
+                                They are already a customer
+                            </Button>
+                        </div>
+
+                        {convertMode === 'existing' ? (
+                            <div className="grid gap-2 md:col-span-4">
+                                <Label htmlFor="convert_customer_id">Existing customer</Label>
+                                <SearchSelect
+                                    id="convert_customer_id"
+                                    value={convertForm.data.customer_id}
+                                    onChange={(e) => convertForm.setData('customer_id', e.target.value)}
+                                >
+                                    <option value="">Choose a customer</option>
+                                    {customers.map((c) => (
+                                        <option key={c.id} value={c.id}>
+                                            {c.code ? `${c.code} - ` : ''}
+                                            {c.name}
+                                            {c.phone ? ` (${c.phone})` : ''}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                                <InputError message={convertForm.errors.customer_id} />
+                                <p className="text-muted-foreground text-xs">
+                                    Use this when the prospect turns out to be someone you already sell to. No second record is created.
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="convert_code">Customer code</Label>
+                                    <Input
+                                        id="convert_code"
+                                        value={convertForm.data.code}
+                                        onChange={(e) => convertForm.setData('code', e.target.value)}
+                                    />
+                                    <InputError message={convertForm.errors.code} />
+                                    {/* ⚠ Deliberately typed, never generated. A machine-invented
+                                        identifier is one nobody recognises out loud. */}
+                                    <p className="text-muted-foreground text-xs">Permanent. Choose something people will say aloud.</p>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="convert_name">Name</Label>
+                                    <Input
+                                        id="convert_name"
+                                        value={convertForm.data.name}
+                                        onChange={(e) => convertForm.setData('name', e.target.value)}
+                                    />
+                                    <InputError message={convertForm.errors.name} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="convert_type">Type</Label>
+                                    <SearchSelect
+                                        id="convert_type"
+                                        value={convertForm.data.type}
+                                        onChange={(e) => convertForm.setData('type', e.target.value)}
+                                    >
+                                        {/* Blank keeps the model's own default rather than
+                                            asserting a price group nobody chose. */}
+                                        <option value="">Use the default</option>
+                                        {customer_types.map((t) => (
+                                            <option key={t.value} value={t.value}>
+                                                {t.label}
+                                            </option>
+                                        ))}
+                                    </SearchSelect>
+                                    <InputError message={convertForm.errors.type} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="convert_phone">Phone</Label>
+                                    <Input
+                                        id="convert_phone"
+                                        value={convertForm.data.phone}
+                                        onChange={(e) => convertForm.setData('phone', e.target.value)}
+                                    />
+                                    <InputError message={convertForm.errors.phone} />
+                                </div>
+                                <div className="grid gap-2 md:col-span-2">
+                                    <Label htmlFor="convert_email">Email</Label>
+                                    <Input
+                                        id="convert_email"
+                                        type="email"
+                                        value={convertForm.data.email}
+                                        onChange={(e) => convertForm.setData('email', e.target.value)}
+                                    />
+                                    <InputError message={convertForm.errors.email} />
+                                </div>
+                                <div className="grid gap-2 md:col-span-2">
+                                    <Label htmlFor="convert_address">Address</Label>
+                                    <Input
+                                        id="convert_address"
+                                        value={convertForm.data.address}
+                                        onChange={(e) => convertForm.setData('address', e.target.value)}
+                                    />
+                                    <InputError message={convertForm.errors.address} />
+                                </div>
+                            </>
+                        )}
+
+                        {/* The action reports "already converted" and "marked lost" against
+                            the lead itself, which is not a field on this form - hence the
+                            cast rather than a phantom `lead` key in the form data. */}
+                        <div className="md:col-span-4">
+                            <InputError message={(convertForm.errors as Record<string, string>).lead} />
+                        </div>
+
+                        <div className="flex items-end gap-2 md:col-span-4">
+                            <Button type="submit" disabled={convertForm.processing}>
+                                Convert to customer
+                            </Button>
+                            <Button type="button" variant="ghost" onClick={cancelConvert}>
+                                Cancel
+                            </Button>
+                        </div>
+                    </form>
+                )}
+
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
                         <thead className="bg-muted/50 text-left">
@@ -492,6 +716,15 @@ export default function LeadsIndex({
                                         {lead.status !== 'converted' && (
                                             <Button variant="ghost" size="sm" onClick={() => edit(lead)}>
                                                 Edit
+                                            </Button>
+                                        )}
+                                        {/* ⚠ Hidden for a LOST lead because `ConvertLead` refuses
+                                            one outright - going straight from lost to converted
+                                            would erase the fact that it was ever lost, which is
+                                            exactly what the funnel report needs. Reopen it first. */}
+                                        {can_convert && lead.status !== 'converted' && lead.status !== 'lost' && (
+                                            <Button variant="ghost" size="sm" onClick={() => beginConvert(lead)}>
+                                                Convert
                                             </Button>
                                         )}
                                     </td>

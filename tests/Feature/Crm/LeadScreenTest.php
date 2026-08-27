@@ -502,3 +502,72 @@ it('filters the lead list without error', function () {
         // other way, or duplicate detection on the list is theatre.
         ->assertInertia(fn ($page) => $page->has('leads.data', 1));
 });
+
+// ── Conversion is REACHABLE, not merely implemented ─────────────────────────
+
+/**
+ * ⚠⚠ THE GUARD THAT WAS MISSING. `crm.leads.convert`, the route, the action and
+ * seventeen tests all shipped on 9 August, and for eighteen days nothing in
+ * resources/js posted to any of it: no lead could become a customer at all.
+ *
+ * ⚠ EveryModuleIsReachableTest cannot see this class of bug - it filters to GET
+ * routes and skips URIs containing `{`, so every POST action is invisible to it.
+ * The screen props are the only thing a test can hold on to, so they are what
+ * this asserts. Take `can_convert` or `customers` away and the button that
+ * depends on them disappears, and this fails by name.
+ */
+it('gives the lead screen what it needs to offer conversion', function () {
+    Lead::create([
+        'business_id' => $this->business->id,
+        'name' => 'Rahima Begum',
+        'phone' => '+8801711000000',
+        'status' => LeadStatus::New,
+    ]);
+
+    ($this->asRole)('Manager')->get('/crm/leads')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('crm/leads/index')
+            ->where('can_convert', true)
+            ->has('customers')
+            ->has('customer_types')
+        );
+});
+
+/**
+ * The button is permission-gated, so Staff must be told it cannot convert
+ * rather than shown a control that 403s on click.
+ */
+it('tells a Staff member it cannot convert', function () {
+    ($this->asRole)('Staff')->get('/crm/leads')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('can_convert', false));
+});
+
+/**
+ * ⚠⚠ `ConvertLead` REFUSES a system customer (WALK-IN carries every counter
+ * sale the business has made) and refuses an inactive one. Offering either in
+ * the picker would be a form that fails on submit for a reason the person
+ * clicking cannot see, so the list must exclude them at source.
+ */
+it('offers only customers that conversion will actually accept', function () {
+    Customer::create([
+        'business_id' => $this->business->id, 'code' => 'REAL',
+        'name' => 'Karim Stores', 'is_system' => false, 'is_active' => true,
+    ]);
+    Customer::create([
+        'business_id' => $this->business->id, 'code' => 'WALK-IN',
+        'name' => 'Walk-in', 'is_system' => true, 'is_active' => true,
+    ]);
+    Customer::create([
+        'business_id' => $this->business->id, 'code' => 'GONE',
+        'name' => 'Closed Shop', 'is_system' => false, 'is_active' => false,
+    ]);
+
+    ($this->asRole)('Manager')->get('/crm/leads')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('customers', 1)
+            ->where('customers.0.code', 'REAL')
+        );
+});
