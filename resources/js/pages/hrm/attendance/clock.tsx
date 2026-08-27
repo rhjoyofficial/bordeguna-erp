@@ -60,7 +60,7 @@ interface MySummary {
 }
 
 interface ClockProps {
-    employee: { name: string; employee_code: string; office: string | null };
+    employee: { name: string; employee_code: string; office: string | null; may_clock_in_remotely: boolean };
     today: string;
     punches: Punch[];
     filters: { from: string; to: string; status: string; sort: string };
@@ -302,21 +302,35 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                     </p>
                 </div>
 
-                <div className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap gap-3 rounded-xl border p-4">
-                    <Button onClick={() => punch('in')} disabled={busy !== null}>
-                        {busy === 'in' ? 'Recording…' : 'Clock in'}
-                    </Button>
-                    <Button variant="outline" onClick={() => punch('out')} disabled={busy !== null}>
-                        {busy === 'out' ? 'Recording…' : 'Clock out'}
-                    </Button>
-                </div>
+                {/* ⚠ Hidden rather than disabled when it is not allowed: a greyed
+                    button invites people to ask why it is greyed. The endpoint
+                    refuses regardless, so this is presentation, not the rule. */}
+                {employee.may_clock_in_remotely ? (
+                    <>
+                        <div className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap gap-3 rounded-xl border p-4">
+                            <Button onClick={() => punch('in')} disabled={busy !== null}>
+                                {busy === 'in' ? 'Recording…' : 'Clock in'}
+                            </Button>
+                            <Button variant="outline" onClick={() => punch('out')} disabled={busy !== null}>
+                                {busy === 'out' ? 'Recording…' : 'Clock out'}
+                            </Button>
+                        </div>
 
-                {locationError && <p className="text-destructive text-sm">{locationError}</p>}
+                        {locationError && <p className="text-destructive text-sm">{locationError}</p>}
 
-                <p className="text-muted-foreground text-xs">
-                    Your location, accuracy, IP address and device details are recorded with each punch. If you are away from your office the punch is
-                    still accepted, and flagged for your manager to review.
-                </p>
+                        <p className="text-muted-foreground text-xs">
+                            Your location, accuracy, IP address and device details are recorded with each punch.
+                        </p>
+                    </>
+                ) : (
+                    <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
+                        <p className="text-sm font-medium">Clocking in here is not switched on for you.</p>
+                        <p className="text-muted-foreground mt-1 text-sm">
+                            Use the punch machine at the office. If your work takes you away from the office, ask HR to switch on clocking in from a
+                            browser for you. Everything below still shows your own attendance.
+                        </p>
+                    </div>
+                )}
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Today</h3>

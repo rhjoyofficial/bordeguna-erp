@@ -92,7 +92,6 @@ class RecordPunch
             $office,
             isset($attributes['latitude']) ? (float) $attributes['latitude'] : null,
             isset($attributes['longitude']) ? (float) $attributes['longitude'] : null,
-            (bool) $employee->may_clock_in_remotely,
         );
 
         return [$verdict['outside'], $verdict['reason'], $verdict['distance']];

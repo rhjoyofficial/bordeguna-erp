@@ -20,11 +20,13 @@ use App\Modules\Foundation\Models\Office;
  * had already supplied was thrown away. It is now always computed and always
  * returned; `outside` only decides whether a human is asked about it.
  *
- * ⚠⚠ A PERSON WITH STANDING REMOTE PERMISSION IS NEVER FLAGGED. That is the
- * whole point of granting it: their punches are still located and still show
- * their distance, but a field salesman clocking in from a customer's shop is
- * doing his job, and asking somebody to review that every morning would train
- * them to approve without looking.
+ * ⚠⚠ THIS KNOWS NOTHING ABOUT WHO MAY USE THE WEB CLOCK. Permission to clock in
+ * from a browser is a separate question, settled by HR on the employee page and
+ * enforced at the clock endpoint (Joy, 27 Aug 2026). It briefly lived in here as
+ * a flag-suppressing argument and that was wrong: whether a punch happened where
+ * it should have is not the same question as whether the person was allowed to
+ * punch at all, and merging them meant switching one on silently switched the
+ * other off.
  */
 class Geofence
 {
@@ -34,17 +36,10 @@ class Geofence
      * Whether this punch should be flagged, why, and how far away it was.
      * Never returns "reject".
      *
-     * @param  bool  $mayWorkRemotely  standing permission to clock in from away
-     *                                 from the office; suppresses the flag but
-     *                                 never the measurement.
      * @return array{outside: bool, reason: string|null, distance: float|null}
      */
-    public static function evaluate(
-        ?Office $office,
-        ?float $latitude,
-        ?float $longitude,
-        bool $mayWorkRemotely = false,
-    ): array {
+    public static function evaluate(?Office $office, ?float $latitude, ?float $longitude): array
+    {
         $distance = self::distanceFrom($office, $latitude, $longitude);
 
         if ($office === null || ! $office->geofence_enforced) {
@@ -62,10 +57,6 @@ class Geofence
         }
 
         if ($latitude === null || $longitude === null) {
-            // ⚠ Still flagged for somebody with remote permission: the
-            // permission says where they may be, not that they may refuse to
-            // say where they are. A browser that reports no location at all is
-            // the one case that stays a question for everyone.
             return [
                 'outside' => true,
                 'reason' => 'No location provided while the office geofence is enforced.',
@@ -75,18 +66,6 @@ class Geofence
 
         if ($distance !== null && $distance <= $office->geofence_radius_meters) {
             return ['outside' => false, 'reason' => null, 'distance' => $distance];
-        }
-
-        if ($mayWorkRemotely) {
-            return [
-                'outside' => false,
-                'reason' => sprintf(
-                    'Clocked in %s m from %s, which is allowed: this person may clock in remotely.',
-                    number_format((float) $distance),
-                    $office->name,
-                ),
-                'distance' => $distance,
-            ];
         }
 
         return [

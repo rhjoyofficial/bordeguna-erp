@@ -55,7 +55,15 @@ function attOwner()
     return test()->actingAs(test()->owner)->withSession(['current_business_id' => test()->business->id]);
 }
 
-function attEmployee(string $name = 'Karim', ?string $enrollId = null, ?User $user = null): Employee
+/**
+ * ⚠ `$mayClockInRemotely` defaults TRUE here, and that is a test-fixture
+ * decision, not the product default. From 27 Aug 2026 the web clock is off
+ * until HR switches it on per person (Joy), so every test below that posts to
+ * the clock would otherwise be testing the gate instead of the geofence and
+ * capture behaviour it was written for. The gate has its own tests, which pass
+ * false deliberately.
+ */
+function attEmployee(string $name = 'Karim', ?string $enrollId = null, ?User $user = null, bool $mayClockInRemotely = true): Employee
 {
     $employee = Employee::create([
         'employee_code' => 'BDG-'.str_pad((string) (Employee::count() + 1), 6, '0', STR_PAD_LEFT),
@@ -65,6 +73,7 @@ function attEmployee(string $name = 'Karim', ?string $enrollId = null, ?User $us
         'last_name' => 'Test',
         'employment_type' => 'permanent',
         'status' => 'active',
+        'may_clock_in_remotely' => $mayClockInRemotely,
     ]);
 
     EmployeeAssignment::create([
@@ -344,6 +353,73 @@ it('requires location on a self-service punch', function () {
         ->assertSessionHasErrors(['latitude', 'longitude', 'gps_accuracy_meters']);
 
     expect(AttendancePunch::count())->toBe(0);
+});
+
+it('refuses a browser punch from somebody HR has not switched it on for', function () {
+    // ⚠⚠ THE GATE (Joy, 27 Aug 2026). The web clock used to be open to every
+    // employee the moment they had a login, which is what made "who is clocking
+    // in from where" unanswerable. Deliberately NOT a geofence question: no
+    // office coordinates are configured here and none are needed.
+    $user = User::factory()->create();
+    $user->businesses()->attach($this->business->id);
+    attEmployee('Karim', null, $user, mayClockInRemotely: false);
+
+    $this->actingAs($user)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('hrm.clock.store'), [
+            'direction' => 'in',
+            'latitude' => 23.8103,
+            'longitude' => 90.4125,
+            'gps_accuracy_meters' => 10,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('error');
+
+    expect(AttendancePunch::count())->toBe(0);
+});
+
+it('accepts a browser punch once HR has switched it on', function () {
+    $user = User::factory()->create();
+    $user->businesses()->attach($this->business->id);
+    $employee = attEmployee('Karim', null, $user, mayClockInRemotely: false);
+
+    $employee->update(['may_clock_in_remotely' => true]);
+
+    $this->actingAs($user)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('hrm.clock.store'), [
+            'direction' => 'in',
+            'latitude' => 23.8103,
+            'longitude' => 90.4125,
+            'gps_accuracy_meters' => 10,
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect(AttendancePunch::count())->toBe(1);
+});
+
+it('still lets a machine punch through for somebody with no browser permission', function () {
+    // ⚠⚠ The permission governs the BROWSER only. The punch machine is the
+    // default way everybody clocks in and must never need permission - if this
+    // ever fails, nine people cannot record attendance.
+    $employee = attEmployee('Karim', '77', null, mayClockInRemotely: false);
+
+    $punch = app(RecordPunch::class)->handle($employee, '2026-08-27 09:00:00', PunchSource::Biometric, [
+        'direction' => PunchDirection::In,
+    ]);
+
+    expect($punch)->not->toBeNull()
+        ->and($punch->needs_review)->toBeFalse();
+});
+
+it('tells the employee on the clock page whether the browser clock is switched on', function () {
+    $user = User::factory()->create();
+    $user->businesses()->attach($this->business->id);
+    attEmployee('Karim', null, $user, mayClockInRemotely: false);
+
+    $this->actingAs($user)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('hrm.clock'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('employee.may_clock_in_remotely', false));
 });
 
 it('lets an employee reach their own clock page without any management permission', function () {

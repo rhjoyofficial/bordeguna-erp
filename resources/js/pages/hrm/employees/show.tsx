@@ -630,13 +630,12 @@ function RemoteClockInCard({ employee }: { employee: EmployeeDetail }) {
 
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-            <h3 className="mb-1 text-sm font-medium">Clocking in from outside the office</h3>
+            <h3 className="mb-1 text-sm font-medium">Clocking in from a browser</h3>
 
             {employee.may_clock_in_remotely ? (
                 <>
                     <p className="text-muted-foreground mb-3 text-sm">
-                        {employee.name} may clock in and out from anywhere. Their punches still record where they came from, and still show the
-                        distance from the office, but they are not raised for review.
+                        {employee.name} can clock in and out from a browser, from anywhere. Their location is still recorded with every punch.
                         {employee.remote_clock_in_granted_by
                             ? ` Allowed by ${employee.remote_clock_in_granted_by}${employee.remote_clock_in_granted_at ? ` on ${employee.remote_clock_in_granted_at}` : ''}.`
                             : ''}
@@ -651,8 +650,8 @@ function RemoteClockInCard({ employee }: { employee: EmployeeDetail }) {
             ) : (
                 <>
                     <p className="text-muted-foreground mb-3 text-sm">
-                        {employee.name} is expected to clock in at the office. If they clock in from somewhere else, the punch is still accepted and
-                        recorded, but it is raised for review. Allow it for people whose work is genuinely away from a desk.
+                        {employee.name} uses the punch machine at the office and cannot clock in from a browser. Switch this on for people whose work
+                        takes them away from the office.
                     </p>
                     <div className="flex flex-wrap items-end gap-3">
                         <div className="grid gap-2">
@@ -666,17 +665,14 @@ function RemoteClockInCard({ employee }: { employee: EmployeeDetail }) {
                             />
                         </div>
                         <Button size="sm" disabled={saving} onClick={() => set(true)}>
-                            Allow clocking in from anywhere
+                            Allow clocking in from a browser
                         </Button>
                     </div>
                 </>
             )}
 
-            {/* ⚠ Said plainly, because it is the difference between this feature
-                working and doing nothing at all: without office coordinates
-                there is no fence to be outside of. */}
             <p className="text-muted-foreground mt-3 text-xs">
-                This only has an effect once the office has coordinates and its geofence is switched on, under Settings, Organization.
+                The punch machine always works and needs no permission. This setting only controls clocking in from a browser.
             </p>
         </div>
     );

@@ -51,22 +51,19 @@ it('flags a punch outside the fence and says how far', function () {
         ->and($verdict['distance'])->toBeGreaterThan(5000);
 });
 
-it('does not flag someone who may clock in remotely, but still records the distance', function () {
-    // ⚠⚠ THE APPROVAL PHASE. A field salesman clocking in from a customer's
-    // shop is doing his job. Asking somebody to review that every morning
-    // teaches them to approve without looking.
-    $verdict = Geofence::evaluate(office(), 23.8103, 90.4125, mayWorkRemotely: true);
+it('knows nothing about who may use the web clock', function () {
+    // ⚠⚠ These were briefly the same question and should not have been. Whether
+    // a punch happened where it should have, and whether the person was allowed
+    // to punch at all, are settled in different places: this evaluator, and the
+    // clock endpoint. Merging them meant switching one on silently switched the
+    // other off.
+    $verdict = Geofence::evaluate(office(), 23.8103, 90.4125);
 
-    expect($verdict['outside'])->toBeFalse()
-        ->and($verdict['distance'])->toBeGreaterThan(5000)
-        // Still explained, so the punch log can say why it was allowed.
-        ->and($verdict['reason'])->toContain('may clock in remotely');
+    expect($verdict['outside'])->toBeTrue();
 });
 
-it('still flags a missing location even for someone allowed to work remotely', function () {
-    // ⚠ The permission says where they may be, not that they may refuse to say
-    // where they are. This is the one case that stays a question for everyone.
-    $verdict = Geofence::evaluate(office(), null, null, mayWorkRemotely: true);
+it('flags a punch that carries no location at all', function () {
+    $verdict = Geofence::evaluate(office(), null, null);
 
     expect($verdict['outside'])->toBeTrue()
         ->and($verdict['reason'])->toContain('No location provided')

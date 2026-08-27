@@ -33,6 +33,15 @@ use Inertia\Response;
  * with accuracy, IP address and device metadata are captured on every punch.
  * Geofence enforcement is separate and never blocks the punch — an
  * out-of-fence clock-in is stored and flagged for review (ATT-05).
+ *
+ * ⚠⚠ THE WEB CLOCK IS OFF FOR EVERYONE UNTIL HR SWITCHES IT ON (Joy,
+ * 27 Aug 2026). It is not a geofence question and deliberately needs no office
+ * coordinates: HR enables a named person on their employee page, and only then
+ * can that person clock in and out from a browser. Everyone else uses the punch
+ * machine, which is the default and needs no permission at all.
+ *
+ * ⚠ Enforced HERE as well as hidden on the screen. A hidden button is a
+ * suggestion; this endpoint is the rule.
  */
 class AttendanceClockController extends Controller
 {
@@ -64,6 +73,9 @@ class AttendanceClockController extends Controller
                 'name' => $employee->fullName(),
                 'employee_code' => $employee->employee_code,
                 'office' => $employee->currentAssignment()?->office?->name,
+                // ⚠ The screen hides the buttons on this; the punch endpoint
+                // refuses on it too. One of the two alone is not a rule.
+                'may_clock_in_remotely' => (bool) $employee->may_clock_in_remotely,
             ],
             'today' => $today->toDateString(),
             'punches' => AttendancePunch::where('employee_id', $employee->id)
@@ -189,6 +201,16 @@ class AttendanceClockController extends Controller
         if ($employee === null) {
             return redirect()->route('dashboard')
                 ->with('error', 'Your user account is not linked to an employee record yet.');
+        }
+
+        // ⚠⚠ THE GATE. Without it the web clock was open to all nine employees
+        // the moment they had a login, which is what made "who is clocking in
+        // from where" unanswerable in the first place.
+        if (! $employee->may_clock_in_remotely) {
+            return back()->with(
+                'error',
+                'You are not set up to clock in from a browser. Use the punch machine, or ask HR to enable it for you.',
+            );
         }
 
         // Proof is required, not optional (Correction C2). An employee who
