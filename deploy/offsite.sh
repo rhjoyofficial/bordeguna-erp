@@ -1,5 +1,5 @@
 #!/bin/sh
-# Offsite replication of the Bor De Guna ERP backups, to Backblaze B2 via restic.
+# Offsite replication of the Bor de Guna ERP backups, to Backblaze B2 via restic.
 #
 # The nightly `backup` container writes dumps to /root/backups on the VPS. Those
 # sit on the SAME DISK as the database, so they protect against a bad migration

@@ -1,4 +1,4 @@
-# Bor De Guna ERP production image.
+# Bor de Guna ERP production image.
 #
 # Two-stage: Node builds the Inertia/React front end, PHP-FPM runs the
 # application. The final image contains no Node, no build tooling and no dev
@@ -26,7 +26,7 @@ COPY vite.config.js tsconfig.json components.json ./
 # every browser tab in production reads "Dashboard - Laravel". Setting it in the
 # runtime .env has no effect whatsoever — by then the value is already compiled
 # into the bundle.
-ARG VITE_APP_NAME="Bor De Guna ERP"
+ARG VITE_APP_NAME="Bor de Guna ERP"
 ENV VITE_APP_NAME=${VITE_APP_NAME}
 
 # Ziggy's generated routes file is committed, but Vite still needs the PHP-side

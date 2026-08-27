@@ -1,5 +1,5 @@
 #!/bin/bash
-# Backup RESTORE DRILL for the Bor De Guna ERP.
+# Backup RESTORE DRILL for the Bor de Guna ERP.
 #
 # ⚠⚠ READ-ONLY WITH RESPECT TO THE LIVE DATABASE. Everything below happens in a
 # scratch database. The only statements that name bordeguna_erp are SELECTs.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Nightly database backup for the Bor De Guna ERP.
+# Nightly database backup for the Bor de Guna ERP.
 #
 # Runs as its own long-lived container with an internal sleep loop, for the same
 # reason the scheduler does: there is no PHP and no useful cron on this host, and
