@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -71,7 +72,6 @@ interface Props {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Loans & advances', href: '/hrm/loans' }];
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 const cardClass = 'border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4';
 const rowClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b';
 const headClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground';
@@ -111,7 +111,7 @@ function RequestDialog({ employees, types }: { employees: Props['employees']; ty
                 <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-2">
                         <Label htmlFor="loan_employee">Employee</Label>
-                        <select id="loan_employee" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+                        <SearchSelect id="loan_employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
@@ -119,19 +119,19 @@ function RequestDialog({ employees, types }: { employees: Props['employees']; ty
                                     {e.outstanding > 0 ? ` - ${money(e.outstanding)} outstanding` : ''}
                                 </option>
                             ))}
-                        </select>
-                        {errors.employee_id && <p className="text-xs text-destructive">{errors.employee_id}</p>}
+                        </SearchSelect>
+                        {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                     </div>
 
                     <div className="grid gap-2">
                         <Label htmlFor="loan_type">Type</Label>
-                        <select id="loan_type" className={selectClass} value={type} onChange={(e) => setType(e.target.value)}>
+                        <SearchSelect id="loan_type" value={type} onChange={(e) => setType(e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
                                     {t.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -145,7 +145,7 @@ function RequestDialog({ employees, types }: { employees: Props['employees']; ty
                                 value={principal}
                                 onChange={(e) => setPrincipal(e.target.value)}
                             />
-                            {errors.principal && <p className="text-xs text-destructive">{errors.principal}</p>}
+                            {errors.principal && <p className="text-destructive text-xs">{errors.principal}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="loan_installment">Monthly installment</Label>
@@ -157,7 +157,7 @@ function RequestDialog({ employees, types }: { employees: Props['employees']; ty
                                 value={installment}
                                 onChange={(e) => setInstallment(e.target.value)}
                             />
-                            {errors.installment_amount && <p className="text-xs text-destructive">{errors.installment_amount}</p>}
+                            {errors.installment_amount && <p className="text-destructive text-xs">{errors.installment_amount}</p>}
                         </div>
                     </div>
 
@@ -165,17 +165,17 @@ function RequestDialog({ employees, types }: { employees: Props['employees']; ty
                         <div className="grid gap-2">
                             <Label htmlFor="loan_year">Start year</Label>
                             <Input id="loan_year" type="number" value={year} onChange={(e) => setYear(e.target.value)} />
-                            {errors.start_year && <p className="text-xs text-destructive">{errors.start_year}</p>}
+                            {errors.start_year && <p className="text-destructive text-xs">{errors.start_year}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="loan_month">Start month</Label>
                             <Input id="loan_month" type="number" min="1" max="12" value={month} onChange={(e) => setMonth(e.target.value)} />
-                            {errors.start_month && <p className="text-xs text-destructive">{errors.start_month}</p>}
+                            {errors.start_month && <p className="text-destructive text-xs">{errors.start_month}</p>}
                         </div>
                     </div>
 
                     {count > 0 && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-muted-foreground text-xs">
                             {count} installment{count === 1 ? '' : 's'} of {money(i)}
                             {last !== i && count > 1 && <> - the last one is {money(last)}, carrying the remainder so the plan adds up exactly</>}.
                         </p>
@@ -184,7 +184,7 @@ function RequestDialog({ employees, types }: { employees: Props['employees']; ty
                     <div className="grid gap-2">
                         <Label htmlFor="loan_reason">Reason</Label>
                         <Input id="loan_reason" value={reason} onChange={(e) => setReason(e.target.value)} />
-                        {errors.reason && <p className="text-xs text-destructive">{errors.reason}</p>}
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                 </div>
                 <DialogFooter>
@@ -253,13 +253,13 @@ function SettleDialog({ loan }: { loan: LoanRow }) {
                     <div className="grid gap-2">
                         <Label htmlFor="settle_amount">Amount received</Label>
                         <Input id="settle_amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                        {errors.amount_received && <p className="text-xs text-destructive">{errors.amount_received}</p>}
-                        {errors.loan && <p className="text-xs text-destructive">{errors.loan}</p>}
+                        {errors.amount_received && <p className="text-destructive text-xs">{errors.amount_received}</p>}
+                        {errors.loan && <p className="text-destructive text-xs">{errors.loan}</p>}
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="settle_note">Note</Label>
                         <Input id="settle_note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Paid by bank transfer" />
-                        {errors.note && <p className="text-xs text-destructive">{errors.note}</p>}
+                        {errors.note && <p className="text-destructive text-xs">{errors.note}</p>}
                     </div>
                 </div>
                 <DialogFooter>
@@ -302,20 +302,24 @@ function LoanCard({ loan }: { loan: LoanRow }) {
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{loan.reference}</span>
                         <Badge variant={loan.status === 'active' ? 'default' : 'secondary'}>{loan.status_label}</Badge>
-                        <span className="text-sm text-muted-foreground">{loan.type_label}</span>
+                        <span className="text-muted-foreground text-sm">{loan.type_label}</span>
                     </div>
                     <div className="mt-1 text-sm">
                         {loan.employee}
-                        <span className="ml-2 text-xs text-muted-foreground">{loan.employee_code}</span>
+                        <span className="text-muted-foreground ml-2 text-xs">{loan.employee_code}</span>
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
+                    <div className="text-muted-foreground mt-1 text-xs">
                         {money(loan.principal)} at {money(loan.installment_amount)} a month from {loan.start} · {loan.reason}
                     </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     {loan.approval_status === 'pending' && !loan.is_applied && (
                         <>
-                            <Button size="sm" variant="ghost" onClick={() => router.post(route('hrm.loans.reject', loan.id), {}, { preserveScroll: true })}>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => router.post(route('hrm.loans.reject', loan.id), {}, { preserveScroll: true })}
+                            >
                                 Reject
                             </Button>
                             <Button size="sm" onClick={() => router.post(route('hrm.loans.approve', loan.id), {}, { preserveScroll: true })}>
@@ -333,32 +337,32 @@ function LoanCard({ loan }: { loan: LoanRow }) {
             {loan.is_applied && (
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                     <div>
-                        <div className="text-xs text-muted-foreground">Outstanding</div>
+                        <div className="text-muted-foreground text-xs">Outstanding</div>
                         <div className="text-xl font-medium">{money(loan.outstanding)}</div>
                     </div>
                     <div>
-                        <div className="text-xs text-muted-foreground">Repaid</div>
+                        <div className="text-muted-foreground text-xs">Repaid</div>
                         <div className="text-xl font-medium">{money(loan.repaid)}</div>
                     </div>
                     <div className="sm:col-span-1">
-                        <div className="text-xs text-muted-foreground">
+                        <div className="text-muted-foreground text-xs">
                             {loan.installments.filter((i) => i.status === 'paid').length} of {loan.installment_count} paid
                         </div>
-                        <div className="mt-2 h-2 w-full rounded bg-muted">
-                            <div className="h-2 rounded bg-primary" style={{ width: `${progress}%` }} />
+                        <div className="bg-muted mt-2 h-2 w-full rounded">
+                            <div className="bg-primary h-2 rounded" style={{ width: `${progress}%` }} />
                         </div>
                     </div>
                 </div>
             )}
 
-            {loan.settlement_note && <p className="mt-3 text-xs text-muted-foreground">Settled: {loan.settlement_note}</p>}
+            {loan.settlement_note && <p className="text-muted-foreground mt-3 text-xs">Settled: {loan.settlement_note}</p>}
 
             {showDetail && (
                 <div className="mt-4 grid gap-4 lg:grid-cols-2">
                     <div className="overflow-x-auto">
                         <h4 className="mb-2 text-sm font-medium">Repayment schedule</h4>
                         {loan.installments.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No schedule yet - it is generated on approval.</p>
+                            <p className="text-muted-foreground text-sm">No schedule yet - it is generated on approval.</p>
                         ) : (
                             <table className="w-full text-sm">
                                 <thead>
@@ -375,7 +379,7 @@ function LoanCard({ loan }: { loan: LoanRow }) {
                                             <td className="py-2">{i.sequence}</td>
                                             <td className="py-2 whitespace-nowrap">{i.period}</td>
                                             <td className="py-2">{money(i.amount)}</td>
-                                            <td className="py-2 text-muted-foreground">
+                                            <td className="text-muted-foreground py-2">
                                                 {i.status_label}
                                                 {i.paid_at && <span className="ml-1 text-xs">{i.paid_at}</span>}
                                             </td>
@@ -388,11 +392,11 @@ function LoanCard({ loan }: { loan: LoanRow }) {
 
                     <div className="overflow-x-auto">
                         <h4 className="mb-2 text-sm font-medium">Ledger</h4>
-                        <p className="mb-2 text-xs text-muted-foreground">
+                        <p className="text-muted-foreground mb-2 text-xs">
                             The outstanding balance is the sum of these rows - never a stored number.
                         </p>
                         {loan.ledger.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">Nothing has moved yet.</p>
+                            <p className="text-muted-foreground text-sm">Nothing has moved yet.</p>
                         ) : (
                             <table className="w-full text-sm">
                                 <tbody>
@@ -403,7 +407,7 @@ function LoanCard({ loan }: { loan: LoanRow }) {
                                             <td className={`py-2 ${e.increases_debt ? 'text-destructive' : ''}`}>
                                                 {e.amount > 0 ? `+${money(e.amount)}` : money(e.amount)}
                                             </td>
-                                            <td className="py-2 text-xs text-muted-foreground">{e.note}</td>
+                                            <td className="text-muted-foreground py-2 text-xs">{e.note}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -427,14 +431,13 @@ export default function Loans({ filters, loans, employees, types }: Props) {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">Loans &amp; advances</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             Payroll deducts one scheduled installment a month. A repayment is recorded only once the payroll is disbursed, so
                             recalculating an open run never moves a balance.
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <select
-                            className={selectClass}
+                        <SearchSelect
                             value={filters.employee_id ?? ''}
                             onChange={(e) => reload(e.target.value === '' ? null : Number(e.target.value))}
                         >
@@ -444,14 +447,14 @@ export default function Loans({ filters, loans, employees, types }: Props) {
                                     {e.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <RequestDialog employees={employees} types={types} />
                     </div>
                 </div>
 
                 {loans.length === 0 ? (
                     <div className={cardClass}>
-                        <p className="text-sm text-muted-foreground">No loans or advances yet.</p>
+                        <p className="text-muted-foreground text-sm">No loans or advances yet.</p>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-4">

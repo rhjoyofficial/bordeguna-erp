@@ -67,23 +67,11 @@ export default function CostOfGoodsSoldIndex({
                     <form onSubmit={submit} className="flex items-end gap-2">
                         <div className="grid gap-1">
                             <Label htmlFor="from">From</Label>
-                            <Input
-                                id="from"
-                                type="date"
-                                value={start}
-                                onChange={(e) => setStart(e.target.value)}
-                                className="w-40"
-                            />
+                            <Input id="from" type="date" value={start} onChange={(e) => setStart(e.target.value)} className="w-40" />
                         </div>
                         <div className="grid gap-1">
                             <Label htmlFor="to">To</Label>
-                            <Input
-                                id="to"
-                                type="date"
-                                value={end}
-                                onChange={(e) => setEnd(e.target.value)}
-                                className="w-40"
-                            />
+                            <Input id="to" type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="w-40" />
                         </div>
                         <Button type="submit">Show</Button>
                     </form>
@@ -99,22 +87,18 @@ export default function CostOfGoodsSoldIndex({
                     >
                         {control.ties_out ? (
                             <span>
-                                Agrees with <strong>{control.account}</strong>, which moved{' '}
-                                <strong>{control.balance}</strong> in this period.
+                                Agrees with <strong>{control.account}</strong>, which moved <strong>{control.balance}</strong> in this period.
                             </span>
                         ) : (
                             <span>
-                                <strong>Does not agree with the ledger.</strong> {control.account} moved{' '}
-                                <strong>{control.balance}</strong> in this period, these documents total{' '}
-                                <strong>{totals.cost}</strong>, a difference of{' '}
-                                <strong>{control.difference}</strong>.
+                                <strong>Does not agree with the ledger.</strong> {control.account} moved <strong>{control.balance}</strong> in this
+                                period, these documents total <strong>{totals.cost}</strong>, a difference of <strong>{control.difference}</strong>.
                             </span>
                         )}
                     </div>
                 ) : (
                     <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950">
-                        This business has no <strong>Cost of Goods Sold</strong> account mapped, so there is nothing to
-                        check these figures against.
+                        This business has no <strong>Cost of Goods Sold</strong> account mapped, so there is nothing to check these figures against.
                     </div>
                 )}
 
@@ -185,9 +169,7 @@ export default function CostOfGoodsSoldIndex({
                                       margin everywhere is a number people learn
                                       to ignore.
                                     */}
-                                    <td className="p-2 text-right tabular-nums">
-                                        {row.margin_percent === null ? '-' : `${row.margin_percent}%`}
-                                    </td>
+                                    <td className="p-2 text-right tabular-nums">{row.margin_percent === null ? '-' : `${row.margin_percent}%`}</td>
                                 </tr>
                             ))}
                         </tbody>

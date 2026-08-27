@@ -1,5 +1,6 @@
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -93,14 +94,14 @@ export default function ExpensesIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">Expenses</h1>
-                    <p className="max-w-2xl text-sm text-muted-foreground">
-                        Rent, fuel, utilities, repairs - money spent on running the business rather than on stock. Each one is paid
-                        at the moment it is recorded; a bill to be settled later is a supplier bill instead.
+                    <p className="text-muted-foreground max-w-2xl text-sm">
+                        Rent, fuel, utilities, repairs - money spent on running the business rather than on stock. Each one is paid at the moment it
+                        is recorded; a bill to be settled later is a supplier bill instead.
                     </p>
                 </div>
 
                 {canRecord && (
-                    <form onSubmit={submit} className="flex flex-col gap-4 rounded-md border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                    <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-md border p-4">
                         <div className="flex flex-wrap items-end gap-3">
                             <div className="grid gap-2">
                                 <Label htmlFor="spent_on">Date</Label>
@@ -122,9 +123,8 @@ export default function ExpensesIndex({
                                   naming an account nobody remembers creating, so it is not
                                   offered at all. The bank & cash screen warns about them.
                                 */}
-                                <select
+                                <SearchSelect
                                     id="money_account_id"
-                                    className={selectClass}
                                     value={data.money_account_id}
                                     onChange={(e) => setData('money_account_id', e.target.value)}
                                 >
@@ -134,25 +134,20 @@ export default function ExpensesIndex({
                                             {account.name}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <InputError message={errors.money_account_id} />
                             </div>
 
                             <div className="grid gap-2">
                                 <Label htmlFor="supplier_id">Supplier (optional)</Label>
-                                <select
-                                    id="supplier_id"
-                                    className={selectClass}
-                                    value={data.supplier_id}
-                                    onChange={(e) => setData('supplier_id', e.target.value)}
-                                >
+                                <SearchSelect id="supplier_id" value={data.supplier_id} onChange={(e) => setData('supplier_id', e.target.value)}>
                                     <option value="">Not a supplier</option>
                                     {suppliers.map((supplier) => (
                                         <option key={supplier.id} value={supplier.id}>
                                             {supplier.name}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <InputError message={errors.supplier_id} />
                             </div>
 
@@ -187,7 +182,7 @@ export default function ExpensesIndex({
                             <Label>What it was spent on</Label>
                             {data.lines.map((line, index) => (
                                 <div key={index} className="flex flex-wrap items-end gap-3">
-                                    <select
+                                    <SearchSelect
                                         aria-label={`Expense account, line ${index + 1}`}
                                         className={`${selectClass} w-72`}
                                         value={line.account_id}
@@ -199,7 +194,7 @@ export default function ExpensesIndex({
                                                 {account.label}
                                             </option>
                                         ))}
-                                    </select>
+                                    </SearchSelect>
                                     <Input
                                         aria-label={`Amount, line ${index + 1}`}
                                         value={line.amount}
@@ -245,8 +240,8 @@ export default function ExpensesIndex({
 
                         <div className="flex items-center gap-4">
                             <Button disabled={processing}>Record expense</Button>
-                            <span className="text-sm text-muted-foreground">
-                                Total <span className="font-medium tabular-nums text-foreground">{total.toFixed(2)}</span>
+                            <span className="text-muted-foreground text-sm">
+                                Total <span className="text-foreground font-medium tabular-nums">{total.toFixed(2)}</span>
                             </span>
                         </div>
                     </form>
@@ -271,12 +266,11 @@ export default function ExpensesIndex({
                                     <td className="p-3">{voucher.spent_on ?? '-'}</td>
                                     <td className="p-3">{voucher.payee}</td>
                                     <td className="p-3">{voucher.paid_from ?? '-'}</td>
-                                    <td className="p-3 text-muted-foreground">
+                                    <td className="text-muted-foreground p-3">
                                         {voucher.lines.map((line) => (
                                             <div key={line.id}>
                                                 {line.account ?? '-'}
-                                                {line.description ? ` - ${line.description}` : ''}{' '}
-                                                <span className="tabular-nums">{line.amount}</span>
+                                                {line.description ? ` - ${line.description}` : ''} <span className="tabular-nums">{line.amount}</span>
                                             </div>
                                         ))}
                                     </td>
@@ -285,7 +279,7 @@ export default function ExpensesIndex({
                             ))}
                             {vouchers.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={6} className="text-muted-foreground p-6 text-center">
                                         No expenses recorded yet.
                                     </td>
                                 </tr>

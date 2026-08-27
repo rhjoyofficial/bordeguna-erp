@@ -1,5 +1,6 @@
 import { Pagination } from '@/components/data-table/pagination';
 import HeadingSmall from '@/components/heading-small';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,8 +28,6 @@ interface Entry {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Audit trail', href: '/settings/audit' }];
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 const eventTone: Record<string, 'secondary' | 'outline' | 'destructive'> = {
     created: 'secondary',
@@ -72,30 +71,25 @@ export default function Audit({
                         </div>
                         <div className="grid gap-1.5">
                             <Label htmlFor="audit-type">Record</Label>
-                            <select id="audit-type" className={selectClass} value={filters.type} onChange={(e) => setFilter('type', e.target.value)}>
+                            <SearchSelect id="audit-type" value={filters.type} onChange={(e) => setFilter('type', e.target.value)}>
                                 <option value="">Everything</option>
                                 {types.map((type) => (
                                     <option key={type.value} value={type.value}>
                                         {type.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid gap-1.5">
                             <Label htmlFor="audit-event">Action</Label>
-                            <select
-                                id="audit-event"
-                                className={selectClass}
-                                value={filters.event}
-                                onChange={(e) => setFilter('event', e.target.value)}
-                            >
+                            <SearchSelect id="audit-event" value={filters.event} onChange={(e) => setFilter('event', e.target.value)}>
                                 <option value="">Any</option>
                                 {events.map((event) => (
                                     <option key={event} value={event}>
                                         {event}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                             <div className="grid gap-1.5">

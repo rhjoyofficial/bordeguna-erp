@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -81,7 +82,7 @@ export default function CustomerStatementIndex({
                 <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
                         <Label htmlFor="customer">Customer</Label>
-                        <select
+                        <SearchSelect
                             id="customer"
                             value={filters.customer}
                             onChange={(e) => setFilters({ ...filters, customer: e.target.value })}
@@ -94,7 +95,7 @@ export default function CustomerStatementIndex({
                                     {option.is_active ? '' : ' (inactive)'}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="from">From</Label>

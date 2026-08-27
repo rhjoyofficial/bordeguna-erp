@@ -55,7 +55,7 @@ export default function ApprovalsIndex({ requests, counts }: ApprovalsIndexProps
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">Type</th>
                             <th className="py-2">Details</th>
                             <th className="py-2">Requested by</th>
@@ -68,11 +68,11 @@ export default function ApprovalsIndex({ requests, counts }: ApprovalsIndexProps
                             <tr key={`${row.type}-${row.id}`} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2">
                                     <Badge variant="outline">{row.type}</Badge>
-                                    {row.stage && <span className="ml-2 text-xs text-muted-foreground">{row.stage}</span>}
+                                    {row.stage && <span className="text-muted-foreground ml-2 text-xs">{row.stage}</span>}
                                 </td>
                                 <td className="py-2">{row.summary}</td>
-                                <td className="py-2 text-muted-foreground">{row.requested_by}</td>
-                                <td className="py-2 text-muted-foreground">{row.requested_at}</td>
+                                <td className="text-muted-foreground py-2">{row.requested_by}</td>
+                                <td className="text-muted-foreground py-2">{row.requested_at}</td>
                                 <td className="py-2 text-right whitespace-nowrap">
                                     <Button variant="ghost" size="sm" onClick={() => approve(row)}>
                                         Approve
@@ -97,7 +97,7 @@ export default function ApprovalsIndex({ requests, counts }: ApprovalsIndexProps
                         ))}
                         {requests.length === 0 && (
                             <tr>
-                                <td colSpan={5} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={5} className="text-muted-foreground py-4 text-center">
                                     Nothing pending - you're all caught up.
                                 </td>
                             </tr>

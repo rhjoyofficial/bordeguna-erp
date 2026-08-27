@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,8 +7,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler, useMemo, useState } from 'react';
-
-const selectClass = 'h-9 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm';
 
 interface Option {
     id: number;
@@ -286,37 +285,27 @@ export default function CounterSale({
                                 <Label htmlFor="customer" className="text-xs">
                                     Customer
                                 </Label>
-                                <select
-                                    id="customer"
-                                    className={selectClass}
-                                    value={data.customer_id}
-                                    onChange={(e) => changeCustomer(e.target.value)}
-                                >
+                                <SearchSelect id="customer" value={data.customer_id} onChange={(e) => changeCustomer(e.target.value)}>
                                     {customers.map((c) => (
                                         <option key={c.id} value={c.id}>
                                             {c.name}
                                             {c.is_system ? ' (default)' : ''}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <InputError message={errors.customer_id} />
                             </div>
                             <div className="grid gap-1">
                                 <Label htmlFor="warehouse" className="text-xs">
                                     Sold from
                                 </Label>
-                                <select
-                                    id="warehouse"
-                                    className={selectClass}
-                                    value={data.warehouse_id}
-                                    onChange={(e) => setData('warehouse_id', e.target.value)}
-                                >
+                                <SearchSelect id="warehouse" value={data.warehouse_id} onChange={(e) => setData('warehouse_id', e.target.value)}>
                                     {warehouses.map((w) => (
                                         <option key={w.id} value={w.id}>
                                             {w.name}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <InputError message={errors.warehouse_id} />
                             </div>
                             <div className="grid gap-1">
@@ -325,19 +314,14 @@ export default function CounterSale({
                                 </Label>
                                 {/* ⚠ "On account" is a real choice, not a missing value: the
                                     invoice then stands open as a receivable. */}
-                                <select
-                                    id="money"
-                                    className={selectClass}
-                                    value={data.money_account_id}
-                                    onChange={(e) => setData('money_account_id', e.target.value)}
-                                >
+                                <SearchSelect id="money" value={data.money_account_id} onChange={(e) => setData('money_account_id', e.target.value)}>
                                     <option value="">On account (unpaid)</option>
                                     {moneyAccounts.map((a) => (
                                         <option key={a.id} value={a.id}>
                                             {a.name}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <InputError message={errors.money_account_id} />
                             </div>
                             <div className="grid gap-1">

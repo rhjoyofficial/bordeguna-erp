@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,8 +8,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Source {
     id: number;
@@ -57,15 +56,7 @@ const EMPTY_CAMPAIGN = {
     note: '',
 };
 
-export default function CrmSettingsIndex({
-    sources,
-    campaigns,
-    brands,
-}: {
-    sources: Source[];
-    campaigns: Campaign[];
-    brands: Brand[];
-}) {
+export default function CrmSettingsIndex({ sources, campaigns, brands }: { sources: Source[]; campaigns: Campaign[]; brands: Brand[] }) {
     const [editingSource, setEditingSource] = useState<Source | null>(null);
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
 
@@ -137,9 +128,9 @@ export default function CrmSettingsIndex({
                 <section className="flex flex-col gap-4">
                     <div>
                         <h2 className="text-lg font-medium">Lead sources</h2>
-                        <p className="text-sm text-muted-foreground">
-                            Where leads come from. The code is permanent - reporting groups by this row, not by the name, so a
-                            source can be renamed without splitting its history.
+                        <p className="text-muted-foreground text-sm">
+                            Where leads come from. The code is permanent - reporting groups by this row, not by the name, so a source can be renamed
+                            without splitting its history.
                         </p>
                     </div>
 
@@ -166,15 +157,14 @@ export default function CrmSettingsIndex({
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="source_active">Active</Label>
-                            <select
+                            <SearchSelect
                                 id="source_active"
-                                className={selectClass}
                                 value={sourceForm.data.is_active ? '1' : '0'}
                                 onChange={(e) => sourceForm.setData('is_active', e.target.value === '1')}
                             >
                                 <option value="1">Active</option>
                                 <option value="0">Inactive</option>
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="source_note">Note</Label>
@@ -207,7 +197,7 @@ export default function CrmSettingsIndex({
                                     <tr key={source.id} className="border-t">
                                         <td className="p-3">
                                             <div className="font-medium">{source.name}</div>
-                                            <div className="text-xs text-muted-foreground">{source.code}</div>
+                                            <div className="text-muted-foreground text-xs">{source.code}</div>
                                         </td>
                                         <td className="p-3">{source.campaigns_count}</td>
                                         <td className="p-3">
@@ -230,18 +220,17 @@ export default function CrmSettingsIndex({
                 <section className="flex flex-col gap-4">
                     <div>
                         <h2 className="text-lg font-medium">Campaigns</h2>
-                        <p className="text-sm text-muted-foreground">
-                            A named acquisition effort. The external id is the platform's own - Meta's campaign id, for example -
-                            and is stored as supplied.
+                        <p className="text-muted-foreground text-sm">
+                            A named acquisition effort. The external id is the platform's own - Meta's campaign id, for example - and is stored as
+                            supplied.
                         </p>
                     </div>
 
                     <form onSubmit={submitCampaign} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
                         <div className="grid gap-2">
                             <Label htmlFor="campaign_source">Source</Label>
-                            <select
+                            <SearchSelect
                                 id="campaign_source"
-                                className={selectClass}
                                 value={campaignForm.data.lead_source_id}
                                 onChange={(e) => campaignForm.setData('lead_source_id', e.target.value)}
                             >
@@ -251,14 +240,13 @@ export default function CrmSettingsIndex({
                                         {s.name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={campaignForm.errors.lead_source_id} />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="campaign_brand">Brand (optional)</Label>
-                            <select
+                            <SearchSelect
                                 id="campaign_brand"
-                                className={selectClass}
                                 value={campaignForm.data.brand_id}
                                 onChange={(e) => campaignForm.setData('brand_id', e.target.value)}
                             >
@@ -268,7 +256,7 @@ export default function CrmSettingsIndex({
                                         {b.name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={campaignForm.errors.brand_id} />
                         </div>
                         <div className="grid gap-2">
@@ -322,15 +310,14 @@ export default function CrmSettingsIndex({
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="campaign_active">Active</Label>
-                            <select
+                            <SearchSelect
                                 id="campaign_active"
-                                className={selectClass}
                                 value={campaignForm.data.is_active ? '1' : '0'}
                                 onChange={(e) => campaignForm.setData('is_active', e.target.value === '1')}
                             >
                                 <option value="1">Active</option>
                                 <option value="0">Inactive</option>
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid gap-2 md:col-span-4">
                             <Label htmlFor="campaign_note">Note</Label>
@@ -365,7 +352,7 @@ export default function CrmSettingsIndex({
                                     <tr key={campaign.id} className="border-t">
                                         <td className="p-3">
                                             <div className="font-medium">{campaign.name}</div>
-                                            <div className="text-xs text-muted-foreground">
+                                            <div className="text-muted-foreground text-xs">
                                                 {campaign.code}
                                                 {campaign.external_campaign_id ? ` · ${campaign.external_campaign_id}` : ''}
                                             </div>

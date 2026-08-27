@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,8 +24,6 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 type LineDraft = { delivery_line_id: number; quantity_to_stock: string; quantity_written_off: string };
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 /*
  * Goods coming back, recorded AFTER inspection in one step (C-SR-3, Joy): the
@@ -88,9 +87,7 @@ export default function ReturnCreate({
         returned_at: form.returned_at || null,
         note: form.note || null,
         lines: form.lines,
-        ...(form.refund_amount && form.refund_account
-            ? { refund: { money_account_id: form.refund_account, amount: form.refund_amount } }
-            : {}),
+        ...(form.refund_amount && form.refund_account ? { refund: { money_account_id: form.refund_account, amount: form.refund_amount } } : {}),
     }));
 
     const submit: FormEventHandler = (e) => {
@@ -98,9 +95,7 @@ export default function ReturnCreate({
         post(route('sales.returns.store'));
     };
 
-    const touched = data.lines.filter(
-        (line) => parseFloat(line.quantity_to_stock || '0') > 0 || parseFloat(line.quantity_written_off || '0') > 0,
-    );
+    const touched = data.lines.filter((line) => parseFloat(line.quantity_to_stock || '0') > 0 || parseFloat(line.quantity_written_off || '0') > 0);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -175,9 +170,9 @@ export default function ReturnCreate({
                             </table>
                         </div>
 
-                        <p className="text-sm text-muted-foreground">
-                            After inspection: sellable goods go back to stock onto the very batches they left from; destroyed goods are
-                            written off and never re-enter stock. A line can split between the two.
+                        <p className="text-muted-foreground text-sm">
+                            After inspection: sellable goods go back to stock onto the very batches they left from; destroyed goods are written off
+                            and never re-enter stock. A line can split between the two.
                         </p>
 
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -194,18 +189,14 @@ export default function ReturnCreate({
                                 <>
                                     <div className="grid gap-2">
                                         <Label>Cash refund from (optional)</Label>
-                                        <select
-                                            className={selectClass}
-                                            value={data.refund_account}
-                                            onChange={(e) => setData('refund_account', e.target.value)}
-                                        >
+                                        <SearchSelect value={data.refund_account} onChange={(e) => setData('refund_account', e.target.value)}>
                                             <option value="">No cash refund - credit the account</option>
                                             {moneyAccounts.map((account) => (
                                                 <option key={account.id} value={String(account.id)}>
                                                     {account.name}
                                                 </option>
                                             ))}
-                                        </select>
+                                        </SearchSelect>
                                         <InputError message={errors['refund.money_account_id' as keyof typeof errors]} />
                                     </div>
                                     <div className="grid gap-2">
@@ -225,16 +216,16 @@ export default function ReturnCreate({
 
                         <div className="flex items-center gap-4">
                             <Button disabled={processing || touched.length === 0}>Record return</Button>
-                            <p className="text-sm text-muted-foreground">
-                                {touched.length} line{touched.length === 1 ? '' : 's'} with quantities. The credit amount is derived from
-                                the invoices, not typed.
+                            <p className="text-muted-foreground text-sm">
+                                {touched.length} line{touched.length === 1 ? '' : 's'} with quantities. The credit amount is derived from the
+                                invoices, not typed.
                             </p>
                         </div>
                     </form>
                 )}
 
                 {deliveryId !== null && lines.length === 0 && (
-                    <p className="text-sm text-muted-foreground">This challan has nothing left to return.</p>
+                    <p className="text-muted-foreground text-sm">This challan has nothing left to return.</p>
                 )}
             </div>
         </AppLayout>

@@ -2,6 +2,7 @@ import { CustomerImportPanel } from '@/components/customer-import-panel';
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,8 +12,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Customer {
     id: number;
@@ -143,13 +142,13 @@ export default function CustomersIndex({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="type">Type</Label>
-                        <select id="type" className={selectClass} value={data.type} onChange={(e) => setData('type', e.target.value)}>
+                        <SearchSelect id="type" value={data.type} onChange={(e) => setData('type', e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
                                     {t.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.type} />
                     </div>
                     <div className="grid gap-2">
@@ -176,19 +175,14 @@ export default function CustomersIndex({
                             once meant `Distributor` vs `distributor` silently
                             charged a distributor the retail price. Blank means
                             RETAIL, the default group. */}
-                        <select
-                            id="price_group_id"
-                            className={selectClass}
-                            value={data.price_group_id}
-                            onChange={(e) => setData('price_group_id', e.target.value)}
-                        >
+                        <SearchSelect id="price_group_id" value={data.price_group_id} onChange={(e) => setData('price_group_id', e.target.value)}>
                             <option value="">Default (RETAIL)</option>
                             {priceGroups.map((g) => (
                                 <option key={g.id} value={g.id}>
                                     {g.code}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.price_group_id} />
                     </div>
                     <div className="grid gap-2">
@@ -253,19 +247,19 @@ export default function CustomersIndex({
                         onChange={(e) => setFilter('search', e.target.value)}
                         className="max-w-xs"
                     />
-                    <select className={selectClass} value={filters.type} onChange={(e) => setFilter('type', e.target.value)}>
+                    <SearchSelect value={filters.type} onChange={(e) => setFilter('type', e.target.value)}>
                         <option value="">All types</option>
                         {types.map((t) => (
                             <option key={t.value} value={t.value}>
                                 {t.label}
                             </option>
                         ))}
-                    </select>
-                    <select className={selectClass} value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                    </SearchSelect>
+                    <SearchSelect value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
                         <option value="">All</option>
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
-                    </select>
+                    </SearchSelect>
                 </FilterBar>
 
                 <div className="overflow-x-auto rounded-lg border">

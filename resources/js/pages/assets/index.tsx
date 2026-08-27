@@ -1,5 +1,6 @@
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,8 +9,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Asset {
     id: number;
@@ -73,24 +72,39 @@ export default function AssetsIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">Fixed assets</h1>
-                    <p className="max-w-3xl text-sm text-muted-foreground">
-                        Things the business owns and uses rather than sells - a van, a chiller, a computer. Recorded here they stay
-                        on the balance sheet and wear down month by month. Bought through Purchasing instead, they become stock and
-                        are written off as cost of sales the first time they are issued.
+                    <p className="text-muted-foreground max-w-3xl text-sm">
+                        Things the business owns and uses rather than sells - a van, a chiller, a computer. Recorded here they stay on the balance
+                        sheet and wear down month by month. Bought through Purchasing instead, they become stock and are written off as cost of sales
+                        the first time they are issued.
                     </p>
                 </div>
 
                 {canManage && (
-                    <form onSubmit={submit} className="flex flex-wrap items-end gap-3 rounded-md border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                    <form
+                        onSubmit={submit}
+                        className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
+                    >
                         <div className="grid gap-2">
                             <Label htmlFor="asset_code">Code</Label>
-                            <Input id="asset_code" value={data.asset_code} onChange={(e) => setData('asset_code', e.target.value)} className="w-32" placeholder="VAN-01" />
+                            <Input
+                                id="asset_code"
+                                value={data.asset_code}
+                                onChange={(e) => setData('asset_code', e.target.value)}
+                                className="w-32"
+                                placeholder="VAN-01"
+                            />
                             <InputError message={errors.asset_code} />
                         </div>
 
                         <div className="grid gap-2">
                             <Label htmlFor="name">What it is</Label>
-                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} className="w-56" placeholder="Delivery van" />
+                            <Input
+                                id="name"
+                                value={data.name}
+                                onChange={(e) => setData('name', e.target.value)}
+                                className="w-56"
+                                placeholder="Delivery van"
+                            />
                             <InputError message={errors.name} />
                         </div>
 
@@ -102,26 +116,44 @@ export default function AssetsIndex({
                               Cash at Bank and Stock on Hand - a list whose choices are
                               overwhelmingly wrong.
                             */}
-                            <select id="account_id" className={`${selectClass} w-64`} value={data.account_id} onChange={(e) => setData('account_id', e.target.value)}>
+                            <SearchSelect
+                                id="account_id"
+                                className="w-64"
+                                value={data.account_id}
+                                onChange={(e) => setData('account_id', e.target.value)}
+                            >
                                 <option value="">Choose an asset account</option>
                                 {assetAccounts.map((account) => (
                                     <option key={account.id} value={account.id}>
                                         {account.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.account_id} />
                         </div>
 
                         <div className="grid gap-2">
                             <Label htmlFor="acquired_on">Acquired</Label>
-                            <Input id="acquired_on" type="date" value={data.acquired_on} onChange={(e) => setData('acquired_on', e.target.value)} className="w-44" />
+                            <Input
+                                id="acquired_on"
+                                type="date"
+                                value={data.acquired_on}
+                                onChange={(e) => setData('acquired_on', e.target.value)}
+                                className="w-44"
+                            />
                             <InputError message={errors.acquired_on} />
                         </div>
 
                         <div className="grid gap-2">
                             <Label htmlFor="cost">Cost</Label>
-                            <Input id="cost" value={data.cost} onChange={(e) => setData('cost', e.target.value)} className="w-32 text-right" placeholder="0.00" inputMode="decimal" />
+                            <Input
+                                id="cost"
+                                value={data.cost}
+                                onChange={(e) => setData('cost', e.target.value)}
+                                className="w-32 text-right"
+                                placeholder="0.00"
+                                inputMode="decimal"
+                            />
                             <InputError message={errors.cost} />
                         </div>
 
@@ -129,13 +161,27 @@ export default function AssetsIndex({
                             {/* What it is expected to be worth at the end of its life;
                                 never written off, so it stays on the balance sheet. */}
                             <Label htmlFor="salvage_value">Salvage value</Label>
-                            <Input id="salvage_value" value={data.salvage_value} onChange={(e) => setData('salvage_value', e.target.value)} className="w-32 text-right" placeholder="0.00" inputMode="decimal" />
+                            <Input
+                                id="salvage_value"
+                                value={data.salvage_value}
+                                onChange={(e) => setData('salvage_value', e.target.value)}
+                                className="w-32 text-right"
+                                placeholder="0.00"
+                                inputMode="decimal"
+                            />
                             <InputError message={errors.salvage_value} />
                         </div>
 
                         <div className="grid gap-2">
                             <Label htmlFor="useful_life_months">Useful life (months)</Label>
-                            <Input id="useful_life_months" value={data.useful_life_months} onChange={(e) => setData('useful_life_months', e.target.value)} className="w-24 text-right" placeholder="36" inputMode="numeric" />
+                            <Input
+                                id="useful_life_months"
+                                value={data.useful_life_months}
+                                onChange={(e) => setData('useful_life_months', e.target.value)}
+                                className="w-24 text-right"
+                                placeholder="36"
+                                inputMode="numeric"
+                            />
                             <InputError message={errors.useful_life_months} />
                         </div>
 
@@ -147,33 +193,43 @@ export default function AssetsIndex({
                               posting deliberately in that case.
                             */}
                             <Label htmlFor="money_account_id">Paid from (optional)</Label>
-                            <select id="money_account_id" className={selectClass} value={data.money_account_id} onChange={(e) => setData('money_account_id', e.target.value)}>
+                            <SearchSelect
+                                id="money_account_id"
+                                value={data.money_account_id}
+                                onChange={(e) => setData('money_account_id', e.target.value)}
+                            >
                                 <option value="">Not paid through the ERP</option>
                                 {moneyAccounts.map((account) => (
                                     <option key={account.id} value={account.id}>
                                         {account.name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.money_account_id} />
                         </div>
 
                         <div className="grid gap-2">
                             <Label htmlFor="supplier_id">Bought from (optional)</Label>
-                            <select id="supplier_id" className={selectClass} value={data.supplier_id} onChange={(e) => setData('supplier_id', e.target.value)}>
+                            <SearchSelect id="supplier_id" value={data.supplier_id} onChange={(e) => setData('supplier_id', e.target.value)}>
                                 <option value="">Not recorded</option>
                                 {suppliers.map((supplier) => (
                                     <option key={supplier.id} value={supplier.id}>
                                         {supplier.name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.supplier_id} />
                         </div>
 
                         <div className="grid gap-2">
                             <Label htmlFor="depreciation_starts_on">Depreciation starts (optional)</Label>
-                            <Input id="depreciation_starts_on" type="date" value={data.depreciation_starts_on} onChange={(e) => setData('depreciation_starts_on', e.target.value)} className="w-44" />
+                            <Input
+                                id="depreciation_starts_on"
+                                type="date"
+                                value={data.depreciation_starts_on}
+                                onChange={(e) => setData('depreciation_starts_on', e.target.value)}
+                                className="w-44"
+                            />
                             <InputError message={errors.depreciation_starts_on} />
                         </div>
 
@@ -208,16 +264,16 @@ export default function AssetsIndex({
                                         )}
                                     </td>
                                     <td className="p-3">{asset.acquired_on ?? '-'}</td>
-                                    <td className="p-3 text-muted-foreground">{asset.account ?? '-'}</td>
+                                    <td className="text-muted-foreground p-3">{asset.account ?? '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{asset.cost}</td>
                                     <td className="p-3 text-right tabular-nums">{asset.accumulated}</td>
                                     <td className="p-3 text-right font-medium tabular-nums">{asset.book_value}</td>
-                                    <td className="p-3 text-right tabular-nums text-muted-foreground">{asset.monthly_charge}</td>
+                                    <td className="text-muted-foreground p-3 text-right tabular-nums">{asset.monthly_charge}</td>
                                 </tr>
                             ))}
                             {assets.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={8} className="text-muted-foreground p-6 text-center">
                                         Nothing recorded yet.
                                     </td>
                                 </tr>
@@ -228,7 +284,7 @@ export default function AssetsIndex({
 
                 <Pagination meta={assets} />
 
-                <p className="text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                     Assets wear down only when somebody runs it:{' '}
                     <Link href="/assets/depreciation" className="underline">
                         depreciation

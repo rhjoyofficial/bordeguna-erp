@@ -62,10 +62,9 @@ export default function CrmReports({
             <div className="flex flex-col gap-8 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">CRM reports</h1>
-                    <p className="max-w-3xl text-sm text-muted-foreground">
-                        Every figure is worked out when you open this page, so nothing here can drift from the records it came
-                        from. Revenue and campaign return arrive with Sales - there are no invoices yet, and a column of zeros
-                        would be worse than an absent one.
+                    <p className="text-muted-foreground max-w-3xl text-sm">
+                        Every figure is worked out when you open this page, so nothing here can drift from the records it came from. Revenue and
+                        campaign return arrive with Sales - there are no invoices yet, and a column of zeros would be worse than an absent one.
                     </p>
                 </div>
 
@@ -73,7 +72,7 @@ export default function CrmReports({
                 <section className="flex flex-col gap-3">
                     <div>
                         <h2 className="text-sm font-medium">Where leads stand</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {/* ⚠ The denominator is stated, not implied. */}
                             {funnel.converted} of {funnel.workable} leads converted
                             {funnel.conversionRate !== null && ` - ${funnel.conversionRate}%`}
@@ -85,7 +84,7 @@ export default function CrmReports({
                         {funnel.stages.map((stage) => (
                             <div key={stage.status} className="min-w-32 rounded-md border p-3">
                                 <p className="text-2xl font-semibold tabular-nums">{stage.count}</p>
-                                <p className="text-xs text-muted-foreground">{stage.label}</p>
+                                <p className="text-muted-foreground text-xs">{stage.label}</p>
                             </div>
                         ))}
                     </div>
@@ -109,7 +108,7 @@ export default function CrmReports({
                                 {sources.map((row) => (
                                     <tr key={`${row.source}-${row.campaign}`} className="border-t">
                                         <td className="p-3">{row.source}</td>
-                                        <td className="p-3 text-muted-foreground">{row.campaign}</td>
+                                        <td className="text-muted-foreground p-3">{row.campaign}</td>
                                         <td className="p-3 text-right tabular-nums">{row.leads}</td>
                                         <td className="p-3 text-right tabular-nums">{row.converted}</td>
                                         <td className="p-3 text-right tabular-nums">{row.rate === null ? '-' : `${row.rate}%`}</td>
@@ -117,7 +116,7 @@ export default function CrmReports({
                                 ))}
                                 {sources.length === 0 && (
                                     <tr>
-                                        <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                                        <td colSpan={5} className="text-muted-foreground p-6 text-center">
                                             No lead has an attribution yet.
                                         </td>
                                     </tr>
@@ -131,7 +130,7 @@ export default function CrmReports({
                 <section className="flex flex-col gap-2">
                     <div>
                         <h2 className="text-sm font-medium">What people are asking for</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {/* ⚠⚠ People, not requests. Six people wanting mango and one
                                 person asking six times are different businesses. */}
                             Counted by how many <span className="font-medium">people</span> asked, not how many times.
@@ -152,21 +151,21 @@ export default function CrmReports({
                                     <tr key={`${row.kind}-${row.what}`} className="border-t">
                                         <td className="p-3">
                                             {row.what}
-                                            {row.sku && <span className="ml-2 text-xs text-muted-foreground">{row.sku}</span>}
+                                            {row.sku && <span className="text-muted-foreground ml-2 text-xs">{row.sku}</span>}
                                             {row.not_currently_sold && (
                                                 <Badge variant="destructive" className="ml-2">
                                                     not currently sold
                                                 </Badge>
                                             )}
                                         </td>
-                                        <td className="p-3 text-muted-foreground">{row.kind}</td>
+                                        <td className="text-muted-foreground p-3">{row.kind}</td>
                                         <td className="p-3 text-right font-medium tabular-nums">{row.people}</td>
-                                        <td className="p-3 text-right tabular-nums text-muted-foreground">{row.requests}</td>
+                                        <td className="text-muted-foreground p-3 text-right tabular-nums">{row.requests}</td>
                                     </tr>
                                 ))}
                                 {demand.length === 0 && (
                                     <tr>
-                                        <td colSpan={4} className="p-6 text-center text-muted-foreground">
+                                        <td colSpan={4} className="text-muted-foreground p-6 text-center">
                                             Nobody has asked for anything yet.
                                         </td>
                                     </tr>
@@ -180,7 +179,7 @@ export default function CrmReports({
                 <section className="flex flex-col gap-2">
                     <div>
                         <h2 className="text-sm font-medium">Follow-up load</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {canSeeAllTasks ? 'Everyone’s open follow-ups.' : 'Your open follow-ups only.'}
                         </p>
                     </div>
@@ -199,17 +198,13 @@ export default function CrmReports({
                                         <td className="p-3">{row.who}</td>
                                         <td className="p-3 text-right tabular-nums">{row.open}</td>
                                         <td className="p-3 text-right tabular-nums">
-                                            {row.overdue > 0 ? (
-                                                <span className="font-medium text-destructive">{row.overdue}</span>
-                                            ) : (
-                                                row.overdue
-                                            )}
+                                            {row.overdue > 0 ? <span className="text-destructive font-medium">{row.overdue}</span> : row.overdue}
                                         </td>
                                     </tr>
                                 ))}
                                 {followUps.length === 0 && (
                                     <tr>
-                                        <td colSpan={3} className="p-6 text-center text-muted-foreground">
+                                        <td colSpan={3} className="text-muted-foreground p-6 text-center">
                                             Nothing outstanding.
                                         </td>
                                     </tr>

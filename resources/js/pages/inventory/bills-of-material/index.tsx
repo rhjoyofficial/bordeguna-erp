@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -189,9 +190,8 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                     <div className="grid gap-4 md:grid-cols-4">
                         <div className="grid gap-2 md:col-span-2">
                             <Label htmlFor="output_product_id">Product being made</Label>
-                            <select
+                            <SearchSelect
                                 id="output_product_id"
-                                className={selectClass}
                                 value={data.output_product_id}
                                 onChange={(e) => setData('output_product_id', e.target.value)}
                                 disabled={editing !== null}
@@ -202,7 +202,7 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                                         {p.name} ({p.sku})
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.output_product_id} />
                         </div>
                         <div className="grid gap-2">
@@ -234,7 +234,7 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                                 {data.lines.map((line, index) => (
                                     <tr key={index} className="border-t align-top">
                                         <td className="p-3">
-                                            <select
+                                            <SearchSelect
                                                 className={`${selectClass} w-full`}
                                                 value={line.product_id}
                                                 onChange={(e) => setLine(index, { product_id: e.target.value })}
@@ -245,7 +245,7 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                                                         {p.name} ({p.sku})
                                                     </option>
                                                 ))}
-                                            </select>
+                                            </SearchSelect>
                                             <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
                                         </td>
                                         <td className="p-3">

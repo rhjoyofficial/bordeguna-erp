@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -36,8 +37,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Daily attendance', href: '/hrm/attendance/daily' },
     { title: 'Show cause notices', href: '/hrm/notices' },
 ];
-
-const selectClass = 'h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 /**
  * Issue a notice from scratch - the blank-letter door. The prefilled door
@@ -82,14 +81,14 @@ function IssueNoticeDialog({ employees }: { employees: { id: number; name: strin
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="scn_employee">Employee</Label>
-                        <select id="scn_employee" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+                        <SearchSelect id="scn_employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
                                     {e.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                     </div>
                     <div className="grid gap-2">
@@ -129,8 +128,7 @@ export default function NoticesIndex({ filters, notices, employees }: Props) {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-lg font-medium">Show cause notices</h2>
                     <div className="flex items-center gap-2">
-                        <select
-                            className={selectClass}
+                        <SearchSelect
                             value={filters.employee_id ?? ''}
                             onChange={(e) =>
                                 router.get(
@@ -146,7 +144,7 @@ export default function NoticesIndex({ filters, notices, employees }: Props) {
                                     {e.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <IssueNoticeDialog employees={employees} />
                     </div>
                 </div>

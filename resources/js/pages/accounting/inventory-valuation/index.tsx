@@ -68,21 +68,14 @@ export default function InventoryValuationIndex({
                     <div>
                         <h1 className="text-xl font-semibold">Inventory valuation</h1>
                         <p className="text-muted-foreground text-sm">
-                            What the stock was worth on {as_at}, derived from stock movements rather than from the
-                            batch cache.
+                            What the stock was worth on {as_at}, derived from stock movements rather than from the batch cache.
                         </p>
                     </div>
 
                     <form onSubmit={submit} className="flex items-end gap-2">
                         <div className="grid gap-1">
                             <Label htmlFor="as_at">As at</Label>
-                            <Input
-                                id="as_at"
-                                type="date"
-                                value={date}
-                                onChange={(e) => setDate(e.target.value)}
-                                className="w-40"
-                            />
+                            <Input id="as_at" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
                         </div>
                         <Button type="submit">Show</Button>
                     </form>
@@ -104,14 +97,12 @@ export default function InventoryValuationIndex({
                     >
                         {control.ties_out ? (
                             <span>
-                                Agrees with <strong>{control.account}</strong> at{' '}
-                                <strong>{control.balance}</strong>.
+                                Agrees with <strong>{control.account}</strong> at <strong>{control.balance}</strong>.
                             </span>
                         ) : (
                             <span>
-                                <strong>Does not agree with the ledger.</strong> {control.account} holds{' '}
-                                <strong>{control.balance}</strong>, this valuation totals <strong>{total}</strong>, a
-                                difference of <strong>{control.difference}</strong>. Run{' '}
+                                <strong>Does not agree with the ledger.</strong> {control.account} holds <strong>{control.balance}</strong>, this
+                                valuation totals <strong>{total}</strong>, a difference of <strong>{control.difference}</strong>. Run{' '}
                                 <code>accounting:reconcile</code> and <code>inventory:verify-ledger</code>.
                             </span>
                         )}
@@ -123,9 +114,8 @@ export default function InventoryValuationIndex({
                       point - a bare red number would look like a defect.
                     */
                     <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950">
-                        This business has no <strong>Stock on Hand</strong> account mapped, so accounting is switched
-                        off for it and there is nothing to check this total against. The stock figures below are still
-                        correct; they are simply not in any set of books.
+                        This business has no <strong>Stock on Hand</strong> account mapped, so accounting is switched off for it and there is nothing
+                        to check this total against. The stock figures below are still correct; they are simply not in any set of books.
                     </div>
                 )}
 
@@ -134,18 +124,14 @@ export default function InventoryValuationIndex({
                         <strong>
                             {anomaly_count} layer{anomaly_count === 1 ? '' : 's'} need attention.
                         </strong>{' '}
-                        Negative stock, value stranded on an empty layer, or goods the books treat as free. They are
-                        marked in the table and are never hidden to make the total look tidy.
+                        Negative stock, value stranded on an empty layer, or goods the books treat as free. They are marked in the table and are never
+                        hidden to make the total look tidy.
                     </div>
                 )}
 
                 <div className="grid gap-6 md:grid-cols-2">
                     <Summary title="By brand" label="Brand" rows={by_brand.map((b) => ({ name: b.brand, ...b }))} />
-                    <Summary
-                        title="By warehouse"
-                        label="Warehouse"
-                        rows={by_warehouse.map((w) => ({ name: w.warehouse, ...w }))}
-                    />
+                    <Summary title="By warehouse" label="Warehouse" rows={by_warehouse.map((w) => ({ name: w.warehouse, ...w }))} />
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
@@ -171,28 +157,17 @@ export default function InventoryValuationIndex({
                                 </tr>
                             )}
                             {rows.map((row, i) => (
-                                <tr
-                                    key={i}
-                                    className={`border-t ${row.anomaly ? 'bg-red-50 dark:bg-red-950' : ''}`}
-                                >
+                                <tr key={i} className={`border-t ${row.anomaly ? 'bg-red-50 dark:bg-red-950' : ''}`}>
                                     <td className="p-2 font-mono text-xs">{row.product_sku}</td>
                                     <td className="p-2">
                                         {row.product_name}
-                                        {row.anomaly && (
-                                            <div className="mt-1 text-xs font-medium text-red-700 dark:text-red-300">
-                                                {row.anomaly}
-                                            </div>
-                                        )}
+                                        {row.anomaly && <div className="mt-1 text-xs font-medium text-red-700 dark:text-red-300">{row.anomaly}</div>}
                                     </td>
                                     <td className="p-2">{row.brand ?? '-'}</td>
                                     <td className="p-2">{row.warehouse}</td>
                                     <td className="p-2">
                                         {row.batch_number ?? '-'}
-                                        {row.expiry_date && (
-                                            <span className="text-muted-foreground block text-xs">
-                                                expires {row.expiry_date}
-                                            </span>
-                                        )}
+                                        {row.expiry_date && <span className="text-muted-foreground block text-xs">expires {row.expiry_date}</span>}
                                     </td>
                                     <td className="p-2 text-right tabular-nums">{row.quantity}</td>
                                     <td className="p-2 text-right tabular-nums">{row.unit_cost ?? '-'}</td>
@@ -215,15 +190,7 @@ export default function InventoryValuationIndex({
     );
 }
 
-function Summary({
-    title,
-    label,
-    rows,
-}: {
-    title: string;
-    label: string;
-    rows: { name: string; quantity: string; value: string }[];
-}) {
+function Summary({ title, label, rows }: { title: string; label: string; rows: { name: string; quantity: string; value: string }[] }) {
     return (
         <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">

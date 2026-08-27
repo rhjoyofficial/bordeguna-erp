@@ -71,7 +71,10 @@ export default function ErpAssistant() {
             const reply = payload?.reply ?? 'The assistant is temporarily unavailable. Please try again in a minute.';
             setMessages((current) => [...current, { role: 'assistant', content: reply }]);
         } catch {
-            setMessages((current) => [...current, { role: 'assistant', content: 'Could not reach the server. Check your connection and try again.' }]);
+            setMessages((current) => [
+                ...current,
+                { role: 'assistant', content: 'Could not reach the server. Check your connection and try again.' },
+            ]);
         } finally {
             setBusy(false);
         }
@@ -83,7 +86,7 @@ export default function ErpAssistant() {
                 type="button"
                 onClick={() => setOpen((value) => !value)}
                 aria-label="Open the ERP guide chat"
-                className="border-border bg-primary text-primary-foreground fixed right-4 bottom-[4.5rem] z-40 flex h-11 w-11 items-center justify-center rounded-full border shadow-lg transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="border-border bg-primary text-primary-foreground focus-visible:ring-ring fixed right-4 bottom-[4.5rem] z-40 flex h-11 w-11 items-center justify-center rounded-full border shadow-lg transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:outline-none"
             >
                 <MessageCircle className="h-5 w-5" />
             </button>
@@ -104,7 +107,12 @@ export default function ErpAssistant() {
                             >
                                 <Trash2 className="h-4 w-4" />
                             </button>
-                            <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="text-muted-foreground hover:text-foreground p-1">
+                            <button
+                                type="button"
+                                onClick={() => setOpen(false)}
+                                aria-label="Close"
+                                className="text-muted-foreground hover:text-foreground p-1"
+                            >
                                 <X className="h-4 w-4" />
                             </button>
                         </div>
@@ -142,7 +150,7 @@ export default function ErpAssistant() {
                             value={draft}
                             onChange={(e) => setDraft(e.target.value)}
                             placeholder="Type your question"
-                            className="border-input bg-background h-9 min-w-0 flex-1 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                            className="border-input bg-background focus-visible:ring-ring h-9 min-w-0 flex-1 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
                         />
                         <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={busy || draft.trim() === ''} aria-label="Send">
                             <Send className="h-4 w-4" />

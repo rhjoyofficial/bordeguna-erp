@@ -82,7 +82,7 @@ export default function ReturnsIndex({
                             ))}
                             {returns.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={6} className="text-muted-foreground p-6 text-center">
                                         No returns yet. Goods coming back are recorded against the challan they left on.
                                     </td>
                                 </tr>

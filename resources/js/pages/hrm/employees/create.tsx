@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,8 +23,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Employees', href: '/hrm/employees' },
     { title: 'Add employee', href: '/hrm/employees/create' },
 ];
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 export default function EmployeeCreate({ employment_types, offices, designations }: CreateProps) {
     const { data, setData, post, errors, processing } = useForm({
@@ -64,13 +63,13 @@ export default function EmployeeCreate({ employment_types, offices, designations
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                         <Label htmlFor="employment_type">Employment type</Label>
-                        <select id="employment_type" className={selectClass} value={data.employment_type} onChange={(e) => setData('employment_type', e.target.value)}>
+                        <SearchSelect id="employment_type" value={data.employment_type} onChange={(e) => setData('employment_type', e.target.value)}>
                             {employment_types.map((type) => (
                                 <option key={type.value} value={type.value}>
                                     {type.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.employment_type} />
                     </div>
                     <div className="grid gap-2">
@@ -83,26 +82,26 @@ export default function EmployeeCreate({ employment_types, offices, designations
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                         <Label htmlFor="office_id">Office</Label>
-                        <select id="office_id" className={selectClass} value={data.office_id} onChange={(e) => setData('office_id', e.target.value)}>
+                        <SearchSelect id="office_id" value={data.office_id} onChange={(e) => setData('office_id', e.target.value)}>
                             <option value="">- None -</option>
                             {offices.map((office) => (
                                 <option key={office.id} value={office.id}>
                                     {office.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.office_id} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="designation_id">Designation</Label>
-                        <select id="designation_id" className={selectClass} value={data.designation_id} onChange={(e) => setData('designation_id', e.target.value)}>
+                        <SearchSelect id="designation_id" value={data.designation_id} onChange={(e) => setData('designation_id', e.target.value)}>
                             <option value="">- None -</option>
                             {designations.map((designation) => (
                                 <option key={designation.id} value={designation.id}>
                                     {designation.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.designation_id} />
                     </div>
                 </div>
@@ -110,7 +109,12 @@ export default function EmployeeCreate({ employment_types, offices, designations
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                         <Label htmlFor="personal_email">Personal email</Label>
-                        <Input id="personal_email" type="email" value={data.personal_email} onChange={(e) => setData('personal_email', e.target.value)} />
+                        <Input
+                            id="personal_email"
+                            type="email"
+                            value={data.personal_email}
+                            onChange={(e) => setData('personal_email', e.target.value)}
+                        />
                         <InputError message={errors.personal_email} />
                     </div>
                     <div className="grid gap-2">

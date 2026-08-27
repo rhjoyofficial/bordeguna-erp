@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -5,8 +6,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
-
-const selectClass = 'h-10 w-full rounded-md border border-input bg-background px-3 text-sm';
 
 interface SupplierRow {
     id: number;
@@ -81,17 +80,11 @@ export default function PaymentCreate({
         });
     };
 
-    const total = useMemo(
-        () => bills.reduce((sum, bill) => sum + toPaisa(data.amounts[bill.id] ?? '0'), 0),
-        [bills, data.amounts],
-    );
+    const total = useMemo(() => bills.reduce((sum, bill) => sum + toPaisa(data.amounts[bill.id] ?? '0'), 0), [bills, data.amounts]);
 
     // ⚠ The server refuses overpayment and is the authority. This only stops the
     // clerk submitting something it already knows will be rejected.
-    const overpaid = useMemo(
-        () => bills.filter((bill) => toPaisa(data.amounts[bill.id] ?? '0') > toPaisa(bill.outstanding)),
-        [bills, data.amounts],
-    );
+    const overpaid = useMemo(() => bills.filter((bill) => toPaisa(data.amounts[bill.id] ?? '0') > toPaisa(bill.outstanding)), [bills, data.amounts]);
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -127,30 +120,22 @@ export default function PaymentCreate({
                 <div className="grid gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
                         <Label htmlFor="supplier_id">Supplier</Label>
-                        <select
-                            id="supplier_id"
-                            className={selectClass}
-                            value={String(data.supplier_id)}
-                            onChange={(e) => chooseSupplier(e.target.value)}
-                        >
+                        <SearchSelect id="supplier_id" value={String(data.supplier_id)} onChange={(e) => chooseSupplier(e.target.value)}>
                             <option value="">Select a supplier</option>
                             {suppliers.map((supplier) => (
                                 <option key={supplier.id} value={supplier.id}>
                                     {supplier.name} - {supplier.outstanding} owed
                                 </option>
                             ))}
-                        </select>
-                        {suppliers.length === 0 && (
-                            <p className="text-sm text-muted-foreground">No supplier is owed anything right now.</p>
-                        )}
-                        {errors.supplier_id && <p className="text-sm text-destructive">{errors.supplier_id}</p>}
+                        </SearchSelect>
+                        {suppliers.length === 0 && <p className="text-muted-foreground text-sm">No supplier is owed anything right now.</p>}
+                        {errors.supplier_id && <p className="text-destructive text-sm">{errors.supplier_id}</p>}
                     </div>
 
                     <div className="grid gap-2">
                         <Label htmlFor="money_account_id">Paid from</Label>
-                        <select
+                        <SearchSelect
                             id="money_account_id"
-                            className={selectClass}
                             value={String(data.money_account_id)}
                             onChange={(e) => setData('money_account_id', e.target.value)}
                         >
@@ -160,19 +145,14 @@ export default function PaymentCreate({
                                     {account.name}
                                 </option>
                             ))}
-                        </select>
-                        {errors.money_account_id && <p className="text-sm text-destructive">{errors.money_account_id}</p>}
+                        </SearchSelect>
+                        {errors.money_account_id && <p className="text-destructive text-sm">{errors.money_account_id}</p>}
                     </div>
 
                     <div className="grid gap-2">
                         <Label htmlFor="paid_on">Payment date</Label>
-                        <Input
-                            id="paid_on"
-                            type="date"
-                            value={data.paid_on}
-                            onChange={(e) => setData('paid_on', e.target.value)}
-                        />
-                        {errors.paid_on && <p className="text-sm text-destructive">{errors.paid_on}</p>}
+                        <Input id="paid_on" type="date" value={data.paid_on} onChange={(e) => setData('paid_on', e.target.value)} />
+                        {errors.paid_on && <p className="text-destructive text-sm">{errors.paid_on}</p>}
                     </div>
 
                     <div className="grid gap-2">
@@ -183,7 +163,7 @@ export default function PaymentCreate({
                             placeholder="Cheque number, bKash trx id, slip number"
                             onChange={(e) => setData('reference', e.target.value)}
                         />
-                        {errors.reference && <p className="text-sm text-destructive">{errors.reference}</p>}
+                        {errors.reference && <p className="text-destructive text-sm">{errors.reference}</p>}
                     </div>
                 </div>
 
@@ -228,19 +208,11 @@ export default function PaymentCreate({
                                                     min="0"
                                                     className={`ml-auto max-w-32 text-right tabular-nums ${isOver ? 'border-destructive' : ''}`}
                                                     value={data.amounts[bill.id] ?? ''}
-                                                    onChange={(e) =>
-                                                        setData('amounts', { ...data.amounts, [bill.id]: e.target.value })
-                                                    }
+                                                    onChange={(e) => setData('amounts', { ...data.amounts, [bill.id]: e.target.value })}
                                                 />
-                                                {isOver && (
-                                                    <p className="mt-1 text-xs text-destructive">
-                                                        Only {bill.outstanding} is outstanding.
-                                                    </p>
-                                                )}
+                                                {isOver && <p className="text-destructive mt-1 text-xs">Only {bill.outstanding} is outstanding.</p>}
                                                 {errors[`allocations.${index}.amount`] && (
-                                                    <p className="mt-1 text-xs text-destructive">
-                                                        {errors[`allocations.${index}.amount`]}
-                                                    </p>
+                                                    <p className="text-destructive mt-1 text-xs">{errors[`allocations.${index}.amount`]}</p>
                                                 )}
                                             </td>
                                         </tr>
@@ -248,7 +220,7 @@ export default function PaymentCreate({
                                 })}
                                 {bills.length === 0 && (
                                     <tr>
-                                        <td colSpan={6} className="p-6 text-center text-muted-foreground">
+                                        <td colSpan={6} className="text-muted-foreground p-6 text-center">
                                             This supplier has no open bills.
                                         </td>
                                     </tr>
@@ -256,7 +228,7 @@ export default function PaymentCreate({
                             </tbody>
                             {bills.length > 0 && (
                                 <tfoot>
-                                    <tr className="border-t bg-muted/30 font-medium">
+                                    <tr className="bg-muted/30 border-t font-medium">
                                         <td className="p-3" colSpan={5}>
                                             Total payment
                                         </td>
@@ -268,7 +240,7 @@ export default function PaymentCreate({
                     </div>
                 )}
 
-                {errors.allocations && <p className="text-sm text-destructive">{errors.allocations}</p>}
+                {errors.allocations && <p className="text-destructive text-sm">{errors.allocations}</p>}
 
                 <div className="grid gap-2">
                     <Label htmlFor="note">Note</Label>
@@ -279,11 +251,7 @@ export default function PaymentCreate({
                     <Button type="submit" disabled={processing || total <= 0 || overpaid.length > 0}>
                         Record payment of {toTaka(total)}
                     </Button>
-                    {overpaid.length > 0 && (
-                        <span className="text-sm text-destructive">
-                            One or more lines pay more than is outstanding.
-                        </span>
-                    )}
+                    {overpaid.length > 0 && <span className="text-destructive text-sm">One or more lines pay more than is outstanding.</span>}
                 </div>
             </form>
         </AppLayout>

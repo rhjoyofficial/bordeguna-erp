@@ -66,7 +66,6 @@ interface DashboardProps {
         expenses: TransactionRow[] | null;
         returns: TransactionRow[] | null;
     };
-
 }
 
 const CHART_RANGES = [
@@ -130,8 +129,8 @@ function KpiTile({ icon: Icon, label, value, tone }: { icon: LucideIcon; label: 
     return (
         <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-                <Icon className="size-4 text-muted-foreground" />
+                <CardTitle className="text-muted-foreground text-sm font-medium">{label}</CardTitle>
+                <Icon className="text-muted-foreground size-4" />
             </CardHeader>
             <CardContent className={`text-2xl font-semibold ${tone === 'destructive' ? 'text-destructive' : ''}`}>{value}</CardContent>
         </Card>
@@ -149,7 +148,7 @@ function TradeChart({ data }: { data: TradeChartPoint[] }) {
     const hasPurchases = data.some((point) => point.purchases !== null);
 
     if (max <= 0) {
-        return <p className="text-sm text-muted-foreground">No sales or purchases in this window.</p>;
+        return <p className="text-muted-foreground text-sm">No sales or purchases in this window.</p>;
     }
 
     return (
@@ -215,7 +214,7 @@ function RecentTransactions({ transactions }: { transactions: DashboardProps['re
     return (
         <Card>
             <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Recent transactions</CardTitle>
+                <CardTitle className="text-muted-foreground text-sm font-medium">Recent transactions</CardTitle>
                 <div className="flex flex-wrap gap-1 pt-1">
                     {visibleTabs.map((tab) => (
                         <button
@@ -236,7 +235,7 @@ function RecentTransactions({ transactions }: { transactions: DashboardProps['re
             </CardHeader>
             <CardContent>
                 {rows.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>
+                    <p className="text-muted-foreground text-sm">Nothing recorded yet.</p>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
@@ -287,7 +286,6 @@ export default function Dashboard({
     trade_chart,
     trade_chart_range,
     recent_transactions,
-
 }: DashboardProps) {
     const [bannerDismissed, setBannerDismissed] = useState(false);
 
@@ -406,7 +404,7 @@ export default function Dashboard({
                     {trade_chart !== null && (
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Sales & purchases</CardTitle>
+                                <CardTitle className="text-muted-foreground text-sm font-medium">Sales & purchases</CardTitle>
                                 <div className="flex gap-1">
                                     {CHART_RANGES.map((option) => (
                                         <Button

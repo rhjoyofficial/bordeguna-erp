@@ -1,6 +1,7 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,8 +12,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Option {
     id: number;
@@ -78,10 +77,14 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
     };
 
     const addLine = () => setData('lines', [...data.lines, { product_id: '', quantity: '', unit_cost: '' }]);
-    const removeLine = (index: number) => setData('lines', data.lines.filter((_, i) => i !== index));
+    const removeLine = (index: number) =>
+        setData(
+            'lines',
+            data.lines.filter((_, i) => i !== index),
+        );
 
     return (
-        <form onSubmit={submit} className="flex flex-col gap-4 rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+        <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
             <h3 className="font-medium">New purchase order</h3>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="grid gap-2">
@@ -131,11 +134,7 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
                             <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
                         </div>
                         <div className="grid gap-1">
-                            <Input
-                                placeholder="Quantity"
-                                value={line.quantity}
-                                onChange={(e) => updateLine(index, { quantity: e.target.value })}
-                            />
+                            <Input placeholder="Quantity" value={line.quantity} onChange={(e) => updateLine(index, { quantity: e.target.value })} />
                             <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                         </div>
                         <div className="grid gap-1">
@@ -197,19 +196,19 @@ export default function PurchaseOrdersIndex({
                         />
                     </FilterField>
                     <FilterField label="Status" htmlFor="filter-status">
-                        <select id="filter-status" className={selectClass} value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                        <SearchSelect id="filter-status" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
                             <option value="">All statuses</option>
                             <option value="open">Open</option>
                             <option value="partially_received">Partially received</option>
                             <option value="received">Received</option>
                             <option value="cancelled">Cancelled</option>
-                        </select>
+                        </SearchSelect>
                     </FilterField>
                 </FilterBar>
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">PO #</th>
                             <th className="py-2">Supplier</th>
                             <th className="py-2">Warehouse</th>
@@ -227,8 +226,8 @@ export default function PurchaseOrdersIndex({
                                         {order.po_number}
                                     </Link>
                                 </td>
-                                <td className="py-2 text-muted-foreground">{order.supplier.name}</td>
-                                <td className="py-2 text-muted-foreground">{order.warehouse.name}</td>
+                                <td className="text-muted-foreground py-2">{order.supplier.name}</td>
+                                <td className="text-muted-foreground py-2">{order.warehouse.name}</td>
                                 <td className="py-2">{order.total_ordered}</td>
                                 <td className="py-2">
                                     <Badge variant={approvalVariant[order.approval_request.status]} className="capitalize">
@@ -240,12 +239,12 @@ export default function PurchaseOrdersIndex({
                                         {order.status.replace('_', ' ')}
                                     </Badge>
                                 </td>
-                                <td className="py-2 text-muted-foreground capitalize">{order.payment_status.replace('_', ' ')}</td>
+                                <td className="text-muted-foreground py-2 capitalize">{order.payment_status.replace('_', ' ')}</td>
                             </tr>
                         ))}
                         {orders.data.length === 0 && (
                             <tr>
-                                <td colSpan={7} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={7} className="text-muted-foreground py-4 text-center">
                                     {hasActiveFilters ? 'No purchase orders match these filters.' : 'No purchase orders yet.'}
                                 </td>
                             </tr>

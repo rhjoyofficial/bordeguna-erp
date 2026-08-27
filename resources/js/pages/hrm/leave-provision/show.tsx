@@ -53,24 +53,24 @@ export default function LeaveProvisionShow({
             <div className="flex flex-col gap-6 p-4">
                 <div className="grid gap-3 sm:grid-cols-4">
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Valued as at</p>
+                        <p className="text-muted-foreground text-xs">Valued as at</p>
                         <p className="font-medium">{run.valued_on?.slice(0, 10)}</p>
                     </div>
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Liability computed</p>
+                        <p className="text-muted-foreground text-xs">Liability computed</p>
                         <p className="font-medium tabular-nums">{money(run.total_liability)}</p>
                     </div>
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Was in the ledger</p>
+                        <p className="text-muted-foreground text-xs">Was in the ledger</p>
                         <p className="font-medium tabular-nums">{money(run.opening_balance)}</p>
                     </div>
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Posted</p>
+                        <p className="text-muted-foreground text-xs">Posted</p>
                         <p className="font-medium tabular-nums">{money(run.delta)}</p>
                     </div>
                 </div>
 
-                {run.note && <p className="text-sm text-muted-foreground">{run.note}</p>}
+                {run.note && <p className="text-muted-foreground text-sm">{run.note}</p>}
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
@@ -92,7 +92,7 @@ export default function LeaveProvisionShow({
                                     <td className="p-3 text-right tabular-nums">{row.days}</td>
                                     <td className="p-3 text-right tabular-nums">{row.daily_rate === null ? '-' : money(row.daily_rate)}</td>
                                     <td className="p-3 text-right tabular-nums">{money(row.amount)}</td>
-                                    <td className="p-3 text-xs text-muted-foreground">{row.explanation}</td>
+                                    <td className="text-muted-foreground p-3 text-xs">{row.explanation}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -117,7 +117,7 @@ export default function LeaveProvisionShow({
                                         <td className="p-3">
                                             {line.account?.code} {line.account?.name}
                                         </td>
-                                        <td className="p-3 text-muted-foreground">{line.memo}</td>
+                                        <td className="text-muted-foreground p-3">{line.memo}</td>
                                         <td className="p-3 text-right tabular-nums">{line.amount_minor > 0 ? taka(line.amount_minor) : ''}</td>
                                         <td className="p-3 text-right tabular-nums">{line.amount_minor < 0 ? taka(-line.amount_minor) : ''}</td>
                                     </tr>

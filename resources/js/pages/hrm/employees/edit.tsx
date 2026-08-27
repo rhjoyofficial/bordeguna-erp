@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -54,8 +55,6 @@ interface EditProps {
     mfs_providers: Option[];
     payment_methods: Option[];
 }
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 type FormData = Omit<EditableEmployee, 'id' | 'employee_code' | 'name'>;
 
@@ -132,9 +131,8 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                         <Text field="last_name" label="Last name" />
                         <div className="grid gap-2">
                             <Label htmlFor="employment_type">Employment type</Label>
-                            <select
+                            <SearchSelect
                                 id="employment_type"
-                                className={selectClass}
                                 value={data.employment_type ?? ''}
                                 onChange={(e) => setData('employment_type', e.target.value)}
                             >
@@ -143,7 +141,7 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                                         {type.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.employment_type} />
                         </div>
                         {/* Blank = the 6-month company default; a number only for
@@ -207,19 +205,14 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="mfs_provider">Provider</Label>
-                            <select
-                                id="mfs_provider"
-                                className={selectClass}
-                                value={data.mfs_provider ?? ''}
-                                onChange={(e) => setData('mfs_provider', e.target.value)}
-                            >
+                            <SearchSelect id="mfs_provider" value={data.mfs_provider ?? ''} onChange={(e) => setData('mfs_provider', e.target.value)}>
                                 <option value="">- None -</option>
                                 {mfs_providers.map((provider) => (
                                     <option key={provider.value} value={provider.value}>
                                         {provider.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.mfs_provider} />
                         </div>
                         <Text field="mfs_account_number" label="Account number" />
@@ -231,9 +224,8 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="salary_payment_method">How this employee is paid</Label>
-                            <select
+                            <SearchSelect
                                 id="salary_payment_method"
-                                className={selectClass}
                                 value={data.salary_payment_method ?? ''}
                                 onChange={(e) => setData('salary_payment_method', e.target.value)}
                             >
@@ -243,7 +235,7 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                                         {method.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.salary_payment_method} />
                             <p className="text-muted-foreground text-xs">
                                 Payroll checks the account details this method actually needs, and disbursement groups the payslips by it - cash never

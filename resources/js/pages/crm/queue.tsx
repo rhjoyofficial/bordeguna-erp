@@ -38,7 +38,7 @@ export default function CrmQueue({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h1 className="text-lg font-semibold">Follow-ups</h1>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {/* ⚠ Whose queue this is depends on a permission, so the
                                 page says which it is rather than leaving somebody to
                                 assume they can see everything. */}
@@ -87,21 +87,18 @@ export default function CrmQueue({
                                     </td>
                                     <td className="p-3">{task.title}</td>
                                     <td className="p-3">
-                                        <Link
-                                            href={`/crm/${task.subject_kind}/${task.subject_id}/timeline`}
-                                            className="font-medium hover:underline"
-                                        >
+                                        <Link href={`/crm/${task.subject_kind}/${task.subject_id}/timeline`} className="font-medium hover:underline">
                                             {task.subject_name ?? `${task.subject_kind} #${task.subject_id}`}
                                         </Link>
-                                        <span className="ml-2 text-xs text-muted-foreground">{task.subject_kind}</span>
+                                        <span className="text-muted-foreground ml-2 text-xs">{task.subject_kind}</span>
                                     </td>
-                                    <td className="p-3 text-muted-foreground">{task.assigned_to ?? 'Nobody'}</td>
-                                    <td className="p-3 text-muted-foreground">{task.status}</td>
+                                    <td className="text-muted-foreground p-3">{task.assigned_to ?? 'Nobody'}</td>
+                                    <td className="text-muted-foreground p-3">{task.status}</td>
                                 </tr>
                             ))}
                             {tasks.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={5} className="text-muted-foreground p-6 text-center">
                                         Nothing to follow up.
                                     </td>
                                 </tr>

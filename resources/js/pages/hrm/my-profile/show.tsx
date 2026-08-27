@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -129,12 +130,11 @@ const requestStatusVariant: Record<string, 'secondary' | 'default' | 'destructiv
 };
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'My profile', href: '/hrm/my-profile' }];
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 function Field({ label, value }: { label: string; value: string | null }) {
     return (
         <div>
-            <dt className="text-xs text-muted-foreground">{label}</dt>
+            <dt className="text-muted-foreground text-xs">{label}</dt>
             <dd className="text-sm">{value ?? '-'}</dd>
         </div>
     );
@@ -179,9 +179,8 @@ function RequestUpdateDialog({ group, mfsProviders }: { group: RequestableGroup;
                         <div key={field.name} className="grid gap-2">
                             <Label htmlFor={field.name}>{field.label}</Label>
                             {field.name === 'mfs_provider' ? (
-                                <select
+                                <SearchSelect
                                     id={field.name}
-                                    className={selectClass}
                                     value={values[field.name]}
                                     onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
                                 >
@@ -191,7 +190,7 @@ function RequestUpdateDialog({ group, mfsProviders }: { group: RequestableGroup;
                                             {provider.label}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                             ) : (
                                 <Input
                                     id={field.name}
@@ -226,7 +225,7 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">{employee.name}</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {employee.employee_code} · {employee.employment_type}
                         </p>
                     </div>
@@ -299,14 +298,14 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                             <Field label="Since" value={employee.placement.since} />
                         </dl>
                     ) : (
-                        <p className="text-sm text-muted-foreground">No current placement in this business.</p>
+                        <p className="text-muted-foreground text-sm">No current placement in this business.</p>
                     )}
                 </div>
 
                 {salary !== null && (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                         <h3 className="mb-1 text-sm font-medium">My salary</h3>
-                        <p className="mb-3 text-xs text-muted-foreground">
+                        <p className="text-muted-foreground mb-3 text-xs">
                             In effect since {salary.effective_from}. These are your contractual figures - what a month actually pays also depends on
                             attendance, leave and any adjustments, and appears on your payslip.
                         </p>
@@ -332,11 +331,11 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">My update requests</h3>
                     {change_requests.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No update requests yet.</p>
+                        <p className="text-muted-foreground text-sm">No update requests yet.</p>
                     ) : (
                         <table className="w-full min-w-[36rem] text-sm">
                             <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                     <th className="py-2">Requested change</th>
                                     <th className="py-2">Status</th>
                                     <th className="py-2">When</th>
@@ -350,9 +349,9 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                                             <Badge variant={requestStatusVariant[row.status] ?? 'secondary'} className="capitalize">
                                                 {row.status}
                                             </Badge>
-                                            {row.stage && <span className="ml-2 text-xs text-muted-foreground">at {row.stage}</span>}
+                                            {row.stage && <span className="text-muted-foreground ml-2 text-xs">at {row.stage}</span>}
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{row.requested_at}</td>
+                                        <td className="text-muted-foreground py-2">{row.requested_at}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -363,11 +362,11 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">My documents</h3>
                     {employee.documents.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No documents on file.</p>
+                        <p className="text-muted-foreground text-sm">No documents on file.</p>
                     ) : (
                         <table className="w-full min-w-[36rem] text-sm">
                             <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                     <th className="py-2">Type</th>
                                     <th className="py-2">File</th>
                                     <th className="py-2">Expiry</th>
@@ -381,9 +380,9 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                                             <a href={document.url} target="_blank" rel="noopener noreferrer" className="text-primary underline">
                                                 {document.original_name}
                                             </a>
-                                            <span className="ml-2 text-xs text-muted-foreground">{formatBytes(document.size)}</span>
+                                            <span className="text-muted-foreground ml-2 text-xs">{formatBytes(document.size)}</span>
                                         </td>
-                                        <td className="py-2 text-muted-foreground">
+                                        <td className="text-muted-foreground py-2">
                                             {document.expires_at ?? '-'}
                                             {document.is_expired && (
                                                 <Badge variant="destructive" className="ml-2">

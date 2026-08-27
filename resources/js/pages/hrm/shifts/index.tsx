@@ -1,5 +1,6 @@
-import ShiftScheduleTabs from '@/components/shift-schedule-tabs';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { SearchSelect } from '@/components/search-select';
+import ShiftScheduleTabs from '@/components/shift-schedule-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,8 +46,6 @@ interface IndexProps {
     shifts: Shift[];
     break_policies: { value: string; label: string }[];
 }
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Shifts', href: '/hrm/shifts' }];
 
@@ -115,7 +114,15 @@ function formFrom(shift: Shift): FormState {
     };
 }
 
-function ShiftDialog({ shift, trigger, breakPolicies }: { shift?: Shift; trigger: React.ReactNode; breakPolicies: { value: string; label: string }[] }) {
+function ShiftDialog({
+    shift,
+    trigger,
+    breakPolicies,
+}: {
+    shift?: Shift;
+    trigger: React.ReactNode;
+    breakPolicies: { value: string; label: string }[];
+}) {
     const [open, setOpen] = useState(false);
     const [form, setForm] = useState<FormState>(() => (shift ? formFrom(shift) : blankForm()));
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -167,7 +174,7 @@ function ShiftDialog({ shift, trigger, breakPolicies }: { shift?: Shift; trigger
                 {required ? '' : ' (optional)'}
             </Label>
             <Input id={field} type="number" min={0} value={form[field] as string} onChange={(e) => set(field, e.target.value)} />
-            {errors[field] && <p className="text-xs text-destructive">{errors[field]}</p>}
+            {errors[field] && <p className="text-destructive text-xs">{errors[field]}</p>}
         </div>
     );
 
@@ -177,24 +184,26 @@ function ShiftDialog({ shift, trigger, breakPolicies }: { shift?: Shift; trigger
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{shift ? 'Edit shift' : 'New shift'}</DialogTitle>
-                    <DialogDescription>Timing template used by employee schedules. The attendance engine derives late/early against it.</DialogDescription>
+                    <DialogDescription>
+                        Timing template used by employee schedules. The attendance engine derives late/early against it.
+                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-2">
                         <Label htmlFor="name">Name</Label>
                         <Input id="name" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. General, Morning, Night" />
-                        {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+                        {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="start_time">Start time</Label>
                             <Input id="start_time" type="time" value={form.start_time} onChange={(e) => set('start_time', e.target.value)} />
-                            {errors.start_time && <p className="text-xs text-destructive">{errors.start_time}</p>}
+                            {errors.start_time && <p className="text-destructive text-xs">{errors.start_time}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="end_time">End time</Label>
                             <Input id="end_time" type="time" value={form.end_time} onChange={(e) => set('end_time', e.target.value)} />
-                            {errors.end_time && <p className="text-xs text-destructive">{errors.end_time}</p>}
+                            {errors.end_time && <p className="text-destructive text-xs">{errors.end_time}</p>}
                         </div>
                         <NumberField field="grace_minutes" label="Late grace (min)" required />
                         <NumberField field="break_minutes" label="Break (min)" required />
@@ -203,26 +212,21 @@ function ShiftDialog({ shift, trigger, breakPolicies }: { shift?: Shift; trigger
                         <NumberField field="early_leave_threshold_minutes" label="Early-leave threshold (min)" />
                         <div className="grid gap-2 sm:col-span-2">
                             <Label htmlFor="break_policy">Break treatment</Label>
-                            <select
-                                id="break_policy"
-                                className={selectClass}
-                                value={form.break_policy}
-                                onChange={(e) => set('break_policy', e.target.value)}
-                            >
+                            <SearchSelect id="break_policy" value={form.break_policy} onChange={(e) => set('break_policy', e.target.value)}>
                                 {breakPolicies.map((policy) => (
                                     <option key={policy.value} value={policy.value}>
                                         {policy.label}
                                     </option>
                                 ))}
-                            </select>
-                            {errors.break_policy && <p className="text-xs text-destructive">{errors.break_policy}</p>}
+                            </SearchSelect>
+                            {errors.break_policy && <p className="text-destructive text-xs">{errors.break_policy}</p>}
                         </div>
                     </div>
                     {form.break_policy === 'meal_window' && (
-                        <div className="grid gap-4 rounded-lg border border-sidebar-border/70 p-3 dark:border-sidebar-border">
-                            <p className="text-xs text-muted-foreground">
-                                Lunch is read from punches inside this window. Missing or unreadable lunch punches fall back to the
-                                standard break and raise a review flag. Lunch never blocks payroll.
+                        <div className="border-sidebar-border/70 dark:border-sidebar-border grid gap-4 rounded-lg border p-3">
+                            <p className="text-muted-foreground text-xs">
+                                Lunch is read from punches inside this window. Missing or unreadable lunch punches fall back to the standard break and
+                                raise a review flag. Lunch never blocks payroll.
                             </p>
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="grid gap-2">
@@ -233,7 +237,7 @@ function ShiftDialog({ shift, trigger, breakPolicies }: { shift?: Shift; trigger
                                         value={form.meal_window_start}
                                         onChange={(e) => set('meal_window_start', e.target.value)}
                                     />
-                                    {errors.meal_window_start && <p className="text-xs text-destructive">{errors.meal_window_start}</p>}
+                                    {errors.meal_window_start && <p className="text-destructive text-xs">{errors.meal_window_start}</p>}
                                 </div>
                                 <div className="grid gap-2">
                                     <Label htmlFor="meal_window_end">Meal window end</Label>
@@ -243,7 +247,7 @@ function ShiftDialog({ shift, trigger, breakPolicies }: { shift?: Shift; trigger
                                         value={form.meal_window_end}
                                         onChange={(e) => set('meal_window_end', e.target.value)}
                                     />
-                                    {errors.meal_window_end && <p className="text-xs text-destructive">{errors.meal_window_end}</p>}
+                                    {errors.meal_window_end && <p className="text-destructive text-xs">{errors.meal_window_end}</p>}
                                 </div>
                                 <NumberField field="meal_standard_minutes" label="Standard meal (min)" required />
                                 <NumberField field="meal_allowance_minutes" label="Allowance before flag (min)" />
@@ -293,11 +297,11 @@ export default function ShiftsIndex({ shifts, break_policies }: IndexProps) {
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     {shifts.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No shifts yet. Create one to start scheduling.</p>
+                        <p className="text-muted-foreground text-sm">No shifts yet. Create one to start scheduling.</p>
                     ) : (
                         <table className="w-full min-w-[52rem] text-sm">
                             <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                     <th className="py-2">Name</th>
                                     <th className="py-2">Hours</th>
                                     <th className="py-2">Grace</th>
@@ -318,14 +322,16 @@ export default function ShiftsIndex({ shifts, break_policies }: IndexProps) {
                                                 </Badge>
                                             )}
                                         </td>
-                                        <td className="py-2 text-muted-foreground">
+                                        <td className="text-muted-foreground py-2">
                                             {shift.start_time} – {shift.end_time}
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{shift.grace_minutes}m</td>
-                                        <td className="py-2 text-muted-foreground">{shift.break_minutes}m</td>
-                                        <td className="py-2 text-muted-foreground">{shift.minimum_payable_hours ?? '-'}</td>
+                                        <td className="text-muted-foreground py-2">{shift.grace_minutes}m</td>
+                                        <td className="text-muted-foreground py-2">{shift.break_minutes}m</td>
+                                        <td className="text-muted-foreground py-2">{shift.minimum_payable_hours ?? '-'}</td>
                                         <td className="py-2">
-                                            <Badge variant={shift.is_active ? 'default' : 'secondary'}>{shift.is_active ? 'Active' : 'Inactive'}</Badge>
+                                            <Badge variant={shift.is_active ? 'default' : 'secondary'}>
+                                                {shift.is_active ? 'Active' : 'Inactive'}
+                                            </Badge>
                                         </td>
                                         <td className="py-2 text-right whitespace-nowrap">
                                             <ShiftDialog

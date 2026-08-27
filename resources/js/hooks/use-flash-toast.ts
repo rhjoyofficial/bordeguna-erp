@@ -1,7 +1,7 @@
+import { type SharedData } from '@/types';
 import { usePage } from '@inertiajs/react';
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { type SharedData } from '@/types';
 
 // Fire a toast whenever the server flashes success/error. Inertia keeps the
 // same flash object identity across a partial reload of unrelated props, so we

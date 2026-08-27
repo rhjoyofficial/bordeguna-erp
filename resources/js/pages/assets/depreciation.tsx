@@ -1,5 +1,6 @@
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -56,10 +57,9 @@ export default function Depreciation({
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">Depreciation</h1>
-                    <p className="max-w-3xl text-sm text-muted-foreground">
-                        One month's wear on everything the business owns, charged against that month's profit. Run it once the month
-                        has finished. Running the same month twice is harmless - each asset can only be charged once per month - but
-                        nothing here reverses a charge.
+                    <p className="text-muted-foreground max-w-3xl text-sm">
+                        One month's wear on everything the business owns, charged against that month's profit. Run it once the month has finished.
+                        Running the same month twice is harmless - each asset can only be charged once per month - but nothing here reverses a charge.
                     </p>
                 </div>
 
@@ -71,22 +71,25 @@ export default function Depreciation({
                   kind of thing nobody notices until the year end.
                 */}
                 {!hasLedgerMapping && (
-                    <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm">
+                    <div className="border-destructive/50 bg-destructive/10 rounded-md border p-3 text-sm">
                         <p className="font-medium">Depreciation is not mapped to the ledger.</p>
                         <p className="text-muted-foreground">
-                            Charges will be recorded against each asset, but nothing will reach the accounts and the profit and loss
-                            will not show the cost. Seed the asset account mappings first.
+                            Charges will be recorded against each asset, but nothing will reach the accounts and the profit and loss will not show the
+                            cost. Seed the asset account mappings first.
                         </p>
                     </div>
                 )}
 
                 {canRun && (
-                    <form onSubmit={submit} className="flex flex-wrap items-end gap-3 rounded-md border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                    <form
+                        onSubmit={submit}
+                        className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
+                    >
                         <div className="grid gap-2">
                             <Label htmlFor="month">Month</Label>
-                            <select
+                            <SearchSelect
                                 id="month"
-                                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                                 value={data.month}
                                 onChange={(e) => setData('month', e.target.value)}
                             >
@@ -95,19 +98,25 @@ export default function Depreciation({
                                         {name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.month} />
                         </div>
 
                         <div className="grid gap-2">
                             <Label htmlFor="year">Year</Label>
-                            <Input id="year" value={data.year} onChange={(e) => setData('year', e.target.value)} className="w-24 text-right" inputMode="numeric" />
+                            <Input
+                                id="year"
+                                value={data.year}
+                                onChange={(e) => setData('year', e.target.value)}
+                                className="w-24 text-right"
+                                inputMode="numeric"
+                            />
                             <InputError message={errors.year} />
                         </div>
 
                         <Button disabled={processing}>Run depreciation</Button>
 
-                        <span className="text-sm text-muted-foreground">
+                        <span className="text-muted-foreground text-sm">
                             {depreciableAssets} asset{depreciableAssets === 1 ? '' : 's'} still to write down.
                         </span>
 
@@ -141,7 +150,7 @@ export default function Depreciation({
                             ))}
                             {charges.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={4} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={4} className="text-muted-foreground p-6 text-center">
                                         Nothing has been depreciated yet.
                                     </td>
                                 </tr>

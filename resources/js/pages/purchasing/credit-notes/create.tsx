@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,8 +7,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface OpenBill {
     id: number;
@@ -73,19 +72,14 @@ export default function CreditNoteCreate({
                 <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-2">
                     <div className="grid gap-2">
                         <Label htmlFor="supplier_id">Supplier</Label>
-                        <select
-                            id="supplier_id"
-                            className={selectClass}
-                            value={data.supplier_id}
-                            onChange={(e) => changeSupplier(e.target.value)}
-                        >
+                        <SearchSelect id="supplier_id" value={data.supplier_id} onChange={(e) => changeSupplier(e.target.value)}>
                             <option value="">Choose a supplier</option>
                             {suppliers.map((s) => (
                                 <option key={s.id} value={s.id}>
                                     {s.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.supplier_id} />
                     </div>
                     <div className="grid gap-2">
@@ -93,9 +87,8 @@ export default function CreditNoteCreate({
                         {/* ⚠ Only returns with value left to credit are offered,
                             with the ceiling shown - the action refuses anything
                             beyond it. */}
-                        <select
+                        <SearchSelect
                             id="purchase_return_id"
-                            className={selectClass}
                             value={data.purchase_return_id}
                             onChange={(e) => setData('purchase_return_id', e.target.value)}
                         >
@@ -105,7 +98,7 @@ export default function CreditNoteCreate({
                                     Return #{r.id} of {r.returned_at ?? 'unknown date'} ({r.creditable} creditable)
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.purchase_return_id} />
                     </div>
                     <div className="grid gap-2">
@@ -120,19 +113,14 @@ export default function CreditNoteCreate({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="credit_date">Credit date</Label>
-                        <Input
-                            id="credit_date"
-                            type="date"
-                            value={data.credit_date}
-                            onChange={(e) => setData('credit_date', e.target.value)}
-                        />
+                        <Input id="credit_date" type="date" value={data.credit_date} onChange={(e) => setData('credit_date', e.target.value)} />
                         <InputError message={errors.credit_date} />
                     </div>
                     <div className="grid gap-2 md:col-span-2">
                         <Label htmlFor="note">Note</Label>
                         <textarea
                             id="note"
-                            className="min-h-16 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            className="border-input bg-background min-h-16 rounded-md border px-3 py-2 text-sm"
                             value={data.note}
                             onChange={(e) => setData('note', e.target.value)}
                         />
@@ -153,7 +141,7 @@ export default function CreditNoteCreate({
                             {bills.map((bill, index) => (
                                 <tr key={bill.id} className="border-t">
                                     <td className="p-3 font-medium">{bill.bill_number}</td>
-                                    <td className="p-3 text-muted-foreground">{bill.bill_date ?? '-'}</td>
+                                    <td className="text-muted-foreground p-3">{bill.bill_date ?? '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{bill.outstanding}</td>
                                     <td className="p-3 text-right">
                                         <Input
@@ -167,7 +155,7 @@ export default function CreditNoteCreate({
                             ))}
                             {bills.length === 0 && (
                                 <tr>
-                                    <td colSpan={4} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={4} className="text-muted-foreground p-6 text-center">
                                         {data.supplier_id
                                             ? 'This supplier has no open bills to credit against.'
                                             : 'Choose a supplier to see their open bills.'}

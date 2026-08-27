@@ -56,7 +56,7 @@ export default function UnitsIndex({ units }: { units: Unit[] }) {
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">Name</th>
                             <th className="py-2">Abbreviation</th>
                             <th className="py-2 text-right">Actions</th>
@@ -66,7 +66,7 @@ export default function UnitsIndex({ units }: { units: Unit[] }) {
                         {units.map((unit) => (
                             <tr key={unit.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2">{unit.name}</td>
-                                <td className="py-2 text-muted-foreground">{unit.abbreviation}</td>
+                                <td className="text-muted-foreground py-2">{unit.abbreviation}</td>
                                 <td className="py-2 text-right">
                                     <Button variant="ghost" size="sm" onClick={() => destroy(unit)}>
                                         Delete
@@ -76,7 +76,7 @@ export default function UnitsIndex({ units }: { units: Unit[] }) {
                         ))}
                         {units.length === 0 && (
                             <tr>
-                                <td colSpan={3} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={3} className="text-muted-foreground py-4 text-center">
                                     No units yet.
                                 </td>
                             </tr>

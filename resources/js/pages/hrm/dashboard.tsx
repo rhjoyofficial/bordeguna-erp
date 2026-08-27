@@ -1,21 +1,11 @@
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import {
-    AlertTriangle,
-    Banknote,
-    CalendarCheck,
-    CheckSquare,
-    Clock,
-    Coins,
-    LayoutGrid,
-    Palmtree,
-    UserX,
-    type LucideIcon,
-} from 'lucide-react';
+import { AlertTriangle, Banknote, CalendarCheck, CheckSquare, Clock, Coins, LayoutGrid, Palmtree, UserX, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 
 interface Option {
@@ -106,17 +96,10 @@ const SERIES = [
  */
 function AttendanceTrendChart({ trend }: { trend: Trend }) {
     if (trend.rows === 0) {
-        return (
-            <p className="text-muted-foreground text-sm">
-                No attendance has been processed in this period, so there is nothing to chart yet.
-            </p>
-        );
+        return <p className="text-muted-foreground text-sm">No attendance has been processed in this period, so there is nothing to chart yet.</p>;
     }
 
-    const max = Math.max(
-        1,
-        ...trend.points.map((p) => p.present + p.late + p.absent + p.leave + p.off),
-    );
+    const max = Math.max(1, ...trend.points.map((p) => p.present + p.late + p.absent + p.leave + p.off));
 
     return (
         <div>
@@ -133,16 +116,10 @@ function AttendanceTrendChart({ trend }: { trend: Trend }) {
                             >
                                 {SERIES.map((s) =>
                                     point[s.key] > 0 ? (
-                                        <div
-                                            key={s.key}
-                                            className={s.bar}
-                                            style={{ height: `${(point[s.key] / Math.max(total, 1)) * 100}%` }}
-                                        />
+                                        <div key={s.key} className={s.bar} style={{ height: `${(point[s.key] / Math.max(total, 1)) * 100}%` }} />
                                     ) : null,
                                 )}
-                                {point.off > 0 && (
-                                    <div className="bg-muted" style={{ height: `${(point.off / Math.max(total, 1)) * 100}%` }} />
-                                )}
+                                {point.off > 0 && <div className="bg-muted" style={{ height: `${(point.off / Math.max(total, 1)) * 100}%` }} />}
                             </div>
                             <span className="text-muted-foreground text-[9px] whitespace-nowrap">{point.label}</span>
                         </div>
@@ -162,9 +139,7 @@ function AttendanceTrendChart({ trend }: { trend: Trend }) {
             </div>
 
             {trend.truncated && (
-                <p className="text-muted-foreground mt-2 text-xs">
-                    Showing the last {trend.days} days of a longer range, so the bars stay readable.
-                </p>
+                <p className="text-muted-foreground mt-2 text-xs">Showing the last {trend.days} days of a longer range, so the bars stay readable.</p>
             )}
         </div>
     );
@@ -321,17 +296,12 @@ export default function HrmDashboard({ widgets, trend, attention, distribution, 
 
                     <div className="flex flex-col gap-1.5">
                         <Label htmlFor="range_to">To</Label>
-                        <Input
-                            id="range_to"
-                            type="date"
-                            value={values.range_to}
-                            onChange={(e) => apply({ ...values, range_to: e.target.value })}
-                        />
+                        <Input id="range_to" type="date" value={values.range_to} onChange={(e) => apply({ ...values, range_to: e.target.value })} />
                     </div>
 
                     <div className="flex flex-col gap-1.5">
                         <Label htmlFor="office_id">Office</Label>
-                        <select
+                        <SearchSelect
                             id="office_id"
                             className="border-input bg-background h-9 rounded-md border px-3 text-sm"
                             value={values.office_id ?? ''}
@@ -343,12 +313,12 @@ export default function HrmDashboard({ widgets, trend, attention, distribution, 
                                     {office.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
 
                     <div className="flex flex-col gap-1.5">
                         <Label htmlFor="department_id">Department</Label>
-                        <select
+                        <SearchSelect
                             id="department_id"
                             className="border-input bg-background h-9 rounded-md border px-3 text-sm disabled:opacity-70"
                             disabled={department_locked}
@@ -362,14 +332,12 @@ export default function HrmDashboard({ widgets, trend, attention, distribution, 
                                     {department.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         {department_locked && <p className="text-muted-foreground text-xs">Your dashboard covers your own department.</p>}
                     </div>
                 </div>
 
-                {widgets.length === 0 && (
-                    <p className="text-muted-foreground text-sm">There are no dashboard figures available to you.</p>
-                )}
+                {widgets.length === 0 && <p className="text-muted-foreground text-sm">There are no dashboard figures available to you.</p>}
 
                 {statRow.length > 0 && (
                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">

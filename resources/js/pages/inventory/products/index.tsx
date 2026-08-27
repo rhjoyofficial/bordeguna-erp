@@ -1,6 +1,7 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +11,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Product {
     id: number;
@@ -205,23 +204,18 @@ export default function ProductsIndex({
                                 type="button"
                                 onClick={proposeSku}
                                 disabled={proposing}
-                                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+                                className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2 disabled:opacity-50"
                             >
                                 {proposing ? 'working' : 'build it for me'}
                             </button>
                         </div>
                         <Input id="sku" value={data.sku} onChange={(e) => setData('sku', e.target.value)} className="font-mono" />
                         <InputError message={errors.sku} />
-                        {skuHint && <p className="text-xs text-muted-foreground">{skuHint}</p>}
+                        {skuHint && <p className="text-muted-foreground text-xs">{skuHint}</p>}
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="barcode">Barcode</Label>
-                        <Input
-                            id="barcode"
-                            value={data.barcode}
-                            onChange={(e) => setData('barcode', e.target.value)}
-                            placeholder="optional"
-                        />
+                        <Input id="barcode" value={data.barcode} onChange={(e) => setData('barcode', e.target.value)} placeholder="optional" />
                         <InputError message={errors.barcode} />
                     </div>
                     <div className="grid gap-2">
@@ -231,9 +225,9 @@ export default function ProductsIndex({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="type">Type</Label>
-                        <select
+                        <SearchSelect
                             id="type"
-                            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                            className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                             value={data.type}
                             onChange={(e) => setData('type', e.target.value)}
                         >
@@ -242,13 +236,13 @@ export default function ProductsIndex({
                                     {t.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="category_id">Category</Label>
-                        <select
+                        <SearchSelect
                             id="category_id"
-                            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                            className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                             value={data.category_id}
                             onChange={(e) => setData('category_id', e.target.value)}
                         >
@@ -258,13 +252,13 @@ export default function ProductsIndex({
                                     {c.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="brand_id">Brand</Label>
-                        <select
+                        <SearchSelect
                             id="brand_id"
-                            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                            className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                             value={data.brand_id}
                             onChange={(e) => setData('brand_id', e.target.value)}
                         >
@@ -276,19 +270,17 @@ export default function ProductsIndex({
                                     {b.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.brand_id} />
                         {data.type === 'finished_good' && data.brand_id === '' && (
-                            <p className="text-xs text-amber-600 dark:text-amber-500">
-                                Finished goods usually carry a brand.
-                            </p>
+                            <p className="text-xs text-amber-600 dark:text-amber-500">Finished goods usually carry a brand.</p>
                         )}
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="unit_of_measure_id">Unit</Label>
-                        <select
+                        <SearchSelect
                             id="unit_of_measure_id"
-                            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                            className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                             value={data.unit_of_measure_id}
                             onChange={(e) => setData('unit_of_measure_id', e.target.value)}
                         >
@@ -298,14 +290,14 @@ export default function ProductsIndex({
                                     {u.name} ({u.abbreviation})
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.unit_of_measure_id} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="tax_class_id">Tax class</Label>
-                        <select
+                        <SearchSelect
                             id="tax_class_id"
-                            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                            className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                             value={data.tax_class_id}
                             onChange={(e) => setData('tax_class_id', e.target.value)}
                         >
@@ -319,8 +311,8 @@ export default function ProductsIndex({
                                     {c.name}
                                 </option>
                             ))}
-                        </select>
-                        <p className="text-xs text-muted-foreground">VAT is off. This is recorded for later and changes nothing now.</p>
+                        </SearchSelect>
+                        <p className="text-muted-foreground text-xs">VAT is off. This is recorded for later and changes nothing now.</p>
                         <InputError message={errors.tax_class_id} />
                     </div>
                     <div className="grid gap-2">
@@ -345,25 +337,18 @@ export default function ProductsIndex({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="content_unit_id">Content unit</Label>
-                        <select
-                            id="content_unit_id"
-                            className={selectClass}
-                            value={data.content_unit_id}
-                            onChange={(e) => setData('content_unit_id', e.target.value)}
-                        >
+                        <SearchSelect id="content_unit_id" value={data.content_unit_id} onChange={(e) => setData('content_unit_id', e.target.value)}>
                             <option value="">Not declared</option>
                             {units.map((u) => (
                                 <option key={u.id} value={u.id}>
                                     {u.name} ({u.abbreviation})
                                 </option>
                             ))}
-                        </select>
-                        <p className="text-xs text-muted-foreground">
-                            Only powers the production yield check. Nothing converts with it.
-                        </p>
+                        </SearchSelect>
+                        <p className="text-muted-foreground text-xs">Only powers the production yield check. Nothing converts with it.</p>
                         <InputError message={errors.content_unit_id} />
                     </div>
-                    <div className="grid gap-2 col-span-2 sm:col-span-3 lg:col-span-6">
+                    <div className="col-span-2 grid gap-2 sm:col-span-3 lg:col-span-6">
                         <Label htmlFor="description">Description</Label>
                         <Input
                             id="description"
@@ -382,7 +367,7 @@ export default function ProductsIndex({
                                 <Button type="button" variant="ghost" onClick={cancel}>
                                     Cancel
                                 </Button>
-                                <span className="text-sm text-muted-foreground">Editing {editing.name}</span>
+                                <span className="text-muted-foreground text-sm">Editing {editing.name}</span>
                             </>
                         )}
                     </div>
@@ -398,37 +383,27 @@ export default function ProductsIndex({
                         />
                     </FilterField>
                     <FilterField label="Type" htmlFor="filter-type">
-                        <select id="filter-type" className={selectClass} value={filters.type} onChange={(e) => setFilter('type', e.target.value)}>
+                        <SearchSelect id="filter-type" value={filters.type} onChange={(e) => setFilter('type', e.target.value)}>
                             <option value="">All types</option>
                             {PRODUCT_TYPES.map((t) => (
                                 <option key={t.value} value={t.value}>
                                     {t.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </FilterField>
                     <FilterField label="Category" htmlFor="filter-category">
-                        <select
-                            id="filter-category"
-                            className={selectClass}
-                            value={filters.category_id}
-                            onChange={(e) => setFilter('category_id', e.target.value)}
-                        >
+                        <SearchSelect id="filter-category" value={filters.category_id} onChange={(e) => setFilter('category_id', e.target.value)}>
                             <option value="">All categories</option>
                             {categories.map((c) => (
                                 <option key={c.id} value={c.id}>
                                     {c.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </FilterField>
                     <FilterField label="Brand" htmlFor="filter-brand">
-                        <select
-                            id="filter-brand"
-                            className={selectClass}
-                            value={filters.brand_id}
-                            onChange={(e) => setFilter('brand_id', e.target.value)}
-                        >
+                        <SearchSelect id="filter-brand" value={filters.brand_id} onChange={(e) => setFilter('brand_id', e.target.value)}>
                             <option value="">All brands</option>
                             {brands.map((b) => (
                                 <option key={b.id} value={b.id}>
@@ -439,13 +414,13 @@ export default function ProductsIndex({
                                 goods still have no brand" is the question the
                                 warning in D-3 leaves open. */}
                             <option value="none">No brand</option>
-                        </select>
+                        </SearchSelect>
                     </FilterField>
                 </FilterBar>
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">SKU</th>
                             <th className="py-2">Barcode</th>
                             <th className="py-2">Name</th>
@@ -461,7 +436,7 @@ export default function ProductsIndex({
                         {products.data.map((product) => (
                             <tr key={product.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2 font-mono text-xs">{product.sku}</td>
-                                <td className="py-2 font-mono text-xs text-muted-foreground">{product.barcode ?? '-'}</td>
+                                <td className="text-muted-foreground py-2 font-mono text-xs">{product.barcode ?? '-'}</td>
                                 <td className="py-2">
                                     {product.name}
                                     {!product.is_active && (
@@ -470,12 +445,12 @@ export default function ProductsIndex({
                                         </Badge>
                                     )}
                                 </td>
-                                <td className="py-2 text-muted-foreground">{product.type.replace('_', ' ')}</td>
-                                <td className="py-2 text-muted-foreground">{product.category ?? '-'}</td>
-                                <td className="py-2 text-muted-foreground">{product.brand ?? '-'}</td>
+                                <td className="text-muted-foreground py-2">{product.type.replace('_', ' ')}</td>
+                                <td className="text-muted-foreground py-2">{product.category ?? '-'}</td>
+                                <td className="text-muted-foreground py-2">{product.brand ?? '-'}</td>
                                 <td className="py-2">
                                     {product.current_quantity !== null ? (
-                                        <span className={product.is_below_threshold ? 'font-medium text-destructive' : ''}>
+                                        <span className={product.is_below_threshold ? 'text-destructive font-medium' : ''}>
                                             {product.current_quantity} {product.unit}
                                             {product.is_below_threshold && ' (low)'}
                                         </span>
@@ -483,7 +458,7 @@ export default function ProductsIndex({
                                         '-'
                                     )}
                                 </td>
-                                <td className="py-2 text-muted-foreground">{product.average_unit_cost ?? '-'}</td>
+                                <td className="text-muted-foreground py-2">{product.average_unit_cost ?? '-'}</td>
                                 <td className="py-2 text-right">
                                     <Button variant="ghost" size="sm" onClick={() => startEdit(product)}>
                                         Edit
@@ -498,7 +473,7 @@ export default function ProductsIndex({
                         ))}
                         {products.data.length === 0 && (
                             <tr>
-                                <td colSpan={8} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={8} className="text-muted-foreground py-4 text-center">
                                     {hasActiveFilters ? 'No products match these filters.' : 'No products yet.'}
                                 </td>
                             </tr>

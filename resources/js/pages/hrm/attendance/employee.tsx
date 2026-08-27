@@ -1,6 +1,6 @@
+import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import Heading from '@/components/heading';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -58,7 +58,7 @@ function minutesLabel(minutes: number): string {
 
 function Tile({ label, value, warn, bad }: { label: string; value: string | number; warn?: boolean; bad?: boolean }) {
     return (
-        <div className="rounded-lg border border-border p-3">
+        <div className="border-border rounded-lg border p-3">
             <p className="text-muted-foreground text-xs">{label}</p>
             <p
                 className={
@@ -124,7 +124,7 @@ export default function EmployeeAttendance() {
 
                 {/* Default is the current payroll month up to today - "the 24th
                     to today" in Joy's words - and any range can be asked for. */}
-                <div className="mb-6 flex flex-wrap items-end gap-3 rounded-lg border border-border p-4">
+                <div className="border-border mb-6 flex flex-wrap items-end gap-3 rounded-lg border p-4">
                     <div className="grid gap-1.5">
                         <Label htmlFor="from">From</Label>
                         <Input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -147,12 +147,11 @@ export default function EmployeeAttendance() {
 
                 {summary.holds_payroll > 0 && (
                     <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                        {summary.holds_payroll} day{summary.holds_payroll === 1 ? '' : 's'} in this period hold payroll
-                        and need a correction.
+                        {summary.holds_payroll} day{summary.holds_payroll === 1 ? '' : 's'} in this period hold payroll and need a correction.
                     </div>
                 )}
 
-                <div className="overflow-x-auto rounded-lg border border-border">
+                <div className="border-border overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
                         <thead className="bg-muted/50 text-left">
                             <tr>

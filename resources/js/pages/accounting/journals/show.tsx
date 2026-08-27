@@ -52,7 +52,7 @@ export default function ShowJournal({ journal }: { journal: Journal }) {
                             {journal.reversed && <Badge variant="destructive">Reversed</Badge>}
                         </div>
                         {journal.memo && <p className="text-sm">{journal.memo}</p>}
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             Dated {journal.date}
                             {journal.posted_by && ` · posted by ${journal.posted_by}`}
                             {journal.posted_at && ` on ${journal.posted_at}`}
@@ -71,8 +71,8 @@ export default function ShowJournal({ journal }: { journal: Journal }) {
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[36rem] text-sm">
                         <thead>
-                            <tr className="border-b border-sidebar-border/70 text-left text-muted-foreground dark:border-sidebar-border">
-                                <th className="py-2 w-10">#</th>
+                            <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
+                                <th className="w-10 py-2">#</th>
                                 <th className="py-2">Account</th>
                                 <th className="py-2">Note</th>
                                 <th className="py-2 text-right">Debit</th>
@@ -81,10 +81,10 @@ export default function ShowJournal({ journal }: { journal: Journal }) {
                         </thead>
                         <tbody>
                             {journal.lines.map((line) => (
-                                <tr key={line.line_no} className="border-b border-sidebar-border/70 dark:border-sidebar-border">
-                                    <td className="py-2 tabular-nums text-muted-foreground">{line.line_no}</td>
+                                <tr key={line.line_no} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                    <td className="text-muted-foreground py-2 tabular-nums">{line.line_no}</td>
                                     <td className="py-2">{line.account}</td>
-                                    <td className="py-2 text-muted-foreground">{line.memo}</td>
+                                    <td className="text-muted-foreground py-2">{line.memo}</td>
                                     <td className="py-2 text-right tabular-nums">{line.debit}</td>
                                     <td className="py-2 text-right tabular-nums">{line.credit}</td>
                                 </tr>
@@ -102,9 +102,9 @@ export default function ShowJournal({ journal }: { journal: Journal }) {
                     </table>
                 </div>
 
-                <p className="max-w-2xl text-sm text-muted-foreground">
-                    Posted journals cannot be edited or deleted. To correct one, reverse it and post a new entry: both stay on the
-                    record, which is what makes the books explainable later.
+                <p className="text-muted-foreground max-w-2xl text-sm">
+                    Posted journals cannot be edited or deleted. To correct one, reverse it and post a new entry: both stay on the record, which is
+                    what makes the books explainable later.
                 </p>
             </div>
         </AppLayout>

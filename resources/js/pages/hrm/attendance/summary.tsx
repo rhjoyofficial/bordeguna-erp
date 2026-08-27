@@ -57,8 +57,8 @@ function hoursAndMinutes(minutes: number): string {
 
 function Tile({ label, value, tone }: { label: string; value: string | number; tone?: 'warn' | 'bad' }) {
     return (
-        <div className="rounded-lg border border-border p-3">
-            <p className="text-xs text-muted-foreground">{label}</p>
+        <div className="border-border rounded-lg border p-3">
+            <p className="text-muted-foreground text-xs">{label}</p>
             <p
                 className={
                     tone === 'bad'
@@ -95,12 +95,9 @@ export default function AttendanceSummary() {
         <AppLayout>
             <Head title="Attendance summary" />
             <div className="px-4 py-6">
-                <Heading
-                    title="Attendance summary"
-                    description="How many days each person was present, late, absent or on leave, over any period."
-                />
+                <Heading title="Attendance summary" description="How many days each person was present, late, absent or on leave, over any period." />
 
-                <div className="mb-6 flex flex-wrap items-end gap-3 rounded-lg border border-border p-4">
+                <div className="border-border mb-6 flex flex-wrap items-end gap-3 rounded-lg border p-4">
                     <div className="grid gap-1.5">
                         <Label htmlFor="from">From</Label>
                         <Input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -125,24 +122,19 @@ export default function AttendanceSummary() {
                     <Tile label="Days attended" value={totals.attended} />
                     <Tile label="Late days" value={totals.late} tone={totals.late > 0 ? 'warn' : undefined} />
                     <Tile label="Absent days" value={totals.absent} tone={totals.absent > 0 ? 'bad' : undefined} />
-                    <Tile
-                        label="Missing punches"
-                        value={totals.missing_punch}
-                        tone={totals.missing_punch > 0 ? 'warn' : undefined}
-                    />
+                    <Tile label="Missing punches" value={totals.missing_punch} tone={totals.missing_punch > 0 ? 'warn' : undefined} />
                     <Tile label="Hours worked" value={totals.worked_hours} />
                 </div>
 
                 {totals.holds_payroll > 0 && (
                     <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
                         <strong>{totals.holds_payroll}</strong> day
-                        {totals.holds_payroll === 1 ? '' : 's'} still hold payroll and need a correction before a payroll
-                        run can include them.
+                        {totals.holds_payroll === 1 ? '' : 's'} still hold payroll and need a correction before a payroll run can include them.
                         {totals.provisional > 0 && <> {totals.provisional} day(s) are still provisional.</>}
                     </div>
                 )}
 
-                <div className="overflow-x-auto rounded-lg border border-border">
+                <div className="border-border overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
                         <thead className="bg-muted/50 text-left">
                             <tr>
@@ -163,13 +155,13 @@ export default function AttendanceSummary() {
                         <tbody>
                             {rows.length === 0 && (
                                 <tr>
-                                    <td colSpan={12} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={12} className="text-muted-foreground p-6 text-center">
                                         No attendance has been processed for this period yet.
                                     </td>
                                 </tr>
                             )}
                             {rows.map((r) => (
-                                <tr key={r.employee_id} className="border-t border-border">
+                                <tr key={r.employee_id} className="border-border border-t">
                                     <td className="p-3">
                                         {/* The row is the question; the person's own
                                             page is the answer in full. */}
@@ -179,9 +171,7 @@ export default function AttendanceSummary() {
                                         >
                                             {r.employee_name}
                                         </Link>
-                                        {r.employee_code && (
-                                            <div className="text-xs text-muted-foreground">{r.employee_code}</div>
-                                        )}
+                                        {r.employee_code && <div className="text-muted-foreground text-xs">{r.employee_code}</div>}
                                     </td>
                                     <td className="p-3 text-right">{r.days_recorded}</td>
                                     <td className="p-3 text-right font-medium">{r.attended}</td>
@@ -190,7 +180,7 @@ export default function AttendanceSummary() {
                                         className={
                                             r.late > 0
                                                 ? 'p-3 text-right font-medium text-amber-600 dark:text-amber-400'
-                                                : 'p-3 text-right text-muted-foreground'
+                                                : 'text-muted-foreground p-3 text-right'
                                         }
                                     >
                                         {r.late}
@@ -199,7 +189,7 @@ export default function AttendanceSummary() {
                                         className={
                                             r.absent > 0
                                                 ? 'p-3 text-right font-medium text-red-600 dark:text-red-400'
-                                                : 'p-3 text-right text-muted-foreground'
+                                                : 'text-muted-foreground p-3 text-right'
                                         }
                                     >
                                         {r.absent}
@@ -208,20 +198,20 @@ export default function AttendanceSummary() {
                                         className={
                                             r.missing_punch > 0
                                                 ? 'p-3 text-right font-medium text-amber-600 dark:text-amber-400'
-                                                : 'p-3 text-right text-muted-foreground'
+                                                : 'text-muted-foreground p-3 text-right'
                                         }
                                     >
                                         {r.missing_punch}
                                     </td>
                                     <td className="p-3 text-right">{r.on_leave}</td>
-                                    <td className="p-3 text-right text-muted-foreground">{r.weekly_off}</td>
+                                    <td className="text-muted-foreground p-3 text-right">{r.weekly_off}</td>
                                     <td className="p-3 text-right">{hoursAndMinutes(r.late_minutes)}</td>
                                     <td className="p-3 text-right">{r.worked_hours}</td>
                                     <td
                                         className={
                                             r.holds_payroll > 0
                                                 ? 'p-3 text-right font-medium text-red-600 dark:text-red-400'
-                                                : 'p-3 text-right text-muted-foreground'
+                                                : 'text-muted-foreground p-3 text-right'
                                         }
                                     >
                                         {r.holds_payroll}
@@ -232,9 +222,9 @@ export default function AttendanceSummary() {
                     </table>
                 </div>
 
-                <p className="mt-3 text-xs text-muted-foreground">
-                    Field duty and days with no punches are counted separately, so a person who was working away from
-                    the office is not shown as absent.
+                <p className="text-muted-foreground mt-3 text-xs">
+                    Field duty and days with no punches are counted separately, so a person who was working away from the office is not shown as
+                    absent.
                 </p>
             </div>
         </AppLayout>

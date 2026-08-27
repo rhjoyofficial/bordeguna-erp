@@ -46,21 +46,19 @@ const breadcrumbs: BreadcrumbItem[] = [
 function SectionBlock({ section }: { section: Section }) {
     return (
         <>
-            <tr className="border-b border-sidebar-border/70 dark:border-sidebar-border">
-                <td className="py-2 font-mono text-xs text-muted-foreground">{section.code}</td>
+            <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                <td className="text-muted-foreground py-2 font-mono text-xs">{section.code}</td>
                 <td className="py-2 font-medium">{section.name}</td>
-                <td className="py-2 text-right tabular-nums font-medium">{section.total}</td>
+                <td className="py-2 text-right font-medium tabular-nums">{section.total}</td>
             </tr>
             {section.lines.map((line) => (
-                <tr key={line.code} className="border-b border-sidebar-border/40 dark:border-sidebar-border/40">
-                    <td className="py-1.5 font-mono text-xs text-muted-foreground">{line.code}</td>
-                    <td className="py-1.5 pl-6 text-muted-foreground">
+                <tr key={line.code} className="border-sidebar-border/40 dark:border-sidebar-border/40 border-b">
+                    <td className="text-muted-foreground py-1.5 font-mono text-xs">{line.code}</td>
+                    <td className="text-muted-foreground py-1.5 pl-6">
                         {line.name}
                         {line.is_contra && <span className="ml-2 text-xs">(deduction)</span>}
                     </td>
-                    <td className="py-1.5 text-right tabular-nums text-muted-foreground">
-                        {line.is_contra ? `(${line.amount})` : line.amount}
-                    </td>
+                    <td className="text-muted-foreground py-1.5 text-right tabular-nums">{line.is_contra ? `(${line.amount})` : line.amount}</td>
                 </tr>
             ))}
         </>
@@ -103,7 +101,7 @@ export default function BalanceSheetIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">Balance sheet</h1>
-                    <p className="max-w-2xl text-sm text-muted-foreground">
+                    <p className="text-muted-foreground max-w-2xl text-sm">
                         What the business owns and owes on one day. Everything recorded up to and including the date shown.
                         {fiscal_year && <> Fiscal year {fiscal_year}.</>}
                     </p>
@@ -123,7 +121,7 @@ export default function BalanceSheetIndex({
                         className={`rounded-md border px-4 py-3 text-sm ${
                             totals.balances
                                 ? 'border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border'
-                                : 'border-destructive/40 bg-destructive/5 font-medium text-destructive'
+                                : 'border-destructive/40 bg-destructive/5 text-destructive font-medium'
                         }`}
                     >
                         {totals.balances
@@ -136,14 +134,14 @@ export default function BalanceSheetIndex({
                     <table className="w-full min-w-[40rem] text-sm">
                         <tbody>
                             <tr>
-                                <td colSpan={3} className="pt-2 pb-1 text-xs uppercase tracking-wide text-muted-foreground">
+                                <td colSpan={3} className="text-muted-foreground pt-2 pb-1 text-xs tracking-wide uppercase">
                                     Assets
                                 </td>
                             </tr>
                             {assets.map((section) => (
                                 <SectionBlock key={section.code} section={section} />
                             ))}
-                            <tr className="border-b-2 border-sidebar-border text-base font-semibold">
+                            <tr className="border-sidebar-border border-b-2 text-base font-semibold">
                                 <td className="py-2.5" colSpan={2}>
                                     Total assets
                                 </td>
@@ -151,14 +149,14 @@ export default function BalanceSheetIndex({
                             </tr>
 
                             <tr>
-                                <td colSpan={3} className="pt-5 pb-1 text-xs uppercase tracking-wide text-muted-foreground">
+                                <td colSpan={3} className="text-muted-foreground pt-5 pb-1 text-xs tracking-wide uppercase">
                                     Liabilities
                                 </td>
                             </tr>
                             {liabilities.map((section) => (
                                 <SectionBlock key={section.code} section={section} />
                             ))}
-                            <tr className="border-b border-sidebar-border/70 font-medium dark:border-sidebar-border">
+                            <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b font-medium">
                                 <td className="py-2" colSpan={2}>
                                     Total liabilities
                                 </td>
@@ -166,7 +164,7 @@ export default function BalanceSheetIndex({
                             </tr>
 
                             <tr>
-                                <td colSpan={3} className="pt-5 pb-1 text-xs uppercase tracking-wide text-muted-foreground">
+                                <td colSpan={3} className="text-muted-foreground pt-5 pb-1 text-xs tracking-wide uppercase">
                                     Equity
                                 </td>
                             </tr>
@@ -179,31 +177,25 @@ export default function BalanceSheetIndex({
                                 still sits in those accounts and has to be shown here. */}
                             {result && (
                                 <>
-                                    <tr className="border-b border-sidebar-border/40 dark:border-sidebar-border/40">
+                                    <tr className="border-sidebar-border/40 dark:border-sidebar-border/40 border-b">
                                         <td className="py-1.5" />
-                                        <td className="py-1.5 text-muted-foreground">
+                                        <td className="text-muted-foreground py-1.5">
                                             {result.brought_forward_is_loss ? 'Loss brought forward' : 'Result brought forward'}
-                                            {fiscal_year_start && (
-                                                <span className="ml-2 text-xs">(before {fiscal_year_start})</span>
-                                            )}
+                                            {fiscal_year_start && <span className="ml-2 text-xs">(before {fiscal_year_start})</span>}
                                         </td>
-                                        <td className="py-1.5 text-right tabular-nums text-muted-foreground">
-                                            {result.brought_forward}
-                                        </td>
+                                        <td className="text-muted-foreground py-1.5 text-right tabular-nums">{result.brought_forward}</td>
                                     </tr>
-                                    <tr className="border-b border-sidebar-border/40 dark:border-sidebar-border/40">
+                                    <tr className="border-sidebar-border/40 dark:border-sidebar-border/40 border-b">
                                         <td className="py-1.5" />
-                                        <td className="py-1.5 text-muted-foreground">
+                                        <td className="text-muted-foreground py-1.5">
                                             {result.for_the_year_is_loss ? 'Loss for the year to date' : 'Result for the year to date'}
                                         </td>
-                                        <td className="py-1.5 text-right tabular-nums text-muted-foreground">
-                                            {result.for_the_year}
-                                        </td>
+                                        <td className="text-muted-foreground py-1.5 text-right tabular-nums">{result.for_the_year}</td>
                                     </tr>
                                 </>
                             )}
 
-                            <tr className="border-b border-sidebar-border/70 font-medium dark:border-sidebar-border">
+                            <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b font-medium">
                                 <td className="py-2" colSpan={2}>
                                     Total equity
                                 </td>
@@ -219,10 +211,8 @@ export default function BalanceSheetIndex({
 
                             {empty && (
                                 <tr>
-                                    <td colSpan={3} className="py-6 text-center text-muted-foreground">
-                                        {ledger_empty
-                                            ? 'Nothing has been posted to the ledger yet.'
-                                            : 'No account held a balance on this date.'}
+                                    <td colSpan={3} className="text-muted-foreground py-6 text-center">
+                                        {ledger_empty ? 'Nothing has been posted to the ledger yet.' : 'No account held a balance on this date.'}
                                     </td>
                                 </tr>
                             )}
@@ -230,10 +220,9 @@ export default function BalanceSheetIndex({
                     </table>
                 </div>
 
-                <p className="max-w-2xl text-sm text-muted-foreground">
-                    No year end has ever been closed on this ledger, so profit is not folded into retained earnings. It is shown
-                    inside equity as the result brought forward and the result for the year, which is what makes the two sides
-                    agree.
+                <p className="text-muted-foreground max-w-2xl text-sm">
+                    No year end has ever been closed on this ledger, so profit is not folded into retained earnings. It is shown inside equity as the
+                    result brought forward and the result for the year, which is what makes the two sides agree.
                 </p>
             </div>
         </AppLayout>

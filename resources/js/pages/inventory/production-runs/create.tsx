@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -181,18 +182,13 @@ export default function ProductionRunCreate({
                     <div className="grid gap-4 md:grid-cols-3">
                         <div className="grid gap-2">
                             <Label htmlFor="warehouse_id">Warehouse</Label>
-                            <select
-                                id="warehouse_id"
-                                className={selectClass}
-                                value={data.warehouse_id}
-                                onChange={(e) => setData('warehouse_id', e.target.value)}
-                            >
+                            <SearchSelect id="warehouse_id" value={data.warehouse_id} onChange={(e) => setData('warehouse_id', e.target.value)}>
                                 {warehouses.map((w) => (
                                     <option key={w.id} value={w.id}>
                                         {w.name} ({w.code})
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <p className="text-muted-foreground text-xs">
                                 Inputs are consumed here and the output lands here. Move packs afterwards with a transfer.
                             </p>
@@ -253,7 +249,7 @@ export default function ProductionRunCreate({
                                     return (
                                         <tr key={index} className="border-t align-top">
                                             <td className="p-3">
-                                                <select
+                                                <SearchSelect
                                                     className={`${selectClass} w-full`}
                                                     value={line.product_id}
                                                     onChange={(e) => setLine(index, { product_id: e.target.value })}
@@ -264,7 +260,7 @@ export default function ProductionRunCreate({
                                                             {p.name} ({p.sku})
                                                         </option>
                                                     ))}
-                                                </select>
+                                                </SearchSelect>
                                                 <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
                                             </td>
                                             <td className="text-muted-foreground p-3 tabular-nums">
@@ -315,9 +311,8 @@ export default function ProductionRunCreate({
                     <div className="grid gap-4 md:grid-cols-5">
                         <div className="grid gap-2 md:col-span-2">
                             <Label htmlFor="output_product_id">Product</Label>
-                            <select
+                            <SearchSelect
                                 id="output_product_id"
-                                className={selectClass}
                                 value={data.output_product_id}
                                 onChange={(e) => setData('output_product_id', e.target.value)}
                             >
@@ -327,7 +322,7 @@ export default function ProductionRunCreate({
                                         {p.name} ({p.sku})
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.output_product_id} />
                         </div>
                         <div className="grid gap-2">

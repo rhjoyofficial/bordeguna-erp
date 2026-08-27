@@ -1,6 +1,6 @@
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -48,11 +48,7 @@ export default function YearEnd({ year, plan, totals, runs }: Props) {
 
     const run = (commit: boolean) => {
         setBusy(true);
-        router.post(
-            route('hrm.leave.year-end.run'),
-            { year, commit },
-            { preserveScroll: true, onFinish: () => setBusy(false) },
-        );
+        router.post(route('hrm.leave.year-end.run'), { year, commit }, { preserveScroll: true, onFinish: () => setBusy(false) });
     };
 
     const lapsing = plan.filter((row) => row.lapse > 0);
@@ -64,12 +60,12 @@ export default function YearEnd({ year, plan, totals, runs }: Props) {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">Leave year end - {year}</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             This is a projection. Nothing changes until you commit, and committing posts exactly what is shown here.
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
-                        <Label htmlFor="year" className="text-sm text-muted-foreground">
+                        <Label htmlFor="year" className="text-muted-foreground text-sm">
                             Closing year
                         </Label>
                         <Input
@@ -105,21 +101,21 @@ export default function YearEnd({ year, plan, totals, runs }: Props) {
 
                 <div className="grid gap-4 sm:grid-cols-3">
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                        <div className="text-xs text-muted-foreground">Employees affected</div>
+                        <div className="text-muted-foreground text-xs">Employees affected</div>
                         <div className="text-2xl font-medium">{totals.employees}</div>
                     </div>
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                        <div className="text-xs text-muted-foreground">Days carrying forward</div>
+                        <div className="text-muted-foreground text-xs">Days carrying forward</div>
                         <div className="text-2xl font-medium">{totals.carried}</div>
                     </div>
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                        <div className="text-xs text-muted-foreground">Days lapsing</div>
+                        <div className="text-muted-foreground text-xs">Days lapsing</div>
                         <div className={`text-2xl font-medium ${totals.lapsed > 0 ? 'text-destructive' : ''}`}>{totals.lapsed}</div>
                     </div>
                 </div>
 
                 {lapsing.length > 0 && (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                         {lapsing.length} employee-balance{lapsing.length === 1 ? '' : 's'} would lose days. Tell them before you commit - they may
                         still have time to take the leave.
                     </p>
@@ -128,13 +124,13 @@ export default function YearEnd({ year, plan, totals, runs }: Props) {
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Projection</h3>
                     {plan.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             Nothing to carry forward for {year}. Only leave types that may carry forward are included.
                         </p>
                     ) : (
                         <table className="w-full min-w-[60rem] text-sm">
                             <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                     <th className="py-2">Employee</th>
                                     <th className="py-2">Leave type</th>
                                     <th className="py-2">Closing</th>
@@ -152,16 +148,20 @@ export default function YearEnd({ year, plan, totals, runs }: Props) {
                                     >
                                         <td className="py-2">
                                             {row.employee}
-                                            <span className="ml-2 text-xs text-muted-foreground">{row.employee_code}</span>
+                                            <span className="text-muted-foreground ml-2 text-xs">{row.employee_code}</span>
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{row.leave_type}</td>
+                                        <td className="text-muted-foreground py-2">{row.leave_type}</td>
                                         <td className="py-2">{row.closing_balance}</td>
-                                        <td className="py-2 text-muted-foreground">{row.cap}</td>
+                                        <td className="text-muted-foreground py-2">{row.cap}</td>
                                         <td className="py-2">{row.carry_forward}</td>
                                         <td className="py-2">
-                                            {row.lapse > 0 ? <Badge variant="outline">{row.lapse}</Badge> : <span className="text-muted-foreground">0</span>}
+                                            {row.lapse > 0 ? (
+                                                <Badge variant="outline">{row.lapse}</Badge>
+                                            ) : (
+                                                <span className="text-muted-foreground">0</span>
+                                            )}
                                         </td>
-                                        <td className="py-2 text-xs text-muted-foreground">{row.explanation}</td>
+                                        <td className="text-muted-foreground py-2 text-xs">{row.explanation}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -179,10 +179,10 @@ export default function YearEnd({ year, plan, totals, runs }: Props) {
                                         <td className="py-2">
                                             <Badge variant={r.is_dry_run ? 'secondary' : 'default'}>{r.is_dry_run ? 'Preview' : 'Committed'}</Badge>
                                         </td>
-                                        <td className="py-2 text-muted-foreground">
+                                        <td className="text-muted-foreground py-2">
                                             {r.employees_affected} employee(s) · {r.total_carried} carried · {r.total_lapsed} lapsed
                                         </td>
-                                        <td className="py-2 text-xs text-muted-foreground">
+                                        <td className="text-muted-foreground py-2 text-xs">
                                             {r.run_at}
                                             {r.run_by && ` by ${r.run_by}`}
                                         </td>

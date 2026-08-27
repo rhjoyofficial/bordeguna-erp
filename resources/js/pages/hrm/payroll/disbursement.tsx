@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -91,7 +92,6 @@ interface Props {
 const cardClass = 'border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4';
 const rowClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b';
 const headClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground';
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 const money = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const today = () => new Date().toISOString().slice(0, 10);
@@ -135,14 +135,14 @@ function PayDialog({ payslip, methods }: { payslip: PayslipRow; methods: Props['
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="pay_method">Method</Label>
-                            <select id="pay_method" className={selectClass} value={method} onChange={(e) => setMethod(e.target.value)}>
+                            <SearchSelect id="pay_method" value={method} onChange={(e) => setMethod(e.target.value)}>
                                 <option value="">{payslip.method} (as recorded)</option>
                                 {methods.map((m) => (
                                     <option key={m.value} value={m.value}>
                                         {m.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="pay_date">Paid on</Label>
@@ -268,13 +268,13 @@ function BatchCard({ batch, formats }: { batch: BatchRow; formats: Props['format
                     )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <select className={selectClass} value={format} onChange={(e) => setFormat(e.target.value)}>
+                    <SearchSelect value={format} onChange={(e) => setFormat(e.target.value)}>
                         {formats.map((f) => (
                             <option key={f.key} value={f.key}>
                                 {f.name}
                             </option>
                         ))}
-                    </select>
+                    </SearchSelect>
                     <a href={route('hrm.batches.register', { batch: batch.id, format })}>
                         <Button size="sm" variant="outline">
                             Download register

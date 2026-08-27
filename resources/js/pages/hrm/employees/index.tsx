@@ -74,7 +74,7 @@ export default function EmployeesIndex({ employees }: { employees: EmployeeRow[]
             <Head title="Employees" />
             <div className="flex flex-col gap-4 p-4">
                 <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">{employees.length} in this business</p>
+                    <p className="text-muted-foreground text-sm">{employees.length} in this business</p>
                     <div className="flex items-center gap-2">
                         <div className="border-border flex rounded-md border p-0.5">
                             <button
@@ -110,7 +110,7 @@ export default function EmployeesIndex({ employees }: { employees: EmployeeRow[]
 
                 {view === 'cards' ? (
                     employees.length === 0 ? (
-                        <p className="py-4 text-center text-sm text-muted-foreground">No employees yet. Add your first team member.</p>
+                        <p className="text-muted-foreground py-4 text-center text-sm">No employees yet. Add your first team member.</p>
                     ) : (
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                             {employees.map((employee) => (
@@ -121,7 +121,7 @@ export default function EmployeesIndex({ employees }: { employees: EmployeeRow[]
                 ) : (
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                            <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                 <th className="py-2">Code</th>
                                 <th className="py-2">Name</th>
                                 <th className="py-2">Type</th>
@@ -134,14 +134,14 @@ export default function EmployeesIndex({ employees }: { employees: EmployeeRow[]
                             {employees.map((employee) => (
                                 <tr key={employee.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                     <td className="py-2">
-                                        <Link href={route('hrm.employees.show', employee.id)} className="font-medium text-primary hover:underline">
+                                        <Link href={route('hrm.employees.show', employee.id)} className="text-primary font-medium hover:underline">
                                             {employee.employee_code}
                                         </Link>
                                     </td>
                                     <td className="py-2">{employee.name}</td>
-                                    <td className="py-2 text-muted-foreground">{employee.employment_type}</td>
-                                    <td className="py-2 text-muted-foreground">{employee.office ?? '-'}</td>
-                                    <td className="py-2 text-muted-foreground">{employee.designation ?? '-'}</td>
+                                    <td className="text-muted-foreground py-2">{employee.employment_type}</td>
+                                    <td className="text-muted-foreground py-2">{employee.office ?? '-'}</td>
+                                    <td className="text-muted-foreground py-2">{employee.designation ?? '-'}</td>
                                     <td className="py-2">
                                         <Badge variant={statusVariant[employee.status] ?? 'secondary'} className="capitalize">
                                             {employee.status.replace('_', ' ')}
@@ -151,7 +151,7 @@ export default function EmployeesIndex({ employees }: { employees: EmployeeRow[]
                             ))}
                             {employees.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="py-4 text-center text-muted-foreground">
+                                    <td colSpan={6} className="text-muted-foreground py-4 text-center">
                                         No employees yet. Add your first team member.
                                     </td>
                                 </tr>

@@ -91,8 +91,7 @@ export default function InvoiceCreate({
     // line and revenue is credited net of it. The whole-invoice discount below
     // is a different animal: contra-revenue, posted to 4210 Discounts Allowed.
     const subtotal = included.reduce(
-        (sum, line) =>
-            sum + parseFloat(line.quantity || '0') * parseFloat(line.unit_price || '0') - parseFloat(line.discount || '0'),
+        (sum, line) => sum + parseFloat(line.quantity || '0') * parseFloat(line.unit_price || '0') - parseFloat(line.discount || '0'),
         0,
     );
     const total = subtotal - parseFloat(data.invoice_discount || '0');
@@ -114,7 +113,7 @@ export default function InvoiceCreate({
                 </div>
 
                 {customerId !== null && billable.length === 0 && (
-                    <p className="text-sm text-muted-foreground">Nothing to bill - this customer has no uninvoiced challan lines.</p>
+                    <p className="text-muted-foreground text-sm">Nothing to bill - this customer has no uninvoiced challan lines.</p>
                 )}
 
                 {billable.length > 0 && (
@@ -141,7 +140,7 @@ export default function InvoiceCreate({
                                             <tr key={line.delivery_line_id} className="border-t">
                                                 <td className="p-3">
                                                     {line.delivery_number}
-                                                    <span className="block text-xs text-muted-foreground">{line.delivered_at}</span>
+                                                    <span className="text-muted-foreground block text-xs">{line.delivered_at}</span>
                                                 </td>
                                                 <td className="p-3">
                                                     {line.product_name} <span className="text-muted-foreground">({line.product_sku})</span>
@@ -171,7 +170,7 @@ export default function InvoiceCreate({
                                                     />
                                                     <InputError message={errors[`lines.${index}.discount` as keyof typeof errors]} />
                                                 </td>
-                                                <td className="p-3 text-xs text-muted-foreground">{line.price_source}</td>
+                                                <td className="text-muted-foreground p-3 text-xs">{line.price_source}</td>
                                             </tr>
                                         );
                                     })}
@@ -198,9 +197,8 @@ export default function InvoiceCreate({
                                     in the other's box makes every per-product margin report wrong
                                     while every total still balances.
                                 */}
-                                <p className="text-xs text-muted-foreground">
-                                    Money off one product goes in that product's Discount box above. Use this one only for money
-                                    off the whole bill.
+                                <p className="text-muted-foreground text-xs">
+                                    Money off one product goes in that product's Discount box above. Use this one only for money off the whole bill.
                                 </p>
                             </div>
                             <div className="grid gap-2">
@@ -213,7 +211,7 @@ export default function InvoiceCreate({
 
                         <div className="flex items-center gap-4">
                             <Button disabled={processing || included.length === 0}>Raise invoice</Button>
-                            <p className="text-sm text-muted-foreground tabular-nums">
+                            <p className="text-muted-foreground text-sm tabular-nums">
                                 {included.length} line{included.length === 1 ? '' : 's'} - subtotal {subtotal.toFixed(2)}
                                 {parseFloat(data.invoice_discount || '0') > 0 && <> - total after discount {total.toFixed(2)}</>}
                             </p>

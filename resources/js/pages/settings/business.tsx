@@ -1,5 +1,6 @@
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,8 +33,6 @@ interface BusinessProps {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Business', href: '/settings/business' }];
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -177,41 +176,30 @@ export default function Business({ business, logo_url, currencies, timezones }: 
                         <div className="grid gap-4 sm:grid-cols-3">
                             <div className="grid gap-2">
                                 <Label htmlFor="currency">Currency</Label>
-                                <select
-                                    id="currency"
-                                    className={selectClass}
-                                    value={data.currency}
-                                    onChange={(e) => setData('currency', e.target.value)}
-                                >
+                                <SearchSelect id="currency" value={data.currency} onChange={(e) => setData('currency', e.target.value)}>
                                     {currencies.map((currency) => (
                                         <option key={currency} value={currency}>
                                             {currency}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <InputError message={errors.currency} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="timezone">Timezone</Label>
-                                <select
-                                    id="timezone"
-                                    className={selectClass}
-                                    value={data.timezone}
-                                    onChange={(e) => setData('timezone', e.target.value)}
-                                >
+                                <SearchSelect id="timezone" value={data.timezone} onChange={(e) => setData('timezone', e.target.value)}>
                                     {timezones.map((timezone) => (
                                         <option key={timezone} value={timezone}>
                                             {timezone}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <InputError message={errors.timezone} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="fiscal_year_start_month">Fiscal year starts</Label>
-                                <select
+                                <SearchSelect
                                     id="fiscal_year_start_month"
-                                    className={selectClass}
                                     value={data.fiscal_year_start_month}
                                     onChange={(e) => setData('fiscal_year_start_month', Number(e.target.value))}
                                 >
@@ -220,14 +208,13 @@ export default function Business({ business, logo_url, currencies, timezones }: 
                                             {month}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <InputError message={errors.fiscal_year_start_month} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="payroll_cycle_start_day">Payroll month starts on day</Label>
-                                <select
+                                <SearchSelect
                                     id="payroll_cycle_start_day"
-                                    className={selectClass}
                                     value={data.payroll_cycle_start_day}
                                     onChange={(e) => setData('payroll_cycle_start_day', Number(e.target.value))}
                                 >
@@ -236,7 +223,7 @@ export default function Business({ business, logo_url, currencies, timezones }: 
                                             {day}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <p className="text-muted-foreground text-xs">
                                     With 24, the month named August runs 24 July to 23 August. This covers payroll, attendance and HR reports only.
                                     Bills, invoices and the accounts keep their own dates.
@@ -246,9 +233,8 @@ export default function Business({ business, logo_url, currencies, timezones }: 
 
                             <div className="grid gap-2">
                                 <Label htmlFor="wfh_monthly_cap">Work from home, days a month</Label>
-                                <select
+                                <SearchSelect
                                     id="wfh_monthly_cap"
-                                    className={selectClass}
                                     value={data.wfh_monthly_cap}
                                     onChange={(e) => setData('wfh_monthly_cap', Number(e.target.value))}
                                 >
@@ -257,7 +243,7 @@ export default function Business({ business, logo_url, currencies, timezones }: 
                                             {days}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <p className="text-muted-foreground text-xs">
                                     The most any one person may work from home in a calendar month. Requests still awaiting approval count against it.
                                     Zero means work from home is not offered here. People at home still clock in and out as usual.

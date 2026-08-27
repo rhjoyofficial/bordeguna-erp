@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -106,29 +107,44 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">Chart of accounts</h1>
-                    <p className="text-sm text-muted-foreground">
-                        One chart, shared by every business. Balances are kept separately per business and come from the ledger, never from
-                        this screen.
+                    <p className="text-muted-foreground text-sm">
+                        One chart, shared by every business. Balances are kept separately per business and come from the ledger, never from this
+                        screen.
                     </p>
                 </div>
 
                 {canManageChartOfAccounts && (
-                    <form onSubmit={submit} className="flex flex-wrap items-end gap-3 rounded-md border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                    <form
+                        onSubmit={submit}
+                        className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
+                    >
                         <div className="grid gap-2">
                             <Label htmlFor="code">Code</Label>
-                            <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} className="w-24" placeholder="6320" />
+                            <Input
+                                id="code"
+                                value={data.code}
+                                onChange={(e) => setData('code', e.target.value)}
+                                className="w-24"
+                                placeholder="6320"
+                            />
                             <InputError message={errors.code} />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="name">Name</Label>
-                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} className="w-64" placeholder="Security services" />
+                            <Input
+                                id="name"
+                                value={data.name}
+                                onChange={(e) => setData('name', e.target.value)}
+                                className="w-64"
+                                placeholder="Security services"
+                            />
                             <InputError message={errors.name} />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="type">Type</Label>
-                            <select
+                            <SearchSelect
                                 id="type"
-                                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                                 value={data.type}
                                 onChange={(e) => setData({ ...data, type: e.target.value, parent_id: '' })}
                             >
@@ -137,14 +153,14 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                                         {type.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.type} />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="parent_id">Sits under</Label>
-                            <select
+                            <SearchSelect
                                 id="parent_id"
-                                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                                 value={data.parent_id}
                                 onChange={(e) => setData('parent_id', e.target.value)}
                             >
@@ -154,7 +170,7 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                                         {account.code} - {account.name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.parent_id} />
                         </div>
                         <label className="flex h-10 items-center gap-2 text-sm">
@@ -178,7 +194,7 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-b border-sidebar-border/70 text-left text-muted-foreground dark:border-sidebar-border">
+                        <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
                             <th className="py-2">Code</th>
                             <th className="py-2">Account</th>
                             <th className="py-2">Type</th>
@@ -191,21 +207,19 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                             const depth = depthOf(account, byId);
 
                             return (
-                                <tr key={account.id} className="border-b border-sidebar-border/70 dark:border-sidebar-border">
-                                    <td className="py-2 font-mono text-muted-foreground">{account.code}</td>
+                                <tr key={account.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                    <td className="text-muted-foreground py-2 font-mono">{account.code}</td>
                                     <td className="py-2" style={{ paddingLeft: `${depth * 1.5}rem` }}>
                                         <span className={account.is_postable ? '' : 'font-semibold'}>{account.name}</span>
-                                        {!account.is_postable && (
-                                            <span className="ml-2 text-xs text-muted-foreground">group</span>
-                                        )}
+                                        {!account.is_postable && <span className="text-muted-foreground ml-2 text-xs">group</span>}
                                         {!account.is_active && (
                                             <Badge variant="destructive" className="ml-2">
                                                 Inactive
                                             </Badge>
                                         )}
                                     </td>
-                                    <td className="py-2 text-muted-foreground">{account.type_label}</td>
-                                    <td className="py-2 text-muted-foreground">{account.normal_balance === 'debit' ? 'Debit' : 'Credit'}</td>
+                                    <td className="text-muted-foreground py-2">{account.type_label}</td>
+                                    <td className="text-muted-foreground py-2">{account.normal_balance === 'debit' ? 'Debit' : 'Credit'}</td>
                                     <td className="py-2 text-right">
                                         {canManageChartOfAccounts && (
                                             <>
@@ -233,7 +247,7 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                         })}
                         {accounts.length === 0 && (
                             <tr>
-                                <td colSpan={5} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={5} className="text-muted-foreground py-4 text-center">
                                     No accounts yet.
                                 </td>
                             </tr>

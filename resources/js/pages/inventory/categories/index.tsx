@@ -64,15 +64,15 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Categories" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="max-w-3xl text-sm text-muted-foreground">
+                <div className="text-muted-foreground max-w-3xl text-sm">
                     <p>
                         The <strong>SKU code</strong> is the part of a product code that comes from its category, so{' '}
-                        <code className="font-mono">DAT</code> is what makes <code className="font-mono">BNC-DAT-AJW-1KG-LRG</code> a date. Fill it
-                        in and every new product in that category can have its SKU built for you.
+                        <code className="font-mono">DAT</code> is what makes <code className="font-mono">BNC-DAT-AJW-1KG-LRG</code> a date. Fill it in
+                        and every new product in that category can have its SKU built for you.
                     </p>
                     <p className="mt-2">
-                        Packaging carries its own family in the code, so a jar category is <code className="font-mono">PK-JAR</code> and its
-                        products come out as <code className="font-mono">PK-JAR-500G</code>.
+                        Packaging carries its own family in the code, so a jar category is <code className="font-mono">PK-JAR</code> and its products
+                        come out as <code className="font-mono">PK-JAR-500G</code>.
                     </p>
                     {missingCodes > 0 && (
                         <p className="mt-2">
@@ -95,7 +95,7 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
                             value={data.code}
                             onChange={(e) => setData('code', e.target.value.toUpperCase())}
                             placeholder="e.g. HON"
-                            className="font-mono w-40"
+                            className="w-40 font-mono"
                         />
                         <InputError message={errors.code} />
                     </div>
@@ -109,7 +109,7 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">Name</th>
                             <th className="py-2">SKU code</th>
                             <th className="py-2">Slug</th>
@@ -121,9 +121,9 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
                             <tr key={category.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2">{category.name}</td>
                                 <td className="py-2 font-mono text-xs">
-                                    {category.code ?? <span className="font-sans text-muted-foreground">not set</span>}
+                                    {category.code ?? <span className="text-muted-foreground font-sans">not set</span>}
                                 </td>
-                                <td className="py-2 text-muted-foreground">{category.slug}</td>
+                                <td className="text-muted-foreground py-2">{category.slug}</td>
                                 <td className="py-2 text-right">
                                     <Button variant="ghost" size="sm" onClick={() => edit(category)}>
                                         Edit
@@ -136,7 +136,7 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
                         ))}
                         {categories.length === 0 && (
                             <tr>
-                                <td colSpan={4} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={4} className="text-muted-foreground py-4 text-center">
                                     No categories yet.
                                 </td>
                             </tr>

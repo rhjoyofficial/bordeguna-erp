@@ -74,7 +74,7 @@ function LineTable({ title, lines, total }: { title: string; lines: Line[]; tota
                     <tbody>
                         {lines.length === 0 && (
                             <tr>
-                                <td colSpan={3} className="py-3 text-muted-foreground">
+                                <td colSpan={3} className="text-muted-foreground py-3">
                                     Nothing recorded.
                                 </td>
                             </tr>
@@ -82,7 +82,7 @@ function LineTable({ title, lines, total }: { title: string; lines: Line[]; tota
                         {lines.map((line) => (
                             <tr key={`${line.code}-${line.source ?? ''}`} className={rowClass}>
                                 <td className="py-2">{line.label}</td>
-                                <td className="py-2 text-xs text-muted-foreground">{line.formula ?? '-'}</td>
+                                <td className="text-muted-foreground py-2 text-xs">{line.formula ?? '-'}</td>
                                 <td className="py-2 text-right whitespace-nowrap">{money(line.amount)}</td>
                             </tr>
                         ))}
@@ -114,7 +114,7 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
                         <h2 className="text-lg font-medium">
                             {doc.employee.name} <span className="text-muted-foreground">{doc.employee.code}</span>
                         </h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {doc.period.label} ({doc.period.start} – {doc.period.end})
                             {(doc.period.run_version ?? 1) > 1 ? `, revision ${doc.period.run_version}` : ''}
                         </p>
@@ -131,7 +131,11 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
                             </Button>
                         )}
                         {can_manage && (
-                            <Button size="sm" variant="outline" onClick={() => router.post(route('hrm.payslips.email', payslip_id), {}, { preserveScroll: true })}>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => router.post(route('hrm.payslips.email', payslip_id), {}, { preserveScroll: true })}
+                            >
                                 Email to employee
                             </Button>
                         )}
@@ -140,18 +144,18 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
 
                 {password_unavailable ? (
                     <div className={cardClass}>
-                        <p className="text-sm text-destructive">{password_unavailable}</p>
+                        <p className="text-destructive text-sm">{password_unavailable}</p>
                     </div>
                 ) : (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-muted-foreground text-xs">
                         The PDF is watermarked, stamped with who produced it, and password protected. Password: {password_hint}
                     </p>
                 )}
 
                 {doc.block_reasons.length > 0 && (
                     <div className={cardClass}>
-                        <h3 className="mb-2 font-medium text-destructive">Held</h3>
-                        <ul className="list-inside list-disc text-sm text-muted-foreground">
+                        <h3 className="text-destructive mb-2 font-medium">Held</h3>
+                        <ul className="text-muted-foreground list-inside list-disc text-sm">
                             {doc.block_reasons.map((reason) => (
                                 <li key={reason}>{reason}</li>
                             ))}
@@ -173,7 +177,7 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
                             ['Paid so far', money(doc.payment.paid_total)],
                         ].map(([label, value]) => (
                             <div key={String(label)}>
-                                <div className="text-xs text-muted-foreground">{label}</div>
+                                <div className="text-muted-foreground text-xs">{label}</div>
                                 <div>{value ?? '-'}</div>
                             </div>
                         ))}
@@ -183,9 +187,7 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
                 {doc.attendance && (
                     <div className={cardClass}>
                         <h3 className="mb-1 font-medium">Attendance</h3>
-                        <p className="mb-3 text-xs text-muted-foreground">
-                            Attendance decided every one of these; payroll only priced them.
-                        </p>
+                        <p className="text-muted-foreground mb-3 text-xs">Attendance decided every one of these; payroll only priced them.</p>
                         <div className="grid gap-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
                             {[
                                 ['Present', doc.attendance.present_days],
@@ -196,7 +198,7 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
                                 ['Days deducted', doc.attendance.deductible_days],
                             ].map(([label, value]) => (
                                 <div key={String(label)}>
-                                    <div className="text-xs text-muted-foreground">{label}</div>
+                                    <div className="text-muted-foreground text-xs">{label}</div>
                                     <div>{String(value)}</div>
                                 </div>
                             ))}
@@ -234,7 +236,7 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
                                             <td className="py-2 whitespace-nowrap">{event.date}</td>
                                             <td className="py-2">
                                                 {event.type}
-                                                {event.failure_reason && <span className="ml-1 text-destructive">- {event.failure_reason}</span>}
+                                                {event.failure_reason && <span className="text-destructive ml-1">- {event.failure_reason}</span>}
                                             </td>
                                             <td className="py-2">{event.method}</td>
                                             <td className="py-2">{event.reference ?? '-'}</td>
@@ -250,7 +252,7 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
                 {doc.notes.length > 0 && (
                     <div className={cardClass}>
                         <h3 className="mb-2 font-medium">How this payslip was reached</h3>
-                        <ul className="list-inside list-disc text-sm text-muted-foreground">
+                        <ul className="text-muted-foreground list-inside list-disc text-sm">
                             {doc.notes.map((note, index) => (
                                 <li key={index}>{note}</li>
                             ))}
@@ -258,7 +260,7 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
                     </div>
                 )}
 
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                     Generated {doc.generated.at}
                     {doc.generated.by ? ` by ${doc.generated.by}` : ''}. Confidential salary document.
                 </p>

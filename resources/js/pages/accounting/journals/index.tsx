@@ -37,9 +37,9 @@ export default function JournalsIndex({ journals }: { journals: Paginated<Journa
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <h1 className="text-lg font-semibold">Journals</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Every entry in the general ledger. Nothing here can be edited or deleted; a mistake is corrected by
-                            reversing it, which leaves both the error and the correction on the record.
+                        <p className="text-muted-foreground text-sm">
+                            Every entry in the general ledger. Nothing here can be edited or deleted; a mistake is corrected by reversing it, which
+                            leaves both the error and the correction on the record.
                         </p>
                     </div>
                     {canPostJournal && (
@@ -52,7 +52,7 @@ export default function JournalsIndex({ journals }: { journals: Paginated<Journa
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[42rem] text-sm">
                         <thead>
-                            <tr className="border-b border-sidebar-border/70 text-left text-muted-foreground dark:border-sidebar-border">
+                            <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
                                 <th className="py-2">Number</th>
                                 <th className="py-2">Date</th>
                                 <th className="py-2">For</th>
@@ -62,9 +62,12 @@ export default function JournalsIndex({ journals }: { journals: Paginated<Journa
                         </thead>
                         <tbody>
                             {journals.data.map((journal) => (
-                                <tr key={journal.id} className="border-b border-sidebar-border/70 dark:border-sidebar-border">
+                                <tr key={journal.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                     <td className="py-2">
-                                        <Link href={route('accounting.journals.show', journal.id)} className="font-mono underline-offset-4 hover:underline">
+                                        <Link
+                                            href={route('accounting.journals.show', journal.id)}
+                                            className="font-mono underline-offset-4 hover:underline"
+                                        >
                                             {journal.number}
                                         </Link>
                                         {journal.is_reversal && (
@@ -83,15 +86,15 @@ export default function JournalsIndex({ journals }: { journals: Paginated<Journa
                                             </Badge>
                                         )}
                                     </td>
-                                    <td className="py-2 tabular-nums text-muted-foreground">{journal.date}</td>
+                                    <td className="text-muted-foreground py-2 tabular-nums">{journal.date}</td>
                                     <td className="py-2">{journal.memo ?? <span className="text-muted-foreground">{journal.type_label}</span>}</td>
                                     <td className="py-2 text-right tabular-nums">{journal.total}</td>
-                                    <td className="py-2 text-right tabular-nums text-muted-foreground">{journal.lines}</td>
+                                    <td className="text-muted-foreground py-2 text-right tabular-nums">{journal.lines}</td>
                                 </tr>
                             ))}
                             {journals.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                                    <td colSpan={5} className="text-muted-foreground py-6 text-center">
                                         Nothing has been posted to the ledger yet.
                                     </td>
                                 </tr>

@@ -1,6 +1,7 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +11,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Lead {
     id: number;
@@ -208,34 +207,33 @@ export default function LeadsIndex({
                         <Label htmlFor="status">Status</Label>
                         {/* ⚠ `converted` is absent by design - it asserts a customer
                             exists and is set only by the Phase 3 conversion action. */}
-                        <select id="status" className={selectClass} value={data.status} onChange={(e) => setData('status', e.target.value)}>
+                        <SearchSelect id="status" value={data.status} onChange={(e) => setData('status', e.target.value)}>
                             {selectable_statuses.map((s) => (
                                 <option key={s.value} value={s.value}>
                                     {s.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.status} />
                     </div>
 
                     <div className="grid gap-2">
                         <Label htmlFor="brand_id">Brand (optional)</Label>
-                        <select id="brand_id" className={selectClass} value={data.brand_id} onChange={(e) => setData('brand_id', e.target.value)}>
+                        <SearchSelect id="brand_id" value={data.brand_id} onChange={(e) => setData('brand_id', e.target.value)}>
                             <option value="">No brand</option>
                             {brands.map((b) => (
                                 <option key={b.id} value={b.id}>
                                     {b.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.brand_id} />
                     </div>
                     {can_assign && (
                         <div className="grid gap-2">
                             <Label htmlFor="assigned_to_user_id">Assigned to</Label>
-                            <select
+                            <SearchSelect
                                 id="assigned_to_user_id"
-                                className={selectClass}
                                 value={data.assigned_to_user_id}
                                 onChange={(e) => setData('assigned_to_user_id', e.target.value)}
                             >
@@ -245,25 +243,20 @@ export default function LeadsIndex({
                                         {a.name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.assigned_to_user_id} />
                         </div>
                     )}
                     <div className="grid gap-2">
                         <Label htmlFor="lost_reason_id">Lost reason</Label>
-                        <select
-                            id="lost_reason_id"
-                            className={selectClass}
-                            value={data.lost_reason_id}
-                            onChange={(e) => setData('lost_reason_id', e.target.value)}
-                        >
+                        <SearchSelect id="lost_reason_id" value={data.lost_reason_id} onChange={(e) => setData('lost_reason_id', e.target.value)}>
                             <option value="">None</option>
                             {lost_reasons.map((r) => (
                                 <option key={r.id} value={r.id}>
                                     {r.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.lost_reason_id} />
                     </div>
                     <div className="grid gap-2 md:col-span-2">
@@ -308,9 +301,8 @@ export default function LeadsIndex({
                         <div className="grid gap-4 md:grid-cols-4">
                             <div className="grid gap-2">
                                 <Label htmlFor="lead_source_id">Source</Label>
-                                <select
+                                <SearchSelect
                                     id="lead_source_id"
-                                    className={selectClass}
                                     value={data.lead_source_id}
                                     onChange={(e) => {
                                         setData('lead_source_id', e.target.value);
@@ -323,24 +315,19 @@ export default function LeadsIndex({
                                             {s.name}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <InputError message={errors.lead_source_id} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="campaign_id">Campaign</Label>
-                                <select
-                                    id="campaign_id"
-                                    className={selectClass}
-                                    value={data.campaign_id}
-                                    onChange={(e) => setData('campaign_id', e.target.value)}
-                                >
+                                <SearchSelect id="campaign_id" value={data.campaign_id} onChange={(e) => setData('campaign_id', e.target.value)}>
                                     <option value="">None</option>
                                     {campaignsForSource.map((c) => (
                                         <option key={c.id} value={c.id}>
                                             {c.name}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <InputError message={errors.campaign_id} />
                             </div>
                             <div className="grid gap-2">
@@ -435,15 +422,15 @@ export default function LeadsIndex({
                         onChange={(e) => setFilter('search', e.target.value)}
                         className="max-w-xs"
                     />
-                    <select className={selectClass} value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                    <SearchSelect value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
                         <option value="">All statuses</option>
                         {statuses.map((s) => (
                             <option key={s.value} value={s.value}>
                                 {s.label}
                             </option>
                         ))}
-                    </select>
-                    <select className={selectClass} value={filters.brand_id} onChange={(e) => setFilter('brand_id', e.target.value)}>
+                    </SearchSelect>
+                    <SearchSelect value={filters.brand_id} onChange={(e) => setFilter('brand_id', e.target.value)}>
                         <option value="">All brands</option>
                         <option value="none">No brand</option>
                         {brands.map((b) => (
@@ -451,12 +438,8 @@ export default function LeadsIndex({
                                 {b.name}
                             </option>
                         ))}
-                    </select>
-                    <select
-                        className={selectClass}
-                        value={filters.assigned_to_user_id}
-                        onChange={(e) => setFilter('assigned_to_user_id', e.target.value)}
-                    >
+                    </SearchSelect>
+                    <SearchSelect value={filters.assigned_to_user_id} onChange={(e) => setFilter('assigned_to_user_id', e.target.value)}>
                         <option value="">All agents</option>
                         <option value="none">Unassigned</option>
                         {agents.map((a) => (
@@ -464,7 +447,7 @@ export default function LeadsIndex({
                                 {a.name}
                             </option>
                         ))}
-                    </select>
+                    </SearchSelect>
                 </FilterBar>
 
                 <div className="overflow-x-auto rounded-lg border">

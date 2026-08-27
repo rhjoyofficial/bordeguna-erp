@@ -160,7 +160,12 @@ function AddForm({
             </div>
             {withCode && (
                 <div className="grid gap-1">
-                    <Input value={data.code ?? ''} onChange={(e) => setData('code', e.target.value)} placeholder="Code (optional)" className="h-9 w-40" />
+                    <Input
+                        value={data.code ?? ''}
+                        onChange={(e) => setData('code', e.target.value)}
+                        placeholder="Code (optional)"
+                        className="h-9 w-40"
+                    />
                     <InputError message={errors.code} />
                 </div>
             )}
@@ -227,7 +232,9 @@ function UnitRow({
                     {editing ? (
                         <div className="flex items-center gap-2">
                             <Input value={value} onChange={(e) => setValue(e.target.value)} className="h-8 w-48" autoFocus />
-                            {withCode && <Input value={codeValue} onChange={(e) => setCodeValue(e.target.value)} placeholder="Code" className="h-8 w-28" />}
+                            {withCode && (
+                                <Input value={codeValue} onChange={(e) => setCodeValue(e.target.value)} placeholder="Code" className="h-8 w-28" />
+                            )}
                         </div>
                     ) : (
                         <span className={isActive ? '' : 'text-muted-foreground line-through'}>
@@ -317,7 +324,7 @@ export default function Organization({ offices, designations }: OrganizationProp
 
                         <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3">
                             {offices.length === 0 ? (
-                                <p className="py-2 text-sm text-muted-foreground">No offices yet.</p>
+                                <p className="text-muted-foreground py-2 text-sm">No offices yet.</p>
                             ) : (
                                 offices.map((office) => (
                                     <UnitRow
@@ -391,9 +398,9 @@ export default function Organization({ offices, designations }: OrganizationProp
                         <section className="space-y-3">
                             <div>
                                 <h3 className="text-sm font-medium">Clock-in geofence</h3>
-                                <p className="text-sm text-muted-foreground">
-                                    Optional. When enforced, a self-service clock-in from outside the radius is still accepted and flagged for review -
-                                    it is never rejected.
+                                <p className="text-muted-foreground text-sm">
+                                    Optional. When enforced, a self-service clock-in from outside the radius is still accepted and flagged for review
+                                    - it is never rejected.
                                 </p>
                             </div>
                             <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border px-3">
@@ -406,11 +413,15 @@ export default function Organization({ offices, designations }: OrganizationProp
 
                     <section className="space-y-3">
                         <h3 className="text-sm font-medium">Designations</h3>
-                        <AddForm storeRoute="organization.designations.store" placeholder="New designation, e.g. Senior Officer" label="Add designation" />
+                        <AddForm
+                            storeRoute="organization.designations.store"
+                            placeholder="New designation, e.g. Senior Officer"
+                            label="Add designation"
+                        />
 
                         <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3">
                             {designations.length === 0 ? (
-                                <p className="py-2 text-sm text-muted-foreground">No designations yet.</p>
+                                <p className="text-muted-foreground py-2 text-sm">No designations yet.</p>
                             ) : (
                                 designations.map((designation) => (
                                     <UnitRow

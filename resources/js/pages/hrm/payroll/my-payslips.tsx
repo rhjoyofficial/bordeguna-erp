@@ -42,22 +42,22 @@ export default function MyPayslips({ employee, password_hint, password_unavailab
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h2 className="text-lg font-medium">My payslips</h2>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                         {employee.name} - {employee.employee_code}. A payslip appears here once its payroll has been approved.
                     </p>
                 </div>
 
                 {password_unavailable ? (
                     <div className={cardClass}>
-                        <p className="text-sm text-destructive">{password_unavailable}</p>
+                        <p className="text-destructive text-sm">{password_unavailable}</p>
                     </div>
                 ) : (
-                    <p className="text-xs text-muted-foreground">Downloaded payslips are password protected. Your password: {password_hint}</p>
+                    <p className="text-muted-foreground text-xs">Downloaded payslips are password protected. Your password: {password_hint}</p>
                 )}
 
                 {payslips.length === 0 ? (
                     <div className={cardClass}>
-                        <p className="text-sm text-muted-foreground">No payslips yet.</p>
+                        <p className="text-muted-foreground text-sm">No payslips yet.</p>
                     </div>
                 ) : (
                     <div className={cardClass}>
@@ -79,7 +79,7 @@ export default function MyPayslips({ employee, password_hint, password_unavailab
                                         <tr key={payslip.id} className={rowClass}>
                                             <td className="py-2">
                                                 {payslip.period}
-                                                <span className="block text-xs text-muted-foreground">{payslip.status}</span>
+                                                <span className="text-muted-foreground block text-xs">{payslip.status}</span>
                                             </td>
                                             <td className="py-2 text-right">{money(payslip.gross_salary)}</td>
                                             <td className="py-2 text-right">{money(payslip.total_earnings)}</td>
@@ -88,7 +88,7 @@ export default function MyPayslips({ employee, password_hint, password_unavailab
                                             <td className="py-2">
                                                 <Badge variant="outline">{payslip.payment_status}</Badge>
                                                 {payslip.paid_total > 0 && (
-                                                    <span className="ml-2 text-xs text-muted-foreground">{money(payslip.paid_total)} paid</span>
+                                                    <span className="text-muted-foreground ml-2 text-xs">{money(payslip.paid_total)} paid</span>
                                                 )}
                                             </td>
                                             <td className="py-2">

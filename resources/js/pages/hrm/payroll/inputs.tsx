@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -111,7 +112,6 @@ interface Props {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Payroll inputs', href: '/hrm/payroll-inputs' }];
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 const cardClass = 'border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4';
 const rowClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b';
 const headClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground';
@@ -164,7 +164,7 @@ function OvertimeDialog({ employees, rules }: { employees: EmployeeOption[]; rul
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="ot_employee">Employee</Label>
-                        <select id="ot_employee" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+                        <SearchSelect id="ot_employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
@@ -172,25 +172,25 @@ function OvertimeDialog({ employees, rules }: { employees: EmployeeOption[]; rul
                                     {e.overtime_eligible ? '' : ' - not overtime-eligible'}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         {selected && !selected.overtime_eligible && (
-                            <p className="text-xs text-destructive">
+                            <p className="text-destructive text-xs">
                                 This employee is not marked overtime-eligible on their salary structure, so the assignment will be refused.
                             </p>
                         )}
-                        {errors.employee_id && <p className="text-xs text-destructive">{errors.employee_id}</p>}
+                        {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="ot_date">Date worked</Label>
                             <Input id="ot_date" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
-                            {errors.work_date && <p className="text-xs text-destructive">{errors.work_date}</p>}
+                            {errors.work_date && <p className="text-destructive text-xs">{errors.work_date}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="ot_hours">Hours</Label>
                             <Input id="ot_hours" type="number" step="0.25" min="0.25" value={hours} onChange={(e) => setHours(e.target.value)} />
-                            {errors.hours && <p className="text-xs text-destructive">{errors.hours}</p>}
+                            {errors.hours && <p className="text-destructive text-xs">{errors.hours}</p>}
                         </div>
                     </div>
 
@@ -198,7 +198,7 @@ function OvertimeDialog({ employees, rules }: { employees: EmployeeOption[]; rul
                         <input type="checkbox" className="mt-1" checked={isHoliday} onChange={(e) => setIsHoliday(e.target.checked)} />
                         <span>
                             Worked on a holiday or weekly off
-                            <span className="block text-xs text-muted-foreground">
+                            <span className="text-muted-foreground block text-xs">
                                 {isHoliday
                                     ? `Compensated in leave, not money - about ${trim(compDays)} day(s) of compensatory leave.`
                                     : `Paid overtime, capped at ${trim(rules.daily_max_hours)} hours a day and ${trim(rules.monthly_max_hours)} a month.`}
@@ -209,7 +209,7 @@ function OvertimeDialog({ employees, rules }: { employees: EmployeeOption[]; rul
                     <div className="grid gap-2">
                         <Label htmlFor="ot_reason">Reason</Label>
                         <Input id="ot_reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why this overtime was needed" />
-                        {errors.reason && <p className="text-xs text-destructive">{errors.reason}</p>}
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                 </div>
                 <DialogFooter>
@@ -277,28 +277,28 @@ function BonusEventDialog({ periods, bases }: { periods: PeriodOption[]; bases: 
                     <div className="grid gap-2">
                         <Label htmlFor="bonus_name">Name</Label>
                         <Input id="bonus_name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Eid-ul-Fitr bonus" />
-                        {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+                        {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="bonus_basis">Basis</Label>
-                            <select id="bonus_basis" className={selectClass} value={basis} onChange={(e) => setBasis(e.target.value)}>
+                            <SearchSelect id="bonus_basis" value={basis} onChange={(e) => setBasis(e.target.value)}>
                                 {bases.map((b) => (
                                     <option key={b.value} value={b.value}>
                                         {b.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="bonus_value">{basis === 'fixed' ? 'Amount' : 'Percentage'}</Label>
                             <Input id="bonus_value" type="number" step="0.01" min="0.01" value={value} onChange={(e) => setValue(e.target.value)} />
-                            {errors.value && <p className="text-xs text-destructive">{errors.value}</p>}
+                            {errors.value && <p className="text-destructive text-xs">{errors.value}</p>}
                         </div>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="bonus_period">Payroll month</Label>
-                        <select id="bonus_period" className={selectClass} value={periodId} onChange={(e) => setPeriodId(e.target.value)}>
+                        <SearchSelect id="bonus_period" value={periodId} onChange={(e) => setPeriodId(e.target.value)}>
                             <option value="">- Select -</option>
                             {periods.map((p) => (
                                 <option key={p.id} value={p.id}>
@@ -306,8 +306,8 @@ function BonusEventDialog({ periods, bases }: { periods: PeriodOption[]; bases: 
                                     {p.is_open ? '' : ' (closed)'}
                                 </option>
                             ))}
-                        </select>
-                        {errors.payroll_period_id && <p className="text-xs text-destructive">{errors.payroll_period_id}</p>}
+                        </SearchSelect>
+                        {errors.payroll_period_id && <p className="text-destructive text-xs">{errors.payroll_period_id}</p>}
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="bonus_note">Note (optional)</Label>
@@ -368,8 +368,8 @@ function AwardDialog({ event, employees }: { event: BonusEventRow; employees: Em
                 <DialogHeader>
                     <DialogTitle>Award “{event.name}”</DialogTitle>
                     <DialogDescription>
-                        The amount is resolved against each employee&rsquo;s salary now and stored, so a later increment cannot restate what this bonus
-                        was worth. Each award is approved individually.
+                        The amount is resolved against each employee&rsquo;s salary now and stored, so a later increment cannot restate what this
+                        bonus was worth. Each award is approved individually.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid max-h-[50vh] gap-2 overflow-y-auto pr-1">
@@ -416,15 +416,7 @@ function AwardDialog({ event, employees }: { event: BonusEventRow; employees: Em
     );
 }
 
-function AdjustmentDialog({
-    employees,
-    periods,
-    types,
-}: {
-    employees: EmployeeOption[];
-    periods: PeriodOption[];
-    types: Props['adjustment_types'];
-}) {
+function AdjustmentDialog({ employees, periods, types }: { employees: EmployeeOption[]; periods: PeriodOption[]; types: Props['adjustment_types'] }) {
     const [open, setOpen] = useState(false);
     const [employeeId, setEmployeeId] = useState('');
     const [type, setType] = useState(types[0]?.value ?? 'addition');
@@ -445,45 +437,45 @@ function AdjustmentDialog({
                 <DialogHeader>
                     <DialogTitle>Record a payroll adjustment</DialogTitle>
                     <DialogDescription>
-                        Reason, evidence, approval and payroll month are all required - an adjustment is the one place an arbitrary sum can be moved by
-                        hand, so all four controls apply.
+                        Reason, evidence, approval and payroll month are all required - an adjustment is the one place an arbitrary sum can be moved
+                        by hand, so all four controls apply.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-2">
                         <Label htmlFor="adj_employee">Employee</Label>
-                        <select id="adj_employee" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+                        <SearchSelect id="adj_employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
                                     {e.name}
                                 </option>
                             ))}
-                        </select>
-                        {errors.employee_id && <p className="text-xs text-destructive">{errors.employee_id}</p>}
+                        </SearchSelect>
+                        {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                     </div>
 
                     <div className="grid gap-2">
                         <Label htmlFor="adj_type">Type</Label>
-                        <select id="adj_type" className={selectClass} value={type} onChange={(e) => setType(e.target.value)}>
+                        <SearchSelect id="adj_type" value={type} onChange={(e) => setType(e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
                                     {t.label} - {t.is_earning ? 'adds' : 'deducts'}
                                 </option>
                             ))}
-                        </select>
-                        {selectedType && <p className="text-xs text-muted-foreground">{selectedType.describe}</p>}
+                        </SearchSelect>
+                        {selectedType && <p className="text-muted-foreground text-xs">{selectedType.describe}</p>}
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="adj_amount">Amount</Label>
                             <Input id="adj_amount" type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                            {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
+                            {errors.amount && <p className="text-destructive text-xs">{errors.amount}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="adj_period">Payroll month</Label>
-                            <select id="adj_period" className={selectClass} value={periodId} onChange={(e) => setPeriodId(e.target.value)}>
+                            <SearchSelect id="adj_period" value={periodId} onChange={(e) => setPeriodId(e.target.value)}>
                                 <option value="">- Select -</option>
                                 {periods.map((p) => (
                                     <option key={p.id} value={p.id}>
@@ -491,15 +483,15 @@ function AdjustmentDialog({
                                         {p.is_open ? '' : ' (closed)'}
                                     </option>
                                 ))}
-                            </select>
-                            {errors.payroll_period_id && <p className="text-xs text-destructive">{errors.payroll_period_id}</p>}
+                            </SearchSelect>
+                            {errors.payroll_period_id && <p className="text-destructive text-xs">{errors.payroll_period_id}</p>}
                         </div>
                     </div>
 
                     <div className="grid gap-2">
                         <Label htmlFor="adj_reason">Reason</Label>
                         <Input id="adj_reason" value={reason} onChange={(e) => setReason(e.target.value)} />
-                        {errors.reason && <p className="text-xs text-destructive">{errors.reason}</p>}
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
 
                     <div className="grid gap-2">
@@ -510,7 +502,7 @@ function AdjustmentDialog({
                             accept=".jpg,.jpeg,.png,.webp,.pdf"
                             onChange={(e) => setEvidence(e.target.files?.[0] ?? null)}
                         />
-                        {errors.evidence && <p className="text-xs text-destructive">{errors.evidence}</p>}
+                        {errors.evidence && <p className="text-destructive text-xs">{errors.evidence}</p>}
                     </div>
                 </div>
                 <DialogFooter>
@@ -578,14 +570,13 @@ export default function PayrollInputs({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">Payroll inputs</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             Everything a payslip pays that the salary structure does not describe. Nothing here calculates - each entry is an
                             authorisation the next payroll run picks up.
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-3">
-                        <select
-                            className={selectClass}
+                        <SearchSelect
                             value={filters.employee_id ?? ''}
                             onChange={(e) => reload({ employee_id: e.target.value === '' ? null : Number(e.target.value) })}
                         >
@@ -595,9 +586,8 @@ export default function PayrollInputs({
                                     {e.name}
                                 </option>
                             ))}
-                        </select>
-                        <select
-                            className={selectClass}
+                        </SearchSelect>
+                        <SearchSelect
                             value={filters.payroll_period_id ?? ''}
                             onChange={(e) => reload({ payroll_period_id: e.target.value === '' ? null : Number(e.target.value) })}
                         >
@@ -607,14 +597,14 @@ export default function PayrollInputs({
                                     {p.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
                 </div>
 
                 {negative_payslips.length > 0 && (
                     <div className={cardClass}>
-                        <h3 className="mb-1 text-sm font-medium text-destructive">Negative net - needs a decision</h3>
-                        <p className="mb-3 text-xs text-muted-foreground">
+                        <h3 className="text-destructive mb-1 text-sm font-medium">Negative net - needs a decision</h3>
+                        <p className="text-muted-foreground mb-3 text-xs">
                             Deductions exceeded earnings, so these payslips are blocked. Carrying the shortfall forward records it as a balance;
                             recalculate the run afterwards and the credit squares the month, with recovery taken from the next one.
                         </p>
@@ -632,9 +622,9 @@ export default function PayrollInputs({
                                 {negative_payslips.map((p) => (
                                     <tr key={p.id} className={rowClass}>
                                         <td className="py-2">{p.employee}</td>
-                                        <td className="py-2 text-muted-foreground">{p.period}</td>
-                                        <td className="py-2 text-destructive">{money(p.net)}</td>
-                                        <td className="py-2 text-xs text-muted-foreground">{p.block_reasons.join(' ')}</td>
+                                        <td className="text-muted-foreground py-2">{p.period}</td>
+                                        <td className="text-destructive py-2">{money(p.net)}</td>
+                                        <td className="text-muted-foreground py-2 text-xs">{p.block_reasons.join(' ')}</td>
                                         <td className="py-2 text-right">
                                             <Button
                                                 size="sm"
@@ -657,7 +647,7 @@ export default function PayrollInputs({
                         <OvertimeDialog employees={employees} rules={overtime_rules} />
                     </div>
                     {overtime.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No overtime assigned yet.</p>
+                        <p className="text-muted-foreground text-sm">No overtime assigned yet.</p>
                     ) : (
                         <table className="w-full min-w-[60rem] text-sm">
                             <thead>
@@ -675,11 +665,11 @@ export default function PayrollInputs({
                                     <tr key={a.id} className={rowClass}>
                                         <td className="py-2">
                                             {a.employee}
-                                            <span className="ml-2 text-xs text-muted-foreground">{a.employee_code}</span>
+                                            <span className="text-muted-foreground ml-2 text-xs">{a.employee_code}</span>
                                         </td>
                                         <td className="py-2 whitespace-nowrap">{a.work_date}</td>
                                         <td className="py-2">{trim(a.hours)}</td>
-                                        <td className="py-2 text-muted-foreground">
+                                        <td className="text-muted-foreground py-2">
                                             {a.is_holiday_work ? (
                                                 <>
                                                     Compensatory leave
@@ -691,7 +681,7 @@ export default function PayrollInputs({
                                                 'Paid'
                                             )}
                                         </td>
-                                        <td className="py-2 text-xs text-muted-foreground">{a.reason}</td>
+                                        <td className="text-muted-foreground py-2 text-xs">{a.reason}</td>
                                         <td className="py-2 text-right">
                                             {a.is_applied ? (
                                                 <Badge variant="default">Approved</Badge>
@@ -716,7 +706,7 @@ export default function PayrollInputs({
                         <BonusEventDialog periods={periods} bases={bonus_bases} />
                     </div>
                     {bonus_events.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No bonus events yet.</p>
+                        <p className="text-muted-foreground text-sm">No bonus events yet.</p>
                     ) : (
                         <table className="w-full min-w-[48rem] text-sm">
                             <thead>
@@ -733,13 +723,13 @@ export default function PayrollInputs({
                                     <tr key={e.id} className={rowClass}>
                                         <td className="py-2">
                                             {e.name}
-                                            {e.note && <div className="text-xs text-muted-foreground">{e.note}</div>}
+                                            {e.note && <div className="text-muted-foreground text-xs">{e.note}</div>}
                                         </td>
-                                        <td className="py-2 text-muted-foreground">
+                                        <td className="text-muted-foreground py-2">
                                             {e.basis === 'fixed' ? money(e.value) : `${trim(e.value)}% - ${e.basis_label}`}
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{e.period}</td>
-                                        <td className="py-2 text-muted-foreground">
+                                        <td className="text-muted-foreground py-2">{e.period}</td>
+                                        <td className="text-muted-foreground py-2">
                                             {e.award_count} employee(s) · {money(e.award_total)}
                                         </td>
                                         <td className="py-2 text-right">
@@ -769,9 +759,9 @@ export default function PayrollInputs({
                                 {bonus_awards.map((a) => (
                                     <tr key={a.id} className={rowClass}>
                                         <td className="py-2">{a.employee}</td>
-                                        <td className="py-2 text-muted-foreground">{a.event}</td>
+                                        <td className="text-muted-foreground py-2">{a.event}</td>
                                         <td className="py-2">{money(a.amount)}</td>
-                                        <td className="py-2 text-xs text-muted-foreground">{a.basis_note}</td>
+                                        <td className="text-muted-foreground py-2 text-xs">{a.basis_note}</td>
                                         <td className="py-2 text-right">
                                             <ApprovalButtons
                                                 approveUrl={route('hrm.bonus.awards.approve', a.id)}
@@ -792,7 +782,7 @@ export default function PayrollInputs({
                         <AdjustmentDialog employees={employees} periods={periods} types={adjustment_types} />
                     </div>
                     {adjustments.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No adjustments recorded yet.</p>
+                        <p className="text-muted-foreground text-sm">No adjustments recorded yet.</p>
                     ) : (
                         <table className="w-full min-w-[60rem] text-sm">
                             <thead>
@@ -811,14 +801,14 @@ export default function PayrollInputs({
                                         <td className="py-2">{a.employee}</td>
                                         <td className="py-2">
                                             {a.type_label}
-                                            {a.is_generated && <span className="ml-2 text-xs text-muted-foreground">auto</span>}
+                                            {a.is_generated && <span className="text-muted-foreground ml-2 text-xs">auto</span>}
                                         </td>
                                         <td className={`py-2 ${a.is_earning ? '' : 'text-destructive'}`}>
                                             {a.is_earning ? '+' : '−'}
                                             {money(a.amount)}
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{a.period}</td>
-                                        <td className="py-2 text-xs text-muted-foreground">
+                                        <td className="text-muted-foreground py-2">{a.period}</td>
+                                        <td className="text-muted-foreground py-2 text-xs">
                                             {a.reason}
                                             {a.evidence_id && (
                                                 <a
@@ -848,12 +838,12 @@ export default function PayrollInputs({
                 {filters.employee_id !== null && (
                     <div className={cardClass}>
                         <h3 className="mb-1 text-sm font-medium">Carry-forward balance</h3>
-                        <p className="mb-3 text-xs text-muted-foreground">
+                        <p className="text-muted-foreground mb-3 text-xs">
                             Outstanding: <span className={outstanding > 0 ? 'text-destructive' : ''}>{money(outstanding)}</span> - recovered in full
                             from the next payroll.
                         </p>
                         {balances.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">Nothing carried forward.</p>
+                            <p className="text-muted-foreground text-sm">Nothing carried forward.</p>
                         ) : (
                             <table className="w-full min-w-[44rem] text-sm">
                                 <tbody>
@@ -861,11 +851,11 @@ export default function PayrollInputs({
                                         <tr key={b.id} className={rowClass}>
                                             <td className="py-2 whitespace-nowrap">{b.date}</td>
                                             <td className="py-2">{b.entry_type}</td>
-                                            <td className="py-2 text-muted-foreground">{b.period}</td>
+                                            <td className="text-muted-foreground py-2">{b.period}</td>
                                             <td className={`py-2 ${b.amount < 0 ? '' : 'text-destructive'}`}>
                                                 {b.amount > 0 ? `+${money(b.amount)}` : money(b.amount)}
                                             </td>
-                                            <td className="py-2 text-xs text-muted-foreground">{b.note}</td>
+                                            <td className="text-muted-foreground py-2 text-xs">{b.note}</td>
                                         </tr>
                                     ))}
                                 </tbody>

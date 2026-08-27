@@ -42,7 +42,7 @@ export function SupplierImportPanel() {
     };
 
     return (
-        <div className="rounded-md border border-sidebar-border/70 dark:border-sidebar-border">
+        <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-md border">
             <div className="flex flex-wrap items-center justify-between gap-3 p-3">
                 <div className="flex flex-wrap items-center gap-2">
                     <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(!open)}>
@@ -56,13 +56,11 @@ export function SupplierImportPanel() {
                         <a href="/purchasing/suppliers/template">Download blank template</a>
                     </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                    Export, edit in a spreadsheet, import back - the same columns both ways.
-                </p>
+                <p className="text-muted-foreground text-xs">Export, edit in a spreadsheet, import back - the same columns both ways.</p>
             </div>
 
             {open && (
-                <div className="border-t border-sidebar-border/70 p-3 dark:border-sidebar-border">
+                <div className="border-sidebar-border/70 dark:border-sidebar-border border-t p-3">
                     <form onSubmit={submitReview} className="flex flex-wrap items-center gap-3">
                         <input
                             type="file"
@@ -72,24 +70,22 @@ export function SupplierImportPanel() {
                             className="text-sm"
                         />
                         <Button disabled={review.processing || !review.data.file}>Check the file</Button>
-                        <span className="text-xs text-muted-foreground">Nothing is written until you confirm.</span>
+                        <span className="text-muted-foreground text-xs">Nothing is written until you confirm.</span>
                     </form>
 
-                    {page.errors?.file && <p className="mt-2 text-sm text-destructive">{page.errors.file}</p>}
+                    {page.errors?.file && <p className="text-destructive mt-2 text-sm">{page.errors.file}</p>}
 
                     {plan && (
-                        <div className="mt-4 flex flex-col gap-3 rounded-md bg-muted/40 p-3 text-sm">
+                        <div className="bg-muted/40 mt-4 flex flex-col gap-3 rounded-md p-3 text-sm">
                             <p className="font-medium">
-                                Read {plan.rowCount} row{plan.rowCount === 1 ? '' : 's'}: {plan.creates.length} to create,{' '}
-                                {plan.updates.length} to update, {plan.unchanged} unchanged.
+                                Read {plan.rowCount} row{plan.rowCount === 1 ? '' : 's'}: {plan.creates.length} to create, {plan.updates.length} to
+                                update, {plan.unchanged} unchanged.
                             </p>
 
                             {plan.errors.length > 0 && (
-                                <div className="rounded-md border border-destructive/50 bg-destructive/10 p-2">
-                                    <p className="font-medium">
-                                        Nothing will be written until every one of these is fixed:
-                                    </p>
-                                    <ul className="list-inside list-disc text-muted-foreground">
+                                <div className="border-destructive/50 bg-destructive/10 rounded-md border p-2">
+                                    <p className="font-medium">Nothing will be written until every one of these is fixed:</p>
+                                    <ul className="text-muted-foreground list-inside list-disc">
                                         {plan.errors.map((e) => (
                                             <li key={e}>{e}</li>
                                         ))}
@@ -100,7 +96,7 @@ export function SupplierImportPanel() {
                             {plan.warnings.length > 0 && (
                                 <div>
                                     <p className="font-medium">Warnings - these do not stop the import:</p>
-                                    <ul className="list-inside list-disc text-muted-foreground">
+                                    <ul className="text-muted-foreground list-inside list-disc">
                                         {plan.warnings.map((w) => (
                                             <li key={w}>{w}</li>
                                         ))}
@@ -111,7 +107,7 @@ export function SupplierImportPanel() {
                             {plan.creates.length > 0 && (
                                 <div>
                                     <p className="font-medium">Would create:</p>
-                                    <ul className="list-inside list-disc text-muted-foreground">
+                                    <ul className="text-muted-foreground list-inside list-disc">
                                         {plan.creates.map((c) => (
                                             <li key={c.code}>
                                                 {c.code} - {c.name}
@@ -124,7 +120,7 @@ export function SupplierImportPanel() {
                             {plan.updates.length > 0 && (
                                 <div>
                                     <p className="font-medium">Would update:</p>
-                                    <ul className="list-inside list-disc text-muted-foreground">
+                                    <ul className="text-muted-foreground list-inside list-disc">
                                         {plan.updates.map((u) => (
                                             <li key={u.code}>
                                                 {u.code} - {u.changes.join('; ')}
@@ -140,8 +136,7 @@ export function SupplierImportPanel() {
                                 shorter spreadsheet. */}
                             {plan.absentFromFile.length > 0 && (
                                 <p className="text-muted-foreground">
-                                    In the business but not in this file, left untouched:{' '}
-                                    {plan.absentFromFile.join(', ')}
+                                    In the business but not in this file, left untouched: {plan.absentFromFile.join(', ')}
                                 </p>
                             )}
 

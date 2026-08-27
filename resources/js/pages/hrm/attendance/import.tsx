@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,8 +40,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Punch log', href: '/hrm/attendance' },
     { title: 'Import', href: '/hrm/attendance/import' },
 ];
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 export default function AttendanceImport({ batches, sources, unmapped_employees }: ImportProps) {
     const [file, setFile] = useState<File | null>(null);
@@ -115,13 +114,13 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="source">Source</Label>
-                        <select id="source" className={selectClass} value={source} onChange={(e) => setSource(e.target.value)}>
+                        <SearchSelect id="source" value={source} onChange={(e) => setSource(e.target.value)}>
                             {sources.map((s) => (
                                 <option key={s.value} value={s.value}>
                                     {s.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="device">Device (optional)</Label>

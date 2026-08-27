@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -106,18 +107,13 @@ export default function OpeningStockIndex({
                         <div className="mt-3 flex flex-wrap items-end gap-3">
                             <div className="grid gap-2">
                                 <Label htmlFor="sheet_warehouse">Warehouse</Label>
-                                <select
-                                    id="sheet_warehouse"
-                                    className={selectClass}
-                                    value={sheetWarehouse}
-                                    onChange={(e) => setSheetWarehouse(e.target.value)}
-                                >
+                                <SearchSelect id="sheet_warehouse" value={sheetWarehouse} onChange={(e) => setSheetWarehouse(e.target.value)}>
                                     {countSheetWarehouses.map((w) => (
                                         <option key={w.id} value={w.id}>
                                             {w.name} ({w.code})
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="sheet_date">Count as at</Label>
@@ -156,18 +152,13 @@ export default function OpeningStockIndex({
                         <div className="grid gap-4 md:grid-cols-3">
                             <div className="grid gap-2">
                                 <Label htmlFor="warehouse_id">Warehouse</Label>
-                                <select
-                                    id="warehouse_id"
-                                    className={selectClass}
-                                    value={data.warehouse_id}
-                                    onChange={(e) => setData('warehouse_id', e.target.value)}
-                                >
+                                <SearchSelect id="warehouse_id" value={data.warehouse_id} onChange={(e) => setData('warehouse_id', e.target.value)}>
                                     {warehouses.map((w) => (
                                         <option key={w.id} value={w.id}>
                                             {w.name} ({w.code})
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <InputError message={errors.warehouse_id} />
                             </div>
                             <div className="grid gap-2">
@@ -198,7 +189,7 @@ export default function OpeningStockIndex({
                                     {data.lines.map((line, index) => (
                                         <tr key={index} className="border-t align-top">
                                             <td className="p-3">
-                                                <select
+                                                <SearchSelect
                                                     className={`${selectClass} w-full`}
                                                     value={line.product_id}
                                                     onChange={(e) => setLine(index, { product_id: e.target.value })}
@@ -209,7 +200,7 @@ export default function OpeningStockIndex({
                                                             {p.name} ({p.sku})
                                                         </option>
                                                     ))}
-                                                </select>
+                                                </SearchSelect>
                                                 <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">

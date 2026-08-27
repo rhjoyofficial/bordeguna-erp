@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,27 +114,29 @@ export default function MoneyAccountsIndex({
                   decided - so the unfinished state is made loud instead.
                 */}
                 {unmappedCount > 0 && (
-                    <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm">
+                    <div className="border-destructive/50 bg-destructive/10 rounded-md border p-3 text-sm">
                         <p className="font-medium">
-                            {unmappedCount} account{unmappedCount === 1 ? '' : 's'} {unmappedCount === 1 ? 'has' : 'have'} no
-                            ledger account.
+                            {unmappedCount} account{unmappedCount === 1 ? '' : 's'} {unmappedCount === 1 ? 'has' : 'have'} no ledger account.
                         </p>
                         <p className="text-muted-foreground">
-                            Payments and customer receipts using {unmappedCount === 1 ? 'it' : 'them'} will be refused when
-                            somebody tries to record one. Set the ledger account below to finish the setup.
+                            Payments and customer receipts using {unmappedCount === 1 ? 'it' : 'them'} will be refused when somebody tries to record
+                            one. Set the ledger account below to finish the setup.
                         </p>
                     </div>
                 )}
                 <div>
                     <h1 className="text-lg font-semibold">Bank &amp; cash accounts</h1>
-                    <p className="max-w-2xl text-sm text-muted-foreground">
-                        Where money actually sits. These record which account paid or received, not how much is in it: the balance
-                        comes from the ledger, so nothing here is ever typed as a number.
+                    <p className="text-muted-foreground max-w-2xl text-sm">
+                        Where money actually sits. These record which account paid or received, not how much is in it: the balance comes from the
+                        ledger, so nothing here is ever typed as a number.
                     </p>
                 </div>
 
                 {canManageChartOfAccounts && (
-                    <form onSubmit={submit} className="flex flex-wrap items-end gap-3 rounded-md border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                    <form
+                        onSubmit={submit}
+                        className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
+                    >
                         <div className="grid gap-2">
                             <Label htmlFor="name">Name</Label>
                             <Input
@@ -148,9 +151,9 @@ export default function MoneyAccountsIndex({
 
                         <div className="grid gap-2">
                             <Label htmlFor="type">Kind</Label>
-                            <select
+                            <SearchSelect
                                 id="type"
-                                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                                 value={data.type}
                                 onChange={(e) => setData('type', e.target.value)}
                             >
@@ -159,7 +162,7 @@ export default function MoneyAccountsIndex({
                                         {type.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
 
                         {!isCash && (
@@ -192,7 +195,12 @@ export default function MoneyAccountsIndex({
                             <>
                                 <div className="grid gap-2">
                                     <Label htmlFor="bank_name">Bank</Label>
-                                    <Input id="bank_name" value={data.bank_name} onChange={(e) => setData('bank_name', e.target.value)} className="w-44" />
+                                    <Input
+                                        id="bank_name"
+                                        value={data.bank_name}
+                                        onChange={(e) => setData('bank_name', e.target.value)}
+                                        className="w-44"
+                                    />
                                 </div>
                                 <div className="grid gap-2">
                                     <Label htmlFor="branch">Branch</Label>
@@ -203,9 +211,9 @@ export default function MoneyAccountsIndex({
 
                         <div className="grid gap-2">
                             <Label htmlFor="account_id">Reports under</Label>
-                            <select
+                            <SearchSelect
                                 id="account_id"
-                                className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                                 value={data.account_id}
                                 onChange={(e) => setData('account_id', e.target.value)}
                             >
@@ -215,7 +223,7 @@ export default function MoneyAccountsIndex({
                                         {account.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.account_id} />
                         </div>
 
@@ -238,7 +246,7 @@ export default function MoneyAccountsIndex({
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[44rem] text-sm">
                         <thead>
-                            <tr className="border-b border-sidebar-border/70 text-left text-muted-foreground dark:border-sidebar-border">
+                            <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
                                 <th className="py-2">Name</th>
                                 <th className="py-2">Kind</th>
                                 <th className="py-2">Details</th>
@@ -248,7 +256,7 @@ export default function MoneyAccountsIndex({
                         </thead>
                         <tbody>
                             {accounts.map((account) => (
-                                <tr key={account.id} className="border-b border-sidebar-border/70 dark:border-sidebar-border">
+                                <tr key={account.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                     <td className="py-2">
                                         {account.name}
                                         {!account.is_active && (
@@ -257,16 +265,16 @@ export default function MoneyAccountsIndex({
                                             </Badge>
                                         )}
                                     </td>
-                                    <td className="py-2 text-muted-foreground">{account.type_label}</td>
-                                    <td className="py-2 text-muted-foreground">
+                                    <td className="text-muted-foreground py-2">{account.type_label}</td>
+                                    <td className="text-muted-foreground py-2">
                                         {[account.bank_name, account.branch, account.provider, account.account_number].filter(Boolean).join(' · ')}
                                     </td>
-                                    <td className="py-2 text-muted-foreground">
+                                    <td className="text-muted-foreground py-2">
                                         {account.ledger_account ?? (
                                             /* ⚠⚠ Not a cosmetic gap. A payment from an unmapped
                                                account fails at the till with MappingNotFound, long
                                                after whoever created it has left this screen. */
-                                            <span className="font-medium text-destructive">
+                                            <span className="text-destructive font-medium">
                                                 Not set - payments and receipts from this account will fail
                                             </span>
                                         )}
@@ -282,7 +290,7 @@ export default function MoneyAccountsIndex({
                             ))}
                             {accounts.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                                    <td colSpan={5} className="text-muted-foreground py-6 text-center">
                                         No bank or cash accounts yet. Opening balances need these first.
                                     </td>
                                 </tr>
@@ -291,9 +299,9 @@ export default function MoneyAccountsIndex({
                     </table>
                 </div>
 
-                <p className="max-w-2xl text-sm text-muted-foreground">
-                    An account that has been used to move money is deactivated rather than removed, so a payment made in August can
-                    still be named in December.
+                <p className="text-muted-foreground max-w-2xl text-sm">
+                    An account that has been used to move money is deactivated rather than removed, so a payment made in August can still be named in
+                    December.
                 </p>
             </div>
         </AppLayout>

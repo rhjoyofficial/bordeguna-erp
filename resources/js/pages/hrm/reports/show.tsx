@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -190,7 +191,7 @@ export default function ReportShow({ report, parameters, columns, formats, queue
                                     )}
 
                                     {['office', 'department', 'employee', 'payroll_run', 'period', 'select'].includes(parameter.type) && (
-                                        <select
+                                        <SearchSelect
                                             id={parameter.key}
                                             className="border-input bg-background h-9 rounded-md border px-3 text-sm disabled:opacity-70"
                                             disabled={parameter.locked}
@@ -203,7 +204,7 @@ export default function ReportShow({ report, parameters, columns, formats, queue
                                                     {option.label}
                                                 </option>
                                             ))}
-                                        </select>
+                                        </SearchSelect>
                                     )}
 
                                     {parameter.help && <p className="text-muted-foreground text-xs">{parameter.help}</p>}
@@ -211,9 +212,7 @@ export default function ReportShow({ report, parameters, columns, formats, queue
                             ))}
                         </div>
 
-                        {errors.length > 0 && (
-                            <p className="text-destructive text-sm">Please choose: {errors.join(', ')}.</p>
-                        )}
+                        {errors.length > 0 && <p className="text-destructive text-sm">Please choose: {errors.join(', ')}.</p>}
 
                         <div className="flex flex-wrap items-center gap-2 border-t pt-4">
                             {formats.map((format) => (
@@ -224,8 +223,8 @@ export default function ReportShow({ report, parameters, columns, formats, queue
                         </div>
 
                         <p className="text-muted-foreground text-xs">
-                            A report estimated over {queue_threshold.toLocaleString()} rows is prepared in the background and emailed to you
-                            when it is ready.
+                            A report estimated over {queue_threshold.toLocaleString()} rows is prepared in the background and emailed to you when it
+                            is ready.
                         </p>
                     </div>
 

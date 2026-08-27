@@ -87,7 +87,7 @@ export default function PaymentShow({
                 </div>
 
                 <section className="flex flex-col gap-2">
-                    <h2 className="text-sm font-medium text-muted-foreground">Bills settled by this payment</h2>
+                    <h2 className="text-muted-foreground text-sm font-medium">Bills settled by this payment</h2>
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full text-sm">
                             <thead className="bg-muted/50 text-left">
@@ -112,7 +112,7 @@ export default function PaymentShow({
                             </tbody>
                         </table>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-muted-foreground text-xs">
                         Outstanding is shown as it stands today, not as it stood when this payment was made.
                     </p>
                 </section>
@@ -121,7 +121,7 @@ export default function PaymentShow({
                     did to the books" is the question that makes an accountant trust
                     the system. */}
                 <section className="flex flex-col gap-2">
-                    <h2 className="text-sm font-medium text-muted-foreground">What this did to the books</h2>
+                    <h2 className="text-muted-foreground text-sm font-medium">What this did to the books</h2>
                     {journal ? (
                         <div className="overflow-x-auto rounded-lg border">
                             <table className="w-full text-sm">
@@ -136,17 +136,11 @@ export default function PaymentShow({
                                 <tbody>
                                     {journal.lines.map((line) => (
                                         <tr key={line.id} className="border-t">
-                                            <td className="p-3">
-                                                {line.account ? `${line.account.code} ${line.account.name}` : '-'}
-                                            </td>
-                                            <td className="p-3 text-muted-foreground">{line.memo}</td>
+                                            <td className="p-3">{line.account ? `${line.account.code} ${line.account.name}` : '-'}</td>
+                                            <td className="text-muted-foreground p-3">{line.memo}</td>
                                             {/* Signed paisa: positive debits, negative credits. */}
-                                            <td className="p-3 text-right tabular-nums">
-                                                {line.amount_minor > 0 ? taka(line.amount_minor) : ''}
-                                            </td>
-                                            <td className="p-3 text-right tabular-nums">
-                                                {line.amount_minor < 0 ? taka(-line.amount_minor) : ''}
-                                            </td>
+                                            <td className="p-3 text-right tabular-nums">{line.amount_minor > 0 ? taka(line.amount_minor) : ''}</td>
+                                            <td className="p-3 text-right tabular-nums">{line.amount_minor < 0 ? taka(-line.amount_minor) : ''}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -168,7 +162,7 @@ export default function PaymentShow({
 function Detail({ label, value, emphasis }: { label: string; value: string; emphasis?: boolean }) {
     return (
         <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">{label}</span>
+            <span className="text-muted-foreground text-xs">{label}</span>
             <span className={emphasis ? 'text-lg font-semibold tabular-nums' : 'text-sm'}>{value}</span>
         </div>
     );

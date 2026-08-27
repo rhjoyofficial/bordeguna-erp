@@ -1,5 +1,6 @@
-import ShiftScheduleTabs from '@/components/shift-schedule-tabs';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { SearchSelect } from '@/components/search-select';
+import ShiftScheduleTabs from '@/components/shift-schedule-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -74,8 +75,6 @@ interface IndexProps {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Schedules', href: '/hrm/schedules' }];
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 type FormState = {
     scope_type: string;
@@ -156,7 +155,8 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
         );
     };
 
-    const incomplete = (scope?.needs_target && form.scope_id === '') || form.holiday_calendar_id === '' || (type?.requires_shift && form.shift_id === '');
+    const incomplete =
+        (scope?.needs_target && form.scope_id === '') || form.holiday_calendar_id === '' || (type?.requires_shift && form.shift_id === '');
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -175,9 +175,8 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="scope_type">Applies to</Label>
-                            <select
+                            <SearchSelect
                                 id="scope_type"
-                                className={selectClass}
                                 value={form.scope_type}
                                 onChange={(e) => setForm((f) => ({ ...f, scope_type: e.target.value, scope_id: '' }))}
                             >
@@ -186,21 +185,21 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                                         {s.label}
                                     </option>
                                 ))}
-                            </select>
-                            {errors.scope_type && <p className="text-xs text-destructive">{errors.scope_type}</p>}
+                            </SearchSelect>
+                            {errors.scope_type && <p className="text-destructive text-xs">{errors.scope_type}</p>}
                         </div>
                         {scope?.needs_target && (
                             <div className="grid gap-2">
                                 <Label htmlFor="scope_id">{scope.label}</Label>
-                                <select id="scope_id" className={selectClass} value={form.scope_id} onChange={(e) => set('scope_id', e.target.value)}>
+                                <SearchSelect id="scope_id" value={form.scope_id} onChange={(e) => set('scope_id', e.target.value)}>
                                     <option value="">- Select -</option>
                                     {targets.map((t) => (
                                         <option key={t.id} value={t.id}>
                                             {t.name}
                                         </option>
                                     ))}
-                                </select>
-                                {errors.scope_id && <p className="text-xs text-destructive">{errors.scope_id}</p>}
+                                </SearchSelect>
+                                {errors.scope_id && <p className="text-destructive text-xs">{errors.scope_id}</p>}
                             </div>
                         )}
                     </div>
@@ -208,39 +207,33 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="schedule_type">Schedule type</Label>
-                            <select
-                                id="schedule_type"
-                                className={selectClass}
-                                value={form.schedule_type}
-                                onChange={(e) => set('schedule_type', e.target.value)}
-                            >
+                            <SearchSelect id="schedule_type" value={form.schedule_type} onChange={(e) => set('schedule_type', e.target.value)}>
                                 {options.schedule_types.map((t) => (
                                     <option key={t.value} value={t.value}>
                                         {t.label}
                                     </option>
                                 ))}
-                            </select>
-                            {errors.schedule_type && <p className="text-xs text-destructive">{errors.schedule_type}</p>}
+                            </SearchSelect>
+                            {errors.schedule_type && <p className="text-destructive text-xs">{errors.schedule_type}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="shift_id">Shift{type?.requires_shift ? '' : ' (optional)'}</Label>
-                            <select id="shift_id" className={selectClass} value={form.shift_id} onChange={(e) => set('shift_id', e.target.value)}>
+                            <SearchSelect id="shift_id" value={form.shift_id} onChange={(e) => set('shift_id', e.target.value)}>
                                 <option value="">- None -</option>
                                 {options.shifts.map((s) => (
                                     <option key={s.id} value={s.id}>
                                         {s.name}
                                     </option>
                                 ))}
-                            </select>
-                            {errors.shift_id && <p className="text-xs text-destructive">{errors.shift_id}</p>}
+                            </SearchSelect>
+                            {errors.shift_id && <p className="text-destructive text-xs">{errors.shift_id}</p>}
                         </div>
                     </div>
 
                     <div className="grid gap-2">
                         <Label htmlFor="holiday_calendar_id">Holiday calendar</Label>
-                        <select
+                        <SearchSelect
                             id="holiday_calendar_id"
-                            className={selectClass}
                             value={form.holiday_calendar_id}
                             onChange={(e) => set('holiday_calendar_id', e.target.value)}
                         >
@@ -250,8 +243,8 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                                     {c.name}
                                 </option>
                             ))}
-                        </select>
-                        {errors.holiday_calendar_id && <p className="text-xs text-destructive">{errors.holiday_calendar_id}</p>}
+                        </SearchSelect>
+                        {errors.holiday_calendar_id && <p className="text-destructive text-xs">{errors.holiday_calendar_id}</p>}
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -263,19 +256,19 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                                 value={form.effective_from}
                                 onChange={(e) => set('effective_from', e.target.value)}
                             />
-                            {errors.effective_from && <p className="text-xs text-destructive">{errors.effective_from}</p>}
+                            {errors.effective_from && <p className="text-destructive text-xs">{errors.effective_from}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="effective_to">Until (optional - temporary)</Label>
                             <Input id="effective_to" type="date" value={form.effective_to} onChange={(e) => set('effective_to', e.target.value)} />
-                            {errors.effective_to && <p className="text-xs text-destructive">{errors.effective_to}</p>}
+                            {errors.effective_to && <p className="text-destructive text-xs">{errors.effective_to}</p>}
                         </div>
                     </div>
 
                     <div className="grid gap-2">
                         <Label htmlFor="note">Note (optional)</Label>
                         <Input id="note" value={form.note} onChange={(e) => set('note', e.target.value)} placeholder="e.g. Ramadan hours 2026" />
-                        {errors.note && <p className="text-xs text-destructive">{errors.note}</p>}
+                        {errors.note && <p className="text-destructive text-xs">{errors.note}</p>}
                     </div>
                 </div>
                 <DialogFooter>
@@ -314,7 +307,7 @@ function EndDialog({ assignment }: { assignment: Assignment }) {
                 <div className="grid gap-2">
                     <Label htmlFor="end_on">Last day it applies</Label>
                     <Input id="end_on" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                    {errors.effective_to && <p className="text-xs text-destructive">{errors.effective_to}</p>}
+                    {errors.effective_to && <p className="text-destructive text-xs">{errors.effective_to}</p>}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
@@ -362,7 +355,7 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-lg font-medium">Schedules</h2>
                     <div className="flex items-center gap-3">
-                        <Label htmlFor="on" className="text-sm text-muted-foreground">
+                        <Label htmlFor="on" className="text-muted-foreground text-sm">
                             Roster on
                         </Label>
                         <Input id="on" type="date" className="w-40" value={date} onChange={(e) => viewOn(e.target.value)} />
@@ -373,11 +366,11 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Roster</h3>
                     {roster.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No employees are placed in this business on {on}.</p>
+                        <p className="text-muted-foreground text-sm">No employees are placed in this business on {on}.</p>
                     ) : (
                         <table className="w-full min-w-[60rem] text-sm">
                             <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                     <th className="py-2">Employee</th>
                                     <th className="py-2">Placement</th>
                                     <th className="py-2">Schedule</th>
@@ -391,13 +384,11 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                                     <tr key={row.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                         <td className="py-2">
                                             {row.name}
-                                            <span className="ml-2 text-xs text-muted-foreground">{row.employee_code}</span>
+                                            <span className="text-muted-foreground ml-2 text-xs">{row.employee_code}</span>
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{row.placement ?? '-'}</td>
-                                        <td className="py-2">
-                                            {row.schedule_type ?? <Badge variant="secondary">Unscheduled</Badge>}
-                                        </td>
-                                        <td className="py-2 text-muted-foreground">
+                                        <td className="text-muted-foreground py-2">{row.placement ?? '-'}</td>
+                                        <td className="py-2">{row.schedule_type ?? <Badge variant="secondary">Unscheduled</Badge>}</td>
+                                        <td className="text-muted-foreground py-2">
                                             {row.shift ? (
                                                 <>
                                                     {row.shift}
@@ -407,8 +398,8 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                                                 '-'
                                             )}
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{row.calendar ?? '-'}</td>
-                                        <td className="py-2 text-xs text-muted-foreground">{row.source ?? '-'}</td>
+                                        <td className="text-muted-foreground py-2">{row.calendar ?? '-'}</td>
+                                        <td className="text-muted-foreground py-2 text-xs">{row.source ?? '-'}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -419,13 +410,13 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Assignments</h3>
                     {assignments.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             Nothing assigned yet. Start with a business-wide schedule, then override per office, department, section or person.
                         </p>
                     ) : (
                         <table className="w-full min-w-[64rem] text-sm">
                             <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                     <th className="py-2">Applies to</th>
                                     <th className="py-2">Type</th>
                                     <th className="py-2">Shift</th>
@@ -440,12 +431,12 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                                     <tr key={a.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                         <td className="py-2">
                                             {a.target ?? a.scope}
-                                            {a.target && <span className="ml-2 text-xs text-muted-foreground">{a.scope}</span>}
+                                            {a.target && <span className="text-muted-foreground ml-2 text-xs">{a.scope}</span>}
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{a.schedule_type}</td>
-                                        <td className="py-2 text-muted-foreground">{a.shift ?? '-'}</td>
-                                        <td className="py-2 text-muted-foreground">{a.calendar ?? '-'}</td>
-                                        <td className="py-2 text-muted-foreground">
+                                        <td className="text-muted-foreground py-2">{a.schedule_type}</td>
+                                        <td className="text-muted-foreground py-2">{a.shift ?? '-'}</td>
+                                        <td className="text-muted-foreground py-2">{a.calendar ?? '-'}</td>
+                                        <td className="text-muted-foreground py-2">
                                             {a.effective_from} → {a.effective_to ?? 'Current'}
                                             {a.is_active && (
                                                 <Badge variant="default" className="ml-2">
@@ -468,7 +459,7 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                                                 </Badge>
                                             )}
                                         </td>
-                                        <td className="py-2 text-xs text-muted-foreground">{a.note ?? '-'}</td>
+                                        <td className="text-muted-foreground py-2 text-xs">{a.note ?? '-'}</td>
                                         <td className="py-2 text-right whitespace-nowrap">
                                             {a.effective_to === null && <EndDialog assignment={a} />}
                                             {a.is_future && (

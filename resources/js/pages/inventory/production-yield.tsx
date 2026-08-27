@@ -45,15 +45,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const money = (value: string | null) =>
     value === null ? '-' : Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function ProductionYield({
-    month,
-    products,
-    runs,
-}: {
-    month: string;
-    products: ProductRow[];
-    runs: RunRow[];
-}) {
+export default function ProductionYield({ month, products, runs }: { month: string; products: ProductRow[]; runs: RunRow[] }) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Production Yield" />
@@ -61,9 +53,9 @@ export default function ProductionYield({
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
                         <h1 className="text-xl font-semibold">Production yield</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Where a drifting yield gets noticed. Waste percentages here are value-based: the only ratio
-                            that adds up honestly across kilograms, litres and pieces. Per-unit figures live on each run.
+                        <p className="text-muted-foreground text-sm">
+                            Where a drifting yield gets noticed. Waste percentages here are value-based: the only ratio that adds up honestly across
+                            kilograms, litres and pieces. Per-unit figures live on each run.
                         </p>
                     </div>
                     <div className="grid gap-2">
@@ -94,7 +86,7 @@ export default function ProductionYield({
                         <tbody>
                             {products.length === 0 && (
                                 <tr>
-                                    <td colSpan={7} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={7} className="text-muted-foreground p-6 text-center">
                                         No confirmed production runs in this month.
                                     </td>
                                 </tr>
@@ -102,7 +94,7 @@ export default function ProductionYield({
                             {products.map((row, index) => (
                                 <tr key={index} className="border-t">
                                     <td className="p-3 font-medium">
-                                        {row.product} <span className="text-xs text-muted-foreground">{row.sku}</span>
+                                        {row.product} <span className="text-muted-foreground text-xs">{row.sku}</span>
                                     </td>
                                     <td className="p-3 text-right tabular-nums">{row.runs}</td>
                                     <td className="p-3 text-right tabular-nums">{row.output_quantity}</td>
@@ -140,7 +132,7 @@ export default function ProductionYield({
                                             <td className="p-3">
                                                 <Link
                                                     href={`/inventory/production-runs/${run.id}`}
-                                                    className="font-medium text-primary hover:underline"
+                                                    className="text-primary font-medium hover:underline"
                                                 >
                                                     {run.run_number}
                                                 </Link>
@@ -159,7 +151,7 @@ export default function ProductionYield({
                                             </td>
                                             <td className="p-3 text-right tabular-nums">
                                                 {run.yield_check?.checked ? (
-                                                    <span className={run.flagged ? 'font-medium text-destructive' : ''}>
+                                                    <span className={run.flagged ? 'text-destructive font-medium' : ''}>
                                                         {run.yield_check.deviation_percent}%
                                                     </span>
                                                 ) : (

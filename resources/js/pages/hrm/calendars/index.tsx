@@ -62,8 +62,7 @@ function CalendarDialog({ calendar, weekdays, trigger }: { calendar?: Calendar; 
     const [isDefault, setIsDefault] = useState(calendar?.is_default ?? false);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    const toggleDay = (value: number) =>
-        setOffDays((days) => (days.includes(value) ? days.filter((d) => d !== value) : [...days, value]));
+    const toggleDay = (value: number) => setOffDays((days) => (days.includes(value) ? days.filter((d) => d !== value) : [...days, value]));
 
     const submit = () => {
         const payload = { name, year: Number(year), weekly_off_days: offDays, is_default: isDefault };
@@ -95,12 +94,12 @@ function CalendarDialog({ calendar, weekdays, trigger }: { calendar?: Calendar; 
                         <div className="grid gap-2">
                             <Label htmlFor="cal-name">Name</Label>
                             <Input id="cal-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Bangladesh, Head Office" />
-                            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+                            {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="cal-year">Year</Label>
                             <Input id="cal-year" type="number" value={year} onChange={(e) => setYear(e.target.value)} />
-                            {errors.year && <p className="text-xs text-destructive">{errors.year}</p>}
+                            {errors.year && <p className="text-destructive text-xs">{errors.year}</p>}
                         </div>
                     </div>
                     <div className="grid gap-2">
@@ -165,12 +164,18 @@ function AddHoliday({ calendarId }: { calendarId: number }) {
                 <Label htmlFor={`name-${calendarId}`} className="text-xs">
                     Holiday name
                 </Label>
-                <Input id={`name-${calendarId}`} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Eid-ul-Fitr" className="h-9" />
+                <Input
+                    id={`name-${calendarId}`}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Eid-ul-Fitr"
+                    className="h-9"
+                />
             </div>
             <Button size="sm" onClick={add} disabled={date === '' || name.trim() === ''}>
                 Add
             </Button>
-            {error && <p className="w-full text-xs text-destructive">{error}</p>}
+            {error && <p className="text-destructive w-full text-xs">{error}</p>}
         </div>
     );
 }
@@ -219,7 +224,7 @@ function AddWorkingDay({ calendarId }: { calendarId: number }) {
             <Button size="sm" variant="outline" onClick={add} disabled={date === '' || reason.trim() === ''}>
                 Add working day
             </Button>
-            {error && <p className="w-full text-xs text-destructive">{error}</p>}
+            {error && <p className="text-destructive w-full text-xs">{error}</p>}
         </div>
     );
 }
@@ -236,11 +241,14 @@ export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
 
                 {calendars.length === 0 ? (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                        <p className="text-sm text-muted-foreground">No calendars yet. Create one to define weekly off-days and holidays.</p>
+                        <p className="text-muted-foreground text-sm">No calendars yet. Create one to define weekly off-days and holidays.</p>
                     </div>
                 ) : (
                     calendars.map((calendar) => (
-                        <div key={calendar.id} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
+                        <div
+                            key={calendar.id}
+                            className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4"
+                        >
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
                                     <div className="flex items-center gap-2">
@@ -248,9 +256,11 @@ export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
                                             {calendar.name} {calendar.year}
                                         </h3>
                                         {calendar.is_default && <Badge>Default</Badge>}
-                                        <Badge variant={calendar.is_active ? 'default' : 'secondary'}>{calendar.is_active ? 'Active' : 'Inactive'}</Badge>
+                                        <Badge variant={calendar.is_active ? 'default' : 'secondary'}>
+                                            {calendar.is_active ? 'Active' : 'Inactive'}
+                                        </Badge>
                                     </div>
-                                    <p className="mt-1 text-xs text-muted-foreground">Weekly off: {calendar.weekly_off_label || 'none'}</p>
+                                    <p className="text-muted-foreground mt-1 text-xs">Weekly off: {calendar.weekly_off_label || 'none'}</p>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-1">
                                     <CalendarDialog
@@ -286,13 +296,13 @@ export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
 
                             <div className="overflow-x-auto">
                                 {calendar.holidays.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground">No holidays yet.</p>
+                                    <p className="text-muted-foreground text-sm">No holidays yet.</p>
                                 ) : (
                                     <table className="w-full min-w-[28rem] text-sm">
                                         <tbody>
                                             {calendar.holidays.map((holiday) => (
                                                 <tr key={holiday.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                                    <td className="w-32 py-1.5 text-muted-foreground">{holiday.date}</td>
+                                                    <td className="text-muted-foreground w-32 py-1.5">{holiday.date}</td>
                                                     <td className="py-1.5">{holiday.name}</td>
                                                     <td className="py-1.5 text-right">
                                                         <Button
@@ -317,7 +327,7 @@ export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
                             <AddHoliday calendarId={calendar.id} />
 
                             <div className="border-sidebar-border/70 dark:border-sidebar-border border-t pt-3">
-                                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                                <p className="text-muted-foreground mb-2 text-xs font-medium">
                                     Working-day overrides - dates that ARE working days despite a weekly off or holiday
                                 </p>
                                 {calendar.working_day_overrides.length > 0 && (
@@ -325,7 +335,7 @@ export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
                                         <tbody>
                                             {calendar.working_day_overrides.map((override) => (
                                                 <tr key={override.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                                    <td className="w-32 py-1.5 text-muted-foreground">{override.date}</td>
+                                                    <td className="text-muted-foreground w-32 py-1.5">{override.date}</td>
                                                     <td className="py-1.5">{override.reason}</td>
                                                     <td className="py-1.5 text-right">
                                                         <Button

@@ -1,4 +1,5 @@
 import HeadingSmall from '@/components/heading-small';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,8 +29,6 @@ type PageProps = {
     flash?: { success?: string };
 };
 
-const selectClass =
-    'h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none';
 
 export default function AiProviders() {
     const { credentials, providers, envFallback } = usePage<PageProps>().props;
@@ -56,36 +55,28 @@ export default function AiProviders() {
             <Head title="AI providers" />
             <SettingsLayout>
                 <div className="space-y-6">
-                    <HeadingSmall
-                        title="AI providers"
-                        description="Add an API key so the ERP guide and future AI features can work."
-                    />
+                    <HeadingSmall title="AI providers" description="Add an API key so the ERP guide and future AI features can work." />
 
-                    <div className="flex items-start gap-3 rounded-md border border-border bg-muted/40 p-4 text-sm">
-                        <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    <div className="border-border bg-muted/40 flex items-start gap-3 rounded-md border p-4 text-sm">
+                        <ShieldCheck className="text-muted-foreground mt-0.5 size-4 shrink-0" />
                         <p className="text-muted-foreground">
-                            A key is encrypted before it is stored and is never sent back to the browser, written to a
-                            log, or shown again. Only the last four characters stay readable so you can tell two keys
-                            apart. To change a key, add the new one; it replaces the old without showing it.
+                            A key is encrypted before it is stored and is never sent back to the browser, written to a log, or shown again. Only the
+                            last four characters stay readable so you can tell two keys apart. To change a key, add the new one; it replaces the old
+                            without showing it.
                         </p>
                     </div>
 
-                    <form onSubmit={submit} className="space-y-4 rounded-md border border-border p-4">
+                    <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
                         <div className="grid gap-4 sm:grid-cols-2">
                             <div className="grid gap-2">
                                 <Label htmlFor="provider">Provider</Label>
-                                <select
-                                    id="provider"
-                                    className={selectClass}
-                                    value={form.data.provider}
-                                    onChange={(e) => form.setData('provider', e.target.value)}
-                                >
+                                <SearchSelect id="provider" value={form.data.provider} onChange={(e) => form.setData('provider', e.target.value)}>
                                     {Object.entries(providers).map(([value, name]) => (
                                         <option key={value} value={value}>
                                             {name}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                             </div>
 
                             <div className="grid gap-2">
@@ -133,7 +124,7 @@ export default function AiProviders() {
                         <h3 className="text-sm font-medium">Saved keys</h3>
 
                         {credentials.length === 0 && (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-muted-foreground text-sm">
                                 No key has been added here yet.
                                 {envFallback.anthropic
                                     ? ' The server environment already provides one, so the assistant works; a key added here would take priority over it.'
@@ -142,16 +133,13 @@ export default function AiProviders() {
                         )}
 
                         {credentials.map((c) => (
-                            <div
-                                key={c.id}
-                                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3"
-                            >
+                            <div key={c.id} className="border-border flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
                                 <div className="min-w-0">
                                     <p className="text-sm font-medium">
                                         {providers[c.provider] ?? c.provider}
                                         {c.label ? ` (${c.label})` : ''}
                                     </p>
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-muted-foreground text-xs">
                                         Ends {c.hint ?? '....'}
                                         {c.model ? ` · ${c.model}` : ''}
                                         {c.created_by ? ` · added by ${c.created_by}` : ''}
@@ -164,7 +152,7 @@ export default function AiProviders() {
                                         className={
                                             c.is_active
                                                 ? 'rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
-                                                : 'rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground'
+                                                : 'bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs'
                                         }
                                     >
                                         {c.is_active ? 'In use' : 'Off'}
@@ -173,13 +161,7 @@ export default function AiProviders() {
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() =>
-                                            router.patch(
-                                                `/settings/ai-providers/${c.id}/toggle-active`,
-                                                {},
-                                                { preserveScroll: true },
-                                            )
-                                        }
+                                        onClick={() => router.patch(`/settings/ai-providers/${c.id}/toggle-active`, {}, { preserveScroll: true })}
                                     >
                                         {c.is_active ? 'Switch off' : 'Use this'}
                                     </Button>

@@ -75,16 +75,16 @@ export default function PriceImport({
             <div className="flex flex-col gap-6 p-4">
                 <div className="max-w-3xl">
                     <h1 className="text-lg font-semibold">Import selling prices</h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <p className="text-muted-foreground mt-1 text-sm">
                         One row per product, one column per price group. Nothing is written until you press Apply.
                     </p>
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="text-muted-foreground mt-2 text-sm">
                         Columns: <code className="font-mono text-xs">sku</code> is required, then any of{' '}
                         <code className="font-mono text-xs">{price_columns.join(', ')}</code>. Optional:{' '}
                         <code className="font-mono text-xs">min_quantity</code> for a volume break, and{' '}
                         <code className="font-mono text-xs">note</code>. Up to {limits.max_rows.toLocaleString()} rows and {limits.max_mb} MB.
                     </p>
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="text-muted-foreground mt-2 text-sm">
                         Price groups here: {groups.map((g) => g.code).join(', ')}. Start from{' '}
                         <a className="underline underline-offset-2" href={route('sales.prices.export')}>
                             an export of what is in force
@@ -98,8 +98,8 @@ export default function PriceImport({
                         green while every dealer sale still refuses.
                     */}
                     <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
-                        A price belongs to one group. Pricing a product for RETAIL only still refuses every DEALER and DISTRIBUTOR sale of it -
-                        there is no fallback between groups.
+                        A price belongs to one group. Pricing a product for RETAIL only still refuses every DEALER and DISTRIBUTOR sale of it - there
+                        is no fallback between groups.
                     </p>
                 </div>
 
@@ -111,7 +111,7 @@ export default function PriceImport({
                             type="file"
                             accept=".csv,text/csv"
                             onChange={(e) => upload.setData('file', e.target.files?.[0] ?? null)}
-                            className="text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-2 file:text-sm"
+                            className="file:border-input file:bg-background text-sm file:mr-3 file:rounded-md file:border file:px-3 file:py-2 file:text-sm"
                         />
                         <InputError message={upload.errors.file} />
                     </div>
@@ -132,9 +132,9 @@ export default function PriceImport({
 
                 {preview && (
                     <div className="flex flex-col gap-4">
-                        <div className="text-sm text-muted-foreground">
-                            <span className="font-medium text-foreground">{preview.file_name}</span> - {preview.rows} row(s), taking effect{' '}
-                            <span className="font-medium text-foreground">{preview.effective_from}</span>.
+                        <div className="text-muted-foreground text-sm">
+                            <span className="text-foreground font-medium">{preview.file_name}</span> - {preview.rows} row(s), taking effect{' '}
+                            <span className="text-foreground font-medium">{preview.effective_from}</span>.
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -145,7 +145,7 @@ export default function PriceImport({
                                 ['warnings', preview.warnings.length, 'warn'],
                                 ['errors', preview.errors.length, 'bad'],
                             ].map(([label, value, tone]) => (
-                                <div key={label as string} className="rounded-lg border border-sidebar-border/70 dark:border-sidebar-border p-3">
+                                <div key={label as string} className="border-sidebar-border/70 dark:border-sidebar-border rounded-lg border p-3">
                                     <div
                                         className={`text-2xl font-semibold tabular-nums ${
                                             tone === 'bad' && (value as number) > 0
@@ -157,14 +157,14 @@ export default function PriceImport({
                                     >
                                         {value as number}
                                     </div>
-                                    <div className="text-xs text-muted-foreground">{label as string}</div>
+                                    <div className="text-muted-foreground text-xs">{label as string}</div>
                                 </div>
                             ))}
                         </div>
 
                         {blocked && (
-                            <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4">
-                                <p className="text-sm font-medium text-destructive">
+                            <div className="border-destructive/40 bg-destructive/5 rounded-lg border p-4">
+                                <p className="text-destructive text-sm font-medium">
                                     No prices can be changed until these are fixed. Every row is listed.
                                 </p>
                                 <ul className="mt-2 space-y-1 text-sm">
@@ -193,27 +193,27 @@ export default function PriceImport({
                         )}
 
                         {preview.ignored_columns.length > 0 && (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-muted-foreground text-sm">
                                 Columns in the file this importer does not read: {preview.ignored_columns.join(', ')}.
                             </p>
                         )}
 
                         {preview.supersedes.length > 0 && (
-                            <div className="rounded-lg border border-sidebar-border/70 dark:border-sidebar-border">
-                                <p className="border-b border-sidebar-border/70 dark:border-sidebar-border p-3 text-sm font-medium">
+                            <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-lg border">
+                                <p className="border-sidebar-border/70 dark:border-sidebar-border border-b p-3 text-sm font-medium">
                                     Prices this would replace - the old rule is closed the day before, never edited or deleted
                                 </p>
                                 <div className="max-h-72 overflow-y-auto">
                                     <table className="w-full text-sm">
                                         <tbody>
                                             {preview.supersedes.map((s, i) => (
-                                                <tr key={i} className="border-b border-sidebar-border/70 dark:border-sidebar-border">
+                                                <tr key={i} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                                     <td className="p-3 font-mono text-xs">{s.sku}</td>
                                                     <td className="p-3">{s.group}</td>
-                                                    <td className="p-3 tabular-nums text-muted-foreground">
+                                                    <td className="text-muted-foreground p-3 tabular-nums">
                                                         {s.was} → {s.becomes}
                                                     </td>
-                                                    <td className="p-3 text-xs text-muted-foreground">closes {s.closesOn}</td>
+                                                    <td className="text-muted-foreground p-3 text-xs">closes {s.closesOn}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -223,21 +223,21 @@ export default function PriceImport({
                         )}
 
                         {preview.creates.length > 0 && (
-                            <div className="rounded-lg border border-sidebar-border/70 dark:border-sidebar-border">
-                                <p className="border-b border-sidebar-border/70 dark:border-sidebar-border p-3 text-sm font-medium">
+                            <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-lg border">
+                                <p className="border-sidebar-border/70 dark:border-sidebar-border border-b p-3 text-sm font-medium">
                                     New price rules
                                 </p>
                                 <div className="max-h-72 overflow-y-auto">
                                     <table className="w-full text-sm">
                                         <tbody>
                                             {preview.creates.map((c, i) => (
-                                                <tr key={i} className="border-b border-sidebar-border/70 dark:border-sidebar-border">
-                                                    <td className="p-3 w-16 text-muted-foreground">{c.line}</td>
+                                                <tr key={i} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                                    <td className="text-muted-foreground w-16 p-3">{c.line}</td>
                                                     <td className="p-3 font-mono text-xs">{c.sku}</td>
                                                     <td className="p-3">{c.product}</td>
                                                     <td className="p-3">{c.group}</td>
                                                     <td className="p-3 text-right tabular-nums">{c.price}</td>
-                                                    <td className="p-3 text-xs text-muted-foreground">
+                                                    <td className="text-muted-foreground p-3 text-xs">
                                                         {Number(c.minQuantity) > 1 ? `from ${c.minQuantity}` : ''}
                                                     </td>
                                                 </tr>
@@ -249,24 +249,27 @@ export default function PriceImport({
                         )}
 
                         {preview.still_unpriced.length > 0 && (
-                            <div className="rounded-lg border border-sidebar-border/70 dark:border-sidebar-border p-4 text-sm">
+                            <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-lg border p-4 text-sm">
                                 <p className="font-medium">
                                     {preview.still_unpriced.length} product(s) would still have no price, so they still cannot be sold.
                                 </p>
-                                <p className="mt-1 font-mono text-xs text-muted-foreground">
+                                <p className="text-muted-foreground mt-1 font-mono text-xs">
                                     {preview.still_unpriced.slice(0, 40).join(', ')}
                                     {preview.still_unpriced.length > 40 ? ` and ${preview.still_unpriced.length - 40} more` : ''}
                                 </p>
                             </div>
                         )}
 
-                        <form onSubmit={submitApply} className="flex items-center gap-3 border-t border-sidebar-border/70 dark:border-sidebar-border pt-4">
+                        <form
+                            onSubmit={submitApply}
+                            className="border-sidebar-border/70 dark:border-sidebar-border flex items-center gap-3 border-t pt-4"
+                        >
                             <Button disabled={apply.processing || blocked}>
                                 {apply.processing
                                     ? 'Importing'
                                     : `Apply from ${preview.effective_from} - ${preview.creates.length} new, ${preview.supersedes.length} replaced`}
                             </Button>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-muted-foreground text-xs">
                                 Applies this exact file on this exact date. Change either and the preview must be run again.
                             </span>
                             <InputError message={applyError} />

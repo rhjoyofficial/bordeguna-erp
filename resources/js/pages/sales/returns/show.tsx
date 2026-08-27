@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,8 +7,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface JournalLine {
     id: number;
@@ -80,19 +79,19 @@ export default function ReturnShow({
             <div className="flex flex-col gap-6 p-4">
                 <div className="grid gap-3 sm:grid-cols-4">
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Customer</p>
+                        <p className="text-muted-foreground text-xs">Customer</p>
                         <p className="font-medium">{salesReturn.customer?.name ?? '-'}</p>
                     </div>
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Against challan</p>
+                        <p className="text-muted-foreground text-xs">Against challan</p>
                         <p className="font-medium">{salesReturn.delivery?.delivery_number ?? '-'}</p>
                     </div>
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Customer credit</p>
+                        <p className="text-muted-foreground text-xs">Customer credit</p>
                         <p className="font-medium tabular-nums">{parseFloat(salesReturn.credit_total).toFixed(2)}</p>
                     </div>
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Refunded / still refundable</p>
+                        <p className="text-muted-foreground text-xs">Refunded / still refundable</p>
                         <p className="font-medium tabular-nums">
                             {parseFloat(refundedTotal).toFixed(2)} / {parseFloat(refundable).toFixed(2)}
                         </p>
@@ -164,18 +163,14 @@ export default function ReturnShow({
                     <form onSubmit={submitRefund} className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
                         <div className="grid gap-2">
                             <Label>Refund from</Label>
-                            <select
-                                className={selectClass}
-                                value={data.money_account_id}
-                                onChange={(e) => setData('money_account_id', e.target.value)}
-                            >
+                            <SearchSelect value={data.money_account_id} onChange={(e) => setData('money_account_id', e.target.value)}>
                                 <option value="">Select account</option>
                                 {moneyAccounts.map((account) => (
                                     <option key={account.id} value={String(account.id)}>
                                         {account.name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             <InputError message={errors.money_account_id} />
                         </div>
                         <div className="grid gap-2">
@@ -216,7 +211,7 @@ export default function ReturnShow({
                                         <td className="p-3">
                                             {line.account?.code} {line.account?.name}
                                         </td>
-                                        <td className="p-3 text-muted-foreground">{line.memo}</td>
+                                        <td className="text-muted-foreground p-3">{line.memo}</td>
                                         <td className="p-3 text-right tabular-nums">{line.amount_minor > 0 ? taka(line.amount_minor) : ''}</td>
                                         <td className="p-3 text-right tabular-nums">{line.amount_minor < 0 ? taka(-line.amount_minor) : ''}</td>
                                     </tr>

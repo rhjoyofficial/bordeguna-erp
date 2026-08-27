@@ -52,19 +52,13 @@ export default function BillsIndex({
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
                         <h1 className="text-xl font-semibold">Supplier bills</h1>
-                        <p className="text-sm text-muted-foreground">
-                            What suppliers have invoiced. Recording a bill clears Goods Received Not Invoiced and
-                            creates the payable.
+                        <p className="text-muted-foreground text-sm">
+                            What suppliers have invoiced. Recording a bill clears Goods Received Not Invoiced and creates the payable.
                         </p>
                     </div>
 
                     <form onSubmit={submitSearch} className="flex gap-2">
-                        <Input
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Bill number or supplier"
-                            className="w-64"
-                        />
+                        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Bill number or supplier" className="w-64" />
                         <Button type="submit" variant="outline">
                             Search
                         </Button>
@@ -76,11 +70,11 @@ export default function BillsIndex({
                 {can_record && (
                     <div className="rounded-lg border p-4">
                         <h2 className="mb-1 text-sm font-semibold">Orders with goods still to bill</h2>
-                        <p className="mb-3 text-sm text-muted-foreground">
+                        <p className="text-muted-foreground mb-3 text-sm">
                             A bill covers exactly one purchase order. Pick the order the supplier has invoiced.
                         </p>
                         {billable_orders.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-muted-foreground text-sm">
                                 Nothing is waiting to be billed. Receive goods against an approved order first.
                             </p>
                         ) : (
@@ -89,7 +83,7 @@ export default function BillsIndex({
                                     <Button key={order.id} variant="outline" size="sm" asChild>
                                         <Link href={`/purchasing/bills/new/${order.id}`}>
                                             {order.po_number}
-                                            <span className="ml-2 text-muted-foreground">{order.supplier}</span>
+                                            <span className="text-muted-foreground ml-2">{order.supplier}</span>
                                         </Link>
                                     </Button>
                                 ))}
@@ -113,7 +107,7 @@ export default function BillsIndex({
                         <tbody>
                             {bills.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={6} className="text-muted-foreground p-6 text-center">
                                         No supplier bills yet.
                                     </td>
                                 </tr>
@@ -125,9 +119,7 @@ export default function BillsIndex({
                                             {bill.bill_number}
                                         </Link>
                                         {bill.is_reversed && (
-                                            <span className="ml-2 rounded bg-destructive/10 px-2 py-0.5 text-xs text-destructive">
-                                                Reversed
-                                            </span>
+                                            <span className="bg-destructive/10 text-destructive ml-2 rounded px-2 py-0.5 text-xs">Reversed</span>
                                         )}
                                     </td>
                                     <td className="p-3">{bill.supplier}</td>

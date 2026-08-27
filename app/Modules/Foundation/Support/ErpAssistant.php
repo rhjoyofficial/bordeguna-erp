@@ -54,7 +54,7 @@ class ErpAssistant
             ['area' => 'Salary structures, increments, payroll inputs, loans, payroll runs, leave provision', 'path' => 'Payroll', 'permission' => 'hrm.payroll.manage'],
             ['area' => 'Accounting: P&L, balance sheet, trial balance, receivables/payables ageing, customer statements, cash & bank book, inventory valuation, COGS, general ledger, reconciliation, journals, chart of accounts', 'path' => 'Finance & Accounts', 'permission' => 'accounting.view'],
             ['area' => 'HR dashboard and HR reports', 'path' => 'Reports', 'permission' => 'hrm.attendance.manage'],
-            ['area' => 'Theme customizer: light/dark mode, accent, sidebar and topbar colors (the gear button, bottom right)', 'path' => 'floating gear button', 'permission' => null],
+            ['area' => 'Appearance: light/dark mode, accent, sidebar and topbar colors, reset to defaults', 'path' => 'Settings > Appearance', 'permission' => null],
             ['area' => 'Settings: profile, password, appearance; team, roles, business, organization for administrators', 'path' => 'Settings', 'permission' => null],
         ];
     }

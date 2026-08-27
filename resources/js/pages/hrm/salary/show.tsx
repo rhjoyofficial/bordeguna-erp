@@ -116,9 +116,7 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
             <Label htmlFor={`c-${c.id}`}>
                 {c.name}
                 {c.is_basic && ' (required)'}
-                {(c.is_percentage || c.is_priced_by_attendance) && (
-                    <span className="ml-1 text-xs text-muted-foreground">- {c.basis_label}</span>
-                )}
+                {(c.is_percentage || c.is_priced_by_attendance) && <span className="text-muted-foreground ml-1 text-xs">- {c.basis_label}</span>}
             </Label>
             <Input
                 id={`c-${c.id}`}
@@ -132,7 +130,7 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
             {/* C14: this field is a daily rate, and it looks exactly like a
                 monthly amount unless it says otherwise. */}
             {c.is_priced_by_attendance && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                     Rate for each day reported for work. Paid on any day with a check-in, including a half day and approved holiday work. Not part of
                     gross, so it does not affect absence, proration or overtime.
                 </p>
@@ -158,7 +156,7 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
                         <div className="grid gap-2">
                             <Label htmlFor="effective_from">Effective from</Label>
                             <Input id="effective_from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
-                            {errors.effective_from && <p className="text-xs text-destructive">{errors.effective_from}</p>}
+                            {errors.effective_from && <p className="text-destructive text-xs">{errors.effective_from}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="reason">Reason (optional)</Label>
@@ -174,29 +172,24 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
                     <div>
                         <h4 className="mb-2 text-sm font-medium">Deductions</h4>
                         <div className="grid gap-4 sm:grid-cols-2">{deductions.map(field)}</div>
-                        <p className="mt-2 text-xs text-muted-foreground">
+                        <p className="text-muted-foreground mt-2 text-xs">
                             Leave a deduction blank unless it is a standing contractual amount. Absence, unpaid leave, late and loan deductions are
                             calculated by payroll each month.
                         </p>
                     </div>
 
                     <label className="flex items-start gap-2 text-sm">
-                        <input
-                            type="checkbox"
-                            className="mt-1"
-                            checked={overtimeEligible}
-                            onChange={(e) => setOvertimeEligible(e.target.checked)}
-                        />
+                        <input type="checkbox" className="mt-1" checked={overtimeEligible} onChange={(e) => setOvertimeEligible(e.target.checked)} />
                         <span>
                             Eligible for overtime
-                            <span className="block text-xs text-muted-foreground">
+                            <span className="text-muted-foreground block text-xs">
                                 Overtime may only be assigned to an eligible employee. Held here rather than on the employee record so it is
                                 effective-dated with the rest of their salary.
                             </span>
                         </span>
                     </label>
 
-                    {errors.lines && <p className="text-xs text-destructive">{errors.lines}</p>}
+                    {errors.lines && <p className="text-destructive text-xs">{errors.lines}</p>}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
@@ -223,8 +216,8 @@ function StructureCard({ structure }: { structure: Structure }) {
                 </span>
                 {structure.is_current && <Badge variant="default">In effect</Badge>}
                 {structure.is_future && <Badge variant="outline">Scheduled</Badge>}
-                {structure.reason && <span className="text-xs text-muted-foreground">{structure.reason}</span>}
-                {structure.created_by && <span className="text-xs text-muted-foreground">· set by {structure.created_by}</span>}
+                {structure.reason && <span className="text-muted-foreground text-xs">{structure.reason}</span>}
+                {structure.created_by && <span className="text-muted-foreground text-xs">· set by {structure.created_by}</span>}
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[36rem] text-sm">
@@ -233,9 +226,9 @@ function StructureCard({ structure }: { structure: Structure }) {
                             <tr key={l.component_id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2">
                                     {l.name}
-                                    {l.is_basic && <span className="ml-2 text-xs text-muted-foreground">Basic</span>}
+                                    {l.is_basic && <span className="text-muted-foreground ml-2 text-xs">Basic</span>}
                                 </td>
-                                <td className="py-2 text-xs text-muted-foreground">{l.formula}</td>
+                                <td className="text-muted-foreground py-2 text-xs">{l.formula}</td>
                                 <td className="py-2 text-right">{money(l.amount)}</td>
                             </tr>
                         ))}
@@ -255,8 +248,8 @@ function StructureCard({ structure }: { structure: Structure }) {
                                         </Badge>
                                     )}
                                 </td>
-                                <td className="py-2 text-xs text-muted-foreground">{l.formula}</td>
-                                <td className="py-2 text-right text-destructive">−{money(l.amount)}</td>
+                                <td className="text-muted-foreground py-2 text-xs">{l.formula}</td>
+                                <td className="text-destructive py-2 text-right">−{money(l.amount)}</td>
                             </tr>
                         ))}
                         {deductions.length > 0 && (
@@ -291,7 +284,7 @@ export default function SalaryShow({ can_manage, employee, current, history, com
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">{employee.name}</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {employee.employee_code}
                             {employee.office && ` · ${employee.office}`}
                             {employee.designation && ` · ${employee.designation}`}
@@ -301,7 +294,7 @@ export default function SalaryShow({ can_manage, employee, current, history, com
                 </div>
 
                 {current === null ? (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                         No salary structure yet. Payroll cannot calculate for this employee until one is set.
                     </p>
                 ) : (
@@ -317,9 +310,9 @@ export default function SalaryShow({ can_manage, employee, current, history, com
                     </div>
                 )}
 
-                <p className="text-xs text-muted-foreground">
-                    These are contractual figures. Absence, unpaid leave, late consequences, overtime, loans and adjustments are applied by payroll each
-                    month and appear on the payslip, not here.
+                <p className="text-muted-foreground text-xs">
+                    These are contractual figures. Absence, unpaid leave, late consequences, overtime, loans and adjustments are applied by payroll
+                    each month and appear on the payslip, not here.
                 </p>
             </div>
         </AppLayout>

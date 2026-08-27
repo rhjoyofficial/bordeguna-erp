@@ -7,8 +7,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-    --font-sans:
-        'Geist', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
@@ -350,5 +349,36 @@
 
     body {
         @apply bg-background text-foreground;
+    }
+
+    /*
+      Tailwind v4 changed the base cursor for buttons from `pointer` to
+      `default`, so every button in this ERP stopped looking clickable the
+      day we moved to v4. Rather than sprinkle `cursor-pointer` across a few
+      hundred elements (and miss the ones added next month), the pointer is
+      restored here for everything that IS actually clickable, and only
+      those. Disabled controls keep the not-allowed cursor: a button you
+      cannot press must not invite the press.
+    */
+    button:not(:disabled),
+    [role='button']:not([aria-disabled='true']),
+    [role='tab']:not([aria-disabled='true']),
+    [role='option'],
+    [role='menuitem'],
+    [role='combobox']:not(:disabled),
+    a[href],
+    label[for],
+    summary,
+    select:not(:disabled),
+    input[type='checkbox']:not(:disabled),
+    input[type='radio']:not(:disabled),
+    input[type='file']:not(:disabled)::file-selector-button {
+        cursor: pointer;
+    }
+
+    button:disabled,
+    select:disabled,
+    [aria-disabled='true'] {
+        cursor: not-allowed;
     }
 }

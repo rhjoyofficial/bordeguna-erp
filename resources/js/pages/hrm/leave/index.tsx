@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -87,7 +88,6 @@ interface Props {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Leave', href: '/hrm/leave' }];
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 type Option = { id: number; name: string };
 
@@ -162,19 +162,19 @@ function LeaveDialog({
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="leave_employee">Employee</Label>
-                        <select id="leave_employee" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+                        <SearchSelect id="leave_employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
                                     {e.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="leave_type">Leave type</Label>
-                        <select id="leave_type" className={selectClass} value={leaveTypeId} onChange={(e) => setLeaveTypeId(e.target.value)}>
+                        <SearchSelect id="leave_type" value={leaveTypeId} onChange={(e) => setLeaveTypeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {leaveTypes.map((t) => (
                                 <option key={t.id} value={t.id}>
@@ -182,7 +182,7 @@ function LeaveDialog({
                                     {t.deducts_balance ? ` (quota ${t.annual_quota})` : ' (no balance)'}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         {type?.deducts_balance && type.annual_quota === 0 && (
                             <p className="text-muted-foreground text-xs">
                                 This type draws on a balance but its quota is 0, so the balance will go negative unless a quota is granted first.
@@ -203,13 +203,13 @@ function LeaveDialog({
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="leave_portion">Portion</Label>
-                            <select id="leave_portion" className={selectClass} value={portion} onChange={(e) => setPortion(e.target.value)}>
+                            <SearchSelect id="leave_portion" value={portion} onChange={(e) => setPortion(e.target.value)}>
                                 {portions.map((p) => (
                                     <option key={p.value} value={p.value}>
                                         {p.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                     </div>
                     <div className="grid gap-2">
@@ -309,26 +309,26 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="mv_employee">Employee</Label>
-                        <select id="mv_employee" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+                        <SearchSelect id="mv_employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
                                     {e.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="mv_type">Type</Label>
-                            <select id="mv_type" className={selectClass} value={type} onChange={(e) => chooseType(e.target.value)}>
+                            <SearchSelect id="mv_type" value={type} onChange={(e) => chooseType(e.target.value)}>
                                 {types.map((t) => (
                                     <option key={t.value} value={t.value}>
                                         {t.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="mv_date">Date</Label>
@@ -567,8 +567,7 @@ export default function LeaveIndex({
                             defaultValue={year}
                             onBlur={(e) => reload({ year: Number(e.target.value) })}
                         />
-                        <select
-                            className={selectClass}
+                        <SearchSelect
                             value={filters.employee_id ?? ''}
                             onChange={(e) => reload({ employee_id: e.target.value === '' ? null : Number(e.target.value) })}
                         >
@@ -578,7 +577,7 @@ export default function LeaveIndex({
                                     {e.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <Button size="sm" variant="outline" onClick={() => router.post(route('hrm.leave.quota'), { year }, { preserveScroll: true })}>
                             Grant {year} quota
                         </Button>

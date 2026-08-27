@@ -1,14 +1,13 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router } from '@inertiajs/react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface ApprovalRequest {
     status: 'pending' | 'approved' | 'rejected';
@@ -64,18 +63,18 @@ export default function StockRequestsIndex({
             <div className="flex flex-col gap-4 p-4">
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
                     <FilterField label="Status" htmlFor="filter-status">
-                        <select id="filter-status" className={selectClass} value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                        <SearchSelect id="filter-status" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
                             <option value="">All statuses</option>
                             <option value="pending">Pending</option>
                             <option value="approved">Approved</option>
                             <option value="rejected">Rejected</option>
-                        </select>
+                        </SearchSelect>
                     </FilterField>
                 </FilterBar>
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">Type</th>
                             <th className="py-2">Product</th>
                             <th className="py-2">Warehouse</th>
@@ -96,13 +95,13 @@ export default function StockRequestsIndex({
                                 <td className="py-2">
                                     {request.product.name} <span className="text-muted-foreground">({request.product.sku})</span>
                                 </td>
-                                <td className="py-2 text-muted-foreground">
+                                <td className="text-muted-foreground py-2">
                                     {request.warehouse.name}
                                     {request.target_warehouse && ` → ${request.target_warehouse.name}`}
                                 </td>
                                 <td className="py-2">{request.quantity}</td>
-                                <td className="py-2 text-muted-foreground">{request.approval_request.requested_by.name}</td>
-                                <td className="py-2 max-w-xs text-muted-foreground">
+                                <td className="text-muted-foreground py-2">{request.approval_request.requested_by.name}</td>
+                                <td className="text-muted-foreground max-w-xs py-2">
                                     {request.reason.name}
                                     {request.note && <div className="text-xs">{request.note}</div>}
                                 </td>
@@ -139,7 +138,7 @@ export default function StockRequestsIndex({
                         ))}
                         {requests.data.length === 0 && (
                             <tr>
-                                <td colSpan={8} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={8} className="text-muted-foreground py-4 text-center">
                                     {hasActiveFilters ? 'No stock requests match this filter.' : 'No stock requests yet.'}
                                 </td>
                             </tr>

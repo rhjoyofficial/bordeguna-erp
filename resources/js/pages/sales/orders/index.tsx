@@ -1,6 +1,7 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,8 +12,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useState } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Option {
     id: number;
@@ -114,17 +113,13 @@ function ExposureBox({ customerId }: { customerId: string }) {
     const overLimit = exposure.credit_limit !== null && parseFloat(exposure.total) > parseFloat(exposure.credit_limit);
 
     return (
-        <div className="rounded-md border border-sidebar-border/70 p-3 text-sm dark:border-sidebar-border">
+        <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-md border p-3 text-sm">
             <p className="text-muted-foreground">
                 Exposure: open invoices {exposure.open_invoices} + undelivered orders {exposure.undelivered_orders} ={' '}
-                <span className="font-medium text-foreground">{exposure.total}</span>
+                <span className="text-foreground font-medium">{exposure.total}</span>
                 {exposure.credit_limit !== null && <> against a credit limit of {exposure.credit_limit}</>}
             </p>
-            {overLimit && (
-                <p className="mt-1 font-medium text-destructive">
-                    Over the credit limit. Shown for your judgement - nothing is blocked.
-                </p>
-            )}
+            {overLimit && <p className="text-destructive mt-1 font-medium">Over the credit limit. Shown for your judgement - nothing is blocked.</p>}
         </div>
     );
 }
@@ -157,14 +152,18 @@ function CreateOrderForm({ customers, warehouses, products }: { customers: Optio
     };
 
     const addLine = () => setData('lines', [...data.lines, { product_id: '', quantity: '' }]);
-    const removeLine = (index: number) => setData('lines', data.lines.filter((_, i) => i !== index));
+    const removeLine = (index: number) =>
+        setData(
+            'lines',
+            data.lines.filter((_, i) => i !== index),
+        );
 
     return (
-        <form onSubmit={submit} className="flex flex-col gap-4 rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+        <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
             <h3 className="font-medium">New sales order</h3>
-            <p className="text-sm text-muted-foreground">
-                Prices are agreed at order time: the server resolves each line's price for this customer on this date and writes it on the
-                order, where it stays - a later invoice bills the order price, not the rule of the day.
+            <p className="text-muted-foreground text-sm">
+                Prices are agreed at order time: the server resolves each line's price for this customer on this date and writes it on the order,
+                where it stays - a later invoice bills the order price, not the rule of the day.
             </p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="grid gap-2">
@@ -185,6 +184,7 @@ function CreateOrderForm({ customers, warehouses, products }: { customers: Optio
                         onChange={(v) => setData('warehouse_id', v)}
                         options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
                         placeholder="Decided at delivery"
+                        clearable
                         searchPlaceholder="Search warehouses…"
                     />
                     <InputError message={errors.warehouse_id} />
@@ -271,20 +271,20 @@ export default function SalesOrdersIndex({
                         />
                     </FilterField>
                     <FilterField label="Status" htmlFor="filter-status">
-                        <select id="filter-status" className={selectClass} value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                        <SearchSelect id="filter-status" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
                             <option value="">All statuses</option>
                             <option value="open">Open</option>
                             <option value="partially_delivered">Partially delivered</option>
                             <option value="delivered">Delivered</option>
                             <option value="closed">Closed short</option>
                             <option value="cancelled">Cancelled</option>
-                        </select>
+                        </SearchSelect>
                     </FilterField>
                 </FilterBar>
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">Order #</th>
                             <th className="py-2">Customer</th>
                             <th className="py-2">Ordered</th>
@@ -302,10 +302,10 @@ export default function SalesOrdersIndex({
                                         {order.order_number}
                                     </Link>
                                 </td>
-                                <td className="py-2 text-muted-foreground">{order.customer.name}</td>
+                                <td className="text-muted-foreground py-2">{order.customer.name}</td>
                                 <td className="py-2">{order.total_ordered}</td>
                                 <td className="py-2">{order.total_delivered}</td>
-                                <td className="py-2 text-muted-foreground">{order.expected_date ?? '-'}</td>
+                                <td className="text-muted-foreground py-2">{order.expected_date ?? '-'}</td>
                                 <td className="py-2">
                                     <Badge variant={approvalVariant[order.approval_request.status]} className="capitalize">
                                         {order.approval_request.status}
@@ -320,7 +320,7 @@ export default function SalesOrdersIndex({
                         ))}
                         {orders.data.length === 0 && (
                             <tr>
-                                <td colSpan={7} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={7} className="text-muted-foreground py-4 text-center">
                                     {hasActiveFilters ? 'No sales orders match these filters.' : 'No sales orders yet.'}
                                 </td>
                             </tr>
@@ -354,9 +354,7 @@ export default function SalesOrdersIndex({
                                             </td>
                                             <td className="p-3 text-right tabular-nums">{row.committed}</td>
                                             <td className="p-3 text-right tabular-nums">{row.on_hand}</td>
-                                            <td className="p-3">
-                                                {row.short && <Badge variant="destructive">Short</Badge>}
-                                            </td>
+                                            <td className="p-3">{row.short && <Badge variant="destructive">Short</Badge>}</td>
                                         </tr>
                                     ))}
                                 </tbody>

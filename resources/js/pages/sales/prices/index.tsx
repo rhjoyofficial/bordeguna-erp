@@ -1,5 +1,6 @@
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,8 +9,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Price {
     id: number;
@@ -65,19 +64,14 @@ export default function PricesIndex({
                 <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
                     <div className="grid gap-2">
                         <Label htmlFor="product_id">Product</Label>
-                        <select
-                            id="product_id"
-                            className={selectClass}
-                            value={data.product_id}
-                            onChange={(e) => setData('product_id', e.target.value)}
-                        >
+                        <SearchSelect id="product_id" value={data.product_id} onChange={(e) => setData('product_id', e.target.value)}>
                             <option value="">Choose a product</option>
                             {products.map((p) => (
                                 <option key={p.id} value={p.id}>
                                     {p.name} ({p.sku})
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.product_id} />
                     </div>
                     <div className="grid gap-2">
@@ -97,47 +91,32 @@ export default function PricesIndex({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="effective_to">Until (optional)</Label>
-                        <Input
-                            id="effective_to"
-                            type="date"
-                            value={data.effective_to}
-                            onChange={(e) => setData('effective_to', e.target.value)}
-                        />
+                        <Input id="effective_to" type="date" value={data.effective_to} onChange={(e) => setData('effective_to', e.target.value)} />
                         <InputError message={errors.effective_to} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="customer_id">For one customer</Label>
-                        <select
-                            id="customer_id"
-                            className={selectClass}
-                            value={data.customer_id}
-                            onChange={(e) => setData('customer_id', e.target.value)}
-                        >
+                        <SearchSelect id="customer_id" value={data.customer_id} onChange={(e) => setData('customer_id', e.target.value)}>
                             <option value="">Everyone</option>
                             {customers.map((c) => (
                                 <option key={c.id} value={c.id}>
                                     {c.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="price_group_id">Or a price group</Label>
                         {/* ⚠ Rows, never typed: the free-text version of this field
                             is how a distributor gets silently charged retail. */}
-                        <select
-                            id="price_group_id"
-                            className={selectClass}
-                            value={data.price_group_id}
-                            onChange={(e) => setData('price_group_id', e.target.value)}
-                        >
+                        <SearchSelect id="price_group_id" value={data.price_group_id} onChange={(e) => setData('price_group_id', e.target.value)}>
                             <option value="">No group</option>
                             {priceGroups.map((g) => (
                                 <option key={g.id} value={g.id}>
                                     {g.code}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.price_group_id} />
                     </div>
                     <div className="grid gap-2">
@@ -177,7 +156,7 @@ export default function PricesIndex({
                                     </td>
                                     <td className="p-3 text-right tabular-nums">{price.min_quantity}</td>
                                     <td className="p-3 text-right tabular-nums">{price.unit_price}</td>
-                                    <td className="p-3 text-muted-foreground">
+                                    <td className="text-muted-foreground p-3">
                                         {price.effective_from?.slice(0, 10)}
                                         {price.effective_to ? ` to ${price.effective_to.slice(0, 10)}` : ' onwards'}
                                     </td>
@@ -185,7 +164,7 @@ export default function PricesIndex({
                             ))}
                             {prices.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={5} className="text-muted-foreground p-6 text-center">
                                         No selling prices set yet. Nothing can be sold until there is one.
                                     </td>
                                 </tr>

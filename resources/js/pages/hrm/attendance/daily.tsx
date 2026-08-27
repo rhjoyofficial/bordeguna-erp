@@ -1,4 +1,5 @@
 import Heading from '@/components/heading';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -93,8 +94,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Punch log', href: '/hrm/attendance' },
     { title: 'Daily attendance', href: '/hrm/attendance/daily' },
 ];
-
-const selectClass = 'h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 function statusVariant(status: string): 'default' | 'secondary' | 'outline' {
     if (status === 'present' || status === 'field_duty') return 'default';
@@ -208,25 +207,25 @@ function FixDayDialog({ day, types, directions }: { day: Day; types: CorrectionT
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="fix-type">What is wrong</Label>
-                        <select id="fix-type" className={selectClass} value={type} onChange={(e) => setType(e.target.value)}>
+                        <SearchSelect id="fix-type" value={type} onChange={(e) => setType(e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
                                     {t.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
                     {selected?.needs_punch && (
                         <div className="grid gap-2">
                             <Label htmlFor="fix-punch">Which punch</Label>
-                            <select id="fix-punch" className={selectClass} value={punchId} onChange={(e) => setPunchId(e.target.value)}>
+                            <SearchSelect id="fix-punch" value={punchId} onChange={(e) => setPunchId(e.target.value)}>
                                 <option value="">- Choose -</option>
                                 {punches.map((punch) => (
                                     <option key={punch.id} value={punch.id}>
                                         {punch.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                     )}
                     {selected?.needs_time && (
@@ -237,14 +236,14 @@ function FixDayDialog({ day, types, directions }: { day: Day; types: CorrectionT
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="fix-direction">Direction</Label>
-                                <select id="fix-direction" className={selectClass} value={direction} onChange={(e) => setDirection(e.target.value)}>
+                                <SearchSelect id="fix-direction" value={direction} onChange={(e) => setDirection(e.target.value)}>
                                     <option value="">- Unknown -</option>
                                     {directions.map((d) => (
                                         <option key={d.value} value={d.value}>
                                             {d.label}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                             </div>
                         </div>
                     )}
@@ -526,9 +525,8 @@ export default function DailyAttendance({
                             <Label htmlFor="employee" className="text-muted-foreground text-xs">
                                 Employee
                             </Label>
-                            <select
+                            <SearchSelect
                                 id="employee"
-                                className={selectClass}
                                 value={filters.employee_id ?? ''}
                                 onChange={(e) => reload({ employee_id: e.target.value || null })}
                             >
@@ -538,7 +536,7 @@ export default function DailyAttendance({
                                         {e.name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                     </div>
 

@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -124,8 +125,6 @@ const statusVariant: Record<string, 'secondary' | 'default' | 'outline' | 'destr
     suspended: 'destructive',
     separated: 'destructive',
 };
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 function Field({ label, value }: { label: string; value: string | null }) {
     return (
@@ -289,13 +288,13 @@ function SeparateDialog({ employeeId, separationTypes }: { employeeId: number; s
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="separation_type">Type</Label>
-                        <select id="separation_type" className={selectClass} value={type} onChange={(e) => setType(e.target.value)}>
+                        <SearchSelect id="separation_type" value={type} onChange={(e) => setType(e.target.value)}>
                             {separationTypes.map((option) => (
                                 <option key={option.value} value={option.value}>
                                     {option.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="separation_date">Last working date</Label>
@@ -395,20 +394,19 @@ function TransferDialog({
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="office_id">Office</Label>
-                            <select id="office_id" className={selectClass} value={officeId} onChange={(e) => changeOffice(e.target.value)}>
+                            <SearchSelect id="office_id" value={officeId} onChange={(e) => changeOffice(e.target.value)}>
                                 <option value="">- None -</option>
                                 {offices.map((office) => (
                                     <option key={office.id} value={office.id}>
                                         {office.name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="department_id">Department</Label>
-                            <select
+                            <SearchSelect
                                 id="department_id"
-                                className={selectClass}
                                 value={departmentId}
                                 onChange={(e) => changeDepartment(e.target.value)}
                                 disabled={officeId === ''}
@@ -419,13 +417,12 @@ function TransferDialog({
                                         {department.name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="section_id">Section</Label>
-                            <select
+                            <SearchSelect
                                 id="section_id"
-                                className={selectClass}
                                 value={sectionId}
                                 onChange={(e) => setSectionId(e.target.value)}
                                 disabled={departmentId === ''}
@@ -436,35 +433,30 @@ function TransferDialog({
                                         {section.name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="designation_id">Designation</Label>
-                            <select
-                                id="designation_id"
-                                className={selectClass}
-                                value={designationId}
-                                onChange={(e) => setDesignationId(e.target.value)}
-                            >
+                            <SearchSelect id="designation_id" value={designationId} onChange={(e) => setDesignationId(e.target.value)}>
                                 <option value="">- None -</option>
                                 {designations.map((designation) => (
                                     <option key={designation.id} value={designation.id}>
                                         {designation.name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="supervisor_id">Supervisor</Label>
-                        <select id="supervisor_id" className={selectClass} value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)}>
+                        <SearchSelect id="supervisor_id" value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)}>
                             <option value="">- None -</option>
                             {supervisors.map((supervisor) => (
                                 <option key={supervisor.id} value={supervisor.id}>
                                     {supervisor.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
                 </div>
                 <DialogFooter>
@@ -526,13 +518,13 @@ function UploadDocumentDialog({ employeeId, documentTypes }: { employeeId: numbe
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="category">Type</Label>
-                        <select id="category" className={selectClass} value={category} onChange={(e) => setCategory(e.target.value)}>
+                        <SearchSelect id="category" value={category} onChange={(e) => setCategory(e.target.value)}>
                             {documentTypes.map((option) => (
                                 <option key={option.value} value={option.value}>
                                     {option.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="file">File</Label>

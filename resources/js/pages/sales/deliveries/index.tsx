@@ -1,13 +1,12 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Delivery {
     id: number;
@@ -47,10 +46,10 @@ export default function DeliveriesIndex({
                         onChange={(e) => setFilter('search', e.target.value)}
                         className="max-w-xs"
                     />
-                    <select className={selectClass} value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                    <SearchSelect value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
                         <option value="">All</option>
                         <option value="uninvoiced">Not fully invoiced</option>
-                    </select>
+                    </SearchSelect>
                 </FilterBar>
 
                 <div className="overflow-x-auto rounded-lg border">

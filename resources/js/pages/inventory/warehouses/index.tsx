@@ -45,7 +45,13 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="code">Code</Label>
-                        <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="e.g. COLD" className="w-32" />
+                        <Input
+                            id="code"
+                            value={data.code}
+                            onChange={(e) => setData('code', e.target.value)}
+                            placeholder="e.g. COLD"
+                            className="w-32"
+                        />
                         <InputError message={errors.code} />
                     </div>
                     <Button disabled={processing}>Add</Button>
@@ -53,7 +59,7 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">Name</th>
                             <th className="py-2">Code</th>
                             <th className="py-2">Status</th>
@@ -64,7 +70,7 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
                         {warehouses.map((warehouse) => (
                             <tr key={warehouse.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2">{warehouse.name}</td>
-                                <td className="py-2 text-muted-foreground">{warehouse.code}</td>
+                                <td className="text-muted-foreground py-2">{warehouse.code}</td>
                                 <td className="py-2">
                                     {warehouse.is_default && <Badge variant="secondary">Default</Badge>}
                                     {!warehouse.is_active && <Badge variant="destructive">Inactive</Badge>}
@@ -84,7 +90,7 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
                         ))}
                         {warehouses.length === 0 && (
                             <tr>
-                                <td colSpan={4} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={4} className="text-muted-foreground py-4 text-center">
                                     No warehouses yet.
                                 </td>
                             </tr>

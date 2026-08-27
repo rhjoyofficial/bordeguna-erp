@@ -1,6 +1,7 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +11,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface StockRow {
     product_id: number;
@@ -79,14 +78,18 @@ function ReasonSelect({ reasons, value, onChange, error }: { reasons: Option[]; 
     return (
         <div className="grid gap-2">
             <Label>Reason</Label>
-            <select className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm" value={value} onChange={(e) => onChange(e.target.value)}>
+            <SearchSelect
+                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+            >
                 <option value="">Select reason</option>
                 {reasons.map((r) => (
                     <option key={r.id} value={r.id}>
                         {r.name}
                     </option>
                 ))}
-            </select>
+            </SearchSelect>
             <InputError message={error} />
         </div>
     );
@@ -121,7 +124,10 @@ function DirectAdjustmentForm({ products, warehouses, reasons }: { products: Opt
     };
 
     return (
-        <form onSubmit={submit} className="grid grid-cols-2 gap-3 rounded-xl border border-sidebar-border/70 p-4 sm:grid-cols-3 dark:border-sidebar-border">
+        <form
+            onSubmit={submit}
+            className="border-sidebar-border/70 dark:border-sidebar-border grid grid-cols-2 gap-3 rounded-xl border p-4 sm:grid-cols-3"
+        >
             <h3 className="col-span-full font-medium">Direct adjustment</h3>
             <ProductWarehouseSelects
                 products={products}
@@ -133,14 +139,14 @@ function DirectAdjustmentForm({ products, warehouses, reasons }: { products: Opt
             />
             <div className="grid gap-2">
                 <Label>Direction</Label>
-                <select
-                    className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                <SearchSelect
+                    className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                     value={data.direction}
                     onChange={(e) => setData('direction', e.target.value)}
                 >
                     <option value="increase">Increase</option>
                     <option value="decrease">Decrease</option>
-                </select>
+                </SearchSelect>
             </div>
             <div className="grid gap-2">
                 <Label>Quantity</Label>
@@ -187,9 +193,12 @@ function DirectTransferForm({ products, warehouses, reasons }: { products: Optio
     };
 
     return (
-        <form onSubmit={submit} className="grid grid-cols-2 gap-3 rounded-xl border border-sidebar-border/70 p-4 sm:grid-cols-3 dark:border-sidebar-border">
+        <form
+            onSubmit={submit}
+            className="border-sidebar-border/70 dark:border-sidebar-border grid grid-cols-2 gap-3 rounded-xl border p-4 sm:grid-cols-3"
+        >
             <h3 className="col-span-full font-medium">Dispatch transfer</h3>
-            <p className="col-span-full text-sm text-muted-foreground">
+            <p className="text-muted-foreground col-span-full text-sm">
                 Stock leaves the source warehouse now but only lands at the destination once someone confirms receipt on the{' '}
                 <Link href={route('inventory.stock.transfers.index')} className="underline">
                     in-transit transfers
@@ -207,8 +216,8 @@ function DirectTransferForm({ products, warehouses, reasons }: { products: Optio
             />
             <div className="grid gap-2">
                 <Label>To warehouse</Label>
-                <select
-                    className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                <SearchSelect
+                    className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                     value={data.target_warehouse_id}
                     onChange={(e) => setData('target_warehouse_id', e.target.value)}
                 >
@@ -218,7 +227,7 @@ function DirectTransferForm({ products, warehouses, reasons }: { products: Optio
                             {w.name}
                         </option>
                     ))}
-                </select>
+                </SearchSelect>
                 <InputError message={errors.target_warehouse_id} />
             </div>
             <div className="grid gap-2">
@@ -272,19 +281,22 @@ function RequestAdjustmentForm({
     const reasons = data.type === 'transfer' ? transferReasons : adjustmentReasons;
 
     return (
-        <form onSubmit={submit} className="grid grid-cols-2 gap-3 rounded-xl border border-sidebar-border/70 p-4 sm:grid-cols-3 dark:border-sidebar-border">
+        <form
+            onSubmit={submit}
+            className="border-sidebar-border/70 dark:border-sidebar-border grid grid-cols-2 gap-3 rounded-xl border p-4 sm:grid-cols-3"
+        >
             <h3 className="col-span-full font-medium">Request adjustment or transfer</h3>
-            <p className="col-span-full text-sm text-muted-foreground">Needs Manager approval before stock actually changes.</p>
+            <p className="text-muted-foreground col-span-full text-sm">Needs Manager approval before stock actually changes.</p>
             <div className="grid gap-2">
                 <Label>Request type</Label>
-                <select
-                    className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                <SearchSelect
+                    className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                     value={data.type}
                     onChange={(e) => setData({ ...data, type: e.target.value, reason_id: '' })}
                 >
                     <option value="adjustment">Adjustment</option>
                     <option value="transfer">Transfer</option>
-                </select>
+                </SearchSelect>
             </div>
             <ProductWarehouseSelects
                 products={products}
@@ -298,8 +310,8 @@ function RequestAdjustmentForm({
             {data.type === 'transfer' && (
                 <div className="grid gap-2">
                     <Label>To warehouse</Label>
-                    <select
-                        className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                    <SearchSelect
+                        className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                         value={data.target_warehouse_id}
                         onChange={(e) => setData('target_warehouse_id', e.target.value)}
                     >
@@ -309,21 +321,21 @@ function RequestAdjustmentForm({
                                 {w.name}
                             </option>
                         ))}
-                    </select>
+                    </SearchSelect>
                     <InputError message={errors.target_warehouse_id} />
                 </div>
             )}
             {data.type === 'adjustment' && (
                 <div className="grid gap-2">
                     <Label>Direction</Label>
-                    <select
-                        className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                    <SearchSelect
+                        className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                         value={data.direction}
                         onChange={(e) => setData('direction', e.target.value)}
                     >
                         <option value="increase">Increase</option>
                         <option value="decrease">Decrease</option>
-                    </select>
+                    </SearchSelect>
                 </div>
             )}
             <div className="grid gap-2">
@@ -382,7 +394,7 @@ export default function StockIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-medium">Current stock</h2>
-                    <Link href={route('inventory.stock.transfers.index')} className="text-sm underline text-muted-foreground">
+                    <Link href={route('inventory.stock.transfers.index')} className="text-muted-foreground text-sm underline">
                         In-transit transfers{in_transit_count > 0 ? ` (${in_transit_count})` : ''}
                     </Link>
                 </div>
@@ -397,25 +409,20 @@ export default function StockIndex({
                         />
                     </FilterField>
                     <FilterField label="Warehouse" htmlFor="filter-warehouse">
-                        <select
-                            id="filter-warehouse"
-                            className={selectClass}
-                            value={filters.warehouse_id}
-                            onChange={(e) => setFilter('warehouse_id', e.target.value)}
-                        >
+                        <SearchSelect id="filter-warehouse" value={filters.warehouse_id} onChange={(e) => setFilter('warehouse_id', e.target.value)}>
                             <option value="">All warehouses</option>
                             {warehouses.map((w) => (
                                 <option key={w.id} value={w.id}>
                                     {w.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </FilterField>
                 </FilterBar>
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">Product</th>
                             <th className="py-2">Warehouse</th>
                             <th className="py-2">Quantity</th>
@@ -423,17 +430,20 @@ export default function StockIndex({
                     </thead>
                     <tbody>
                         {stock.data.map((row) => (
-                            <tr key={`${row.product_id}-${row.warehouse_id}`} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                            <tr
+                                key={`${row.product_id}-${row.warehouse_id}`}
+                                className="border-sidebar-border/70 dark:border-sidebar-border border-b"
+                            >
                                 <td className="py-2">
                                     {row.product.name} <span className="text-muted-foreground">({row.product.sku})</span>
                                 </td>
-                                <td className="py-2 text-muted-foreground">{row.warehouse.name}</td>
+                                <td className="text-muted-foreground py-2">{row.warehouse.name}</td>
                                 <td className="py-2">{row.quantity}</td>
                             </tr>
                         ))}
                         {stock.data.length === 0 && (
                             <tr>
-                                <td colSpan={3} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={3} className="text-muted-foreground py-4 text-center">
                                     {hasActiveFilters ? 'No stock matches these filters.' : 'No stock recorded yet.'}
                                 </td>
                             </tr>

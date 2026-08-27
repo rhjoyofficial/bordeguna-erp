@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -108,7 +109,7 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
             <form onSubmit={submit} className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">New journal</h1>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                         Every entry needs at least two lines, and the debits must equal the credits exactly before it can be posted.
                     </p>
                 </div>
@@ -127,9 +128,9 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="journal_type">Kind</Label>
-                        <select
+                        <SearchSelect
                             id="journal_type"
-                            className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
+                            className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                             value={data.journal_type}
                             onChange={(e) => setData('journal_type', e.target.value)}
                         >
@@ -138,7 +139,7 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                                     {type.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.journal_type} />
                     </div>
                     <div className="grid flex-1 gap-2">
@@ -156,7 +157,7 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[46rem] text-sm">
                         <thead>
-                            <tr className="border-b border-sidebar-border/70 text-left text-muted-foreground dark:border-sidebar-border">
+                            <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
                                 <th className="py-2">Account</th>
                                 <th className="py-2">Note</th>
                                 <th className="py-2 text-right">Debit</th>
@@ -166,11 +167,11 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                         </thead>
                         <tbody>
                             {data.lines.map((line, index) => (
-                                <tr key={index} className="border-b border-sidebar-border/70 dark:border-sidebar-border">
+                                <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                     <td className="py-2 pr-2">
-                                        <select
+                                        <SearchSelect
                                             aria-label={`Account for line ${index + 1}`}
-                                            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                                            className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
                                             value={line.account_id}
                                             onChange={(e) => setLine(index, 'account_id', e.target.value)}
                                         >
@@ -188,7 +189,7 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                                                     {account.system_owned ? ' - maintained by another module' : ''}
                                                 </option>
                                             ))}
-                                        </select>
+                                        </SearchSelect>
                                         <InputError message={errors[`lines.${index}.account_id` as keyof typeof errors]} />
                                     </td>
                                     <td className="py-2 pr-2">

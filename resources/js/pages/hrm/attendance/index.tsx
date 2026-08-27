@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -64,9 +65,15 @@ interface IndexProps {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Punch log', href: '/hrm/attendance' }];
 
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
-
-function ManualPunchDialog({ employees, directions, on }: { employees: { id: number; name: string }[]; directions: { value: string; label: string }[]; on: string }) {
+function ManualPunchDialog({
+    employees,
+    directions,
+    on,
+}: {
+    employees: { id: number; name: string }[];
+    directions: { value: string; label: string }[];
+    on: string;
+}) {
     const [open, setOpen] = useState(false);
     const [employeeId, setEmployeeId] = useState('');
     const [punchedAt, setPunchedAt] = useState(`${on}T09:00`);
@@ -111,33 +118,33 @@ function ManualPunchDialog({ employees, directions, on }: { employees: { id: num
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="employee_id">Employee</Label>
-                        <select id="employee_id" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+                        <SearchSelect id="employee_id" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
                                     {e.name}
                                 </option>
                             ))}
-                        </select>
-                        {errors.employee_id && <p className="text-xs text-destructive">{errors.employee_id}</p>}
+                        </SearchSelect>
+                        {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="punched_at">Date &amp; time</Label>
                             <Input id="punched_at" type="datetime-local" value={punchedAt} onChange={(e) => setPunchedAt(e.target.value)} />
-                            {errors.punched_at && <p className="text-xs text-destructive">{errors.punched_at}</p>}
+                            {errors.punched_at && <p className="text-destructive text-xs">{errors.punched_at}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="direction">Direction (optional)</Label>
-                            <select id="direction" className={selectClass} value={direction} onChange={(e) => setDirection(e.target.value)}>
+                            <SearchSelect id="direction" value={direction} onChange={(e) => setDirection(e.target.value)}>
                                 <option value="">- Unknown -</option>
                                 {directions.map((d) => (
                                     <option key={d.value} value={d.value}>
                                         {d.label}
                                     </option>
                                 ))}
-                            </select>
-                            {errors.direction && <p className="text-xs text-destructive">{errors.direction}</p>}
+                            </SearchSelect>
+                            {errors.direction && <p className="text-destructive text-xs">{errors.direction}</p>}
                         </div>
                     </div>
                     <div className="grid gap-2">
@@ -148,7 +155,7 @@ function ManualPunchDialog({ employees, directions, on }: { employees: { id: num
                             onChange={(e) => setNote(e.target.value)}
                             placeholder="e.g. Device offline, taken from the manual register"
                         />
-                        {errors.note && <p className="text-xs text-destructive">{errors.note}</p>}
+                        {errors.note && <p className="text-destructive text-xs">{errors.note}</p>}
                     </div>
                 </div>
                 <DialogFooter>
@@ -168,11 +175,14 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
     const reload = (params: Record<string, string | number | boolean | null>) => {
         // `on` is deliberately dropped: it is the single-day shortcut, and
         // carrying it alongside from/to would pin the range to one day forever.
-        router.get(route('hrm.attendance.index'), { ...filters, ...params, page: null }, { preserveState: true, preserveScroll: true, replace: true });
+        router.get(
+            route('hrm.attendance.index'),
+            { ...filters, ...params, page: null },
+            { preserveState: true, preserveScroll: true, replace: true },
+        );
     };
 
-    const sortBy = (column: 'time' | 'employee') =>
-        reload({ sort: column, dir: filters.sort === column && filters.dir === 'desc' ? 'asc' : 'desc' });
+    const sortBy = (column: 'time' | 'employee') => reload({ sort: column, dir: filters.sort === column && filters.dir === 'desc' ? 'asc' : 'desc' });
 
     const arrow = (column: string) => (filters.sort === column ? (filters.dir === 'asc' ? ' ↑' : ' ↓') : '');
 
@@ -183,30 +193,29 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">Punch log</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {summary.total} {summary.total === 1 ? 'punch' : 'punches'} from {summary.employees}{' '}
-                            {summary.employees === 1 ? 'employee' : 'employees'} across {summary.days}{' '}
-                            {summary.days === 1 ? 'day' : 'days'}
+                            {summary.employees === 1 ? 'employee' : 'employees'} across {summary.days} {summary.days === 1 ? 'day' : 'days'}
                             {summary.needs_review > 0 && ` · ${summary.needs_review} flagged for review`}
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <Label htmlFor="from" className="text-sm text-muted-foreground">
+                        <Label htmlFor="from" className="text-muted-foreground text-sm">
                             From
                         </Label>
                         <Input id="from" type="date" className="w-40" value={filters.from} onChange={(e) => reload({ from: e.target.value })} />
-                        <Label htmlFor="to" className="text-sm text-muted-foreground">
+                        <Label htmlFor="to" className="text-muted-foreground text-sm">
                             To
                         </Label>
                         <Input id="to" type="date" className="w-40" value={filters.to} onChange={(e) => reload({ to: e.target.value })} />
-                        <select className={selectClass} value={filters.employee_id ?? ''} onChange={(e) => reload({ employee_id: e.target.value || null })}>
+                        <SearchSelect value={filters.employee_id ?? ''} onChange={(e) => reload({ employee_id: e.target.value || null })}>
                             <option value="">All employees</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id}>
                                     {e.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         <label className="flex items-center gap-2 text-sm">
                             <input type="checkbox" checked={filters.review} onChange={(e) => reload({ review: e.target.checked })} />
                             Flagged only
@@ -217,13 +226,13 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     {punches.data.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             No punches captured between {filters.from} and {filters.to}. Widen the dates, or check the import screen.
                         </p>
                     ) : (
                         <table className="w-full min-w-[64rem] text-sm">
                             <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                     <th className="py-2">
                                         <button type="button" className="hover:text-foreground" onClick={() => sortBy('time')}>
                                             Date &amp; time{arrow('time')}
@@ -248,16 +257,16 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                                         </td>
                                         <td className="py-2">
                                             {punch.employee}
-                                            <span className="ml-2 text-xs text-muted-foreground">{punch.employee_code}</span>
+                                            <span className="text-muted-foreground ml-2 text-xs">{punch.employee_code}</span>
                                             {punch.needs_review && (
                                                 <Badge variant="outline" className="ml-2">
                                                     Review
                                                 </Badge>
                                             )}
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{punch.direction ?? '-'}</td>
-                                        <td className="py-2 text-muted-foreground">{punch.source}</td>
-                                        <td className="py-2 text-xs text-muted-foreground">
+                                        <td className="text-muted-foreground py-2">{punch.direction ?? '-'}</td>
+                                        <td className="text-muted-foreground py-2">{punch.source}</td>
+                                        <td className="text-muted-foreground py-2 text-xs">
                                             {punch.device_identifier && <div>Device: {punch.device_identifier}</div>}
                                             {punch.enroll_id && <div>Enroll: {punch.enroll_id}</div>}
                                             {punch.has_location && (
@@ -270,7 +279,7 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                                             {punch.review_reason && <div className="text-destructive">{punch.review_reason}</div>}
                                             {!punch.device_identifier && !punch.has_location && !punch.ip_address && !punch.enroll_id && '-'}
                                         </td>
-                                        <td className="py-2 text-xs text-muted-foreground">
+                                        <td className="text-muted-foreground py-2 text-xs">
                                             {punch.note ?? '-'}
                                             {punch.recorded_by && <div>by {punch.recorded_by}</div>}
                                         </td>
@@ -291,18 +300,22 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                                 size="sm"
                                 variant="outline"
                                 disabled={punches.prev_page_url === null}
-                                onClick={() => punches.prev_page_url && router.get(punches.prev_page_url, {}, { preserveState: true, preserveScroll: true })}
+                                onClick={() =>
+                                    punches.prev_page_url && router.get(punches.prev_page_url, {}, { preserveState: true, preserveScroll: true })
+                                }
                             >
                                 Previous
                             </Button>
-                            <span className="self-center text-muted-foreground">
+                            <span className="text-muted-foreground self-center">
                                 Page {punches.current_page} of {punches.last_page}
                             </span>
                             <Button
                                 size="sm"
                                 variant="outline"
                                 disabled={punches.next_page_url === null}
-                                onClick={() => punches.next_page_url && router.get(punches.next_page_url, {}, { preserveState: true, preserveScroll: true })}
+                                onClick={() =>
+                                    punches.next_page_url && router.get(punches.next_page_url, {}, { preserveState: true, preserveScroll: true })
+                                }
                             >
                                 Next
                             </Button>
@@ -310,7 +323,7 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                     </div>
                 )}
 
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                     Raw punches are immutable and cannot be edited or deleted. Corrections are recorded separately.
                 </p>
             </div>

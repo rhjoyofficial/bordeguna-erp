@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -110,7 +111,7 @@ export default function GeneralLedgerIndex({
                 <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
                         <Label htmlFor="account">Account</Label>
-                        <select
+                        <SearchSelect
                             id="account"
                             value={filters.account}
                             onChange={(e) => setFilters({ ...filters, account: e.target.value, party: '' })}
@@ -122,7 +123,7 @@ export default function GeneralLedgerIndex({
                                     {option.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="from">From</Label>
@@ -147,7 +148,7 @@ export default function GeneralLedgerIndex({
                     {parties.length > 0 && (
                         <div className="grid gap-2">
                             <Label htmlFor="party">Party</Label>
-                            <select
+                            <SearchSelect
                                 id="party"
                                 value={filters.party}
                                 onChange={(e) => setFilters({ ...filters, party: e.target.value })}
@@ -159,7 +160,7 @@ export default function GeneralLedgerIndex({
                                         {option.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                     )}
                     <Button variant="outline">Show</Button>

@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,8 +7,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler, useMemo } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Conversion {
     id: number;
@@ -75,44 +74,39 @@ export default function UnitConversions({
             <div className="flex flex-col gap-6 p-4">
                 <div className="max-w-3xl">
                     <h1 className="text-lg font-semibold">Buying in one unit, stocking in another</h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        Mustard oil is bought by the kilogram and sold by the litre. Record how many stock units one purchase unit becomes, and
-                        every goods receipt converts it for you and works out the cost per stock unit.
+                    <p className="text-muted-foreground mt-1 text-sm">
+                        Mustard oil is bought by the kilogram and sold by the litre. Record how many stock units one purchase unit becomes, and every
+                        goods receipt converts it for you and works out the cost per stock unit.
                     </p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                        The number is <strong>frozen onto each batch</strong> as it arrives, so changing it later never rewrites what old stock
-                        cost. To change it, add a new row with a later start date.
+                    <p className="text-muted-foreground mt-2 text-sm">
+                        The number is <strong>frozen onto each batch</strong> as it arrives, so changing it later never rewrites what old stock cost.
+                        To change it, add a new row with a later start date.
                     </p>
                     <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
-                        Until a product has a conversion, every goods receipt for it is <strong>refused</strong> rather than assuming one for
-                        one. That is deliberate: assuming would put 100 litres into stock for a 100 kg drum and understate the cost of a litre
-                        by about 9%, and every report would still balance.
+                        Until a product has a conversion, every goods receipt for it is <strong>refused</strong> rather than assuming one for one.
+                        That is deliberate: assuming would put 100 litres into stock for a 100 kg drum and understate the cost of a litre by about 9%,
+                        and every report would still balance.
                     </p>
                 </div>
 
                 <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="grid gap-2 lg:col-span-2">
                         <Label htmlFor="product_id">Product</Label>
-                        <select
-                            id="product_id"
-                            className={selectClass}
-                            value={data.product_id}
-                            onChange={(e) => setData('product_id', e.target.value)}
-                        >
+                        <SearchSelect id="product_id" value={data.product_id} onChange={(e) => setData('product_id', e.target.value)}>
                             <option value="">Choose a product</option>
                             {products.map((p) => (
                                 <option key={p.id} value={p.id}>
                                     {p.sku} - {p.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         {product && (
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-muted-foreground text-xs">
                                 Stocked in <strong>{product.stock_unit}</strong>
                                 {product.purchase_unit ? (
                                     <>
-                                        , already bought in <strong>{product.purchase_unit}</strong>. A new row here changes the rate, not the
-                                        unit - changing the purchase unit is a new product.
+                                        , already bought in <strong>{product.purchase_unit}</strong>. A new row here changes the rate, not the unit -
+                                        changing the purchase unit is a new product.
                                     </>
                                 ) : (
                                     '. It has no purchase unit yet.'
@@ -124,12 +118,7 @@ export default function UnitConversions({
 
                     <div className="grid gap-2">
                         <Label htmlFor="from_unit_id">Bought in</Label>
-                        <select
-                            id="from_unit_id"
-                            className={selectClass}
-                            value={data.from_unit_id}
-                            onChange={(e) => setData('from_unit_id', e.target.value)}
-                        >
+                        <SearchSelect id="from_unit_id" value={data.from_unit_id} onChange={(e) => setData('from_unit_id', e.target.value)}>
                             <option value="">Choose a unit</option>
                             {units
                                 .filter((u) => !product || u.id !== product.stock_unit_id)
@@ -138,7 +127,7 @@ export default function UnitConversions({
                                         {u.name} ({u.abbreviation})
                                     </option>
                                 ))}
-                        </select>
+                        </SearchSelect>
                         <InputError message={errors.from_unit_id} />
                     </div>
 
@@ -214,15 +203,15 @@ export default function UnitConversions({
                     with every ledger balancing. Calculating the second from the
                     first would make an inverted entry impossible to detect.
                 */}
-                <p className="max-w-3xl text-sm text-muted-foreground">
-                    Both directions are asked for on purpose. They are not the same number upside down by accident - for mustard oil, 1 kg is
-                    1.09 L while 1 L is 0.917 kg. Typing both is what catches an entry made the wrong way round, which would otherwise be about
-                    21% wrong for ever and look perfectly correct in every report.
+                <p className="text-muted-foreground max-w-3xl text-sm">
+                    Both directions are asked for on purpose. They are not the same number upside down by accident - for mustard oil, 1 kg is 1.09 L
+                    while 1 L is 0.917 kg. Typing both is what catches an entry made the wrong way round, which would otherwise be about 21% wrong for
+                    ever and look perfectly correct in every report.
                 </p>
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">Product</th>
                             <th className="py-2">Bought in</th>
                             <th className="py-2">Stocked in</th>
@@ -243,12 +232,12 @@ export default function UnitConversions({
                                     {c.stock_units_per_purchase_unit} {c.to_unit}
                                 </td>
                                 <td className="py-2">{c.effective_from}</td>
-                                <td className="py-2 text-muted-foreground">{c.source}</td>
+                                <td className="text-muted-foreground py-2">{c.source}</td>
                             </tr>
                         ))}
                         {conversions.length === 0 && (
                             <tr>
-                                <td colSpan={6} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={6} className="text-muted-foreground py-4 text-center">
                                     Nothing here yet. Most products are bought in the unit they are stocked in and need no conversion at all.
                                 </td>
                             </tr>

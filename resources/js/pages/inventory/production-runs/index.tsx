@@ -1,11 +1,10 @@
 import { Pagination } from '@/components/data-table/pagination';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface RunRow {
     id: number;
@@ -50,8 +49,7 @@ export default function ProductionRunsIndex({ runs, filters }: { runs: Paginated
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <select
-                            className={selectClass}
+                        <SearchSelect
                             value={filters.status}
                             onChange={(e) =>
                                 router.get('/inventory/production-runs', e.target.value ? { status: e.target.value } : {}, {
@@ -63,7 +61,7 @@ export default function ProductionRunsIndex({ runs, filters }: { runs: Paginated
                             <option value="draft">Draft</option>
                             <option value="confirmed">Confirmed</option>
                             <option value="reversed">Reversed</option>
-                        </select>
+                        </SearchSelect>
                         <Button asChild>
                             <Link href="/inventory/production-runs/new">New run</Link>
                         </Button>

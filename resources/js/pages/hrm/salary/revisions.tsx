@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -75,7 +76,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Increments', href: '/hrm/salary-revisions' },
 ];
 
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 const cardClass = 'border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4';
 const rowClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b';
 
@@ -118,14 +118,14 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                 <DialogHeader>
                     <DialogTitle>Propose a salary revision</DialogTitle>
                     <DialogDescription>
-                        Nothing changes until this is approved - no salary structure exists while a proposal is pending. A backdated revision recomputes
-                        the months already paid and posts the difference forward as an arrear; it never rewrites a closed payslip.
+                        Nothing changes until this is approved - no salary structure exists while a proposal is pending. A backdated revision
+                        recomputes the months already paid and posts the difference forward as an arrear; it never rewrites a closed payslip.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-2">
                         <Label htmlFor="rev_employee">Employee</Label>
-                        <select id="rev_employee" className={selectClass} value={employeeId} onChange={(e) => chooseEmployee(e.target.value)}>
+                        <SearchSelect id="rev_employee" value={employeeId} onChange={(e) => chooseEmployee(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
                                 <option key={e.id} value={e.id} disabled={!e.has_structure}>
@@ -133,24 +133,24 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                                     {e.has_structure ? '' : ' - no salary structure yet'}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         {selected?.has_structure && (
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-muted-foreground text-xs">
                                 Currently Basic {money(selected.basic ?? 0)}, Gross {money(selected.gross ?? 0)} since {selected.effective_from}.
                             </p>
                         )}
-                        {errors.employee_id && <p className="text-xs text-destructive">{errors.employee_id}</p>}
+                        {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                     </div>
 
                     <div className="grid gap-2">
                         <Label htmlFor="rev_from">Effective from</Label>
                         <Input id="rev_from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
                         {isBackdated && (
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-muted-foreground text-xs">
                                 Backdated - every already-disbursed month from this date is re-priced and the difference posted as an arrear.
                             </p>
                         )}
-                        {errors.effective_from && <p className="text-xs text-destructive">{errors.effective_from}</p>}
+                        {errors.effective_from && <p className="text-destructive text-xs">{errors.effective_from}</p>}
                     </div>
 
                     {employeeId !== '' && (
@@ -160,7 +160,7 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                                 <div key={c.id} className="flex items-center gap-3">
                                     <span className="w-48 text-sm">
                                         {c.name}
-                                        {c.is_basic && <span className="ml-1 text-xs text-muted-foreground">basic</span>}
+                                        {c.is_basic && <span className="text-muted-foreground ml-1 text-xs">basic</span>}
                                     </span>
                                     <Input
                                         type="number"
@@ -170,12 +170,12 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                                         value={values[c.id] ?? ''}
                                         onChange={(e) => setValues({ ...values, [c.id]: e.target.value })}
                                     />
-                                    <span className="text-xs text-muted-foreground">
+                                    <span className="text-muted-foreground text-xs">
                                         {c.is_percentage || c.is_priced_by_attendance ? c.basis_label : c.type}
                                     </span>
                                 </div>
                             ))}
-                            {errors.lines && <p className="text-xs text-destructive">{errors.lines}</p>}
+                            {errors.lines && <p className="text-destructive text-xs">{errors.lines}</p>}
                         </div>
                     )}
 
@@ -187,7 +187,7 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                     <div className="grid gap-2">
                         <Label htmlFor="rev_reason">Reason</Label>
                         <Input id="rev_reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Annual increment 2026" />
-                        {errors.reason && <p className="text-xs text-destructive">{errors.reason}</p>}
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                 </div>
                 <DialogFooter>
@@ -239,14 +239,13 @@ export default function SalaryRevisions({ can_manage, filters, revisions, employ
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">Increments</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             A raise is a proposal before it is a fact. Approving one opens a new effective-dated structure and, if it reaches
                             backwards, posts the difference forward as an arrear.
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <select
-                            className={selectClass}
+                        <SearchSelect
                             value={filters.employee_id ?? ''}
                             onChange={(e) => reload(e.target.value === '' ? null : Number(e.target.value))}
                         >
@@ -256,18 +255,18 @@ export default function SalaryRevisions({ can_manage, filters, revisions, employ
                                     {e.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         {can_manage && <ProposeDialog employees={employees} components={components} />}
                     </div>
                 </div>
 
                 <div className={cardClass}>
                     {revisions.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No revisions proposed yet.</p>
+                        <p className="text-muted-foreground text-sm">No revisions proposed yet.</p>
                     ) : (
                         <table className="w-full min-w-[64rem] text-sm">
                             <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                     <th className="py-2">Employee</th>
                                     <th className="py-2">Effective</th>
                                     <th className="py-2">Proposed</th>
@@ -281,14 +280,14 @@ export default function SalaryRevisions({ can_manage, filters, revisions, employ
                                     <tr key={r.id} className={rowClass}>
                                         <td className="py-2">
                                             {r.employee}
-                                            <span className="ml-2 text-xs text-muted-foreground">{r.employee_code}</span>
+                                            <span className="text-muted-foreground ml-2 text-xs">{r.employee_code}</span>
                                         </td>
                                         <td className="py-2 whitespace-nowrap">
                                             {r.effective_from}
-                                            {r.is_retroactive && <span className="ml-2 text-xs text-muted-foreground">backdated</span>}
+                                            {r.is_retroactive && <span className="text-muted-foreground ml-2 text-xs">backdated</span>}
                                         </td>
                                         <td className="py-2">{money(r.proposed_total)}</td>
-                                        <td className="py-2 text-xs text-muted-foreground">
+                                        <td className="text-muted-foreground py-2 text-xs">
                                             {r.reason}
                                             {r.overtime_eligible && <div className="text-xs">overtime-eligible</div>}
                                         </td>
@@ -299,7 +298,7 @@ export default function SalaryRevisions({ can_manage, filters, revisions, employ
                                                 <>
                                                     <span className={r.arrear_amount < 0 ? 'text-destructive' : ''}>{money(r.arrear_amount)}</span>
                                                     {r.arrear_breakdown.map((b) => (
-                                                        <div key={b.payroll_run_id} className="text-xs text-muted-foreground">
+                                                        <div key={b.payroll_run_id} className="text-muted-foreground text-xs">
                                                             {b.period}: {money(b.difference)}
                                                         </div>
                                                     ))}
@@ -320,7 +319,9 @@ export default function SalaryRevisions({ can_manage, filters, revisions, employ
                                                     </Button>
                                                     <Button
                                                         size="sm"
-                                                        onClick={() => router.post(route('hrm.revisions.approve', r.id), {}, { preserveScroll: true })}
+                                                        onClick={() =>
+                                                            router.post(route('hrm.revisions.approve', r.id), {}, { preserveScroll: true })
+                                                        }
                                                     >
                                                         Approve
                                                     </Button>

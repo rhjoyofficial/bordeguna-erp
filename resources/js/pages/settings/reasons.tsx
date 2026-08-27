@@ -36,12 +36,7 @@ function AddReasonForm({ context }: { context: string }) {
         <form onSubmit={submit} className="flex items-end gap-3">
             <div className="grid flex-1 gap-2">
                 <Label htmlFor={`new-reason-${context}`}>New reason</Label>
-                <Input
-                    id={`new-reason-${context}`}
-                    value={data.name}
-                    onChange={(e) => setData('name', e.target.value)}
-                    placeholder="e.g. Damaged"
-                />
+                <Input id={`new-reason-${context}`} value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. Damaged" />
                 <InputError message={errors.name} />
             </div>
             <Button disabled={processing}>Add</Button>
@@ -132,7 +127,7 @@ export default function Reasons({ reasons, contexts }: ReasonsProps) {
 
                                 <div>
                                     {contextReasons.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground">No reasons yet.</p>
+                                        <p className="text-muted-foreground text-sm">No reasons yet.</p>
                                     ) : (
                                         contextReasons.map((reason) => <ReasonRow key={reason.id} reason={reason} />)
                                     )}

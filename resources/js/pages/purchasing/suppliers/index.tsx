@@ -1,6 +1,7 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { SupplierImportPanel } from '@/components/supplier-import-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,8 +12,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Supplier {
     id: number;
@@ -196,16 +195,11 @@ export default function SuppliersIndex({
                         />
                     </FilterField>
                     <FilterField label="Status" htmlFor="filter-status">
-                        <select
-                            id="filter-status"
-                            className={selectClass}
-                            value={filters.status}
-                            onChange={(e) => setFilter('status', e.target.value)}
-                        >
+                        <SearchSelect id="filter-status" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
                             <option value="">All statuses</option>
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
-                        </select>
+                        </SearchSelect>
                     </FilterField>
                 </FilterBar>
 

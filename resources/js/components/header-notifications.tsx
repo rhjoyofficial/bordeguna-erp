@@ -25,8 +25,7 @@ import { Bell, CheckSquare } from 'lucide-react';
  * every notification from everyone else.
  */
 export default function HeaderNotifications() {
-    const { pendingApprovalsCount, canReviewApprovals, unreadNotificationsCount, recentNotifications } =
-        usePage<SharedData>().props;
+    const { pendingApprovalsCount, canReviewApprovals, unreadNotificationsCount, recentNotifications } = usePage<SharedData>().props;
 
     const notifications = recentNotifications ?? [];
     const unread = unreadNotificationsCount ?? 0;

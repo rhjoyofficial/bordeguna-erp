@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,8 +8,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface JournalLine {
     id: number;
@@ -162,9 +161,8 @@ export default function InvoiceShow({
                             <h2 className="font-medium">Record a receipt</h2>
                             <div className="grid gap-2">
                                 <Label htmlFor="money_account_id">Into</Label>
-                                <select
+                                <SearchSelect
                                     id="money_account_id"
-                                    className={selectClass}
                                     value={data.money_account_id}
                                     onChange={(e) => setData('money_account_id', e.target.value)}
                                 >
@@ -173,7 +171,7 @@ export default function InvoiceShow({
                                             {a.name}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                                 <InputError message={errors.money_account_id} />
                             </div>
                             <div className="grid gap-2">

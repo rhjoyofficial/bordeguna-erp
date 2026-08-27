@@ -66,7 +66,7 @@ function NavGroupSection({ group, activeUrl }: { group: NavGroup; activeUrl: str
         <Collapsible open={isCollapsed ? true : open} onOpenChange={handleOpenChange} className="group/nav-section">
             <SidebarGroup className="px-2 py-0">
                 <SidebarGroupLabel asChild>
-                    <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 hover:text-sidebar-foreground">
+                    <CollapsibleTrigger className="hover:text-sidebar-foreground flex w-full items-center justify-between gap-2">
                         <span>{group.label}</span>
                         <ChevronRight className="size-3.5 shrink-0 opacity-60 transition-transform duration-200 group-data-[state=open]/nav-section:rotate-90" />
                     </CollapsibleTrigger>

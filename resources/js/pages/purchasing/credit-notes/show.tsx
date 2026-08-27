@@ -56,7 +56,7 @@ export default function CreditNoteShow({
                         <dt className="text-muted-foreground">Against return</dt>
                         <dd>#{creditNote.purchase_return?.id ?? '-'}</dd>
                     </dl>
-                    {creditNote.note && <p className="mt-3 text-sm text-muted-foreground">{creditNote.note}</p>}
+                    {creditNote.note && <p className="text-muted-foreground mt-3 text-sm">{creditNote.note}</p>}
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
@@ -73,7 +73,7 @@ export default function CreditNoteShow({
                             {allocations.map((allocation) => (
                                 <tr key={allocation.id} className="border-t">
                                     <td className="p-3 font-medium">{allocation.bill?.bill_number ?? '-'}</td>
-                                    <td className="p-3 text-muted-foreground">{allocation.bill?.bill_date ?? '-'}</td>
+                                    <td className="text-muted-foreground p-3">{allocation.bill?.bill_date ?? '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{allocation.amount}</td>
                                     <td className="p-3 text-right tabular-nums">{allocation.bill?.outstanding ?? '-'}</td>
                                 </tr>
@@ -87,15 +87,13 @@ export default function CreditNoteShow({
                     accountant trust the system. */}
                 {journal && (
                     <div className="overflow-x-auto rounded-lg border">
-                        <div className="border-b bg-muted/50 p-3 text-sm font-medium">Journal {journal.journal_number}</div>
+                        <div className="bg-muted/50 border-b p-3 text-sm font-medium">Journal {journal.journal_number}</div>
                         <table className="w-full text-sm">
                             <tbody>
                                 {journal.lines.map((line) => (
                                     <tr key={line.id} className="border-t">
-                                        <td className="p-3">
-                                            {line.account ? `${line.account.code} ${line.account.name}` : '-'}
-                                        </td>
-                                        <td className="p-3 text-muted-foreground">{line.memo}</td>
+                                        <td className="p-3">{line.account ? `${line.account.code} ${line.account.name}` : '-'}</td>
+                                        <td className="text-muted-foreground p-3">{line.memo}</td>
                                         <td className="p-3 text-right tabular-nums">
                                             {line.amount_minor >= 0 ? `Dr ${taka(line.amount_minor)}` : `Cr ${taka(line.amount_minor)}`}
                                         </td>

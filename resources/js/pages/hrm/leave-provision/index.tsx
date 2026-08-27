@@ -70,28 +70,28 @@ export default function LeaveProvisionIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div className="grid gap-3 sm:grid-cols-4">
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Computed liability</p>
+                        <p className="text-muted-foreground text-xs">Computed liability</p>
                         <p className="font-medium tabular-nums">{money(plan.totals.liability)}</p>
                     </div>
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Already in the ledger</p>
+                        <p className="text-muted-foreground text-xs">Already in the ledger</p>
                         <p className="font-medium tabular-nums">{money(currentBalance)}</p>
                     </div>
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">This run would post</p>
+                        <p className="text-muted-foreground text-xs">This run would post</p>
                         <p className="font-medium tabular-nums">{money(delta)}</p>
                     </div>
                     <div className="rounded-lg border p-3">
-                        <p className="text-xs text-muted-foreground">Staff with a balance</p>
+                        <p className="text-muted-foreground text-xs">Staff with a balance</p>
                         <p className="font-medium tabular-nums">{plan.totals.employees}</p>
                     </div>
                 </div>
 
                 {plan.totals.unpriced > 0 && (
                     <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                        {plan.totals.unpriced} employee(s) have encashable days that could NOT be priced because no salary structure is in
-                        force for them. Their days are listed below and are deliberately NOT provided for - fix the structure and run
-                        again rather than accepting a figure that leaves a real liability out.
+                        {plan.totals.unpriced} employee(s) have encashable days that could NOT be priced because no salary structure is in force for
+                        them. Their days are listed below and are deliberately NOT provided for - fix the structure and run again rather than
+                        accepting a figure that leaves a real liability out.
                     </p>
                 )}
 
@@ -113,7 +113,7 @@ export default function LeaveProvisionIndex({
                         <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
                     </div>
                     <Button disabled={processing}>Record this provision</Button>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                         Posts the difference only. Running twice on one day is harmless - the second run finds nothing to post.
                     </p>
                 </form>
@@ -138,12 +138,12 @@ export default function LeaveProvisionIndex({
                                     <td className="p-3 text-right tabular-nums">{row.days}</td>
                                     <td className="p-3 text-right tabular-nums">{row.daily_rate === null ? '-' : money(row.daily_rate)}</td>
                                     <td className="p-3 text-right tabular-nums">{money(row.amount)}</td>
-                                    <td className="p-3 text-xs text-muted-foreground">{row.explanation}</td>
+                                    <td className="text-muted-foreground p-3 text-xs">{row.explanation}</td>
                                 </tr>
                             ))}
                             {plan.rows.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={5} className="text-muted-foreground p-6 text-center">
                                         Nobody currently holds an encashable leave balance, so there is no liability to provide for.
                                     </td>
                                 </tr>
@@ -172,7 +172,7 @@ export default function LeaveProvisionIndex({
                                             <Link href={`/hrm/leave-provision/${run.id}`} className="hover:underline">
                                                 {run.valued_on?.slice(0, 10)}
                                             </Link>
-                                            {run.is_dry_run && <span className="ml-2 text-xs text-muted-foreground">(preview)</span>}
+                                            {run.is_dry_run && <span className="text-muted-foreground ml-2 text-xs">(preview)</span>}
                                         </td>
                                         <td className="p-3">{run.runner?.name ?? '-'}</td>
                                         <td className="p-3 text-right tabular-nums">{run.employees_affected}</td>

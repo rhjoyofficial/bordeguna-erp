@@ -42,15 +42,7 @@ type JournalView = {
 
 const money = (value: string) => Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
-export default function BillShow({
-    bill,
-    journals,
-    can_reverse,
-}: {
-    bill: Bill;
-    journals: JournalView[];
-    can_reverse: boolean;
-}) {
+export default function BillShow({ bill, journals, can_reverse }: { bill: Bill; journals: JournalView[]; can_reverse: boolean }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchasing', href: '/purchasing/purchase-orders' },
         { title: 'Bills', href: '/purchasing/bills' },
@@ -73,7 +65,7 @@ export default function BillShow({
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <h1 className="text-xl font-semibold">Bill {bill.bill_number}</h1>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             {bill.supplier}
                             {bill.po_number ? ` · against ${bill.po_number}` : ''}
                             {bill.bill_date ? ` · dated ${bill.bill_date}` : ''}
@@ -82,8 +74,8 @@ export default function BillShow({
                     </div>
 
                     {bill.is_reversed && (
-                        <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
-                            <div className="font-semibold text-destructive">Reversed {bill.reversed_at}</div>
+                        <div className="border-destructive/40 bg-destructive/10 rounded border px-3 py-2 text-sm">
+                            <div className="text-destructive font-semibold">Reversed {bill.reversed_at}</div>
                             {bill.reversal_note && <div className="text-muted-foreground">{bill.reversal_note}</div>}
                         </div>
                     )}
@@ -97,7 +89,7 @@ export default function BillShow({
                         ['Outstanding', bill.outstanding],
                     ].map(([label, value]) => (
                         <div key={label} className="rounded-lg border p-4">
-                            <div className="text-sm text-muted-foreground">{label}</div>
+                            <div className="text-muted-foreground text-sm">{label}</div>
                             <div className="text-lg font-semibold tabular-nums">{money(value)}</div>
                         </div>
                     ))}
@@ -119,12 +111,10 @@ export default function BillShow({
                                 <tr key={line.id} className="border-t">
                                     <td className="p-3">
                                         <div className="font-medium">{line.product}</div>
-                                        <div className="text-xs text-muted-foreground">{line.sku}</div>
+                                        <div className="text-muted-foreground text-xs">{line.sku}</div>
                                     </td>
                                     <td className="p-3 text-right tabular-nums">{line.quantity}</td>
-                                    <td className="p-3 text-right tabular-nums">
-                                        {line.order_unit_cost ? money(line.order_unit_cost) : '-'}
-                                    </td>
+                                    <td className="p-3 text-right tabular-nums">{line.order_unit_cost ? money(line.order_unit_cost) : '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{money(line.unit_cost)}</td>
                                     <td className="p-3 text-right tabular-nums">{money(line.line_total)}</td>
                                 </tr>
@@ -137,17 +127,13 @@ export default function BillShow({
                     <h2 className="mb-2 text-sm font-semibold">Accounting</h2>
                     <div className="flex flex-col gap-3">
                         {journals.length === 0 && (
-                            <p className="text-sm text-muted-foreground">
-                                No journal was posted. Account mappings are not configured yet.
-                            </p>
+                            <p className="text-muted-foreground text-sm">No journal was posted. Account mappings are not configured yet.</p>
                         )}
                         {journals.map((entry) => (
                             <div key={entry.id} className="overflow-x-auto rounded-lg border">
-                                <div className="border-b bg-muted/50 p-3 text-sm font-medium">
+                                <div className="bg-muted/50 border-b p-3 text-sm font-medium">
                                     {entry.journal_number}
-                                    {entry.is_reversal && (
-                                        <span className="ml-2 text-xs text-destructive">reversal</span>
-                                    )}
+                                    {entry.is_reversal && <span className="text-destructive ml-2 text-xs">reversal</span>}
                                 </div>
                                 <table className="w-full text-sm">
                                     <tbody>
@@ -170,9 +156,9 @@ export default function BillShow({
                 {can_reverse && (
                     <form onSubmit={reverse} className="flex flex-col gap-2 rounded-lg border p-4">
                         <h2 className="text-sm font-semibold">Reverse this bill</h2>
-                        <p className="text-sm text-muted-foreground">
-                            The bill is kept and a reversing journal is posted. The goods become billable again.
-                            Once a bill has been paid or credited it can no longer be reversed.
+                        <p className="text-muted-foreground text-sm">
+                            The bill is kept and a reversing journal is posted. The goods become billable again. Once a bill has been paid or credited
+                            it can no longer be reversed.
                         </p>
                         <Input
                             value={data.note}

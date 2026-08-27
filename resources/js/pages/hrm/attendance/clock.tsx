@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -70,8 +71,6 @@ interface ClockProps {
     directions: { value: string; label: string }[];
 }
 
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
-
 /**
  * An employee raising a correction on one of their own days (COR-01). It is a
  * request, not a change - it routes to their manager and then HR.
@@ -112,13 +111,13 @@ function RequestCorrectionDialog({
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="ctype">What is wrong</Label>
-                        <select id="ctype" className={selectClass} value={type} onChange={(e) => setType(e.target.value)}>
+                        <SearchSelect id="ctype" value={type} onChange={(e) => setType(e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
                                     {t.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
                     {selected?.needs_time && (
                         <div className="grid gap-4 sm:grid-cols-2">
@@ -129,14 +128,14 @@ function RequestCorrectionDialog({
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="cdir">Direction</Label>
-                                <select id="cdir" className={selectClass} value={direction} onChange={(e) => setDirection(e.target.value)}>
+                                <SearchSelect id="cdir" value={direction} onChange={(e) => setDirection(e.target.value)}>
                                     <option value="">- Unknown -</option>
                                     {directions.map((d) => (
                                         <option key={d.value} value={d.value}>
                                             {d.label}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                             </div>
                         </div>
                     )}
@@ -394,23 +393,23 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                             <label htmlFor="my-status" className="text-muted-foreground text-xs">
                                 Status
                             </label>
-                            <select id="my-status" className={selectClass} value={myStatus} onChange={(e) => setMyStatus(e.target.value)}>
+                            <SearchSelect id="my-status" value={myStatus} onChange={(e) => setMyStatus(e.target.value)}>
                                 <option value="">All statuses</option>
                                 {statuses.map((s) => (
                                     <option key={s.value} value={s.value}>
                                         {s.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid gap-1.5">
                             <label htmlFor="my-sort" className="text-muted-foreground text-xs">
                                 Date order
                             </label>
-                            <select id="my-sort" className={selectClass} value={mySort} onChange={(e) => setMySort(e.target.value)}>
+                            <SearchSelect id="my-sort" value={mySort} onChange={(e) => setMySort(e.target.value)}>
                                 <option value="newest">Newest first</option>
                                 <option value="oldest">Oldest first</option>
-                            </select>
+                            </SearchSelect>
                         </div>
                         <Button onClick={() => showHistory()}>Show</Button>
                     </div>

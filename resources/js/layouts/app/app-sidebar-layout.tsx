@@ -4,7 +4,6 @@ import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
 import ErpAssistant from '@/components/erp-assistant';
 import { Toaster } from '@/components/ui/sonner';
-import ThemeCustomizer from '@/components/theme-customizer';
 import { useFlashToast } from '@/hooks/use-flash-toast';
 import { type BreadcrumbItem } from '@/types';
 
@@ -19,7 +18,6 @@ export default function AppSidebarLayout({ children, breadcrumbs = [] }: { child
                 {children}
             </AppContent>
             <Toaster />
-            <ThemeCustomizer />
             <ErpAssistant />
         </AppShell>
     );

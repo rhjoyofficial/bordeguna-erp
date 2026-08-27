@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -65,8 +66,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Corrections', href: '/hrm/attendance/corrections' },
 ];
 
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
-
 /**
  * A datetime-local value to the timestamp the API expects.
  *
@@ -87,7 +86,17 @@ function toTimestamp(value: string): string {
     return `${datePart} ${hh.padStart(2, '0')}:${mm.padStart(2, '0')}:${ss.padStart(2, '0')}`;
 }
 
-function CorrectionDialog({ types, directions, employees, prefill }: { types: CorrectionType[]; directions: { value: string; label: string }[]; employees: { id: number; name: string }[]; prefill?: { employee_id: number | null; attendance_date: string | null } }) {
+function CorrectionDialog({
+    types,
+    directions,
+    employees,
+    prefill,
+}: {
+    types: CorrectionType[];
+    directions: { value: string; label: string }[];
+    employees: { id: number; name: string }[];
+    prefill?: { employee_id: number | null; attendance_date: string | null };
+}) {
     // Opens by itself when the Fix button on a held day sent us here, so the
     // journey from "this day blocks payroll" to "here is why, and here is the
     // correction" is one click rather than a hunt through the screen.
@@ -164,49 +173,49 @@ function CorrectionDialog({ types, directions, employees, prefill }: { types: Co
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="employee_id">Employee</Label>
-                            <select id="employee_id" className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+                            <SearchSelect id="employee_id" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                                 <option value="">- Select -</option>
                                 {employees.map((e) => (
                                     <option key={e.id} value={e.id}>
                                         {e.name}
                                     </option>
                                 ))}
-                            </select>
-                            {errors.employee_id && <p className="text-xs text-destructive">{errors.employee_id}</p>}
+                            </SearchSelect>
+                            {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="attendance_date">Date</Label>
                             <Input id="attendance_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                            {errors.attendance_date && <p className="text-xs text-destructive">{errors.attendance_date}</p>}
+                            {errors.attendance_date && <p className="text-destructive text-xs">{errors.attendance_date}</p>}
                         </div>
                     </div>
 
                     <div className="grid gap-2">
                         <Label htmlFor="type">What needs correcting</Label>
-                        <select id="type" className={selectClass} value={type} onChange={(e) => setType(e.target.value)}>
+                        <SearchSelect id="type" value={type} onChange={(e) => setType(e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
                                     {t.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
 
                     {selected?.needs_punch && (
                         <div className="grid gap-2">
                             <Label htmlFor="punch_id">Which punch</Label>
-                            <select id="punch_id" className={selectClass} value={punchId} onChange={(e) => setPunchId(e.target.value)}>
+                            <SearchSelect id="punch_id" value={punchId} onChange={(e) => setPunchId(e.target.value)}>
                                 <option value="">- Select -</option>
                                 {punches.map((p) => (
                                     <option key={p.id} value={p.id}>
                                         {p.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                             {punches.length === 0 && employeeId !== '' && (
-                                <p className="text-xs text-muted-foreground">No punches captured on this date.</p>
+                                <p className="text-muted-foreground text-xs">No punches captured on this date.</p>
                             )}
-                            {errors.punch_id && <p className="text-xs text-destructive">{errors.punch_id}</p>}
+                            {errors.punch_id && <p className="text-destructive text-xs">{errors.punch_id}</p>}
                         </div>
                     )}
 
@@ -224,18 +233,18 @@ function CorrectionDialog({ types, directions, employees, prefill }: { types: Co
                                     value={correctedAt}
                                     onChange={(e) => setCorrectedAt(e.target.value)}
                                 />
-                                {errors.corrected_at && <p className="text-xs text-destructive">{errors.corrected_at}</p>}
+                                {errors.corrected_at && <p className="text-destructive text-xs">{errors.corrected_at}</p>}
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="direction">Direction</Label>
-                                <select id="direction" className={selectClass} value={direction} onChange={(e) => setDirection(e.target.value)}>
+                                <SearchSelect id="direction" value={direction} onChange={(e) => setDirection(e.target.value)}>
                                     <option value="">- Unknown -</option>
                                     {directions.map((d) => (
                                         <option key={d.value} value={d.value}>
                                             {d.label}
                                         </option>
                                     ))}
-                                </select>
+                                </SearchSelect>
                             </div>
                         </div>
                     )}
@@ -243,13 +252,18 @@ function CorrectionDialog({ types, directions, employees, prefill }: { types: Co
                     <div className="grid gap-2">
                         <Label htmlFor="reason">Reason</Label>
                         <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why this correction is needed" />
-                        {errors.reason && <p className="text-xs text-destructive">{errors.reason}</p>}
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
 
                     <div className="grid gap-2">
                         <Label htmlFor="evidence">Evidence (optional)</Label>
-                        <Input id="evidence" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" onChange={(e) => setEvidence(e.target.files?.[0] ?? null)} />
-                        {errors.evidence && <p className="text-xs text-destructive">{errors.evidence}</p>}
+                        <Input
+                            id="evidence"
+                            type="file"
+                            accept=".jpg,.jpeg,.png,.webp,.pdf"
+                            onChange={(e) => setEvidence(e.target.files?.[0] ?? null)}
+                        />
+                        {errors.evidence && <p className="text-destructive text-xs">{errors.evidence}</p>}
                     </div>
 
                     <div className="grid gap-2">
@@ -260,7 +274,7 @@ function CorrectionDialog({ types, directions, employees, prefill }: { types: Co
                             onChange={(e) => setOverrideReason(e.target.value)}
                             placeholder="Required to correct a locked period"
                         />
-                        {errors.override_reason && <p className="text-xs text-destructive">{errors.override_reason}</p>}
+                        {errors.override_reason && <p className="text-destructive text-xs">{errors.override_reason}</p>}
                     </div>
                 </div>
                 <DialogFooter>
@@ -302,12 +316,12 @@ function LockDialog() {
                         <div className="grid gap-2">
                             <Label htmlFor="period_start">From</Label>
                             <Input id="period_start" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
-                            {errors.period_start && <p className="text-xs text-destructive">{errors.period_start}</p>}
+                            {errors.period_start && <p className="text-destructive text-xs">{errors.period_start}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="period_end">To</Label>
                             <Input id="period_end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
-                            {errors.period_end && <p className="text-xs text-destructive">{errors.period_end}</p>}
+                            {errors.period_end && <p className="text-destructive text-xs">{errors.period_end}</p>}
                         </div>
                     </div>
                     <div className="grid gap-2">
@@ -394,7 +408,7 @@ export default function Corrections({ corrections, locks, types, directions, emp
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">Attendance corrections</h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             Raw punches are never edited. A correction is recorded next to them and the day is reprocessed.
                         </p>
                     </div>
@@ -407,11 +421,11 @@ export default function Corrections({ corrections, locks, types, directions, emp
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Corrections</h3>
                     {corrections.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No corrections recorded yet.</p>
+                        <p className="text-muted-foreground text-sm">No corrections recorded yet.</p>
                     ) : (
                         <table className="w-full min-w-[60rem] text-sm">
                             <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                     <th className="py-2">Date</th>
                                     <th className="py-2">Correction</th>
                                     <th className="py-2">Reason</th>
@@ -426,18 +440,14 @@ export default function Corrections({ corrections, locks, types, directions, emp
                                         <td className="py-2">
                                             {c.summary}
                                             {c.override_reason && (
-                                                <div className="text-xs text-destructive">Locked-period override: {c.override_reason}</div>
+                                                <div className="text-destructive text-xs">Locked-period override: {c.override_reason}</div>
                                             )}
                                         </td>
-                                        <td className="py-2 text-xs text-muted-foreground">{c.reason}</td>
-                                        <td className="py-2 text-muted-foreground">{c.requested_by ?? '-'}</td>
+                                        <td className="text-muted-foreground py-2 text-xs">{c.reason}</td>
+                                        <td className="text-muted-foreground py-2">{c.requested_by ?? '-'}</td>
                                         <td className="py-2">
-                                            {c.is_applied ? (
-                                                <Badge variant="default">Applied</Badge>
-                                            ) : (
-                                                <Badge variant="secondary">{c.status}</Badge>
-                                            )}
-                                            {c.stage && !c.is_applied && <span className="ml-2 text-xs text-muted-foreground">at {c.stage}</span>}
+                                            {c.is_applied ? <Badge variant="default">Applied</Badge> : <Badge variant="secondary">{c.status}</Badge>}
+                                            {c.stage && !c.is_applied && <span className="text-muted-foreground ml-2 text-xs">at {c.stage}</span>}
                                         </td>
                                     </tr>
                                 ))}
@@ -449,13 +459,13 @@ export default function Corrections({ corrections, locks, types, directions, emp
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Locked periods</h3>
                     {locks.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-muted-foreground text-sm">
                             No periods locked. Lock a week or a payroll cutoff to close it to further corrections.
                         </p>
                     ) : (
                         <table className="w-full min-w-[48rem] text-sm">
                             <thead>
-                                <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                                <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                     <th className="py-2">Period</th>
                                     <th className="py-2">Note</th>
                                     <th className="py-2">Status</th>
@@ -468,12 +478,12 @@ export default function Corrections({ corrections, locks, types, directions, emp
                                         <td className="py-2 whitespace-nowrap">
                                             {lock.period_start} → {lock.period_end}
                                         </td>
-                                        <td className="py-2 text-muted-foreground">{lock.note ?? '-'}</td>
+                                        <td className="text-muted-foreground py-2">{lock.note ?? '-'}</td>
                                         <td className="py-2">
                                             {lock.is_active ? (
                                                 <Badge variant="default">Locked</Badge>
                                             ) : (
-                                                <span className="text-xs text-muted-foreground">
+                                                <span className="text-muted-foreground text-xs">
                                                     <Badge variant="secondary">Reopened</Badge>
                                                     {lock.unlock_reason && <span className="ml-2">{lock.unlock_reason}</span>}
                                                 </span>

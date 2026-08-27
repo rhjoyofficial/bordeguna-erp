@@ -1,4 +1,5 @@
 import Heading from '@/components/heading';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,8 +29,6 @@ type PageProps = {
     groups: { id: number; name: string; code: string }[];
 };
 
-const selectClass =
-    'h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none';
 
 export default function Discounts() {
     const { on, discounts, products, groups } = usePage<PageProps>().props;
@@ -44,10 +43,7 @@ export default function Discounts() {
         discount_label: '',
     });
 
-    const chosen = useMemo(
-        () => products.find((p) => String(p.id) === form.data.product_id) ?? null,
-        [products, form.data.product_id],
-    );
+    const chosen = useMemo(() => products.find((p) => String(p.id) === form.data.product_id) ?? null, [products, form.data.product_id]);
 
     const saving = useMemo(() => {
         if (!chosen?.list_price || !form.data.unit_price) return null;
@@ -68,27 +64,18 @@ export default function Discounts() {
         <AppLayout>
             <Head title="Discounts" />
             <div className="px-4 py-6">
-                <Heading
-                    title="Discounts"
-                    description="Sell something below its list price for a period, or from a quantity up."
-                />
+                <Heading title="Discounts" description="Sell something below its list price for a period, or from a quantity up." />
 
-                <div className="mb-6 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-                    A discount is an ordinary price rule with a lower number on it, so nothing else in the system has to
-                    learn a new idea. To sell 500 g of a 125 g pack, set a discount from <strong>4 packs</strong> up
-                    rather than creating a 500 g product.
+                <div className="border-border bg-muted/40 text-muted-foreground mb-6 rounded-md border p-4 text-sm">
+                    A discount is an ordinary price rule with a lower number on it, so nothing else in the system has to learn a new idea. To sell 500
+                    g of a 125 g pack, set a discount from <strong>4 packs</strong> up rather than creating a 500 g product.
                 </div>
 
-                <form onSubmit={submit} className="mb-8 space-y-4 rounded-lg border border-border p-4">
+                <form onSubmit={submit} className="border-border mb-8 space-y-4 rounded-lg border p-4">
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         <div className="grid gap-1.5">
                             <Label htmlFor="product">Product</Label>
-                            <select
-                                id="product"
-                                className={selectClass}
-                                value={form.data.product_id}
-                                onChange={(e) => form.setData('product_id', e.target.value)}
-                            >
+                            <SearchSelect id="product" value={form.data.product_id} onChange={(e) => form.setData('product_id', e.target.value)}>
                                 <option value="">Choose a product</option>
                                 {products.map((p) => (
                                     <option key={p.id} value={p.id}>
@@ -96,10 +83,8 @@ export default function Discounts() {
                                         {p.list_price !== null ? ` (${p.list_price.toFixed(2)})` : ' (no price yet)'}
                                     </option>
                                 ))}
-                            </select>
-                            {form.errors.product_id && (
-                                <p className="text-sm text-red-600">{form.errors.product_id}</p>
-                            )}
+                            </SearchSelect>
+                            {form.errors.product_id && <p className="text-sm text-red-600">{form.errors.product_id}</p>}
                         </div>
 
                         <div className="grid gap-1.5">
@@ -113,7 +98,7 @@ export default function Discounts() {
                                 onChange={(e) => form.setData('unit_price', e.target.value)}
                             />
                             {chosen?.list_price != null && (
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-muted-foreground text-xs">
                                     List price is {chosen.list_price.toFixed(2)}
                                     {saving && (
                                         <>
@@ -136,14 +121,13 @@ export default function Discounts() {
                                 value={form.data.min_quantity}
                                 onChange={(e) => form.setData('min_quantity', e.target.value)}
                             />
-                            <p className="text-xs text-muted-foreground">1 means every sale. 4 means four or more.</p>
+                            <p className="text-muted-foreground text-xs">1 means every sale. 4 means four or more.</p>
                         </div>
 
                         <div className="grid gap-1.5">
                             <Label htmlFor="group">Customer group</Label>
-                            <select
+                            <SearchSelect
                                 id="group"
-                                className={selectClass}
                                 value={form.data.price_group_id}
                                 onChange={(e) => form.setData('price_group_id', e.target.value)}
                             >
@@ -153,7 +137,7 @@ export default function Discounts() {
                                         {g.name}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
 
                         <div className="grid gap-1.5">
@@ -164,9 +148,7 @@ export default function Discounts() {
                                 value={form.data.effective_from}
                                 onChange={(e) => form.setData('effective_from', e.target.value)}
                             />
-                            {form.errors.effective_from && (
-                                <p className="text-sm text-red-600">{form.errors.effective_from}</p>
-                            )}
+                            {form.errors.effective_from && <p className="text-sm text-red-600">{form.errors.effective_from}</p>}
                         </div>
 
                         <div className="grid gap-1.5">
@@ -177,7 +159,7 @@ export default function Discounts() {
                                 value={form.data.effective_to}
                                 onChange={(e) => form.setData('effective_to', e.target.value)}
                             />
-                            <p className="text-xs text-muted-foreground">Leave empty to run until you end it.</p>
+                            <p className="text-muted-foreground text-xs">Leave empty to run until you end it.</p>
                         </div>
                     </div>
 
@@ -197,7 +179,7 @@ export default function Discounts() {
                 </form>
 
                 <h3 className="mb-3 text-sm font-medium">Discounts set</h3>
-                <div className="overflow-x-auto rounded-lg border border-border">
+                <div className="border-border overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
                         <thead className="bg-muted/50 text-left">
                             <tr>
@@ -214,16 +196,16 @@ export default function Discounts() {
                         <tbody>
                             {discounts.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={8} className="text-muted-foreground p-6 text-center">
                                         No discounts set. Everything sells at its list price.
                                     </td>
                                 </tr>
                             )}
                             {discounts.map((d) => (
-                                <tr key={d.id} className="border-t border-border">
+                                <tr key={d.id} className="border-border border-t">
                                     <td className="p-3">
                                         <div className="font-medium">{d.product}</div>
-                                        <div className="text-xs text-muted-foreground">{d.sku}</div>
+                                        <div className="text-muted-foreground text-xs">{d.sku}</div>
                                     </td>
                                     <td className="p-3">{d.label ?? <span className="text-muted-foreground">-</span>}</td>
                                     <td className="p-3">{d.group}</td>
@@ -239,22 +221,14 @@ export default function Discounts() {
                                                 Yes
                                             </span>
                                         ) : (
-                                            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                                                No
-                                            </span>
+                                            <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs">No</span>
                                         )}
                                     </td>
                                     <td className="p-3 text-right">
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() =>
-                                                router.post(
-                                                    `/sales/discounts/${d.id}/close`,
-                                                    {},
-                                                    { preserveScroll: true },
-                                                )
-                                            }
+                                            onClick={() => router.post(`/sales/discounts/${d.id}/close`, {}, { preserveScroll: true })}
                                         >
                                             End it
                                         </Button>
@@ -265,9 +239,9 @@ export default function Discounts() {
                     </table>
                 </div>
 
-                <p className="mt-3 text-xs text-muted-foreground">
-                    "Applying today" is answered by the pricing engine itself, not guessed here. A discount can be saved
-                    and still lose to another rule, which is why the column exists.
+                <p className="text-muted-foreground mt-3 text-xs">
+                    "Applying today" is answered by the pricing engine itself, not guessed here. A discount can be saved and still lose to another
+                    rule, which is why the column exists.
                 </p>
             </div>
         </AppLayout>

@@ -57,7 +57,7 @@ function PermissionGrid({
         <div className="grid gap-5 sm:grid-cols-2">
             {Object.entries(groups).map(([module, permissions]) => (
                 <div key={module} className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{module}</p>
+                    <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">{module}</p>
                     <div className="space-y-1.5">
                         {permissions.map((permission) => {
                             const isLocked = locked.includes(permission);
@@ -70,7 +70,7 @@ function PermissionGrid({
                                         onCheckedChange={() => onToggle(permission)}
                                     />
                                     {prettyLabel(permission)}
-                                    {isLocked && <span className="text-xs text-muted-foreground">(required)</span>}
+                                    {isLocked && <span className="text-muted-foreground text-xs">(required)</span>}
                                 </label>
                             );
                         })}
@@ -93,7 +93,10 @@ function CreateRoleForm({ availablePermissions }: { availablePermissions: string
     };
 
     const toggle = (permission: string) =>
-        setData('permissions', data.permissions.includes(permission) ? data.permissions.filter((p) => p !== permission) : [...data.permissions, permission]);
+        setData(
+            'permissions',
+            data.permissions.includes(permission) ? data.permissions.filter((p) => p !== permission) : [...data.permissions, permission],
+        );
 
     return (
         <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
@@ -145,7 +148,7 @@ function RoleRow({ role, availablePermissions }: { role: Role; availablePermissi
                             Built-in
                         </Badge>
                     )}
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-muted-foreground text-sm">
                         {role.members_count} {role.members_count === 1 ? 'member' : 'members'}
                     </span>
                 </div>
@@ -181,13 +184,13 @@ function RoleRow({ role, availablePermissions }: { role: Role; availablePermissi
                             </Badge>
                         ))
                     ) : (
-                        <span className="text-sm text-muted-foreground">No permissions</span>
+                        <span className="text-muted-foreground text-sm">No permissions</span>
                     )}
                 </div>
             )}
 
             {editing && (
-                <div className="flex flex-col gap-4 rounded-lg bg-muted/40 p-4">
+                <div className="bg-muted/40 flex flex-col gap-4 rounded-lg p-4">
                     {!role.is_system && (
                         <div className="grid max-w-sm gap-2">
                             <Label htmlFor={`role-name-${role.id}`}>Name</Label>
@@ -230,7 +233,7 @@ export default function Roles({ roles, available_permissions }: RolesProps) {
                     <CreateRoleForm availablePermissions={available_permissions} />
 
                     <div>
-                        <h3 className="mb-1 text-sm font-medium text-muted-foreground">Roles</h3>
+                        <h3 className="text-muted-foreground mb-1 text-sm font-medium">Roles</h3>
                         {roles.map((role) => (
                             <RoleRow key={role.id} role={role} availablePermissions={available_permissions} />
                         ))}

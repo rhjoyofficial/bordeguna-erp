@@ -56,16 +56,22 @@ export default function TrialBalanceIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">Trial balance</h1>
-                    <p className="max-w-2xl text-sm text-muted-foreground">
-                        Every account with a balance or any movement in the period. In a correct ledger the two columns are equal,
-                        because every debit was posted with a matching credit.
+                    <p className="text-muted-foreground max-w-2xl text-sm">
+                        Every account with a balance or any movement in the period. In a correct ledger the two columns are equal, because every debit
+                        was posted with a matching credit.
                     </p>
                 </div>
 
                 <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
                         <Label htmlFor="from">From</Label>
-                        <Input id="from" type="date" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} className="w-44" />
+                        <Input
+                            id="from"
+                            type="date"
+                            value={range.from}
+                            onChange={(e) => setRange({ ...range, from: e.target.value })}
+                            className="w-44"
+                        />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="to">To</Label>
@@ -80,7 +86,7 @@ export default function TrialBalanceIndex({
                         className={`rounded-md border px-4 py-3 text-sm ${
                             totals.balances
                                 ? 'border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border'
-                                : 'border-destructive/40 bg-destructive/5 font-medium text-destructive'
+                                : 'border-destructive/40 bg-destructive/5 text-destructive font-medium'
                         }`}
                     >
                         {totals.balances
@@ -92,7 +98,7 @@ export default function TrialBalanceIndex({
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[52rem] text-sm">
                         <thead>
-                            <tr className="border-b border-sidebar-border/70 text-left text-muted-foreground dark:border-sidebar-border">
+                            <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
                                 <th className="py-2">Code</th>
                                 <th className="py-2">Account</th>
                                 <th className="py-2 text-right">Opening</th>
@@ -103,22 +109,22 @@ export default function TrialBalanceIndex({
                         </thead>
                         <tbody>
                             {rows.map((row) => (
-                                <tr key={row.code} className="border-b border-sidebar-border/70 dark:border-sidebar-border">
-                                    <td className="py-2 font-mono text-muted-foreground">{row.code}</td>
+                                <tr key={row.code} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                    <td className="text-muted-foreground py-2 font-mono">{row.code}</td>
                                     <td className="py-2">{row.name}</td>
-                                    <td className="py-2 text-right tabular-nums text-muted-foreground">
+                                    <td className="text-muted-foreground py-2 text-right tabular-nums">
                                         {row.opening && `${row.opening} ${row.opening_side === 'credit' ? 'Cr' : 'Dr'}`}
                                     </td>
                                     <td className="py-2 text-right tabular-nums">{row.debit}</td>
                                     <td className="py-2 text-right tabular-nums">{row.credit}</td>
-                                    <td className="py-2 text-right tabular-nums font-medium">
+                                    <td className="py-2 text-right font-medium tabular-nums">
                                         {row.closing} {row.closing_side === 'credit' ? 'Cr' : 'Dr'}
                                     </td>
                                 </tr>
                             ))}
                             {rows.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="py-6 text-center text-muted-foreground">
+                                    <td colSpan={6} className="text-muted-foreground py-6 text-center">
                                         {empty
                                             ? 'Nothing has been posted to the ledger yet.'
                                             : 'No account had a balance or any movement in this period.'}
@@ -145,9 +151,9 @@ export default function TrialBalanceIndex({
                     </table>
                 </div>
 
-                <p className="max-w-2xl text-sm text-muted-foreground">
-                    A trial balance that balances proves the entries were recorded in pairs. It does not prove they were recorded
-                    against the right accounts, and it cannot tell you about something nobody entered at all.
+                <p className="text-muted-foreground max-w-2xl text-sm">
+                    A trial balance that balances proves the entries were recorded in pairs. It does not prove they were recorded against the right
+                    accounts, and it cannot tell you about something nobody entered at all.
                 </p>
             </div>
         </AppLayout>

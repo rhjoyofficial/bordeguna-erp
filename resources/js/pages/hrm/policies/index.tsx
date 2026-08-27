@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -376,7 +377,7 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                             onChange={(e) => patchTier(wi, ti, { from_occurrence: e.target.value })}
                                         />
                                         <span className="text-muted-foreground text-xs">occurrence this month:</span>
-                                        <select
+                                        <SearchSelect
                                             className={`${selectClass} w-56`}
                                             value={t.consequence}
                                             onChange={(e) => patchTier(wi, ti, { consequence: e.target.value })}
@@ -386,7 +387,7 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                                     {c.label}
                                                 </option>
                                             ))}
-                                        </select>
+                                        </SearchSelect>
                                         {w.tiers.length > 1 && (
                                             <button
                                                 type="button"

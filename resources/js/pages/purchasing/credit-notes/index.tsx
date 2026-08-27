@@ -1,13 +1,12 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface CreditNote {
     id: number;
@@ -55,14 +54,14 @@ export default function CreditNotesIndex({
                         onChange={(e) => setFilter('search', e.target.value)}
                         className="max-w-xs"
                     />
-                    <select className={selectClass} value={filters.supplier_id} onChange={(e) => setFilter('supplier_id', e.target.value)}>
+                    <SearchSelect value={filters.supplier_id} onChange={(e) => setFilter('supplier_id', e.target.value)}>
                         <option value="">All suppliers</option>
                         {suppliers.map((s) => (
                             <option key={s.id} value={s.id}>
                                 {s.name}
                             </option>
                         ))}
-                    </select>
+                    </SearchSelect>
                 </FilterBar>
 
                 <div className="overflow-x-auto rounded-lg border">
@@ -81,7 +80,7 @@ export default function CreditNotesIndex({
                                 <tr key={creditNote.id} className="border-t">
                                     <td className="p-3 font-medium">{creditNote.credit_note_number}</td>
                                     <td className="p-3">{creditNote.supplier?.name ?? '-'}</td>
-                                    <td className="p-3 text-muted-foreground">{creditNote.credit_date_only ?? '-'}</td>
+                                    <td className="text-muted-foreground p-3">{creditNote.credit_date_only ?? '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{creditNote.total_taka}</td>
                                     <td className="p-3 text-right">
                                         <Button variant="ghost" size="sm" asChild>
@@ -92,7 +91,7 @@ export default function CreditNotesIndex({
                             ))}
                             {creditNotes.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={5} className="text-muted-foreground p-6 text-center">
                                         No credit notes yet. One belongs here when goods go back after the bill arrived.
                                     </td>
                                 </tr>

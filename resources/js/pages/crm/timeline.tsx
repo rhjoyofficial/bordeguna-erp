@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,8 +8,6 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Activity {
     id: number;
@@ -145,8 +144,7 @@ export default function CrmTimeline({
         });
     };
 
-    const setTaskStatus = (t: Task, status: string) =>
-        router.put(`/crm/tasks/${t.id}`, { status }, { preserveScroll: true });
+    const setTaskStatus = (t: Task, status: string) => router.put(`/crm/tasks/${t.id}`, { status }, { preserveScroll: true });
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -154,7 +152,7 @@ export default function CrmTimeline({
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">{subject.name ?? `${subject.kind} #${subject.id}`}</h1>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                         {subject.phone ?? 'No phone'} · {subject.kind}
                         {subject.converted_customer_id && ' · converted to a customer'}
                     </p>
@@ -162,79 +160,121 @@ export default function CrmTimeline({
 
                 {canRecord && (
                     <div className="grid gap-4 lg:grid-cols-2">
-                        <form onSubmit={submitLog} className="flex flex-col gap-3 rounded-md border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                        <form
+                            onSubmit={submitLog}
+                            className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-md border p-4"
+                        >
                             <p className="text-sm font-medium">Record what happened</p>
                             <div className="flex flex-wrap items-end gap-3">
                                 <div className="grid gap-2">
                                     <Label htmlFor="type">Kind</Label>
-                                    <select id="type" className={selectClass} value={log.data.type} onChange={(e) => log.setData('type', e.target.value)}>
+                                    <SearchSelect id="type" value={log.data.type} onChange={(e) => log.setData('type', e.target.value)}>
                                         {activityTypes.map((t) => (
                                             <option key={t.value} value={t.value}>
                                                 {t.label}
                                             </option>
                                         ))}
-                                    </select>
+                                    </SearchSelect>
                                 </div>
                                 {/* ⚠ A note has no direction and only a call has a
                                     duration. Hidden rather than stored and ignored. */}
                                 {chosen?.has_direction && (
                                     <div className="grid gap-2">
                                         <Label htmlFor="direction">Direction</Label>
-                                        <select id="direction" className={selectClass} value={log.data.direction} onChange={(e) => log.setData('direction', e.target.value)}>
+                                        <SearchSelect
+                                            id="direction"
+                                            value={log.data.direction}
+                                            onChange={(e) => log.setData('direction', e.target.value)}
+                                        >
                                             {directions.map((d) => (
                                                 <option key={d.value} value={d.value}>
                                                     {d.label}
                                                 </option>
                                             ))}
-                                        </select>
+                                        </SearchSelect>
                                     </div>
                                 )}
                                 {chosen?.has_duration && (
                                     <div className="grid gap-2">
                                         <Label htmlFor="duration_seconds">Seconds</Label>
-                                        <Input id="duration_seconds" className="w-24" inputMode="numeric" value={log.data.duration_seconds} onChange={(e) => log.setData('duration_seconds', e.target.value)} />
+                                        <Input
+                                            id="duration_seconds"
+                                            className="w-24"
+                                            inputMode="numeric"
+                                            value={log.data.duration_seconds}
+                                            onChange={(e) => log.setData('duration_seconds', e.target.value)}
+                                        />
                                     </div>
                                 )}
                                 <div className="grid gap-2">
                                     {/* ⚠⚠ When it HAPPENED, not when it was typed. */}
                                     <Label htmlFor="occurred_at">When (blank = now)</Label>
-                                    <Input id="occurred_at" type="datetime-local" className="w-52" value={log.data.occurred_at} onChange={(e) => log.setData('occurred_at', e.target.value)} />
+                                    <Input
+                                        id="occurred_at"
+                                        type="datetime-local"
+                                        className="w-52"
+                                        value={log.data.occurred_at}
+                                        onChange={(e) => log.setData('occurred_at', e.target.value)}
+                                    />
                                     <InputError message={log.errors.occurred_at} />
                                 </div>
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="summary">What happened</Label>
-                                <Input id="summary" value={log.data.summary} onChange={(e) => log.setData('summary', e.target.value)} placeholder="Wants 5kg, will confirm Thursday" />
+                                <Input
+                                    id="summary"
+                                    value={log.data.summary}
+                                    onChange={(e) => log.setData('summary', e.target.value)}
+                                    placeholder="Wants 5kg, will confirm Thursday"
+                                />
                                 <InputError message={log.errors.summary} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="body">Detail (optional)</Label>
-                                <textarea id="body" className="min-h-20 rounded-md border border-input bg-background p-2 text-sm" value={log.data.body} onChange={(e) => log.setData('body', e.target.value)} />
+                                <textarea
+                                    id="body"
+                                    className="border-input bg-background min-h-20 rounded-md border p-2 text-sm"
+                                    value={log.data.body}
+                                    onChange={(e) => log.setData('body', e.target.value)}
+                                />
                             </div>
                             <div>
                                 <Button disabled={log.processing}>Record</Button>
-                                <span className="ml-3 text-xs text-muted-foreground">This cannot be edited afterwards.</span>
+                                <span className="text-muted-foreground ml-3 text-xs">This cannot be edited afterwards.</span>
                             </div>
                         </form>
 
-                        <form onSubmit={submitTask} className="flex flex-col gap-3 rounded-md border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                        <form
+                            onSubmit={submitTask}
+                            className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-md border p-4"
+                        >
                             <p className="text-sm font-medium">Add a follow-up</p>
                             <div className="grid gap-2">
                                 <Label htmlFor="title">What needs doing</Label>
-                                <Input id="title" value={task.data.title} onChange={(e) => task.setData('title', e.target.value)} placeholder="Call back about the 5kg order" />
+                                <Input
+                                    id="title"
+                                    value={task.data.title}
+                                    onChange={(e) => task.setData('title', e.target.value)}
+                                    placeholder="Call back about the 5kg order"
+                                />
                                 <InputError message={task.errors.title} />
                             </div>
                             <div className="flex flex-wrap items-end gap-3">
                                 <div className="grid gap-2">
                                     <Label htmlFor="due_at">Due</Label>
-                                    <Input id="due_at" type="datetime-local" className="w-52" value={task.data.due_at} onChange={(e) => task.setData('due_at', e.target.value)} />
+                                    <Input
+                                        id="due_at"
+                                        type="datetime-local"
+                                        className="w-52"
+                                        value={task.data.due_at}
+                                        onChange={(e) => task.setData('due_at', e.target.value)}
+                                    />
                                     <InputError message={task.errors.due_at} />
                                 </div>
                                 <div className="grid gap-2">
                                     <Label htmlFor="assigned_to_user_id">Assign to</Label>
-                                    <select
+                                    <SearchSelect
                                         id="assigned_to_user_id"
-                                        className={selectClass}
                                         value={task.data.assigned_to_user_id}
                                         onChange={(e) => task.setData('assigned_to_user_id', e.target.value)}
                                         disabled={!canAssign}
@@ -245,7 +285,7 @@ export default function CrmTimeline({
                                                 {u.name}
                                             </option>
                                         ))}
-                                    </select>
+                                    </SearchSelect>
                                     <InputError message={task.errors.assigned_to_user_id} />
                                 </div>
                             </div>
@@ -257,21 +297,24 @@ export default function CrmTimeline({
                 )}
 
                 {canRecord && (
-                    <form onSubmit={submitInterest} className="flex flex-wrap items-end gap-3 rounded-md border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                    <form
+                        onSubmit={submitInterest}
+                        className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
+                    >
                         <p className="w-full text-sm font-medium">What did they ask for?</p>
                         <div className="grid gap-2">
                             <Label htmlFor="interest_kind">About</Label>
-                            <select id="interest_kind" className={selectClass} value={interestKind} onChange={(e) => setInterestKind(e.target.value)}>
+                            <SearchSelect id="interest_kind" value={interestKind} onChange={(e) => setInterestKind(e.target.value)}>
                                 <option value="product">A product</option>
                                 <option value="category">A category</option>
                                 <option value="brand">A brand</option>
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="interest_target">Which</Label>
-                            <select
+                            <SearchSelect
                                 id="interest_target"
-                                className={`${selectClass} w-64`}
+                                className="w-64"
                                 value={
                                     interestKind === 'product'
                                         ? interest.data.product_id
@@ -299,7 +342,7 @@ export default function CrmTimeline({
                                         </option>
                                     ),
                                 )}
-                            </select>
+                            </SearchSelect>
                             <InputError message={interest.errors.product_id} />
                         </div>
                         <div className="grid gap-2">
@@ -317,9 +360,8 @@ export default function CrmTimeline({
                             {/* ⚠⚠ The unit THEY said, which may differ from the
                                 product's stock unit. Never converted at capture. */}
                             <Label htmlFor="requested_unit_id">In what unit</Label>
-                            <select
+                            <SearchSelect
                                 id="requested_unit_id"
-                                className={selectClass}
                                 value={interest.data.requested_unit_id}
                                 onChange={(e) => interest.setData('requested_unit_id', e.target.value)}
                             >
@@ -329,7 +371,7 @@ export default function CrmTimeline({
                                         {u.abbreviation}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="interest_note">Context</Label>
@@ -355,7 +397,7 @@ export default function CrmTimeline({
                                         <p className="font-medium">
                                             {i.quantity && `${i.quantity} ${i.unit ?? ''} `}
                                             {i.what}
-                                            {i.sku && <span className="ml-2 text-xs text-muted-foreground">{i.sku}</span>}
+                                            {i.sku && <span className="text-muted-foreground ml-2 text-xs">{i.sku}</span>}
                                             {/* ⚠ Surfaced, not hidden: a request for a
                                                 product we no longer sell is a demand
                                                 signal worth seeing. */}
@@ -375,9 +417,9 @@ export default function CrmTimeline({
                                     <div className="flex shrink-0 items-center gap-2">
                                         <Badge variant={i.status === 'open' ? 'default' : 'secondary'}>{i.status_label}</Badge>
                                         {canRecord && i.status === 'open' && (
-                                            <select
+                                            <SearchSelect
                                                 aria-label={`Close interest ${i.id}`}
-                                                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                                                className="border-input bg-background h-8 rounded-md border px-2 text-xs"
                                                 value=""
                                                 onChange={(e) =>
                                                     e.target.value &&
@@ -390,13 +432,13 @@ export default function CrmTimeline({
                                                         {s.label}
                                                     </option>
                                                 ))}
-                                            </select>
+                                            </SearchSelect>
                                         )}
                                     </div>
                                 </div>
                             </div>
                         ))}
-                        {interests.length === 0 && <p className="text-sm text-muted-foreground">Nothing asked for yet.</p>}
+                        {interests.length === 0 && <p className="text-muted-foreground text-sm">Nothing asked for yet.</p>}
                     </div>
                 </div>
 
@@ -433,7 +475,7 @@ export default function CrmTimeline({
                                     )}
                                 </div>
                             ))}
-                            {tasks.length === 0 && <p className="text-sm text-muted-foreground">No follow-ups.</p>}
+                            {tasks.length === 0 && <p className="text-muted-foreground text-sm">No follow-ups.</p>}
                         </div>
                     </div>
 
@@ -444,7 +486,7 @@ export default function CrmTimeline({
                                 <div key={a.id} className="rounded-md border p-3 text-sm">
                                     <div className="flex items-start justify-between gap-3">
                                         <p className="font-medium">{a.summary}</p>
-                                        <span className="shrink-0 text-xs text-muted-foreground">{a.at}</span>
+                                        <span className="text-muted-foreground shrink-0 text-xs">{a.at}</span>
                                     </div>
                                     <p className="text-muted-foreground">
                                         {a.label}
@@ -455,7 +497,7 @@ export default function CrmTimeline({
                                     {a.body && <p className="mt-1 whitespace-pre-wrap">{a.body}</p>}
                                 </div>
                             ))}
-                            {activities.length === 0 && <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>}
+                            {activities.length === 0 && <p className="text-muted-foreground text-sm">Nothing recorded yet.</p>}
                         </div>
                     </div>
                 </div>

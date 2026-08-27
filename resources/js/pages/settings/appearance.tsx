@@ -1,10 +1,13 @@
 import { Head } from '@inertiajs/react';
+import { useState } from 'react';
 
 import AccentPicker from '@/components/accent-picker';
 import AppearanceTabs from '@/components/appearance-tabs';
 import HeadingSmall from '@/components/heading-small';
 import SidebarColorPicker from '@/components/sidebar-color-picker';
 import TopbarColorPicker from '@/components/topbar-color-picker';
+import { Button } from '@/components/ui/button';
+import { resetThemePreferences } from '@/hooks/use-appearance';
 import { type BreadcrumbItem } from '@/types';
 
 import AppLayout from '@/layouts/app-layout';
@@ -18,13 +21,24 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function Appearance() {
+    // Bumped on reset to remount the pickers below. Each owns its own
+    // useAppearance() instance and local state, so a reset that only touches
+    // localStorage and the DOM would not otherwise be reflected in their
+    // active swatch until the next navigation.
+    const [resetKey, setResetKey] = useState(0);
+
+    const handleReset = () => {
+        resetThemePreferences();
+        setResetKey((count) => count + 1);
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Appearance settings" />
 
             <SettingsLayout>
-                <div className="space-y-6">
-                    <HeadingSmall title="Appearance settings" description="Update your account's appearance settings" />
+                <div key={resetKey} className="space-y-6">
+                    <HeadingSmall title="Appearance settings" description="Personal to your account, saved to this browser" />
                     <AppearanceTabs />
 
                     <HeadingSmall title="Accent color" description="Pick the highlight color used for buttons, links and active menus" />
@@ -35,6 +49,12 @@ export default function Appearance() {
 
                     <HeadingSmall title="Topbar color" description="The header bar's background" />
                     <TopbarColorPicker />
+
+                    <div className="border-t pt-6">
+                        <Button variant="outline" onClick={handleReset}>
+                            Reset to defaults
+                        </Button>
+                    </div>
                 </div>
             </SettingsLayout>
         </AppLayout>

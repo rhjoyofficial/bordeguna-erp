@@ -1,13 +1,12 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Payment {
     id: number;
@@ -56,18 +55,14 @@ export default function PaymentsIndex({
                             onChange={(e) => setFilter('search', e.target.value)}
                             className="max-w-xs"
                         />
-                        <select
-                            className={selectClass}
-                            value={filters.supplier_id}
-                            onChange={(e) => setFilter('supplier_id', e.target.value)}
-                        >
+                        <SearchSelect value={filters.supplier_id} onChange={(e) => setFilter('supplier_id', e.target.value)}>
                             <option value="">All suppliers</option>
                             {suppliers.map((supplier) => (
                                 <option key={supplier.id} value={supplier.id}>
                                     {supplier.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </FilterBar>
 
                     {canRecordSupplierPayment && (
@@ -104,7 +99,7 @@ export default function PaymentsIndex({
                             ))}
                             {payments.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={5} className="text-muted-foreground p-6 text-center">
                                         No supplier payments yet.
                                     </td>
                                 </tr>

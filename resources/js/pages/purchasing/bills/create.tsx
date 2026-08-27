@@ -69,10 +69,7 @@ export default function RecordBill({ order }: { order: Order }) {
         return carry + quantity * (billed - orderCost);
     }, 0);
 
-    const billTotal = data.lines.reduce(
-        (carry, line) => carry + (Number(line.quantity) || 0) * (Number(line.unit_cost) || 0),
-        0,
-    );
+    const billTotal = data.lines.reduce((carry, line) => carry + (Number(line.quantity) || 0) * (Number(line.unit_cost) || 0), 0);
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -85,48 +82,28 @@ export default function RecordBill({ order }: { order: Order }) {
 
             <form onSubmit={submit} className="flex flex-col gap-6 p-4">
                 <div>
-                    <h1 className="text-xl font-semibold">
-                        Record supplier bill against {order.po_number}
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        {order.supplier.name}. A bill covers exactly one purchase order.
-                    </p>
+                    <h1 className="text-xl font-semibold">Record supplier bill against {order.po_number}</h1>
+                    <p className="text-muted-foreground text-sm">{order.supplier.name}. A bill covers exactly one purchase order.</p>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div>
                         <Label htmlFor="bill_number">Supplier's invoice number</Label>
-                        <Input
-                            id="bill_number"
-                            value={data.bill_number}
-                            onChange={(e) => setData('bill_number', e.target.value)}
-                        />
+                        <Input id="bill_number" value={data.bill_number} onChange={(e) => setData('bill_number', e.target.value)} />
                         <InputError message={errors.bill_number} />
                     </div>
                     <div>
                         <Label htmlFor="bill_date">Bill date</Label>
-                        <Input
-                            id="bill_date"
-                            type="date"
-                            value={data.bill_date}
-                            onChange={(e) => setData('bill_date', e.target.value)}
-                        />
+                        <Input id="bill_date" type="date" value={data.bill_date} onChange={(e) => setData('bill_date', e.target.value)} />
                         <InputError message={errors.bill_date} />
                     </div>
                     <div>
                         <Label htmlFor="due_date">Due date</Label>
-                        <Input
-                            id="due_date"
-                            type="date"
-                            value={data.due_date}
-                            onChange={(e) => setData('due_date', e.target.value)}
-                        />
+                        <Input id="due_date" type="date" value={data.due_date} onChange={(e) => setData('due_date', e.target.value)} />
                         {/* D-SB-7: guidance only. The terms are free text and are
                             deliberately never parsed into a date. */}
                         {order.supplier.payment_terms && (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                                Supplier's terms: {order.supplier.payment_terms}
-                            </p>
+                            <p className="text-muted-foreground mt-1 text-xs">Supplier's terms: {order.supplier.payment_terms}</p>
                         )}
                         <InputError message={errors.due_date} />
                     </div>
@@ -147,31 +124,30 @@ export default function RecordBill({ order }: { order: Order }) {
                                 <th className="p-3 text-right">Billed</th>
                                 <th className="p-3 text-right">Billable</th>
                                 <th className="p-3 text-right">Order price</th>
-                                <th className="p-3 w-28">Quantity</th>
-                                <th className="p-3 w-28">Unit cost</th>
+                                <th className="w-28 p-3">Quantity</th>
+                                <th className="w-28 p-3">Unit cost</th>
                                 <th className="p-3 text-right">Line total</th>
                             </tr>
                         </thead>
                         <tbody>
                             {order.lines.length === 0 && (
                                 <tr>
-                                    <td colSpan={9} className="p-6 text-center text-muted-foreground">
-                                        Nothing on this order is still billable. Receive goods first, or the goods
-                                        received have already been billed or returned.
+                                    <td colSpan={9} className="text-muted-foreground p-6 text-center">
+                                        Nothing on this order is still billable. Receive goods first, or the goods received have already been billed
+                                        or returned.
                                     </td>
                                 </tr>
                             )}
                             {order.lines.map((line, index) => {
                                 const entry = data.lines[index];
                                 const lineVariance =
-                                    (Number(entry?.quantity) || 0) *
-                                    ((Number(entry?.unit_cost) || 0) - Number(line.order_unit_cost));
+                                    (Number(entry?.quantity) || 0) * ((Number(entry?.unit_cost) || 0) - Number(line.order_unit_cost));
 
                                 return (
                                     <tr key={line.id} className="border-t align-top">
                                         <td className="p-3">
                                             <div className="font-medium">{line.product}</div>
-                                            <div className="text-xs text-muted-foreground">{line.sku}</div>
+                                            <div className="text-muted-foreground text-xs">{line.sku}</div>
                                         </td>
                                         <td className="p-3 text-right tabular-nums">{line.quantity_received}</td>
                                         <td className="p-3 text-right tabular-nums">{line.quantity_returned}</td>
@@ -179,26 +155,12 @@ export default function RecordBill({ order }: { order: Order }) {
                                         <td className="p-3 text-right font-medium tabular-nums">{line.billable}</td>
                                         <td className="p-3 text-right tabular-nums">{line.order_unit_cost}</td>
                                         <td className="p-3">
-                                            <Input
-                                                value={entry?.quantity ?? ''}
-                                                onChange={(e) => setLine(index, { quantity: e.target.value })}
-                                            />
-                                            <InputError
-                                                message={
-                                                    errors[`lines.${index}.quantity` as keyof typeof errors]
-                                                }
-                                            />
+                                            <Input value={entry?.quantity ?? ''} onChange={(e) => setLine(index, { quantity: e.target.value })} />
+                                            <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                                         </td>
                                         <td className="p-3">
-                                            <Input
-                                                value={entry?.unit_cost ?? ''}
-                                                onChange={(e) => setLine(index, { unit_cost: e.target.value })}
-                                            />
-                                            <InputError
-                                                message={
-                                                    errors[`lines.${index}.unit_cost` as keyof typeof errors]
-                                                }
-                                            />
+                                            <Input value={entry?.unit_cost ?? ''} onChange={(e) => setLine(index, { unit_cost: e.target.value })} />
+                                            <InputError message={errors[`lines.${index}.unit_cost` as keyof typeof errors]} />
                                             {lineVariance !== 0 && (
                                                 <p className="mt-1 text-xs text-amber-600">
                                                     {lineVariance > 0 ? '+' : ''}
@@ -223,16 +185,13 @@ export default function RecordBill({ order }: { order: Order }) {
                     </div>
                     {variance !== 0 && (
                         <div className="flex justify-between text-sm">
-                            <span className="text-amber-600">
-                                Purchase price variance ({variance > 0 ? 'unfavourable' : 'favourable'})
-                            </span>
-                            <span className="font-semibold tabular-nums text-amber-600">{money(variance)}</span>
+                            <span className="text-amber-600">Purchase price variance ({variance > 0 ? 'unfavourable' : 'favourable'})</span>
+                            <span className="font-semibold text-amber-600 tabular-nums">{money(variance)}</span>
                         </div>
                     )}
-                    <p className="text-xs text-muted-foreground">
-                        Goods Received Not Invoiced is cleared at the order price. Any difference between the
-                        order and this invoice is recorded as Purchase Price Variance. Stock costs are not
-                        changed.
+                    <p className="text-muted-foreground text-xs">
+                        Goods Received Not Invoiced is cleared at the order price. Any difference between the order and this invoice is recorded as
+                        Purchase Price Variance. Stock costs are not changed.
                     </p>
                 </div>
 

@@ -53,11 +53,7 @@ export default function BusinessSwitcher({ businesses, current_business_id }: Pr
     const selectBusiness = (businessId: number) => {
         setProcessing(true);
 
-        router.post(
-            route('businesses.switch.store'),
-            { business_id: businessId },
-            { onFinish: () => setProcessing(false) },
-        );
+        router.post(route('businesses.switch.store'), { business_id: businessId }, { onFinish: () => setProcessing(false) });
     };
 
     return (
@@ -82,9 +78,7 @@ export default function BusinessSwitcher({ businesses, current_business_id }: Pr
                             <div className="text-muted-foreground text-sm">{business.slug}</div>
                         </button>
                     ))}
-                    {businesses.length === 0 && (
-                        <p className="text-muted-foreground text-sm">You don't have access to any business yet.</p>
-                    )}
+                    {businesses.length === 0 && <p className="text-muted-foreground text-sm">You don't have access to any business yet.</p>}
                 </div>
             </div>
         </AppLayout>

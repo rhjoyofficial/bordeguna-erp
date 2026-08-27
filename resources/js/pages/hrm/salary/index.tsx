@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,10 +53,19 @@ interface Props {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Salary', href: '/hrm/salary' }];
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 const money = (n: number | null) => (n === null ? '-' : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
-function ComponentDialog({ component, bases, types, trigger }: { component?: Component; bases: Props['bases']; types: Props['types']; trigger: React.ReactNode }) {
+function ComponentDialog({
+    component,
+    bases,
+    types,
+    trigger,
+}: {
+    component?: Component;
+    bases: Props['bases'];
+    types: Props['types'];
+    trigger: React.ReactNode;
+}) {
     const [open, setOpen] = useState(false);
     const [code, setCode] = useState(component?.code ?? '');
     const [name, setName] = useState(component?.name ?? '');
@@ -98,21 +108,26 @@ function ComponentDialog({ component, bases, types, trigger }: { component?: Com
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="code">Code</Label>
-                            <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="house_rent" disabled={component?.is_basic} />
-                            {errors.code && <p className="text-xs text-destructive">{errors.code}</p>}
+                            <Input
+                                id="code"
+                                value={code}
+                                onChange={(e) => setCode(e.target.value)}
+                                placeholder="house_rent"
+                                disabled={component?.is_basic}
+                            />
+                            {errors.code && <p className="text-destructive text-xs">{errors.code}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="name">Name</Label>
                             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-                            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+                            {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                         </div>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-3">
                         <div className="grid gap-2">
                             <Label htmlFor="type">Type</Label>
-                            <select
+                            <SearchSelect
                                 id="type"
-                                className={selectClass}
                                 value={type}
                                 disabled={component?.is_basic}
                                 onChange={(e) => {
@@ -132,18 +147,18 @@ function ComponentDialog({ component, bases, types, trigger }: { component?: Com
                                         {t.label}
                                     </option>
                                 ))}
-                            </select>
+                            </SearchSelect>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="basis">Calculated as</Label>
-                            <select id="basis" className={selectClass} value={basis} disabled={component?.is_basic} onChange={(e) => setBasis(e.target.value)}>
+                            <SearchSelect id="basis" value={basis} disabled={component?.is_basic} onChange={(e) => setBasis(e.target.value)}>
                                 {available.map((b) => (
                                     <option key={b.value} value={b.value}>
                                         {b.label}
                                     </option>
                                 ))}
-                            </select>
-                            {errors.calculation_basis && <p className="text-xs text-destructive">{errors.calculation_basis}</p>}
+                            </SearchSelect>
+                            {errors.calculation_basis && <p className="text-destructive text-xs">{errors.calculation_basis}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="sequence">Order</Label>
@@ -178,21 +193,19 @@ export default function SalaryIndex({ can_manage, employees, components, types, 
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">Salary structures</h2>
-                        <p className="text-sm text-muted-foreground">
-                            {withStructure} of {employees.length} employees have a structure. These are contractual figures - what a month actually pays
-                            is calculated by payroll.
+                        <p className="text-muted-foreground text-sm">
+                            {withStructure} of {employees.length} employees have a structure. These are contractual figures - what a month actually
+                            pays is calculated by payroll.
                         </p>
                     </div>
-                    {can_manage && (
-                        <ComponentDialog bases={bases} types={types} trigger={<Button size="sm">New component</Button>} />
-                    )}
+                    {can_manage && <ComponentDialog bases={bases} types={types} trigger={<Button size="sm">New component</Button>} />}
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Employees</h3>
                     <table className="w-full min-w-[48rem] text-sm">
                         <thead>
-                            <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                            <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                 <th className="py-2">Employee</th>
                                 <th className="py-2">Effective from</th>
                                 <th className="py-2 text-right">Basic</th>
@@ -205,9 +218,9 @@ export default function SalaryIndex({ can_manage, employees, components, types, 
                                 <tr key={e.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                     <td className="py-2">
                                         {e.name}
-                                        <span className="ml-2 text-xs text-muted-foreground">{e.employee_code}</span>
+                                        <span className="text-muted-foreground ml-2 text-xs">{e.employee_code}</span>
                                     </td>
-                                    <td className="py-2 text-muted-foreground">
+                                    <td className="text-muted-foreground py-2">
                                         {e.has_structure ? e.effective_from : <Badge variant="outline">No structure</Badge>}
                                     </td>
                                     <td className="py-2 text-right">{money(e.basic)}</td>
@@ -227,7 +240,7 @@ export default function SalaryIndex({ can_manage, employees, components, types, 
                     <h3 className="mb-3 text-sm font-medium">Components</h3>
                     <table className="w-full min-w-[52rem] text-sm">
                         <thead>
-                            <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                            <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                 <th className="py-2">Component</th>
                                 <th className="py-2">Type</th>
                                 <th className="py-2">Calculated as</th>
@@ -256,9 +269,9 @@ export default function SalaryIndex({ can_manage, employees, components, types, 
                                             </Badge>
                                         )}
                                     </td>
-                                    <td className="py-2 text-muted-foreground">{c.type_label}</td>
-                                    <td className="py-2 text-muted-foreground">{c.basis_label}</td>
-                                    <td className="py-2 text-xs text-muted-foreground">{c.description ?? '-'}</td>
+                                    <td className="text-muted-foreground py-2">{c.type_label}</td>
+                                    <td className="text-muted-foreground py-2">{c.basis_label}</td>
+                                    <td className="text-muted-foreground py-2 text-xs">{c.description ?? '-'}</td>
                                     <td className="py-2 text-right whitespace-nowrap">
                                         {can_manage && (
                                             <>
@@ -276,7 +289,9 @@ export default function SalaryIndex({ can_manage, employees, components, types, 
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
-                                                        onClick={() => router.patch(route('hrm.salary.components.toggle', c.id), {}, { preserveScroll: true })}
+                                                        onClick={() =>
+                                                            router.patch(route('hrm.salary.components.toggle', c.id), {}, { preserveScroll: true })
+                                                        }
                                                     >
                                                         {c.is_active ? 'Deactivate' : 'Activate'}
                                                     </Button>
@@ -288,9 +303,9 @@ export default function SalaryIndex({ can_manage, employees, components, types, 
                             ))}
                         </tbody>
                     </table>
-                    <p className="mt-3 text-xs text-muted-foreground">
-                        Income Tax and Provident Fund are entered manually - the statutory calculation rules (GOV-06) are not yet decided, so nothing is
-                        computed for them automatically.
+                    <p className="text-muted-foreground mt-3 text-xs">
+                        Income Tax and Provident Fund are entered manually - the statutory calculation rules (GOV-06) are not yet decided, so nothing
+                        is computed for them automatically.
                     </p>
                 </div>
             </div>

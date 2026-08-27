@@ -1,5 +1,6 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,8 +8,6 @@ import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Invoice {
     id: number;
@@ -57,11 +56,11 @@ export default function InvoicesIndex({
                         onChange={(e) => setFilter('search', e.target.value)}
                         className="max-w-xs"
                     />
-                    <select className={selectClass} value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                    <SearchSelect value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
                         <option value="">All</option>
                         <option value="open">Unpaid</option>
                         <option value="settled">Paid</option>
-                    </select>
+                    </SearchSelect>
                 </FilterBar>
 
                 <div className="overflow-x-auto rounded-lg border">
@@ -89,15 +88,13 @@ export default function InvoicesIndex({
                                     <td className="p-3 text-right tabular-nums">{invoice.total}</td>
                                     <td className="p-3 text-right tabular-nums">{invoice.outstanding}</td>
                                     <td className="p-3">
-                                        <Badge variant={invoice.is_settled ? 'secondary' : 'outline'}>
-                                            {invoice.is_settled ? 'Paid' : 'Unpaid'}
-                                        </Badge>
+                                        <Badge variant={invoice.is_settled ? 'secondary' : 'outline'}>{invoice.is_settled ? 'Paid' : 'Unpaid'}</Badge>
                                     </td>
                                 </tr>
                             ))}
                             {invoices.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="p-6 text-center text-muted-foreground">
+                                    <td colSpan={6} className="text-muted-foreground p-6 text-center">
                                         No invoices yet.
                                     </td>
                                 </tr>

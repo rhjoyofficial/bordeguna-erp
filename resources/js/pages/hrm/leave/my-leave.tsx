@@ -1,3 +1,4 @@
+import { SearchSelect } from '@/components/search-select';
 import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -63,7 +64,6 @@ interface Props {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'My leave', href: '/hrm/my-leave' }];
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; portions: Props['portions'] }) {
     const [open, setOpen] = useState(false);
@@ -90,14 +90,14 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="leave_type_id">Leave type</Label>
-                        <select id="leave_type_id" className={selectClass} value={typeId} onChange={(e) => setTypeId(e.target.value)}>
+                        <SearchSelect id="leave_type_id" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {types.map((t) => (
                                 <option key={t.id} value={t.id}>
                                     {t.name}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         {errors.leave_type_id && <p className="text-destructive text-xs">{errors.leave_type_id}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -122,13 +122,13 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="day_portion">Portion</Label>
-                        <select id="day_portion" className={selectClass} value={portion} onChange={(e) => setPortion(e.target.value)}>
+                        <SearchSelect id="day_portion" value={portion} onChange={(e) => setPortion(e.target.value)}>
                             {portions.map((p) => (
                                 <option key={p.value} value={p.value}>
                                     {p.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                         {errors.day_portion && <p className="text-destructive text-xs">{errors.day_portion}</p>}
                     </div>
                     <div className="grid gap-2">
@@ -207,13 +207,13 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="mtype">Type</Label>
-                        <select id="mtype" className={selectClass} value={type} onChange={(e) => chooseType(e.target.value)}>
+                        <SearchSelect id="mtype" value={type} onChange={(e) => chooseType(e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
                                     {t.label}
                                 </option>
                             ))}
-                        </select>
+                        </SearchSelect>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-3">
                         <div className="grid gap-2">

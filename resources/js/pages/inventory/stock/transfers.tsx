@@ -1,13 +1,12 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router } from '@inertiajs/react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface TransferRow {
     id: number;
@@ -54,24 +53,24 @@ export default function StockTransfersIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="In-transit transfers" />
             <div className="flex flex-col gap-4 p-4">
-                <p className="text-sm text-muted-foreground">
-                    Stock dispatched from a source warehouse sits here until someone confirms it arrived; it does not count as destination
-                    stock until received.
+                <p className="text-muted-foreground text-sm">
+                    Stock dispatched from a source warehouse sits here until someone confirms it arrived; it does not count as destination stock until
+                    received.
                 </p>
 
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
                     <FilterField label="Status" htmlFor="filter-status">
-                        <select id="filter-status" className={selectClass} value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                        <SearchSelect id="filter-status" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
                             <option value="">All statuses</option>
                             <option value="in_transit">In transit</option>
                             <option value="received">Received</option>
-                        </select>
+                        </SearchSelect>
                     </FilterField>
                 </FilterBar>
 
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground">
+                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">Product</th>
                             <th className="py-2">Route</th>
                             <th className="py-2">Qty</th>
@@ -87,15 +86,15 @@ export default function StockTransfersIndex({
                                 <td className="py-2">
                                     {transfer.product.name} <span className="text-muted-foreground">({transfer.product.sku})</span>
                                 </td>
-                                <td className="py-2 text-muted-foreground">
+                                <td className="text-muted-foreground py-2">
                                     {transfer.source_warehouse.name} → {transfer.target_warehouse.name}
                                 </td>
                                 <td className="py-2">{transfer.quantity}</td>
-                                <td className="py-2 max-w-xs text-muted-foreground">
+                                <td className="text-muted-foreground max-w-xs py-2">
                                     {transfer.reason.name}
                                     {transfer.note && <div className="text-xs">{transfer.note}</div>}
                                 </td>
-                                <td className="py-2 text-muted-foreground">
+                                <td className="text-muted-foreground py-2">
                                     {transfer.dispatched_by.name}
                                     <div className="text-xs">{transfer.dispatched_at}</div>
                                 </td>
@@ -115,7 +114,7 @@ export default function StockTransfersIndex({
                         ))}
                         {transfers.data.length === 0 && (
                             <tr>
-                                <td colSpan={7} className="py-4 text-center text-muted-foreground">
+                                <td colSpan={7} className="text-muted-foreground py-4 text-center">
                                     {hasActiveFilters ? 'No transfers match this filter.' : 'No transfers yet.'}
                                 </td>
                             </tr>
