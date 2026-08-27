@@ -28,6 +28,8 @@ interface Lead {
     lost_reason_id: number | null;
     note: string | null;
     converted_customer: string | null;
+    duplicate_of_lead_id: number | null;
+    duplicate_of: string | null;
     created_at: string | null;
 }
 
@@ -241,6 +243,36 @@ export default function LeadsIndex({
         setConvertMode(mode);
         convertForm.clearErrors();
         convertForm.setData('customer_id', '');
+    };
+
+    /**
+     * ⚠⚠ THE SECOND DEAD ENGINE. `LinkDuplicateLead` and fifteen tests shipped
+     * on 9 August and nothing ever posted to the route, so the amber banner
+     * listed matches as plain text with no way to act on them - and
+     * `CrmReportController` counted `duplicatesExcluded`, a figure that could
+     * only ever be zero.
+     *
+     * ⚠⚠ DIRECTION. `linkDuplicate(duplicate: $lead, survivor: $survivor)` and
+     * the route is `leads/{lead}/duplicate-of`, so THE LEAD BEING EDITED becomes
+     * the duplicate and the one clicked survives. The button says exactly that,
+     * because getting it backwards marks the wrong person as the copy and
+     * nothing about the result would look wrong afterwards.
+     *
+     * ⚠ Only while editing. During capture there is no lead yet, so there is
+     * nothing that could be marked as a duplicate of anything.
+     */
+    const duplicateForm = useForm({ survivor_id: '' });
+
+    const markDuplicateOf = (survivorId: number) => {
+        if (!editing) {
+            return;
+        }
+
+        duplicateForm.transform(() => ({ survivor_id: survivorId }));
+        duplicateForm.post(route('crm.leads.duplicate-of', editing.id), {
+            preserveScroll: true,
+            onSuccess: () => cancel(),
+        });
     };
 
     const submitConvert: FormEventHandler = (e) => {
@@ -468,18 +500,57 @@ export default function LeadsIndex({
                                 A household may share a number, so this is a warning and not a block. Use an existing record where it is the same
                                 person.
                             </p>
-                            <ul className="mt-2 list-disc pl-5">
+                            <ul className="mt-2 flex flex-col gap-1.5">
                                 {matches?.customers.map((c) => (
-                                    <li key={`c-${c.id}`}>
-                                        <span className="font-medium">Customer:</span> {c.name} {c.code ? `(${c.code})` : ''} - {c.phone}
+                                    <li key={`c-${c.id}`} className="flex flex-wrap items-center gap-2">
+                                        <span>
+                                            <span className="font-medium">Customer:</span> {c.name} {c.code ? `(${c.code})` : ''} - {c.phone}
+                                        </span>
+                                        {/* Already a customer, so the honest act is not a
+                                            duplicate link but a conversion onto that record. */}
+                                        {editing && can_convert && (
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    beginConvert(editing);
+                                                    switchConvertMode('existing');
+                                                    convertForm.setData('customer_id', String(c.id));
+                                                }}
+                                            >
+                                                This lead is them
+                                            </Button>
+                                        )}
                                     </li>
                                 ))}
                                 {matches?.leads.map((l) => (
-                                    <li key={`l-${l.id}`}>
-                                        <span className="font-medium">Lead:</span> {l.name ?? '(no name)'} - {l.phone} - {l.status}
+                                    <li key={`l-${l.id}`} className="flex flex-wrap items-center gap-2">
+                                        <span>
+                                            <span className="font-medium">Lead:</span> {l.name ?? '(no name)'} - {l.phone} - {l.status}
+                                        </span>
+                                        {/* ⚠ The lead being EDITED becomes the duplicate; the
+                                            one named here survives. The label says so. */}
+                                        {editing && (
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={duplicateForm.processing}
+                                                onClick={() => markDuplicateOf(l.id)}
+                                            >
+                                                This lead is a duplicate of that one
+                                            </Button>
+                                        )}
                                     </li>
                                 ))}
                             </ul>
+                            {!editing && (
+                                <p className="text-muted-foreground mt-2 text-xs">
+                                    Save this lead first if you want to link it to one of these. Nothing is ever deleted or merged away.
+                                </p>
+                            )}
+                            <InputError message={(duplicateForm.errors as Record<string, string>).survivor_id} />
                         </div>
                     )}
 
@@ -707,6 +778,11 @@ export default function LeadsIndex({
                                         {lead.converted_customer && (
                                             <div className="text-muted-foreground mt-1 text-xs">→ {lead.converted_customer}</div>
                                         )}
+                                        {/* Nothing was deleted; this one simply points at the
+                                            lead that should be worked instead. */}
+                                        {lead.duplicate_of && (
+                                            <div className="text-muted-foreground mt-1 text-xs">duplicate of {lead.duplicate_of}</div>
+                                        )}
                                     </td>
                                     <td className="p-3">{lead.brand ?? '-'}</td>
                                     <td className="p-3">{lead.assigned_to ?? '-'}</td>
@@ -722,7 +798,9 @@ export default function LeadsIndex({
                                             one outright - going straight from lost to converted
                                             would erase the fact that it was ever lost, which is
                                             exactly what the funnel report needs. Reopen it first. */}
-                                        {can_convert && lead.status !== 'converted' && lead.status !== 'lost' && (
+                                        {/* ⚠ A lead that points at another is not the one to
+                                            work, so it is not the one to convert either. */}
+                                        {can_convert && lead.status !== 'converted' && lead.status !== 'lost' && !lead.duplicate_of_lead_id && (
                                             <Button variant="ghost" size="sm" onClick={() => beginConvert(lead)}>
                                                 Convert
                                             </Button>

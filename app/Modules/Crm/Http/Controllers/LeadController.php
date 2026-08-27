@@ -40,7 +40,7 @@ class LeadController extends Controller
         ];
 
         $leads = Lead::query()
-            ->with(['brand:id,name,code', 'assignedTo:id,name', 'convertedCustomer:id,name,code'])
+            ->with(['brand:id,name,code', 'assignedTo:id,name', 'convertedCustomer:id,name,code', 'duplicateOf:id,name'])
             // ⚠ Searching the NORMALISED phone as well as the raw one. A user who
             // types `01711000000` must find a lead captured as `+8801711000000`,
             // or duplicate detection is theatre.
@@ -81,6 +81,11 @@ class LeadController extends Controller
                 // ⚠ Shown so a converted lead is obviously not editable back into
                 // the pipeline, and so the link is visible rather than implied.
                 'converted_customer' => $lead->convertedCustomer?->name,
+                // ⚠ Shown for the same reason as the conversion above: a lead
+                // that points at another is not the one to work, and saying so
+                // on the row is cheaper than someone chasing the wrong person.
+                'duplicate_of_lead_id' => $lead->duplicate_of_lead_id,
+                'duplicate_of' => $lead->duplicateOf?->name,
                 'created_at' => $lead->created_at?->toDateString(),
             ]);
 

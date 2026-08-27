@@ -571,3 +571,59 @@ it('offers only customers that conversion will actually accept', function () {
             ->where('customers.0.code', 'REAL')
         );
 });
+
+// ── Duplicate linking is REACHABLE too ──────────────────────────────────────
+
+/**
+ * ⚠⚠ THE SECOND DEAD ENGINE. `LinkDuplicateLead` and fifteen tests shipped on
+ * 9 August; nothing ever posted to the route, so the amber duplicate banner
+ * listed matches as plain text with no way to act on them.
+ *
+ * ⚠ DIRECTION: the lead in the URL becomes the DUPLICATE and `survivor_id` is
+ * the one that stays. Backwards marks the wrong person as the copy, and nothing
+ * about the result looks wrong afterwards - which is why it is pinned here.
+ */
+it('marks the lead in the url as the duplicate, not the survivor', function () {
+    $survivor = Lead::create([
+        'business_id' => $this->business->id, 'name' => 'Rahima Begum',
+        'phone' => '+8801711000000', 'status' => LeadStatus::New,
+    ]);
+    $copy = Lead::create([
+        'business_id' => $this->business->id, 'name' => 'Rahima B',
+        'phone' => '+8801711000000', 'status' => LeadStatus::New,
+    ]);
+
+    ($this->asRole)('Manager')
+        ->post("/crm/leads/{$copy->id}/duplicate-of", ['survivor_id' => $survivor->id])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($copy->fresh()->duplicate_of_lead_id)->toBe($survivor->id)
+        ->and($survivor->fresh()->duplicate_of_lead_id)->toBeNull();
+});
+
+/**
+ * The banner can only offer the button once there is a lead to mark, so the row
+ * has to carry the link for the list to show it. Take the prop away and the
+ * "duplicate of" line under the status disappears.
+ */
+it('tells the screen which lead a duplicate points at', function () {
+    $survivor = Lead::create([
+        'business_id' => $this->business->id, 'name' => 'Rahima Begum',
+        'phone' => '+8801711000000', 'status' => LeadStatus::New,
+    ]);
+    $copy = Lead::create([
+        'business_id' => $this->business->id, 'name' => 'Rahima B',
+        'phone' => '+8801711000000', 'status' => LeadStatus::New,
+    ]);
+
+    app(\App\Modules\Crm\Actions\LinkDuplicateLead::class)->handle($copy, $survivor, $this->agent);
+
+    ($this->asRole)('Manager')->get('/crm/leads')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('leads.data.0.duplicate_of', 'Rahima Begum')
+            ->where('leads.data.0.duplicate_of_lead_id', $survivor->id)
+            ->where('leads.data.1.duplicate_of', null)
+        );
+});
