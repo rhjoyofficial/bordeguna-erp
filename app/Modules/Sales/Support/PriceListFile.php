@@ -55,7 +55,7 @@ class PriceListFile
      * ⚠⚠ This list is the difference between a guard and an obstruction. The
      * rule below rejects any unused column containing "price", because that is
      * how a whole pricing tier goes missing on a typo. But `cost_price` is a
-     * real column in Bor De Guna's catalogue file - a PURCHASE cost, deliberately
+     * real column in Bor de Guna's catalogue file - a PURCHASE cost, deliberately
      * not a selling price - and rejecting it made the importer refuse the only
      * file it exists to read. Found by running it against the real file rather
      * than against a fixture that agreed with the rule.

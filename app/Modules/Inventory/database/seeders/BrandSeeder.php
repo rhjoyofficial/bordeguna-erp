@@ -9,7 +9,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
 /**
- * The brands Bor De Guna sells under.
+ * The brands Bor de Guna sells under.
  *
  * ⚠ D-7: LaLaDia and Bionic-Garden only. A future brand is one row and does not
  * need this seeder changed - it can be added through the product screen's brand
@@ -41,7 +41,7 @@ class BrandSeeder extends Seeder
         $business = Business::withoutGlobalScopes()->where('slug', 'bor-de-guna')->first();
 
         if ($business === null) {
-            $this->command?->warn('Bor De Guna business not found; no brands seeded.');
+            $this->command?->warn('Bor de Guna business not found; no brands seeded.');
 
             return;
         }

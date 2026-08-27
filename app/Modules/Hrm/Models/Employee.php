@@ -25,7 +25,7 @@ use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
- * A central Bor De Guna employee (ORG-01). Separate from User (EMP-01): most
+ * A central Bor de Guna employee (ORG-01). Separate from User (EMP-01): most
  * employees have no ERP login, and one optionally links to a User when they
  * need access. Not business-scoped — belonging is expressed through
  * effective-dated assignments.

@@ -348,7 +348,7 @@ it('blocks a user without the attendance permission', function () {
 });
 
 // =============================================================================
-// Department-scoped policy — Bor De Guna's Retail circular BdG-HQ-OD-26071901
+// Department-scoped policy — Bor de Guna's Retail circular BdG-HQ-OD-26071901
 // binds one department to an earlier deadline and a show-cause ladder, and must
 // not reach the office staff it never mentions.
 // =============================================================================

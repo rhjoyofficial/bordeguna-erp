@@ -68,7 +68,7 @@ beforeEach(function () {
     ]);
 
     // ⚠ TEST DATA. The reciprocal of a general edible-oil reference, which Joy
-    // said explicitly is NOT the confirmed Bor De Guna factor. No seeder, no
+    // said explicitly is NOT the confirmed Bor de Guna factor. No seeder, no
     // default, no production row uses it.
     // ⚠ Through the controlled path, which is what also declares the product's
     // purchase unit. `purchase_unit_id` is not fillable, so setting it in

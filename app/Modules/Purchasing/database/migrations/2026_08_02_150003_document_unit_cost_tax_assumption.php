@@ -8,7 +8,7 @@ return new class extends Migration
     /**
      * C-ACC-1, discharged honestly rather than built.
      *
-     * Joy 2026-08-02: Bor De Guna is not implementing VAT accounting yet, so do
+     * Joy 2026-08-02: Bor de Guna is not implementing VAT accounting yet, so do
      * not block Inventory on a tax decision - but DOCUMENT the assumption the
      * system currently makes, in the code and the UI, and leave the full
      * treatment to Accounting.

@@ -35,7 +35,7 @@ function stamped(string $businessId): array
 
 it('refuses a write from a page built for a different business, and changes nothing', function () {
     // ⚠ THE DEFECT. This fails before the fix: the shift is renamed inside
-    // LaLaDia by a click on a page that was showing Bor De Guna.
+    // LaLaDia by a click on a page that was showing Bor de Guna.
     $tabA = Business::create(['name' => 'Tab A Co', 'slug' => 'tab-a-co']);
     $tabB = Business::create(['name' => 'Tab B Co', 'slug' => 'tab-b-co']);
 

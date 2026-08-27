@@ -64,7 +64,7 @@ return [
     | Go-live date
     |--------------------------------------------------------------------------
     |
-    | The date Bor De Guna's configuration takes effect. Schedule assignments
+    | The date Bor de Guna's configuration takes effect. Schedule assignments
     | are effective-dated, and the effective date decides which shift and which
     | calendar a given day is judged against — so this is not cosmetic.
     |

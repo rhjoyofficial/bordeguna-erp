@@ -31,7 +31,7 @@ use Illuminate\Database\Seeder;
  * (see Account::scopeInChartOrder). A three-digit code sorts before every
  * four-digit one and quietly moves an account to the top of the report.
  *
- * ℹ NO VAT ACCOUNTS, on purpose. C-ACC-1 settled that Bor De Guna is not doing
+ * ℹ NO VAT ACCOUNTS, on purpose. C-ACC-1 settled that Bor de Guna is not doing
  * VAT accounting yet and that unit costs are recorded gross of any tax charged.
  * Input and output VAT accounts arrive with that decision; seeding them now
  * would suggest a treatment nobody has chosen.

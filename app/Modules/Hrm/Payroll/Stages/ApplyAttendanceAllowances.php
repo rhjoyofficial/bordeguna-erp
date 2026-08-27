@@ -10,7 +10,7 @@ use App\Modules\Hrm\Salary\ResolvedSalaryLine;
 /**
  * Stage 5 — allowances earned per day reported for work (Correction C14).
  *
- * Bor De Guna's two Retail Sales Officers receive a travel and daily allowance
+ * Bor de Guna's two Retail Sales Officers receive a travel and daily allowance
  * for each day they turn up: 246.00 and 361.00 respectively. That is genuinely
  * part of what they are paid, so it lives on the salary structure as an
  * effective-dated component like any other, rather than as a monthly ad-hoc

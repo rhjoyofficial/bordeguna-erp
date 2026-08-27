@@ -88,7 +88,7 @@ class CatalogueText
      * warned as a near-duplicate of the first; two genuinely different Bangla
      * unit names compared equal, which raised a FALSE blocking error about one
      * name under two abbreviations; and the near-duplicate CATEGORY check,
-     * which skips empty keys, silently did nothing at all. Bor De Guna's
+     * which skips empty keys, silently did nothing at all. Bor de Guna's
      * catalogue is in Bangla, so all three were certainties, not risks.
      */
     public static function looseKey(string $value): string

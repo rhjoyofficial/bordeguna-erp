@@ -54,7 +54,7 @@ class CreateEmployee
      *
      * ⚠⚠ **Derived from the highest existing code, NEVER from `count()`.** The
      * original implementation was `Employee::count() + 1`, and real data proved
-     * it broken before a single production row existed: Bor De Guna's nine
+     * it broken before a single production row existed: Bor de Guna's nine
      * employees are numbered 1, 2, 10, 12, 16, 19, 20, 21, 22 — **twelve gaps**,
      * left by people who have since left. After migrating those nine, a count of
      * 9 would have issued **BDG-000010** to the next hire, which already belongs

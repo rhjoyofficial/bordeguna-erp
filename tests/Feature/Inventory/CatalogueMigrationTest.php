@@ -21,7 +21,7 @@ use Illuminate\Support\Str;
  * refused loudly".
  */
 beforeEach(function () {
-    $this->business = Business::create(['name' => 'Bor De Guna', 'slug' => 'bor-de-guna']);
+    $this->business = Business::create(['name' => 'Bor de Guna', 'slug' => 'bor-de-guna']);
     $this->other = Business::create(['name' => 'Rival Co', 'slug' => 'rival-co']);
 
     $this->paths = [];

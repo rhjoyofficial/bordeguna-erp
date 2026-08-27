@@ -28,7 +28,7 @@ use Illuminate\Support\Carbon;
  * Variance. Accounts Payable carries the actual bill.
  *
  * ⚠⚠ FIFO IS NOT TOUCHED. No batch is revalued, no stock movement is written,
- * and cost of goods sold already released is never rewritten. Bor De Guna is a
+ * and cost of goods sold already released is never rewritten. Bor de Guna is a
  * FIFO business and a purchase order carries an agreed price, NOT a standard
  * cost. These tests assert that absence as hard as they assert the journal.
  */

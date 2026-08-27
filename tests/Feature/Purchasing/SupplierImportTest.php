@@ -58,7 +58,7 @@ beforeEach(function () {
 
 // ── The real file, which is the point of the exercise ───────────────────────
 
-it('imports the three real Bor De Guna suppliers', function () {
+it('imports the three real Bor de Guna suppliers', function () {
     $path = tempnam(sys_get_temp_dir(), 'sup').'.csv';
     file_put_contents($path, <<<'CSV'
     code,name,contact_name,phone,email,address,payment_terms,bin,tin,bank_name,bank_branch,bank_account_name,bank_account_number,mfs_number,notes,is_active

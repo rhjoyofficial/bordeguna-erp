@@ -102,9 +102,9 @@ class XlsxWriter implements ReportWriter
         $options = new Options(properties: new Properties(
             title: $dataset->meta->title,
             subject: $dataset->meta->subtitle,
-            application: 'Bor De Guna ERP',
-            creator: $dataset->meta->generatedBy ?? 'Bor De Guna ERP',
-            lastModifiedBy: $dataset->meta->generatedBy ?? 'Bor De Guna ERP',
+            application: 'Bor de Guna ERP',
+            creator: $dataset->meta->generatedBy ?? 'Bor de Guna ERP',
+            lastModifiedBy: $dataset->meta->generatedBy ?? 'Bor de Guna ERP',
             // The stamp that would otherwise sit above the header row. It is
             // still on the file, just not in the way of it.
             description: $dataset->meta->stamp(),

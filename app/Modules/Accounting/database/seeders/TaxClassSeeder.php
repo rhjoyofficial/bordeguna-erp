@@ -12,7 +12,7 @@ use Illuminate\Database\Seeder;
  * The three tax classes every VAT regime has, whatever the rates turn out to be.
  *
  * ⚠⚠ CLASSES ONLY, NO RATES. C-VAT-2 is deliberately open - Joy has not
- * confirmed whether Bor De Guna falls under standard 15% VAT or 4% turnover tax,
+ * confirmed whether Bor de Guna falls under standard 15% VAT or 4% turnover tax,
  * and those are different engines. A class is a statement about the KIND of
  * thing being sold and is true under either regime; a rate is not. Seeding a
  * rate here would be inventing the decision this note exists to defer.

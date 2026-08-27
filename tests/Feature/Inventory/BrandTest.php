@@ -196,10 +196,10 @@ it('lets a brand with no products be deleted', function () {
  * so re-running is safe AND adding a brand later actually adds it - the
  * all-or-nothing seeder trap this project has already met.
  */
-it('seeds exactly LaLaDia and Bionic-Garden into Bor De Guna', function () {
+it('seeds exactly LaLaDia and Bionic-Garden into Bor de Guna', function () {
     TenantScope::leave();
 
-    $bdg = Business::create(['name' => 'Bor De Guna', 'slug' => 'bor-de-guna']);
+    $bdg = Business::create(['name' => 'Bor de Guna', 'slug' => 'bor-de-guna']);
 
     (new BrandSeeder)->run();
 
@@ -213,7 +213,7 @@ it('seeds exactly LaLaDia and Bionic-Garden into Bor De Guna', function () {
 it('can be seeded twice without duplicating', function () {
     TenantScope::leave();
 
-    $bdg = Business::create(['name' => 'Bor De Guna', 'slug' => 'bor-de-guna']);
+    $bdg = Business::create(['name' => 'Bor de Guna', 'slug' => 'bor-de-guna']);
 
     (new BrandSeeder)->run();
     (new BrandSeeder)->run();
@@ -229,7 +229,7 @@ it('seeds with no ambient business context', function () {
     TenantScope::leave();
     app(BusinessContext::class)->forget();
 
-    $bdg = Business::create(['name' => 'Bor De Guna', 'slug' => 'bor-de-guna']);
+    $bdg = Business::create(['name' => 'Bor de Guna', 'slug' => 'bor-de-guna']);
 
     (new BrandSeeder)->run();
 

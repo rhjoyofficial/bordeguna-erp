@@ -113,7 +113,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('business_id')->constrained()->cascadeOnDelete();
 
-            // The year the fiscal year STARTS in. Bor De Guna runs 1 July to
+            // The year the fiscal year STARTS in. Bor de Guna runs 1 July to
             // 30 June (C-GL-4), so 2026 means 2026-07-01 to 2027-06-30.
             $table->unsignedSmallInteger('fiscal_year');
 

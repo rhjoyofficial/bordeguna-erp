@@ -77,7 +77,7 @@ return [
     | the person is standing, not an instant on a global timeline.
     |
     | ⚠ `businesses.timezone` exists and defaults to Asia/Dhaka — it was added
-    | for exactly this purpose and nothing reads it. If Bor De Guna ever operates
+    | for exactly this purpose and nothing reads it. If Bor de Guna ever operates
     | outside Bangladesh, that column is the seam to wire up; until then a single
     | application timezone is correct and far safer than converting at every one
     | of the dozens of date boundaries this system computes.

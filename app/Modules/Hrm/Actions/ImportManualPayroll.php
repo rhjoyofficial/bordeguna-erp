@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
- * Imports Bor De Guna's own payroll sheet for a period (Correction C16a).
+ * Imports Bor de Guna's own payroll sheet for a period (Correction C16a).
  *
  * The expected shape is **wide**: one row per employee, one column per item, as
  * a payroll spreadsheet is actually kept. Headings are matched by alias rather

@@ -40,8 +40,12 @@ export function DocumentLetterhead({ issuer, title, subtitle }: { issuer: Issuer
                         to sit on a page beside text without pushing it around. */}
                     {issuer.logo_url && <img src={issuer.logo_url} alt="" className="h-16 w-auto max-w-[9rem] object-contain" />}
                     <div>
-                        <p className="text-xl font-semibold">{issuer.legal_name ?? issuer.name}</p>
-                        {issuer.legal_name && <p className="text-sm text-black/60">{issuer.name}</p>}
+                        <p className="brand-name text-xl font-semibold">{issuer.legal_name ?? issuer.name}</p>
+                        {/* ⚠ Only when it actually says something different. The legal
+                            name and the trading name are the same words here, and
+                            printing them twice reads as a fault on a document a
+                            customer keeps. */}
+                        {issuer.legal_name && issuer.legal_name !== issuer.name && <p className="text-sm text-black/60">{issuer.name}</p>}
                         {issuer.address && <p className="mt-1 max-w-xs text-sm whitespace-pre-line text-black/70">{issuer.address}</p>}
                         <p className="text-sm text-black/70">{[issuer.phone, issuer.email].filter(Boolean).join(' · ')}</p>
                     </div>

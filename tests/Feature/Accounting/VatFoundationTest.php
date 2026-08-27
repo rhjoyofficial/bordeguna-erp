@@ -54,7 +54,7 @@ it('leaves the regime undecided rather than guessing one', function () {
     expect($this->business->vat_regime)->toBeNull();
 });
 
-it('records that Bor De Guna prices INCLUDE tax', function () {
+it('records that Bor de Guna prices INCLUDE tax', function () {
     // ⚠⚠ C-VAT-1, Joy's decision on 9 August: the customer-facing price is the
     // final price the customer pays, and VAT is never added on top of it. This
     // is the one thing that could not be retrofitted - it decides what every

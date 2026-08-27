@@ -97,7 +97,7 @@ it('records the account the money left from', function () {
 });
 
 it('refuses an account belonging to another business', function () {
-    // ⚠ Tenant isolation on a money movement. Paying Bor De Guna's salaries from
+    // ⚠ Tenant isolation on a money movement. Paying Bor de Guna's salaries from
     // LaLaDia's bank account is the kind of thing that is obvious in a sentence
     // and invisible in a dropdown.
     $batch = bareBatch($this);

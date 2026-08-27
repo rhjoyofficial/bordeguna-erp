@@ -28,7 +28,7 @@ use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 
 /**
- * A throwaway business that mirrors Bor De Guna's shape, for exercising the
+ * A throwaway business that mirrors Bor de Guna's shape, for exercising the
  * complete operational spine with data that can be deleted afterwards.
  *
  * ⚠⚠ WHY A SEPARATE BUSINESS RATHER THAN A `DUMMY-` PREFIX INSIDE BOR DE GUNA.
@@ -121,7 +121,7 @@ class SandboxSeeder extends Seeder
 
     private function seedInventoryMasters(Business $business): void
     {
-        // ⚠ Bor De Guna's real warehouse codes and default rule: the default is
+        // ⚠ Bor de Guna's real warehouse codes and default rule: the default is
         // the primary SALES location, not the largest store.
         $adabor = Warehouse::create([
             'business_id' => $business->id, 'name' => 'DUMMY Uttar Adabor', 'code' => 'ADABOR', 'is_default' => true,

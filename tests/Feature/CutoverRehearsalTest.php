@@ -41,7 +41,7 @@ use Illuminate\Support\Carbon;
 /**
  * THE 1 SEPTEMBER CUTOVER REHEARSAL.
  *
- * ⚠⚠ Everything Bor De Guna will actually do, in the order it will do it, on a
+ * ⚠⚠ Everything Bor de Guna will actually do, in the order it will do it, on a
  * scratch business - so that the first time this sequence runs on the real
  * company's books is not the first time it has ever been run.
  *

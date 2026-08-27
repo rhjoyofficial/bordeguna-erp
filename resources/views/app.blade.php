@@ -11,7 +11,10 @@
         <link rel="apple-touch-icon" href="/favicon-192.png">
 
         <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=geist:400,500,600,700" rel="stylesheet" />
+        {{-- Berkshire Swash carries the brand name only (Joy, 27 Aug 2026). It is a
+             display face: legible as a wordmark, poor as body text, so it is bound
+             to one utility class rather than to any element. --}}
+        <link href="https://fonts.bunny.net/css?family=geist:400,500,600,700|berkshire-swash:400" rel="stylesheet" />
 
         @routes
         @viteReactRefresh

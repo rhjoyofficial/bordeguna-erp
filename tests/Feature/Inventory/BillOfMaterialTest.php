@@ -53,7 +53,7 @@ beforeEach(function () {
     ]);
 
     // Joy's first real case: the pickle is BOUGHT ready in bulk by weight, and
-    // Bor De Guna packs it. Note the output is counted in pcs and the bulk is
+    // Bor de Guna packs it. Note the output is counted in pcs and the bulk is
     // measured in kg, and the recipe converts nothing.
     $this->bulk = $make('RM-PIC-BEF', 'Royal Beef Pickle bulk', $this->kg, ProductType::RawMaterial);
     $this->jar = $make('PK-JAR-400G', 'Jar 400 g', $this->piece, ProductType::RawMaterial);

@@ -15,14 +15,14 @@ use App\Modules\Hrm\Models\SalaryStructureLine;
 use Illuminate\Database\Seeder;
 
 /**
- * W1 migration, part one: Bor De Guna's nine real employees.
+ * W1 migration, part one: Bor de Guna's nine real employees.
  *
  * Source: `D:\WORK\BorDeGuna\ORG-STRUCTURE-SPEC.md` §6 and §7, which is itself
  * derived from the employee list the client supplied on 2026-07-28. Every
  * figure here traces to that table; nothing is invented.
  *
  * ⚠⚠ **SALARY IS ONE AMOUNT — THE WHOLE GROSS BECOMES BASIC.** Settled with Joy
- * 2026-07-28. Bor De Guna does not split salary into House Rent / Medical /
+ * 2026-07-28. Bor de Guna does not split salary into House Rent / Medical /
  * Conveyance, so a structure here is a single Basic line. This matters beyond
  * bookkeeping: overtime is `Basic ÷ 30 ÷ 8`, and absence is deducted from
  * Gross, so inventing a 50/30/20 split would silently change both.
@@ -139,7 +139,7 @@ class BorDeGunaEmployeeSeeder extends Seeder
         $business = Business::where('slug', self::SLUG)->first();
 
         if ($business === null) {
-            $this->command?->warn('Bor De Guna business not found — run BorDeGunaOrganisationSeeder first.');
+            $this->command?->warn('Bor de Guna business not found — run BorDeGunaOrganisationSeeder first.');
 
             return;
         }
@@ -225,7 +225,7 @@ class BorDeGunaEmployeeSeeder extends Seeder
      * One structure, effective from the joining date.
      *
      * ⚠ A single Basic line carrying the whole gross. See the class docblock:
-     * this is Bor De Guna's actual arrangement, and splitting it would change
+     * this is Bor de Guna's actual arrangement, and splitting it would change
      * both the overtime rate and the absence deduction.
      */
     private function salaryFor(Employee $employee, array $row, ?SalaryComponent $basic, ?SalaryComponent $taDa): void

@@ -34,7 +34,7 @@ use Spatie\Permission\PermissionRegistrar;
  * TOGETHER ON ONE DATASET. Every module has been tested alone; the integration
  * between them has not. See DUMMY-DATA-DESIGN.md §6 for what it is hunting.
  *
- * ⚠ Runs entirely inside the SANDBOX business. Bor De Guna receives no dummy
+ * ⚠ Runs entirely inside the SANDBOX business. Bor de Guna receives no dummy
  * transaction of any kind.
  */
 beforeEach(function () {
@@ -353,7 +353,7 @@ it('removes the entire sandbox and leaves no orphan row', function () {
 });
 
 it('refuses to delete anything that is not the sandbox', function () {
-    // ⚠⚠ THE GUARD THAT MATTERS. Bor De Guna must be untouchable by this command.
+    // ⚠⚠ THE GUARD THAT MATTERS. Bor de Guna must be untouchable by this command.
     $this->artisan('sandbox:teardown', ['--business' => 'bor-de-guna'])->assertFailed();
 
     expect(Business::withoutGlobalScopes()->where('slug', SandboxSeeder::SLUG)->exists())->toBeTrue();

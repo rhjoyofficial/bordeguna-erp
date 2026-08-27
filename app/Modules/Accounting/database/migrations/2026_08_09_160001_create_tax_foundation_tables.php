@@ -23,7 +23,7 @@ return new class extends Migration
     {
         // ── C-VAT-1 / C-VAT-5: the business settings ────────────────────────
         Schema::table('businesses', function (Blueprint $table) {
-            // ⚠⚠ C-VAT-1, ANSWERED BY JOY 9 AUGUST: Bor De Guna's customer-facing
+            // ⚠⚠ C-VAT-1, ANSWERED BY JOY 9 AUGUST: Bor de Guna's customer-facing
             // price IS the final price the customer pays. VAT is never added on
             // top of it - when the engine arrives it will be extracted from
             // within. Default true because that is the answer for this

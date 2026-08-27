@@ -15,13 +15,13 @@ use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 /**
- * Bor De Guna's real organisational structure (go-live).
+ * Bor de Guna's real organisational structure (go-live).
  *
  * ⚠ **This is production master data, not demo data.** It is separated from
  * `InventoryDemoDataSeeder` for exactly that reason: demo data may be wiped,
  * this may not.
  *
- * **M0, resolved by Joy 2026-07-28: Bor De Guna is the legal company and the
+ * **M0, resolved by Joy 2026-07-28: Bor de Guna is the legal company and the
  * employer.** Every employee belongs to it, every salary is paid by it, and
  * LaLaDia and Bionic are *brands it operates* rather than employing entities.
  * That makes C7c trivially satisfied — one employer means one salary structure
@@ -90,7 +90,7 @@ class BorDeGunaOrganisationSeeder extends Seeder
      * Only Owner / Manager / Staff / Finance existed. WFL-08 recorded that "HR
      * Head and Management do not exist as roles", parked the permissions on
      * Owner, and said they should be bound to real roles through the Roles UI
-     * later. Bor De Guna's real structure is that moment.
+     * later. Bor de Guna's real structure is that moment.
      *
      * **HR and Payroll are separated deliberately.** C5/ACL-02 treats salary as
      * the most restricted data in the system, and somebody who maintains
@@ -128,7 +128,7 @@ class BorDeGunaOrganisationSeeder extends Seeder
         $business = Business::firstOrCreate(
             ['slug' => self::SLUG],
             [
-                'name' => 'Bor De Guna',
+                'name' => 'Bor de Guna',
                 'is_active' => true,
                 // Correction C12. The application default is already Asia/Dhaka;
                 // set explicitly here so the record states it rather than
@@ -160,7 +160,7 @@ class BorDeGunaOrganisationSeeder extends Seeder
 
     private function seedRoles(Business $business): void
     {
-        // The four the platform already assumes, plus the three Bor De Guna's
+        // The four the platform already assumes, plus the three Bor de Guna's
         // structure needs. Created even where nobody holds them yet: an unheld
         // role costs nothing, and a workflow stage bound to a role that does
         // not exist cannot be configured at all.
@@ -170,7 +170,7 @@ class BorDeGunaOrganisationSeeder extends Seeder
 
         // ⚠ Create the permissions before granting them. This seeder runs
         // BEFORE the module permission seeders (so that they, iterating
-        // Business::all(), find Bor De Guna and grant its Owner/Manager/Finance
+        // Business::all(), find Bor de Guna and grant its Owner/Manager/Finance
         // roles) — which means the names below may not exist yet. Same
         // firstOrCreate the module seeders use, so nothing is duplicated.
         foreach (collect(self::ROLES)->flatten()->unique() as $name) {

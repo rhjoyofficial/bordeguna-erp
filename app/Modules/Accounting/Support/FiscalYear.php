@@ -9,7 +9,7 @@ use Illuminate\Support\Carbon;
  * Which fiscal year a date falls in, for a business that may not start its year
  * in January.
  *
- * C-GL-4: Bor De Guna runs 1 July to 30 June, which is the common company year
+ * C-GL-4: Bor de Guna runs 1 July to 30 June, which is the common company year
  * in Bangladesh. `businesses.fiscal_year_start_month` already existed and is set
  * to 7 for all four businesses.
  *

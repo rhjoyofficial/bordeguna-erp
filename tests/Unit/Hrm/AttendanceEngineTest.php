@@ -463,7 +463,7 @@ it('still reports hours when no policy is configured', function () {
 // --- C13: field staff who never return to the device --------------------------
 
 it('accepts a single morning punch as a worked day for field duty', function () {
-    // ⚠⚠ The rule Bor De Guna's real operations forced. Their Retail Sales
+    // ⚠⚠ The rule Bor de Guna's real operations forced. Their Retail Sales
     // Officers give fingerprint at the office each morning and finish from the
     // field — they never come back to the device. Under POL-07's blanket
     // pairing rule every one of their days became a blocking Missing Punch, so
@@ -565,7 +565,7 @@ it('leaves a field duty schedule with no shift unjudged on time', function () {
 // =============================================================================
 
 /**
- * Bor De Guna's real ladder: three bands, only the third exceptional. Bands 1
+ * Bor de Guna's real ladder: three bands, only the third exceptional. Bands 1
  * and 2 deduct once their free occurrences are spent and are deliberately NOT
  * held for review.
  */

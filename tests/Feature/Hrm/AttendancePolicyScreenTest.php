@@ -86,7 +86,7 @@ beforeEach(function () {
     ];
 
     $this->default = AttendancePolicy::create([
-        'name' => 'Bor De Guna attendance policy', 'version' => 1,
+        'name' => 'Bor de Guna attendance policy', 'version' => 1,
         'config' => $this->officeConfig, 'effective_from' => '2026-01-01',
     ]);
     $this->retail = AttendancePolicy::create([

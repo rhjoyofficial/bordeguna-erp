@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Attendance policy gains a department scope.
  *
- * Until now one policy governed a whole business, which was true of Bor De Guna
+ * Until now one policy governed a whole business, which was true of Bor de Guna
  * until its own circular BdG-HQ-OD-26071901 bound the Retail Sales Department to
  * an 08:15 entry deadline and a show-cause ladder that the office staff it never
  * mentions must not inherit. A department-wide order is the normal shape of this

@@ -61,7 +61,7 @@ class PostPayrollAccrual
      * integration landed - 52 of them - and that was the code telling me
      * something true: making Accounting a hard dependency of APPROVING A
      * PAYROLL would mean a business that has not set up its ledger yet cannot
-     * pay its people. Bor De Guna's payroll is live and in a parallel run; an
+     * pay its people. Bor de Guna's payroll is live and in a parallel run; an
      * accounting feature must not be able to stop it.
      *
      * So there are two different situations and they deserve different answers:

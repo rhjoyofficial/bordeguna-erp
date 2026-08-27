@@ -81,7 +81,7 @@ it('posts a capital introduction and balances', function () {
 });
 
 it('numbers journals per business and per fiscal year', function () {
-    // C-LGR-2, taken as a default: JV-2026-27-0001. Bor De Guna's year runs
+    // C-LGR-2, taken as a default: JV-2026-27-0001. Bor de Guna's year runs
     // 1 July to 30 June, so August 2026 is fiscal year 2026-27 and May 2026 is
     // the year before it.
     $first = ($this->post)(($this->draft)([

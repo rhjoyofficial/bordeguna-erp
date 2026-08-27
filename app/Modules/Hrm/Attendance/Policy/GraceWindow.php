@@ -32,7 +32,7 @@ final readonly class GraceWindow
          * Whether a day in this band is an exception HR must review before
          * payroll may use it (Correction C15b).
          *
-         * ⚠ **Stored, never inferred.** Bor De Guna's third band happens to be
+         * ⚠ **Stored, never inferred.** Bor de Guna's third band happens to be
          * the only one with no free occurrences, so "deducts from the first
          * occurrence" would identify it today — and would be wrong the moment a
          * band is configured with no free occurrences but a mild consequence,

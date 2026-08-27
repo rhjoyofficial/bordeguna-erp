@@ -54,7 +54,7 @@ it('refuses a business that does not exist', function () {
         ->assertExitCode(1);
 });
 
-// ▶▶ The state Bor De Guna is actually in today: catalogue but no prices, no
+// ▶▶ The state Bor de Guna is actually in today: catalogue but no prices, no
 // raw materials, nothing counted.
 it('fails an unprepared business and says exactly why', function () {
     $this->artisan('cutover:preflight --business=preflight-co --date=2026-09-01')

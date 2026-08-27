@@ -24,6 +24,8 @@
 <!DOCTYPE html>
 <html lang="bn">
 <head>
+    <link rel="preconnect" href="https://fonts.bunny.net">
+    <link href="https://fonts.bunny.net/css?family=berkshire-swash:400" rel="stylesheet" />
     <meta charset="utf-8">
     <title>Opening stock count sheet - {{ $warehouse->code }} - {{ $asAt }}</title>
     <style>
@@ -53,7 +55,15 @@
 
         header { border-bottom: 2px solid #111827; padding-bottom: 6px; margin-bottom: 8px; }
 
-        .business { font-size: 12px; font-weight: bold; }
+        /* The brand wordmark on a sheet that gets printed and signed.
+           ⚠ A real fallback stack: this page is often opened in a warehouse,
+           and a count sheet that fails to render its own company name is worse
+           than one in a plainer face. */
+        .business {
+            font-size: 13px;
+            font-weight: bold;
+            font-family: 'Berkshire Swash', 'Segoe Script', cursive;
+        }
 
         h1 { font-size: 15px; margin: 2px 0 4px; }
 

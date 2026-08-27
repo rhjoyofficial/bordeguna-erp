@@ -97,7 +97,7 @@ it('numbers vouchers per fiscal year', function () {
         lines: [['account' => $this->rent, 'amount' => '300']], createdBy: $this->user,
     );
 
-    // Bor De Guna's year runs 1 July to 30 June, so May 2026 belongs to the
+    // Bor de Guna's year runs 1 July to 30 June, so May 2026 belongs to the
     // previous year and keeps its own sequence.
     expect($first->voucher_number)->toBe('EXP-2026-27-0001')
         ->and($second->voucher_number)->toBe('EXP-2026-27-0002')

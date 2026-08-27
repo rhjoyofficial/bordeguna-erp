@@ -49,7 +49,7 @@ it('lists brands, retired ones included, with their product counts', function ()
 
 it('creates a brand from the screen, code upper-cased', function () {
     ($this->asRole)('Owner')->post(route('inventory.brands.store'), [
-        'name' => 'Bor De Guna Fresh',
+        'name' => 'Bor de Guna Fresh',
         'code' => 'bdf',
     ])->assertRedirect()->assertSessionHasNoErrors();
 

@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Bor De Guna's own manual payroll figures, imported for the W2 parallel run
+ * Bor de Guna's own manual payroll figures, imported for the W2 parallel run
  * (ROL-02, Correction C16a).
  *
  * ⚠ **Stored rather than uploaded-and-discarded.** ROL-04 is a joint sign-off

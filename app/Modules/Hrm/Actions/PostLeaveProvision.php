@@ -60,7 +60,7 @@ class PostLeaveProvision
 
     /**
      * ⚠⚠ DISABLED BY BUSINESS POLICY, 23 Aug 2026 - JOY'S FINAL DECISION.
-     * Leave encashment is not enabled at Bor De Guna: unused leave creates no
+     * Leave encashment is not enabled at Bor de Guna: unused leave creates no
      * financial liability and no provision journal, and the ~133,566.67 BDT
      * this engine computes must never be posted unless he explicitly changes
      * the policy. Leave balances and expiry stay, for HR purposes only.

@@ -81,7 +81,7 @@
     @if ($protected) Password protected under SAL-07. @endif
 </div>
 
-<h1>{{ $doc['employee']['business'] ?? 'Bor De Guna' }}</h1>
+<h1>{{ $doc['employee']['business'] ?? 'Bor de Guna' }}</h1>
 <div style="color:#6b7280;">Payslip for {{ $doc['period']['label'] }}
     ({{ $doc['period']['start'] }} &ndash; {{ $doc['period']['end'] }})@if (($doc['period']['run_version'] ?? 1) > 1), revision {{ $doc['period']['run_version'] }}@endif</div>
 

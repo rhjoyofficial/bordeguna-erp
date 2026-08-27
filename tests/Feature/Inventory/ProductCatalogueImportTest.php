@@ -424,7 +424,7 @@ it('warns about near-duplicate product names without blocking', function () {
 });
 
 /**
- * ⚠⚠⚠ BANGLA IS THE REAL DATA, AND EVERY TEST ABOVE IS IN ENGLISH. Bor De Guna's
+ * ⚠⚠⚠ BANGLA IS THE REAL DATA, AND EVERY TEST ABOVE IS IN ENGLISH. Bor de Guna's
  * catalogue is written in Bangla, and the first version of looseKey() stripped
  * every character outside `a-z0-9` - so all six products in the first real file
  * reduced to the EMPTY STRING and compared equal to one another. 34 green tests

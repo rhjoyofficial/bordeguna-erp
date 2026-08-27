@@ -149,7 +149,7 @@ class PostPurchaseJournals
         // still tied while it happened. Same basis on both sides, so GRNI clears
         // exactly whatever the supplier invoiced.
         //
-        // ⚠ Bor De Guna is FIFO. The order carries an AGREED PRICE, not a
+        // ⚠ Bor de Guna is FIFO. The order carries an AGREED PRICE, not a
         // standard cost, and nothing here revalues a batch or rewrites cost of
         // goods sold. The variance is the gap between what was agreed and what
         // was invoiced, and it is reported rather than absorbed.

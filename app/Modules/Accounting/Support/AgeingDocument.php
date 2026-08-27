@@ -26,7 +26,7 @@ final class AgeingDocument
     ) {}
 
     /**
-     * ⚠⚠ C-GLA-10. Both `due_date` columns are NULLABLE, and Bor De Guna has no
+     * ⚠⚠ C-GLA-10. Both `due_date` columns are NULLABLE, and Bor de Guna has no
      * agreed credit terms yet, so most early documents will carry none. A null
      * due date is read as DUE ON THE DOCUMENT DATE - cash on delivery unless
      * terms were agreed, which is the conservative reading and the one that

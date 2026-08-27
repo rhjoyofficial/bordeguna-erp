@@ -9,6 +9,10 @@
 @theme {
     --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 
+    /* The brand wordmark. Given a real fallback stack because a printed invoice
+       must still read correctly on a machine that cannot reach the font host. */
+    --font-brand: 'Berkshire Swash', 'Segoe Script', cursive;
+
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
     --radius-sm: calc(var(--radius) - 4px);
@@ -80,13 +84,13 @@
 }
 
 /*
-  Bor De Guna brand theme. Primary is the deep leaf green from the logo
+  Bor de Guna brand theme. Primary is the deep leaf green from the logo
   (#37940B / #61AD3B family), tuned per mode for WCAG AA contrast:
   light mode uses a deep green with white text (~5.4:1), dark mode a
   brighter green with near-black text (~8:1).
 
   Neutral SURFACES carry a deliberate, visible green tint (no pure
-  #fff / #000 anywhere) so the page background itself reads "Bor De Guna"
+  #fff / #000 anywhere) so the page background itself reads "Bor de Guna"
   in every mode — while lightness stays high (light) / low (dark) enough
   that dense ERP tables remain calm and all body/muted text keeps WCAG AA
   contrast. Cards sit a step brighter (light) / lighter (dark) than the
@@ -340,6 +344,22 @@
     --topbar-background: var(--primary);
     --topbar-foreground: var(--primary-foreground);
     --topbar-border: color-mix(in srgb, var(--primary) 70%, black 15%);
+}
+
+/*
+  The company name, wherever it is presented AS the brand: the sidebar wordmark,
+  the sign-in page, and the head of every printed document.
+
+  ⚠⚠ DELIBERATELY NOT APPLIED TO THE NAME AS DATA. The business switcher, table
+  cells, form fields and report columns keep the interface font. A display face
+  in a dense ERP table costs legibility and buys nothing, and one of four
+  businesses rendered in a swash script reads as a rendering fault rather than a
+  brand.
+*/
+.brand-name {
+    font-family: var(--font-brand);
+    /* The swash forms need a little more room than the interface face. */
+    letter-spacing: 0.01em;
 }
 
 @layer base {

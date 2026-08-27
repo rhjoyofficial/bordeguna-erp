@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Brands: LaLaDia and Bionic-Garden live inside Bor De Guna as brands rather
+ * Brands: LaLaDia and Bionic-Garden live inside Bor de Guna as brands rather
  * than as separate tenants.
  *
  * ⚠⚠ A TABLE, NOT A STRING COLUMN ON `products`. Brand is about to become the

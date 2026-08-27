@@ -55,7 +55,7 @@ final readonly class DayContext
      * ⚠⚠ **Correction C17 (2026-08-16) — the two rules were fused, and one of
      * them was wrong.** Field duty used to switch off punctuality *and* the
      * pair-closing requirement together, on the reasoning that field staff are
-     * measured by outcome. Bor De Guna's internal circular BdG-HQ-OD-26071901
+     * measured by outcome. Bor de Guna's internal circular BdG-HQ-OD-26071901
      * (19-07-2026, in force from 20 July) says otherwise, and says it about
      * exactly these people: every member of the Retail Sales Department must be
      * **inside the office by 08:15** and seated for the 08:30 morning ritual.

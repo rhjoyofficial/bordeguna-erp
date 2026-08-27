@@ -35,7 +35,7 @@ use Spatie\Permission\PermissionRegistrar;
  * zero: Accounts Receivable actually CARRYING a balance, and a receipt arriving
  * on a different day from the invoice.
  *
- * ⚠ Sandbox business only. Bor De Guna receives no dummy transaction.
+ * ⚠ Sandbox business only. Bor de Guna receives no dummy transaction.
  */
 beforeEach(function () {
     Carbon::setTestNow('2026-08-09 10:00:00');

@@ -40,7 +40,7 @@ class SalaryComponentSeeder extends Seeder
             //
             // ⚠ It is deliberately **not** part of gross, so it never affects
             // the daily rate that prices absence, proration or overtime. The
-            // rate is per employee (Bor De Guna: 246.00 and 361.00), set on the
+            // rate is per employee (Bor de Guna: 246.00 and 361.00), set on the
             // salary structure, not here.
             ['code' => 'ta_da', 'name' => 'TA & DA', 'type' => 'earning', 'sequence' => 50,
                 'calculation_basis' => 'per_present_day',

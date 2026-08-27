@@ -23,7 +23,7 @@ use Spatie\Permission\PermissionRegistrar;
  *
  * ⚠⚠ ALL FIGURES HERE ARE TEST DATA. The factor 1.09051254 litres per kilogram
  * is the reciprocal of a GENERAL edible-oil reference (0.917 kg/L) that Joy
- * supplied explicitly as "not our confirmed Bor De Guna factor". It exists here
+ * supplied explicitly as "not our confirmed Bor de Guna factor". It exists here
  * to exercise the arithmetic and NOWHERE in application code, seeders or
  * production data. The real factor is still outstanding.
  *
@@ -66,7 +66,7 @@ function recordConversion($test, string $factor = TEST_FACTOR, string $from = '2
         stockUnitsPerPurchaseUnit: $factor,
         purchaseUnitsPerStockUnit: number_format(1 / (float) $factor, 8, '.', ''),
         effectiveFrom: $from,
-        source: 'PROVISIONAL - general edible oil reference, not yet confirmed by Bor De Guna',
+        source: 'PROVISIONAL - general edible oil reference, not yet confirmed by Bor de Guna',
     );
 }
 

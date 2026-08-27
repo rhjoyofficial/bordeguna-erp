@@ -15,7 +15,7 @@ export default function AuthSimpleLayout({ children, title, description }: AuthL
             <Head>
                 <meta
                     name="description"
-                    content="Bor De Guna ERP access portal for operations, procurement, stock control, and business workflows."
+                    content="Bor de Guna ERP access portal for operations, procurement, stock control, and business workflows."
                 />
             </Head>
             <div className="relative min-h-svh overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(55,148,11,0.18),_transparent_32%),linear-gradient(160deg,hsl(96,33%,97%),hsl(0,0%,100%)_42%,hsl(98,28%,95%)_100%)] dark:bg-[radial-gradient(circle_at_top,_rgba(113,221,73,0.18),_transparent_30%),linear-gradient(160deg,hsl(118,10%,8%),hsl(120,8%,5%)_50%,hsl(120,9%,7%)_100%)]">
@@ -32,7 +32,9 @@ export default function AuthSimpleLayout({ children, title, description }: AuthL
                                     <AppLogoIcon className="h-10 w-10" />
                                 </div>
                                 <div>
-                                    <p className="text-primary text-xs font-semibold tracking-[0.3em] uppercase">Bor De Guna ERP</p>
+                                    <p className="text-primary text-xs font-semibold tracking-[0.3em] uppercase">
+                                        <span className="brand-name normal-case">Bor de Guna</span> ERP
+                                    </p>
                                     <p className="text-muted-foreground text-sm">Unified control for business operations</p>
                                 </div>
                             </Link>
@@ -81,7 +83,7 @@ export default function AuthSimpleLayout({ children, title, description }: AuthL
                                         <AppLogoIcon className="h-8 w-8" />
                                     </div>
                                     <div>
-                                        <p className="text-primary text-sm font-semibold tracking-[0.28em] uppercase">Bor De Guna</p>
+                                        <p className="brand-name text-primary text-sm font-semibold normal-case">Bor de Guna</p>
                                         <p className="text-muted-foreground text-xs">Enterprise Resource Planning</p>
                                     </div>
                                 </Link>

@@ -9,7 +9,7 @@ return new class extends Migration
     /**
      * The day of the month each business's PAYROLL cycle starts on.
      *
-     * ⚠⚠ Joy's final decision, 23 Aug 2026: Bor De Guna's employee month runs
+     * ⚠⚠ Joy's final decision, 23 Aug 2026: Bor de Guna's employee month runs
      * the 24th to the 23rd, and the day must be changeable from Settings
      * rather than living in code. The engine already ran 24-to-23 (Correction
      * C7b hardcoded it); this column is that number made his to change.

@@ -25,7 +25,7 @@ beforeEach(function () {
 it('logs a warehouse identity change', function () {
     $warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Adabor', 'code' => 'ADABOR']);
 
-    $warehouse->update(['code' => 'BDGO', 'name' => 'Bor De Guna Office']);
+    $warehouse->update(['code' => 'BDGO', 'name' => 'Bor de Guna Office']);
 
     $entry = Activity::query()
         ->where('subject_type', Warehouse::class)

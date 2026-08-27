@@ -69,7 +69,7 @@ function payFacts(array $overrides = []): AttendanceFacts
 }
 
 /**
- * PAY-13's structure plus a per-day allowance (C14) — the shape Bor De Guna's
+ * PAY-13's structure plus a per-day allowance (C14) — the shape Bor de Guna's
  * two Retail Sales Officers are paid on.
  *
  * ⚠ Note what `gross` is: `$basic + $houseRent + $medical`, with the allowance

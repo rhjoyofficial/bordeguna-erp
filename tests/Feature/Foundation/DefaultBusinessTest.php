@@ -41,7 +41,7 @@ it('lands a super admin on the flagged business, not the alphabetically first on
     // Production's exact shape: the intended default sorts LAST by name and LAST
     // by id, so neither accident can make this pass.
     landingBusiness('Azmion', 'azmion');
-    $borDeGuna = landingBusiness('Bor De Guna', 'bor-de-guna', default: true);
+    $borDeGuna = landingBusiness('Bor de Guna', 'bor-de-guna', default: true);
 
     $admin = User::factory()->create(['is_super_admin' => true]);
 

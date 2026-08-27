@@ -15,7 +15,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  *
  * ⚠⚠ A BRAND IS NOT A TENANT. LaLaDia and Bionic-Garden used to be separate
  * businesses in this system, holding four demo products each. They are now
- * brands inside Bor De Guna, which is what lets one catalogue, one set of FIFO
+ * brands inside Bor de Guna, which is what lets one catalogue, one set of FIFO
  * cost layers and one profit report cover all of them. Duplicating products
  * across businesses instead would have split stock and made per-product
  * profitability unanswerable.

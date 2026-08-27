@@ -62,7 +62,7 @@ class DatabaseSeeder extends Seeder
         );
 
         $this->call(FoundationSeeder::class);
-        // ⚠⚠ Bor De Guna's real organisational structure — production master
+        // ⚠⚠ Bor de Guna's real organisational structure — production master
         // data, and it MUST run here, before every permission, workflow and
         // policy seeder below. All of those iterate Business::all(), so a
         // business created after them silently receives no permissions, no
@@ -95,7 +95,7 @@ class DatabaseSeeder extends Seeder
         $this->call(PayrollInputWorkflowSeeder::class);
         // ⚠ After AttendancePolicySeeder, BangladeshHolidayCalendarSeeder and
         // the shift/schedule tables exist: this replaces the generic POL-03
-        // example policy with Bor De Guna's real ladder, and binds their teams
+        // example policy with Bor de Guna's real ladder, and binds their teams
         // to their shifts.
         $this->call(BorDeGunaAttendanceSeeder::class);
 

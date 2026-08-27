@@ -64,7 +64,7 @@ it('assigns sequential global employee codes', function () {
 
 it('continues the sequence past gaps left by departed employees', function () {
     // ⚠⚠ THE REGRESSION THAT REAL DATA EXPOSED. The generator was
-    // `Employee::count() + 1`. Bor De Guna's nine real employees are numbered
+    // `Employee::count() + 1`. Bor de Guna's nine real employees are numbered
     // 1, 2, 10, 12, 16, 19, 20, 21, 22 — twelve gaps left by people who have
     // left. A count of 9 would have issued BDG-000010 to the next hire, which
     // already belongs to somebody: a unique-constraint failure that blocks

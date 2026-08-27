@@ -124,7 +124,7 @@ class AttendanceFileReader
     /**
      * A cell as text the parser can read.
      *
-     * ⚠ **`getCalculatedValue()`, not `getValue()`.** Bor De Guna's own export
+     * ⚠ **`getCalculatedValue()`, not `getValue()`.** Bor de Guna's own export
      * builds `CardNo` with the formula `="bdg-"&F2`, so the raw value is the
      * formula source rather than `bdg-000020`. Nothing keys on CardNo today —
      * the enroll column is `No.` — but a reader that hands formulas downstream

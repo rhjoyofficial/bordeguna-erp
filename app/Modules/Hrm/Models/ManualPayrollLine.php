@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 /**
- * One figure from Bor De Guna's own manual payroll, for the W2 parallel run.
+ * One figure from Bor de Guna's own manual payroll, for the W2 parallel run.
  *
  * ⚠⚠ **NOTHING IN PAYROLL MAY READ THIS MODEL.** It exists only to be compared
  * against what the system independently produced. The moment a calculated

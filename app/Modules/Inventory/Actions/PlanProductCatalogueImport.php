@@ -451,7 +451,7 @@ class PlanProductCatalogueImport
     private function warnOnPackSizeVersusUnit(string $name, string $unitKey, int $line, string $sku, CatalogueImportPlan $plan): void
     {
         // ⚠⚠ Bangla spellings included, in BOTH halves. The first version matched
-        // only ASCII digits and ASCII unit words, so on Bor De Guna's own
+        // only ASCII digits and ASCII unit words, so on Bor de Guna's own
         // catalogue - which is written in Bangla - this check never fired once.
         // It is the single warning Joy asked for by name, and it was dead on
         // exactly the data it was written for.

@@ -25,7 +25,7 @@ return new class extends Migration
 
         // ⚠ Adding the column alone would ship the "nothing is flagged" state to
         // production, where the id fallback lands everybody in LaLaDia (id 1) -
-        // wrong in a new way, since Bor De Guna is id 4. Flag it here.
+        // wrong in a new way, since Bor de Guna is id 4. Flag it here.
         // No-op on any installation that has no such row.
         DB::table('businesses')->where('slug', 'bor-de-guna')->update(['is_default' => true]);
     }

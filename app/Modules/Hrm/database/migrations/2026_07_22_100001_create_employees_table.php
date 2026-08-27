@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('employees', function (Blueprint $table) {
             $table->id();
-            // A central Bor De Guna record (ORG-01) — deliberately NOT
+            // A central Bor de Guna record (ORG-01) — deliberately NOT
             // business-scoped. Which business an employee belongs to is
             // expressed through effective-dated employee_assignments, so one
             // person can be assigned to a child business or held centrally, and

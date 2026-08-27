@@ -58,6 +58,17 @@ class PayslipPdf
         $options->set('isHtml5ParserEnabled', true);
         $options->set('defaultFont', 'DejaVu Sans');
 
+        // ⚠⚠ BERKSHIRE SWASH IS DELIBERATELY ABSENT HERE. Joy asked for the
+        // company name to carry the brand face everywhere, and it now does on
+        // every screen and every browser-printed document. This one renderer is
+        // dompdf, which refused the face by both documented routes: an
+        // @font-face pointing at the bundled file, and registerFont(), which
+        // returned false. Forcing it would have meant setting isRemoteEnabled,
+        // and a payslip must never be able to reach out of the server while
+        // rendering. A payslip in DejaVu Sans is a small loss; a payslip that
+        // fetches over the network, or fails to render at all, is not.
+        $options->set('fontCache', $this->fontCacheDirectory());
+
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml(View::make('hrm.payslip', [
             'doc' => $this->document->build($payslip, $generatedBy),
@@ -103,5 +114,24 @@ class PayslipPdf
     private function ownerPassword(Payslip $payslip): string
     {
         return hash('sha256', sprintf('%s|%s|%s', config('app.key'), $payslip->id, $payslip->created_at));
+    }
+
+    /**
+     * Where dompdf may write its parsed-font cache.
+     *
+     * ⚠ Its default is inside the vendor directory, which is read-only on a
+     * deployed container and is wiped by every composer install. Pointing it at
+     * storage means the first payslip after a deploy pays the parsing cost once
+     * rather than failing.
+     */
+    private function fontCacheDirectory(): string
+    {
+        $path = storage_path('app/dompdf-fonts');
+
+        if (! is_dir($path)) {
+            mkdir($path, 0775, true);
+        }
+
+        return $path;
     }
 }

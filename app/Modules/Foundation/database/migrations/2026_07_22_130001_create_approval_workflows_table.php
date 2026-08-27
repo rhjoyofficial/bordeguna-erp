@@ -10,7 +10,7 @@ return new class extends Migration
      * A named, business-owned approval workflow definition (config, not code) —
      * e.g. "Purchase order approval" or "Payroll unlock". Referenced by a stable
      * `key` that an approvable maps to (StockRequest → 'stock_request'). Seeded
-     * with Bor De Guna's defaults; editable per business so a sequence can
+     * with Bor de Guna's defaults; editable per business so a sequence can
      * change without a code change. The ordered stages live in
      * approval_workflow_stages.
      */

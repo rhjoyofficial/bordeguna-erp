@@ -218,7 +218,7 @@ it('spans two batches correctly for a product bought in kilograms and stocked in
         'type' => ProductType::FinishedGood,
     ]);
 
-    // ⚠ TEST DATA. Not the confirmed Bor De Guna factor - see the architecture note.
+    // ⚠ TEST DATA. Not the confirmed Bor de Guna factor - see the architecture note.
     ProductUnitConversion::record(
         businessId: $this->business->id,
         product: $oil,

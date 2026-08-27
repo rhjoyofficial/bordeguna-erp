@@ -9,7 +9,7 @@ use Illuminate\Support\Carbon;
 /**
  * THE one place that knows when a payroll month starts and ends.
  *
- * ⚠⚠ Joy's final decision, 23 Aug 2026: Bor De Guna's employee month runs the
+ * ⚠⚠ Joy's final decision, 23 Aug 2026: Bor de Guna's employee month runs the
  * 24th to the 23rd, set per business on Settings → Business, and it governs
  * payroll, attendance summaries and payroll-related HR reports - NOTHING in
  * accounting. A supplier bill dated the 25th belongs to the month on its face,

@@ -102,7 +102,7 @@ class PendingApprovalNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Approval needed: Bor De Guna ERP')
+            ->subject('Approval needed: Bor de Guna ERP')
             ->greeting("Hello {$notifiable->name},")
             ->line('An item is waiting for your approval:')
             ->line($this->summary)

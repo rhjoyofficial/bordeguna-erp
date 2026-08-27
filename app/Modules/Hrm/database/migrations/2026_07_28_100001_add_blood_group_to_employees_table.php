@@ -9,7 +9,7 @@ return new class extends Migration
     /**
      * Blood group (EMP-04 family).
      *
-     * Added when Bor De Guna's real employee data arrived carrying it for five
+     * Added when Bor de Guna's real employee data arrived carrying it for five
      * of nine people and the column did not exist — so migration would have
      * silently dropped it and somebody would have had to collect it again.
      *

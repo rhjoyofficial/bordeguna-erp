@@ -77,7 +77,7 @@ class AttendanceSummaryController extends Controller
         $to = $request->filled('to') ? Carbon::parse($request->string('to')->toString()) : $anchor;
         $from = $request->filled('from')
             ? Carbon::parse($request->string('from')->toString())
-            // The current PAYROLL month, not the calendar one - for Bor De Guna
+            // The current PAYROLL month, not the calendar one - for Bor de Guna
             // that is the 24th (Settings → Business), so the default answers
             // "how is this person doing this pay month", which is the month the
             // consequences and the payslip are counted in.

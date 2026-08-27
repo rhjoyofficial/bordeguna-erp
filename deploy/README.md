@@ -1,4 +1,4 @@
-# Production deployment — Bor De Guna ERP
+# Production deployment — Bor de Guna ERP
 
 Target: `srv1808022` (Hostinger KVM, `200.97.162.40`), reached as `ssh vps`.
 Serves `https://erp.srv1808022.hstgr.cloud`.

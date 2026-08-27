@@ -11,7 +11,7 @@ use Illuminate\Database\Seeder;
  * The four official price groups, fixed by Joy on 2026-08-10 (D-PRC-2):
  * RETAIL (the default), DEALER, DISTRIBUTOR, CORPORATE.
  *
- * ⚠ Seeded for EVERY business, not just Bor De Guna - pricing is generic
+ * ⚠ Seeded for EVERY business, not just Bor de Guna - pricing is generic
  * infrastructure, per the standing constraint that Sales stays generic across
  * businesses. A future group is a row added by hand; this seeder does not need
  * changing for it.

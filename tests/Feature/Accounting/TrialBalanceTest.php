@@ -377,7 +377,7 @@ it('refuses the trial balance to somebody with no accounting permission', functi
 it('defaults to the fiscal year rather than the calendar month', function () {
     $response = $this->actingAs($this->founder)->get(route('accounting.trial-balance'));
 
-    // Bor De Guna's year runs 1 July to 30 June (C-GL-4). A July default would
+    // Bor de Guna's year runs 1 July to 30 June (C-GL-4). A July default would
     // show four weeks of a twelve-month story.
     expect($response->viewData('page')['props']['from'])->toBe('2026-07-01');
 });

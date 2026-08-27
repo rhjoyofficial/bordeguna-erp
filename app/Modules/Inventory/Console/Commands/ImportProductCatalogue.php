@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Throwable;
 
 /**
- * Stage 3 of the Bor De Guna onboarding: the product catalogue, as master data
+ * Stage 3 of the Bor de Guna onboarding: the product catalogue, as master data
  * under version control rather than an afternoon of typing.
  *
  * ⚠⚠ REPORTS BY DEFAULT, WRITES ONLY WITH --apply. Joy's rule for the whole

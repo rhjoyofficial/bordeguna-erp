@@ -18,7 +18,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
 /**
- * Bor De Guna's attendance configuration: the lateness policy, the shifts, and
+ * Bor de Guna's attendance configuration: the lateness policy, the shifts, and
  * which team works which one.
  *
  * ⚠ **This provisions; it does not administer.** Everything it writes is
@@ -29,7 +29,7 @@ use Illuminate\Support\Carbon;
  * configuration rather than an empty screen, and so this exact setup can be
  * rebuilt from scratch.
  *
- * **Scalability, since Bor De Guna expects more offices, warehouses and
+ * **Scalability, since Bor de Guna expects more offices, warehouses and
  * outlets.** Three properties carry it, and none of them needs code to grow:
  *
  *  1. **The lateness policy is expressed in minutes after shift start, never in
@@ -89,7 +89,7 @@ class BorDeGunaAttendanceSeeder extends Seeder
     /**
      * Employees who work to something other than their team's schedule.
      *
-     * ⚠ Bor De Guna's two Retail Sales Officers give fingerprint at the office
+     * ⚠ Bor de Guna's two Retail Sales Officers give fingerprint at the office
      * each morning and finish from the field. They sit in the Retail Sales Team
      * with the Assistant Sales Manager, who *does* keep normal hours — so the
      * exception is per person, not per team, and `ScheduleScope::Employee`
@@ -107,7 +107,7 @@ class BorDeGunaAttendanceSeeder extends Seeder
     ];
 
     /**
-     * Bor De Guna's lateness ladder, confirmed by Joy 2026-07-28.
+     * Bor de Guna's lateness ladder, confirmed by Joy 2026-07-28.
      *
      * **Two independent monthly allowances plus an unpaid cliff:**
      *
@@ -135,7 +135,7 @@ class BorDeGunaAttendanceSeeder extends Seeder
      * - **Office (09:00 shift)** — over 180 minutes means after **12:00**.
      * - **Retail (08:30 shift)** — over 180 minutes means after **11:30**.
      *
-     * That is the property which lets one policy govern every shift Bor De Guna
+     * That is the property which lets one policy govern every shift Bor de Guna
      * will ever open, including future outlets on hours nobody has chosen yet.
      *
      * @return array<string, mixed>
@@ -216,7 +216,7 @@ class BorDeGunaAttendanceSeeder extends Seeder
      * ⚠ **Provisioning, and it refuses to amend.**
      *
      * `AttendancePolicySeeder` already gave every business POL-03's *worked
-     * example* as a starting point. Bor De Guna's real rule replaces it — but
+     * example* as a starting point. Bor de Guna's real rule replaces it — but
      * only while the policy is still untouched by operations. Once a single day
      * has been judged under it, POL-12's versioning applies: a rule change
      * becomes a **new version with its own effective date**, because a day must
@@ -243,7 +243,7 @@ class BorDeGunaAttendanceSeeder extends Seeder
         if ($policy === null) {
             AttendancePolicy::create([
                 'business_id' => $business->id,
-                'name' => 'Bor De Guna attendance policy',
+                'name' => 'Bor de Guna attendance policy',
                 'version' => 1,
                 'config' => self::policyConfig(),
                 'effective_from' => $this->effectiveFrom(),
@@ -253,7 +253,7 @@ class BorDeGunaAttendanceSeeder extends Seeder
         }
 
         $policy->update([
-            'name' => 'Bor De Guna attendance policy',
+            'name' => 'Bor de Guna attendance policy',
             'config' => self::policyConfig(),
         ]);
     }

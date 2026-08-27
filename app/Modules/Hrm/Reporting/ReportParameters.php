@@ -77,7 +77,7 @@ final class ReportParameters
      * when it says "August".
      *
      * ⚠⚠ Joy's decision, 23 Aug 2026: the employee month runs from the
-     * configured start day (24 for Bor De Guna) to the day before it, so the
+     * configured start day (24 for Bor de Guna) to the day before it, so the
      * report labelled August covers 24 July to 23 August - the same days the
      * August payslip pays. Before this, every HRM report read the calendar
      * month, so a report and the payslip beside it disagreed about what

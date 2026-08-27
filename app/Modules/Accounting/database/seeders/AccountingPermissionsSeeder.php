@@ -67,7 +67,7 @@ class AccountingPermissionsSeeder extends Seeder
                 // givePermissionTo is additive - syncPermissions would wipe out
                 // whatever other modules' seeders already granted this role.
                 // ⚠ The role may not exist in every business: `Payroll` is part
-                // of Bor De Guna's real structure, not the seeded default set.
+                // of Bor de Guna's real structure, not the seeded default set.
                 if ($role) {
                     $role->givePermissionTo($permissions);
                 }

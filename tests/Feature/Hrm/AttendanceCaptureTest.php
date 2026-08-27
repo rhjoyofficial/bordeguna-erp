@@ -589,7 +589,7 @@ it('keeps one biometric enroll ID from being shared by two employees', function 
 // --- Spreadsheet uploads (ATT-02): the device's own export, unconverted ------
 
 /**
- * Writes a spreadsheet shaped like Bor De Guna's real ZKTeco export, including
+ * Writes a spreadsheet shaped like Bor de Guna's real ZKTeco export, including
  * the two things that file does which a hand-made fixture would not:
  *
  *  - `Date/Time` is a genuine date CELL, not text, so it carries a serial

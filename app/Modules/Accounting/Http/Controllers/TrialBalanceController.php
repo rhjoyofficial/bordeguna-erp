@@ -66,7 +66,7 @@ class TrialBalanceController extends Controller
      * Defaults to the current fiscal year to date.
      *
      * ⚠ Not "this month" and not "everything". A trial balance is read against
-     * the year it belongs to, and Bor De Guna's year runs 1 July to 30 June
+     * the year it belongs to, and Bor de Guna's year runs 1 July to 30 June
      * (C-GL-4), so a July default would show four weeks of a twelve-month story.
      *
      * @return array{0: Carbon, 1: Carbon}

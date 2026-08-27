@@ -10,7 +10,7 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
- * Seeds the 3 known Bor De Guna businesses, a Super Admin, one demo Owner
+ * Seeds the 3 known Bor de Guna businesses, a Super Admin, one demo Owner
  * per business, and the per-business Owner/Manager/Staff roles (spatie teams).
  *
  * Per-business roles are deliberately re-created per business (not shared),
@@ -30,7 +30,7 @@ class FoundationSeeder extends Seeder
             // is_super_admin, and it was found live on the public production
             // system accepting the word "password" on 2026-07-29.
             [
-                'name' => 'Bor De Guna Super Admin',
+                'name' => 'Bor de Guna Super Admin',
                 'password' => SeedCredentials::demoPassword(),
                 'is_super_admin' => true,
                 'is_active' => SeedCredentials::demoActive(),

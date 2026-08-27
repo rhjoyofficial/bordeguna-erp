@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
  * assignment as of the separation date (so they drop out of "who works here"),
  * and disables their ERP login if one is linked.
  *
- * Separation is a central event (the person leaves Bor De Guna), so assignments
+ * Separation is a central event (the person leaves Bor de Guna), so assignments
  * are closed across all businesses, not just the current one.
  *
  * EMP-08 lists more automations — attendance cutoff, final salary, leave
