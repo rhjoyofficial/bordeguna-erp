@@ -113,6 +113,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         Route::get('expenses', [ExpenseVoucherController::class, 'index'])->name('expenses.index');
         // ⚠ Printing sits with viewing, not recording: a voucher on paper is no
         // more secret than the voucher on the screen it was read from.
+        Route::get('expenses/export', [ExpenseVoucherController::class, 'export'])->name('expenses.export');
         Route::get('expenses/{voucher}/print', [ExpenseVoucherController::class, 'print'])->name('expenses.print');
     });
 

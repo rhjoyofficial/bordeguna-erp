@@ -123,6 +123,20 @@ export default function ExpensesIndex({
     suppliers: { id: number; name: string }[];
     today: string;
 }) {
+    // ⚠ Held locally rather than pushed through a visit: these filter the FILE,
+    // not the list on screen, so picking a date must not reload the page.
+    const [exportFrom, setExportFrom] = useState('');
+    const [exportTo, setExportTo] = useState('');
+
+    const exportUrl = (() => {
+        const params = new URLSearchParams();
+        if (exportFrom) params.set('from', exportFrom);
+        if (exportTo) params.set('to', exportTo);
+        const query = params.toString();
+
+        return `/purchasing/expenses/export${query ? `?${query}` : ''}`;
+    })();
+
     const { data, setData, post, errors, processing, reset } = useForm({
         money_account_id: '',
         spent_on: today,
@@ -309,6 +323,29 @@ export default function ExpensesIndex({
                         </div>
                     </form>
                 )}
+
+                <div className="flex flex-wrap items-end gap-3">
+                    <div className="grid gap-1">
+                        <Label htmlFor="export-from" className="text-muted-foreground text-xs">
+                            Export from
+                        </Label>
+                        <Input id="export-from" type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} className="w-40" />
+                    </div>
+                    <div className="grid gap-1">
+                        <Label htmlFor="export-to" className="text-muted-foreground text-xs">
+                            to
+                        </Label>
+                        <Input id="export-to" type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} className="w-40" />
+                    </div>
+                    {/* ⚠ A plain anchor, not a router visit: this is a file download,
+                        and Inertia would try to render the CSV as a page. */}
+                    <Button variant="outline" size="sm" asChild>
+                        <a href={exportUrl}>Export to CSV</a>
+                    </Button>
+                    <p className="text-muted-foreground text-xs">
+                        Leave both dates empty for everything. One row per expense line, so the amounts add up.
+                    </p>
+                </div>
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full min-w-[52rem] text-sm">

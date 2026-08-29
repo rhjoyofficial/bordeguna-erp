@@ -11,18 +11,20 @@ use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\Attachment;
-use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Purchasing\Actions\RecordExpenseVoucher;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Support\ExpenseVoucherCsv;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * What the business spent on running itself: rent, fuel, utilities, repairs.
@@ -120,6 +122,51 @@ class ExpenseVoucherController extends Controller
 
             'today' => now()->toDateString(),
         ]);
+    }
+
+    /**
+     * The expense register as a file.
+     *
+     * ⚠⚠ FILTERED BY DATE, AND THE FILTER IS OPTIONAL ON PURPOSE. Asked for a
+     * month, it gives that month; asked for nothing, it gives everything. An
+     * export that silently capped itself at a page would be worse than none:
+     * the number at the bottom would look like the answer and would not be.
+     *
+     * ⚠ One row per LINE, so the amounts add up to the accounts. See the CSV
+     * class for why `voucher_total` must not be summed.
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $this->authorize('purchasing.reports.view');
+
+        $filters = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
+
+        $from = $filters['from'] ?? null;
+        $to = $filters['to'] ?? null;
+
+        $name = 'expenses-'.($from && $to ? "{$from}-to-{$to}" : now()->format('Y-m-d')).'.csv';
+
+        return response()->streamDownload(
+            function () use ($from, $to) {
+                // ⚠ Queried INSIDE the closure. streamDownload defers execution,
+                // and this must run while the request's tenant scope is still in
+                // force, or it reads every business at once.
+                $vouchers = ExpenseVoucher::query()
+                    ->with(['moneyAccount:id,name', 'supplier:id,name', 'lines.account:id,code,name', 'createdBy:id,name', 'attachments'])
+                    ->when($from, fn ($query) => $query->whereDate('spent_on', '>=', $from))
+                    ->when($to, fn ($query) => $query->whereDate('spent_on', '<=', $to))
+                    ->orderBy('spent_on')
+                    ->orderBy('id')
+                    ->get();
+
+                echo ExpenseVoucherCsv::export($vouchers);
+            },
+            $name,
+            ['Content-Type' => 'text/csv; charset=UTF-8'],
+        );
     }
 
     /**
