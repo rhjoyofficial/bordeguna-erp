@@ -139,6 +139,7 @@ class HandleInertiaRequests extends Middleware
             'canSell' => fn () => (bool) $request->user()?->can('sales.sell'),
             'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),
             'canViewCrm' => fn () => (bool) $request->user()?->can('crm.leads.view'),
+            'canViewContacts' => fn () => (bool) $request->user()?->can('crm.contacts.view'),
             'canManageCrmSettings' => fn () => (bool) $request->user()?->can('crm.settings.manage'),
             // ⚠ The Assets module shipped loading MIGRATIONS ONLY - no routes, no
             // screens, no permissions - so nothing the business owns could be

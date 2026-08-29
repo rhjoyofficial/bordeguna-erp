@@ -83,6 +83,7 @@ export function AppSidebar() {
         canManageBom,
         canImportPrices,
         canViewCrm,
+        canViewContacts,
         canManageCrmSettings,
         canViewAssets,
         hasEmployeeProfile,
@@ -208,17 +209,31 @@ export function AppSidebar() {
                   },
               ]
             : []),
-        ...(canViewCrm
+        ...(canViewCrm || canViewContacts
             ? [
                   {
                       label: 'CRM',
                       items: [
-                          { title: 'Leads', url: '/crm/leads', icon: UserPlus },
-                          // ⚠ The work queue is the screen an agent lives in all
-                          // day. Without it, follow-ups exist and nobody sees them.
-                          { title: 'Follow-ups', url: '/crm/queue', icon: CalendarCheck },
-                          { title: 'CRM reports', url: '/crm/reports', icon: FileBarChart },
+                          // ⚠⚠ Gated ITEM BY ITEM, not just as a group. The phone
+                          // book has its own permission, so somebody may hold it
+                          // without holding the lead permissions. Gating only the
+                          // group would show that person four links they cannot
+                          // open, and a 403 from the sidebar reads as a bug.
+                          ...(canViewCrm
+                              ? [
+                                    { title: 'Leads', url: '/crm/leads', icon: UserPlus },
+                                    // ⚠ The work queue is the screen an agent lives in all
+                                    // day. Without it, follow-ups exist and nobody sees them.
+                                    { title: 'Follow-ups', url: '/crm/queue', icon: CalendarCheck },
+                                    { title: 'CRM reports', url: '/crm/reports', icon: FileBarChart },
+                                ]
+                              : []),
                           ...(canManageCrmSettings ? [{ title: 'Sources & campaigns', url: '/crm/settings', icon: Megaphone }] : []),
+                          // ⚠ Linked in the same slice as the route and the
+                          // screen. Seven modules in this project have shipped
+                          // complete and unreachable because this line was left
+                          // for later.
+                          ...(canViewContacts ? [{ title: 'Phone book', url: '/crm/contacts', icon: Contact }] : []),
                       ],
                   },
               ]

@@ -25,10 +25,18 @@ use Spatie\Permission\Models\Role;
  */
 class CrmPermissionsSeeder extends Seeder
 {
+    /**
+     * ⚠ The phone book gets its OWN pair (29 Aug 2026) rather than riding on the
+     * lead permissions. It holds people who are neither leads nor customers, and
+     * it is what a future SMS or email send is aimed at. Staff may read it and
+     * work with groups; changing who is in the book, and pulling CRM records
+     * into it, stays with Owner and Manager for the same reason sources and
+     * campaigns do. A send costs money, and the audience is half of the send.
+     */
     private const ROLE_PERMISSIONS = [
-        'Owner' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert'],
-        'Manager' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert'],
-        'Staff' => ['crm.leads.view', 'crm.leads.manage'],
+        'Owner' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage'],
+        'Manager' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage'],
+        'Staff' => ['crm.leads.view', 'crm.leads.manage', 'crm.contacts.view'],
     ];
 
     public function run(): void

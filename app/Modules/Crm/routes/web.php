@@ -1,5 +1,8 @@
 <?php
 
+use App\Modules\Crm\Http\Controllers\ContactController;
+use App\Modules\Crm\Http\Controllers\ContactGroupController;
+use App\Modules\Crm\Http\Controllers\ContactImportController;
 use App\Modules\Crm\Http\Controllers\CrmActivityController;
 use App\Modules\Crm\Http\Controllers\CrmReportController;
 use App\Modules\Crm\Http\Controllers\CrmSettingsController;
@@ -69,5 +72,39 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         Route::post('{type}/{id}/interests', [CrmActivityController::class, 'storeInterest'])
             ->whereIn('type', ['lead', 'customer'])->whereNumber('id')->name('interests.store');
         Route::put('interests/{interest}/close', [CrmActivityController::class, 'closeInterest'])->name('interests.close');
+    });
+
+    // ── The phone book (Joy, 29 Aug 2026) ───────────────────────────────────
+    // ⚠ Its own permissions, not the lead ones. The phone book holds people who
+    // are neither leads nor customers, and somebody trusted to run a send is not
+    // automatically somebody trusted to work the sales pipeline.
+    Route::middleware('can:crm.contacts.view')->group(function () {
+        Route::get('contacts', [ContactController::class, 'index'])->name('contacts.index');
+
+        // ⚠⚠ Declared BEFORE any '{contact}' pattern, which would otherwise
+        // swallow /crm/contacts/export as a contact called "export". The same
+        // trap the CRM queue route carries a warning about.
+        Route::get('contacts/export', [ContactImportController::class, 'export'])->name('contacts.export');
+        Route::get('contacts/template', [ContactImportController::class, 'template'])->name('contacts.template');
+    });
+
+    Route::middleware('can:crm.contacts.manage')->group(function () {
+        Route::post('contacts', [ContactController::class, 'store'])->name('contacts.store');
+        Route::put('contacts/{contact}', [ContactController::class, 'update'])->whereNumber('contact')->name('contacts.update');
+        Route::post('contacts/{contact}/deactivate', [ContactController::class, 'deactivate'])->whereNumber('contact')->name('contacts.deactivate');
+        Route::post('contacts/{contact}/reactivate', [ContactController::class, 'reactivate'])->whereNumber('contact')->name('contacts.reactivate');
+
+        Route::post('contact-groups', [ContactGroupController::class, 'store'])->name('contact-groups.store');
+        Route::put('contact-groups/{group}', [ContactGroupController::class, 'update'])->name('contact-groups.update');
+        Route::post('contact-groups/add', [ContactController::class, 'addToGroup'])->name('contact-groups.add');
+        Route::post('contact-groups/remove', [ContactController::class, 'removeFromGroup'])->name('contact-groups.remove');
+
+        Route::post('contacts/pull', [ContactController::class, 'pullFromCrm'])->name('contacts.pull');
+
+        // ⚠⚠ TWO requests on purpose. `review` writes nothing and returns a
+        // plan; `apply` writes what the person has just read. A single
+        // upload-and-write route would make the preview a decoration.
+        Route::post('contacts/import/review', [ContactImportController::class, 'review'])->name('contacts.import.review');
+        Route::post('contacts/import/apply', [ContactImportController::class, 'apply'])->name('contacts.import.apply');
     });
 });

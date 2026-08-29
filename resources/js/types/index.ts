@@ -77,6 +77,7 @@ export interface SharedData {
     canImportPrices: boolean;
     canManageBom: boolean;
     canViewCrm: boolean;
+    canViewContacts: boolean;
     canManageCrmSettings: boolean;
     canViewAssets: boolean;
     canRunDepreciation: boolean;
