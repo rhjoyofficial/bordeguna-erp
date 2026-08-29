@@ -361,6 +361,10 @@ export function AppSidebar() {
                   {
                       label: 'Finance & Accounts',
                       items: [
+                          // ⚠ First, because it is the one screen that answers
+                          // "how are we doing" without being asked for a date
+                          // range first.
+                          { title: 'Overview', url: '/accounting/overview', icon: ChartColumn },
                           // ⚠ The two statements first, and the trial balance
                           // after them. A trial balance answers "do the books
                           // add up"; these answer "how did we do" and "what do

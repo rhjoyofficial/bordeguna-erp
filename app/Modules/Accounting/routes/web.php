@@ -7,6 +7,7 @@ use App\Modules\Accounting\Http\Controllers\CashAndBankBookController;
 use App\Modules\Accounting\Http\Controllers\CashFlowController;
 use App\Modules\Accounting\Http\Controllers\CostOfGoodsSoldController;
 use App\Modules\Accounting\Http\Controllers\CustomerStatementController;
+use App\Modules\Accounting\Http\Controllers\FinanceDashboardController;
 use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
 use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
 use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
@@ -26,6 +27,12 @@ use Illuminate\Support\Facades\Route;
  */
 Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('accounting.')->group(function () {
     Route::middleware('can:accounting.view')->group(function () {
+        // ⚠ The overview, gated on the SAME permission as the statements it
+        // summarises. A dashboard is not a softer thing than the report behind
+        // it, and every figure on it comes from those report classes rather
+        // than from arithmetic of its own.
+        Route::get('overview', [FinanceDashboardController::class, 'index'])->name('overview');
+
         Route::get('accounts', [AccountController::class, 'index'])->name('accounts.index');
         Route::get('money-accounts', [MoneyAccountController::class, 'index'])->name('money-accounts.index');
         // ⚠ The third primary statement. A RANGE, not a date - unlike the
