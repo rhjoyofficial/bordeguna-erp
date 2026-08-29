@@ -7,7 +7,6 @@ use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
-use App\Modules\Hrm\Models\LeaveProvisionRun;
 use App\Modules\Hrm\Models\LoanLedgerEntry;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
@@ -144,7 +143,6 @@ final class SubledgerReconciliation
 
         if (AccountMapping::forKeyOn('payroll.net_payable', $today) !== null) {
             $this->reconcileEmployeeAdvances($business, $today);
-            $this->reconcileLeaveProvision($business, $today);
         }
     }
 
@@ -525,45 +523,6 @@ final class SubledgerReconciliation
             glBalance: $this->glDebitBalance($account->id),
             derived: $outstanding,
             derivedFrom: 'the loan ledger',
-        );
-    }
-
-    /**
-     * R8. Leave Encashment Provision: the GL against the last committed
-     * true-up's computed liability.
-     *
-     * ⚠⚠ NOT against a fresh recomputation. The provision is a point-in-time
-     * true-up: leave taken since the last run legitimately makes today's
-     * liability differ from the posted balance, and reporting that as a break
-     * would flag the intended state and teach people to ignore this command.
-     * What must agree is the ledger and the document that produced it - which
-     * is exactly the failure class this whole command exists for.
-     */
-    private function reconcileLeaveProvision(string $business, Carbon $today): void
-    {
-        $account = AccountMapping::forKeyOn('payroll.leave_provision', $today)?->account;
-
-        if ($account === null) {
-            return;
-        }
-
-        $lastRun = LeaveProvisionRun::query()
-            ->where('is_dry_run', false)
-            ->orderByDesc('valued_on')
-            ->orderByDesc('id')
-            ->first();
-
-        if ($lastRun === null) {
-            return;
-        }
-
-        $this->compare(
-            $business,
-            'Leave Encashment Provision',
-            $account->id,
-            glBalance: $this->glCreditBalance($account->id),
-            derived: Money::ofTaka((string) $lastRun->total_liability),
-            derivedFrom: 'the last leave provision run',
         );
     }
 

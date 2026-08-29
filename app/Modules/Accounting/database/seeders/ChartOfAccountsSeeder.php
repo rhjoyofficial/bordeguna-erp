@@ -103,13 +103,6 @@ class ChartOfAccountsSeeder extends Seeder
         // because payroll posting has to find it (Phase 3).
         ['2140', 'Employee Deductions Payable', AccountType::Liability, '2100', true, 'employee_deductions_payable'],
         ['2150', 'Advances from Customers', AccountType::Liability, '2100', true, null],
-        // ⚠⚠ C-LPE-1: a DEDICATED head, not generic 2160. The balance answers
-        // "what do we owe the staff for leave they have earned" at a glance,
-        // and leaves 2160 free for genuine sundry accruals (the cut-over
-        // question the accountant questionnaire already points there).
-        // Recommended to the accountant; one mapping row moves it if he
-        // prefers otherwise.
-        ['2135', 'Leave Encashment Provision', AccountType::Liability, '2100', true, 'leave_provision'],
         ['2160', 'Accrued Expenses', AccountType::Liability, '2100', true, null],
         // ⚠⚠ C-VAT-6. VAT charged to customers and owed onward to the
         // government. It is never the business's money, which is exactly why it
@@ -176,8 +169,8 @@ class ChartOfAccountsSeeder extends Seeder
         ['6100', 'Salaries and Wages', AccountType::Expense, '6000', true, 'salaries_expense'],
         ['6110', 'Bonus and Festival Allowance', AccountType::Expense, '6000', true, null],
         ['6120', 'Overtime', AccountType::Expense, '6000', true, null],
-        // ⚠ Slug added 2026-08-12 for the leave provision; the set-when-absent
-        // branch below carries it onto installations seeded before it existed.
+        // ⚠ The slug stays after provisioning was removed (29 Aug 2026): an
+        // actual encashment PAYMENT still needs a head to land in.
         ['6130', 'Leave Encashment', AccountType::Expense, '6000', true, 'leave_encashment'],
         ['6140', 'Staff Welfare', AccountType::Expense, '6000', true, null],
         ['6200', 'Rent', AccountType::Expense, '6000', true, null],

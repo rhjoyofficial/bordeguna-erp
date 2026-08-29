@@ -76,14 +76,12 @@ class PayrollAccountMappingSeeder extends Seeder
         // from the loan module.
         'payroll.employee_advances' => 'employee_advances',
 
-        // ─── Leave earned but not taken (coverage item 5) ────────────────────
-        // ⚠⚠ The liability that existed from day one and was recorded nowhere.
-        // The expense is 6130 - the same head an actual encashment payment
-        // lands in, so providing for it and paying it read as one story - and
-        // the credit is its own liability head rather than generic accruals
-        // (C-LPE-1). Both are Joy-and-accountant changeable in one row.
+        // ─── Leave paid out in cash ─────────────────────────────────────
+        // ⚠ 6130 is where an ACTUAL encashment payment lands if one is ever
+        // made by hand. It is NOT a provision: Joy removed provisioning from
+        // the ERP on 29 Aug 2026, so nothing accrues a liability for unused
+        // leave and no 2135 credit exists any more. Changeable in one row.
         'payroll.leave_encashment' => 'leave_encashment',
-        'payroll.leave_provision' => 'leave_provision',
     ];
 
     public function run(): void

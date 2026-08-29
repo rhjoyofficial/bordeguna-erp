@@ -166,13 +166,7 @@ it('leaves no user-facing page with no way to reach it', function () {
             || str_starts_with($uri, 'reset-password')
             || str_starts_with($uri, 'verify-email')
             || str_starts_with($uri, 'confirm-password')
-            || str_starts_with($uri, 'businesses')
-            // ⚠ Deliberately unlinked, not forgotten (Joy, 23 Aug 2026): leave
-            // encashment is not enabled, so nothing may invite anyone to post
-            // a provision. The page stays as a read-only valuation for whoever
-            // knows to ask; its Record path refuses with the policy named.
-            // Remove this exemption if the policy ever changes.
-            || str_starts_with($uri, 'hrm/leave-provision'))
+            || str_starts_with($uri, 'businesses'))
         ->values()
         ->all();
 

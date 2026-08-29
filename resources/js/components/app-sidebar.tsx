@@ -303,12 +303,6 @@ export function AppSidebar() {
                                     // reach means employees are never paid back.
                                     { title: 'Expense claims', url: '/hrm/expense-claims', icon: HandCoins },
                                     { title: 'Payroll runs', url: '/hrm/payroll', icon: Banknote },
-                                    // ⚠ Leave provision's link is GONE on purpose, not
-                                    // forgotten (Joy, 23 Aug 2026): encashment is not
-                                    // enabled, so unused leave carries no liability and
-                                    // nothing must invite anyone to post one. The route
-                                    // still answers as a read-only valuation, and the
-                                    // Record path refuses with the policy named.
                                 ]
                               : []),
                       ],

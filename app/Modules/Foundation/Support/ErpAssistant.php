@@ -52,7 +52,7 @@ class ErpAssistant
             ['area' => 'Suppliers, purchase orders, goods receipts, supplier bills, payments, credit notes, expense vouchers', 'path' => 'Purchases', 'permission' => null],
             ['area' => 'Fixed assets register and depreciation runs', 'path' => 'Assets', 'permission' => 'assets.view'],
             ['area' => 'Employees, schedules, shifts, attendance (daily, punch log, corrections, import), leave', 'path' => 'HRM', 'permission' => 'hrm.employees.manage'],
-            ['area' => 'Salary structures, increments, payroll inputs, loans, payroll runs, leave provision', 'path' => 'Payroll', 'permission' => 'hrm.payroll.manage'],
+            ['area' => 'Salary structures, increments, payroll inputs, loans, payroll runs', 'path' => 'Payroll', 'permission' => 'hrm.payroll.manage'],
             ['area' => 'Accounting: P&L, balance sheet, trial balance, receivables/payables ageing, customer statements, cash & bank book, inventory valuation, COGS, general ledger, reconciliation, journals, chart of accounts', 'path' => 'Finance & Accounts', 'permission' => 'accounting.view'],
             ['area' => 'HR dashboard and HR reports', 'path' => 'Reports', 'permission' => 'hrm.attendance.manage'],
             ['area' => 'Appearance: light/dark mode, accent, sidebar and topbar colors, reset to defaults', 'path' => 'Settings > Appearance', 'permission' => null],
