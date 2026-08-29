@@ -8,6 +8,7 @@ use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\BonusAward;
+use App\Modules\Hrm\Models\ExpenseClaim;
 use App\Modules\Hrm\Models\LeaveRequest;
 use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\Movement;
@@ -58,6 +59,7 @@ class ApprovalInbox
                     BonusAward::class => ['employee:id,employee_code,first_name,last_name', 'event:id,name'],
                     PayrollAdjustment::class => ['employee:id,employee_code,first_name,last_name', 'period'],
                     SalaryRevision::class => ['employee:id,employee_code,first_name,last_name'],
+                    ExpenseClaim::class => ['employee:id,employee_code,first_name,last_name', 'attachments'],
                 ]),
             ])
             ->latest()

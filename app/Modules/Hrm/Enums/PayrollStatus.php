@@ -100,6 +100,24 @@ enum PayrollStatus: string
     }
 
     /**
+     * The wages for this period have actually left the business.
+     *
+     * ⚠⚠ NOT the same question as isFinal(), and the difference is money.
+     * isFinal() also counts Rejected and Cancelled, where the period is void
+     * and UNPAID - a fresh version is still coming, so anything wanting to
+     * reach that month by adjustment still can. Only Disbursed and Locked mean
+     * the salary is in somebody's hands and a late line would appear in a month
+     * already signed off and paid.
+     *
+     * ⚠ It lives here rather than as a string comparison at the call site so a
+     * ninth case cannot slip past a `=== 'disbursed'` written somewhere else.
+     */
+    public function isPaidOut(): bool
+    {
+        return in_array($this, [self::Disbursed, self::Locked], true);
+    }
+
+    /**
      * Past this point the figures are the record — WFL-05 forbids a direct
      * re-run, and WFL-06 sends corrections forward as adjustments.
      */

@@ -11,9 +11,10 @@ use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
 use App\Modules\Hrm\Http\Controllers\DisbursementController;
 use App\Modules\Hrm\Http\Controllers\EmployeeAttendanceController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
+use App\Modules\Hrm\Http\Controllers\ExpenseClaimController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
-use App\Modules\Hrm\Http\Controllers\HrmDashboardController;
 use App\Modules\Hrm\Http\Controllers\HolidayWorkController;
+use App\Modules\Hrm\Http\Controllers\HrmDashboardController;
 use App\Modules\Hrm\Http\Controllers\LeaveController;
 use App\Modules\Hrm\Http\Controllers\LeaveProvisionController;
 use App\Modules\Hrm\Http\Controllers\LeaveTypeController;
@@ -156,6 +157,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('my-leave/requests', [SelfLeaveController::class, 'storeLeave'])->name('my-leave.requests.store');
     Route::post('my-leave/movements', [SelfLeaveController::class, 'storeMovement'])->name('my-leave.movements.store');
 
+    // Employee expense claims. Self-scope: raising and seeing your own needs no
+    // management permission, exactly like the clock and My Leave.
+    Route::get('my-expenses', [ExpenseClaimController::class, 'mine'])->name('my-expenses');
+    Route::post('my-expenses', [ExpenseClaimController::class, 'store'])->name('my-expenses.store');
+
     // Leave & movement administration (LEV-01..07, POL-09/10).
     Route::get('leave', [LeaveController::class, 'index'])->name('leave.index');
     Route::post('leave', [LeaveController::class, 'store'])->name('leave.store');
@@ -169,6 +175,19 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('leave/types', [LeaveTypeController::class, 'store'])->name('leave.types.store');
     Route::put('leave/types/{leaveType}', [LeaveTypeController::class, 'update'])->name('leave.types.update');
     Route::patch('leave/types/{leaveType}/toggle-active', [LeaveTypeController::class, 'toggleActive'])->name('leave.types.toggle-active');
+
+    // Paying claims back is a payroll act, not a self-service one.
+    Route::middleware('can:hrm.payroll.manage')->group(function () {
+        Route::get('expense-claims', [ExpenseClaimController::class, 'index'])->name('expense-claims.index');
+        Route::post('expense-claims/{claim}/settle', [ExpenseClaimController::class, 'settle'])->name('expense-claims.settle');
+    });
+
+    // ⚠ Approving sits OUTSIDE that permission group on purpose: the workflow
+    // stage decides who may act, and it also names Owner as a role. Gating the
+    // route on the permission as well would refuse an Owner the stage allows,
+    // before the stage was ever consulted. Same shape as loans and leave.
+    Route::post('expense-claims/{claim}/approve', [ExpenseClaimController::class, 'approve'])->name('expense-claims.approve');
+    Route::post('expense-claims/{claim}/reject', [ExpenseClaimController::class, 'reject'])->name('expense-claims.reject');
 
     Route::get('holiday-work', [HolidayWorkController::class, 'index'])->name('holiday-work.index');
     Route::post('holiday-work', [HolidayWorkController::class, 'store'])->name('holiday-work.store');

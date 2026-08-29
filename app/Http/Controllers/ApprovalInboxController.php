@@ -6,6 +6,7 @@ use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\BonusAward;
+use App\Modules\Hrm\Models\ExpenseClaim;
 use App\Modules\Hrm\Models\LeaveRequest;
 use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\Movement;
@@ -208,6 +209,27 @@ class ApprovalInboxController extends Controller
                 'summary' => $approvable->summaryLine().' — '.$approvable->reason,
                 'approve_url' => route('hrm.revisions.approve', $approvable),
                 'reject_url' => route('hrm.revisions.reject', $approvable),
+            ];
+        }
+
+        if ($approvable instanceof ExpenseClaim) {
+            return [
+                ...$shared,
+                'type' => 'Expense claim',
+                // ⚠ The amount and the receipt count are both on the line: an
+                // approver deciding on somebody's own money should not have to
+                // open the claim to learn whether it came with proof.
+                'summary' => sprintf(
+                    '%s — %s — %s spent on %s by %s (%d receipt(s))',
+                    $approvable->claim_number,
+                    $approvable->purpose,
+                    number_format((float) $approvable->amount, 2),
+                    $approvable->spent_on?->toDateString(),
+                    $approvable->employee?->fullName(),
+                    $approvable->attachments->count(),
+                ),
+                'approve_url' => route('hrm.expense-claims.approve', $approvable),
+                'reject_url' => route('hrm.expense-claims.reject', $approvable),
             ];
         }
 

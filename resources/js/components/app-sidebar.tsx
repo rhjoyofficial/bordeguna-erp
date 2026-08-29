@@ -299,6 +299,9 @@ export function AppSidebar() {
                               ? [
                                     { title: 'Payroll inputs', url: '/hrm/payroll-inputs', icon: Coins },
                                     { title: 'Loans & advances', url: '/hrm/loans', icon: HandCoins },
+                                    // ⚠ Linked deliberately: a settlement screen nobody can
+                                    // reach means employees are never paid back.
+                                    { title: 'Expense claims', url: '/hrm/expense-claims', icon: HandCoins },
                                     { title: 'Payroll runs', url: '/hrm/payroll', icon: Banknote },
                                     // ⚠ Leave provision's link is GONE on purpose, not
                                     // forgotten (Joy, 23 Aug 2026): encashment is not

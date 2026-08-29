@@ -6,24 +6,25 @@ use App\Models\User;
 use App\Modules\Accounting\database\seeders\AccountingPermissionsSeeder;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Assets\database\seeders\AssetAccountMappingSeeder;
-use App\Modules\Foundation\Support\SeedCredentials;
 use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
 use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
 use App\Modules\Foundation\database\seeders\FoundationSeeder;
+use App\Modules\Foundation\Support\SeedCredentials;
 use App\Modules\Hrm\database\seeders\AttendanceCorrectionWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\AttendancePolicySeeder;
 use App\Modules\Hrm\database\seeders\BangladeshHolidayCalendarSeeder;
 use App\Modules\Hrm\database\seeders\BorDeGunaAttendanceSeeder;
 use App\Modules\Hrm\database\seeders\BorDeGunaEmployeeSeeder;
 use App\Modules\Hrm\database\seeders\BorDeGunaOrganisationSeeder;
+use App\Modules\Hrm\database\seeders\ExpenseClaimWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\HrmChangeRequestWorkflowSeeder;
+use App\Modules\Hrm\database\seeders\HrmPermissionsSeeder;
 use App\Modules\Hrm\database\seeders\LeaveTypeSeeder;
 use App\Modules\Hrm\database\seeders\LeaveWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\PayrollAccountMappingSeeder;
 use App\Modules\Hrm\database\seeders\PayrollInputWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\PayrollWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\SalaryComponentSeeder;
-use App\Modules\Hrm\database\seeders\HrmPermissionsSeeder;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\database\seeders\InventoryDemoDataSeeder;
 use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
@@ -93,6 +94,7 @@ class DatabaseSeeder extends Seeder
         $this->call(SalaryComponentSeeder::class);
         $this->call(PayrollWorkflowSeeder::class);
         $this->call(PayrollInputWorkflowSeeder::class);
+        $this->call(ExpenseClaimWorkflowSeeder::class);
         // ⚠ After AttendancePolicySeeder, BangladeshHolidayCalendarSeeder and
         // the shift/schedule tables exist: this replaces the generic POL-03
         // example policy with Bor de Guna's real ladder, and binds their teams
