@@ -85,6 +85,7 @@ export function AppSidebar() {
         canViewCrm,
         canViewContacts,
         canViewCalendar,
+        canViewNotes,
         canManageCrmSettings,
         canViewAssets,
         hasEmployeeProfile,
@@ -106,6 +107,7 @@ export function AppSidebar() {
                 // Purchasing and shows each reader only the sources they may
                 // already see.
                 ...(canViewCalendar ? [{ title: 'Calendar', url: '/calendar', icon: CalendarDays }] : []),
+                ...(canViewNotes ? [{ title: 'Notes', url: '/notes', icon: PenSquare }] : []),
                 { title: 'Switch business', url: '/businesses/switch', icon: Repeat },
             ],
         },

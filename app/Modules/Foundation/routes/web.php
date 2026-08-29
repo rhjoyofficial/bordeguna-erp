@@ -5,6 +5,7 @@ use App\Modules\Foundation\Http\Controllers\AuditTrailController;
 use App\Modules\Foundation\Http\Controllers\BusinessSettingsController;
 use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
 use App\Modules\Foundation\Http\Controllers\CalendarController;
+use App\Modules\Foundation\Http\Controllers\NoteController;
 use App\Modules\Foundation\Http\Controllers\ChangeRequestController;
 use App\Modules\Foundation\Http\Controllers\OrganizationController;
 use App\Modules\Foundation\Http\Controllers\RoleManagementController;
@@ -25,6 +26,22 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
         Route::post('calendar', [CalendarController::class, 'store'])->name('calendar.store');
         Route::put('calendar/{event}', [CalendarController::class, 'update'])->name('calendar.update');
         Route::delete('calendar/{event}', [CalendarController::class, 'destroy'])->name('calendar.destroy');
+    });
+
+    // ── Notes (Joy, 29 Aug 2026) ────────────────────────────────────────────
+    // ⚠⚠ NOTHING DELETES. Archive is the only exit, because the one thing
+    // anybody asks of a notes system months later is "what was that thing we
+    // wrote down", and a delete button is how that answer stops existing.
+    Route::middleware('can:notes.view')->group(function () {
+        Route::get('notes', [NoteController::class, 'index'])->name('notes.index');
+    });
+
+    Route::middleware('can:notes.manage')->group(function () {
+        Route::post('notes', [NoteController::class, 'store'])->name('notes.store');
+        Route::put('notes/{note}', [NoteController::class, 'update'])->name('notes.update');
+        Route::post('notes/{note}/archive', [NoteController::class, 'archive'])->name('notes.archive');
+        Route::post('notes/{note}/restore', [NoteController::class, 'restore'])->name('notes.restore');
+        Route::post('notes/{note}/pin', [NoteController::class, 'togglePin'])->name('notes.pin');
     });
 
     // Team / user management — presented under Settings, owned by Foundation.

@@ -6,7 +6,14 @@ import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import { Bot, Building2, KeyRound, ListChecks, Network, Palette, ScrollText, ShieldCheck, User, Users } from 'lucide-react';
 
-export default function SettingsLayout({ children }: { children: React.ReactNode }) {
+/**
+ * ⚠⚠ `wide` exists because the audit trail was unreadable without it. Settings
+ * pages are forms, so the content column is clamped to max-w-xl, which is right
+ * for a profile form and wrong for a five-column table of every change ever
+ * made: it was being squeezed into 576px beside a 192px nav. Data-heavy settings
+ * pages opt out; the forms keep the narrow measure that makes them readable.
+ */
+export default function SettingsLayout({ children, wide = false }: { children: React.ReactNode; wide?: boolean }) {
     const { canManageUsers, canManageOrganization } = usePage<SharedData>().props;
     const currentPath = window.location.pathname;
 
@@ -61,8 +68,8 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
 
                 <Separator className="my-6 md:hidden" />
 
-                <div className="flex-1 md:max-w-2xl">
-                    <section className="max-w-xl space-y-12">{children}</section>
+                <div className={cn('flex-1', wide ? 'min-w-0' : 'md:max-w-2xl')}>
+                    <section className={cn('space-y-12', wide ? '' : 'max-w-xl')}>{children}</section>
                 </div>
             </div>
         </div>

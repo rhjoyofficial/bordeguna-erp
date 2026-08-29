@@ -99,6 +99,63 @@ it('filters by the kind of record and by a value somebody typed', function () {
         ->assertInertia(fn ($page) => $page->where('entries.data', []));
 });
 
+it('filters by WHO made the change, not just by their name appearing somewhere', function () {
+    $colleague = User::factory()->create(['name' => 'Shuborna']);
+    $colleague->businesses()->attach($this->business->id);
+
+    $this->actingAs($this->owner);
+    Customer::create(['business_id' => $this->business->id, 'code' => 'CUS-J', 'name' => 'Joy Traders', 'type' => CustomerType::Retail]);
+
+    $this->actingAs($colleague);
+    Customer::create(['business_id' => $this->business->id, 'code' => 'CUS-S', 'name' => 'Other Traders', 'type' => CustomerType::Retail]);
+
+    // ⚠⚠ THE REASON THIS IS NOT THE FREE-TEXT SEARCH. Searching "Joy" also
+    // matches the customer NAMED Joy Traders, which somebody else created. The
+    // first question anybody brings to an audit trail is "what did this person
+    // change", and a name match cannot answer it.
+    ($this->asOwner)()->get(route('audit.index', ['causer' => $colleague->id]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('entries.data', fn ($rows) => count($rows) === 1
+            && $rows[0]['causer'] === 'Shuborna'));
+
+    ($this->asOwner)()->get(route('audit.index', ['search' => 'Joy']))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('entries.data', fn ($rows) => count($rows) >= 1));
+});
+
+it('offers only people who actually appear in the trail', function () {
+    $never = User::factory()->create(['name' => 'Never Touched Anything']);
+    $never->businesses()->attach($this->business->id);
+
+    $this->actingAs($this->owner);
+    Customer::create(['business_id' => $this->business->id, 'code' => 'CUS-P', 'name' => 'Someone', 'type' => CustomerType::Retail]);
+
+    // ⚠ A filter that offers a choice returning nothing teaches people the
+    // screen is broken. Same rule the record-type list already follows.
+    ($this->asOwner)()->get(route('audit.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('people', fn ($people) => collect($people)->pluck('label')->contains('Joy')
+            && ! collect($people)->pluck('label')->contains('Never Touched Anything')));
+});
+
+it('narrows to one record, so "what happened to this customer" has an answer', function () {
+    $this->actingAs($this->owner);
+
+    $first = Customer::create(['business_id' => $this->business->id, 'code' => 'CUS-A', 'name' => 'First', 'type' => CustomerType::Retail]);
+    Customer::create(['business_id' => $this->business->id, 'code' => 'CUS-B', 'name' => 'Second', 'type' => CustomerType::Retail]);
+    $first->update(['name' => 'First, renamed']);
+
+    ($this->asOwner)()->get(route('audit.index', ['record' => $first->id, 'type' => Customer::class]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('entries.data', fn ($rows) => count($rows) === 2
+            && collect($rows)->every(fn ($row) => $row['subject_id'] === $first->id)));
+});
+
+it('refuses a date it cannot read instead of throwing a 500 at a stale bookmark', function () {
+    ($this->asOwner)()->get(route('audit.index', ['from' => 'not-a-date']))
+        ->assertSessionHasErrors('from');
+});
+
 it('never shows one business the changes made in another', function () {
     // ⚠ Written straight to the table under the other tenant: the point is the
     // scope on the way OUT, and going through a model would only prove the

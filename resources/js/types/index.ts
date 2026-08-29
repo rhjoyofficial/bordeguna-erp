@@ -79,6 +79,7 @@ export interface SharedData {
     canViewCrm: boolean;
     canViewContacts: boolean;
     canViewCalendar: boolean;
+    canViewNotes: boolean;
     canManageCrmSettings: boolean;
     canViewAssets: boolean;
     canRunDepreciation: boolean;

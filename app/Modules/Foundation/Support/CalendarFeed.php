@@ -7,6 +7,7 @@ use App\Modules\Crm\Enums\TaskStatus;
 use App\Modules\Crm\Models\CrmTask;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\CalendarEvent;
+use App\Modules\Foundation\Models\Note;
 use App\Modules\Hrm\Models\Holiday;
 use App\Modules\Hrm\Models\HolidayCalendar;
 use App\Modules\Hrm\Models\LeaveRequest;
@@ -46,6 +47,7 @@ class CalendarFeed
     {
         return array_merge(
             $this->events($user, $from, $to),
+            $this->noteReminders($user, $from, $to),
             $this->holidays($from, $to),
             $this->leave($user, $from, $to),
             $this->followUps($user, $from, $to),
@@ -115,6 +117,46 @@ class CalendarFeed
         }
 
         return $items;
+    }
+
+    /**
+     * Notes asking to be brought back on a day.
+     *
+     * ⚠⚠ THIS IS THE REASON THE NOTES BOARD IS NOT A DRAWER. A note nobody
+     * rereads is worthless, and the cheapest thing that makes one resurface is
+     * for it to appear, on the day it asked for, on the screen people already
+     * open. Without this the notes module is exactly the feature it was once
+     * advised against being.
+     *
+     * ⚠ Gated by `notes.view` AND by the note's own privacy, because a reminder
+     * shows the note's TITLE and a private note's title is private.
+     *
+     * ⚠ Archived notes never remind. Archiving is how somebody says they are
+     * done with it, and a reminder afterwards would make archiving useless.
+     */
+    private function noteReminders(User $user, string $from, string $to): array
+    {
+        if (! $user->can('notes.view')) {
+            return [];
+        }
+
+        return Note::query()
+            ->visibleTo($user)
+            ->active()
+            ->whereNotNull('remind_on')
+            ->whereBetween('remind_on', [$from, $to])
+            ->orderBy('remind_on')
+            ->get()
+            ->map(fn (Note $n) => [
+                'date' => $n->remind_on->toDateString(),
+                'type' => 'note',
+                'label' => $n->is_private ? 'Private note' : 'Note',
+                'title' => $n->title,
+                'detail' => null,
+                'url' => '/notes',
+                'id' => null,
+            ])
+            ->all();
     }
 
     /**

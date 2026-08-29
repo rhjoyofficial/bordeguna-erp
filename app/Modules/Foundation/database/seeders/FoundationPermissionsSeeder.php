@@ -26,6 +26,8 @@ class FoundationPermissionsSeeder extends Seeder
             'foundation.organization.manage',
             'calendar.view',
             'calendar.manage',
+            'notes.view',
+            'notes.manage',
         ],
         // ⚠⚠ The calendar goes to EVERY role (29 Aug 2026), which is unusual on
         // this project and deliberate. It is the one screen whose value is that
@@ -39,10 +41,17 @@ class FoundationPermissionsSeeder extends Seeder
         'Manager' => [
             'calendar.view',
             'calendar.manage',
+            'notes.view',
+            'notes.manage',
         ],
+        // ⚠ Notes follow the calendar to every role for the same reason: a board
+        // only some of the team can read is one nobody writes on. Privacy is
+        // handled per note, not per role.
         'Staff' => [
             'calendar.view',
             'calendar.manage',
+            'notes.view',
+            'notes.manage',
         ],
     ];
 

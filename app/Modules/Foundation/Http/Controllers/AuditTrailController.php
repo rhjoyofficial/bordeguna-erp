@@ -48,10 +48,27 @@ class AuditTrailController extends Controller
     {
         $this->authorize('foundation.organization.manage');
 
+        // ⚠ Validated rather than trusted. A bad date reaching whereDate is a
+        // 500 for anybody who edits the address bar or keeps a stale bookmark.
+        $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+            'causer' => ['nullable', 'integer'],
+            'record' => ['nullable', 'integer'],
+        ]);
+
         $filters = [
             'search' => trim((string) $request->query('search', '')),
             'type' => (string) $request->query('type', ''),
             'event' => (string) $request->query('event', ''),
+            // ⚠⚠ WHO, as a real filter and not only as free text. "What did this
+            // person change" is the first question anybody brings to an audit
+            // trail, and searching a name matched the name wherever it appeared
+            // - including inside the VALUES of somebody else's change.
+            'causer' => (string) $request->query('causer', ''),
+            // ⚠ "Everything that happened to customer 12", which needs the id
+            // and the type together to mean anything.
+            'record' => (string) $request->query('record', ''),
             'from' => (string) $request->query('from', ''),
             'to' => (string) $request->query('to', ''),
         ];
@@ -60,6 +77,8 @@ class AuditTrailController extends Controller
             ->with('causer:id,name')
             ->when($filters['type'] !== '', fn (Builder $q) => $q->where('subject_type', $filters['type']))
             ->when($filters['event'] !== '', fn (Builder $q) => $q->where('event', $filters['event']))
+            ->when($filters['causer'] !== '', fn (Builder $q) => $q->where('causer_id', $filters['causer']))
+            ->when($filters['record'] !== '', fn (Builder $q) => $q->where('subject_id', $filters['record']))
             ->when($filters['from'] !== '', fn (Builder $q) => $q->whereDate('created_at', '>=', $filters['from']))
             ->when($filters['to'] !== '', fn (Builder $q) => $q->whereDate('created_at', '<=', $filters['to']))
             ->when($filters['search'] !== '', function (Builder $q) use ($filters) {
@@ -99,6 +118,22 @@ class AuditTrailController extends Controller
                 ->values(),
             'events' => ActivityLogEntry::query()
                 ->select('event')->distinct()->orderBy('event')->pluck('event')->filter()->values(),
+            // ⚠ Only people who actually appear in the trail, so the filter can
+            // never offer a name that returns nothing. Same rule as the types
+            // list above.
+            'people' => ActivityLogEntry::query()
+                ->whereNotNull('causer_id')
+                ->with('causer:id,name')
+                // ⚠⚠ BOTH columns. `causer` is a morphTo, so selecting only
+                // `causer_id` leaves it with no type to resolve against, every
+                // causer comes back null, and the filter silently offers nobody
+                // at all.
+                ->select('causer_id', 'causer_type')->distinct()->get()
+                ->map(fn (ActivityLogEntry $entry) => ['value' => (string) $entry->causer_id, 'label' => $entry->causer?->name])
+                ->filter(fn (array $row) => $row['label'] !== null)
+                ->unique('value')
+                ->sortBy('label')
+                ->values(),
         ]);
     }
 

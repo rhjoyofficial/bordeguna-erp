@@ -33,6 +33,13 @@ export function useFilters<T extends FilterValues>(baseUrl: string, initial: T) 
         setFilters((current) => ({ ...current, [key]: value }));
     };
 
+    // ⚠ Several at once, in ONE state update. A date preset that called
+    // setFilter twice would queue two debounced visits and the first would be
+    // sent with only half the range applied.
+    const setMany = (values: Partial<T>) => {
+        setFilters((current) => ({ ...current, ...values }));
+    };
+
     const reset = () => {
         setFilters((current) => {
             const cleared = { ...current };
@@ -45,5 +52,5 @@ export function useFilters<T extends FilterValues>(baseUrl: string, initial: T) 
 
     const hasActiveFilters = Object.values(filters).some((value) => value !== '' && value !== null);
 
-    return { filters, setFilter, reset, hasActiveFilters };
+    return { filters, setFilter, setMany, reset, hasActiveFilters };
 }
