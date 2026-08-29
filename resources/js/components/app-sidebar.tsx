@@ -84,6 +84,7 @@ export function AppSidebar() {
         canImportPrices,
         canViewCrm,
         canViewContacts,
+        canViewCalendar,
         canManageCrmSettings,
         canViewAssets,
         hasEmployeeProfile,
@@ -100,6 +101,11 @@ export function AppSidebar() {
                 // under My profile now (SelfServiceTabs), not as sidebar rows.
                 // Their routes are unchanged, so old bookmarks still land.
                 ...(hasEmployeeProfile ? [{ title: 'My profile', url: '/hrm/my-profile', icon: UserCircle }] : []),
+                // ⚠ Top level rather than inside a module group, because the
+                // calendar belongs to no module: it reads HR, CRM, Sales and
+                // Purchasing and shows each reader only the sources they may
+                // already see.
+                ...(canViewCalendar ? [{ title: 'Calendar', url: '/calendar', icon: CalendarDays }] : []),
                 { title: 'Switch business', url: '/businesses/switch', icon: Repeat },
             ],
         },

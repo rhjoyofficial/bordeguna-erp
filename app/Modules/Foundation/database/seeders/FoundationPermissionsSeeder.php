@@ -24,6 +24,25 @@ class FoundationPermissionsSeeder extends Seeder
         'Owner' => [
             'foundation.users.manage',
             'foundation.organization.manage',
+            'calendar.view',
+            'calendar.manage',
+        ],
+        // ⚠⚠ The calendar goes to EVERY role (29 Aug 2026), which is unusual on
+        // this project and deliberate. It is the one screen whose value is that
+        // the whole team looks at the same one, and a warehouse hand needs to
+        // know the office is shut on Thursday as much as the Owner does.
+        //
+        // ⚠ Granting it leaks nothing, because CalendarFeed gates each SOURCE by
+        // that module's own permission: somebody without sales.reports.view is
+        // never handed an invoice due date to begin with. The permission on this
+        // page opens the grid; it does not decide what is drawn on it.
+        'Manager' => [
+            'calendar.view',
+            'calendar.manage',
+        ],
+        'Staff' => [
+            'calendar.view',
+            'calendar.manage',
         ],
     ];
 

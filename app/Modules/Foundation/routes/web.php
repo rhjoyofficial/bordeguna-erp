@@ -4,6 +4,7 @@ use App\Modules\Foundation\Http\Controllers\AttachmentController;
 use App\Modules\Foundation\Http\Controllers\AuditTrailController;
 use App\Modules\Foundation\Http\Controllers\BusinessSettingsController;
 use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
+use App\Modules\Foundation\Http\Controllers\CalendarController;
 use App\Modules\Foundation\Http\Controllers\ChangeRequestController;
 use App\Modules\Foundation\Http\Controllers\OrganizationController;
 use App\Modules\Foundation\Http\Controllers\RoleManagementController;
@@ -11,6 +12,21 @@ use App\Modules\Foundation\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->group(function () {
+    // ── The business calendar (Joy, 29 Aug 2026) ────────────────────────────
+    // ⚠⚠ The calendar OWNS almost nothing it shows. Holidays, approved leave,
+    // follow-ups, expected deliveries and due dates all come from the modules
+    // that own them, and CalendarFeed gates each source by that module's own
+    // permission. Only the hand-typed entries live in `calendar_events`.
+    Route::middleware('can:calendar.view')->group(function () {
+        Route::get('calendar', [CalendarController::class, 'index'])->name('calendar.index');
+    });
+
+    Route::middleware('can:calendar.manage')->group(function () {
+        Route::post('calendar', [CalendarController::class, 'store'])->name('calendar.store');
+        Route::put('calendar/{event}', [CalendarController::class, 'update'])->name('calendar.update');
+        Route::delete('calendar/{event}', [CalendarController::class, 'destroy'])->name('calendar.destroy');
+    });
+
     // Team / user management — presented under Settings, owned by Foundation.
     // Each action authorizes foundation.users.manage internally; {user} is
     // membership-checked in the controller (users are not tenant-scoped).
