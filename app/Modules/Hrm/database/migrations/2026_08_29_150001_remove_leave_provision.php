@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -22,9 +23,18 @@ use Illuminate\Support\Facades\Schema;
  * `leave_provision_runs` and zero journal lines against account 2135 in any of
  * the four businesses. The feature was built, disabled, and never used once.
  *
- * ⚠ The 2135 delete is GUARDED. If any journal line ever references the account
- * it is deactivated instead of deleted, because a posted line may not be
- * orphaned. A chart head with history is history; one with none is clutter.
+ * ⚠⚠ THE 2135 DELETE IS GUARDED BY THE DATABASE, NOT BY A LIST. EIGHT tables
+ * carry a `restrictOnDelete` foreign key at `accounts` today - journal lines,
+ * account mappings, money accounts, money transfer fees, fixed assets, expense
+ * claims, expense voucher lines and the chart's own parent link - and that list
+ * grows every time a module is added. Enumerating them here would be correct
+ * this week and wrong later, and a DELETE that throws halfway leaves the
+ * migration unrecorded with the table already dropped: the exact state neither
+ * `migrate` nor `migrate:status` can resolve.
+ *
+ * So the delete is ATTEMPTED and any constraint violation is caught, and the
+ * account is deactivated instead. Whatever still points at 2135 keeps pointing
+ * at it, and a head nobody uses stops appearing in the chart either way.
  */
 return new class extends Migration
 {
@@ -37,15 +47,13 @@ return new class extends Migration
         $accounts = DB::table('accounts')->where('code', '2135')->pluck('id');
 
         foreach ($accounts as $accountId) {
-            $posted = DB::table('journal_lines')->where('account_id', $accountId)->exists();
-
-            if ($posted) {
+            try {
+                DB::table('accounts')->where('id', $accountId)->delete();
+            } catch (QueryException) {
+                // Something still references it. Retire the head instead of
+                // orphaning whatever points at it.
                 DB::table('accounts')->where('id', $accountId)->update(['is_active' => false]);
-
-                continue;
             }
-
-            DB::table('accounts')->where('id', $accountId)->delete();
         }
     }
 
