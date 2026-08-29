@@ -34,8 +34,13 @@ class CrmPermissionsSeeder extends Seeder
      * campaigns do. A send costs money, and the audience is half of the send.
      */
     private const ROLE_PERMISSIONS = [
-        'Owner' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage'],
-        'Manager' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage'],
+        // ⚠⚠ `crm.campaigns.send` and `crm.campaigns.approve` are SEPARATE, and
+        // only the Owner approves. A send is the one action in this ERP that
+        // spends money by itself, so the person who presses send must not also
+        // be the person who agrees to the spend - the same preparer/approver
+        // split payroll already uses.
+        'Owner' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage', 'crm.campaigns.send', 'crm.campaigns.approve'],
+        'Manager' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage', 'crm.campaigns.send'],
         'Staff' => ['crm.leads.view', 'crm.leads.manage', 'crm.contacts.view'],
     ];
 

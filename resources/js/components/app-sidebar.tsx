@@ -30,6 +30,7 @@ import {
     Landmark,
     LayoutDashboard,
     LayoutGrid,
+    Mail,
     ListTree,
     Megaphone,
     MessageSquare,
@@ -88,6 +89,7 @@ export function AppSidebar() {
         canImportPrices,
         canViewCrm,
         canViewContacts,
+        canSendCampaigns,
         canViewCalendar,
         canViewNotes,
         canViewFiles,
@@ -250,6 +252,14 @@ export function AppSidebar() {
                           // complete and unreachable because this line was left
                           // for later.
                           ...(canViewContacts ? [{ title: 'Phone book', url: '/crm/contacts', icon: Contact }] : []),
+                          // ⚠ Two pages, one engine underneath. Linked in the
+                          // same slice as the routes, like everything else here.
+                          ...(canSendCampaigns
+                              ? [
+                                    { title: 'SMS', url: '/crm/messages/sms', icon: MessageSquare },
+                                    { title: 'Email', url: '/crm/messages/email', icon: Mail },
+                                ]
+                              : []),
                       ],
                   },
               ]

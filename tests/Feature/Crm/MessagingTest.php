@@ -1,0 +1,423 @@
+<?php
+
+use App\Models\User;
+use App\Modules\Crm\Enums\CampaignStatus;
+use App\Modules\Crm\Models\Contact;
+use App\Modules\Crm\Models\ContactGroup;
+use App\Modules\Crm\Models\MessageCampaign;
+use App\Modules\Crm\Models\MessageDelivery;
+use App\Modules\Crm\Models\MessageOptOut;
+use App\Modules\Crm\Models\MessageProvider;
+use App\Modules\Crm\Support\SmsText;
+use App\Modules\Crm\database\seeders\MessageCampaignWorkflowSeeder;
+use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Support\BusinessContext;
+use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
+
+/**
+ * Sending to the phone book.
+ *
+ * ⚠⚠ THIS IS THE ONLY MODULE IN THE ERP THAT SPENDS MONEY BY ITSELF. Everything
+ * else records money somebody else moved. Almost every test below is about a
+ * refusal, because the failure that costs real money is not a crash: it is a
+ * send that works perfectly and goes to more people than anybody meant.
+ */
+beforeEach(function () {
+    $this->business = Business::create(['name' => 'Send Co', 'slug' => 'send-co']);
+    app(BusinessContext::class)->set($this->business->id);
+    app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
+
+    foreach (['crm.campaigns.send', 'crm.campaigns.approve', 'crm.settings.manage'] as $name) {
+        Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
+    }
+
+    Role::firstOrCreate(['name' => 'Owner', 'business_id' => $this->business->id, 'guard_name' => 'web'])
+        ->givePermissionTo(['crm.campaigns.send', 'crm.campaigns.approve', 'crm.settings.manage']);
+    Role::firstOrCreate(['name' => 'Manager', 'business_id' => $this->business->id, 'guard_name' => 'web'])
+        ->givePermissionTo(['crm.campaigns.send']);
+
+    (new MessageCampaignWorkflowSeeder)->run();
+
+    $this->owner = User::factory()->create();
+    $this->owner->businesses()->attach($this->business->id);
+    $this->owner->assignRole('Owner');
+
+    $this->manager = User::factory()->create();
+    $this->manager->businesses()->attach($this->business->id);
+    $this->manager->assignRole('Manager');
+
+    $this->provider = MessageProvider::create([
+        'business_id' => $this->business->id, 'channel' => 'sms', 'driver' => 'recording_sms',
+        'name' => 'Test SMS', 'is_active' => true, 'cost_per_part' => 0.50,
+    ]);
+
+    $this->group = ContactGroup::create(['business_id' => $this->business->id, 'name' => 'Dealers']);
+});
+
+function contactIn(int $businessId, ?ContactGroup $group, array $overrides = []): Contact
+{
+    $contact = Contact::create(array_merge([
+        'business_id' => $businessId, 'name' => 'Rahim', 'phone' => '01711000000',
+    ], $overrides));
+
+    $group?->contacts()->attach($contact->id);
+
+    return $contact;
+}
+
+function campaignFor(int $businessId, ?ContactGroup $group, int $providerId, array $overrides = []): MessageCampaign
+{
+    return MessageCampaign::create(array_merge([
+        'business_id' => $businessId, 'channel' => 'sms', 'name' => 'Eid greeting',
+        'body' => 'Eid Mubarak from us', 'audience_type' => 'group',
+        'contact_group_id' => $group?->id, 'message_provider_id' => $providerId,
+    ], $overrides));
+}
+
+// ─── What a message costs ────────────────────────────────────────────────────
+
+it('counts an English message at 160 characters a part', function () {
+    expect(SmsText::measure(str_repeat('a', 160)))->toMatchArray(['alphabet' => 'gsm', 'parts' => 1])
+        // ⚠ 153, not 160, once concatenated: the joining header eats seven.
+        ->and(SmsText::measure(str_repeat('a', 161))['parts'])->toBe(2)
+        ->and(SmsText::measure(str_repeat('a', 306))['parts'])->toBe(2)
+        ->and(SmsText::measure(str_repeat('a', 307))['parts'])->toBe(3);
+});
+
+it('counts a Bangla message at 70 characters a part, which is why it costs more', function () {
+    $bangla = str_repeat("\u{0985}", 70);
+
+    expect(SmsText::measure($bangla))->toMatchArray(['alphabet' => 'unicode', 'parts' => 1])
+        ->and(SmsText::measure(str_repeat("\u{0985}", 71))['parts'])->toBe(2);
+});
+
+it('turns the WHOLE message Unicode for one stray character', function () {
+    // ⚠⚠ 100 English characters is one part. Add a single Bangla letter and the
+    // same message becomes two, because the whole thing switches alphabet. This
+    // is the surprise that shows up on a bill.
+    expect(SmsText::measure(str_repeat('a', 100))['parts'])->toBe(1)
+        ->and(SmsText::measure(str_repeat('a', 100)."\u{0985}")['parts'])->toBe(2);
+});
+
+it('charges nothing for an empty message', function () {
+    // ⚠ Zero parts, not one. A preview of a mistake must not look like a plan.
+    expect(SmsText::measure('')['parts'])->toBe(0);
+});
+
+it('counts an extension character as two septets', function () {
+    // ⚠ `€` and the bracket family take two GSM septets each, so 80 of them
+    // overflow a 160-character part.
+    expect(SmsText::measure(str_repeat('€', 80))['parts'])->toBe(1)
+        ->and(SmsText::measure(str_repeat('€', 81))['parts'])->toBe(2);
+});
+
+// ─── Who would receive it ────────────────────────────────────────────────────
+
+it('leaves out anybody who asked not to be contacted', function () {
+    contactIn($this->business->id, $this->group, ['name' => 'Wants it', 'phone' => '01711000001']);
+    contactIn($this->business->id, $this->group, ['name' => 'Asked to stop', 'phone' => '01711000002']);
+
+    MessageOptOut::create([
+        'business_id' => $this->business->id, 'channel' => 'sms', 'address' => '01711000002',
+    ]);
+
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.preview', $campaign->id))
+        ->assertSessionHas('campaignPreview', fn ($p) => $p['count'] === 1 && $p['opted_out'] === 1);
+});
+
+it('sends one message per number, not one per row', function () {
+    // ⚠⚠ A household sharing a number is legitimate and appears twice in the
+    // phone book ON PURPOSE. Sending twice is a duplicate charge and a nuisance.
+    contactIn($this->business->id, $this->group, ['name' => 'Rahim', 'phone' => '01711000000']);
+    contactIn($this->business->id, $this->group, ['name' => 'Rahim wife', 'phone' => '+8801711000000']);
+
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.preview', $campaign->id))
+        ->assertSessionHas('campaignPreview', fn ($p) => $p['count'] === 1 && $p['duplicates'] === 1);
+});
+
+it('counts the people it cannot reach instead of quietly dropping them', function () {
+    contactIn($this->business->id, $this->group, ['name' => 'Has a phone', 'phone' => '01711000001']);
+    contactIn($this->business->id, $this->group, ['name' => 'Email only', 'phone' => null, 'email' => 'a@example.com']);
+
+    // ⚠ "I sent to the 200 dealers" and "180 of them have a number" are
+    // different facts, and the screen has to show both.
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.preview', $campaign->id))
+        ->assertSessionHas('campaignPreview', fn ($p) => $p['count'] === 1 && $p['unreachable'] === 1);
+});
+
+it('never includes a contact somebody has deactivated', function () {
+    contactIn($this->business->id, $this->group, ['name' => 'Active', 'phone' => '01711000001']);
+    contactIn($this->business->id, $this->group, ['name' => 'Gone', 'phone' => '01711000002', 'is_active' => false]);
+
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.preview', $campaign->id))
+        ->assertSessionHas('campaignPreview', fn ($p) => $p['count'] === 1);
+});
+
+it('resolves a group campaign with no group to NOBODY, never to everybody', function () {
+    contactIn($this->business->id, null, ['name' => 'Not in any group', 'phone' => '01711000009']);
+
+    $campaign = campaignFor($this->business->id, null, $this->provider->id, ['contact_group_id' => null]);
+
+    // ⚠⚠ THE MOST EXPENSIVE BUG THIS MODULE COULD HAVE. Falling through to the
+    // whole phone book would look like a successful send.
+    $this->actingAs($this->owner)->post(route('crm.campaigns.preview', $campaign->id))
+        ->assertSessionHas('campaignPreview', fn ($p) => $p['count'] === 0);
+});
+
+// ─── The brakes ──────────────────────────────────────────────────────────────
+
+it('refuses to send over the cap rather than sending the first few', function () {
+    foreach (range(1, 3) as $i) {
+        contactIn($this->business->id, $this->group, ['name' => "P{$i}", 'phone' => '0171100000'.$i]);
+    }
+
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id, ['recipient_cap' => 2]);
+
+    // ⚠⚠ Truncating would hide the mistake AND still spend money.
+    $this->actingAs($this->owner)->post(route('crm.campaigns.send', $campaign->id))
+        ->assertSessionHasErrors('send');
+
+    expect(MessageDelivery::count())->toBe(0);
+});
+
+it('raises approval instead of sending when the audience is big', function () {
+    foreach (range(1, 60) as $i) {
+        contactIn($this->business->id, $this->group, ['name' => "P{$i}", 'phone' => '017110'.str_pad((string) $i, 5, '0', STR_PAD_LEFT)]);
+    }
+
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id, ['recipient_cap' => 1000]);
+
+    $this->actingAs($this->manager)->post(route('crm.campaigns.send', $campaign->id))
+        ->assertRedirect()
+        ->assertSessionHas('success', fn ($m) => str_contains($m, 'gone for approval'));
+
+    // ⚠⚠ NOTHING WENT OUT. A button that silently does something else is worse
+    // than one that refuses.
+    expect(MessageDelivery::count())->toBe(0)
+        ->and($campaign->fresh()->status)->toBe(CampaignStatus::PendingApproval)
+        ->and($campaign->fresh()->approvalRequest)->not->toBeNull();
+});
+
+it('refuses to send a campaign that is still waiting for approval', function () {
+    contactIn($this->business->id, $this->group);
+
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+    $campaign->submitForApproval($this->manager);
+    $campaign->update(['status' => CampaignStatus::PendingApproval]);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.send', $campaign->id))
+        ->assertSessionHasErrors('send');
+
+    expect(MessageDelivery::count())->toBe(0);
+});
+
+it('approves without sending, because permission to spend is not an instruction to', function () {
+    contactIn($this->business->id, $this->group);
+
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+    $campaign->submitForApproval($this->manager);
+    $campaign->update(['status' => CampaignStatus::PendingApproval]);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.approve', $campaign->id))->assertRedirect();
+
+    expect($campaign->fresh()->status)->toBe(CampaignStatus::Approved)
+        ->and($campaign->fresh()->approvalRequest->status)->toBe(ApprovalStatus::Approved)
+        ->and(MessageDelivery::count())->toBe(0);
+});
+
+it('will not let the person who sends also be the person who approves', function () {
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+    $campaign->submitForApproval($this->manager);
+
+    // ⚠ The same preparer/approver split payroll already uses.
+    $this->actingAs($this->manager)->post(route('crm.campaigns.approve', $campaign->id))->assertForbidden();
+});
+
+it('refuses to send with no active provider', function () {
+    contactIn($this->business->id, $this->group);
+
+    $this->provider->update(['is_active' => false]);
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.send', $campaign->id))
+        ->assertSessionHasErrors('send');
+});
+
+// ─── Sending ─────────────────────────────────────────────────────────────────
+
+it('records one row per person and marks them sent, never delivered', function () {
+    contactIn($this->business->id, $this->group, ['name' => 'A', 'phone' => '01711000001']);
+    contactIn($this->business->id, $this->group, ['name' => 'B', 'phone' => '01711000002']);
+
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.send', $campaign->id))->assertRedirect();
+
+    // ⚠⚠ `sent` means the provider accepted it. `delivered` is a different fact
+    // that only arrives if the provider says so, and several never do.
+    expect(MessageDelivery::count())->toBe(2)
+        ->and(MessageDelivery::where('status', 'sent')->count())->toBe(2)
+        ->and(MessageDelivery::whereNotNull('delivered_at')->count())->toBe(0)
+        ->and($campaign->fresh()->status)->toBe(CampaignStatus::Sent);
+});
+
+it('does not message somebody who opted out after the preview was read', function () {
+    contactIn($this->business->id, $this->group, ['name' => 'A', 'phone' => '01711000001']);
+    contactIn($this->business->id, $this->group, ['name' => 'B', 'phone' => '01711000002']);
+
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.preview', $campaign->id));
+
+    // ⚠⚠ Somebody asks to be left alone AFTER the preview was read. A preview is
+    // not a licence to ignore a later request.
+    MessageOptOut::create(['business_id' => $this->business->id, 'channel' => 'sms', 'address' => '01711000002']);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.send', $campaign->id))->assertRedirect();
+
+    // ⚠ The guarantee is that they were NOT messaged, not which of the two
+    // guards caught them. Here the re-plan at send time excluded them before
+    // the loop began; the per-recipient re-check in SendCampaign covers the
+    // narrower case of somebody opting out WHILE a long batch is going out.
+    expect(MessageDelivery::count())->toBe(1)
+        ->and(MessageDelivery::first()->to_address)->toBe('01711000001');
+});
+
+it('keeps the address it actually sent to, whatever happens to the contact later', function () {
+    $contact = contactIn($this->business->id, $this->group, ['phone' => '01711000001']);
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.send', $campaign->id));
+
+    $contact->update(['phone' => '01799999999']);
+
+    // ⚠ A contact whose number changes next month must not rewrite the history
+    // of where a message actually went.
+    expect(MessageDelivery::first()->to_address)->toBe('01711000001');
+});
+
+it('refuses to send the same campaign twice', function () {
+    contactIn($this->business->id, $this->group);
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.send', $campaign->id));
+    $this->actingAs($this->owner)->post(route('crm.campaigns.send', $campaign->id))->assertSessionHasErrors('send');
+
+    expect(MessageDelivery::count())->toBe(1);
+});
+
+it('will not let a sent campaign be edited afterwards', function () {
+    contactIn($this->business->id, $this->group);
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.send', $campaign->id));
+
+    // ⚠ Editing would rewrite what was approved and what went out, and the
+    // delivery rows would describe a message nobody can read any more.
+    $this->actingAs($this->owner)->put(route('crm.campaigns.update', $campaign->id), [
+        'name' => 'Changed', 'body' => 'Something else', 'audience_type' => 'group',
+        'contact_group_id' => $this->group->id, 'recipient_cap' => 500,
+    ])->assertForbidden();
+
+    expect($campaign->fresh()->name)->toBe('Eid greeting');
+});
+
+// ─── Opt-outs and providers ──────────────────────────────────────────────────
+
+it('records an opt-out against the number, so re-importing cannot undo it', function () {
+    $contact = contactIn($this->business->id, $this->group, ['phone' => '01711000001']);
+
+    $this->actingAs($this->owner)->post(route('crm.messages.opt-out', 'sms'), [
+        'address' => '+880 1711-000001', 'reason' => 'Asked on the phone',
+    ])->assertRedirect();
+
+    // ⚠⚠ Normalised, so however it was typed it matches. And it survives the
+    // contact: deleting the row and importing the file again must not start
+    // messaging them once more.
+    expect(MessageOptOut::first()->address)->toBe('01711000001');
+
+    $contact->delete();
+
+    expect(MessageOptOut::count())->toBe(1);
+});
+
+it('keeps provider credentials encrypted and never hands them back', function () {
+    $this->actingAs($this->owner)->post(route('crm.settings.messaging.store'), [
+        'name' => 'Real SMS', 'channel' => 'sms', 'driver' => 'recording_sms',
+        'priority' => 10, 'cost_per_part' => '0.45',
+        'credentials' => ['api_key' => 'super-secret-key-1234'],
+    ])->assertRedirect();
+
+    $provider = MessageProvider::where('name', 'Real SMS')->firstOrFail();
+
+    // ⚠⚠ Ciphertext at rest.
+    $raw = DB::table('message_providers')->where('id', $provider->id)->value('credentials');
+    expect($raw)->not->toContain('super-secret-key-1234')
+        ->and($provider->credentials['api_key'])->toBe('super-secret-key-1234')
+        // ⚠ Only the last four ever reach a screen.
+        ->and($provider->maskedCredentials()['api_key'])->toBe('••••••1234')
+        // ⚠ And it arrives switched OFF.
+        ->and($provider->is_active)->toBeFalse();
+
+    $this->actingAs($this->owner)->get(route('crm.settings.messaging'))
+        ->assertOk()
+        ->assertDontSee('super-secret-key-1234');
+});
+
+it('treats a blank credential on edit as leave it alone, not erase it', function () {
+    $provider = MessageProvider::create([
+        'business_id' => $this->business->id, 'channel' => 'sms', 'driver' => 'recording_sms',
+        'name' => 'Keeps its key', 'credentials' => ['api_key' => 'keep-me'], 'cost_per_part' => 0,
+    ]);
+
+    // ⚠⚠ The screen can never show the secret, so it always arrives blank
+    // unless somebody typed a new one. Erasing on blank would wipe the key
+    // every time anybody renamed a provider.
+    $this->actingAs($this->owner)->put(route('crm.settings.messaging.update', $provider->id), [
+        'name' => 'Renamed', 'channel' => 'sms', 'driver' => 'recording_sms',
+        'priority' => 100, 'cost_per_part' => '0', 'credentials' => ['api_key' => ''],
+    ])->assertRedirect();
+
+    expect($provider->fresh()->credentials['api_key'])->toBe('keep-me')
+        ->and($provider->fresh()->name)->toBe('Renamed');
+});
+
+it('refuses a driver that cannot send the channel it was filed under', function () {
+    // ⚠ Otherwise a send picks a provider that cannot send it, and the failure
+    // appears per recipient rather than at the settings screen.
+    $this->actingAs($this->owner)->post(route('crm.settings.messaging.store'), [
+        'name' => 'Wrong', 'channel' => 'sms', 'driver' => 'smtp_mail',
+        'priority' => 100, 'cost_per_part' => '0', 'credentials' => [],
+    ])->assertStatus(422);
+});
+
+it('never shows one business the campaigns of another', function () {
+    campaignFor($this->business->id, $this->group, $this->provider->id, ['name' => 'Ours']);
+
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-send-co']);
+    MessageCampaign::withoutGlobalScopes()->create([
+        'business_id' => $other->id, 'channel' => 'sms', 'name' => 'Theirs', 'body' => 'x',
+    ]);
+
+    $this->actingAs($this->owner)->get('/crm/messages/sms')
+        ->assertInertia(fn ($page) => $page->where('campaigns', fn ($c) => count($c) === 1 && $c[0]['name'] === 'Ours'));
+});
+
+it('refuses the send pages to a login that cannot send', function () {
+    $nobody = User::factory()->create();
+    $nobody->businesses()->attach($this->business->id);
+
+    $this->actingAs($nobody)->get('/crm/messages/sms')->assertForbidden();
+});

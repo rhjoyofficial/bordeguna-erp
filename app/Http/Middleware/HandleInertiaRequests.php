@@ -140,6 +140,7 @@ class HandleInertiaRequests extends Middleware
             'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),
             'canViewCrm' => fn () => (bool) $request->user()?->can('crm.leads.view'),
             'canViewContacts' => fn () => (bool) $request->user()?->can('crm.contacts.view'),
+            'canSendCampaigns' => fn () => (bool) $request->user()?->can('crm.campaigns.send'),
             'canViewCalendar' => fn () => (bool) $request->user()?->can('calendar.view'),
             'canViewNotes' => fn () => (bool) $request->user()?->can('notes.view'),
             'canViewFiles' => fn () => (bool) $request->user()?->can('files.view'),

@@ -78,6 +78,7 @@ export interface SharedData {
     canManageBom: boolean;
     canViewCrm: boolean;
     canViewContacts: boolean;
+    canSendCampaigns: boolean;
     canViewCalendar: boolean;
     canViewNotes: boolean;
     canViewFiles: boolean;

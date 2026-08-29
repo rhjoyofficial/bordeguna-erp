@@ -4,6 +4,8 @@ use App\Modules\Crm\Http\Controllers\ContactController;
 use App\Modules\Crm\Http\Controllers\ContactGroupController;
 use App\Modules\Crm\Http\Controllers\ContactImportController;
 use App\Modules\Crm\Http\Controllers\CrmActivityController;
+use App\Modules\Crm\Http\Controllers\MessageProviderController;
+use App\Modules\Crm\Http\Controllers\MessagingController;
 use App\Modules\Crm\Http\Controllers\CrmReportController;
 use App\Modules\Crm\Http\Controllers\CrmSettingsController;
 use App\Modules\Crm\Http\Controllers\LeadController;
@@ -72,6 +74,43 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         Route::post('{type}/{id}/interests', [CrmActivityController::class, 'storeInterest'])
             ->whereIn('type', ['lead', 'customer'])->whereNumber('id')->name('interests.store');
         Route::put('interests/{interest}/close', [CrmActivityController::class, 'closeInterest'])->name('interests.close');
+    });
+
+    // ── Sending to the phone book (Joy, 29 Aug 2026) ────────────────────────
+    // ⚠⚠ THE FIRST THING IN THE ERP THAT SPENDS MONEY BY ITSELF. Three brakes,
+    // none optional: a preview that must be read, a hard cap per campaign, and
+    // approval above a threshold. Approving is a SEPARATE permission from
+    // sending, so the person who spends is not automatically the person who
+    // agrees to the spend.
+    Route::middleware('can:crm.campaigns.send')->group(function () {
+        Route::get('messages/{channel}', [MessagingController::class, 'index'])
+            ->whereIn('channel', ['sms', 'email'])->name('messages.index');
+        Route::post('messages/{channel}', [MessagingController::class, 'store'])
+            ->whereIn('channel', ['sms', 'email'])->name('messages.store');
+        Route::post('messages/{channel}/opt-out', [MessagingController::class, 'optOut'])
+            ->whereIn('channel', ['sms', 'email'])->name('messages.opt-out');
+
+        Route::put('campaigns/{campaign}', [MessagingController::class, 'update'])->name('campaigns.update');
+        // ⚠ Preview writes only the figures it just worked out. It is a POST
+        // because it records the estimate that approval will approve.
+        Route::post('campaigns/{campaign}/preview', [MessagingController::class, 'preview'])->name('campaigns.preview');
+        Route::post('campaigns/{campaign}/send', [MessagingController::class, 'send'])->name('campaigns.send');
+        Route::get('campaigns/{campaign}/deliveries', [MessagingController::class, 'deliveries'])->name('campaigns.deliveries');
+    });
+
+    // ⚠⚠ Held apart from sending on purpose.
+    Route::middleware('can:crm.campaigns.approve')->group(function () {
+        Route::post('campaigns/{campaign}/approve', [MessagingController::class, 'approve'])->name('campaigns.approve');
+        Route::post('campaigns/{campaign}/reject', [MessagingController::class, 'reject'])->name('campaigns.reject');
+    });
+
+    // ⚠ Provider credentials sit with settings management, not with sending.
+    // Somebody trusted to run a send does not need to read the API key.
+    Route::middleware('can:crm.settings.manage')->group(function () {
+        Route::get('settings/messaging', [MessageProviderController::class, 'index'])->name('settings.messaging');
+        Route::post('settings/messaging', [MessageProviderController::class, 'store'])->name('settings.messaging.store');
+        Route::put('settings/messaging/{provider}', [MessageProviderController::class, 'update'])->name('settings.messaging.update');
+        Route::post('settings/messaging/{provider}/toggle', [MessageProviderController::class, 'toggle'])->name('settings.messaging.toggle');
     });
 
     // ── The phone book (Joy, 29 Aug 2026) ───────────────────────────────────

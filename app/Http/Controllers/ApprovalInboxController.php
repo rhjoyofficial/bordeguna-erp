@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Modules\Crm\Models\MessageCampaign;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
 use App\Modules\Hrm\Models\AttendanceCorrection;
@@ -258,6 +259,25 @@ class ApprovalInboxController extends Controller
                 ),
                 'approve_url' => route('inventory.stock.adjustments.approve', $approvable),
                 'reject_url' => route('inventory.stock.adjustments.reject', $approvable),
+            ];
+        }
+
+        if ($approvable instanceof MessageCampaign) {
+            return [
+                ...$shared,
+                'type' => 'Message campaign',
+                // ⚠⚠ The COST is on the line. This is the only approval in the
+                // system where saying yes spends money directly, and an approver
+                // should never have to open the campaign to learn how much.
+                'summary' => sprintf(
+                    '%s - %s to %d recipient(s), about %s',
+                    $approvable->name,
+                    strtoupper($approvable->channel),
+                    $approvable->estimated_recipients,
+                    number_format((float) $approvable->estimated_cost, 2),
+                ),
+                'approve_url' => route('crm.campaigns.approve', $approvable),
+                'reject_url' => route('crm.campaigns.reject', $approvable),
             ];
         }
 
