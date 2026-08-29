@@ -23,6 +23,7 @@ import {
     FileText,
     FileUp,
     FileWarning,
+    FolderOpen,
     Fingerprint,
     HandCoins,
     Landmark,
@@ -86,6 +87,7 @@ export function AppSidebar() {
         canViewContacts,
         canViewCalendar,
         canViewNotes,
+        canViewFiles,
         canManageCrmSettings,
         canViewAssets,
         hasEmployeeProfile,
@@ -108,6 +110,7 @@ export function AppSidebar() {
                 // already see.
                 ...(canViewCalendar ? [{ title: 'Calendar', url: '/calendar', icon: CalendarDays }] : []),
                 ...(canViewNotes ? [{ title: 'Notes', url: '/notes', icon: PenSquare }] : []),
+                ...(canViewFiles ? [{ title: 'Files', url: '/files', icon: FolderOpen }] : []),
                 { title: 'Switch business', url: '/businesses/switch', icon: Repeat },
             ],
         },

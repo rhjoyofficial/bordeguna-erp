@@ -28,6 +28,8 @@ class FoundationPermissionsSeeder extends Seeder
             'calendar.manage',
             'notes.view',
             'notes.manage',
+            'files.view',
+            'files.manage',
         ],
         // ⚠⚠ The calendar goes to EVERY role (29 Aug 2026), which is unusual on
         // this project and deliberate. It is the one screen whose value is that
@@ -43,15 +45,22 @@ class FoundationPermissionsSeeder extends Seeder
             'calendar.manage',
             'notes.view',
             'notes.manage',
+            'files.view',
+            'files.manage',
         ],
         // ⚠ Notes follow the calendar to every role for the same reason: a board
         // only some of the team can read is one nobody writes on. Privacy is
         // handled per note, not per role.
+        // ⚠ Staff may READ the library and may NOT manage it. `files.view` on
+        // its own shows a Staff login the library and nothing else, because
+        // FileVisibility hands back only the types whose own permission they
+        // already hold.
         'Staff' => [
             'calendar.view',
             'calendar.manage',
             'notes.view',
             'notes.manage',
+            'files.view',
         ],
     ];
 

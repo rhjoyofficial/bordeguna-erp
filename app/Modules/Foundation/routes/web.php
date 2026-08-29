@@ -5,6 +5,7 @@ use App\Modules\Foundation\Http\Controllers\AuditTrailController;
 use App\Modules\Foundation\Http\Controllers\BusinessSettingsController;
 use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
 use App\Modules\Foundation\Http\Controllers\CalendarController;
+use App\Modules\Foundation\Http\Controllers\FileManagerController;
 use App\Modules\Foundation\Http\Controllers\NoteController;
 use App\Modules\Foundation\Http\Controllers\ChangeRequestController;
 use App\Modules\Foundation\Http\Controllers\OrganizationController;
@@ -26,6 +27,23 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
         Route::post('calendar', [CalendarController::class, 'store'])->name('calendar.store');
         Route::put('calendar/{event}', [CalendarController::class, 'update'])->name('calendar.update');
         Route::delete('calendar/{event}', [CalendarController::class, 'destroy'])->name('calendar.destroy');
+    });
+
+    // ── Files (Joy, 29 Aug 2026) ────────────────────────────────────────────
+    // ⚠⚠ No new table and no new download route: files already live in
+    // `attachments` behind the authenticated `attachments.show` stream. WHO SEES
+    // WHAT is decided by FileVisibility, whose default is CLOSED - read it
+    // before touching this. A browser over the attachments table is the easiest
+    // way in this system to show somebody every payroll document at once.
+    Route::middleware('can:files.view')->group(function () {
+        Route::get('files', [FileManagerController::class, 'index'])->name('files.index');
+    });
+
+    Route::middleware('can:files.manage')->group(function () {
+        Route::post('files', [FileManagerController::class, 'store'])->name('files.store');
+        // ⚠ Refuses anything that is not a LIBRARY file. Evidence attached to a
+        // record is removed from that record, where the loss is visible.
+        Route::delete('files/{attachment}', [FileManagerController::class, 'destroy'])->name('files.destroy');
     });
 
     // ── Notes (Joy, 29 Aug 2026) ────────────────────────────────────────────
