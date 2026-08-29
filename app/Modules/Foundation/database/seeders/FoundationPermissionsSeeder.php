@@ -30,6 +30,7 @@ class FoundationPermissionsSeeder extends Seeder
             'notes.manage',
             'files.view',
             'files.manage',
+            'chat.use',
         ],
         // ⚠⚠ The calendar goes to EVERY role (29 Aug 2026), which is unusual on
         // this project and deliberate. It is the one screen whose value is that
@@ -47,6 +48,7 @@ class FoundationPermissionsSeeder extends Seeder
             'notes.manage',
             'files.view',
             'files.manage',
+            'chat.use',
         ],
         // ⚠ Notes follow the calendar to every role for the same reason: a board
         // only some of the team can read is one nobody writes on. Privacy is
@@ -61,6 +63,10 @@ class FoundationPermissionsSeeder extends Seeder
             'notes.view',
             'notes.manage',
             'files.view',
+            // ⚠ One permission, not a view/manage pair. Chat is either something
+            // you take part in or it is not; a read-only member of a
+            // conversation is not a thing anybody asked for.
+            'chat.use',
         ],
     ];
 

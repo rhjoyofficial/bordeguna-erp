@@ -5,6 +5,7 @@ use App\Modules\Foundation\Http\Controllers\AuditTrailController;
 use App\Modules\Foundation\Http\Controllers\BusinessSettingsController;
 use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
 use App\Modules\Foundation\Http\Controllers\CalendarController;
+use App\Modules\Foundation\Http\Controllers\ChatController;
 use App\Modules\Foundation\Http\Controllers\FileManagerController;
 use App\Modules\Foundation\Http\Controllers\NoteController;
 use App\Modules\Foundation\Http\Controllers\ChangeRequestController;
@@ -27,6 +28,18 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
         Route::post('calendar', [CalendarController::class, 'store'])->name('calendar.store');
         Route::put('calendar/{event}', [CalendarController::class, 'update'])->name('calendar.update');
         Route::delete('calendar/{event}', [CalendarController::class, 'destroy'])->name('calendar.destroy');
+    });
+
+    // ── Chat (Joy, 29 Aug 2026) ─────────────────────────────────────────────
+    // ⚠⚠ NO REAL-TIME PUSH. There is no websocket server on this project, so
+    // the screen POLLS `chat/{channel}/poll`, which returns JSON and only
+    // messages newer than the id the client already holds.
+    Route::middleware('can:chat.use')->group(function () {
+        Route::get('chat', [ChatController::class, 'index'])->name('chat.index');
+        Route::get('chat/{channel}/poll', [ChatController::class, 'poll'])->name('chat.poll');
+        Route::post('chat/channels', [ChatController::class, 'storeChannel'])->name('chat.channels.store');
+        Route::post('chat/{channel}/messages', [ChatController::class, 'storeMessage'])->name('chat.messages.store');
+        Route::delete('chat/messages/{message}', [ChatController::class, 'destroyMessage'])->name('chat.messages.destroy');
     });
 
     // ── Files (Joy, 29 Aug 2026) ────────────────────────────────────────────

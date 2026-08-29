@@ -24,6 +24,7 @@ import {
     FileUp,
     FileWarning,
     FolderOpen,
+    UserSearch,
     Fingerprint,
     HandCoins,
     Landmark,
@@ -31,6 +32,7 @@ import {
     LayoutGrid,
     ListTree,
     Megaphone,
+    MessageSquare,
     NotebookPen,
     PackageCheck,
     PackageSearch,
@@ -68,6 +70,7 @@ export function AppSidebar() {
         pendingApprovalsCount,
         canReviewApprovals,
         canManageEmployees,
+        canViewRecruitment,
         canManageScheduling,
         canManageAttendance,
         canManageLeave,
@@ -88,6 +91,7 @@ export function AppSidebar() {
         canViewCalendar,
         canViewNotes,
         canViewFiles,
+        canUseChat,
         canManageCrmSettings,
         canViewAssets,
         hasEmployeeProfile,
@@ -111,6 +115,7 @@ export function AppSidebar() {
                 ...(canViewCalendar ? [{ title: 'Calendar', url: '/calendar', icon: CalendarDays }] : []),
                 ...(canViewNotes ? [{ title: 'Notes', url: '/notes', icon: PenSquare }] : []),
                 ...(canViewFiles ? [{ title: 'Files', url: '/files', icon: FolderOpen }] : []),
+                ...(canUseChat ? [{ title: 'Chat', url: '/chat', icon: MessageSquare }] : []),
                 { title: 'Switch business', url: '/businesses/switch', icon: Repeat },
             ],
         },
@@ -270,12 +275,15 @@ export function AppSidebar() {
         // Leave) it grew as. Same items, same per-permission gating - only
         // the grouping changed, so a Staff user who can manage attendance
         // and nothing else sees an HRM section holding exactly those four.
-        ...(canManageEmployees || canManageScheduling || canManageAttendance || canManageLeave
+        ...(canManageEmployees || canManageScheduling || canManageAttendance || canManageLeave || canViewRecruitment
             ? [
                   {
                       label: 'HRM',
                       items: [
                           ...(canManageEmployees ? [{ title: 'Employees', url: '/hrm/employees', icon: Users }] : []),
+                          // ⚠ Its own permission, so a Manager running a hiring
+                          // round is not handed the people file with it.
+                          ...(canViewRecruitment ? [{ title: 'Recruitment', url: '/hrm/recruitment', icon: UserSearch }] : []),
                           ...(canManageScheduling
                               ? [
                                     // Merged into one section on Joy's instruction

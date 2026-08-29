@@ -8,6 +8,7 @@ use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\DisbursementBatch;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\ExpenseClaim;
+use App\Modules\Hrm\Models\JobApplicant;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
@@ -52,6 +53,13 @@ class FileVisibility
         // ⚠ People's documents. Photographs, national id, contracts.
         Employee::class => 'hrm.employees.manage',
         AttendanceCorrection::class => 'hrm.attendance.manage',
+
+        // ⚠⚠ A CV. Added the same day recruitment shipped, because the closed
+        // default would otherwise have hidden every applicant's CV from the
+        // people running the hiring round - the default failing SAFE, and still
+        // failing. A new attachable type belongs in this map on the day it
+        // starts attaching files.
+        JobApplicant::class => 'recruitment.view',
 
         // ⚠⚠ Money paid to staff. The three that would hurt most in the wrong
         // hands, which is why the default below is closed rather than open.

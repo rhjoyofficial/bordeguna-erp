@@ -12,6 +12,7 @@ use App\Modules\Hrm\Http\Controllers\DisbursementController;
 use App\Modules\Hrm\Http\Controllers\EmployeeAttendanceController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
 use App\Modules\Hrm\Http\Controllers\ExpenseClaimController;
+use App\Modules\Hrm\Http\Controllers\RecruitmentController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\HolidayWorkController;
 use App\Modules\Hrm\Http\Controllers\HrmDashboardController;
@@ -160,6 +161,22 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // management permission, exactly like the clock and My Leave.
     Route::get('my-expenses', [ExpenseClaimController::class, 'mine'])->name('my-expenses');
     Route::post('my-expenses', [ExpenseClaimController::class, 'store'])->name('my-expenses.store');
+
+    // ── Recruitment (Joy, 29 Aug 2026) ──────────────────────────────────────
+    // ⚠⚠ NOTHING HERE CREATES AN EMPLOYEE. Marking somebody hired records the
+    // decision; the employee record is made in People, where a joining date, an
+    // employment type, a probation length and a salary structure are asked for.
+    Route::middleware('can:recruitment.view')->group(function () {
+        Route::get('recruitment', [RecruitmentController::class, 'index'])->name('recruitment.index');
+    });
+
+    Route::middleware('can:recruitment.manage')->group(function () {
+        Route::post('recruitment/openings', [RecruitmentController::class, 'storeOpening'])->name('recruitment.openings.store');
+        Route::put('recruitment/openings/{opening}', [RecruitmentController::class, 'updateOpening'])->name('recruitment.openings.update');
+        Route::post('recruitment/applicants', [RecruitmentController::class, 'storeApplicant'])->name('recruitment.applicants.store');
+        Route::post('recruitment/applicants/{applicant}', [RecruitmentController::class, 'updateApplicant'])->name('recruitment.applicants.update');
+        Route::post('recruitment/applicants/{applicant}/move', [RecruitmentController::class, 'moveApplicant'])->name('recruitment.applicants.move');
+    });
 
     // Leave & movement administration (LEV-01..07, POL-09/10).
     Route::get('leave', [LeaveController::class, 'index'])->name('leave.index');

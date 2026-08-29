@@ -37,6 +37,12 @@ class HrmPermissionsSeeder extends Seeder
             // WFL-07: the approval stage, held separately from generation so
             // the same person need not be both preparer and approver.
             'hrm.payroll.approve',
+            // ⚠ Recruitment (29 Aug 2026), its OWN pair rather than riding on
+            // hrm.employees.manage. A CV and an expected salary are not the same
+            // sensitivity as a payroll record, and somebody may reasonably be
+            // asked to run a hiring round without being handed the people file.
+            'recruitment.view',
+            'recruitment.manage',
         ],
         // COR-03's first correction stage. Held separately from
         // hrm.attendance.manage so a Manager can approve their team's
@@ -45,6 +51,12 @@ class HrmPermissionsSeeder extends Seeder
             'hrm.attendance.approve',
             // LEV-05's first stage and POL-10's manager confirmation.
             'hrm.leave.approve',
+            // ⚠ A Manager runs the hiring for their own team. They still get no
+            // salary permission (Correction C5), and an applicant's EXPECTED
+            // salary is not a salary: it is what somebody asked for before they
+            // worked here.
+            'recruitment.view',
+            'recruitment.manage',
             // Note: a Manager deliberately gets NO salary permission.
             // Correction C5 (ACL-02) excludes Department Managers from seeing
             // their team's salary amounts.
