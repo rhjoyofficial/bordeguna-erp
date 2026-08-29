@@ -38,6 +38,19 @@ class ApprovalWorkflowSeeder extends Seeder
                 ['name' => 'Approval', 'roles' => [], 'permissions' => ['purchasing.po.approve']],
             ],
         ],
+        // ⚠⚠ Missing until 29 Aug 2026, and the omission was invisible.
+        // CreateSalesOrder calls submitForApproval like every other consumer,
+        // but with no workflow row the request was created with workflow_id
+        // null: it never carried a stage, so the approval inbox could never
+        // list it and the only way to approve an order was to already be
+        // looking at that order's own screen. The sibling purchase order has
+        // had a workflow since the beginning, which is why nobody noticed.
+        'sales_order' => [
+            'name' => 'Sales order approval',
+            'stages' => [
+                ['name' => 'Approval', 'roles' => [], 'permissions' => ['sales.orders.approve']],
+            ],
+        ],
     ];
 
     public function run(): void

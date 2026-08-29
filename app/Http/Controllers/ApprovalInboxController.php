@@ -15,8 +15,10 @@ use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\PayrollUnlockRequest;
 use App\Modules\Hrm\Models\SalaryRevision;
+use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Sales\Models\SalesOrder;
 use App\Support\ApprovalInbox;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -233,6 +235,36 @@ class ApprovalInboxController extends Controller
             ];
         }
 
+        if ($approvable instanceof SalesOrder) {
+            return [
+                ...$shared,
+                'type' => 'Sales order',
+                'summary' => "{$approvable->order_number} - {$approvable->customer?->name} - {$approvable->lines->count()} line(s)",
+                'approve_url' => route('sales.orders.approve', $approvable),
+                'reject_url' => route('sales.orders.reject', $approvable),
+            ];
+        }
+
+        if ($approvable instanceof InventoryAdjustment) {
+            return [
+                ...$shared,
+                'type' => 'Inventory adjustment',
+                'summary' => sprintf(
+                    '%s %s of %s at %s',
+                    ucfirst((string) ($approvable->direction?->value ?? $approvable->direction ?? '')),
+                    $approvable->quantity,
+                    $approvable->product?->name,
+                    $approvable->warehouse?->name,
+                ),
+                'approve_url' => route('inventory.stock.adjustments.approve', $approvable),
+                'reject_url' => route('inventory.stock.adjustments.reject', $approvable),
+            ];
+        }
+
+        // ⚠⚠ THE SILENT ROW. Anything reaching here is listed with no approve or
+        // reject link at all: visible, unactionable, and it looks like the
+        // approver simply has nothing to do. EveryApprovalReachesSomebodyTest
+        // exists so a new Approvable model cannot arrive here unnoticed.
         return [...$shared, 'type' => class_basename($approvable), 'summary' => "#{$approvable->id}", 'approve_url' => null, 'reject_url' => null];
     }
 }
