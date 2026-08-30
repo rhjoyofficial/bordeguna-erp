@@ -36,6 +36,7 @@ final class FontCatalogue
     {
         return [
             'tiro_bangla' => [
+                'bundled' => true,
                 'label' => 'Tiro Bangla',
                 'category' => 'Serif',
                 'stack' => "'Tiro Bangla', 'Noto Serif Bengali', Georgia, serif",
@@ -47,6 +48,7 @@ final class FontCatalogue
                     .'Bangla by Tiro Typeworks, with matching Latin, so a bilingual line stays one voice.',
             ],
             'noto_serif_bengali' => [
+                'bundled' => true,
                 'label' => 'Noto Serif Bengali',
                 'category' => 'Serif',
                 'stack' => "'Noto Serif Bengali', 'Tiro Bangla', Georgia, serif",
@@ -58,6 +60,7 @@ final class FontCatalogue
                     .'these. Published only as a variable font, which is why it is not offered for PDFs.',
             ],
             'noto_sans_bengali' => [
+                'bundled' => true,
                 'label' => 'Noto Sans Bengali',
                 'category' => 'Sans',
                 'stack' => "'Noto Sans Bengali', 'Hind Siliguri', system-ui, sans-serif",
@@ -68,7 +71,37 @@ final class FontCatalogue
                 'note' => 'The sans companion to the above. A plainer, more modern register than a serif, '
                     .'and easier to read at small sizes on a screen.',
             ],
+            'nikosh' => [
+                'label' => 'Nikosh (installed on the reader machine)',
+                'category' => 'Serif',
+                'stack' => "'Nikosh', 'NikoshBAN', 'Tiro Bangla', Georgia, serif",
+                'css_family' => 'Nikosh',
+                // ⚠⚠ NOT BUNDLED, AND THAT IS A LICENCE DECISION, NOT AN
+                // OVERSIGHT. Nikosh is the Bangla Academy / Bangladesh Computer
+                // Council face that government offices expect, but it is
+                // released under Creative Commons BY-NC-ND 3.0:
+                // NonCommercial and NoDerivatives. Shipping it inside a
+                // commercial company's ERP is redistribution for a commercial
+                // purpose, and subsetting or converting it to woff2 would be a
+                // derivative. Both are outside that licence however many
+                // download sites call the font "free for commercial use".
+                //
+                // ⚠ So nothing is redistributed: the page simply ASKS for
+                // Nikosh, and it renders on machines that already have it
+                // installed - which, in Bangladeshi government-facing offices,
+                // is most of them. Anywhere else the stack falls through to
+                // Tiro Bangla and the document still reads correctly.
+                'ttf' => null,
+                'woff2' => null,
+                'bundled' => false,
+                'pdf' => false,
+                'note' => 'The face Bangladeshi government offices expect. It is NOT shipped with the system, '
+                    .'because its licence (CC BY-NC-ND) does not allow that for a commercial business - it renders '
+                    .'only on computers where somebody has installed Nikosh, and falls back to Tiro Bangla '
+                    .'everywhere else, including in PDFs.',
+            ],
             'hind_siliguri' => [
+                'bundled' => true,
                 'label' => 'Hind Siliguri',
                 'category' => 'Sans',
                 'stack' => "'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif",
@@ -124,7 +157,9 @@ final class FontCatalogue
     {
         $font = self::get($key);
 
-        if ($font['pdf'] !== true) {
+        // ⚠ Covers the non-bundled case too: a face with no file on the server
+        // cannot possibly be embedded, whatever its pdf flag says.
+        if ($font['pdf'] !== true || ($font['ttf'] ?? null) === null) {
             $font = self::get(self::DEFAULT);
         }
 

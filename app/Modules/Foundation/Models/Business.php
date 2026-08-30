@@ -20,6 +20,7 @@ class Business extends Model
         'address',
         'phone',
         'email',
+        'website',
         'document_font',
         'currency',
         'timezone',

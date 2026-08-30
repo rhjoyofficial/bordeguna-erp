@@ -18,6 +18,7 @@ interface BusinessProfile {
     address: string | null;
     phone: string | null;
     email: string | null;
+    website: string | null;
     document_font: string | null;
     currency: string;
     timezone: string;
@@ -121,6 +122,7 @@ export default function Business({ business, logo_url, currencies, timezones, fo
         address: business.address ?? '',
         phone: business.phone ?? '',
         email: business.email ?? '',
+        website: business.website ?? '',
         document_font: business.document_font ?? default_font,
         currency: business.currency,
         timezone: business.timezone,
@@ -188,6 +190,16 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                                 <Label htmlFor="email">Email</Label>
                                 <Input id="email" type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} />
                                 <InputError message={errors.email} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="website">Website</Label>
+                                <Input
+                                    id="website"
+                                    placeholder="www.bordeguna.com"
+                                    value={data.website}
+                                    onChange={(e) => setData('website', e.target.value)}
+                                />
+                                <InputError message={errors.website} />
                             </div>
                         </div>
 

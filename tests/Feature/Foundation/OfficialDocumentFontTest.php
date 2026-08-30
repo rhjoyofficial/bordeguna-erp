@@ -208,7 +208,17 @@ it('offers only faces that carry Bangla and Latin together', function () {
     // failure lands on something rather than on nothing.
     foreach (FontCatalogue::all() as $key => $font) {
         expect(preg_match('/(serif|sans-serif)$/', (string) $font['stack']))->toBe(1, "{$key} has no generic family at the end of its stack.");
-        expect(file_exists(public_path($font['ttf'])))->toBeTrue("{$key} has no font file at {$font['ttf']}.");
+
+        // ⚠ Only the BUNDLED faces must have a file. Nikosh is deliberately not
+        // shipped - its CC BY-NC-ND licence does not allow a commercial business
+        // to redistribute it - so it renders only where somebody has installed
+        // it, and the stack carries it to Tiro Bangla everywhere else.
+        if (($font['bundled'] ?? false) === true) {
+            expect(file_exists(public_path($font['ttf'])))->toBeTrue("{$key} has no font file at {$font['ttf']}.");
+        } else {
+            expect($font['ttf'])->toBeNull("{$key} is not bundled, so it must not claim a file.");
+            expect($font['pdf'])->toBeFalse("{$key} is not bundled, so it can never reach a PDF.");
+        }
     }
 });
 

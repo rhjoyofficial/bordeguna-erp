@@ -28,6 +28,7 @@ class BusinessIdentity
         public readonly ?string $address,
         public readonly ?string $phone,
         public readonly ?string $email,
+        public readonly ?string $website,
         public readonly ?string $logoUrl,
         public readonly array $missing,
     ) {}
@@ -53,6 +54,7 @@ class BusinessIdentity
             address: blank($business->address) ? null : (string) $business->address,
             phone: blank($business->phone) ? null : (string) $business->phone,
             email: blank($business->email) ? null : (string) $business->email,
+            website: blank($business->website) ? null : (string) $business->website,
             logoUrl: $logo?->url(),
             missing: $missing,
         );
@@ -69,12 +71,12 @@ class BusinessIdentity
         $business = Business::withoutGlobalScopes()->find($id);
 
         return $business === null
-            ? new self('', null, null, null, null, null, ['address', 'phone', 'email'])
+            ? new self('', null, null, null, null, null, null, ['address', 'phone', 'email'])
             : self::for($business);
     }
 
     /**
-     * @return array{name:string, legal_name:?string, address:?string, phone:?string, email:?string, logo_url:?string, missing:list<string>}
+     * @return array{name:string, legal_name:?string, address:?string, phone:?string, email:?string, website:?string, logo_url:?string, missing:list<string>}
      */
     public function toArray(): array
     {
@@ -84,6 +86,7 @@ class BusinessIdentity
             'address' => $this->address,
             'phone' => $this->phone,
             'email' => $this->email,
+            'website' => $this->website,
             'logo_url' => $this->logoUrl,
             'missing' => $this->missing,
         ];

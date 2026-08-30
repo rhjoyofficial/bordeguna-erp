@@ -6,6 +6,7 @@ export interface Issuer {
     address: string | null;
     phone: string | null;
     email: string | null;
+    website: string | null;
     logo_url: string | null;
     missing: string[];
 }
@@ -47,7 +48,9 @@ export function DocumentLetterhead({ issuer, title, subtitle }: { issuer: Issuer
                             customer keeps. */}
                         {issuer.legal_name && issuer.legal_name !== issuer.name && <p className="text-sm text-black/60">{issuer.name}</p>}
                         {issuer.address && <p className="mt-1 max-w-xs text-sm whitespace-pre-line text-black/70">{issuer.address}</p>}
-                        <p className="text-sm text-black/70">{[issuer.phone, issuer.email].filter(Boolean).join(' · ')}</p>
+                        {/* ⚠ Joined only from what is actually set, so a business
+                            with no website does not print a stray separator. */}
+                        <p className="text-sm text-black/70">{[issuer.phone, issuer.email, issuer.website].filter(Boolean).join(' · ')}</p>
                     </div>
                 </div>
                 <div className="text-right">

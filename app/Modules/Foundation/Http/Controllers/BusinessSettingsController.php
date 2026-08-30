@@ -35,7 +35,7 @@ class BusinessSettingsController extends Controller
 
         return Inertia::render('settings/business', [
             'business' => $business->only([
-                'id', 'name', 'legal_name', 'address', 'phone', 'email', 'document_font', 'currency', 'timezone', 'fiscal_year_start_month', 'payroll_cycle_start_day', 'wfh_monthly_cap',
+                'id', 'name', 'legal_name', 'address', 'phone', 'email', 'website', 'document_font', 'currency', 'timezone', 'fiscal_year_start_month', 'payroll_cycle_start_day', 'wfh_monthly_cap',
             ]),
             'logo_url' => $logo?->url(),
             'currencies' => self::CURRENCIES,
@@ -69,6 +69,7 @@ class BusinessSettingsController extends Controller
             'address' => ['nullable', 'string', 'max:1000'],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
+            'website' => ['nullable', 'string', 'max:255'],
             // The face official documents are set in. Constrained to the
             // catalogue: a free-text family name would be a font that exists
             // on the machine that typed it and nowhere else.
