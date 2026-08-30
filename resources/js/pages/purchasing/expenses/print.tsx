@@ -27,7 +27,7 @@ const money = (value: string | number) => Number(value).toLocaleString('en-BD', 
  */
 function VoucherCopy({ voucher, issuer, copyLabel }: { voucher: Voucher; issuer: Issuer; copyLabel: string }) {
     return (
-        <div className="border-sidebar-border/70 dark:border-sidebar-border mx-auto w-full max-w-2xl rounded-xl border bg-white p-8 text-black dark:bg-white print:max-w-none print:rounded-none print:border-0 print:p-0">
+        <div className="official-document border-sidebar-border/70 dark:border-sidebar-border mx-auto w-full max-w-2xl rounded-xl border bg-white p-8 text-black dark:bg-white print:max-w-none print:rounded-none print:border-0 print:p-0">
             <DocumentLetterhead issuer={issuer} title="Payment voucher" subtitle={`No. ${voucher.voucher_number}`} />
 
             <p className="mt-2 text-right text-xs tracking-widest text-black/50 uppercase">{copyLabel}</p>

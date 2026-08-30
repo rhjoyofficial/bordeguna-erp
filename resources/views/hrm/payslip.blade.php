@@ -12,8 +12,36 @@
 <style>
     @page { margin: 22mm 14mm 20mm 14mm; }
 
+    /*
+      Office Circular BdG-HQ-OD-26071201: Tiro Bangla on documents that leave
+      the organisation. A payslip is emailed to the employee, so it is one.
+
+      ⚠⚠ dompdf reads this file off DISK, not over HTTP, and only from inside
+      the chroot PayslipPdf opens to public_path(). The .ttf is what it needs -
+      it cannot parse the .woff2 the browser uses, so both formats of the same
+      face are kept in public/fonts/tiro-bangla on purpose.
+
+      ⚠ DejaVu Sans stays as the fallback and is still doing real work: if the
+      face ever fails to parse, the payslip renders in DejaVu rather than not at
+      all. What it cannot do is Bangla - it has no Bengali glyphs, which is why
+      a Bangla employee name used to print as empty boxes.
+    */
+    @font-face {
+        font-family: "Tiro Bangla";
+        font-style: normal;
+        font-weight: normal;
+        src: url("{{ public_path('fonts/tiro-bangla/TiroBangla-Regular.ttf') }}") format("truetype");
+    }
+
+    @font-face {
+        font-family: "Tiro Bangla";
+        font-style: italic;
+        font-weight: normal;
+        src: url("{{ public_path('fonts/tiro-bangla/TiroBangla-Italic.ttf') }}") format("truetype");
+    }
+
     body {
-        font-family: "DejaVu Sans", sans-serif;
+        font-family: "Tiro Bangla", "DejaVu Sans", sans-serif;
         font-size: 10px;
         color: #1f2937;
     }

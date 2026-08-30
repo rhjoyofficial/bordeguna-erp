@@ -73,7 +73,7 @@ export default function SettlementShow({
                     </div>
                 )}
 
-                <div className="border-sidebar-border/70 dark:border-sidebar-border mx-auto w-full max-w-2xl rounded-xl border bg-white p-8 text-black dark:bg-white print:max-w-none print:border-0 print:p-0">
+                <div className="official-document border-sidebar-border/70 dark:border-sidebar-border mx-auto w-full max-w-2xl rounded-xl border bg-white p-8 text-black dark:bg-white print:max-w-none print:border-0 print:p-0">
                     <DocumentLetterhead issuer={issuer} title="Final settlement" subtitle={employee.code} />
 
                     <div className="mt-6 flex flex-wrap justify-between gap-6 text-sm">

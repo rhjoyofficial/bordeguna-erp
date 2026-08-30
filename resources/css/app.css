@@ -6,6 +6,114 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+  ── Tiro Bangla: the official document face ───────────────────────────────────
+
+  Office Circular BdG-HQ-OD-26071201 (12 July 2026) makes Tiro Bangla the
+  official font for every document Bor de Guna sends OUTSIDE the organisation:
+  letters, notices and circulars, offer letters, proposals and price lists,
+  quotations, contracts, MoUs and certificates, anything on the company pad, and
+  any formal attachment sent by email.
+
+  ⚠⚠ SCOPE. The circular is about documents that LEAVE THE BUILDING, not about
+  the software people work in all day. So this face is applied through the
+  `.official-document` class on the paper itself, and nowhere else. The
+  interface keeps Geist. Setting it globally would be easier and wrong: it would
+  restyle every screen in the ERP on the authority of a circular about
+  stationery.
+
+  ⚠ SELF-HOSTED, not linked from Google. A document is printed and saved as PDF
+  from a laptop on a Barguna connection; a font fetched at print time is a font
+  that sometimes is not there, and the layout would shift between two copies of
+  the same invoice. The files are in public/fonts/tiro-bangla with their OFL
+  licence beside them.
+
+  ⚠ THE FAMILY HAS ONE WEIGHT: 400, roman and italic. There is no bold cut, so
+  anything marked font-semibold on a document is synthesised by the browser.
+  That is the font's own design, not a missing file - do not go looking for a
+  Tiro Bangla Bold to download.
+*/
+@font-face {
+    font-family: 'Tiro Bangla';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/tiro-bangla/tiro-bangla-bengali.woff2') format('woff2');
+    unicode-range:
+        U+0951-0952, U+0964-0965, U+0980-09FE, U+1CD0, U+1CD2, U+1CD5-1CD6, U+1CD8, U+1CE1, U+1CEA, U+1CED, U+1CF2, U+1CF5-1CF7, U+200C-200D, U+20B9,
+        U+25CC, U+A8F1;
+}
+@font-face {
+    font-family: 'Tiro Bangla';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/tiro-bangla/tiro-bangla-latin-ext.woff2') format('woff2');
+    unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+        U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+    font-family: 'Tiro Bangla';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/tiro-bangla/tiro-bangla-latin.woff2') format('woff2');
+    unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+        U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+    font-family: 'Tiro Bangla';
+    font-style: italic;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/tiro-bangla/tiro-bangla-italic-bengali.woff2') format('woff2');
+    unicode-range:
+        U+0951-0952, U+0964-0965, U+0980-09FE, U+1CD0, U+1CD2, U+1CD5-1CD6, U+1CD8, U+1CE1, U+1CEA, U+1CED, U+1CF2, U+1CF5-1CF7, U+200C-200D, U+20B9,
+        U+25CC, U+A8F1;
+}
+@font-face {
+    font-family: 'Tiro Bangla';
+    font-style: italic;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/tiro-bangla/tiro-bangla-italic-latin-ext.woff2') format('woff2');
+    unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+        U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+    font-family: 'Tiro Bangla';
+    font-style: italic;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/tiro-bangla/tiro-bangla-italic-latin.woff2') format('woff2');
+    unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+        U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/*
+  The paper. Everything inside inherits the official face.
+
+  ⚠ Inherited rather than forced onto every descendant with `*`. A reference
+  number set in font-mono is deliberately monospaced so a customer can read it
+  back over the phone, and a rule that shouted over it would undo that.
+*/
+.official-document {
+    font-family: 'Tiro Bangla', 'Noto Serif Bengali', Georgia, serif;
+    /* The face runs small for its size beside Geist. */
+    font-size: 0.95rem;
+}
+
+/* ⚠ The brand wordmark stays the wordmark. The circular sets the font for the
+   TEXT of a document; the name on the letterhead is artwork and keeps its own
+   face, exactly as it does on the printed pad. */
+.official-document .brand-name {
+    font-family: var(--font-brand);
+}
+
 @theme {
     --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 

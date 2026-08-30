@@ -56,17 +56,31 @@ class PayslipPdf
         // to reach out of the server while rendering.
         $options->set('isRemoteEnabled', false);
         $options->set('isHtml5ParserEnabled', true);
-        $options->set('defaultFont', 'DejaVu Sans');
 
-        // ⚠⚠ BERKSHIRE SWASH IS DELIBERATELY ABSENT HERE. Joy asked for the
-        // company name to carry the brand face everywhere, and it now does on
-        // every screen and every browser-printed document. This one renderer is
-        // dompdf, which refused the face by both documented routes: an
-        // @font-face pointing at the bundled file, and registerFont(), which
-        // returned false. Forcing it would have meant setting isRemoteEnabled,
-        // and a payslip must never be able to reach out of the server while
-        // rendering. A payslip in DejaVu Sans is a small loss; a payslip that
-        // fetches over the network, or fails to render at all, is not.
+        // ⚠⚠ THE EARLIER NOTE HERE SAID DOMPDF "REFUSES" A CUSTOM FACE. It does
+        // not. It refuses **woff2**, which is the only format Google Fonts
+        // serves and therefore the only one the previous attempt had: dompdf
+        // parses TrueType and OpenType, nothing else. Point it at a .ttf on
+        // disk and it embeds the font perfectly happily, with isRemoteEnabled
+        // still false and no other option changed.
+        //
+        // ⚠ Checked, not assumed: rendering with the font cache deleted still
+        // embeds the face, and `chroot` turned out to be irrelevant to the
+        // @font-face path, so no extra filesystem access is opened here.
+        // OfficialDocumentFontTest asserts the font name appears in the PDF's
+        // own font descriptors, which is what a silent fallback would fail.
+
+        // Office Circular BdG-HQ-OD-26071201: Tiro Bangla is the official face
+        // for documents that leave the organisation, and a payslip emailed to
+        // an employee is one of them.
+        //
+        // ⚠⚠ IT IS ALSO THE ONLY FONT HERE THAT CAN WRITE BANGLA AT ALL. The
+        // previous default, DejaVu Sans, HAS NO BENGALI GLYPHS - an employee
+        // whose name is spelled in Bangla came out as a row of empty boxes on
+        // their own payslip. That was never a styling preference; it was a
+        // document that could not say who it belonged to.
+        $options->set('defaultFont', 'Tiro Bangla');
+
         $options->set('fontCache', $this->fontCacheDirectory());
 
         $dompdf = new Dompdf($options);
