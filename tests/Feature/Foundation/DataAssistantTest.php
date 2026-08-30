@@ -202,3 +202,23 @@ it('lists every permission its map depends on, so none can quietly vanish', func
             ->toBeTrue("ReadableData maps a permission that does not exist: {$permission}");
     }
 });
+
+it('reads its credential from config so config:cache cannot disable the barrier', function () {
+    // ⚠⚠ THE TRAP THIS PINS, found on production 30 Aug 2026. The first version
+    // called env('DB_READONLY_USERNAME') inside a service provider. After
+    // `php artisan config:cache` - which production runs on every deploy -
+    // env() outside a config file returns NULL, so the credential came back
+    // empty, the connection silently fell back to the app user, and barrier
+    // four was gone. Every test on an uncached development machine passed.
+    //
+    // A security barrier that disables itself under config caching is the worst
+    // kind, because it works everywhere you happen to look at it.
+    $source = file_get_contents(app_path('Modules/Foundation/Support/Ai/ReadOnlyConnection.php'));
+
+    expect($source)->not->toContain("env('DB_READONLY")
+        ->and($source)->toContain("Config::get('database.readonly_username')");
+
+    // And the config keys exist to be read.
+    expect(config()->has('database.readonly_username'))->toBeTrue()
+        ->and(config()->has('database.readonly_password'))->toBeTrue();
+});

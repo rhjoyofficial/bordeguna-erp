@@ -37,8 +37,12 @@ final class ReadOnlyConnection
             return;
         }
 
-        $username = env('DB_READONLY_USERNAME');
-        $password = env('DB_READONLY_PASSWORD');
+        // ⚠⚠ Config, NEVER env(). See config/database.php: after
+        // `config:cache` - which production runs on every deploy - env() outside
+        // a config file returns null, and this barrier would quietly disable
+        // itself in the one environment that matters.
+        $username = Config::get('database.readonly_username');
+        $password = Config::get('database.readonly_password');
 
         // ⚠⚠ NO CREDENTIAL, NO SEPARATE CONNECTION - and this is not laziness.
         // A second connection with the SAME credential buys nothing at all, and

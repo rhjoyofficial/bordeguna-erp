@@ -29,6 +29,21 @@ return [
     |
     */
 
+    /*
+     * The AI data assistant's SELECT-only credential.
+     *
+     * ⚠⚠ READ HERE, NOT VIA env() IN A SERVICE PROVIDER. Once
+     * `php artisan config:cache` has run - which production does on every
+     * deploy - `env()` outside a config file returns NULL. The first version of
+     * ReadOnlyConnection called env() at boot, so on production the credential
+     * came back empty and the barrier silently fell back to the app user while
+     * every test on an uncached machine passed. A security barrier that
+     * disables itself under config caching is the worst kind: it works
+     * everywhere you look at it.
+     */
+    'readonly_username' => env('DB_READONLY_USERNAME'),
+    'readonly_password' => env('DB_READONLY_PASSWORD'),
+
     'connections' => [
 
         'sqlite' => [
