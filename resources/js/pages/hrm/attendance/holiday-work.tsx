@@ -1,4 +1,4 @@
-import HeadingSmall from '@/components/heading-small';
+import { ReportHeading } from '@/components/report/report-shell';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -53,15 +53,15 @@ export default function HolidayWork({ date, is_non_working_day, rows }: { date: 
             <Head title="Holiday work" />
 
             <div className="space-y-6 p-4">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                    <HeadingSmall
-                        title="Holiday work"
-                        description="Record who worked on a holiday or weekly off. Approved days count as normal present days."
-                    />
-                    <Link href="/hrm/holiday-work/report" className="text-sm underline">
-                        Year report
-                    </Link>
-                </div>
+                <ReportHeading
+                    title="Holiday work"
+                    description="Record who worked on a holiday or weekly off. Approved days count as normal present days."
+                    actions={
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href="/hrm/holiday-work/report">Year report</Link>
+                        </Button>
+                    }
+                />
 
                 <div className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
