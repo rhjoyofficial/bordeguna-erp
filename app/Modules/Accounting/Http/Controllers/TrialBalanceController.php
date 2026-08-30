@@ -34,6 +34,8 @@ class TrialBalanceController extends Controller
         return Inertia::render('accounting/trial-balance/index', [
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
+            // For the presets on the date bar; the server keeps deciding the default window.
+            'fiscal_year_start_month' => $business?->fiscal_year_start_month,
             'rows' => $trialBalance->rows
                 ->filter(fn (TrialBalanceRow $row) => $row->isWorthShowing())
                 ->values()

@@ -1,5 +1,7 @@
 import { CompactControls } from '@/components/form/compact-controls';
+import { Field } from '@/components/form/field';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { FormEventHandler, ReactNode } from 'react';
 
 /**
@@ -144,4 +146,95 @@ export function EmptyRow({ colSpan, children }: { colSpan: number; children: Rea
  */
 export function Footnote({ children }: { children: ReactNode }) {
     return <p className="text-muted-foreground max-w-2xl text-sm">{children}</p>;
+}
+
+export interface DateRange {
+    from: string;
+    to: string;
+}
+
+function iso(date: Date): string {
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * The three periods somebody asks a statement for without thinking about
+ * dates. Worked out on the viewer's clock, which is the same "today" the
+ * server defaults to.
+ *
+ * ⚠ The fiscal year is named by the year it STARTS in and starts on the
+ * business's `fiscal_year_start_month` (July for Bor de Guna, C-GL-4). A page
+ * that does not pass the month gets a calendar year, which is what the
+ * server does for a business without one - the two must never disagree.
+ */
+export function rangePresets(fiscalYearStartMonth: number | null | undefined, today = new Date()): { label: string; range: DateRange }[] {
+    const startMonth = fiscalYearStartMonth && fiscalYearStartMonth >= 1 && fiscalYearStartMonth <= 12 ? fiscalYearStartMonth : 1;
+    const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+    const fiscalStartYear = today.getMonth() + 1 >= startMonth ? today.getFullYear() : today.getFullYear() - 1;
+    const fiscalStart = new Date(fiscalStartYear, startMonth - 1, 1);
+
+    return [
+        { label: 'This month', range: { from: iso(thisMonthStart), to: iso(today) } },
+        { label: 'Last month', range: { from: iso(lastMonthStart), to: iso(lastMonthEnd) } },
+        { label: startMonth === 1 ? 'This year' : 'This financial year', range: { from: iso(fiscalStart), to: iso(today) } },
+    ];
+}
+
+/**
+ * The from/to pair above a statement, with the presets beside it.
+ *
+ * Three statements each had their own copy of this bar (30 Aug 2026 audit:
+ * one a bordered box, one a bare form, one the FilterBar) and none offered
+ * "last month", so every month-end meant typing two dates. Typing still
+ * works; a preset applies at once through `onApply`.
+ */
+export function DateRangeBar({
+    from,
+    to,
+    onChange,
+    onSubmit,
+    onApply,
+    fiscalYearStartMonth,
+    label,
+}: {
+    from: string;
+    to: string;
+    onChange: (range: DateRange) => void;
+    onSubmit: FormEventHandler;
+    /** A preset was chosen: navigate now. Falls back to onChange. */
+    onApply?: (range: DateRange) => void;
+    fiscalYearStartMonth?: number | null;
+    label?: string;
+}) {
+    const apply = onApply ?? onChange;
+
+    return (
+        <FilterBar onSubmit={onSubmit} label={label}>
+            <Field label="From" htmlFor="from">
+                <Input id="from" type="date" value={from} onChange={(e) => onChange({ from: e.target.value, to })} />
+            </Field>
+            <Field label="To" htmlFor="to">
+                <Input id="to" type="date" value={to} onChange={(e) => onChange({ from, to: e.target.value })} />
+            </Field>
+            <div className="flex flex-wrap items-center gap-1">
+                {rangePresets(fiscalYearStartMonth).map((preset) => (
+                    <Button
+                        key={preset.label}
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground"
+                        onClick={() => apply(preset.range)}
+                    >
+                        {preset.label}
+                    </Button>
+                ))}
+            </div>
+        </FilterBar>
+    );
 }

@@ -1,6 +1,14 @@
-import { EmptyRow, FilterBar, Footnote, ReportHeading, ReportPage, ReportTable, StatRow, StatTile, Verdict } from '@/components/report/report-shell';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import {
+    DateRangeBar,
+    EmptyRow,
+    Footnote,
+    ReportHeading,
+    ReportPage,
+    ReportTable,
+    StatRow,
+    StatTile,
+    Verdict,
+} from '@/components/report/report-shell';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -33,21 +41,28 @@ const breadcrumbs: BreadcrumbItem[] = [
 export default function TrialBalanceIndex({
     from,
     to,
+    fiscal_year_start_month,
     rows,
     totals,
     empty,
 }: {
     from: string;
     to: string;
+    fiscal_year_start_month: number | null;
     rows: Row[];
     totals: Totals;
     empty: boolean;
 }) {
     const [range, setRange] = useState({ from, to });
 
+    const show = (next: { from: string; to: string }) => {
+        setRange(next);
+        router.get(route('accounting.trial-balance'), next, { preserveState: true });
+    };
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        router.get(route('accounting.trial-balance'), range, { preserveState: true });
+        show(range);
     };
 
     return (
@@ -60,16 +75,14 @@ export default function TrialBalanceIndex({
                     description="Every account with a balance or any movement in the period. In a correct ledger the two columns are equal, because every debit was posted with a matching credit."
                 />
 
-                <FilterBar onSubmit={submit}>
-                    <div className="grid gap-2">
-                        <Label htmlFor="from">From</Label>
-                        <Input id="from" type="date" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="to">To</Label>
-                        <Input id="to" type="date" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} />
-                    </div>
-                </FilterBar>
+                <DateRangeBar
+                    from={range.from}
+                    to={range.to}
+                    onChange={setRange}
+                    onSubmit={submit}
+                    onApply={show}
+                    fiscalYearStartMonth={fiscal_year_start_month}
+                />
 
                 {/* The one thing this page exists to say, said before the detail. */}
                 {!empty && (
