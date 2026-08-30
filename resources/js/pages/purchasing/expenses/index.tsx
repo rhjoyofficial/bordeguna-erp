@@ -1,5 +1,6 @@
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -95,12 +96,6 @@ interface Voucher {
     evidence: { id: number; name: string; uploaded_by: string | null; url: string }[];
 }
 
-interface Option {
-    id: number;
-    name?: string;
-    label?: string;
-}
-
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Purchasing', href: '/purchasing/purchase-orders' },
     { title: 'Expenses', href: '/purchasing/expenses' },
@@ -169,13 +164,10 @@ export default function ExpensesIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Expenses" />
             <div className="flex flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-lg font-semibold">Expenses</h1>
-                    <p className="text-muted-foreground max-w-2xl text-sm">
-                        Rent, fuel, utilities, repairs - money spent on running the business rather than on stock. Each one is paid at the moment it
-                        is recorded; a bill to be settled later is a supplier bill instead.
-                    </p>
-                </div>
+                <ReportHeading
+                    title="Expenses"
+                    description="Rent, fuel, utilities, repairs - money spent on running the business rather than on stock. Each one is paid at the moment it is recorded; a bill to be settled later is a supplier bill instead."
+                />
 
                 {canRecord && (
                     <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-md border p-4">
