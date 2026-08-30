@@ -37,6 +37,8 @@ class CashAndBankBookController extends Controller
         return Inertia::render('accounting/cash-and-bank/index', [
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
+            // For the presets on the date bar; the server keeps deciding the default window.
+            'fiscal_year_start_month' => $business?->fiscal_year_start_month,
             'rows' => $book->rows->map(fn (CashAndBankRow $row) => [
                 'account_id' => $row->account->id,
                 'code' => $row->account->code,

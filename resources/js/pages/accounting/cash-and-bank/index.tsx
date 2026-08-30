@@ -1,6 +1,4 @@
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { DateRangeBar, ReportHeading } from '@/components/report/report-shell';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -46,6 +44,7 @@ const side = (amount: string, sideOf: 'debit' | 'credit') => (sideOf === 'credit
 export default function CashAndBankIndex({
     from,
     to,
+    fiscal_year_start_month,
     rows,
     totals,
     unmapped,
@@ -54,6 +53,7 @@ export default function CashAndBankIndex({
 }: {
     from: string;
     to: string;
+    fiscal_year_start_month: number | null;
     rows: Row[];
     totals: Totals;
     unmapped: string[];
@@ -62,34 +62,33 @@ export default function CashAndBankIndex({
 }) {
     const [range, setRange] = useState({ from, to });
 
+    const show = (next: { from: string; to: string }) => {
+        setRange(next);
+        router.get(route('accounting.cash-and-bank'), next, { preserveState: true });
+    };
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        router.get(route('accounting.cash-and-bank'), range, { preserveState: true });
+        show(range);
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cash & bank book" />
             <div className="flex flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-lg font-semibold">Cash &amp; bank book</h1>
-                    <p className="text-muted-foreground max-w-2xl text-sm">
-                        Where the money sits and how it moved in the period. One row per ledger account that a bank account, cash box or wallet
-                        reports under; the figures are the trial balance&apos;s own.
-                    </p>
-                </div>
+                <ReportHeading
+                    title="Cash & bank book"
+                    description="Where the money sits and how it moved in the period. One row per ledger account that a bank account, cash box or wallet reports under; the figures are the trial balance's own."
+                />
 
-                <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-                    <div className="grid gap-2">
-                        <Label htmlFor="from">From</Label>
-                        <Input id="from" type="date" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="to">To</Label>
-                        <Input id="to" type="date" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} />
-                    </div>
-                    <Button variant="outline">Show</Button>
-                </form>
+                <DateRangeBar
+                    from={range.from}
+                    to={range.to}
+                    onChange={setRange}
+                    onSubmit={submit}
+                    onApply={show}
+                    fiscalYearStartMonth={fiscal_year_start_month}
+                />
 
                 {/* C-CBB-4: whose movements this report cannot see. */}
                 {unmapped.length > 0 && (
