@@ -1,4 +1,5 @@
 import { BusyButton } from '@/components/busy-button';
+import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -433,29 +434,27 @@ export default function Loans({ filters, loans, employees, types }: Props) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Loans & advances" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <h2 className="text-lg font-medium">Loans &amp; advances</h2>
-                        <p className="text-muted-foreground text-sm">
-                            Payroll deducts one scheduled installment a month. A repayment is recorded only once the payroll is disbursed, so
-                            recalculating an open run never moves a balance.
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <SearchSelect
-                            value={filters.employee_id ?? ''}
-                            onChange={(e) => reload(e.target.value === '' ? null : Number(e.target.value))}
-                        >
-                            <option value="">All employees</option>
-                            {employees.map((e) => (
-                                <option key={e.id} value={e.id}>
-                                    {e.name}
-                                </option>
-                            ))}
-                        </SearchSelect>
-                        <RequestDialog employees={employees} types={types} />
-                    </div>
-                </div>
+                <ReportHeading
+                    title="Loans & advances"
+                    description="Payroll deducts one scheduled installment a month. A repayment is recorded only once the payroll is disbursed, so recalculating an open run never moves a balance."
+                    actions={
+                        <>
+                            <SearchSelect
+                                fit
+                                value={filters.employee_id ?? ''}
+                                onChange={(e) => reload(e.target.value === '' ? null : Number(e.target.value))}
+                            >
+                                <option value="">All employees</option>
+                                {employees.map((e) => (
+                                    <option key={e.id} value={e.id}>
+                                        {e.name}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                            <RequestDialog employees={employees} types={types} />
+                        </>
+                    }
+                />
 
                 {loans.length === 0 ? (
                     <div className={cardClass}>
