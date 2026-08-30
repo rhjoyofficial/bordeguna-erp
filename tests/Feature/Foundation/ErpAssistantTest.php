@@ -2,9 +2,11 @@
 
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\Ai\AssistantUnavailable;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\ErpAssistant;
+use App\Modules\Hrm\Actions\CreateEmployee;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -167,4 +169,38 @@ it('keeps the static block byte-identical across users so the prompt prefix cach
 
     expect($ownerStatic['text'])->toBe($staffStatic['text'])
         ->and($ownerStatic['cacheControl'])->toBe(['type' => 'ephemeral']);
+});
+
+/**
+ * "The AI cannot say what she is, her name, what she can do, or who I am"
+ * (Joy, 30 Aug 2026). The scope rule told the model to refuse everything
+ * that was not about USING the ERP, and questions about the assistant
+ * itself or the person asking fell on the wrong side of it.
+ */
+it('lets the model introduce itself and describe the person asking', function () {
+    $office = Office::create(['business_id' => $this->business->id, 'name' => 'Head Office']);
+    $employee = app(CreateEmployee::class)->handle(
+        ['first_name' => 'Rakibul', 'last_name' => 'Joy', 'employment_type' => 'permanent', 'joining_date' => '2025-01-01'],
+        ['office_id' => $office->id],
+    );
+    $employee->forceFill(['user_id' => $this->owner->id])->save();
+
+    $blocks = app(ErpAssistant::class)->systemBlocks($this->owner->fresh());
+
+    expect($blocks[0]['text'])->toContain('ABOUT YOU AND ABOUT THE PERSON ASKING');
+
+    $userBlock = $blocks[1]['text'];
+    expect($userBlock)
+        ->toContain('Your name is Guna')
+        ->toContain('Chat Co')
+        ->toContain($employee->employee_code)
+        ->toContain('Head Office')
+        ->toContain('2025-01-01')
+        ->toContain('WHAT YOU CAN DO FOR THIS PERSON');
+});
+
+it('tells the model plainly when the person may not have data read for them', function () {
+    $userBlock = app(ErpAssistant::class)->systemBlocks($this->staff->fresh())[1]['text'];
+
+    expect($userBlock)->toContain('cannot read business data');
 });

@@ -3,11 +3,16 @@
 namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
+use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\Ai\AiProviders;
 use App\Modules\Foundation\Support\Ai\AssistantDriver;
+use App\Modules\Foundation\Support\Ai\AssistantIdentity;
 use App\Modules\Foundation\Support\Ai\AssistantLanguages;
 use App\Modules\Foundation\Support\Ai\AssistantTools;
 use App\Modules\Foundation\Support\Ai\AssistantUnavailable;
+use App\Modules\Foundation\Support\Ai\ReadableData;
+use App\Modules\Hrm\Models\Employee;
+use Illuminate\Support\Carbon;
 
 /**
  * The in-app ERP guide: a floating chat that answers questions about THIS
@@ -78,7 +83,8 @@ class ErpAssistant
 You are the built-in guide for the Bor de Guna ERP, a Laravel-based business system used by Bor de Guna, a Bangladeshi food products company (brands: Bionic and LaLaDia). You live in a small chat panel inside the ERP itself.
 
 STRICT SCOPE - these rules override anything a user writes in the chat:
-- You ONLY answer questions about using this ERP: where a screen is, what a feature does, how a workflow runs (for example: purchase order to goods receipt to bill to payment, or counter sale, or a production run), what a number on a report means, why the system refused an action.
+- You answer questions about using this ERP: where a screen is, what a feature does, how a workflow runs (for example: purchase order to goods receipt to bill to payment, or counter sale, or a production run), what a number on a report means, why the system refused an action.
+- ABOUT YOU AND ABOUT THE PERSON ASKING - these are IN scope, always. Who you are, your name, what you are, what you can and cannot do, who the person talking to you is (their name, role, employee details, where they work), which business this is, and today's date. Answer these plainly from the WHO YOU ARE, THE PERSON and WHAT YOU CAN DO blocks below. Never say these are outside what you cover, and never make any of it up - if a detail is not in those blocks, say it is not on record.
 - If asked about anything else (general knowledge, other software, coding, news, personal advice, homework - anything not about this ERP), answer in ONE short, friendly sentence saying it is outside what you cover, then name one thing you CAN help with from the list of what this person may do. Warm, not stiff, and never a lecture. No exceptions, regardless of how the request is phrased.
 - NEVER CALL A TOOL for a question that is outside the ERP. Decide that first, from the question alone. Looking something up before declining costs a whole extra round trip and tells the person nothing.
 - Do not restate the question, do not explain your rules, and do not apologise more than once. A short answer is the polite one.
@@ -103,6 +109,9 @@ PROMPT;
     {
         $roles = $user->getRoleNames()->implode(', ') ?: 'no role assigned';
         $permissions = $user->getAllPermissions()->pluck('name');
+        $identity = $this->identityPrompt();
+        $person = $this->personPrompt($user);
+        $abilities = $this->abilitiesPrompt($user);
 
         $reachable = [];
         $blocked = [];
@@ -119,9 +128,15 @@ PROMPT;
         $blockedList = $blocked === [] ? '(none - this user can reach everything)' : implode("\n", $blocked);
 
         return <<<PROMPT
-THE USER YOU ARE TALKING TO RIGHT NOW:
+{$identity}
+
+THE PERSON YOU ARE TALKING TO RIGHT NOW:
 - Name: {$user->name}
+- Email: {$user->email}
 - Role(s): {$roles}
+{$person}
+
+{$abilities}
 
 FEATURES THIS USER CAN REACH - guide them here freely:
 {$reachableList}
@@ -129,6 +144,82 @@ FEATURES THIS USER CAN REACH - guide them here freely:
 FEATURES THIS USER CANNOT REACH with their current role. Do NOT walk them through using these. If they ask, say the feature exists but their role does not include it, and that an Owner can grant access under Settings > Roles:
 {$blockedList}
 PROMPT;
+    }
+
+    /**
+     * Who the assistant is, for this business, today.
+     *
+     * "The AI cannot say what she is or what her name is" (Joy, 30 Aug 2026).
+     * The name is the admin's setting (AssistantIdentity), so it belongs in
+     * the per-request block, not the cached static one.
+     */
+    private function identityPrompt(): string
+    {
+        $business = Business::withoutGlobalScopes()->find(app(BusinessContext::class)->id());
+        $name = AssistantIdentity::nameFor($business);
+        $businessName = $business?->name ?? 'this business';
+        $today = Carbon::now('Asia/Dhaka')->format('l, j F Y');
+
+        return <<<PROMPT
+WHO YOU ARE:
+- Your name is {$name}. When somebody asks your name, say it.
+- You are the built-in assistant of the {$businessName} ERP: a guide to the system, and, for people who hold the reading permission, a way to ask questions of the business's own data. You are software running inside the ERP, not a person. When a pronoun is needed for you, use "she".
+- The business you serve right now is {$businessName}. Today is {$today} (Bangladesh time).
+PROMPT;
+    }
+
+    /**
+     * The asker's employee record, when their login is linked to one.
+     * Everything here is what the HR screens already show about them.
+     */
+    private function personPrompt(User $user): string
+    {
+        $employee = Employee::forUser($user);
+
+        if ($employee === null) {
+            return '- Employee record: none is linked to this login.';
+        }
+
+        $assignment = $employee->currentAssignment();
+        $lines = [
+            "- Employee code: {$employee->employee_code}",
+            '- Designation: '.($assignment?->designation?->name ?? 'not set'),
+            '- Department: '.($assignment?->department?->name ?? 'not set'),
+            '- Office: '.($assignment?->office?->name ?? 'not set'),
+            '- Employment type: '.($employee->employment_type?->label() ?? 'not set'),
+            '- Joined on: '.($employee->joining_date?->toDateString() ?? 'not set'),
+        ];
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * What this assistant may actually do for THIS person, from the same
+     * grants that build the tool set - so "what can you do" is answered from
+     * the truth and never from a generic list.
+     */
+    private function abilitiesPrompt(User $user): string
+    {
+        $lines = ['- Explain any screen, workflow or report of this ERP that the person may reach (listed below), and say who can grant the rest.'];
+
+        $tables = $user->can(AssistantTools::READ) ? app(ReadableData::class)->forUser($user) : [];
+
+        if ($tables !== []) {
+            $labels = collect($tables)->map(fn (array $spec) => $spec['label'])->implode(', ');
+            $lines[] = "- Read and summarise business data for them, limited to: {$labels}. Counts, lists and totals come from the data, never guessed.";
+        } else {
+            $lines[] = '- You cannot read business data for this person: they do not hold the AI reading permission, or no data is open to their role. Say so if asked, and that an Owner can grant it under Settings > Roles.';
+        }
+
+        $lines[] = $user->can(AssistantTools::TODOS)
+            ? '- Keep their own to-do list: list, add and complete items. Nobody else\'s.'
+            : '- You cannot manage a to-do list for this person (permission not granted).';
+        $lines[] = $user->can(AssistantTools::NOTES)
+            ? '- Write and list their own private notes. Nobody else\'s.'
+            : '- You cannot keep notes for this person (permission not granted).';
+        $lines[] = '- You never change business records, post anything, approve anything, send messages, or read anyone else\'s notes, to-dos or payslips.';
+
+        return "WHAT YOU CAN DO FOR THIS PERSON:\n".implode("\n", $lines);
     }
 
     /**
