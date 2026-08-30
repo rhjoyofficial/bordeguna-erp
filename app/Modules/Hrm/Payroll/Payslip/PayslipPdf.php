@@ -57,18 +57,33 @@ class PayslipPdf
         $options->set('isRemoteEnabled', false);
         $options->set('isHtml5ParserEnabled', true);
 
-        // ⚠⚠ THE EARLIER NOTE HERE SAID DOMPDF "REFUSES" A CUSTOM FACE. It does
-        // not. It refuses **woff2**, which is the only format Google Fonts
-        // serves and therefore the only one the previous attempt had: dompdf
-        // parses TrueType and OpenType, nothing else. Point it at a .ttf on
-        // disk and it embeds the font perfectly happily, with isRemoteEnabled
-        // still false and no other option changed.
+        // ⚠⚠ BOTH OF THESE ARE REQUIRED, and the earlier note here was wrong on
+        // both counts. It said dompdf "refuses" a custom face, having tried
+        // @font-face and registerFont(). Two separate things were stopping it:
         //
-        // ⚠ Checked, not assumed: rendering with the font cache deleted still
-        // embeds the face, and `chroot` turned out to be irrelevant to the
-        // @font-face path, so no extra filesystem access is opened here.
-        // OfficialDocumentFontTest asserts the font name appears in the PDF's
-        // own font descriptors, which is what a silent fallback would fail.
+        //   1. FORMAT. dompdf parses TrueType and OpenType only. Google Fonts
+        //      serves woff2, which is all the previous attempt had, and a woff2
+        //      is rejected silently. Hence the .ttf beside the .woff2 in
+        //      public/fonts/tiro-bangla - the browser uses one, dompdf the other.
+        //   2. CHROOT. dompdf will not read a local file outside its chroot, and
+        //      the default chroot is dompdf's OWN folder inside vendor/. So an
+        //      @font-face pointing at public/fonts is refused before the file is
+        //      ever opened. Opening public/ is not opening the network:
+        //      isRemoteEnabled stays false, so a payslip still cannot reach off
+        //      this server while it renders.
+        //
+        // ⚠⚠ WHY THIS IS ALMOST IMPOSSIBLE TO TEST ON A DEVELOPER MACHINE.
+        // On its first SUCCESSFUL render dompdf INSTALLS the parsed face into
+        // vendor/dompdf/dompdf/lib/fonts, and from then on it resolves from
+        // there no matter what @font-face says. So once one good render has
+        // happened, removing either fix above still looks green - I removed
+        // chroot, watched the test pass, and concluded it was unnecessary. It
+        // was not: production, on a container with no installed font, fell
+        // straight back to DejaVu Sans and printed a payslip in the wrong face.
+        // ⛔ To check this properly you must delete BOTH storage/app/dompdf-fonts
+        // AND vendor/dompdf/dompdf/lib/fonts/tiro* first. Anything less is a
+        // test that cannot fail.
+        $options->set('chroot', [public_path()]);
 
         // Office Circular BdG-HQ-OD-26071201: Tiro Bangla is the official face
         // for documents that leave the organisation, and a payslip emailed to
