@@ -67,8 +67,8 @@ export default function LabelsIndex({
                 <div>
                     <h1 className="text-lg font-medium">Barcode labels</h1>
                     <p className="text-muted-foreground text-sm">
-                        Choose how many labels each product needs, then print. The barcode is the code a scanner reads and belongs to the pack -
-                        it is not the SKU, which never changes.
+                        Choose how many labels each product needs, then print. The barcode is the code a scanner reads and belongs to the pack - it is
+                        not the SKU, which never changes.
                     </p>
                 </div>
 
@@ -96,12 +96,7 @@ export default function LabelsIndex({
                     </div>
                     <div className="grid flex-1 gap-2">
                         <Label htmlFor="search">Find a product</Label>
-                        <Input
-                            id="search"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Name, SKU or barcode"
-                        />
+                        <Input id="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name, SKU or barcode" />
                     </div>
                     <Button onClick={print} disabled={total === 0}>
                         Print {total > 0 ? `${total} label${total === 1 ? '' : 's'}` : 'labels'}
@@ -115,7 +110,7 @@ export default function LabelsIndex({
                                 <th className="p-3">Product</th>
                                 <th className="p-3">SKU</th>
                                 <th className="p-3">Barcode</th>
-                                <th className="p-3 w-32">Labels</th>
+                                <th className="w-32 p-3">Labels</th>
                             </tr>
                         </thead>
                         <tbody>

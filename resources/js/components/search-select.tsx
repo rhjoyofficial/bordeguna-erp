@@ -91,6 +91,7 @@ export function SearchSelect({
     searchThreshold,
     searchPlaceholder,
     emptyText,
+    fit = false,
 }: {
     children: ReactNode;
     value: string | number;
@@ -104,6 +105,8 @@ export function SearchSelect({
     searchThreshold?: number;
     searchPlaceholder?: string;
     emptyText?: string;
+    /** Size to the option rather than to the column. See SearchableSelect. */
+    fit?: boolean;
 }) {
     const collected: { options: SelectOption[]; placeholder?: string } = { options: [] };
     collect(children, collected);
@@ -122,6 +125,7 @@ export function SearchSelect({
             disabled={disabled}
             invalid={invalid}
             searchThreshold={searchThreshold}
+            fit={fit}
         />
     );
 }

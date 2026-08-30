@@ -277,9 +277,8 @@ export default function MessagingIndex({
                             , costing about <strong>{preview.cost.toFixed(2)}</strong>.
                         </p>
                         <p className="text-muted-foreground text-sm">
-                            {preview.opted_out} asked not to be contacted, {preview.unreachable} have no{' '}
-                            {isSms ? 'phone number' : 'email address'}, {preview.duplicates} would have been a second message to the same{' '}
-                            {isSms ? 'number' : 'address'}.
+                            {preview.opted_out} asked not to be contacted, {preview.unreachable} have no {isSms ? 'phone number' : 'email address'},{' '}
+                            {preview.duplicates} would have been a second message to the same {isSms ? 'number' : 'address'}.
                         </p>
                         {preview.over_cap && (
                             <p className="text-destructive text-sm">

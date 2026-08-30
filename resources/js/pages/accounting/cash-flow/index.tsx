@@ -93,8 +93,8 @@ export default function CashFlowIndex({
                     <h1 className="text-lg font-medium">Statement of cash flows</h1>
                     <p className="text-muted-foreground text-sm">
                         Where the money actually went{fiscal_year ? ` · fiscal year ${fiscal_year}` : ''}. Read from the cash itself rather than
-                        worked backwards from profit: every journal touching a cash account is a movement, and the accounts on the other side of
-                        it say what the movement was for.
+                        worked backwards from profit: every journal touching a cash account is a movement, and the accounts on the other side of it
+                        say what the movement was for.
                     </p>
                 </div>
 
@@ -113,8 +113,8 @@ export default function CashFlowIndex({
                     <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
                         <p className="font-medium">No bank or cash account has a place in the chart yet.</p>
                         <p className="text-muted-foreground">
-                            Until one does there is no cash to follow, and every figure below would be a confident zero. Set "Reports under" on
-                            Bank &amp; cash.
+                            Until one does there is no cash to follow, and every figure below would be a confident zero. Set "Reports under" on Bank
+                            &amp; cash.
                         </p>
                     </div>
                 )}
@@ -164,8 +164,8 @@ export default function CashFlowIndex({
                     trusted exactly as much as one that did. */}
                 {proves ? (
                     <p className="text-muted-foreground text-sm">
-                        ✓ The movements above account for the change in cash exactly. Opening plus net movement equals the closing balance read
-                        from the ledger.
+                        ✓ The movements above account for the change in cash exactly. Opening plus net movement equals the closing balance read from
+                        the ledger.
                     </p>
                 ) : (
                     <div className="rounded-md border border-red-500/50 bg-red-500/10 p-3 text-sm">

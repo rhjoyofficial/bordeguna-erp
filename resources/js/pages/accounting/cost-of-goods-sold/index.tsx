@@ -67,11 +67,11 @@ export default function CostOfGoodsSoldIndex({
                     <form onSubmit={submit} className="flex items-end gap-2">
                         <div className="grid gap-1">
                             <Label htmlFor="from">From</Label>
-                            <Input id="from" type="date" value={start} onChange={(e) => setStart(e.target.value)} className="w-40" />
+                            <Input id="from" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
                         </div>
                         <div className="grid gap-1">
                             <Label htmlFor="to">To</Label>
-                            <Input id="to" type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="w-40" />
+                            <Input id="to" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
                         </div>
                         <Button type="submit">Show</Button>
                     </form>

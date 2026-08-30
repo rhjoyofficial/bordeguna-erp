@@ -84,8 +84,8 @@ export default function FilesIndex({
                             Upload
                         </Button>
                         <p className="text-muted-foreground w-full text-xs">
-                            Documents, images, spreadsheets and archives, up to 10 MB. A date makes the file show as out of date once it passes,
-                            which is what a trade licence or a certificate needs.
+                            Documents, images, spreadsheets and archives, up to 10 MB. A date makes the file show as out of date once it passes, which
+                            is what a trade licence or a certificate needs.
                         </p>
                     </form>
                 )}

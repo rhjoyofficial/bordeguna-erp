@@ -203,11 +203,11 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                         <Label htmlFor="from" className="text-muted-foreground text-sm">
                             From
                         </Label>
-                        <Input id="from" type="date" className="w-40" value={filters.from} onChange={(e) => reload({ from: e.target.value })} />
+                        <Input id="from" type="date" value={filters.from} onChange={(e) => reload({ from: e.target.value })} />
                         <Label htmlFor="to" className="text-muted-foreground text-sm">
                             To
                         </Label>
-                        <Input id="to" type="date" className="w-40" value={filters.to} onChange={(e) => reload({ to: e.target.value })} />
+                        <Input id="to" type="date" value={filters.to} onChange={(e) => reload({ to: e.target.value })} />
                         <SearchSelect value={filters.employee_id ?? ''} onChange={(e) => reload({ employee_id: e.target.value || null })}>
                             <option value="">All employees</option>
                             {employees.map((e) => (

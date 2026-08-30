@@ -63,17 +63,11 @@ export default function TrialBalanceIndex({
                 <FilterBar onSubmit={submit}>
                     <div className="grid gap-2">
                         <Label htmlFor="from">From</Label>
-                        <Input
-                            id="from"
-                            type="date"
-                            value={range.from}
-                            onChange={(e) => setRange({ ...range, from: e.target.value })}
-                            className="w-44"
-                        />
+                        <Input id="from" type="date" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="to">To</Label>
-                        <Input id="to" type="date" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} className="w-44" />
+                        <Input id="to" type="date" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} />
                     </div>
                 </FilterBar>
 

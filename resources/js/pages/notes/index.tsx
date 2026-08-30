@@ -50,11 +50,7 @@ export default function NotesIndex({
     const form = useForm(EMPTY);
 
     const applyFilters = (next: Partial<{ search: string; show: string }>) => {
-        router.get(
-            '/notes',
-            { search: next.search ?? search, show: next.show ?? filters.show },
-            { preserveState: true, replace: true },
-        );
+        router.get('/notes', { search: next.search ?? search, show: next.show ?? filters.show }, { preserveState: true, replace: true });
     };
 
     const submit: FormEventHandler = (e) => {
@@ -163,11 +159,7 @@ export default function NotesIndex({
                                 Only me
                             </label>
                             <label className="flex items-end gap-2 text-sm">
-                                <input
-                                    type="checkbox"
-                                    checked={form.data.is_pinned}
-                                    onChange={(e) => form.setData('is_pinned', e.target.checked)}
-                                />
+                                <input type="checkbox" checked={form.data.is_pinned} onChange={(e) => form.setData('is_pinned', e.target.checked)} />
                                 Pin to the top
                             </label>
                         </div>
@@ -195,7 +187,7 @@ export default function NotesIndex({
                                 </div>
                             </div>
 
-                            {note.body && <p className="text-muted-foreground whitespace-pre-wrap text-sm">{note.body}</p>}
+                            {note.body && <p className="text-muted-foreground text-sm whitespace-pre-wrap">{note.body}</p>}
 
                             <div className="text-muted-foreground mt-auto flex flex-wrap items-center gap-2 text-xs">
                                 <span>{note.author}</span>
@@ -240,9 +232,7 @@ export default function NotesIndex({
                     ))}
 
                     {notes.data.length === 0 && (
-                        <p className="text-muted-foreground col-span-full rounded-lg border p-6 text-center text-sm">
-                            Nothing written down yet.
-                        </p>
+                        <p className="text-muted-foreground col-span-full rounded-lg border p-6 text-center text-sm">Nothing written down yet.</p>
                     )}
                 </div>
 

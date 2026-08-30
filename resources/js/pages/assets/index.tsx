@@ -117,6 +117,7 @@ export default function AssetsIndex({
                               overwhelmingly wrong.
                             */}
                             <SearchSelect
+                                fit
                                 id="account_id"
                                 className="w-64"
                                 value={data.account_id}
@@ -134,13 +135,7 @@ export default function AssetsIndex({
 
                         <div className="grid gap-2">
                             <Label htmlFor="acquired_on">Acquired</Label>
-                            <Input
-                                id="acquired_on"
-                                type="date"
-                                value={data.acquired_on}
-                                onChange={(e) => setData('acquired_on', e.target.value)}
-                                className="w-44"
-                            />
+                            <Input id="acquired_on" type="date" value={data.acquired_on} onChange={(e) => setData('acquired_on', e.target.value)} />
                             <InputError message={errors.acquired_on} />
                         </div>
 
@@ -194,6 +189,7 @@ export default function AssetsIndex({
                             */}
                             <Label htmlFor="money_account_id">Paid from (optional)</Label>
                             <SearchSelect
+                                fit
                                 id="money_account_id"
                                 value={data.money_account_id}
                                 onChange={(e) => setData('money_account_id', e.target.value)}
@@ -210,7 +206,7 @@ export default function AssetsIndex({
 
                         <div className="grid gap-2">
                             <Label htmlFor="supplier_id">Bought from (optional)</Label>
-                            <SearchSelect id="supplier_id" value={data.supplier_id} onChange={(e) => setData('supplier_id', e.target.value)}>
+                            <SearchSelect fit id="supplier_id" value={data.supplier_id} onChange={(e) => setData('supplier_id', e.target.value)}>
                                 <option value="">Not recorded</option>
                                 {suppliers.map((supplier) => (
                                     <option key={supplier.id} value={supplier.id}>
@@ -228,7 +224,6 @@ export default function AssetsIndex({
                                 type="date"
                                 value={data.depreciation_starts_on}
                                 onChange={(e) => setData('depreciation_starts_on', e.target.value)}
-                                className="w-44"
                             />
                             <InputError message={errors.depreciation_starts_on} />
                         </div>

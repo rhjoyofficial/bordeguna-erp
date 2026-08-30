@@ -112,6 +112,7 @@ export default function GeneralLedgerIndex({
                     <div className="grid gap-2">
                         <Label htmlFor="account">Account</Label>
                         <SearchSelect
+                            fit
                             id="account"
                             value={filters.account}
                             onChange={(e) => setFilters({ ...filters, account: e.target.value, party: '' })}
@@ -127,28 +128,17 @@ export default function GeneralLedgerIndex({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="from">From</Label>
-                        <Input
-                            id="from"
-                            type="date"
-                            value={filters.from}
-                            onChange={(e) => setFilters({ ...filters, from: e.target.value })}
-                            className="w-44"
-                        />
+                        <Input id="from" type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="to">To</Label>
-                        <Input
-                            id="to"
-                            type="date"
-                            value={filters.to}
-                            onChange={(e) => setFilters({ ...filters, to: e.target.value })}
-                            className="w-44"
-                        />
+                        <Input id="to" type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
                     </div>
                     {parties.length > 0 && (
                         <div className="grid gap-2">
                             <Label htmlFor="party">Party</Label>
                             <SearchSelect
+                                fit
                                 id="party"
                                 value={filters.party}
                                 onChange={(e) => setFilters({ ...filters, party: e.target.value })}

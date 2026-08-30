@@ -66,7 +66,7 @@ export default function HolidayWork({ date, is_non_working_day, rows }: { date: 
                 <div className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
                         <Label htmlFor="date">Date</Label>
-                        <Input id="date" type="date" value={day} onChange={(e) => setDay(e.target.value)} className="w-48" />
+                        <Input id="date" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
                     </div>
                     <Button variant="outline" onClick={load}>
                         Show this day

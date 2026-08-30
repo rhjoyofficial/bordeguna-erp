@@ -303,8 +303,8 @@ export default function MessagingSettings({
                             Save threshold
                         </Button>
                         <p className="text-muted-foreground max-w-md text-xs">
-                            Recipients, not messages. Leaving it empty does <strong>not</strong> switch approvals off - it means every send needs
-                            one, whatever its size.
+                            Recipients, not messages. Leaving it empty does <strong>not</strong> switch approvals off - it means every send needs one,
+                            whatever its size.
                         </p>
                     </form>
 
@@ -489,9 +489,7 @@ export default function MessagingSettings({
                                                 autoComplete="off"
                                                 placeholder={editing ? 'leave blank to keep' : 'paste the key'}
                                                 value={form.data.credentials[secret] ?? ''}
-                                                onChange={(e) =>
-                                                    form.setData('credentials', { ...form.data.credentials, [secret]: e.target.value })
-                                                }
+                                                onChange={(e) => form.setData('credentials', { ...form.data.credentials, [secret]: e.target.value })}
                                             />
                                         </div>
                                     ))}
@@ -499,7 +497,9 @@ export default function MessagingSettings({
                                         type="button"
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => setConfig({ credential_map: { ...config.credential_map, ['key' + credentialRows.length]: '' } })}
+                                        onClick={() =>
+                                            setConfig({ credential_map: { ...config.credential_map, ['key' + credentialRows.length]: '' } })
+                                        }
                                     >
                                         Add another key
                                     </Button>
@@ -581,8 +581,8 @@ export default function MessagingSettings({
                                 {config.success?.mode === 'http_ok' && (
                                     <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs dark:border-amber-900 dark:bg-amber-950">
                                         Most Bangladeshi gateways answer <strong>HTTP 200 whether they accepted the message or refused it</strong>,
-                                        and put the truth in the reply body. On this setting a refused message will be recorded as sent. Send a
-                                        test, read the reply below, then set the field and value.
+                                        and put the truth in the reply body. On this setting a refused message will be recorded as sent. Send a test,
+                                        read the reply below, then set the field and value.
                                     </p>
                                 )}
 
@@ -624,8 +624,8 @@ export default function MessagingSettings({
                         )}
 
                         <p className="text-muted-foreground text-xs">
-                            Keys are stored encrypted and are never shown again, only their last four characters. Leaving one blank when editing
-                            keeps whatever is already saved.
+                            Keys are stored encrypted and are never shown again, only their last four characters. Leaving one blank when editing keeps
+                            whatever is already saved.
                         </p>
                         <div className="flex gap-2">
                             <Button type="submit" disabled={form.processing}>
@@ -676,9 +676,7 @@ export default function MessagingSettings({
                                         </td>
                                         <td className="p-3">{provider.cost_per_part}</td>
                                         <td className="p-3">
-                                            <Badge variant={provider.is_active ? 'secondary' : 'outline'}>
-                                                {provider.is_active ? 'On' : 'Off'}
-                                            </Badge>
+                                            <Badge variant={provider.is_active ? 'secondary' : 'outline'}>{provider.is_active ? 'On' : 'Off'}</Badge>
                                         </td>
                                         <td className="p-3 text-right whitespace-nowrap">
                                             <Button variant="ghost" size="sm" onClick={() => edit(provider)}>
@@ -745,9 +743,7 @@ export default function MessagingSettings({
                                 </Button>
                                 <Button
                                     variant="secondary"
-                                    onClick={() =>
-                                        router.post(route('crm.settings.messaging.balance', testingId), {}, { preserveScroll: true })
-                                    }
+                                    onClick={() => router.post(route('crm.settings.messaging.balance', testingId), {}, { preserveScroll: true })}
                                 >
                                     Check balance
                                 </Button>

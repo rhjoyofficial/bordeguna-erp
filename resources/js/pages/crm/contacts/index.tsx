@@ -295,7 +295,7 @@ export default function PhoneBookIndex({
                         <div className="flex flex-wrap items-end gap-2 rounded-lg border p-4">
                             <div className="grid gap-2">
                                 <Label htmlFor="bulk_group">{selected.length} selected</Label>
-                                <SearchSelect id="bulk_group" value={bulkGroup} onChange={(e) => setBulkGroup(e.target.value)}>
+                                <SearchSelect fit id="bulk_group" value={bulkGroup} onChange={(e) => setBulkGroup(e.target.value)}>
                                     <option value="">Choose a group</option>
                                     {groups.map((g) => (
                                         <option key={g.id} value={g.id}>
@@ -387,11 +387,7 @@ export default function PhoneBookIndex({
                                                         variant="ghost"
                                                         size="sm"
                                                         onClick={() =>
-                                                            router.post(
-                                                                route('crm.contacts.deactivate', contact.id),
-                                                                {},
-                                                                { preserveScroll: true },
-                                                            )
+                                                            router.post(route('crm.contacts.deactivate', contact.id), {}, { preserveScroll: true })
                                                         }
                                                     >
                                                         Deactivate
@@ -402,11 +398,7 @@ export default function PhoneBookIndex({
                                                         variant="ghost"
                                                         size="sm"
                                                         onClick={() =>
-                                                            router.post(
-                                                                route('crm.contacts.reactivate', contact.id),
-                                                                {},
-                                                                { preserveScroll: true },
-                                                            )
+                                                            router.post(route('crm.contacts.reactivate', contact.id), {}, { preserveScroll: true })
                                                         }
                                                     >
                                                         Reactivate
@@ -560,7 +552,12 @@ export default function PhoneBookIndex({
                         <form onSubmit={submitImport} className="flex flex-wrap items-end gap-2 rounded-lg border p-4">
                             <div className="grid gap-2">
                                 <Label htmlFor="file">Contact file (CSV)</Label>
-                                <Input id="file" type="file" accept=".csv,text/csv" onChange={(e) => importForm.setData('file', e.target.files?.[0] ?? null)} />
+                                <Input
+                                    id="file"
+                                    type="file"
+                                    accept=".csv,text/csv"
+                                    onChange={(e) => importForm.setData('file', e.target.files?.[0] ?? null)}
+                                />
                                 <InputError message={importForm.errors.file} />
                             </div>
                             <Button type="submit" disabled={importForm.processing || !importForm.data.file}>

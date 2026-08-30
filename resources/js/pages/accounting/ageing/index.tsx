@@ -85,7 +85,7 @@ export default function AgeingIndex({
                 <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
                         <Label htmlFor="as_at">As at</Label>
-                        <Input id="as_at" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
+                        <Input id="as_at" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                     </div>
                     <Button variant="outline">Show</Button>
                 </form>

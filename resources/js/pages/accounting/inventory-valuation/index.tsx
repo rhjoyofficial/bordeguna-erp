@@ -75,7 +75,7 @@ export default function InventoryValuationIndex({
                     <form onSubmit={submit} className="flex items-end gap-2">
                         <div className="grid gap-1">
                             <Label htmlFor="as_at">As at</Label>
-                            <Input id="as_at" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
+                            <Input id="as_at" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                         </div>
                         <Button type="submit">Show</Button>
                     </form>

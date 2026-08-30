@@ -143,6 +143,7 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                         <div className="grid gap-2">
                             <Label htmlFor="type">Type</Label>
                             <SearchSelect
+                                fit
                                 id="type"
                                 className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                                 value={data.type}
@@ -159,6 +160,7 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                         <div className="grid gap-2">
                             <Label htmlFor="parent_id">Sits under</Label>
                             <SearchSelect
+                                fit
                                 id="parent_id"
                                 className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                                 value={data.parent_id}

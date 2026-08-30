@@ -248,9 +248,7 @@ export default function ChatIndex({
                                     </div>
                                     {current.topic && <div className="text-muted-foreground text-xs">{current.topic}</div>}
                                     {current.is_private && (
-                                        <div className="text-muted-foreground text-xs">
-                                            {current.members.map((m) => m.name).join(', ')}
-                                        </div>
+                                        <div className="text-muted-foreground text-xs">{current.members.map((m) => m.name).join(', ')}</div>
                                     )}
                                 </header>
 
@@ -308,9 +306,7 @@ export default function ChatIndex({
                                 </form>
                             </>
                         ) : (
-                            <p className="text-muted-foreground p-6 text-center text-sm">
-                                No channel yet. Create one on the left to start.
-                            </p>
+                            <p className="text-muted-foreground p-6 text-center text-sm">No channel yet. Create one on the left to start.</p>
                         )}
                     </section>
                 </div>

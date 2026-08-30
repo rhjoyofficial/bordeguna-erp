@@ -36,7 +36,7 @@ export default function Appearance() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Appearance settings" />
 
-            <SettingsLayout>
+            <SettingsLayout narrow>
                 <div key={resetKey} className="space-y-6">
                     <HeadingSmall title="Appearance settings" description="Personal to your account, saved to this browser" />
                     <AppearanceTabs />

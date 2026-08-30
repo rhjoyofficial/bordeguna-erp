@@ -107,7 +107,7 @@ export default function OpeningStockIndex({
                         <div className="mt-3 flex flex-wrap items-end gap-3">
                             <div className="grid gap-2">
                                 <Label htmlFor="sheet_warehouse">Warehouse</Label>
-                                <SearchSelect id="sheet_warehouse" value={sheetWarehouse} onChange={(e) => setSheetWarehouse(e.target.value)}>
+                                <SearchSelect fit id="sheet_warehouse" value={sheetWarehouse} onChange={(e) => setSheetWarehouse(e.target.value)}>
                                     {countSheetWarehouses.map((w) => (
                                         <option key={w.id} value={w.id}>
                                             {w.name} ({w.code})
@@ -152,7 +152,12 @@ export default function OpeningStockIndex({
                         <div className="grid gap-4 md:grid-cols-3">
                             <div className="grid gap-2">
                                 <Label htmlFor="warehouse_id">Warehouse</Label>
-                                <SearchSelect id="warehouse_id" value={data.warehouse_id} onChange={(e) => setData('warehouse_id', e.target.value)}>
+                                <SearchSelect
+                                    fit
+                                    id="warehouse_id"
+                                    value={data.warehouse_id}
+                                    onChange={(e) => setData('warehouse_id', e.target.value)}
+                                >
                                     {warehouses.map((w) => (
                                         <option key={w.id} value={w.id}>
                                             {w.name} ({w.code})
@@ -190,6 +195,7 @@ export default function OpeningStockIndex({
                                         <tr key={index} className="border-t align-top">
                                             <td className="p-3">
                                                 <SearchSelect
+                                                    fit
                                                     className={`${selectClass} w-full`}
                                                     value={line.product_id}
                                                     onChange={(e) => setLine(index, { product_id: e.target.value })}

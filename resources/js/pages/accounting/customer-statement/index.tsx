@@ -83,6 +83,7 @@ export default function CustomerStatementIndex({
                     <div className="grid gap-2">
                         <Label htmlFor="customer">Customer</Label>
                         <SearchSelect
+                            fit
                             id="customer"
                             value={filters.customer}
                             onChange={(e) => setFilters({ ...filters, customer: e.target.value })}
@@ -99,23 +100,11 @@ export default function CustomerStatementIndex({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="from">From</Label>
-                        <Input
-                            id="from"
-                            type="date"
-                            value={filters.from}
-                            onChange={(e) => setFilters({ ...filters, from: e.target.value })}
-                            className="w-44"
-                        />
+                        <Input id="from" type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="to">To</Label>
-                        <Input
-                            id="to"
-                            type="date"
-                            value={filters.to}
-                            onChange={(e) => setFilters({ ...filters, to: e.target.value })}
-                            className="w-44"
-                        />
+                        <Input id="to" type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
                     </div>
                     <Button variant="outline">Show</Button>
                 </form>

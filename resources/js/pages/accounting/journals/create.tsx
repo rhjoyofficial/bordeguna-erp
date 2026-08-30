@@ -117,18 +117,13 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                 <div className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
                         <Label htmlFor="journal_date">Date</Label>
-                        <Input
-                            id="journal_date"
-                            type="date"
-                            value={data.journal_date}
-                            onChange={(e) => setData('journal_date', e.target.value)}
-                            className="w-44"
-                        />
+                        <Input id="journal_date" type="date" value={data.journal_date} onChange={(e) => setData('journal_date', e.target.value)} />
                         <InputError message={errors.journal_date} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="journal_type">Kind</Label>
                         <SearchSelect
+                            fit
                             id="journal_type"
                             className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                             value={data.journal_type}
@@ -170,6 +165,7 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                                 <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                     <td className="py-2 pr-2">
                                         <SearchSelect
+                                            fit
                                             aria-label={`Account for line ${index + 1}`}
                                             className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
                                             value={line.account_id}

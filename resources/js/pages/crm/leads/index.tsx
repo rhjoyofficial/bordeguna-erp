@@ -609,8 +609,8 @@ export default function LeadsIndex({
                         <div className="md:col-span-4">
                             <h2 className="font-medium">Convert {converting.name ?? `lead #${converting.id}`} to a customer</h2>
                             <p className="text-muted-foreground text-sm">
-                                The lead is kept, never deleted, and its history stays where it is. Nothing financial happens here - no invoice,
-                                no price, no stock.
+                                The lead is kept, never deleted, and its history stays where it is. Nothing financial happens here - no invoice, no
+                                price, no stock.
                             </p>
                         </div>
 

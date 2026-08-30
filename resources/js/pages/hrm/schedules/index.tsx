@@ -358,7 +358,7 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                         <Label htmlFor="on" className="text-muted-foreground text-sm">
                             Roster on
                         </Label>
-                        <Input id="on" type="date" className="w-40" value={date} onChange={(e) => viewOn(e.target.value)} />
+                        <Input id="on" type="date" value={date} onChange={(e) => viewOn(e.target.value)} />
                         <AssignDialog on={on} options={options} />
                     </div>
                 </div>

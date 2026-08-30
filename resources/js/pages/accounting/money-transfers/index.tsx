@@ -77,8 +77,8 @@ export default function MoneyTransfersIndex({
                 <div>
                     <h1 className="text-lg font-medium">Money transfer</h1>
                     <p className="text-muted-foreground text-sm">
-                        Moving money between your own accounts - bank to the till, bKash to the bank. Nothing is earned or spent here except
-                        the fee, so the business is exactly as rich afterwards, minus what the move cost.
+                        Moving money between your own accounts - bank to the till, bKash to the bank. Nothing is earned or spent here except the fee,
+                        so the business is exactly as rich afterwards, minus what the move cost.
                     </p>
                 </div>
 

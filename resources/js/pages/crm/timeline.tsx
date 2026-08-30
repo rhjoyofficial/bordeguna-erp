@@ -168,7 +168,7 @@ export default function CrmTimeline({
                             <div className="flex flex-wrap items-end gap-3">
                                 <div className="grid gap-2">
                                     <Label htmlFor="type">Kind</Label>
-                                    <SearchSelect id="type" value={log.data.type} onChange={(e) => log.setData('type', e.target.value)}>
+                                    <SearchSelect fit id="type" value={log.data.type} onChange={(e) => log.setData('type', e.target.value)}>
                                         {activityTypes.map((t) => (
                                             <option key={t.value} value={t.value}>
                                                 {t.label}
@@ -182,6 +182,7 @@ export default function CrmTimeline({
                                     <div className="grid gap-2">
                                         <Label htmlFor="direction">Direction</Label>
                                         <SearchSelect
+                                            fit
                                             id="direction"
                                             value={log.data.direction}
                                             onChange={(e) => log.setData('direction', e.target.value)}
@@ -212,7 +213,6 @@ export default function CrmTimeline({
                                     <Input
                                         id="occurred_at"
                                         type="datetime-local"
-                                        className="w-52"
                                         value={log.data.occurred_at}
                                         onChange={(e) => log.setData('occurred_at', e.target.value)}
                                     />
@@ -265,7 +265,6 @@ export default function CrmTimeline({
                                     <Input
                                         id="due_at"
                                         type="datetime-local"
-                                        className="w-52"
                                         value={task.data.due_at}
                                         onChange={(e) => task.setData('due_at', e.target.value)}
                                     />
@@ -274,6 +273,7 @@ export default function CrmTimeline({
                                 <div className="grid gap-2">
                                     <Label htmlFor="assigned_to_user_id">Assign to</Label>
                                     <SearchSelect
+                                        fit
                                         id="assigned_to_user_id"
                                         value={task.data.assigned_to_user_id}
                                         onChange={(e) => task.setData('assigned_to_user_id', e.target.value)}
@@ -304,7 +304,7 @@ export default function CrmTimeline({
                         <p className="w-full text-sm font-medium">What did they ask for?</p>
                         <div className="grid gap-2">
                             <Label htmlFor="interest_kind">About</Label>
-                            <SearchSelect id="interest_kind" value={interestKind} onChange={(e) => setInterestKind(e.target.value)}>
+                            <SearchSelect fit id="interest_kind" value={interestKind} onChange={(e) => setInterestKind(e.target.value)}>
                                 <option value="product">A product</option>
                                 <option value="category">A category</option>
                                 <option value="brand">A brand</option>
@@ -313,6 +313,7 @@ export default function CrmTimeline({
                         <div className="grid gap-2">
                             <Label htmlFor="interest_target">Which</Label>
                             <SearchSelect
+                                fit
                                 id="interest_target"
                                 className="w-64"
                                 value={
@@ -361,6 +362,7 @@ export default function CrmTimeline({
                                 product's stock unit. Never converted at capture. */}
                             <Label htmlFor="requested_unit_id">In what unit</Label>
                             <SearchSelect
+                                fit
                                 id="requested_unit_id"
                                 value={interest.data.requested_unit_id}
                                 onChange={(e) => interest.setData('requested_unit_id', e.target.value)}

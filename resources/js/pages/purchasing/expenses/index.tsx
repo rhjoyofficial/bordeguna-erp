@@ -182,13 +182,7 @@ export default function ExpensesIndex({
                         <div className="flex flex-wrap items-end gap-3">
                             <div className="grid gap-2">
                                 <Label htmlFor="spent_on">Date</Label>
-                                <Input
-                                    id="spent_on"
-                                    type="date"
-                                    value={data.spent_on}
-                                    onChange={(e) => setData('spent_on', e.target.value)}
-                                    className="w-44"
-                                />
+                                <Input id="spent_on" type="date" value={data.spent_on} onChange={(e) => setData('spent_on', e.target.value)} />
                                 <InputError message={errors.spent_on} />
                             </div>
 
@@ -201,6 +195,7 @@ export default function ExpensesIndex({
                                   offered at all. The bank & cash screen warns about them.
                                 */}
                                 <SearchSelect
+                                    fit
                                     id="money_account_id"
                                     value={data.money_account_id}
                                     onChange={(e) => setData('money_account_id', e.target.value)}
@@ -217,7 +212,7 @@ export default function ExpensesIndex({
 
                             <div className="grid gap-2">
                                 <Label htmlFor="supplier_id">Supplier (optional)</Label>
-                                <SearchSelect id="supplier_id" value={data.supplier_id} onChange={(e) => setData('supplier_id', e.target.value)}>
+                                <SearchSelect fit id="supplier_id" value={data.supplier_id} onChange={(e) => setData('supplier_id', e.target.value)}>
                                     <option value="">Not a supplier</option>
                                     {suppliers.map((supplier) => (
                                         <option key={supplier.id} value={supplier.id}>
@@ -260,6 +255,7 @@ export default function ExpensesIndex({
                             {data.lines.map((line, index) => (
                                 <div key={index} className="flex flex-wrap items-end gap-3">
                                     <SearchSelect
+                                        fit
                                         aria-label={`Expense account, line ${index + 1}`}
                                         className={`${selectClass} w-72`}
                                         value={line.account_id}
@@ -329,13 +325,13 @@ export default function ExpensesIndex({
                         <Label htmlFor="export-from" className="text-muted-foreground text-xs">
                             Export from
                         </Label>
-                        <Input id="export-from" type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} className="w-40" />
+                        <Input id="export-from" type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} />
                     </div>
                     <div className="grid gap-1">
                         <Label htmlFor="export-to" className="text-muted-foreground text-xs">
                             to
                         </Label>
-                        <Input id="export-to" type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} className="w-40" />
+                        <Input id="export-to" type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} />
                     </div>
                     {/* ⚠ A plain anchor, not a router visit: this is a file download,
                         and Inertia would try to render the CSV as a page. */}

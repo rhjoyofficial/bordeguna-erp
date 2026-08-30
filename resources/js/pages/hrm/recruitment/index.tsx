@@ -248,7 +248,11 @@ export default function RecruitmentIndex({
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="status">Status</Label>
-                                <SearchSelect id="status" value={openingForm.data.status} onChange={(e) => openingForm.setData('status', e.target.value)}>
+                                <SearchSelect
+                                    id="status"
+                                    value={openingForm.data.status}
+                                    onChange={(e) => openingForm.setData('status', e.target.value)}
+                                >
                                     {statuses.map((s) => (
                                         <option key={s.value} value={s.value}>
                                             {s.label}
@@ -308,7 +312,7 @@ export default function RecruitmentIndex({
                     <div className="flex flex-wrap items-end gap-2">
                         <div className="grid gap-1.5">
                             <Label htmlFor="status_filter">Show</Label>
-                            <SearchSelect id="status_filter" value={filters.status} onChange={(e) => applyFilters({ status: e.target.value })}>
+                            <SearchSelect fit id="status_filter" value={filters.status} onChange={(e) => applyFilters({ status: e.target.value })}>
                                 <option value="all">All openings</option>
                                 {statuses.map((s) => (
                                     <option key={s.value} value={s.value}>
@@ -385,6 +389,7 @@ export default function RecruitmentIndex({
                             <div className="grid gap-2">
                                 <Label htmlFor="job_opening_id">For which role</Label>
                                 <SearchSelect
+                                    fit
                                     id="job_opening_id"
                                     value={applicantForm.data.job_opening_id}
                                     onChange={(e) => applicantForm.setData('job_opening_id', e.target.value)}
@@ -543,9 +548,7 @@ export default function RecruitmentIndex({
                                                 <div className="text-muted-foreground mt-1 text-xs">as {applicant.hired_employee}</div>
                                             )}
                                             {applicant.stage === 'hired' && !applicant.hired_employee && (
-                                                <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
-                                                    No employee record linked yet
-                                                </div>
+                                                <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">No employee record linked yet</div>
                                             )}
                                         </td>
                                         <td className="p-3 whitespace-nowrap">{applicant.expected_salary ?? '-'}</td>

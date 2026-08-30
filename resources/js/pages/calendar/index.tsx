@@ -128,7 +128,7 @@ export default function CalendarIndex({
                 </div>
 
                 <div className="overflow-x-auto">
-                    <div className="grid min-w-[52rem] grid-cols-7 gap-px rounded-lg border bg-border">
+                    <div className="bg-border grid min-w-[52rem] grid-cols-7 gap-px rounded-lg border">
                         {WEEKDAYS.map((w) => (
                             <div key={w} className="bg-muted/50 p-2 text-center text-xs font-medium">
                                 {w}
@@ -177,39 +177,39 @@ export default function CalendarIndex({
                             const eventId = item.id;
 
                             return (
-                            <div key={i} className="flex flex-wrap items-center gap-3 rounded-lg border p-3">
-                                <Badge className={TONE[item.type] ?? TONE.event}>{item.label}</Badge>
-                                <span className="font-medium">{item.title}</span>
-                                {item.detail && <span className="text-muted-foreground text-sm">{item.detail}</span>}
-                                <div className="ml-auto flex gap-2">
-                                    {item.url && (
-                                        <Button variant="ghost" size="sm" asChild>
-                                            <Link href={item.url}>Open</Link>
-                                        </Button>
-                                    )}
-                                    {can.manage && eventId !== null && (
-                                        <>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => {
-                                                    setEditing(item);
-                                                    form.setData({ ...EMPTY, title: item.title, starts_at: `${item.date}T09:00` });
-                                                }}
-                                            >
-                                                Edit
+                                <div key={i} className="flex flex-wrap items-center gap-3 rounded-lg border p-3">
+                                    <Badge className={TONE[item.type] ?? TONE.event}>{item.label}</Badge>
+                                    <span className="font-medium">{item.title}</span>
+                                    {item.detail && <span className="text-muted-foreground text-sm">{item.detail}</span>}
+                                    <div className="ml-auto flex gap-2">
+                                        {item.url && (
+                                            <Button variant="ghost" size="sm" asChild>
+                                                <Link href={item.url}>Open</Link>
                                             </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => router.delete(route('calendar.destroy', eventId), { preserveScroll: true })}
-                                            >
-                                                Delete
-                                            </Button>
-                                        </>
-                                    )}
+                                        )}
+                                        {can.manage && eventId !== null && (
+                                            <>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setEditing(item);
+                                                        form.setData({ ...EMPTY, title: item.title, starts_at: `${item.date}T09:00` });
+                                                    }}
+                                                >
+                                                    Edit
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => router.delete(route('calendar.destroy', eventId), { preserveScroll: true })}
+                                                >
+                                                    Delete
+                                                </Button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
                             );
                         })}
                     </div>
@@ -248,11 +248,7 @@ export default function CalendarIndex({
                             </div>
                             <div className="flex items-end gap-4 md:col-span-2">
                                 <label className="flex items-center gap-2 text-sm">
-                                    <input
-                                        type="checkbox"
-                                        checked={form.data.all_day}
-                                        onChange={(e) => form.setData('all_day', e.target.checked)}
-                                    />
+                                    <input type="checkbox" checked={form.data.all_day} onChange={(e) => form.setData('all_day', e.target.checked)} />
                                     All day
                                 </label>
                                 <label className="flex items-center gap-2 text-sm">

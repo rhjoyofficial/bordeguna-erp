@@ -152,6 +152,7 @@ export default function MoneyAccountsIndex({
                         <div className="grid gap-2">
                             <Label htmlFor="type">Kind</Label>
                             <SearchSelect
+                                fit
                                 id="type"
                                 className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                                 value={data.type}
@@ -212,6 +213,7 @@ export default function MoneyAccountsIndex({
                         <div className="grid gap-2">
                             <Label htmlFor="account_id">Reports under</Label>
                             <SearchSelect
+                                fit
                                 id="account_id"
                                 className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                                 value={data.account_id}

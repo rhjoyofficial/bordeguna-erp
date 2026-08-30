@@ -44,6 +44,7 @@ export function SearchableSelect({
     clearable = false,
     invalid = false,
     searchThreshold = 8,
+    fit = false,
 }: {
     value: string;
     onChange: (value: string) => void;
@@ -58,6 +59,21 @@ export function SearchableSelect({
     clearable?: boolean;
     invalid?: boolean;
     searchThreshold?: number;
+    /**
+     * ⚠ Size to the option instead of to the column (Joy, 30 August 2026).
+     *
+     * A filter that reads "All warehouses" does not need half a screen, and a
+     * row of them stretched to equal thirds is mostly empty box. It is opt-in
+     * rather than the default because a picker INSIDE A FORM should still line
+     * up with the fields above and below it - there, full width is right.
+     *
+     * ⚠⚠ Bounded at both ends on purpose. Pure content width would make the
+     * control CHANGE SIZE as the selection changes, so the filter row would
+     * reflow under the pointer as somebody used it. The minimum keeps a short
+     * option clickable; the maximum keeps a long product name from taking the
+     * row back over.
+     */
+    fit?: boolean;
 }) {
     const [open, setOpen] = useState(false);
     const selected = options.find((option) => option.value === value);
@@ -96,7 +112,8 @@ export function SearchableSelect({
                         aria-expanded={open}
                         aria-invalid={invalid || undefined}
                         className={cn(
-                            'bg-background h-10 w-full justify-between font-normal',
+                            'bg-background h-10 justify-between font-normal',
+                            fit ? 'w-auto max-w-[18rem] min-w-[9rem]' : 'w-full',
                             (!selected || value === '') && 'text-muted-foreground',
                             invalid && 'border-destructive',
                             className,

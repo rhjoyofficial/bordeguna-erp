@@ -163,7 +163,7 @@ export default function ReturnShow({
                     <form onSubmit={submitRefund} className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
                         <div className="grid gap-2">
                             <Label>Refund from</Label>
-                            <SearchSelect value={data.money_account_id} onChange={(e) => setData('money_account_id', e.target.value)}>
+                            <SearchSelect fit value={data.money_account_id} onChange={(e) => setData('money_account_id', e.target.value)}>
                                 <option value="">Select account</option>
                                 {moneyAccounts.map((account) => (
                                     <option key={account.id} value={String(account.id)}>

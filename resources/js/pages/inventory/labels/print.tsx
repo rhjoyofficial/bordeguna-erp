@@ -69,11 +69,7 @@ export default function LabelsPrint({
 
             <div className="p-6 text-black" style={{ background: '#fff', minHeight: '100vh' }}>
                 <div className="no-print mb-4 flex flex-wrap items-center gap-3">
-                    <button
-                        type="button"
-                        onClick={() => window.print()}
-                        className="rounded bg-black px-3 py-1.5 text-sm text-white"
-                    >
+                    <button type="button" onClick={() => window.print()} className="rounded bg-black px-3 py-1.5 text-sm text-white">
                         Print
                     </button>
                     <span className="text-sm text-neutral-600">

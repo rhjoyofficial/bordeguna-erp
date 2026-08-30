@@ -65,8 +65,8 @@ export default function FinanceDashboard({
                 <div>
                     <h2 className="text-lg font-medium">Finance overview</h2>
                     <p className="text-muted-foreground text-sm">
-                        Every figure here is read from the same report that produces the statement of the same name, so this screen and the
-                        statements can never disagree.
+                        Every figure here is read from the same report that produces the statement of the same name, so this screen and the statements
+                        can never disagree.
                     </p>
                 </div>
 
@@ -104,7 +104,12 @@ export default function FinanceDashboard({
                                 <Link href="/accounting/income-statement">The statement</Link>
                             </Button>
                         </div>
-                        <PairedBars points={months} aLabel="Income" bLabel="Cost and expenses" empty="No income or costs posted in the last six months." />
+                        <PairedBars
+                            points={months}
+                            aLabel="Income"
+                            bLabel="Cost and expenses"
+                            empty="No income or costs posted in the last six months."
+                        />
                     </div>
 
                     <div className="flex flex-col gap-3 rounded-lg border p-4">

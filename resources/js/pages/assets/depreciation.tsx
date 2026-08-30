@@ -88,6 +88,7 @@ export default function Depreciation({
                         <div className="grid gap-2">
                             <Label htmlFor="month">Month</Label>
                             <SearchSelect
+                                fit
                                 id="month"
                                 className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                                 value={data.month}
