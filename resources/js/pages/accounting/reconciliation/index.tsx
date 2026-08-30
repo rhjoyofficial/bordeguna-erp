@@ -1,3 +1,4 @@
+import { ReportHeading, Verdict } from '@/components/report/report-shell';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -23,20 +24,16 @@ export default function ReconciliationIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Reconciliation" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <h1 className="text-lg font-semibold">Reconciliation</h1>
-                        <p className="text-muted-foreground max-w-2xl text-sm">
-                            Proves each subsidiary ledger agrees with its source documents: payables against supplier bills, receivables against
-                            invoices and receipts, stock against its movements. A balanced trial balance does not prove the accounting is correct;
-                            this is the check that gets closer.
-                        </p>
-                    </div>
-                    {/* C-RSC-5: fresh on every load; the button just reloads. */}
-                    <Button variant="outline" onClick={() => router.reload()}>
-                        Run again
-                    </Button>
-                </div>
+                {/* C-RSC-5: fresh on every load; the button just reloads. */}
+                <ReportHeading
+                    title="Reconciliation"
+                    description="Proves each subsidiary ledger agrees with its source documents: payables against supplier bills, receivables against invoices and receipts, stock against its movements. A balanced trial balance does not prove the accounting is correct; this is the check that gets closer."
+                    actions={
+                        <Button variant="outline" size="sm" onClick={() => router.reload()}>
+                            Run again
+                        </Button>
+                    }
+                />
 
                 {/* C-RSC-3: zero checks is NOT agreement, and the 13 Aug restore
                     drill is why this state gets its own loud box. */}
@@ -49,17 +46,11 @@ export default function ReconciliationIndex({
                         </p>
                     </div>
                 ) : (
-                    <div
-                        className={`rounded-md border px-4 py-3 text-sm ${
-                            problems.length === 0
-                                ? 'border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border'
-                                : 'border-destructive/40 bg-destructive/5 text-destructive font-medium'
-                        }`}
-                    >
+                    <Verdict tone={problems.length === 0 ? 'good' : 'bad'}>
                         {problems.length === 0
                             ? `Ran ${checks} reconciliation${checks === 1 ? '' : 's'}. Every subsidiary ledger agrees with its control account.`
                             : `Ran ${checks} reconciliation${checks === 1 ? '' : 's'}. ${problems.length} break${problems.length === 1 ? '' : 's'} found.`}
-                    </div>
+                    </Verdict>
                 )}
 
                 {problems.length > 0 && (
