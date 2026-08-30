@@ -117,6 +117,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
 
         Route::post('warehouses', [WarehouseController::class, 'store'])->name('warehouses.store');
         Route::put('warehouses/{warehouse}', [WarehouseController::class, 'update'])->name('warehouses.update');
+        Route::patch('warehouses/{warehouse}/toggle-active', [WarehouseController::class, 'toggleActive'])->name('warehouses.toggle-active');
         Route::delete('warehouses/{warehouse}', [WarehouseController::class, 'destroy'])->name('warehouses.destroy');
     });
 

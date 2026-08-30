@@ -11,6 +11,8 @@ use Inertia\Response;
 
 class WarehouseController extends Controller
 {
+    private const DEFAULT_STAYS_ON = 'The default warehouse cannot be switched off. Make another warehouse the default first.';
+
     public function index(): Response
     {
         return Inertia::render('inventory/warehouses/index', [
@@ -38,9 +40,33 @@ class WarehouseController extends Controller
             'is_active' => ['required', 'boolean'],
         ]);
 
+        if ($warehouse->is_default && ! $data['is_active']) {
+            return back()->with('error', self::DEFAULT_STAYS_ON);
+        }
+
         $warehouse->update($data);
 
         return back()->with('success', 'Warehouse updated.');
+    }
+
+    /**
+     * The status on the warehouses page is a control, not a label (30 Aug 2026
+     * audit). Same shape as brands: switch off, never delete, because stock
+     * batches and documents keep pointing at the warehouse.
+     *
+     * ⚠ THE DEFAULT WAREHOUSE STAYS ON. Every stock document that does not
+     * name a warehouse lands in the default one; an inactive default would
+     * make the next receipt fail somewhere far from this screen.
+     */
+    public function toggleActive(Warehouse $warehouse): RedirectResponse
+    {
+        if ($warehouse->is_default && $warehouse->is_active) {
+            return back()->with('error', self::DEFAULT_STAYS_ON);
+        }
+
+        $warehouse->update(['is_active' => ! $warehouse->is_active]);
+
+        return back()->with('success', $warehouse->is_active ? 'Warehouse switched on.' : 'Warehouse switched off. Its stock and documents are untouched.');
     }
 
     public function destroy(Warehouse $warehouse): RedirectResponse
