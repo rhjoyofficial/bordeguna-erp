@@ -22,6 +22,11 @@ class FoundationServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
+        // ⚠ The data assistant's read-only connection, derived from the app's
+        // own so it follows whatever driver is in use, with the SELECT-only
+        // credentials swapped in when they are configured.
+        \App\Modules\Foundation\Support\Ai\ReadOnlyConnection::register();
+
         if ($this->app->runningInConsole()) {
             $this->commands([TeardownSandbox::class, CutoverPreflight::class]);
 
