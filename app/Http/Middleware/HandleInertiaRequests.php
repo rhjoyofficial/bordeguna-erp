@@ -52,6 +52,30 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
             ],
+
+            // ⚠⚠ FLASHED PREVIEWS. Found dead on 30 August 2026, and this is
+            // dead engine #9 in the same family as #7 and #8.
+            //
+            // Three controllers answered a dry-run with `back()->with('...')`
+            // and three React pages read `usePage().props.<key>` - and NOTHING
+            // JOINED THE TWO. A flashed session key is not an Inertia prop; only
+            // what is shared here or passed to Inertia::render ever reaches a
+            // page. So every preview came back undefined and the panel silently
+            // did not render.
+            //
+            // ⚠⚠ THE TESTS WERE ALL GREEN because they asserted
+            // `assertSessionHas(...)` - the half that worked. That is the exact
+            // failure the reachability rule keeps catching: a test anchored to
+            // the server's own bookkeeping instead of to what the screen is
+            // handed. ⛔ Assert the PROP.
+            //
+            // What was invisible matters: `contactImportPlan` is Joy's standing
+            // requirement that an importer must preview before it applies, and
+            // `campaignPreview` is the FIRST of the three brakes on a module
+            // that spends money by itself. Both were built, tested and unseen.
+            'contactImportPlan' => fn () => $request->session()->get('contactImportPlan'),
+            'campaignPreview' => fn () => $request->session()->get('campaignPreview'),
+            'test_result' => fn () => $request->session()->get('test_result'),
             // W3. The business this page was BUILT for, which is not the same
             // thing as the business the session holds by the time somebody
             // clicks a button in it. The client sends it back on every mutating
