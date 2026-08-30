@@ -1,3 +1,4 @@
+import { Field, FormRow } from '@/components/form/field';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
@@ -335,9 +336,8 @@ export default function AiProviders() {
                     </form>
 
                     <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <div className="grid gap-2">
-                                <Label htmlFor="provider">Provider</Label>
+                        <FormRow>
+                            <Field label="Provider" htmlFor="provider">
                                 <SearchSelect id="provider" value={form.data.provider} onChange={(e) => form.setData('provider', e.target.value)}>
                                     {Object.entries(providers).map(([value, name]) => (
                                         <option key={value} value={value}>
@@ -345,12 +345,26 @@ export default function AiProviders() {
                                         </option>
                                     ))}
                                 </SearchSelect>
-                            </div>
+                            </Field>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="model">Model (optional)</Label>
+                            <Field
+                                label="Model (optional)"
+                                htmlFor="model"
+                                size="grow"
+                                error={form.errors.model}
+                                hint={
+                                    Object.keys(choices).length > 0
+                                        ? 'Chosen from what this provider says the key can run, so a model name cannot be mistyped.'
+                                        : 'Save the key first; the list of models it can run is then read from the provider.'
+                                }
+                            >
                                 {Object.keys(choices).length > 0 ? (
-                                    <SearchSelect id="model" value={form.data.model} onChange={(e) => form.setData('model', e.target.value)}>
+                                    <SearchSelect
+                                        id="model"
+                                        fit={false}
+                                        value={form.data.model}
+                                        onChange={(e) => form.setData('model', e.target.value)}
+                                    >
                                         <option value="">Provider default</option>
                                         {Object.entries(choices).map(([id, name]) => (
                                             <option key={id} value={id}>
@@ -366,38 +380,30 @@ export default function AiProviders() {
                                         onChange={(e) => form.setData('model', e.target.value)}
                                     />
                                 )}
-                                <p className="text-muted-foreground text-xs">
-                                    {Object.keys(choices).length > 0
-                                        ? 'Chosen from what this provider says the key can run, so a model name cannot be mistyped.'
-                                        : 'Save the key first; the list of models it can run is then read from the provider.'}
-                                </p>
-                                {form.errors.model && <p className="text-sm text-red-600">{form.errors.model}</p>}
-                            </div>
-                        </div>
+                            </Field>
+                        </FormRow>
 
-                        <div className="grid gap-2">
-                            <Label htmlFor="label">Label (optional)</Label>
-                            <Input
-                                id="label"
-                                value={form.data.label}
-                                placeholder="Main account"
-                                onChange={(e) => form.setData('label', e.target.value)}
-                            />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="secret">API key</Label>
-                            <Input
-                                id="secret"
-                                type="password"
-                                autoComplete="off"
-                                spellCheck={false}
-                                value={form.data.secret}
-                                placeholder="Paste the key here"
-                                onChange={(e) => form.setData('secret', e.target.value)}
-                            />
-                            {form.errors.secret && <p className="text-sm text-red-600">{form.errors.secret}</p>}
-                        </div>
+                        <FormRow>
+                            <Field label="Label (optional)" htmlFor="label" size="md">
+                                <Input
+                                    id="label"
+                                    value={form.data.label}
+                                    placeholder="Main account"
+                                    onChange={(e) => form.setData('label', e.target.value)}
+                                />
+                            </Field>
+                            <Field label="API key" htmlFor="secret" size="grow" error={form.errors.secret}>
+                                <Input
+                                    id="secret"
+                                    type="password"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    value={form.data.secret}
+                                    placeholder="Paste the key here"
+                                    onChange={(e) => form.setData('secret', e.target.value)}
+                                />
+                            </Field>
+                        </FormRow>
 
                         <Button type="submit" disabled={form.processing || form.data.secret.trim() === ''}>
                             Save key
