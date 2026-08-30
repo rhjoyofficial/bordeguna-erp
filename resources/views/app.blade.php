@@ -16,6 +16,17 @@
              to one utility class rather than to any element. --}}
         <link href="https://fonts.bunny.net/css?family=geist:400,500,600,700|berkshire-swash:400" rel="stylesheet" />
 
+        {{-- The face official documents are set in, chosen per business in
+             Settings. Emitted server-side rather than applied from React so it
+             is present in the very first paint: a print dialog opened before
+             hydration must already be on the right font, and a document that
+             prints in one face and re-renders in another is the failure this
+             whole exercise is about.
+
+             ⚠ ONLY the document variable. The interface keeps its own font -
+             Joy was explicit that the sidebar and headings stay as they are. --}}
+        <style>:root { --font-document: {!! \App\Modules\Foundation\Support\FontCatalogue::stack(\App\Modules\Foundation\Support\DocumentFont::current()) !!}; }</style>
+
         @routes
         @viteReactRefresh
         @vite(['resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])

@@ -18,6 +18,7 @@ interface BusinessProfile {
     address: string | null;
     phone: string | null;
     email: string | null;
+    document_font: string | null;
     currency: string;
     timezone: string;
     fiscal_year_start_month: number;
@@ -25,14 +26,28 @@ interface BusinessProfile {
     wfh_monthly_cap: number;
 }
 
+interface FontChoice {
+    value: string;
+    label: string;
+    category: string;
+    note: string;
+    pdf: boolean;
+    stack: string;
+}
+
 interface BusinessProps {
     business: BusinessProfile;
     logo_url: string | null;
     currencies: string[];
     timezones: string[];
+    fonts: FontChoice[];
+    default_font: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Business', href: '/settings/business' }];
+
+/* A bilingual sample: Latin, Bangla and digits in one line. */
+const PREVIEW = 'Bor de Guna - বর দে গুনা - 1,234.56';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -99,19 +114,22 @@ function LogoSection({ logoUrl }: { logoUrl: string | null }) {
     );
 }
 
-export default function Business({ business, logo_url, currencies, timezones }: BusinessProps) {
+export default function Business({ business, logo_url, currencies, timezones, fonts, default_font }: BusinessProps) {
     const { data, setData, patch, errors, processing, recentlySuccessful } = useForm({
         name: business.name,
         legal_name: business.legal_name ?? '',
         address: business.address ?? '',
         phone: business.phone ?? '',
         email: business.email ?? '',
+        document_font: business.document_font ?? default_font,
         currency: business.currency,
         timezone: business.timezone,
         fiscal_year_start_month: business.fiscal_year_start_month,
         payroll_cycle_start_day: business.payroll_cycle_start_day,
         wfh_monthly_cap: business.wfh_monthly_cap,
     });
+
+    const chosenFont = fonts.find((font) => font.value === data.document_font);
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -171,6 +189,55 @@ export default function Business({ business, logo_url, currencies, timezones }: 
                                 <Input id="email" type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} />
                                 <InputError message={errors.email} />
                             </div>
+                        </div>
+
+                        {/* The face official documents are set in. Only this one
+                            is a setting: the sidebar and the headings stay in
+                            the interface font until Joy says otherwise. */}
+                        <div className="grid gap-2">
+                            <Label htmlFor="document_font">Font for official documents</Label>
+                            <SearchSelect
+                                fit
+                                id="document_font"
+                                value={data.document_font}
+                                onChange={(e) => setData('document_font', e.target.value)}
+                            >
+                                {fonts.map((font) => (
+                                    <option key={font.value} value={font.value}>
+                                        {font.label} ({font.category})
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                            <InputError message={errors.document_font} />
+
+                            {chosenFont && (
+                                <>
+                                    {/* ⚠ Both scripts and a number in ONE line. That is
+                                        what these documents actually carry, and it is the
+                                        only way to see whether a single face handles all
+                                        of it rather than the browser quietly borrowing a
+                                        second font for the Bangla. */}
+                                    <p className="rounded-md border p-3 text-lg" style={{ fontFamily: chosenFont.stack }}>
+                                        {PREVIEW}
+                                    </p>
+                                    <p className="text-muted-foreground max-w-2xl text-xs">{chosenFont.note}</p>
+                                </>
+                            )}
+
+                            {chosenFont && !chosenFont.pdf && (
+                                <p className="max-w-2xl rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-xs">
+                                    Used everywhere a document is printed from the browser, but <strong>not in the payslip PDF</strong>, which is
+                                    built by a renderer that can only read plain TrueType from disk. Payslips keep the default face rather than
+                                    silently falling back to one that cannot write Bangla at all.
+                                </p>
+                            )}
+
+                            {data.document_font !== default_font && (
+                                <p className="max-w-2xl rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-xs">
+                                    Office Circular BdG-HQ-OD-26071201 names <strong>Tiro Bangla</strong> as the official font for documents leaving
+                                    the organisation. Changing this is a decision to depart from that circular.
+                                </p>
+                            )}
                         </div>
 
                         <div className="grid gap-4 sm:grid-cols-3">

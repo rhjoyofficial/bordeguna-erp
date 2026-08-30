@@ -95,6 +95,42 @@
 }
 
 /*
+  The rest of the document faces, for the setting that chooses between them.
+
+  ⚠ Every one covers Bangla AND Latin in a single family. That is the entry
+  requirement, not a preference: this business writes bilingual lines, and a
+  face that covers only one script does not fail loudly - the browser quietly
+  borrows a second font for the other half, and the document goes out in two
+  typefaces nobody picked together.
+
+  ⚠ These three are served as .ttf rather than subset woff2. They are the
+  alternatives, not the default, and shipping one file per family beats
+  maintaining twenty-four subset files for faces that may never be chosen. The
+  default face, Tiro Bangla, keeps its optimised woff2 subsets above.
+*/
+@font-face {
+    font-family: 'Noto Serif Bengali';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/fonts/library/NotoSerifBengali-Variable.ttf') format('truetype-variations');
+}
+@font-face {
+    font-family: 'Noto Sans Bengali';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/fonts/library/NotoSansBengali-Variable.ttf') format('truetype-variations');
+}
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/library/HindSiliguri-Regular.ttf') format('truetype');
+}
+
+/*
   The paper. Everything inside inherits the official face.
 
   ⚠ Inherited rather than forced onto every descendant with `*`. A reference
@@ -102,7 +138,11 @@
   back over the phone, and a rule that shouted over it would undo that.
 */
 .official-document {
-    font-family: 'Tiro Bangla', 'Noto Serif Bengali', Georgia, serif;
+    /* ⚠ The fallback is the WHOLE default stack, not a bare family. If the
+       variable is ever missing the paper must still land on a face that can
+       write Bangla, rather than on the browser's default - which on a lot of
+       machines cannot. */
+    font-family: var(--font-document, 'Tiro Bangla', 'Noto Serif Bengali', Georgia, serif);
     /* The face runs small for its size beside Geist. */
     font-size: 0.95rem;
 }

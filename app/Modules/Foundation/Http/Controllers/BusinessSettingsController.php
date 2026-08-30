@@ -7,6 +7,7 @@ use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\FontCatalogue;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -34,11 +35,25 @@ class BusinessSettingsController extends Controller
 
         return Inertia::render('settings/business', [
             'business' => $business->only([
-                'id', 'name', 'legal_name', 'address', 'phone', 'email', 'currency', 'timezone', 'fiscal_year_start_month', 'payroll_cycle_start_day', 'wfh_monthly_cap',
+                'id', 'name', 'legal_name', 'address', 'phone', 'email', 'document_font', 'currency', 'timezone', 'fiscal_year_start_month', 'payroll_cycle_start_day', 'wfh_monthly_cap',
             ]),
             'logo_url' => $logo?->url(),
             'currencies' => self::CURRENCIES,
             'timezones' => self::TIMEZONES,
+            // The faces a document may be set in, with the note explaining each
+            // one and whether it survives the PDF path. See FontCatalogue.
+            'fonts' => collect(FontCatalogue::all())
+                ->map(fn (array $font, string $key) => [
+                    'value' => $key,
+                    'label' => $font['label'],
+                    'category' => $font['category'],
+                    'note' => $font['note'],
+                    'pdf' => $font['pdf'],
+                    'stack' => $font['stack'],
+                ])
+                ->values()
+                ->all(),
+            'default_font' => FontCatalogue::DEFAULT,
         ]);
     }
 
@@ -54,6 +69,10 @@ class BusinessSettingsController extends Controller
             'address' => ['nullable', 'string', 'max:1000'],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
+            // The face official documents are set in. Constrained to the
+            // catalogue: a free-text family name would be a font that exists
+            // on the machine that typed it and nowhere else.
+            'document_font' => ['nullable', Rule::in(FontCatalogue::keys())],
             'currency' => ['required', Rule::in(self::CURRENCIES)],
             'timezone' => ['required', 'timezone'],
             'fiscal_year_start_month' => ['required', 'integer', 'between:1,12'],

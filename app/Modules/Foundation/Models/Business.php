@@ -20,6 +20,7 @@ class Business extends Model
         'address',
         'phone',
         'email',
+        'document_font',
         'currency',
         'timezone',
         'fiscal_year_start_month',

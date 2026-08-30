@@ -3,6 +3,8 @@
 namespace App\Modules\Hrm\Payroll\Payslip;
 
 use App\Models\User;
+use App\Modules\Foundation\Support\DocumentFont;
+use App\Modules\Foundation\Support\FontCatalogue;
 use App\Modules\Hrm\Models\Payslip;
 use Dompdf\Adapter\CPDF;
 use Dompdf\Dompdf;
@@ -85,16 +87,19 @@ class PayslipPdf
         // test that cannot fail.
         $options->set('chroot', [public_path()]);
 
-        // Office Circular BdG-HQ-OD-26071201: Tiro Bangla is the official face
-        // for documents that leave the organisation, and a payslip emailed to
-        // an employee is one of them.
+        // Office Circular BdG-HQ-OD-26071201: an official face for documents
+        // that leave the organisation, and a payslip emailed to an employee is
+        // one of them. Which face is now a per-business setting; the catalogue
+        // answers with the default for anything a PDF cannot actually render.
         //
-        // ⚠⚠ IT IS ALSO THE ONLY FONT HERE THAT CAN WRITE BANGLA AT ALL. The
-        // previous default, DejaVu Sans, HAS NO BENGALI GLYPHS - an employee
-        // whose name is spelled in Bangla came out as a row of empty boxes on
-        // their own payslip. That was never a styling preference; it was a
-        // document that could not say who it belonged to.
-        $options->set('defaultFont', 'Tiro Bangla');
+        // ⚠⚠ WHATEVER IS CHOSEN, IT CAN WRITE BANGLA. The previous default,
+        // DejaVu Sans, HAS NO BENGALI GLYPHS - an employee whose name is spelled
+        // in Bangla came out as a row of empty boxes on their own payslip. That
+        // was never a styling preference; it was a document that could not say
+        // who it belonged to. Every face in the catalogue covers both scripts.
+        $font = FontCatalogue::forPdf(DocumentFont::current());
+
+        $options->set('defaultFont', $font['family']);
 
         $options->set('fontCache', $this->fontCacheDirectory());
 
@@ -102,6 +107,7 @@ class PayslipPdf
         $dompdf->loadHtml(View::make('hrm.payslip', [
             'doc' => $this->document->build($payslip, $generatedBy),
             'protected' => $protected,
+            'font' => $font,
         ])->render());
         $dompdf->setPaper('A4');
         $dompdf->render();

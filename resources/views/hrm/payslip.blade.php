@@ -27,21 +27,14 @@
       a Bangla employee name used to print as empty boxes.
     */
     @font-face {
-        font-family: "Tiro Bangla";
+        font-family: "{{ $font['family'] }}";
         font-style: normal;
         font-weight: normal;
-        src: url("{{ public_path('fonts/tiro-bangla/TiroBangla-Regular.ttf') }}") format("truetype");
-    }
-
-    @font-face {
-        font-family: "Tiro Bangla";
-        font-style: italic;
-        font-weight: normal;
-        src: url("{{ public_path('fonts/tiro-bangla/TiroBangla-Italic.ttf') }}") format("truetype");
+        src: url("{{ public_path($font['ttf']) }}") format("truetype");
     }
 
     body {
-        font-family: "Tiro Bangla", "DejaVu Sans", sans-serif;
+        font-family: "{{ $font['family'] }}", "DejaVu Sans", sans-serif;
         font-size: 10px;
         color: #1f2937;
     }
