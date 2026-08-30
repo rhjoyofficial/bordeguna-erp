@@ -151,13 +151,7 @@ export default function MoneyAccountsIndex({
 
                         <div className="grid gap-2">
                             <Label htmlFor="type">Kind</Label>
-                            <SearchSelect
-                                fit
-                                id="type"
-                                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                                value={data.type}
-                                onChange={(e) => setData('type', e.target.value)}
-                            >
+                            <SearchSelect fit id="type" value={data.type} onChange={(e) => setData('type', e.target.value)}>
                                 {types.map((type) => (
                                     <option key={type.value} value={type.value}>
                                         {type.label}
@@ -212,13 +206,7 @@ export default function MoneyAccountsIndex({
 
                         <div className="grid gap-2">
                             <Label htmlFor="account_id">Reports under</Label>
-                            <SearchSelect
-                                fit
-                                id="account_id"
-                                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                                value={data.account_id}
-                                onChange={(e) => setData('account_id', e.target.value)}
-                            >
+                            <SearchSelect fit id="account_id" value={data.account_id} onChange={(e) => setData('account_id', e.target.value)}>
                                 <option value="">Not decided yet</option>
                                 {ledgerAccounts.map((account) => (
                                     <option key={account.id} value={account.id}>

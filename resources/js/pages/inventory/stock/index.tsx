@@ -78,11 +78,7 @@ function ReasonSelect({ reasons, value, onChange, error }: { reasons: Option[]; 
     return (
         <div className="grid gap-2">
             <Label>Reason</Label>
-            <SearchSelect
-                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-            >
+            <SearchSelect value={value} onChange={(e) => onChange(e.target.value)}>
                 <option value="">Select reason</option>
                 {reasons.map((r) => (
                     <option key={r.id} value={r.id}>
@@ -139,11 +135,7 @@ function DirectAdjustmentForm({ products, warehouses, reasons }: { products: Opt
             />
             <div className="grid gap-2">
                 <Label>Direction</Label>
-                <SearchSelect
-                    className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                    value={data.direction}
-                    onChange={(e) => setData('direction', e.target.value)}
-                >
+                <SearchSelect value={data.direction} onChange={(e) => setData('direction', e.target.value)}>
                     <option value="increase">Increase</option>
                     <option value="decrease">Decrease</option>
                 </SearchSelect>
@@ -216,11 +208,7 @@ function DirectTransferForm({ products, warehouses, reasons }: { products: Optio
             />
             <div className="grid gap-2">
                 <Label>To warehouse</Label>
-                <SearchSelect
-                    className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                    value={data.target_warehouse_id}
-                    onChange={(e) => setData('target_warehouse_id', e.target.value)}
-                >
+                <SearchSelect value={data.target_warehouse_id} onChange={(e) => setData('target_warehouse_id', e.target.value)}>
                     <option value="">Select warehouse</option>
                     {warehouses.map((w) => (
                         <option key={w.id} value={w.id}>
@@ -289,11 +277,7 @@ function RequestAdjustmentForm({
             <p className="text-muted-foreground col-span-full text-sm">Needs Manager approval before stock actually changes.</p>
             <div className="grid gap-2">
                 <Label>Request type</Label>
-                <SearchSelect
-                    className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                    value={data.type}
-                    onChange={(e) => setData({ ...data, type: e.target.value, reason_id: '' })}
-                >
+                <SearchSelect value={data.type} onChange={(e) => setData({ ...data, type: e.target.value, reason_id: '' })}>
                     <option value="adjustment">Adjustment</option>
                     <option value="transfer">Transfer</option>
                 </SearchSelect>
@@ -310,11 +294,7 @@ function RequestAdjustmentForm({
             {data.type === 'transfer' && (
                 <div className="grid gap-2">
                     <Label>To warehouse</Label>
-                    <SearchSelect
-                        className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                        value={data.target_warehouse_id}
-                        onChange={(e) => setData('target_warehouse_id', e.target.value)}
-                    >
+                    <SearchSelect value={data.target_warehouse_id} onChange={(e) => setData('target_warehouse_id', e.target.value)}>
                         <option value="">Select warehouse</option>
                         {warehouses.map((w) => (
                             <option key={w.id} value={w.id}>
@@ -328,11 +308,7 @@ function RequestAdjustmentForm({
             {data.type === 'adjustment' && (
                 <div className="grid gap-2">
                     <Label>Direction</Label>
-                    <SearchSelect
-                        className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                        value={data.direction}
-                        onChange={(e) => setData('direction', e.target.value)}
-                    >
+                    <SearchSelect value={data.direction} onChange={(e) => setData('direction', e.target.value)}>
                         <option value="increase">Increase</option>
                         <option value="decrease">Decrease</option>
                     </SearchSelect>

@@ -122,13 +122,7 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="journal_type">Kind</Label>
-                        <SearchSelect
-                            fit
-                            id="journal_type"
-                            className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                            value={data.journal_type}
-                            onChange={(e) => setData('journal_type', e.target.value)}
-                        >
+                        <SearchSelect fit id="journal_type" value={data.journal_type} onChange={(e) => setData('journal_type', e.target.value)}>
                             {types.map((type) => (
                                 <option key={type.value} value={type.value}>
                                     {type.label}
@@ -167,7 +161,6 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                                         <SearchSelect
                                             fit
                                             aria-label={`Account for line ${index + 1}`}
-                                            className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
                                             value={line.account_id}
                                             onChange={(e) => setLine(index, 'account_id', e.target.value)}
                                         >

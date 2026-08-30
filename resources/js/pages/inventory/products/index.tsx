@@ -225,12 +225,7 @@ export default function ProductsIndex({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="type">Type</Label>
-                        <SearchSelect
-                            id="type"
-                            className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                            value={data.type}
-                            onChange={(e) => setData('type', e.target.value)}
-                        >
+                        <SearchSelect id="type" value={data.type} onChange={(e) => setData('type', e.target.value)}>
                             {PRODUCT_TYPES.map((t) => (
                                 <option key={t.value} value={t.value}>
                                     {t.label}
@@ -240,12 +235,7 @@ export default function ProductsIndex({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="category_id">Category</Label>
-                        <SearchSelect
-                            id="category_id"
-                            className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                            value={data.category_id}
-                            onChange={(e) => setData('category_id', e.target.value)}
-                        >
+                        <SearchSelect id="category_id" value={data.category_id} onChange={(e) => setData('category_id', e.target.value)}>
                             <option value="">None</option>
                             {categories.map((c) => (
                                 <option key={c.id} value={c.id}>
@@ -256,12 +246,7 @@ export default function ProductsIndex({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="brand_id">Brand</Label>
-                        <SearchSelect
-                            id="brand_id"
-                            className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                            value={data.brand_id}
-                            onChange={(e) => setData('brand_id', e.target.value)}
-                        >
+                        <SearchSelect id="brand_id" value={data.brand_id} onChange={(e) => setData('brand_id', e.target.value)}>
                             {/* ⚠ "None" is a legitimate answer, not a blank. Raw
                                 materials have no brand (D-5). */}
                             <option value="">None</option>
@@ -280,7 +265,6 @@ export default function ProductsIndex({
                         <Label htmlFor="unit_of_measure_id">Unit</Label>
                         <SearchSelect
                             id="unit_of_measure_id"
-                            className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
                             value={data.unit_of_measure_id}
                             onChange={(e) => setData('unit_of_measure_id', e.target.value)}
                         >
@@ -295,12 +279,7 @@ export default function ProductsIndex({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="tax_class_id">Tax class</Label>
-                        <SearchSelect
-                            id="tax_class_id"
-                            className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                            value={data.tax_class_id}
-                            onChange={(e) => setData('tax_class_id', e.target.value)}
-                        >
+                        <SearchSelect id="tax_class_id" value={data.tax_class_id} onChange={(e) => setData('tax_class_id', e.target.value)}>
                             {/* ⚠⚠ "Not classified" is NOT zero-rated. It means nobody
                                 has decided yet, and it falls back to the business
                                 default when VAT is switched on. The two are wrong in

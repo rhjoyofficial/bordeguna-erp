@@ -116,13 +116,7 @@ export default function AssetsIndex({
                               Cash at Bank and Stock on Hand - a list whose choices are
                               overwhelmingly wrong.
                             */}
-                            <SearchSelect
-                                fit
-                                id="account_id"
-                                className="w-64"
-                                value={data.account_id}
-                                onChange={(e) => setData('account_id', e.target.value)}
-                            >
+                            <SearchSelect fit id="account_id" value={data.account_id} onChange={(e) => setData('account_id', e.target.value)}>
                                 <option value="">Choose an asset account</option>
                                 {assetAccounts.map((account) => (
                                     <option key={account.id} value={account.id}>

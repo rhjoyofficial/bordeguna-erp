@@ -303,7 +303,6 @@ export default function HrmDashboard({ widgets, trend, attention, distribution, 
                         <Label htmlFor="office_id">Office</Label>
                         <SearchSelect
                             id="office_id"
-                            className="border-input bg-background h-9 rounded-md border px-3 text-sm"
                             value={values.office_id ?? ''}
                             onChange={(e) => apply({ ...values, office_id: e.target.value ? Number(e.target.value) : null })}
                         >
@@ -320,7 +319,7 @@ export default function HrmDashboard({ widgets, trend, attention, distribution, 
                         <Label htmlFor="department_id">Department</Label>
                         <SearchSelect
                             id="department_id"
-                            className="border-input bg-background h-9 rounded-md border px-3 text-sm disabled:opacity-70"
+                            className="disabled:opacity-70"
                             disabled={department_locked}
                             value={values.department_id ?? ''}
                             onChange={(e) => apply({ ...values, department_id: e.target.value ? Number(e.target.value) : null })}

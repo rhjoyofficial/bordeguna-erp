@@ -193,7 +193,7 @@ export default function ReportShow({ report, parameters, columns, formats, queue
                                     {['office', 'department', 'employee', 'payroll_run', 'period', 'select'].includes(parameter.type) && (
                                         <SearchSelect
                                             id={parameter.key}
-                                            className="border-input bg-background h-9 rounded-md border px-3 text-sm disabled:opacity-70"
+                                            className="disabled:opacity-70"
                                             disabled={parameter.locked}
                                             value={values[parameter.key] ?? ''}
                                             onChange={(e) => set(parameter.key, e.target.value)}

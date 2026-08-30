@@ -116,7 +116,6 @@ export default function GeneralLedgerIndex({
                             id="account"
                             value={filters.account}
                             onChange={(e) => setFilters({ ...filters, account: e.target.value, party: '' })}
-                            className="border-input bg-background h-9 w-80 rounded-md border px-3 text-sm"
                         >
                             <option value="">Choose an account</option>
                             {accounts.map((option) => (
@@ -137,13 +136,7 @@ export default function GeneralLedgerIndex({
                     {parties.length > 0 && (
                         <div className="grid gap-2">
                             <Label htmlFor="party">Party</Label>
-                            <SearchSelect
-                                fit
-                                id="party"
-                                value={filters.party}
-                                onChange={(e) => setFilters({ ...filters, party: e.target.value })}
-                                className="border-input bg-background h-9 w-56 rounded-md border px-3 text-sm"
-                            >
+                            <SearchSelect fit id="party" value={filters.party} onChange={(e) => setFilters({ ...filters, party: e.target.value })}>
                                 <option value="">Everyone</option>
                                 {parties.map((option) => (
                                     <option key={`${option.type}:${option.id}`} value={`${option.type}:${option.id}`}>

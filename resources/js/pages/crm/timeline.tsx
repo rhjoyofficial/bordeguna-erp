@@ -315,7 +315,6 @@ export default function CrmTimeline({
                             <SearchSelect
                                 fit
                                 id="interest_target"
-                                className="w-64"
                                 value={
                                     interestKind === 'product'
                                         ? interest.data.product_id
@@ -421,7 +420,7 @@ export default function CrmTimeline({
                                         {canRecord && i.status === 'open' && (
                                             <SearchSelect
                                                 aria-label={`Close interest ${i.id}`}
-                                                className="border-input bg-background h-8 rounded-md border px-2 text-xs"
+                                                className="text-xs"
                                                 value=""
                                                 onChange={(e) =>
                                                     e.target.value &&

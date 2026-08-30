@@ -388,7 +388,7 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                                 type="date"
                                 defaultValue={filters.from}
                                 onChange={(e) => setMyFrom(e.target.value)}
-                                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
+                                className="border-input bg-background h-10 w-auto rounded-md border px-3 text-sm"
                             />
                         </div>
                         <div className="grid gap-1.5">
@@ -400,7 +400,7 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                                 type="date"
                                 defaultValue={filters.to}
                                 onChange={(e) => setMyTo(e.target.value)}
-                                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
+                                className="border-input bg-background h-10 w-auto rounded-md border px-3 text-sm"
                             />
                         </div>
                         <div className="grid gap-1.5">

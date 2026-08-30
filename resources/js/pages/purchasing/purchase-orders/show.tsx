@@ -401,11 +401,7 @@ export default function PurchaseOrderShow({
                     {can_update_payment && order.approval_request.status === 'approved' && (
                         <div className="flex items-center gap-2">
                             <Label className="text-muted-foreground text-xs">Payment:</Label>
-                            <SearchSelect
-                                className="border-input bg-background h-9 w-full min-w-0 rounded-md border px-2 text-sm capitalize"
-                                value={order.payment_status}
-                                onChange={(e) => setPaymentStatus(e.target.value)}
-                            >
+                            <SearchSelect className="capitalize" value={order.payment_status} onChange={(e) => setPaymentStatus(e.target.value)}>
                                 <option value="unpaid">Unpaid</option>
                                 <option value="partially_paid">Partially paid</option>
                                 <option value="paid">Paid</option>
