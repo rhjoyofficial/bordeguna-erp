@@ -1,13 +1,13 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
-import { ReportHeading } from '@/components/report/report-shell';
+import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
+import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
@@ -87,9 +87,11 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
     return (
         <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
             <h3 className="font-medium">New purchase order</h3>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="grid gap-2">
-                    <Label>Supplier</Label>
+            {/* Header fields as wide as what they hold (30 Aug 2026 audit): the
+                two pickers fit their names, the date sizes itself, the note
+                takes what is left. */}
+            <FormRow className="gap-3">
+                <Field label="Supplier" error={errors.supplier_id}>
                     <SearchableSelect
                         value={data.supplier_id}
                         onChange={(v) => setData('supplier_id', v)}
@@ -97,10 +99,8 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
                         placeholder="Select supplier"
                         searchPlaceholder="Search suppliers…"
                     />
-                    <InputError message={errors.supplier_id} />
-                </div>
-                <div className="grid gap-2">
-                    <Label>Receiving warehouse</Label>
+                </Field>
+                <Field label="Receiving warehouse" error={errors.warehouse_id}>
                     <SearchableSelect
                         value={data.warehouse_id}
                         onChange={(v) => setData('warehouse_id', v)}
@@ -108,23 +108,20 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
                         placeholder="Select warehouse"
                         searchPlaceholder="Search warehouses…"
                     />
-                    <InputError message={errors.warehouse_id} />
-                </div>
-                <div className="grid gap-2">
-                    <Label>Expected date (optional)</Label>
+                </Field>
+                <Field label="Expected date (optional)">
                     <Input type="date" value={data.expected_date} onChange={(e) => setData('expected_date', e.target.value)} />
-                </div>
-                <div className="grid gap-2">
-                    <Label>Note (optional)</Label>
+                </Field>
+                <Field label="Note (optional)" size="grow">
                     <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
-                </div>
-            </div>
+                </Field>
+            </FormRow>
 
             <div className="flex flex-col gap-2">
-                <Label>Line items</Label>
+                <p className="text-sm font-medium">Line items</p>
                 {data.lines.map((line, index) => (
-                    <div key={index} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[2fr_1fr_1fr_auto]">
-                        <div className="grid gap-1">
+                    <div key={index} className="flex flex-wrap items-start gap-2">
+                        <div className="grid min-w-64 flex-1 gap-1">
                             <SearchableSelect
                                 value={line.product_id}
                                 onChange={(v) => updateLine(index, { product_id: v })}
@@ -134,11 +131,11 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
                             />
                             <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
                         </div>
-                        <div className="grid gap-1">
+                        <div className="grid w-24 gap-1">
                             <Input placeholder="Quantity" value={line.quantity} onChange={(e) => updateLine(index, { quantity: e.target.value })} />
                             <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                         </div>
-                        <div className="grid gap-1">
+                        <div className="grid w-36 gap-1">
                             <Input
                                 placeholder="Unit cost"
                                 value={line.unit_cost}
@@ -146,7 +143,14 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
                             />
                             <InputError message={errors[`lines.${index}.unit_cost` as keyof typeof errors]} />
                         </div>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeLine(index)} disabled={data.lines.length === 1}>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-10"
+                            onClick={() => removeLine(index)}
+                            disabled={data.lines.length === 1}
+                        >
                             Remove
                         </Button>
                     </div>
@@ -208,51 +212,53 @@ export default function PurchaseOrdersIndex({
                     </FilterField>
                 </FilterBar>
 
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
-                            <th className="py-2">PO #</th>
-                            <th className="py-2">Supplier</th>
-                            <th className="py-2">Warehouse</th>
-                            <th className="py-2">Qty ordered</th>
-                            <th className="py-2">Approval</th>
-                            <th className="py-2">Status</th>
-                            <th className="py-2">Payment</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {orders.data.map((order) => (
-                            <tr key={order.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                <td className="py-2">
-                                    <Link href={route('purchasing.purchase-orders.show', order.id)} className="underline">
-                                        {order.po_number}
-                                    </Link>
-                                </td>
-                                <td className="text-muted-foreground py-2">{order.supplier.name}</td>
-                                <td className="text-muted-foreground py-2">{order.warehouse.name}</td>
-                                <td className="py-2">{order.total_ordered}</td>
-                                <td className="py-2">
-                                    <Badge variant={approvalVariant[order.approval_request.status]} className="capitalize">
-                                        {order.approval_request.status}
-                                    </Badge>
-                                </td>
-                                <td className="py-2">
-                                    <Badge variant={statusVariant[order.status]} className="capitalize">
-                                        {order.status.replace('_', ' ')}
-                                    </Badge>
-                                </td>
-                                <td className="text-muted-foreground py-2 capitalize">{order.payment_status.replace('_', ' ')}</td>
-                            </tr>
-                        ))}
-                        {orders.data.length === 0 && (
+                <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full text-sm">
+                        <thead className="bg-muted/50 text-left">
                             <tr>
-                                <td colSpan={7} className="text-muted-foreground py-4 text-center">
-                                    {hasActiveFilters ? 'No purchase orders match these filters.' : 'No purchase orders yet.'}
-                                </td>
+                                <th className="p-3">PO #</th>
+                                <th className="p-3">Supplier</th>
+                                <th className="p-3">Warehouse</th>
+                                <th className="p-3 text-right">Qty ordered</th>
+                                <th className="p-3">Approval</th>
+                                <th className="p-3">Status</th>
+                                <th className="p-3">Payment</th>
                             </tr>
-                        )}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {orders.data.map((order) => (
+                                <tr key={order.id} className="border-t">
+                                    <td className="p-3">
+                                        <Link href={route('purchasing.purchase-orders.show', order.id)} className="font-medium hover:underline">
+                                            {order.po_number}
+                                        </Link>
+                                    </td>
+                                    <td className="text-muted-foreground p-3">{order.supplier.name}</td>
+                                    <td className="text-muted-foreground p-3">{order.warehouse.name}</td>
+                                    <td className="p-3 text-right tabular-nums">{order.total_ordered}</td>
+                                    <td className="p-3">
+                                        <Badge variant={approvalVariant[order.approval_request.status]} className="capitalize">
+                                            {order.approval_request.status}
+                                        </Badge>
+                                    </td>
+                                    <td className="p-3">
+                                        <Badge variant={statusVariant[order.status]} className="capitalize">
+                                            {order.status.replace('_', ' ')}
+                                        </Badge>
+                                    </td>
+                                    <td className="text-muted-foreground p-3 capitalize">{order.payment_status.replace('_', ' ')}</td>
+                                </tr>
+                            ))}
+                            {orders.data.length === 0 && (
+                                <tr>
+                                    <td colSpan={7} className="text-muted-foreground p-4 text-center">
+                                        {hasActiveFilters ? 'No purchase orders match these filters.' : 'No purchase orders yet.'}
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
 
                 <Pagination meta={orders} />
 
