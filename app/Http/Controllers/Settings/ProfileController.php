@@ -29,7 +29,7 @@ class ProfileController extends Controller
             // The picture is the linked employee's HR photo; a login with no
             // employee record has nowhere to keep one, and the page says so.
             'hasEmployee' => $employee !== null,
-            'photo_url' => $employee?->attachmentInCollection('photo')?->url(),
+            'photo_url' => $employee?->photo()?->url(),
         ]);
     }
 
@@ -63,7 +63,7 @@ class ProfileController extends Controller
 
     public function destroyPhoto(Request $request, DeleteAttachment $action): RedirectResponse
     {
-        $photo = Employee::forUser($request->user())?->attachmentInCollection('photo');
+        $photo = Employee::forUser($request->user())?->photo();
 
         if ($photo !== null) {
             $action->handle($photo);

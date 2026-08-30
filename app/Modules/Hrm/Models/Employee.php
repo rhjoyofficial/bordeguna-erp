@@ -7,6 +7,8 @@ use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Contracts\HandlesChangeRequest;
 use App\Modules\Foundation\Contracts\OpensAttachmentCollections;
+use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Foundation\Scopes\BusinessScope;
 use App\Modules\Hrm\Actions\UpdateEmployee;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
@@ -262,6 +264,28 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
     public function openAttachmentCollections(): array
     {
         return ['photo'];
+    }
+
+    /**
+     * The profile photo, findable WITHOUT a business context.
+     *
+     * ⚠⚠ Attachments carry the business they were uploaded in and are scoped
+     * to it, which fails closed when no tenant is set. The profile and
+     * password pages sit outside the `business` middleware, so on those
+     * pages `attachmentInCollection('photo')` found nothing and the avatar
+     * fell back to initials (seen live 30 Aug 2026: every business page
+     * showed Joy's face, /settings/profile showed "RJ"). An employee is
+     * central and a face is not business data, so the lookup drops that one
+     * scope. Serving the file still goes through attachments.show, which
+     * keeps its own scope and gate.
+     */
+    public function photo(): ?Attachment
+    {
+        return $this->attachments()
+            ->withoutGlobalScope(BusinessScope::class)
+            ->where('collection', 'photo')
+            ->latest('id')
+            ->first();
     }
 
     /**

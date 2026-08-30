@@ -77,6 +77,6 @@ class User extends Authenticatable
     {
         $employee = Employee::forUser($this);
 
-        return $employee?->attachmentInCollection('photo')?->url();
+        return $employee?->photo()?->url();
     }
 }

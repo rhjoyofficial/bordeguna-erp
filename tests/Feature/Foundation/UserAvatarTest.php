@@ -102,3 +102,17 @@ it('hands the employee list each photo', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page->where('employees.0.photo_url', $this->photo->url()));
 });
+
+it('still shows the picture on a page that carries no business context, like the profile page', function () {
+    // ⚠ The profile routes sit outside the `business` middleware, and a
+    // console-style cold request has no tenant set. Seen live on 30 Aug 2026:
+    // every business page showed Joy's face, /settings/profile showed "RJ".
+    app(BusinessContext::class)->forget();
+
+    $this->actingAs($this->joy)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('profile.edit'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('auth.user.avatar', $this->photo->url())
+            ->where('photo_url', $this->photo->url()));
+});
