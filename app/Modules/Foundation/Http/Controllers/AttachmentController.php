@@ -4,6 +4,7 @@ namespace App\Modules\Foundation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
+use App\Modules\Foundation\Contracts\OpensAttachmentCollections;
 use App\Modules\Foundation\Models\Attachment;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\Request;
@@ -29,7 +30,9 @@ class AttachmentController extends Controller
     public function show(Request $request, Attachment $attachment): StreamedResponse|BinaryFileResponse
     {
         $owner = $attachment->attachable;
-        if ($owner instanceof ControlsAttachmentAccess) {
+        $open = $owner instanceof OpensAttachmentCollections
+            && in_array($attachment->collection, $owner->openAttachmentCollections(), true);
+        if ($owner instanceof ControlsAttachmentAccess && ! $open) {
             abort_unless($owner->canAccessAttachments($request->user()), 403);
         }
 

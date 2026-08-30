@@ -11,6 +11,7 @@ interface EmployeeRow {
     id: number;
     employee_code: string;
     name: string;
+    photo_url: string | null;
     employment_type: string;
     status: string;
     office: string | null;
@@ -42,9 +43,13 @@ function EmployeeCard({ employee }: { employee: EmployeeRow }) {
             href={route('hrm.employees.show', employee.id)}
             className="border-border bg-card hover:border-ring flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors"
         >
-            <span className="bg-primary/10 text-primary flex h-14 w-14 items-center justify-center rounded-full text-lg font-semibold">
-                {initials(employee.name)}
-            </span>
+            {employee.photo_url ? (
+                <img src={employee.photo_url} alt={employee.name} className="h-14 w-14 rounded-full object-cover" />
+            ) : (
+                <span className="bg-primary/10 text-primary flex h-14 w-14 items-center justify-center rounded-full text-lg font-semibold">
+                    {initials(employee.name)}
+                </span>
+            )}
             <div>
                 <p className="font-medium">{employee.name}</p>
                 <p className="text-muted-foreground text-xs">{employee.employee_code}</p>

@@ -50,7 +50,13 @@ class HandleInertiaRequests extends Middleware
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
-                'user' => $request->user(),
+                // ⚠ `avatar` was a typed field on the front end that NOTHING set
+                // (found 30 Aug 2026: every avatar showed initials). The user
+                // row has no picture column; the picture is the linked
+                // employee's HR photo, resolved here so every page gets it.
+                'user' => fn () => $request->user() === null
+                    ? null
+                    : array_merge($request->user()->toArray(), ['avatar' => $request->user()->avatarUrl()]),
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

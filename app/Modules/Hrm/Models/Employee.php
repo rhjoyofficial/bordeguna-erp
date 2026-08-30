@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Contracts\HandlesChangeRequest;
+use App\Modules\Foundation\Contracts\OpensAttachmentCollections;
 use App\Modules\Hrm\Actions\UpdateEmployee;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
@@ -30,7 +31,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * need access. Not business-scoped — belonging is expressed through
  * effective-dated assignments.
  */
-class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeRequest
+class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeRequest, OpensAttachmentCollections
 {
     use HasAttachments, HasFactory, LogsActivity;
 
@@ -251,6 +252,16 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
     public function canAccessAttachments(User $user): bool
     {
         return SelfScope::allows($user, $this, 'hrm.employees.manage');
+    }
+
+    /**
+     * The face is not a certificate: anyone in the business may see it (it is
+     * the avatar beside every chat message and in the sidebar). Everything
+     * else the employee has on file keeps the gate above.
+     */
+    public function openAttachmentCollections(): array
+    {
+        return ['photo'];
     }
 
     /**

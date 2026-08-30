@@ -24,6 +24,7 @@ interface Message {
     edited: boolean;
     author: string | null;
     author_id: number;
+    author_avatar: string | null;
     at: string | null;
 }
 
@@ -255,7 +256,12 @@ export default function ChatIndex({
                                 <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-3">
                                     {messages.map((message) => (
                                         <div key={message.id} className={message.author_id === me ? 'self-end text-right' : ''}>
-                                            <div className="text-muted-foreground text-xs">
+                                            <div
+                                                className={`text-muted-foreground flex items-center gap-1.5 text-xs ${message.author_id === me ? 'justify-end' : ''}`}
+                                            >
+                                                {message.author_avatar ? (
+                                                    <img src={message.author_avatar} alt="" className="h-5 w-5 rounded-full object-cover" />
+                                                ) : null}
                                                 {message.author} · {message.at}
                                             </div>
                                             <div

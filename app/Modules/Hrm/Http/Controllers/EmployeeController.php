@@ -51,7 +51,10 @@ class EmployeeController extends Controller
         // in the application follows this, so the same person sits in the same
         // place on every screen and a name spelled two ways cannot move them.
         $employees = Employee::whereHas('assignments', fn ($query) => $query->active()->where('is_primary', true))
-            ->with(['assignments' => fn ($query) => $query->active()->where('is_primary', true)->with(['office:id,name', 'designation:id,name'])])
+            ->with([
+                'assignments' => fn ($query) => $query->active()->where('is_primary', true)->with(['office:id,name', 'designation:id,name']),
+                'attachments' => fn ($query) => $query->where('collection', 'photo'),
+            ])
             ->orderBy('employee_code')->get()
             ->map(function (Employee $employee) {
                 $assignment = $employee->assignments->first();
@@ -60,11 +63,12 @@ class EmployeeController extends Controller
                     'id' => $employee->id,
                     'employee_code' => $employee->employee_code,
                     'name' => $employee->fullName(),
+                    'photo_url' => $employee->attachments->first()?->url(),
                     'employment_type' => $employee->employment_type->label(),
-                'may_clock_in_remotely' => (bool) $employee->may_clock_in_remotely,
-                'remote_clock_in_granted_by' => $employee->remoteClockInGrantedBy?->name,
-                'remote_clock_in_granted_at' => $employee->remote_clock_in_granted_at?->toDayDateTimeString(),
-                'remote_clock_in_reason' => $employee->remote_clock_in_reason,
+                    'may_clock_in_remotely' => (bool) $employee->may_clock_in_remotely,
+                    'remote_clock_in_granted_by' => $employee->remoteClockInGrantedBy?->name,
+                    'remote_clock_in_granted_at' => $employee->remote_clock_in_granted_at?->toDayDateTimeString(),
+                    'remote_clock_in_reason' => $employee->remote_clock_in_reason,
                     'status' => $employee->status->value,
                     'office' => $assignment?->office?->name,
                     'designation' => $assignment?->designation?->name,

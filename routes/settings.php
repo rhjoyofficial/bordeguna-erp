@@ -23,6 +23,11 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'business'])->group(function () {
+    // The picture lives on the employee record, which is business-scoped, so
+    // these two sit here rather than with the plain profile routes above.
+    Route::post('settings/profile/photo', [ProfileController::class, 'storePhoto'])->name('profile.photo.store');
+    Route::delete('settings/profile/photo', [ProfileController::class, 'destroyPhoto'])->name('profile.photo.destroy');
+
     Route::get('settings/reasons', [ReasonController::class, 'index'])->name('reasons.index');
     Route::post('settings/reasons', [ReasonController::class, 'store'])->name('reasons.store');
     Route::put('settings/reasons/{reason}', [ReasonController::class, 'update'])->name('reasons.update');

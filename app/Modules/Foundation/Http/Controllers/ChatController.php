@@ -177,6 +177,7 @@ class ChatController extends Controller
     private function messagesFor(ChatChannel $channel, User $user): array
     {
         $messages = $channel->messages()->with('author:id,name')->orderBy('id')->limit(200)->get();
+        $this->avatars = [];
 
         $this->markRead($channel, $user);
 
@@ -197,8 +198,21 @@ class ChatController extends Controller
             'edited' => $message->edited_at !== null,
             'author' => $message->author?->name,
             'author_id' => $message->user_id,
+            'author_avatar' => $this->avatarFor($message->author),
             'at' => $message->created_at?->format('j M, g:i a'),
         ];
+    }
+
+    /** @var array<int, string|null> one lookup per author per request, not per message */
+    private array $avatars = [];
+
+    private function avatarFor(?User $author): ?string
+    {
+        if ($author === null) {
+            return null;
+        }
+
+        return $this->avatars[$author->id] ??= $author->avatarUrl();
     }
 
     private function markRead(ChatChannel $channel, User $user): void
