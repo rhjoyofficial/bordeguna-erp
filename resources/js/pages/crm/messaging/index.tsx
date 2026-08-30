@@ -250,7 +250,7 @@ export default function MessagingIndex({
                                     onChange={(e) => form.setData('recipient_cap', Number(e.target.value))}
                                 />
                             </Field>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 self-end">
                                 <Button type="submit" disabled={form.processing}>
                                     Save draft
                                 </Button>

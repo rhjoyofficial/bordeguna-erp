@@ -596,7 +596,7 @@ export default function RecruitmentIndex({
                                         </SearchSelect>
                                     </Field>
                                 )}
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 self-end">
                                     <Button type="button" onClick={submitMove}>
                                         Move
                                     </Button>

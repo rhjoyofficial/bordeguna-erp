@@ -67,13 +67,17 @@ export function Field({
 /**
  * A row of Fields that wraps when the screen runs out.
  *
- * ⚠ `items-end` so a field with a hint under it does not push its neighbours'
- * inputs out of line - the inputs share a baseline, the hints hang below.
+ * ⚠ `items-start`, not `items-end`. Seen live on Discounts (30 Aug 2026):
+ * with bottoms aligned, a field that has a hint under it is lifted by the
+ * height of that hint, so its input floats above its neighbours. With tops
+ * aligned the labels sit on one line and the inputs directly under them
+ * line up, and a hint simply hangs lower. The one thing that still breaks
+ * the line is a label that WRAPS - keep labels short on narrow fields.
  */
 export function FormRow({ children, className }: { children: ReactNode; className?: string }) {
     return (
         <CompactControls>
-            <div className={cn('flex flex-wrap items-end gap-4', className)}>{children}</div>
+            <div className={cn('flex flex-wrap items-start gap-4', className)}>{children}</div>
         </CompactControls>
     );
 }

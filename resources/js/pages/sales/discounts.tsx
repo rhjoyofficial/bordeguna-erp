@@ -120,7 +120,7 @@ export default function Discounts() {
                                 onChange={(e) => form.setData('unit_price', e.target.value)}
                             />
                         </Field>
-                        <Field label="From this quantity up" htmlFor="min_quantity" size="xs" hint="1 means every sale. 4 means four or more.">
+                        <Field label="From qty" htmlFor="min_quantity" size="xs" hint="1 means every sale. 4 means four or more.">
                             <Input
                                 id="min_quantity"
                                 type="number"

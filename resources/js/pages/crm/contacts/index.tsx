@@ -436,7 +436,7 @@ export default function PhoneBookIndex({
                                         onChange={(e) => groupForm.setData('description', e.target.value)}
                                     />
                                 </Field>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 self-end">
                                     <Button type="submit" disabled={groupForm.processing}>
                                         {editingGroup ? 'Save group' : 'Add group'}
                                     </Button>

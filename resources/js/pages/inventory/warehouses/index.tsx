@@ -153,7 +153,9 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
                         <Field label="Code" htmlFor="code" size="xs" error={errors.code}>
                             <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="e.g. COLD" />
                         </Field>
-                        <Button disabled={processing}>Add</Button>
+                        <Button disabled={processing} className="self-end">
+                            Add
+                        </Button>
                     </FormRow>
                 </form>
 
