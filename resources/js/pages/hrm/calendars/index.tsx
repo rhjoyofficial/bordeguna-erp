@@ -99,7 +99,7 @@ function CalendarDialog({ calendar, weekdays, trigger }: { calendar?: Calendar; 
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="cal-year">Year</Label>
-                            <Input id="cal-year" type="number" value={year} onChange={(e) => setYear(e.target.value)} />
+                            <Input id="cal-year" type="number" className="w-24" value={year} onChange={(e) => setYear(e.target.value)} />
                             {errors.year && <p className="text-destructive text-xs">{errors.year}</p>}
                         </div>
                     </div>
@@ -170,7 +170,7 @@ function AddHoliday({ calendarId }: { calendarId: number }) {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Eid-ul-Fitr"
-                    className="h-9"
+                    className="h-9 w-64"
                 />
             </div>
             <Button size="sm" onClick={add} disabled={date === '' || name.trim() === ''}>
@@ -219,7 +219,7 @@ function AddWorkingDay({ calendarId }: { calendarId: number }) {
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     placeholder="e.g. Friday worked in place of a holiday"
-                    className="h-9"
+                    className="h-9 w-80"
                 />
             </div>
             <Button size="sm" variant="outline" onClick={add} disabled={date === '' || reason.trim() === ''}>
