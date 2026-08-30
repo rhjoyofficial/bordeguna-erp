@@ -33,8 +33,9 @@ function AddReasonForm({ context }: { context: string }) {
     };
 
     return (
-        <form onSubmit={submit} className="flex items-end gap-3">
-            <div className="grid flex-1 gap-2">
+        <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+            {/* A reason is a word or two; the box was the width of the page. */}
+            <div className="grid w-64 gap-2">
                 <Label htmlFor={`new-reason-${context}`}>New reason</Label>
                 <Input id={`new-reason-${context}`} value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. Damaged" />
                 <InputError message={errors.name} />
