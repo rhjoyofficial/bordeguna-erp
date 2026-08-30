@@ -1,5 +1,6 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,16 +40,20 @@ export default function InvoicesIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Sales Invoices" />
             <div className="flex flex-col gap-6 p-4">
-                {can_create && (
-                    <div className="flex justify-end">
-                        {/* ⚠ Billing a challan - the month-end half of the distributor
-                            rhythm. This button is the fix for F1: the engine existed
-                            with no way for a human to reach it. */}
-                        <Button asChild size="sm">
-                            <Link href={route('sales.invoices.create')}>New invoice from challans</Link>
-                        </Button>
-                    </div>
-                )}
+                {/* ⚠ Billing a challan - the month-end half of the distributor
+                    rhythm. This button is the fix for F1: the engine existed
+                    with no way for a human to reach it. It sits in the heading
+                    row, not on a row of its own (30 Aug 2026 audit). */}
+                <ReportHeading
+                    title="Sales invoices"
+                    actions={
+                        can_create && (
+                            <Button asChild size="sm">
+                                <Link href={route('sales.invoices.create')}>New invoice from challans</Link>
+                            </Button>
+                        )
+                    }
+                />
                 <FilterBar showClear={hasActiveFilters} onClear={resetFilters}>
                     <Input
                         placeholder="Search invoice number or customer"

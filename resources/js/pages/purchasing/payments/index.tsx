@@ -1,5 +1,6 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,30 +48,33 @@ export default function PaymentsIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Supplier payments" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="flex items-center justify-between gap-4">
-                    <FilterBar showClear={hasActiveFilters} onClear={resetFilters}>
-                        <Input
-                            placeholder="Search reference or supplier"
-                            value={filters.search}
-                            onChange={(e) => setFilter('search', e.target.value)}
-                            className="max-w-xs"
-                        />
-                        <SearchSelect value={filters.supplier_id} onChange={(e) => setFilter('supplier_id', e.target.value)}>
-                            <option value="">All suppliers</option>
-                            {suppliers.map((supplier) => (
-                                <option key={supplier.id} value={supplier.id}>
-                                    {supplier.name}
-                                </option>
-                            ))}
-                        </SearchSelect>
-                    </FilterBar>
+                <ReportHeading
+                    title="Supplier payments"
+                    actions={
+                        canRecordSupplierPayment && (
+                            <Button asChild size="sm">
+                                <Link href="/purchasing/payments/new">Pay a supplier</Link>
+                            </Button>
+                        )
+                    }
+                />
 
-                    {canRecordSupplierPayment && (
-                        <Button asChild>
-                            <Link href="/purchasing/payments/new">Pay a supplier</Link>
-                        </Button>
-                    )}
-                </div>
+                <FilterBar showClear={hasActiveFilters} onClear={resetFilters}>
+                    <Input
+                        placeholder="Search reference or supplier"
+                        value={filters.search}
+                        onChange={(e) => setFilter('search', e.target.value)}
+                        className="max-w-xs"
+                    />
+                    <SearchSelect value={filters.supplier_id} onChange={(e) => setFilter('supplier_id', e.target.value)}>
+                        <option value="">All suppliers</option>
+                        {suppliers.map((supplier) => (
+                            <option key={supplier.id} value={supplier.id}>
+                                {supplier.name}
+                            </option>
+                        ))}
+                    </SearchSelect>
+                </FilterBar>
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">

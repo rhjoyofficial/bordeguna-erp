@@ -1,5 +1,6 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,15 +38,17 @@ export default function CreditNotesIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Supplier Credit Notes" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="flex items-center justify-between">
-                    {/* A credit note settles the claim a late return creates:
-                        goods went back AFTER the bill arrived, so the supplier
-                        owes us and this is their document saying so. */}
-                    <h1 className="text-lg font-semibold">Supplier credit notes</h1>
-                    <Button asChild>
-                        <Link href="/purchasing/credit-notes/new">Record credit note</Link>
-                    </Button>
-                </div>
+                {/* A credit note settles the claim a late return creates:
+                    goods went back AFTER the bill arrived, so the supplier
+                    owes us and this is their document saying so. */}
+                <ReportHeading
+                    title="Supplier credit notes"
+                    actions={
+                        <Button asChild size="sm">
+                            <Link href="/purchasing/credit-notes/new">Record credit note</Link>
+                        </Button>
+                    }
+                />
 
                 <FilterBar showClear={hasActiveFilters} onClear={reset}>
                     <Input

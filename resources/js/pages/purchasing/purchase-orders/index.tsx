@@ -1,5 +1,6 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { ReportHeading } from '@/components/report/report-shell';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
@@ -186,6 +187,7 @@ export default function PurchaseOrdersIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Purchase orders" />
             <div className="flex flex-col gap-6 p-4">
+                <ReportHeading title="Purchase orders" />
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
                     <FilterField label="Search PO #" htmlFor="filter-search" className="min-w-56 flex-1">
                         <Input

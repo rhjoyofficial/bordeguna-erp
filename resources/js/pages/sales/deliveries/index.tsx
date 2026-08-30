@@ -1,5 +1,6 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -36,6 +37,7 @@ export default function DeliveriesIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Delivery Challans" />
             <div className="flex flex-col gap-6 p-4">
+                <ReportHeading title="Delivery challans" />
                 {/* An uninvoiced challan is not an error. It is goods out that
                     nobody has billed yet, and its value is what sits in Goods
                     Delivered Not Invoiced. */}
