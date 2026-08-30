@@ -1,3 +1,4 @@
+import { Field, FormRow } from '@/components/form/field';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
@@ -152,22 +153,20 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                     <LogoSection logoUrl={logo_url} />
 
                     <form onSubmit={submit} className="space-y-6">
-                        <div className="grid gap-2">
-                            <Label htmlFor="name">Display name</Label>
-                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
-                            <InputError message={errors.name} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="legal_name">Legal name</Label>
-                            <Input
-                                id="legal_name"
-                                value={data.legal_name}
-                                onChange={(e) => setData('legal_name', e.target.value)}
-                                placeholder="Registered legal entity name (optional)"
-                            />
-                            <InputError message={errors.legal_name} />
-                        </div>
+                        {/* Each box as wide as what it holds (30 Aug 2026 audit). */}
+                        <FormRow>
+                            <Field label="Display name" htmlFor="name" size="lg" error={errors.name}>
+                                <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
+                            </Field>
+                            <Field label="Legal name" htmlFor="legal_name" size="grow" error={errors.legal_name}>
+                                <Input
+                                    id="legal_name"
+                                    value={data.legal_name}
+                                    onChange={(e) => setData('legal_name', e.target.value)}
+                                    placeholder="Registered legal entity name (optional)"
+                                />
+                            </Field>
+                        </FormRow>
 
                         <div className="grid gap-2">
                             <Label htmlFor="address">Address</Label>
@@ -180,28 +179,22 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                             <InputError message={errors.address} />
                         </div>
 
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <div className="grid gap-2">
-                                <Label htmlFor="phone">Phone</Label>
+                        <FormRow>
+                            <Field label="Phone" htmlFor="phone" size="md" error={errors.phone}>
                                 <Input id="phone" value={data.phone} onChange={(e) => setData('phone', e.target.value)} />
-                                <InputError message={errors.phone} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">Email</Label>
+                            </Field>
+                            <Field label="Email" htmlFor="email" size="lg" error={errors.email}>
                                 <Input id="email" type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} />
-                                <InputError message={errors.email} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="website">Website</Label>
+                            </Field>
+                            <Field label="Website" htmlFor="website" size="lg" error={errors.website}>
                                 <Input
                                     id="website"
                                     placeholder="www.bordeguna.com"
                                     value={data.website}
                                     onChange={(e) => setData('website', e.target.value)}
                                 />
-                                <InputError message={errors.website} />
-                            </div>
-                        </div>
+                            </Field>
+                        </FormRow>
 
                         {/* The face official documents are set in. Only this one
                             is a setting: the sidebar and the headings stay in
@@ -252,9 +245,8 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                             )}
                         </div>
 
-                        <div className="grid gap-4 sm:grid-cols-3">
-                            <div className="grid gap-2">
-                                <Label htmlFor="currency">Currency</Label>
+                        <FormRow>
+                            <Field label="Currency" htmlFor="currency" error={errors.currency}>
                                 <SearchSelect id="currency" value={data.currency} onChange={(e) => setData('currency', e.target.value)}>
                                     {currencies.map((currency) => (
                                         <option key={currency} value={currency}>
@@ -262,10 +254,8 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                                         </option>
                                     ))}
                                 </SearchSelect>
-                                <InputError message={errors.currency} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="timezone">Timezone</Label>
+                            </Field>
+                            <Field label="Timezone" htmlFor="timezone" error={errors.timezone}>
                                 <SearchSelect id="timezone" value={data.timezone} onChange={(e) => setData('timezone', e.target.value)}>
                                     {timezones.map((timezone) => (
                                         <option key={timezone} value={timezone}>
@@ -273,10 +263,8 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                                         </option>
                                     ))}
                                 </SearchSelect>
-                                <InputError message={errors.timezone} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="fiscal_year_start_month">Fiscal year starts</Label>
+                            </Field>
+                            <Field label="Fiscal year starts" htmlFor="fiscal_year_start_month" error={errors.fiscal_year_start_month}>
                                 <SearchSelect
                                     id="fiscal_year_start_month"
                                     value={data.fiscal_year_start_month}
@@ -288,47 +276,49 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                                         </option>
                                     ))}
                                 </SearchSelect>
-                                <InputError message={errors.fiscal_year_start_month} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="payroll_cycle_start_day">Payroll month starts on day</Label>
-                                <SearchSelect
-                                    id="payroll_cycle_start_day"
-                                    value={data.payroll_cycle_start_day}
-                                    onChange={(e) => setData('payroll_cycle_start_day', Number(e.target.value))}
-                                >
-                                    {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
-                                        <option key={day} value={day}>
-                                            {day}
-                                        </option>
-                                    ))}
-                                </SearchSelect>
-                                <p className="text-muted-foreground text-xs">
-                                    With 24, the month named August runs 24 July to 23 August. This covers payroll, attendance and HR reports only.
-                                    Bills, invoices and the accounts keep their own dates.
-                                </p>
-                                <InputError message={errors.payroll_cycle_start_day} />
-                            </div>
+                            </Field>
+                        </FormRow>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="wfh_monthly_cap">Work from home, days a month</Label>
-                                <SearchSelect
-                                    id="wfh_monthly_cap"
-                                    value={data.wfh_monthly_cap}
-                                    onChange={(e) => setData('wfh_monthly_cap', Number(e.target.value))}
-                                >
-                                    {Array.from({ length: 32 }, (_, i) => i).map((days) => (
-                                        <option key={days} value={days}>
-                                            {days}
-                                        </option>
-                                    ))}
-                                </SearchSelect>
-                                <p className="text-muted-foreground text-xs">
-                                    The most any one person may work from home in a calendar month. Requests still awaiting approval count against it.
-                                    Zero means work from home is not offered here. People at home still clock in and out as usual.
-                                </p>
-                                <InputError message={errors.wfh_monthly_cap} />
-                            </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="payroll_cycle_start_day">Payroll month starts on day</Label>
+                            <SearchSelect
+                                fit
+                                id="payroll_cycle_start_day"
+                                value={data.payroll_cycle_start_day}
+                                onChange={(e) => setData('payroll_cycle_start_day', Number(e.target.value))}
+                            >
+                                {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
+                                    <option key={day} value={day}>
+                                        {day}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                            <p className="text-muted-foreground text-xs">
+                                With 24, the month named August runs 24 July to 23 August. This covers payroll, attendance and HR reports only. Bills,
+                                invoices and the accounts keep their own dates.
+                            </p>
+                            <InputError message={errors.payroll_cycle_start_day} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="wfh_monthly_cap">Work from home, days a month</Label>
+                            <SearchSelect
+                                fit
+                                id="wfh_monthly_cap"
+                                value={data.wfh_monthly_cap}
+                                onChange={(e) => setData('wfh_monthly_cap', Number(e.target.value))}
+                            >
+                                {Array.from({ length: 32 }, (_, i) => i).map((days) => (
+                                    <option key={days} value={days}>
+                                        {days}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                            <p className="text-muted-foreground text-xs">
+                                The most any one person may work from home in a calendar month. Requests still awaiting approval count against it.
+                                Zero means work from home is not offered here. People at home still clock in and out as usual.
+                            </p>
+                            <InputError message={errors.wfh_monthly_cap} />
                         </div>
 
                         <div className="flex items-center gap-4">
