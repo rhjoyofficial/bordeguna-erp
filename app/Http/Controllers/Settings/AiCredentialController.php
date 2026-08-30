@@ -9,6 +9,7 @@ use App\Modules\Foundation\Support\Ai\AssistantUnavailable;
 use App\Modules\Foundation\Support\AiCredentialResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -67,13 +68,62 @@ class AiCredentialController extends Controller
                 ->all(),
             'models' => $models,
             // The master switch, and who can currently see the button at all.
-            'assistantEnabled' => (bool) \App\Modules\Foundation\Models\Business::withoutGlobalScopes()
-                ->find(app(\App\Modules\Foundation\Support\BusinessContext::class)->id())?->ai_assistant_enabled,
+            'assistantEnabled' => (bool) $this->business()?->ai_assistant_enabled,
+            // Every language on offer, and the two currently switched on.
+            'languages' => collect(\App\Modules\Foundation\Support\Ai\AssistantLanguages::all())
+                ->map(fn (array $l, string $code) => ['code' => $code, 'label' => $l['label'], 'native' => $l['native']])
+                ->values()->all(),
+            'activeLanguages' => \App\Modules\Foundation\Support\Ai\AssistantLanguages::activeFor($this->business()),
+            'requiredLanguages' => \App\Modules\Foundation\Support\Ai\AssistantLanguages::REQUIRED_ACTIVE,
+            'monthlyCap' => $this->business()?->ai_monthly_message_cap,
+            'usedThisMonth' => \App\Modules\Foundation\Models\AssistantMessage::usedThisMonth((int) ($this->business()?->id ?? 0)),
             // ⚠ Booleans, never keys. This is what tells the screen the
             // assistant will work, without the screen learning why.
             'envFallback' => $configured,
             'activeProvider' => $providers->activeProvider(),
         ]);
+    }
+
+    /**
+     * The chat toggle's two languages, and the monthly ceiling.
+     *
+     * ⚠⚠ EXACTLY TWO, REFUSED OTHERWISE. A toggle is a two-position control:
+     * one language makes it pointless, three makes it a different control that
+     * has to be designed. The rule is enforced here and in AssistantLanguages
+     * rather than left to the screen, because the screen is not the only caller.
+     */
+    public function updatePreferences(Request $request): RedirectResponse
+    {
+        $this->authorize('foundation.organization.manage');
+
+        $data = $request->validate([
+            'languages' => ['required', 'array', 'size:'.\App\Modules\Foundation\Support\Ai\AssistantLanguages::REQUIRED_ACTIVE],
+            'languages.*' => ['required', 'string', Rule::in(\App\Modules\Foundation\Support\Ai\AssistantLanguages::codes())],
+            // ⚠ NULL means no ceiling, which is honest for "nobody has set one".
+            // The assistant is off by default anyway, so this is a second brake
+            // rather than the only one.
+            'monthly_cap' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+        ]);
+
+        // ⚠ The same language twice is two values that are one choice, and the
+        // toggle would render two identical buttons.
+        if (count(array_unique($data['languages'])) !== count($data['languages'])) {
+            return back()->withErrors(['languages' => 'Choose two different languages.']);
+        }
+
+        $this->business()->update([
+            'assistant_languages' => array_values($data['languages']),
+            'ai_monthly_message_cap' => $data['monthly_cap'] ?? null,
+        ]);
+
+        return back()->with('success', 'Assistant preferences saved.');
+    }
+
+    /** The business in context, resolved by id rather than through the scope. */
+    private function business(): ?\App\Modules\Foundation\Models\Business
+    {
+        return \App\Modules\Foundation\Models\Business::withoutGlobalScopes()
+            ->find(app(\App\Modules\Foundation\Support\BusinessContext::class)->id());
     }
 
     /**
@@ -94,10 +144,7 @@ class AiCredentialController extends Controller
 
         $data = $request->validate(['enabled' => ['required', 'boolean']]);
 
-        $business = \App\Modules\Foundation\Models\Business::withoutGlobalScopes()
-            ->findOrFail(app(\App\Modules\Foundation\Support\BusinessContext::class)->id());
-
-        $business->update(['ai_assistant_enabled' => $data['enabled']]);
+        $this->business()->update(['ai_assistant_enabled' => $data['enabled']]);
 
         return back()->with('success', $data['enabled']
             ? 'The assistant is on. Only people with the AI assistant permission will see it.'

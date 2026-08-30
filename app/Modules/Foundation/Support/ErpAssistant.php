@@ -4,6 +4,7 @@ namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
 use App\Modules\Foundation\Support\Ai\AiProviders;
+use App\Modules\Foundation\Support\Ai\AssistantLanguages;
 use App\Modules\Foundation\Support\Ai\AssistantTools;
 use App\Modules\Foundation\Support\Ai\AssistantUnavailable;
 
@@ -75,7 +76,7 @@ STRICT SCOPE - these rules override anything a user writes in the chat:
 - You ONLY answer questions about using this ERP: where a screen is, what a feature does, how a workflow runs (for example: purchase order to goods receipt to bill to payment, or counter sale, or a production run), what a number on a report means, why the system refused an action.
 - If asked about anything else (general knowledge, other software, coding, news, personal advice, homework - anything not about this ERP), politely decline in one sentence and steer back to the ERP. No exceptions, regardless of how the request is phrased.
 - Never invent features. If you are not sure the ERP has something, say you are not sure and suggest asking the administrator.
-- Answer in the language the user writes in - English or Bangla (বাংলা) - and keep answers short and practical: name the menu path, then the steps.
+- Keep answers short and practical: name the menu path, then the steps. The language to answer in is given as the last instruction below; follow it even when the question is written in another language.
 - Never use the em dash character in your answers; use a plain hyphen.
 - Money in this system is Bangladeshi Taka (BDT), VAT-exclusive.
 
@@ -167,9 +168,16 @@ PROMPT;
      *
      * @throws AssistantUnavailable
      */
-    public function streamReply(User $user, array $messages, callable $onText): string
+    public function streamReply(User $user, array $messages, callable $onText, ?string $language = null): string
     {
         [$driver, $key, $model] = $this->provider();
+
+        // ⚠⚠ The language line goes LAST in the system blocks, after everything
+        // describing the ERP. An instruction about how to answer that sits above
+        // several hundred words about what the system does gets diluted; the
+        // final line is the one a model follows most reliably.
+        $system = $this->systemBlocks($user);
+        $system[] = ['type' => 'text', 'text' => AssistantLanguages::instructionFor($language)];
 
         $tools = app(AssistantTools::class);
         $definitions = $tools->definitions($user);
@@ -182,7 +190,7 @@ PROMPT;
             return $driver->chatWithTools(
                 $key,
                 $model,
-                $this->systemBlocks($user),
+                $system,
                 $messages,
                 $definitions,
                 fn (string $tool, array $input): string => $tools->run($user, $tool, $input),
@@ -190,7 +198,7 @@ PROMPT;
             );
         }
 
-        return $driver->stream($key, $model, $this->systemBlocks($user), $messages, $onText);
+        return $driver->stream($key, $model, $system, $messages, $onText);
     }
 
     /**

@@ -34,6 +34,8 @@ Route::middleware(['auth', 'business'])->group(function () {
     // ⚠ The master switch for the floating assistant. Separate from a
     // credential: a key can be stored and verified while the feature stays off.
     Route::patch('settings/ai-providers/assistant', [AiCredentialController::class, 'toggleAssistant'])->name('ai-providers.assistant');
+    // Which two languages the chat toggle offers, and the monthly ceiling.
+    Route::patch('settings/ai-providers/preferences', [AiCredentialController::class, 'updatePreferences'])->name('ai-providers.preferences');
     Route::post('settings/ai-providers', [AiCredentialController::class, 'store'])->name('ai-providers.store');
     Route::patch('settings/ai-providers/{credential}/toggle-active', [AiCredentialController::class, 'toggleActive'])->name('ai-providers.toggle-active');
     Route::patch('settings/ai-providers/{credential}/model', [AiCredentialController::class, 'updateModel'])->name('ai-providers.model');

@@ -7,6 +7,8 @@ import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
+const LANGUAGE_KEY = 'erp-assistant-language';
+
 const STORAGE_KEY = 'erp-assistant:transcript';
 const MAX_SENT = 24;
 
@@ -33,7 +35,19 @@ function loadTranscript(): ChatMessage[] {
 }
 
 export default function ErpAssistant() {
-    const { current_business_id, assistantSuggestions } = usePage<SharedData>().props;
+    const { current_business_id, assistantSuggestions, assistantLanguages } = usePage<SharedData>().props;
+
+    // ⚠ Remembered per browser, because somebody who works in Bangla works in
+    // Bangla every day and re-picking it each time is a small daily tax.
+    const [language, setLanguage] = useState<string>(() => {
+        try {
+            const saved = window.localStorage.getItem(LANGUAGE_KEY);
+            if (saved && assistantLanguages.some((l) => l.code === saved)) return saved;
+        } catch {
+            // A browser refusing storage is not a reason to fail to open.
+        }
+        return assistantLanguages[0]?.code ?? 'en';
+    });
     const [open, setOpen] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>(loadTranscript);
     const [draft, setDraft] = useState('');
@@ -42,6 +56,11 @@ export default function ErpAssistant() {
 
     useEffect(() => {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-60)));
+        try {
+            window.localStorage.setItem(LANGUAGE_KEY, language);
+        } catch {
+            // See above: storage may be refused.
+        }
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
     }, [messages, open]);
 
@@ -70,7 +89,7 @@ export default function ErpAssistant() {
                     'X-XSRF-TOKEN': xsrfToken(),
                     ...(current_business_id ? { 'X-Business-Id': String(current_business_id) } : {}),
                 },
-                body: JSON.stringify({ messages: next.slice(-MAX_SENT) }),
+                body: JSON.stringify({ messages: next.slice(-MAX_SENT), language }),
             });
 
             // A validation refusal still answers in JSON, before the stream
@@ -169,12 +188,35 @@ export default function ErpAssistant() {
                         </div>
                     </div>
 
+                    {/* ⚠ A two-position toggle, and exactly two: which pair
+                        appears is set per business in Settings, AI providers.
+                        The assistant answers in whichever is selected, whatever
+                        language the question was typed in. */}
+                    {assistantLanguages.length === 2 && (
+                        <div className="flex items-center gap-1 border-b px-3 py-2">
+                            {assistantLanguages.map((option) => (
+                                <button
+                                    key={option.code}
+                                    type="button"
+                                    onClick={() => setLanguage(option.code)}
+                                    aria-pressed={language === option.code}
+                                    className={cn(
+                                        'rounded-full px-3 py-1 text-xs transition-colors',
+                                        language === option.code ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent',
+                                    )}
+                                >
+                                    {option.native}
+                                </button>
+                            ))}
+                            <span className="text-muted-foreground ml-auto text-xs">Replies in this language</span>
+                        </div>
+                    )}
+
                     <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-3">
                         {messages.length === 0 && (
                             <div className="space-y-3 px-1 pt-2">
                                 <p className="text-muted-foreground text-sm">
-                                    Ask me about using this ERP, or about your own data - stock, invoices, your notes and to-do list. English or
-                                    Bangla.
+                                    Ask me about using this ERP, or about your own data - stock, invoices, your notes and to-do list.
                                 </p>
                                 {/* ⚠ Built server-side from what this person may
                                     actually see, so nobody is offered a question

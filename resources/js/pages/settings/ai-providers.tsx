@@ -1,10 +1,12 @@
 import HeadingSmall from '@/components/heading-small';
+import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { cn } from '@/lib/utils';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { ShieldCheck, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -32,11 +34,46 @@ type PageProps = {
     activeProvider: string | null;
     /** The master switch. Off means the floating button exists for nobody. */
     assistantEnabled: boolean;
+    /** Every language on offer. */
+    languages: { code: string; label: string; native: string }[];
+    /** The two currently switched on, which become the chat toggle. */
+    activeLanguages: string[];
+    requiredLanguages: number;
+    /** Null means no ceiling. */
+    monthlyCap: number | null;
+    usedThisMonth: number;
     flash?: { success?: string };
 };
 
 export default function AiProviders() {
-    const { credentials, providers, supported, models, envFallback, activeProvider, assistantEnabled } = usePage<PageProps>().props;
+    const {
+        credentials,
+        providers,
+        supported,
+        models,
+        envFallback,
+        activeProvider,
+        assistantEnabled,
+        languages,
+        activeLanguages,
+        requiredLanguages,
+        monthlyCap,
+        usedThisMonth,
+    } = usePage<PageProps>().props;
+
+    const prefs = useForm<{ languages: string[]; monthly_cap: string }>({
+        languages: activeLanguages,
+        monthly_cap: monthlyCap === null ? '' : String(monthlyCap),
+    });
+
+    // ⚠ Picking a third replaces the OLDEST, so the control always holds exactly
+    // two and never has to refuse a click. "Deselect one first" is a rule the
+    // interface can simply not need.
+    const toggleLanguage = (code: string) => {
+        const current = prefs.data.languages;
+        if (current.includes(code)) return;
+        prefs.setData('languages', [current[1] ?? current[0], code].filter(Boolean).slice(-2));
+    };
     const [confirmingId, setConfirmingId] = useState<number | null>(null);
     const [testingId, setTestingId] = useState<number | null>(null);
 
@@ -104,6 +141,69 @@ export default function AiProviders() {
                             without showing it.
                         </p>
                     </div>
+
+                    {/* Which two languages the chat toggle offers, and the ceiling. */}
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            prefs.patch(route('ai-providers.preferences'), { preserveScroll: true });
+                        }}
+                        className="border-border space-y-4 rounded-md border p-4"
+                    >
+                        <div>
+                            <p className="font-medium">Chat languages</p>
+                            <p className="text-muted-foreground max-w-2xl text-sm">
+                                Choose exactly {requiredLanguages}. These two become the toggle on the chat box, and the assistant answers in
+                                whichever is selected, whatever language the question was typed in.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                            {languages.map((option) => {
+                                const on = prefs.data.languages.includes(option.code);
+
+                                return (
+                                    <button
+                                        key={option.code}
+                                        type="button"
+                                        onClick={() => toggleLanguage(option.code)}
+                                        aria-pressed={on}
+                                        className={cn(
+                                            'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                                            on ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-accent',
+                                        )}
+                                    >
+                                        {option.native} <span className="opacity-70">({option.label})</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <InputError message={prefs.errors.languages} />
+
+                        <div className="flex flex-wrap items-end gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="monthly_cap">Messages allowed each month</Label>
+                                <Input
+                                    id="monthly_cap"
+                                    type="number"
+                                    min={1}
+                                    className="w-44"
+                                    placeholder="No limit"
+                                    value={prefs.data.monthly_cap}
+                                    onChange={(e) => prefs.setData('monthly_cap', e.target.value)}
+                                />
+                                <InputError message={prefs.errors.monthly_cap} />
+                            </div>
+                            <Button type="submit" variant="secondary" disabled={prefs.processing}>
+                                Save preferences
+                            </Button>
+                            <p className="text-muted-foreground max-w-md text-xs">
+                                <strong>{usedThisMonth}</strong> used so far this calendar month. Every message spends money on the provider key and
+                                nothing else in the ERP can stop it, so a ceiling here is the only thing between a mistake and an invoice. Empty means
+                                no limit.
+                            </p>
+                        </div>
+                    </form>
 
                     <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
                         <div className="grid gap-4 sm:grid-cols-2">

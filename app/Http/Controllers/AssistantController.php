@@ -53,7 +53,25 @@ class AssistantController extends Controller
             'messages' => ['required', 'array', 'min:1', 'max:24'],
             'messages.*.role' => ['required', 'in:user,assistant'],
             'messages.*.content' => ['required', 'string', 'max:4000'],
+            // ⚠ Validated against the catalogue, and AssistantLanguages checks
+            // again that it is one of the TWO this business has switched on -
+            // the chat box offers two, but the request is only JSON.
+            'language' => ['nullable', 'string', 'max:8'],
         ]);
+
+        // ⚠⚠ THE SPENDING BRAKE. Every message bills a metered key and nothing
+        // else in the ERP could stop it. Checked BEFORE the stream opens so it
+        // can still be an honest status code rather than an in-stream event.
+        $business = \App\Modules\Foundation\Models\Business::withoutGlobalScopes()
+            ->find(app(\App\Modules\Foundation\Support\BusinessContext::class)->id());
+
+        $cap = $business?->ai_monthly_message_cap;
+
+        if ($cap !== null && \App\Modules\Foundation\Models\AssistantMessage::usedThisMonth((int) $business->id) >= $cap) {
+            return response()->json([
+                'reply' => "This business has used its {$cap} assistant messages for this month. An Owner can raise the limit under Settings, AI providers.",
+            ], 429);
+        }
 
         // The transcript must end with the user's new message; rather than
         // policing alternation strictly, require only the last-message rule
@@ -71,11 +89,27 @@ class AssistantController extends Controller
             $data['messages'],
         );
 
-        return response()->stream(function () use ($assistant, $user, $messages) {
+        $language = $data['language'] ?? null;
+        $businessId = (int) ($business?->id ?? 0);
+
+        // ⚠⚠ RECORDED BEFORE THE ANSWER, NOT AFTER. A turn that fails halfway
+        // has still been paid for, and a counter that only increments on success
+        // is a cap that a run of errors walks straight through.
+        $record = \App\Modules\Foundation\Models\AssistantMessage::create([
+            'business_id' => $businessId,
+            'user_id' => $user->id,
+            'question' => (string) ($messages[count($messages) - 1]['content'] ?? ''),
+            'language' => $language,
+            'answered' => false,
+        ]);
+
+        return response()->stream(function () use ($assistant, $user, $messages, $language, $record) {
             try {
                 $assistant->streamReply($user, $messages, function (string $text) {
                     $this->send('text', ['text' => $text]);
-                });
+                }, $language);
+
+                $record->update(['answered' => true]);
 
                 $this->send('done', []);
             } catch (AssistantUnavailable $e) {

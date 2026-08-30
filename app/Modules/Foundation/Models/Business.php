@@ -23,6 +23,8 @@ class Business extends Model
         'website',
         'document_font',
         'ai_assistant_enabled',
+        'assistant_languages',
+        'ai_monthly_message_cap',
         'currency',
         'timezone',
         'fiscal_year_start_month',
@@ -71,6 +73,8 @@ class Business extends Model
             // ⚠ Without this the column reads back as integer 0/1, and a
             // `=== false` check against it silently never matches.
             'ai_assistant_enabled' => 'boolean',
+            'assistant_languages' => 'array',
+            'ai_monthly_message_cap' => 'integer',
             'fiscal_year_start_month' => 'integer',
             'payroll_cycle_start_day' => 'integer',
             'prices_include_tax' => 'boolean',

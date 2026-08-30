@@ -126,6 +126,9 @@ class HandleInertiaRequests extends Middleware
                 && \App\Modules\Foundation\Support\AssistantAvailability::enabledForCurrentBusiness()
                     ? app(\App\Modules\Foundation\Support\ErpAssistant::class)->suggestions($request->user())
                     : [],
+            // The two languages this business has switched on, for the chat
+            // toggle. Always two - AssistantLanguages guarantees it.
+            'assistantLanguages' => fn () => \App\Modules\Foundation\Support\Ai\AssistantLanguages::toggleFor(),
             'canUseAssistant' => fn () => $request->user() !== null
                 && $request->user()->can('foundation.ai.use')
                 && \App\Modules\Foundation\Support\AssistantAvailability::enabledForCurrentBusiness(),
