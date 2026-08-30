@@ -41,6 +41,8 @@ class CashFlowController extends Controller
         return Inertia::render('accounting/cash-flow/index', [
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
+            // For the presets on the date bar; the server keeps deciding the default window.
+            'fiscal_year_start_month' => $business?->fiscal_year_start_month,
             'fiscal_year' => $business !== null ? FiscalYear::containing($to, $business)->label() : null,
             'operating' => self::lines($flow->operating),
             'investing' => self::lines($flow->investing),

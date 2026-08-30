@@ -1,5 +1,4 @@
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { DateRangeBar, ReportHeading } from '@/components/report/report-shell';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -61,6 +60,7 @@ export default function CashFlowIndex({
     from,
     to,
     fiscal_year,
+    fiscal_year_start_month,
     operating,
     investing,
     financing,
@@ -72,6 +72,7 @@ export default function CashFlowIndex({
     from: string;
     to: string;
     fiscal_year: string | null;
+    fiscal_year_start_month: number | null;
     operating: Line[];
     investing: Line[];
     financing: Line[];
@@ -81,33 +82,28 @@ export default function CashFlowIndex({
     difference: string;
     any_cash_account_mapped: boolean;
 }) {
-    const setRange = (key: 'from' | 'to', value: string) => {
-        router.get('/accounting/cash-flow', { from, to, [key]: value }, { preserveState: true, preserveScroll: true });
+    const show = (range: { from: string; to: string }) => {
+        router.get('/accounting/cash-flow', range, { preserveState: true, preserveScroll: true });
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cash flow" />
             <div className="flex flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-lg font-medium">Statement of cash flows</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Where the money actually went{fiscal_year ? ` · fiscal year ${fiscal_year}` : ''}. Read from the cash itself rather than
-                        worked backwards from profit: every journal touching a cash account is a movement, and the accounts on the other side of it
-                        say what the movement was for.
-                    </p>
-                </div>
+                <ReportHeading
+                    title="Statement of cash flows"
+                    description={`Where the money actually went${fiscal_year ? ` · fiscal year ${fiscal_year}` : ''}. Read from the cash itself rather than worked backwards from profit: every journal touching a cash account is a movement, and the accounts on the other side of it say what the movement was for.`}
+                />
 
-                <div className="flex flex-wrap items-end gap-4 rounded-lg border p-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="from">From</Label>
-                        <Input id="from" type="date" value={from} onChange={(e) => setRange('from', e.target.value)} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="to">To</Label>
-                        <Input id="to" type="date" value={to} onChange={(e) => setRange('to', e.target.value)} />
-                    </div>
-                </div>
+                {/* ⚠ This statement always reloads on a change, so the Show button
+                    is only there for a date typed by hand. */}
+                <DateRangeBar
+                    from={from}
+                    to={to}
+                    onChange={show}
+                    onSubmit={(e) => e.preventDefault()}
+                    fiscalYearStartMonth={fiscal_year_start_month}
+                />
 
                 {!any_cash_account_mapped && (
                     <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
