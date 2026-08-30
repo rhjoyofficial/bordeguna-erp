@@ -16,6 +16,10 @@ import { useEffect, useState } from 'react';
 export type NavGroup = {
     label: string;
     items: NavItem[];
+    // ⚠ Settings is long and is opened rarely. It starts closed so it does not
+    // push the working modules off the bottom of the sidebar; the moment
+    // somebody is on a settings page it opens itself, like any other group.
+    defaultOpen?: boolean;
 };
 
 // The active item is the one whose url is the longest prefix of the current
@@ -42,9 +46,10 @@ function NavGroupSection({ group, activeUrl }: { group: NavGroup; activeUrl: str
     const storageKey = `sidebar:group:${group.label}`;
 
     const [open, setOpen] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return true;
+        const fallback = group.defaultOpen ?? true;
+        if (typeof window === 'undefined') return fallback;
         const stored = window.localStorage.getItem(storageKey);
-        return stored === null ? true : stored === '1';
+        return stored === null ? fallback : stored === '1';
     });
 
     // Always reveal the group that owns the active route, even if the user had

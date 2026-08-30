@@ -1,6 +1,7 @@
 import { NavGroups, type NavGroup } from '@/components/nav-groups';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { settingsNavItems } from '@/lib/settings-nav';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
@@ -23,15 +24,14 @@ import {
     FileText,
     FileUp,
     FileWarning,
-    FolderOpen,
-    UserSearch,
     Fingerprint,
+    FolderOpen,
     HandCoins,
     Landmark,
     LayoutDashboard,
     LayoutGrid,
-    Mail,
     ListTree,
+    Mail,
     Megaphone,
     MessageSquare,
     NotebookPen,
@@ -60,6 +60,7 @@ import {
     UserCircle,
     UserPlus,
     Users,
+    UserSearch,
     Wallet,
     Warehouse,
     Waves,
@@ -97,7 +98,17 @@ export function AppSidebar() {
         canManageCrmSettings,
         canViewAssets,
         hasEmployeeProfile,
+        canManageUsers,
+        canManageOrganization,
+        canManageReasons,
     } = usePage<SharedData>().props;
+
+    const settingsItems = settingsNavItems({
+        canManageUsers,
+        canManageOrganization,
+        canManageCrmSettings,
+        canManageReasons,
+    });
 
     const navGroups: NavGroup[] = [
         {
@@ -432,6 +443,23 @@ export function AppSidebar() {
                           { title: 'HR dashboard', url: '/hrm/dashboard', icon: LayoutDashboard },
                           { title: 'Reports', url: '/hrm/reports', icon: FileBarChart },
                       ],
+                  },
+              ]
+            : []),
+        // ⚠⚠ SETTINGS LIVES IN THE SIDEBAR (Joy, 30 Aug 2026), not in a second
+        // navigation column inside the settings pages. One place to look for a
+        // link, and the settings pages get the whole screen back.
+        //
+        // ⚠ Every item is gated by the permission its own controller
+        // authorizes - see settings-nav.ts, where the gates are listed with the
+        // permission each one really checks. An empty list renders no group at
+        // all rather than an empty heading.
+        ...(settingsItems.length > 0
+            ? [
+                  {
+                      label: 'Settings',
+                      defaultOpen: false,
+                      items: settingsItems,
                   },
               ]
             : []),

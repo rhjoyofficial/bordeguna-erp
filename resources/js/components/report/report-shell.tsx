@@ -19,15 +19,7 @@ export function ReportPage({ children }: { children: ReactNode }) {
     return <div className="flex flex-col gap-6 p-4">{children}</div>;
 }
 
-export function ReportHeading({
-    title,
-    description,
-    actions,
-}: {
-    title: ReactNode;
-    description?: ReactNode;
-    actions?: ReactNode;
-}) {
+export function ReportHeading({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
     return (
         <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -46,15 +38,7 @@ export function ReportHeading({
  * controls that chose it are furniture, and furniture on a page somebody hands
  * to an accountant looks like a mistake.
  */
-export function FilterBar({
-    onSubmit,
-    children,
-    label = 'Show',
-}: {
-    onSubmit: FormEventHandler;
-    children: ReactNode;
-    label?: string;
-}) {
+export function FilterBar({ onSubmit, children, label = 'Show' }: { onSubmit: FormEventHandler; children: ReactNode; label?: string }) {
     return (
         <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3 print:hidden">
             {children}
@@ -84,17 +68,7 @@ export function Verdict({ tone = 'plain', children }: { tone?: 'plain' | 'good' 
  * A headline figure. The same tile the finance overview uses, so a number means
  * the same thing and looks the same wherever it appears.
  */
-export function StatTile({
-    label,
-    value,
-    hint,
-    tone,
-}: {
-    label: ReactNode;
-    value: ReactNode;
-    hint?: ReactNode;
-    tone?: 'good' | 'bad';
-}) {
+export function StatTile({ label, value, hint, tone }: { label: ReactNode; value: ReactNode; hint?: ReactNode; tone?: 'good' | 'bad' }) {
     const colour = tone === 'good' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'bad' ? 'text-red-600 dark:text-red-400' : '';
 
     return (

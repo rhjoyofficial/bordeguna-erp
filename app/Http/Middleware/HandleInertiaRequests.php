@@ -108,6 +108,12 @@ class HandleInertiaRequests extends Middleware
                 ->values()
                 ->all() ?? [],
             'canManageUsers' => fn () => (bool) $request->user()?->can('foundation.users.manage'),
+            // ⚠⚠ The Reasons settings screen authorizes `inventory.catalog.manage`,
+            // NOT an organisation permission. The old settings nav showed the
+            // link to everybody, so anybody without it followed a link the
+            // interface offered them into a 403. Named after the screen rather
+            // than the permission so the two cannot drift apart unnoticed.
+            'canManageReasons' => fn () => (bool) $request->user()?->can('inventory.catalog.manage'),
             'canManageOrganization' => fn () => (bool) $request->user()?->can('foundation.organization.manage'),
             'canManageEmployees' => fn () => (bool) $request->user()?->can('hrm.employees.manage'),
             'canManageScheduling' => fn () => (bool) $request->user()?->can('hrm.scheduling.manage'),

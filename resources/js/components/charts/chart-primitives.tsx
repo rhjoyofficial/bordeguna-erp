@@ -119,14 +119,7 @@ export function PairedBars({
 
                     return (
                         <g key={point.label}>
-                            <rect
-                                x={centre - barWidth - 0.5}
-                                y={height - aHeight}
-                                width={barWidth}
-                                height={aHeight}
-                                fill={MONEY_IN}
-                                rx={0.6}
-                            >
+                            <rect x={centre - barWidth - 0.5} y={height - aHeight} width={barWidth} height={aHeight} fill={MONEY_IN} rx={0.6}>
                                 <title>{`${point.label}: ${aLabel} ${point.a.toLocaleString()}`}</title>
                             </rect>
                             <rect x={centre + 0.5} y={height - bHeight} width={barWidth} height={bHeight} fill={MONEY_OUT} rx={0.6}>
@@ -213,10 +206,7 @@ export function Breakdown({ points, empty = 'Nothing outstanding.' }: { points: 
                             <span className="font-medium">{point.value.toLocaleString()}</span>
                         </div>
                         <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
-                            <div
-                                className="bg-primary h-full rounded-full"
-                                style={{ width: `${Math.max(share * 100, share > 0 ? 1.5 : 0)}%` }}
-                            />
+                            <div className="bg-primary h-full rounded-full" style={{ width: `${Math.max(share * 100, share > 0 ? 1.5 : 0)}%` }} />
                         </div>
                     </li>
                 );

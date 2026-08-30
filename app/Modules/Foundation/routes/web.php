@@ -1,7 +1,6 @@
 <?php
 
 use App\Modules\Foundation\Http\Controllers\AttachmentController;
-use App\Modules\Foundation\Http\Controllers\AuditTrailController;
 use App\Modules\Foundation\Http\Controllers\BusinessSettingsController;
 use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
 use App\Modules\Foundation\Http\Controllers\CalendarController;
@@ -84,10 +83,6 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     Route::patch('settings/team/{user}/toggle-active', [UserManagementController::class, 'toggleActive'])->name('users.toggle-active');
     Route::post('settings/team/{user}/password-link', [UserManagementController::class, 'sendPasswordLink'])->name('users.password-link');
     Route::delete('settings/team/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
-
-    // Who changed what. Read-only, Owner-level, and authorised inside the
-    // controller like everything else on this file.
-    Route::get('settings/audit', [AuditTrailController::class, 'index'])->name('audit.index');
 
     // Role & permission management — same admin permission as team management.
     // {role} is checked against the current business in the controller.
