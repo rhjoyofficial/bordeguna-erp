@@ -22,12 +22,13 @@ beforeEach(function () {
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
 
-    foreach (['inventory.view', 'notes.view'] as $name) {
+    // ⚠ Each AI capability needs its own grant since 30 Aug 2026.
+    foreach (['inventory.view', 'notes.view', 'foundation.ai.read', 'foundation.ai.notes', 'foundation.ai.todos'] as $name) {
         Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
     }
 
     Role::firstOrCreate(['name' => 'Storeman', 'business_id' => $this->business->id, 'guard_name' => 'web'])
-        ->givePermissionTo(['inventory.view', 'notes.view']);
+        ->givePermissionTo(['inventory.view', 'notes.view', 'foundation.ai.read', 'foundation.ai.notes', 'foundation.ai.todos']);
 
     $this->me = User::factory()->create();
     $this->me->businesses()->attach($this->business->id);

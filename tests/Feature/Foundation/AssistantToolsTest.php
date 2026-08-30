@@ -21,13 +21,20 @@ beforeEach(function () {
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
 
-    foreach (['inventory.view', 'sales.view', 'notes.view'] as $name) {
+    // ⚠ From 30 Aug 2026 each AI capability needs its own grant, held by no
+    // role by default. Granted here so these tests keep testing what they are
+    // about - the shape of the tools. Who may have them at all is
+    // AssistantPermissionsTest's job.
+    foreach (['inventory.view', 'sales.view', 'notes.view', 'foundation.ai.read', 'foundation.ai.notes', 'foundation.ai.todos'] as $name) {
         Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
     }
 
     Role::firstOrCreate(['name' => 'Storeman', 'business_id' => $this->business->id, 'guard_name' => 'web'])
-        ->givePermissionTo('inventory.view');
-    Role::firstOrCreate(['name' => 'Nobody', 'business_id' => $this->business->id, 'guard_name' => 'web']);
+        ->givePermissionTo(['inventory.view', 'foundation.ai.read', 'foundation.ai.notes', 'foundation.ai.todos']);
+    // ⚠ Holds the AI grants but NO module read permission, which is exactly
+    // the narrows-never-widens case: the tools exist, the data does not.
+    Role::firstOrCreate(['name' => 'Nobody', 'business_id' => $this->business->id, 'guard_name' => 'web'])
+        ->givePermissionTo(['foundation.ai.read', 'foundation.ai.notes', 'foundation.ai.todos']);
 
     $this->storeman = User::factory()->create();
     $this->storeman->businesses()->attach($this->business->id);
@@ -84,10 +91,24 @@ it('returns a refusal as an answer rather than throwing', function () {
         ->and(json_decode($result, true))->toHaveKey('refused');
 });
 
-it('refuses a tool name it does not have', function () {
-    $result = $this->tools->run($this->storeman, 'delete_everything', []);
+it('refuses an invented tool name the same way it refuses an ungranted one', function () {
+    // ⚠⚠ THE SAME MESSAGE FOR BOTH, deliberately. A tool that does not exist and
+    // a tool this person has not been granted are indistinguishable from
+    // outside, so the assistant cannot be used to map which tools the system
+    // has. The permission check runs BEFORE the dispatch precisely so an
+    // invented name never reaches something that could tell them apart.
+    $ungranted = User::factory()->create();
+    $ungranted->businesses()->attach($this->business->id);
+    Role::firstOrCreate(['name' => 'No AI Grants', 'business_id' => $this->business->id, 'guard_name' => 'web'])
+        ->givePermissionTo('inventory.view');
+    $ungranted->assignRole('No AI Grants');
 
-    expect(json_decode($result, true)['refused'])->toContain('no tool called');
+    $invented = json_decode($this->tools->run($ungranted, 'delete_everything', []), true);
+    $real = json_decode($this->tools->run($ungranted, 'create_note', ['title' => 'x']), true);
+
+    expect($invented)->toHaveKey('refused')
+        ->and($real)->toHaveKey('refused')
+        ->and($invented['refused'])->toBe($real['refused']);
 });
 
 it('suggests only questions this person could actually get an answer to', function () {
