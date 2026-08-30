@@ -53,7 +53,6 @@ interface Preview {
  * and the preview is the truth.
  */
 function measure(body: string): { unicode: boolean; characters: number; parts: number } {
-    // eslint-disable-next-line no-control-regex
     const gsm = /^[@£$¥èéùìòÇ\n Øø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&'()*+,\-./0-9:;<=>?¡A-ZÄÖÑÜ§¿a-zäöñüà^{}\\[~\]|€]*$/;
     const unicode = !gsm.test(body);
     const characters = [...body].length;

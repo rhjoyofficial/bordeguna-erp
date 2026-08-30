@@ -193,7 +193,7 @@ export default function PurchaseOrdersIndex({
             <div className="flex flex-col gap-6 p-4">
                 <ReportHeading title="Purchase orders" />
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
-                    <FilterField label="Search PO #" htmlFor="filter-search" className="min-w-56 flex-1">
+                    <FilterField label="Search PO #" htmlFor="filter-search" className="w-72">
                         <Input
                             id="filter-search"
                             value={filters.search}
