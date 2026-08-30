@@ -1,9 +1,9 @@
 import { Pagination } from '@/components/data-table/pagination';
-import InputError from '@/components/input-error';
+import { Field, FormRow } from '@/components/form/field';
+import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
@@ -74,109 +74,99 @@ export default function MoneyTransfersIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Money transfer" />
             <div className="flex flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-lg font-medium">Money transfer</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Moving money between your own accounts - bank to the till, bKash to the bank. Nothing is earned or spent here except the fee,
-                        so the business is exactly as rich afterwards, minus what the move cost.
-                    </p>
-                </div>
+                <ReportHeading
+                    title="Money transfer"
+                    description="Moving money between your own accounts - bank to the till, bKash to the bank. Nothing is earned or spent here except the fee, so the business is exactly as rich afterwards, minus what the move cost."
+                />
 
-                <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="transferred_on">Date</Label>
-                        <Input
-                            id="transferred_on"
-                            type="date"
-                            value={data.transferred_on}
-                            onChange={(e) => setData('transferred_on', e.target.value)}
-                        />
-                        <InputError message={errors.transferred_on} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="from_money_account_id">From</Label>
-                        <SearchSelect
-                            id="from_money_account_id"
-                            value={data.from_money_account_id}
-                            onChange={(e) => setData('from_money_account_id', e.target.value)}
+                <form onSubmit={submit} className="flex flex-col gap-4 rounded-lg border p-4">
+                    {/* Two rows, each box as wide as its value (30 Aug 2026 audit):
+                        the move on the first, what it cost and why on the second. */}
+                    <FormRow>
+                        <Field label="Date" htmlFor="transferred_on" error={errors.transferred_on}>
+                            <Input
+                                id="transferred_on"
+                                type="date"
+                                value={data.transferred_on}
+                                onChange={(e) => setData('transferred_on', e.target.value)}
+                            />
+                        </Field>
+                        <Field label="From" htmlFor="from_money_account_id" error={errors.from_money_account_id}>
+                            <SearchSelect
+                                id="from_money_account_id"
+                                value={data.from_money_account_id}
+                                onChange={(e) => setData('from_money_account_id', e.target.value)}
+                            >
+                                <option value="">Choose an account</option>
+                                {accounts.map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                        {a.name}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                        </Field>
+                        <Field label="To" htmlFor="to_money_account_id" error={errors.to_money_account_id}>
+                            <SearchSelect
+                                id="to_money_account_id"
+                                value={data.to_money_account_id}
+                                onChange={(e) => setData('to_money_account_id', e.target.value)}
+                            >
+                                <option value="">Choose an account</option>
+                                {accounts.map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                        {a.name}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                        </Field>
+                        <Field label="Amount that arrives" htmlFor="amount" size="sm" error={errors.amount}>
+                            <Input id="amount" inputMode="decimal" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
+                        </Field>
+                    </FormRow>
+                    <FormRow>
+                        {/* ⚠ The hint is the reason the fee field exists at all. */}
+                        <Field
+                            label="Fee (optional)"
+                            htmlFor="fee"
+                            size="sm"
+                            error={errors.fee}
+                            hint="A bKash cash-out costs about 1.85%. Leave blank if the move was free."
                         >
-                            <option value="">Choose an account</option>
-                            {accounts.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                    {a.name}
-                                </option>
-                            ))}
-                        </SearchSelect>
-                        <InputError message={errors.from_money_account_id} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="to_money_account_id">To</Label>
-                        <SearchSelect
-                            id="to_money_account_id"
-                            value={data.to_money_account_id}
-                            onChange={(e) => setData('to_money_account_id', e.target.value)}
-                        >
-                            <option value="">Choose an account</option>
-                            {accounts.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                    {a.name}
-                                </option>
-                            ))}
-                        </SearchSelect>
-                        <InputError message={errors.to_money_account_id} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="amount">Amount that arrives</Label>
-                        <Input id="amount" inputMode="decimal" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
-                        <InputError message={errors.amount} />
-                    </div>
-
-                    <div className="grid gap-2">
-                        <Label htmlFor="fee">Fee (optional)</Label>
-                        <Input id="fee" inputMode="decimal" value={data.fee} onChange={(e) => setData('fee', e.target.value)} />
-                        <InputError message={errors.fee} />
-                        {/* ⚠ The reason this field exists at all. */}
-                        <p className="text-muted-foreground text-xs">A bKash cash-out costs about 1.85%. Leave blank if the move was free.</p>
-                    </div>
-                    <div className="grid gap-2 md:col-span-2">
-                        <Label htmlFor="fee_account_id">Charge the fee to</Label>
-                        <SearchSelect
-                            id="fee_account_id"
-                            value={data.fee_account_id}
-                            onChange={(e) => setData('fee_account_id', e.target.value)}
-                            disabled={!chargeable}
-                        >
-                            <option value="">{chargeable ? 'Choose an expense account' : 'No fee to charge'}</option>
-                            {fee_accounts.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                    {a.label}
-                                </option>
-                            ))}
-                        </SearchSelect>
-                        <InputError message={errors.fee_account_id} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="reference">Reference</Label>
-                        <Input
-                            id="reference"
-                            value={data.reference}
-                            onChange={(e) => setData('reference', e.target.value)}
-                            placeholder="Slip or transaction no."
-                        />
-                        <InputError message={errors.reference} />
-                    </div>
-
-                    <div className="grid gap-2 md:col-span-4">
-                        <Label htmlFor="note">Note</Label>
-                        <Input id="note" value={data.note} onChange={(e) => setData('note', e.target.value)} />
-                        <InputError message={errors.note} />
-                    </div>
+                            <Input id="fee" inputMode="decimal" value={data.fee} onChange={(e) => setData('fee', e.target.value)} />
+                        </Field>
+                        <Field label="Charge the fee to" htmlFor="fee_account_id" error={errors.fee_account_id}>
+                            <SearchSelect
+                                id="fee_account_id"
+                                value={data.fee_account_id}
+                                onChange={(e) => setData('fee_account_id', e.target.value)}
+                                disabled={!chargeable}
+                            >
+                                <option value="">{chargeable ? 'Choose an expense account' : 'No fee to charge'}</option>
+                                {fee_accounts.map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                        {a.label}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                        </Field>
+                        <Field label="Reference" htmlFor="reference" size="md" error={errors.reference}>
+                            <Input
+                                id="reference"
+                                value={data.reference}
+                                onChange={(e) => setData('reference', e.target.value)}
+                                placeholder="Slip or transaction no."
+                            />
+                        </Field>
+                        <Field label="Note" htmlFor="note" size="grow" error={errors.note}>
+                            <Input id="note" value={data.note} onChange={(e) => setData('note', e.target.value)} />
+                        </Field>
+                    </FormRow>
 
                     {/* ⚠⚠ The one thing people get wrong: the source loses amount PLUS
                         fee, not amount. Stated on screen rather than left to be
                         discovered when the till is counted. */}
                     {withdrawn > 0 && (
-                        <div className="bg-muted/50 rounded-md p-3 text-sm md:col-span-4">
+                        <div className="bg-muted/50 rounded-md p-3 text-sm">
                             Leaves the source: <span className="font-medium tabular-nums">{withdrawn.toFixed(2)}</span>
                             {chargeable && (
                                 <>
@@ -189,7 +179,7 @@ export default function MoneyTransfersIndex({
                         </div>
                     )}
 
-                    <div className="md:col-span-4">
+                    <div>
                         <Button type="submit" disabled={processing}>
                             Record transfer
                         </Button>
