@@ -1,4 +1,6 @@
+import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
+import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -141,20 +143,20 @@ export default function MessagingIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={isSms ? 'Send SMS' : 'Send email'} />
             <div className="flex flex-col gap-8 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                        <h2 className="text-lg font-medium">{isSms ? 'SMS' : 'Email'}</h2>
-                        <p className="text-muted-foreground text-sm">
+                <ReportHeading
+                    title={isSms ? 'SMS' : 'Email'}
+                    description={
+                        <>
                             Uploading nothing sends nothing. A campaign is drafted, previewed, and only then sent. Anything above {approvalAbove}{' '}
                             recipients goes for approval first, because a send is the one thing here that spends money by itself.
-                        </p>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" asChild>
+                        </>
+                    }
+                    actions={
+                        <Button variant="outline" size="sm" asChild>
                             <Link href={`/crm/messages/${isSms ? 'email' : 'sms'}`}>{isSms ? 'Email instead' : 'SMS instead'}</Link>
                         </Button>
-                    </div>
-                </div>
+                    }
+                />
 
                 {providers.filter((p) => p.is_active).length === 0 && (
                     <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950">
@@ -164,49 +166,49 @@ export default function MessagingIndex({
                 )}
 
                 {can.send && (
-                    <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-                        <div className="grid gap-2 md:col-span-2">
-                            <Label htmlFor="name">What this send is called</Label>
-                            <Input id="name" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
-                            <InputError message={form.errors.name} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="audience_type">Who it goes to</Label>
-                            <SearchSelect
-                                id="audience_type"
-                                value={form.data.audience_type}
-                                onChange={(e) => form.setData('audience_type', e.target.value)}
-                            >
-                                <option value="group">One group</option>
-                                <option value="all">Everybody in the phone book</option>
-                            </SearchSelect>
-                        </div>
-                        {form.data.audience_type === 'group' && (
-                            <div className="grid gap-2">
-                                <Label htmlFor="contact_group_id">Group</Label>
+                    <form onSubmit={submit} className="flex flex-col gap-4 rounded-lg border p-4">
+                        {/* Name grows, the two pickers fit their options (30 Aug 2026
+                            audit); the subject and the message take the full width
+                            because a sentence needs it. */}
+                        <FormRow>
+                            <Field label="What this send is called" htmlFor="name" size="grow" error={form.errors.name}>
+                                <Input id="name" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
+                            </Field>
+                            <Field label="Who it goes to" htmlFor="audience_type">
                                 <SearchSelect
-                                    id="contact_group_id"
-                                    value={form.data.contact_group_id}
-                                    onChange={(e) => form.setData('contact_group_id', e.target.value)}
+                                    id="audience_type"
+                                    value={form.data.audience_type}
+                                    onChange={(e) => form.setData('audience_type', e.target.value)}
                                 >
-                                    <option value="">Choose a group</option>
-                                    {groups.map((g) => (
-                                        <option key={g.id} value={g.id}>
-                                            {g.name} ({g.contacts_count})
-                                        </option>
-                                    ))}
+                                    <option value="group">One group</option>
+                                    <option value="all">Everybody in the phone book</option>
                                 </SearchSelect>
-                                <InputError message={form.errors.contact_group_id} />
-                            </div>
-                        )}
+                            </Field>
+                            {form.data.audience_type === 'group' && (
+                                <Field label="Group" htmlFor="contact_group_id" error={form.errors.contact_group_id}>
+                                    <SearchSelect
+                                        id="contact_group_id"
+                                        value={form.data.contact_group_id}
+                                        onChange={(e) => form.setData('contact_group_id', e.target.value)}
+                                    >
+                                        <option value="">Choose a group</option>
+                                        {groups.map((g) => (
+                                            <option key={g.id} value={g.id}>
+                                                {g.name} ({g.contacts_count})
+                                            </option>
+                                        ))}
+                                    </SearchSelect>
+                                </Field>
+                            )}
+                        </FormRow>
                         {!isSms && (
-                            <div className="grid gap-2 md:col-span-4">
+                            <div className="grid gap-2">
                                 <Label htmlFor="subject">Subject</Label>
                                 <Input id="subject" value={form.data.subject} onChange={(e) => form.setData('subject', e.target.value)} />
                                 <InputError message={form.errors.subject} />
                             </div>
                         )}
-                        <div className="grid gap-2 md:col-span-4">
+                        <div className="grid gap-2">
                             <Label htmlFor="body">Message</Label>
                             <textarea
                                 id="body"
@@ -223,43 +225,42 @@ export default function MessagingIndex({
                                 </p>
                             )}
                         </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="message_provider_id">Send through</Label>
-                            <SearchSelect
-                                id="message_provider_id"
-                                value={form.data.message_provider_id}
-                                onChange={(e) => form.setData('message_provider_id', e.target.value)}
-                            >
-                                <option value="">Choose a provider</option>
-                                {providers.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                        {p.name}
-                                        {p.is_active ? '' : ' (off)'}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="recipient_cap">Stop above</Label>
-                            <Input
-                                id="recipient_cap"
-                                type="number"
-                                min={1}
-                                value={form.data.recipient_cap}
-                                onChange={(e) => form.setData('recipient_cap', Number(e.target.value))}
-                            />
-                            <InputError message={form.errors.recipient_cap} />
-                        </div>
-                        <div className="flex items-end gap-2 md:col-span-2">
-                            <Button type="submit" disabled={form.processing}>
-                                {editing ? 'Save draft' : 'Save draft'}
-                            </Button>
-                            {editing && (
-                                <Button type="button" variant="ghost" onClick={cancel}>
-                                    Cancel
+                        <FormRow>
+                            <Field label="Send through" htmlFor="message_provider_id">
+                                <SearchSelect
+                                    id="message_provider_id"
+                                    value={form.data.message_provider_id}
+                                    onChange={(e) => form.setData('message_provider_id', e.target.value)}
+                                >
+                                    <option value="">Choose a provider</option>
+                                    {providers.map((p) => (
+                                        <option key={p.id} value={p.id}>
+                                            {p.name}
+                                            {p.is_active ? '' : ' (off)'}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                            </Field>
+                            <Field label="Stop above" htmlFor="recipient_cap" size="xs" error={form.errors.recipient_cap}>
+                                <Input
+                                    id="recipient_cap"
+                                    type="number"
+                                    min={1}
+                                    value={form.data.recipient_cap}
+                                    onChange={(e) => form.setData('recipient_cap', Number(e.target.value))}
+                                />
+                            </Field>
+                            <div className="flex items-center gap-2">
+                                <Button type="submit" disabled={form.processing}>
+                                    Save draft
                                 </Button>
-                            )}
-                        </div>
+                                {editing && (
+                                    <Button type="button" variant="ghost" onClick={cancel}>
+                                        Cancel
+                                    </Button>
+                                )}
+                            </div>
+                        </FormRow>
                     </form>
                 )}
 
