@@ -1,3 +1,4 @@
+import { Field, FormRow } from '@/components/form/field';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
@@ -310,14 +311,13 @@ export default function MessagingSettings({
 
                     {/* ── Add or edit a provider ─────────────────────────── */}
                     <form onSubmit={submit} className="space-y-4 rounded-lg border p-4">
-                        <div className="grid gap-4 md:grid-cols-3">
-                            <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
+                        {/* Every box as wide as what it holds (30 Aug 2026 audit): a
+                            cost is a money box, a priority is a digit, a URL grows. */}
+                        <FormRow>
+                            <Field label="Name" htmlFor="name" size="md" error={form.errors.name}>
                                 <Input id="name" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
-                                <InputError message={form.errors.name} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="channel">Sends</Label>
+                            </Field>
+                            <Field label="Sends" htmlFor="channel">
                                 <SearchSelect
                                     id="channel"
                                     value={form.data.channel}
@@ -326,9 +326,8 @@ export default function MessagingSettings({
                                     <option value="sms">SMS</option>
                                     <option value="email">Email</option>
                                 </SearchSelect>
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="driver">Through</Label>
+                            </Field>
+                            <Field label="Through" htmlFor="driver" error={form.errors.driver}>
                                 <SearchSelect id="driver" value={form.data.driver} onChange={(e) => form.setData('driver', e.target.value)}>
                                     <option value="">Choose</option>
                                     {forChannel.map((d) => (
@@ -337,24 +336,19 @@ export default function MessagingSettings({
                                         </option>
                                     ))}
                                 </SearchSelect>
-                                <InputError message={form.errors.driver} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="sender_id">{form.data.channel === 'sms' ? 'Sender ID (masking)' : 'From address'}</Label>
+                            </Field>
+                            <Field label={form.data.channel === 'sms' ? 'Sender ID (masking)' : 'From address'} htmlFor="sender_id" size="md">
                                 <Input id="sender_id" value={form.data.sender_id} onChange={(e) => form.setData('sender_id', e.target.value)} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="cost_per_part">Cost per part</Label>
+                            </Field>
+                            <Field label="Cost per part" htmlFor="cost_per_part" size="sm" error={form.errors.cost_per_part}>
                                 <Input
                                     id="cost_per_part"
                                     inputMode="decimal"
                                     value={form.data.cost_per_part}
                                     onChange={(e) => form.setData('cost_per_part', e.target.value)}
                                 />
-                                <InputError message={form.errors.cost_per_part} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="priority">Priority</Label>
+                            </Field>
+                            <Field label="Priority" htmlFor="priority" size="xs">
                                 <Input
                                     id="priority"
                                     type="number"
@@ -362,14 +356,14 @@ export default function MessagingSettings({
                                     value={form.data.priority}
                                     onChange={(e) => form.setData('priority', Number(e.target.value))}
                                 />
-                            </div>
-                        </div>
+                            </Field>
+                        </FormRow>
 
                         {isGateway && (
                             <div className="space-y-4 rounded-lg border border-dashed p-4">
                                 <div className="grid gap-2">
                                     <Label htmlFor="preset">Start from a known gateway</Label>
-                                    <SearchSelect id="preset" value={presetKey} onChange={(e) => applyPreset(e.target.value)}>
+                                    <SearchSelect fit id="preset" value={presetKey} onChange={(e) => applyPreset(e.target.value)}>
                                         <option value="">Choose one, or fill the fields in by hand</option>
                                         {presets.map((p) => (
                                             <option key={p.key} value={p.key}>
@@ -389,51 +383,52 @@ export default function MessagingSettings({
                                     )}
                                 </div>
 
-                                <div className="grid gap-4 md:grid-cols-3">
-                                    <div className="grid gap-2 md:col-span-2">
-                                        <Label htmlFor="endpoint">Endpoint</Label>
+                                <FormRow>
+                                    <Field
+                                        label="Endpoint"
+                                        htmlFor="endpoint"
+                                        size="grow"
+                                        className="min-w-80"
+                                        error={(form.errors as Record<string, string>)['config.endpoint']}
+                                    >
                                         <Input
                                             id="endpoint"
                                             placeholder="https://bulksmsbd.net/api/smsapi"
                                             value={config.endpoint}
                                             onChange={(e) => setConfig({ endpoint: e.target.value })}
                                         />
-                                        <InputError message={(form.errors as Record<string, string>)['config.endpoint']} />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="method">Sent as</Label>
+                                    </Field>
+                                    <Field label="Sent as" htmlFor="method">
                                         <SearchSelect id="method" value={config.method} onChange={(e) => setConfig({ method: e.target.value })}>
                                             <option value="post_form">POST form</option>
                                             <option value="post_json">POST JSON</option>
                                             <option value="get">GET</option>
                                         </SearchSelect>
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="recipient_field">Number field</Label>
+                                    </Field>
+                                </FormRow>
+                                <FormRow>
+                                    <Field label="Number field" htmlFor="recipient_field" size="sm">
                                         <Input
                                             id="recipient_field"
                                             value={config.recipient_field}
                                             onChange={(e) => setConfig({ recipient_field: e.target.value })}
                                         />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="message_field">Message field</Label>
+                                    </Field>
+                                    <Field label="Message field" htmlFor="message_field" size="sm">
                                         <Input
                                             id="message_field"
                                             value={config.message_field}
                                             onChange={(e) => setConfig({ message_field: e.target.value })}
                                         />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="sender_field">Sender ID field</Label>
+                                    </Field>
+                                    <Field label="Sender ID field" htmlFor="sender_field" size="sm">
                                         <Input
                                             id="sender_field"
                                             value={config.sender_field ?? ''}
                                             onChange={(e) => setConfig({ sender_field: e.target.value })}
                                         />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="number_format">Number written as</Label>
+                                    </Field>
+                                    <Field label="Number written as" htmlFor="number_format">
                                         <SearchSelect
                                             id="number_format"
                                             value={config.number_format}
@@ -444,24 +439,24 @@ export default function MessagingSettings({
                                             <option value="plus88">+8801711000000</option>
                                             <option value="raw">exactly as stored</option>
                                         </SearchSelect>
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="auth">Credentials go in</Label>
+                                    </Field>
+                                    <Field label="Credentials go in" htmlFor="auth">
                                         <SearchSelect id="auth" value={config.auth} onChange={(e) => setConfig({ auth: e.target.value })}>
                                             <option value="params">the parameters</option>
                                             <option value="basic">HTTP basic auth</option>
                                             <option value="bearer">a bearer token</option>
                                             <option value="header">request headers</option>
                                         </SearchSelect>
-                                    </div>
-                                </div>
+                                    </Field>
+                                </FormRow>
 
                                 {/* Secrets: what it is called here, what it is called on the wire, and its value. */}
                                 <div className="space-y-2">
                                     <Label>Keys</Label>
                                     {credentialRows.map(([secret, wire]) => (
-                                        <div key={secret} className="grid gap-2 md:grid-cols-3">
+                                        <div key={secret} className="flex flex-wrap gap-2">
                                             <Input
+                                                className="w-40"
                                                 aria-label={`${secret} name`}
                                                 value={secret}
                                                 onChange={(e) => {
@@ -476,6 +471,7 @@ export default function MessagingSettings({
                                                 }}
                                             />
                                             <Input
+                                                className="w-48"
                                                 aria-label={`${secret} sent as`}
                                                 placeholder="sent to the gateway as"
                                                 value={wire}
@@ -484,6 +480,7 @@ export default function MessagingSettings({
                                                 }
                                             />
                                             <Input
+                                                className="min-w-56 flex-1"
                                                 aria-label={`${secret} value`}
                                                 type="password"
                                                 autoComplete="off"
@@ -533,9 +530,8 @@ export default function MessagingSettings({
                                     </div>
                                 </div>
 
-                                <div className="grid gap-4 md:grid-cols-3">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="success_mode">It worked when</Label>
+                                <FormRow>
+                                    <Field label="It worked when" htmlFor="success_mode">
                                         <SearchSelect
                                             id="success_mode"
                                             value={config.success?.mode ?? 'http_ok'}
@@ -545,9 +541,8 @@ export default function MessagingSettings({
                                             <option value="body_contains">the reply contains</option>
                                             <option value="http_ok">the reply is any HTTP 2xx</option>
                                         </SearchSelect>
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="success_path">Field</Label>
+                                    </Field>
+                                    <Field label="Field" htmlFor="success_path" size="md">
                                         <Input
                                             id="success_path"
                                             placeholder="response_code"
@@ -555,9 +550,8 @@ export default function MessagingSettings({
                                             value={config.success?.path ?? ''}
                                             onChange={(e) => setConfig({ success: { ...config.success, path: e.target.value } })}
                                         />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="success_values">Any of these values</Label>
+                                    </Field>
+                                    <Field label="Any of these values" htmlFor="success_values" size="md">
                                         <Input
                                             id="success_values"
                                             placeholder="202"
@@ -575,8 +569,8 @@ export default function MessagingSettings({
                                                 })
                                             }
                                         />
-                                    </div>
-                                </div>
+                                    </Field>
+                                </FormRow>
 
                                 {config.success?.mode === 'http_ok' && (
                                     <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs dark:border-amber-900 dark:bg-amber-950">
@@ -586,40 +580,36 @@ export default function MessagingSettings({
                                     </p>
                                 )}
 
-                                <div className="grid gap-4 md:grid-cols-4">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="error_path">Error message field</Label>
+                                <FormRow>
+                                    <Field label="Error message field" htmlFor="error_path" size="md">
                                         <Input
                                             id="error_path"
                                             value={config.error_path ?? ''}
                                             onChange={(e) => setConfig({ error_path: e.target.value })}
                                         />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="message_id_path">Message ID field</Label>
+                                    </Field>
+                                    <Field label="Message ID field" htmlFor="message_id_path" size="md">
                                         <Input
                                             id="message_id_path"
                                             value={config.message_id_path ?? ''}
                                             onChange={(e) => setConfig({ message_id_path: e.target.value })}
                                         />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="balance_endpoint">Balance endpoint</Label>
+                                    </Field>
+                                    <Field label="Balance endpoint" htmlFor="balance_endpoint" size="grow">
                                         <Input
                                             id="balance_endpoint"
                                             value={config.balance_endpoint ?? ''}
                                             onChange={(e) => setConfig({ balance_endpoint: e.target.value })}
                                         />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="balance_path">Balance field</Label>
+                                    </Field>
+                                    <Field label="Balance field" htmlFor="balance_path" size="md">
                                         <Input
                                             id="balance_path"
                                             value={config.balance_path ?? ''}
                                             onChange={(e) => setConfig({ balance_path: e.target.value })}
                                         />
-                                    </div>
-                                </div>
+                                    </Field>
+                                </FormRow>
                             </div>
                         )}
 
@@ -721,22 +711,19 @@ export default function MessagingSettings({
                                 title="Send one test message"
                                 description="This goes to a real handset through the real account and costs one message. That is the point: a wrong field name found here costs one SMS instead of a whole campaign."
                             />
-                            <div className="grid gap-4 md:grid-cols-3">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="test_to">To</Label>
+                            <FormRow>
+                                <Field label="To" htmlFor="test_to" size="md" error={testForm.errors.to}>
                                     <Input
                                         id="test_to"
                                         placeholder="01711000000"
                                         value={testForm.data.to}
                                         onChange={(e) => testForm.setData('to', e.target.value)}
                                     />
-                                    <InputError message={testForm.errors.to} />
-                                </div>
-                                <div className="grid gap-2 md:col-span-2">
-                                    <Label htmlFor="test_body">Message</Label>
+                                </Field>
+                                <Field label="Message" htmlFor="test_body" size="grow">
                                     <Input id="test_body" value={testForm.data.body} onChange={(e) => testForm.setData('body', e.target.value)} />
-                                </div>
-                            </div>
+                                </Field>
+                            </FormRow>
                             <div className="flex gap-2">
                                 <Button onClick={() => runTest(testingId)} disabled={testForm.processing}>
                                     Send the test
