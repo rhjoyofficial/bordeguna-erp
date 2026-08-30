@@ -6,7 +6,6 @@ use App\Models\User;
 use App\Modules\Foundation\Models\Note;
 use App\Modules\Foundation\Models\PersonalTodo;
 use App\Modules\Foundation\Support\BusinessContext;
-use RuntimeException;
 
 /**
  * The only thing in the data assistant that may write, and it may write exactly
@@ -158,7 +157,7 @@ class PersonalItems
         $note = Note::query()->where('id', $id)->where('created_by', $user->id)->first();
 
         if ($note === null) {
-            throw new RuntimeException('You have no note with that number.');
+            throw new AssistantRefusal('You have no note with that number.');
         }
 
         return $note;
@@ -169,7 +168,7 @@ class PersonalItems
         $todo = PersonalTodo::query()->where('id', $id)->mine($user)->first();
 
         if ($todo === null) {
-            throw new RuntimeException('You have no to-do with that number.');
+            throw new AssistantRefusal('You have no to-do with that number.');
         }
 
         return $todo;

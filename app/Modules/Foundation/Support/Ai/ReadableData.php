@@ -41,7 +41,13 @@ class ReadableData
      * `national_id` to a table should have to decide, in this file, that the
      * assistant may read it.
      *
-     * @var array<string,array{permission:string, columns:list<string>, owner?:string, label:string}>
+     * ⚠⚠ `shared` MARKS A TABLE THAT IS NOT BUSINESS-SCOPED, and it is opt-in
+     * for a reason. The default is scoped, so a table added here without
+     * thinking gets the business filter and returns nothing rather than
+     * returning another tenant's rows. Only set it where the migration really
+     * has no `business_id` column, and say why.
+     *
+     * @var array<string,array{permission:string, columns:list<string>, owner?:string, label:string, shared?:bool}>
      */
     private const TABLES = [
         // ── Inventory ────────────────────────────────────────────────────────
@@ -98,9 +104,18 @@ class ReadableData
         // ── Accounting ───────────────────────────────────────────────────────
         // ⚠ Accounts and journals only. The assistant reads the ledger; it does
         // not get the money accounts' balances by another name.
+        // ⚠⚠ SHARED, NOT SCOPED. One chart of accounts serves all four
+        // businesses (C-GL-1); the table has no `business_id` column at all.
+        // Filtering it by business threw "Unknown column 'business_id'" on
+        // EVERY question about accounts - which the assistant then reported to
+        // an Owner as "your role does not include accounting". Found 30 Aug
+        // 2026 on the first real run, by the suggestion chip the panel itself
+        // offers. The chart is configuration and holds no amounts, so there is
+        // nothing here that is one tenant's rather than another's.
         'accounts' => [
             'permission' => 'accounting.view',
             'label' => 'Chart of accounts',
+            'shared' => true,
             'columns' => ['id', 'code', 'name', 'type', 'is_postable', 'is_active'],
         ],
 

@@ -3,7 +3,7 @@
 namespace App\Modules\Foundation\Support\Ai;
 
 use App\Models\User;
-use RuntimeException;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -57,11 +57,35 @@ class AssistantTools
         'create_note' => self::NOTES,
     ];
 
+    /**
+     * The tools actually run this turn, by name, in order.
+     *
+     * ⚠⚠ THE AUDIT RECORD THE MIGRATION PROMISED AND NOBODY WROTE. The column
+     * has existed since the table was created and was NULL on every row,
+     * including turns that read the whole product list - so "what has the
+     * assistant been reading" had no answer at all. Names only, never
+     * arguments: those name tables, and a log recording which table somebody
+     * queried is a log that discloses the schema to whoever can read logs.
+     *
+     * @var list<string>
+     */
+    private array $used = [];
+
     public function __construct(
         private readonly ReadableData $readable,
         private readonly DataQuery $query,
         private readonly PersonalItems $personal,
     ) {}
+
+    /**
+     * Which tools ran this turn, for the caller that records it.
+     *
+     * @return list<string>
+     */
+    public function used(): array
+    {
+        return $this->used;
+    }
 
     /**
      * The tool definitions for this person, in the PHP SDK's shape.
@@ -91,9 +115,16 @@ class AssistantTools
 
             $tools[] = [
                 'name' => 'read_data',
-                'description' => "Read business data to answer a question. You may ONLY use the tables below; "
+                'description' => 'Read business data to answer a question. You may ONLY use the tables below; '
                     ."anything else is refused. Results are already limited to this user's business and to what "
-                    ."they are allowed to see, so you never need to filter for that yourself.\n\n".$describe,
+                    ."they are allowed to see, so you never need to filter for that yourself.\n\n"
+                    // ⚠⚠ SAYING THIS IS WHAT STOPS "50 products". The result
+                    // carries `total` (how many rows match in full) and `rows`
+                    // (only a page of them). Counting the page and reporting it
+                    // as the total is the exact mistake this sentence prevents.
+                    ."The result gives 'total' - how many rows match in full - and 'rows', which is only "
+                    ."the first page of them. ALWAYS answer 'how many' from 'total', NEVER by counting "
+                    ."'rows'. When 'truncated' is true, say you are showing the first few of 'total'.\n\n".$describe,
                 'inputSchema' => [
                     'type' => 'object',
                     'properties' => [
@@ -130,65 +161,65 @@ class AssistantTools
         // neither takes a parameter naming a person - there is nothing for the
         // model to put somebody else's id into. Each group needs its own grant.
         if ($user->can(self::TODOS)) {
-        $tools[] = [
-            'name' => 'list_todos',
-            'description' => "List the current user's own to-do items. Nobody else's list can be read.",
-            'inputSchema' => [
-                'type' => 'object',
-                'properties' => [
-                    'include_done' => ['type' => 'boolean', 'description' => 'Include items already completed.'],
+            $tools[] = [
+                'name' => 'list_todos',
+                'description' => "List the current user's own to-do items. Nobody else's list can be read.",
+                'inputSchema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'include_done' => ['type' => 'boolean', 'description' => 'Include items already completed.'],
+                    ],
                 ],
-            ],
-        ];
+            ];
 
-        $tools[] = [
-            'name' => 'create_todo',
-            'description' => "Add an item to the current user's own to-do list.",
-            'inputSchema' => [
-                'type' => 'object',
-                'properties' => [
-                    'title' => ['type' => 'string'],
-                    'notes' => ['type' => 'string'],
-                    'due_on' => ['type' => 'string', 'description' => 'A date, YYYY-MM-DD.'],
+            $tools[] = [
+                'name' => 'create_todo',
+                'description' => "Add an item to the current user's own to-do list.",
+                'inputSchema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'title' => ['type' => 'string'],
+                        'notes' => ['type' => 'string'],
+                        'due_on' => ['type' => 'string', 'description' => 'A date, YYYY-MM-DD.'],
+                    ],
+                    'required' => ['title'],
                 ],
-                'required' => ['title'],
-            ],
-        ];
+            ];
 
-        $tools[] = [
-            'name' => 'complete_todo',
-            'description' => "Mark one of the current user's own to-do items done, or put it back.",
-            'inputSchema' => [
-                'type' => 'object',
-                'properties' => [
-                    'id' => ['type' => 'integer'],
-                    'done' => ['type' => 'boolean', 'description' => 'True to complete, false to reopen.'],
+            $tools[] = [
+                'name' => 'complete_todo',
+                'description' => "Mark one of the current user's own to-do items done, or put it back.",
+                'inputSchema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'id' => ['type' => 'integer'],
+                        'done' => ['type' => 'boolean', 'description' => 'True to complete, false to reopen.'],
+                    ],
+                    'required' => ['id'],
                 ],
-                'required' => ['id'],
-            ],
-        ];
+            ];
 
         }
 
         if ($user->can(self::NOTES)) {
-        $tools[] = [
-            'name' => 'list_notes',
-            'description' => "List the current user's own notes. Nobody else's notes can be read.",
-            'inputSchema' => ['type' => 'object', 'properties' => []],
-        ];
+            $tools[] = [
+                'name' => 'list_notes',
+                'description' => "List the current user's own notes. Nobody else's notes can be read.",
+                'inputSchema' => ['type' => 'object', 'properties' => []],
+            ];
 
-        $tools[] = [
-            'name' => 'create_note',
-            'description' => "Write a private note for the current user.",
-            'inputSchema' => [
-                'type' => 'object',
-                'properties' => [
-                    'title' => ['type' => 'string'],
-                    'body' => ['type' => 'string'],
+            $tools[] = [
+                'name' => 'create_note',
+                'description' => 'Write a private note for the current user.',
+                'inputSchema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'title' => ['type' => 'string'],
+                        'body' => ['type' => 'string'],
+                    ],
+                    'required' => ['title'],
                 ],
-                'required' => ['title'],
-            ],
-        ];
+            ];
         }
 
         return $tools;
@@ -218,6 +249,11 @@ class AssistantTools
             ], JSON_UNESCAPED_UNICODE);
         }
 
+        // ⚠ Recorded before it runs, not after. A tool that throws still read
+        // something, and a log that lists only the successes answers "what did
+        // it read" wrongly.
+        $this->used[] = $tool;
+
         try {
             $result = match ($tool) {
                 'read_data' => $this->query->run($user, $input),
@@ -239,15 +275,31 @@ class AssistantTools
                     (string) ($input['title'] ?? ''),
                     isset($input['body']) ? (string) $input['body'] : null,
                 ),
-                default => throw new RuntimeException("There is no tool called '{$tool}'."),
+                default => throw new AssistantRefusal("There is no tool called '{$tool}'."),
             };
 
             return (string) json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
-        } catch (Throwable $e) {
-            // ⚠ The message, not the class or the stack. Whatever comes back
-            // here may be repeated to the user by the model, so it must read as
-            // a sentence and must never describe the system's internals.
+        } catch (AssistantRefusal $e) {
+            // ⚠⚠ ONLY AssistantRefusal, which is the type that MEANS "this
+            // string was written for a person to read". Catching
+            // RuntimeException here instead looks equivalent and is not:
+            // QueryException extends PDOException extends RuntimeException, so
+            // that version leaked the SQL it was written to hide.
             return (string) json_encode(['refused' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        } catch (Throwable $e) {
+            // ⚠⚠ EVERYTHING ELSE IS AN INTERNAL AND ITS MESSAGE NEVER LEAVES THE
+            // SERVER. This used to return $e->getMessage() for any throwable at
+            // all, which handed the model text like "Unknown column
+            // 'business_id' ... (Connection: mysql, Host: db, Port: 3306,
+            // Database: bordeguna_erp, SQL: select ...)" - the schema, the
+            // database host and the query, in a string the model is free to
+            // repeat to whoever asked. Found 30 Aug 2026, when a real question
+            // about the chart of accounts took exactly that path.
+            Log::warning('Assistant tool failed', ['tool' => $tool, 'message' => $e->getMessage()]);
+
+            return (string) json_encode([
+                'refused' => 'That lookup did not work. Say you could not read it, and do not guess a number.',
+            ], JSON_UNESCAPED_UNICODE);
         }
     }
 

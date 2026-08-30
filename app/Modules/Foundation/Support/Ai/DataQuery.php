@@ -6,7 +6,6 @@ use App\Models\User;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * Turns the assistant's structured request into a query, and runs it read-only.
@@ -17,7 +16,8 @@ use RuntimeException;
  * table, a nested subquery, a comment-terminated injection or INTO OUTFILE:
  * there is no SQL string coming from the model for anything to hide inside.
  *
- * ⚠⚠ SCOPING IS APPLIED HERE, NEVER BY THE MODEL. business_id is always added.
+ * ⚠⚠ SCOPING IS APPLIED HERE, NEVER BY THE MODEL. business_id is added unless
+ * ReadableData marks the table shared.
  * An owner-scoped table always gets the asker's id. The model cannot leave
  * either out, because it never supplies them - they are appended after its
  * request has been parsed and validated.
@@ -42,7 +42,7 @@ class DataQuery
 
     /**
      * @param  array<string,mixed>  $request  what the model asked for
-     * @return array{rows: array<int,mixed>, count: int, table: string, columns: list<string>}
+     * @return array{rows: array<int,mixed>, count: int, total: int, truncated: bool, table: string, columns: list<string>}
      */
     public function run(User $user, array $request): array
     {
@@ -54,16 +54,21 @@ class DataQuery
         $spec = $this->readable->spec($user, $table);
 
         if ($spec === null) {
-            throw new RuntimeException("There is no data called '{$table}' that you can see.");
+            throw new AssistantRefusal("There is no data called '{$table}' that you can see.");
         }
 
         $columns = $this->columns($request, $spec);
 
         $query = DB::connection(ReadOnlyConnection::name())->table($table)->select($columns);
 
-        // ⚠ Always. Four businesses share this database and a question asked in
-        // one must never reach another's rows.
-        $query->where("{$table}.business_id", $this->context->id());
+        // ⚠ Four businesses share this database and a question asked in one
+        // must never reach another's rows. The ONLY exception is a table
+        // ReadableData marks `shared`, which has no business_id column to
+        // filter on - the chart of accounts is deliberately installation-wide.
+        // ⛔ Absence of the flag means scoped, so forgetting it fails closed.
+        if (($spec['shared'] ?? false) !== true) {
+            $query->where("{$table}.business_id", $this->context->id());
+        }
 
         // ⚠⚠ Personal stays personal. The owner is taken from the SESSION, never
         // from the request - there is deliberately no parameter for the model to
@@ -75,12 +80,24 @@ class DataQuery
         $this->applyFilters($query, $table, $request['filters'] ?? [], $spec['columns']);
 
         $limit = min((int) ($request['limit'] ?? 50), self::MAX_ROWS);
+
+        // ⚠⚠ THE TOTAL IS COUNTED BEFORE THE LIMIT, AND IT IS THE ONLY HONEST
+        // ANSWER TO "HOW MANY". Returning just the rows made the model count
+        // what it had been handed: asked how many products there were it read
+        // the first 50 and answered "50", when there are 153. A page size is
+        // not a fact about the business, and a confidently wrong number is far
+        // worse than a slow one. Found 30 Aug 2026 on the first real run.
+        $total = (clone $query)->count();
         $rows = $query->limit(max($limit, 1))->get();
 
         return [
             'table' => $table,
             'columns' => $columns,
+            // How many rows exist. Answer counting questions from this.
+            'total' => $total,
+            // How many are in `rows` below, which may be fewer.
             'count' => $rows->count(),
+            'truncated' => $total > $rows->count(),
             'rows' => $rows->map(fn ($row) => (array) $row)->all(),
         ];
     }
