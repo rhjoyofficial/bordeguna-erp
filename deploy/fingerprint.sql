@@ -1,3 +1,9 @@
+-- ⚠⚠ EVERY TABLE NAMED HERE MUST STILL EXIST. One missing table makes the
+-- WHOLE query error, the fingerprint file come back empty, and the restore
+-- drill report DIFFERENCES on a perfectly good backup. `leave_provision_runs`
+-- did exactly that from 29 Aug 2026, when leave provisioning was removed,
+-- until 30 Aug. When you drop a table, delete its line here in the same
+-- commit.
 SELECT 'db' AS metric, DATABASE() AS value
 UNION ALL SELECT 'tables', (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE())
 UNION ALL SELECT 'migrations', (SELECT COUNT(*) FROM migrations)
@@ -20,7 +26,6 @@ UNION ALL SELECT 'stock_movements', (SELECT COUNT(*) FROM stock_movements)
 UNION ALL SELECT 'suppliers', (SELECT COUNT(*) FROM suppliers)
 UNION ALL SELECT 'customers', (SELECT COUNT(*) FROM customers)
 UNION ALL SELECT 'product_prices', (SELECT COUNT(*) FROM product_prices)
-UNION ALL SELECT 'leave_provision_runs', (SELECT COUNT(*) FROM leave_provision_runs)
 UNION ALL SELECT 'salary_structures', (SELECT COUNT(*) FROM salary_structures)
 UNION ALL SELECT 'triggers', (SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema = DATABASE())
 UNION ALL SELECT 'routines', (SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = DATABASE())

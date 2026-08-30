@@ -60,11 +60,28 @@ cat /root/fingerprint-restored.txt
 
 echo
 echo "=== 5. DIFF AGAINST LIVE (the whole point) ==="
+# ⚠⚠ THE LIVE FINGERPRINT IS TAKEN NOW, EVERY RUN. It used to be read from a
+# file on disk that nothing ever regenerated: between 13 and 30 August 2026 that
+# file was three weeks stale, so the drill reported "DIFFERENCES - investigate
+# before trusting this backup" on a backup that restored perfectly. A disaster
+# recovery tool that cries wolf is worse than none - somebody under pressure
+# discards a good backup on its say-so.
+docker exec -i bordeguna-erp-db-1 mysql -uroot -p"${ROOT_PW}" "${LIVE_DB}" < /root/fingerprint.sql 2>&1   | grep -v 'Using a password' > /root/fingerprint-live.txt
+cat /root/fingerprint-live.txt
+
+echo
 # ⚠ The 'db' row differs by design - it names the database being read.
 if diff <(grep -v '^db	' /root/fingerprint-live.txt) <(grep -v '^db	' /root/fingerprint-restored.txt); then
     echo "IDENTICAL: every table count, hash, FK count and schema object matches live."
 else
-    echo "DIFFERENCES ABOVE - investigate before trusting this backup."
+    echo
+    echo "DIFFERENCES ABOVE. Read them before deciding anything:"
+    echo "  - A dump taken BEFORE a deploy legitimately has fewer migrations and"
+    echo "    tables than live. That is the backup being older, not broken."
+    echo "  - What would condemn a backup is the restore exit code above being"
+    echo "    non-zero, core tables missing, or a *_hash row differing while the"
+    echo "    matching count row is identical - that last one means the same"
+    echo "    number of rows with different contents."
 fi
 
 echo
