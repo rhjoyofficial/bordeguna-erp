@@ -31,6 +31,9 @@ Route::middleware(['auth', 'business'])->group(function () {
     // AI provider credentials. Owner-only via foundation.organization.manage;
     // the secret is write-only and never comes back out (AiCredential).
     Route::get('settings/ai-providers', [AiCredentialController::class, 'index'])->name('ai-providers.index');
+    // ⚠ The master switch for the floating assistant. Separate from a
+    // credential: a key can be stored and verified while the feature stays off.
+    Route::patch('settings/ai-providers/assistant', [AiCredentialController::class, 'toggleAssistant'])->name('ai-providers.assistant');
     Route::post('settings/ai-providers', [AiCredentialController::class, 'store'])->name('ai-providers.store');
     Route::patch('settings/ai-providers/{credential}/toggle-active', [AiCredentialController::class, 'toggleActive'])->name('ai-providers.toggle-active');
     Route::patch('settings/ai-providers/{credential}/model', [AiCredentialController::class, 'updateModel'])->name('ai-providers.model');

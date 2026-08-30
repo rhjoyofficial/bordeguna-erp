@@ -66,11 +66,42 @@ class AiCredentialController extends Controller
                 ->map(fn (string $label, string $provider) => $providers->isSupported($provider))
                 ->all(),
             'models' => $models,
+            // The master switch, and who can currently see the button at all.
+            'assistantEnabled' => (bool) \App\Modules\Foundation\Models\Business::withoutGlobalScopes()
+                ->find(app(\App\Modules\Foundation\Support\BusinessContext::class)->id())?->ai_assistant_enabled,
             // ⚠ Booleans, never keys. This is what tells the screen the
             // assistant will work, without the screen learning why.
             'envFallback' => $configured,
             'activeProvider' => $providers->activeProvider(),
         ]);
+    }
+
+    /**
+     * Switch the floating assistant on or off for this business.
+     *
+     * ⚠⚠ OFF MEANS NOBODY, including an Owner holding every permission: the
+     * button is not rendered and the endpoint refuses. ON means only people
+     * granted `foundation.ai.use` - the switch opens the door, the permission
+     * says who walks through it.
+     *
+     * ⚠ Deliberately separate from storing a key. A key can be added and
+     * verified while the feature stays off, which is exactly the order somebody
+     * setting this up for the first time wants.
+     */
+    public function toggleAssistant(Request $request): RedirectResponse
+    {
+        $this->authorize('foundation.organization.manage');
+
+        $data = $request->validate(['enabled' => ['required', 'boolean']]);
+
+        $business = \App\Modules\Foundation\Models\Business::withoutGlobalScopes()
+            ->findOrFail(app(\App\Modules\Foundation\Support\BusinessContext::class)->id());
+
+        $business->update(['ai_assistant_enabled' => $data['enabled']]);
+
+        return back()->with('success', $data['enabled']
+            ? 'The assistant is on. Only people with the AI assistant permission will see it.'
+            : 'The assistant is off. The button is hidden for everybody.');
     }
 
     public function store(Request $request): RedirectResponse

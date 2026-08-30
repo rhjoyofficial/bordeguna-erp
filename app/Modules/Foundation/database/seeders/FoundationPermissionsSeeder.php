@@ -31,6 +31,11 @@ class FoundationPermissionsSeeder extends Seeder
             'files.view',
             'files.manage',
             'chat.use',
+            // ⚠ Owner ONLY by default, and deliberately not given to Manager or
+            // Staff below. Every message this permission allows spends money on
+            // a metered API key, so it is granted deliberately from Settings >
+            // Roles rather than arriving with a job title.
+            'foundation.ai.use',
         ],
         // ⚠⚠ The calendar goes to EVERY role (29 Aug 2026), which is unusual on
         // this project and deliberate. It is the one screen whose value is that

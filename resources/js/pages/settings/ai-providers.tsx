@@ -30,11 +30,13 @@ type PageProps = {
     models: Record<string, Record<string, string>>;
     envFallback: Record<string, boolean>;
     activeProvider: string | null;
+    /** The master switch. Off means the floating button exists for nobody. */
+    assistantEnabled: boolean;
     flash?: { success?: string };
 };
 
 export default function AiProviders() {
-    const { credentials, providers, supported, models, envFallback, activeProvider } = usePage<PageProps>().props;
+    const { credentials, providers, supported, models, envFallback, activeProvider, assistantEnabled } = usePage<PageProps>().props;
     const [confirmingId, setConfirmingId] = useState<number | null>(null);
     const [testingId, setTestingId] = useState<number | null>(null);
 
@@ -62,6 +64,29 @@ export default function AiProviders() {
         <AppLayout>
             <Head title="AI providers" />
             <SettingsLayout>
+                {/* ⚠ The master switch, above the keys, because it is the thing
+                    that decides whether any of this is reachable at all. */}
+                <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border p-4">
+                    <div>
+                        <p className="font-medium">Assistant panel</p>
+                        <p className="text-muted-foreground max-w-xl text-sm">
+                            {assistantEnabled
+                                ? 'On. The floating button appears only for people who hold the AI assistant permission, which you grant under Settings, Roles. Everybody else sees nothing.'
+                                : 'Off. The floating button is hidden for everybody, including you, and the assistant refuses every message. A key can still be added and verified while it is off.'}
+                        </p>
+                        <p className="text-muted-foreground mt-1 max-w-xl text-xs">
+                            Every message spends money on the provider key, so this is off until somebody turns it on, and granted per person rather
+                            than by job title.
+                        </p>
+                    </div>
+                    <Button
+                        variant={assistantEnabled ? 'outline' : 'default'}
+                        onClick={() => router.patch(route('ai-providers.assistant'), { enabled: !assistantEnabled }, { preserveScroll: true })}
+                    >
+                        {assistantEnabled ? 'Switch off' : 'Switch on'}
+                    </Button>
+                </div>
+
                 <div className="space-y-6">
                     <HeadingSmall title="AI providers" description="Add an API key so the ERP guide and future AI features can work." />
 

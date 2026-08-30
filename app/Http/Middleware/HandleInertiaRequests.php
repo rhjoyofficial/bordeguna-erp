@@ -108,6 +108,18 @@ class HandleInertiaRequests extends Middleware
                 ->values()
                 ->all() ?? [],
             'canManageUsers' => fn () => (bool) $request->user()?->can('foundation.users.manage'),
+            // ⚠⚠ TWO CONDITIONS, BOTH REQUIRED (Joy, 30 Aug 2026): the business
+            // has the assistant switched on AND this person holds the
+            // permission. Off, and the floating button is not rendered for
+            // anybody; on, and it appears only for those granted it.
+            //
+            // ⚠ This prop hides a BUTTON. It is not the security boundary -
+            // AssistantController authorizes the same permission, because a
+            // hidden button is still a URL anybody can POST to, and every
+            // message spends money.
+            'canUseAssistant' => fn () => $request->user() !== null
+                && $request->user()->can('foundation.ai.use')
+                && \App\Modules\Foundation\Support\AssistantAvailability::enabledForCurrentBusiness(),
             // ⚠⚠ The Reasons settings screen authorizes `inventory.catalog.manage`,
             // NOT an organisation permission. The old settings nav showed the
             // link to everybody, so anybody without it followed a link the

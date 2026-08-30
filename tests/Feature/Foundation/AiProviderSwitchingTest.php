@@ -26,6 +26,13 @@ beforeEach(function () {
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
 
+    // ⚠ From 30 Aug 2026 the assistant needs BOTH an admin switch and the
+    // `foundation.ai.use` permission. Both are turned on here so these tests
+    // keep testing what they are about - the assistant's own behaviour. Who is
+    // allowed to reach it at all is AssistantAccessTest's job.
+    $this->business->update(['ai_assistant_enabled' => true]);
+    Permission::firstOrCreate(['name' => 'foundation.ai.use', 'guard_name' => 'web']);
+
     Permission::firstOrCreate(['name' => 'foundation.organization.manage', 'guard_name' => 'web']);
     Role::firstOrCreate(['name' => 'Owner', 'business_id' => $this->business->id, 'guard_name' => 'web'])
         ->givePermissionTo('foundation.organization.manage');

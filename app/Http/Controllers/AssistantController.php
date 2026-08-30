@@ -26,6 +26,19 @@ class AssistantController extends Controller
      */
     public function chat(Request $request, ErpAssistant $assistant, AiProviders $providers): StreamedResponse|JsonResponse
     {
+        // ⚠⚠ THE ACTUAL SECURITY BOUNDARY, and until 30 Aug 2026 there was
+        // none: this endpoint checked only that somebody was logged in, so any
+        // user at all could spend money on the API key by POSTing to it. The
+        // floating button being hidden is not a control - a hidden button is
+        // still a URL. Both halves are required, exactly as the shared prop
+        // that decides whether to draw the button.
+        abort_unless(
+            $request->user()?->can('foundation.ai.use')
+                && \App\Modules\Foundation\Support\AssistantAvailability::enabledForCurrentBusiness(),
+            403,
+            'The assistant is switched off for this business, or you do not have permission to use it.',
+        );
+
         // ⚠⚠ ANSWERED BEFORE THE STREAM OPENS, so it can still be a real status
         // code. Once the first byte is written the headers are gone and every
         // failure has to travel as an in-stream event; "no key at all" is

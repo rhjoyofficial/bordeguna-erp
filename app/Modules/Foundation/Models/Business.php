@@ -22,6 +22,7 @@ class Business extends Model
         'email',
         'website',
         'document_font',
+        'ai_assistant_enabled',
         'currency',
         'timezone',
         'fiscal_year_start_month',
@@ -67,6 +68,9 @@ class Business extends Model
         return [
             'is_active' => 'boolean',
             'is_default' => 'boolean',
+            // ⚠ Without this the column reads back as integer 0/1, and a
+            // `=== false` check against it silently never matches.
+            'ai_assistant_enabled' => 'boolean',
             'fiscal_year_start_month' => 'integer',
             'payroll_cycle_start_day' => 'integer',
             'prices_include_tax' => 'boolean',
