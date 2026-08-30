@@ -568,6 +568,7 @@ export default function LeaveIndex({
                             onBlur={(e) => reload({ year: Number(e.target.value) })}
                         />
                         <SearchSelect
+                            fit
                             value={filters.employee_id ?? ''}
                             onChange={(e) => reload({ employee_id: e.target.value === '' ? null : Number(e.target.value) })}
                         >
