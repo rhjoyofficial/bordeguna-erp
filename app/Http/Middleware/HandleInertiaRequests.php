@@ -2,7 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Modules\Foundation\Support\Ai\AssistantIdentity;
+use App\Modules\Foundation\Support\Ai\AssistantLanguages;
+use App\Modules\Foundation\Support\AssistantAvailability;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\ErpAssistant;
 use App\Modules\Hrm\Models\Employee;
 use App\Support\ApprovalInbox;
 use Illuminate\Foundation\Inspiring;
@@ -123,15 +127,19 @@ class HandleInertiaRequests extends Middleware
             // it.
             'assistantSuggestions' => fn () => $request->user() !== null
                 && $request->user()->can('foundation.ai.use')
-                && \App\Modules\Foundation\Support\AssistantAvailability::enabledForCurrentBusiness()
-                    ? app(\App\Modules\Foundation\Support\ErpAssistant::class)->suggestions($request->user())
+                && AssistantAvailability::enabledForCurrentBusiness()
+                    ? app(ErpAssistant::class)->suggestions($request->user())
                     : [],
             // The two languages this business has switched on, for the chat
             // toggle. Always two - AssistantLanguages guarantees it.
-            'assistantLanguages' => fn () => \App\Modules\Foundation\Support\Ai\AssistantLanguages::toggleFor(),
+            'assistantLanguages' => fn () => AssistantLanguages::toggleFor(),
+            // ⚠ Name, face and input ceiling, set per business in Settings. All
+            // three are presentation and one limit; none of them widens what the
+            // assistant may read, so this prop is safe to send to every page.
+            'assistantIdentity' => fn () => AssistantIdentity::current(),
             'canUseAssistant' => fn () => $request->user() !== null
                 && $request->user()->can('foundation.ai.use')
-                && \App\Modules\Foundation\Support\AssistantAvailability::enabledForCurrentBusiness(),
+                && AssistantAvailability::enabledForCurrentBusiness(),
             // ⚠⚠ The Reasons settings screen authorizes `inventory.catalog.manage`,
             // NOT an organisation permission. The old settings nav showed the
             // link to everybody, so anybody without it followed a link the

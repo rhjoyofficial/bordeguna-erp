@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Support\Ai\AssistantUnavailable;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\ErpAssistant;
 use Spatie\Permission\Models\Permission;
@@ -78,7 +79,11 @@ it('streams the reply as server-sent events rather than one finished block', fun
 
     // ⚠ The driver is what streams; the controller only forwards. Standing in
     // for it here keeps this a test of the transport, with no API call.
+    // ⚠ `toolsUsed` is asked for once the turn ends, so the record of what the
+    // assistant read can be written. A mock that does not expect it fails the
+    // request rather than the assertion, which is a confusing way to find out.
     $this->mock(ErpAssistant::class)
+        ->shouldReceive('toolsUsed')->andReturn([])
         ->shouldReceive('streamReply')
         ->once()
         ->andReturnUsing(function ($user, $messages, $onText) {
@@ -112,9 +117,10 @@ it('sends a provider failure as an in-stream error, because the status code is a
     config(['services.anthropic.key' => 'test-key']);
 
     $this->mock(ErpAssistant::class)
+        ->shouldReceive('toolsUsed')->andReturn([])
         ->shouldReceive('streamReply')
         ->once()
-        ->andThrow(App\Modules\Foundation\Support\Ai\AssistantUnavailable::badModel('claude-haiku-4.5'));
+        ->andThrow(AssistantUnavailable::badModel('claude-haiku-4.5'));
 
     $response = $this->actingAs($this->owner)
         ->postJson('/assistant/chat', ['messages' => [['role' => 'user', 'content' => 'Where are prices?']]])

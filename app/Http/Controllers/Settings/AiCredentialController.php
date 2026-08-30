@@ -4,13 +4,19 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Models\AiCredential;
+use App\Modules\Foundation\Models\AssistantMessage;
+use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\Ai\AiProviders;
+use App\Modules\Foundation\Support\Ai\AssistantIdentity;
+use App\Modules\Foundation\Support\Ai\AssistantLanguages;
 use App\Modules\Foundation\Support\Ai\AssistantUnavailable;
 use App\Modules\Foundation\Support\AiCredentialResolver;
+use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -70,13 +76,23 @@ class AiCredentialController extends Controller
             // The master switch, and who can currently see the button at all.
             'assistantEnabled' => (bool) $this->business()?->ai_assistant_enabled,
             // Every language on offer, and the two currently switched on.
-            'languages' => collect(\App\Modules\Foundation\Support\Ai\AssistantLanguages::all())
+            'languages' => collect(AssistantLanguages::all())
                 ->map(fn (array $l, string $code) => ['code' => $code, 'label' => $l['label'], 'native' => $l['native']])
                 ->values()->all(),
-            'activeLanguages' => \App\Modules\Foundation\Support\Ai\AssistantLanguages::activeFor($this->business()),
-            'requiredLanguages' => \App\Modules\Foundation\Support\Ai\AssistantLanguages::REQUIRED_ACTIVE,
+            'activeLanguages' => AssistantLanguages::activeFor($this->business()),
+            'requiredLanguages' => AssistantLanguages::REQUIRED_ACTIVE,
             'monthlyCap' => $this->business()?->ai_monthly_message_cap,
-            'usedThisMonth' => \App\Modules\Foundation\Models\AssistantMessage::usedThisMonth((int) ($this->business()?->id ?? 0)),
+            // What the assistant is called, what it looks like and how long a
+            // message may be. All three are this screen's to set.
+            'identity' => [
+                'name' => AssistantIdentity::nameFor($this->business()),
+                'avatar' => AssistantIdentity::avatarUrlFor($this->business()),
+                'charLimit' => AssistantIdentity::charLimitFor($this->business()),
+                'defaultName' => AssistantIdentity::DEFAULT_NAME,
+                'minCharLimit' => AssistantIdentity::MIN_CHAR_LIMIT,
+                'maxCharLimit' => AssistantIdentity::MAX_CHAR_LIMIT,
+            ],
+            'usedThisMonth' => AssistantMessage::usedThisMonth((int) ($this->business()?->id ?? 0)),
             // ⚠ Booleans, never keys. This is what tells the screen the
             // assistant will work, without the screen learning why.
             'envFallback' => $configured,
@@ -97,8 +113,8 @@ class AiCredentialController extends Controller
         $this->authorize('foundation.organization.manage');
 
         $data = $request->validate([
-            'languages' => ['required', 'array', 'size:'.\App\Modules\Foundation\Support\Ai\AssistantLanguages::REQUIRED_ACTIVE],
-            'languages.*' => ['required', 'string', Rule::in(\App\Modules\Foundation\Support\Ai\AssistantLanguages::codes())],
+            'languages' => ['required', 'array', 'size:'.AssistantLanguages::REQUIRED_ACTIVE],
+            'languages.*' => ['required', 'string', Rule::in(AssistantLanguages::codes())],
             // ⚠ NULL means no ceiling, which is honest for "nobody has set one".
             // The assistant is off by default anyway, so this is a second brake
             // rather than the only one.
@@ -119,11 +135,75 @@ class AiCredentialController extends Controller
         return back()->with('success', 'Assistant preferences saved.');
     }
 
-    /** The business in context, resolved by id rather than through the scope. */
-    private function business(): ?\App\Modules\Foundation\Models\Business
+    /**
+     * The assistant's name, face and input ceiling.
+     *
+     * ⚠⚠ NONE OF THIS WIDENS WHAT IT MAY READ. A name is a label and a picture
+     * is a picture; the character limit only ever narrows. That is what makes
+     * the screen safe to offer at all, and it is worth keeping true - if a
+     * field here ever starts affecting the prompt, it stops being cosmetic and
+     * belongs behind a different permission.
+     */
+    public function updateIdentity(Request $request): RedirectResponse
     {
-        return \App\Modules\Foundation\Models\Business::withoutGlobalScopes()
-            ->find(app(\App\Modules\Foundation\Support\BusinessContext::class)->id());
+        $this->authorize('foundation.organization.manage');
+
+        $identity = AssistantIdentity::class;
+
+        $data = $request->validate([
+            // ⚠ Short on purpose. It is drawn in a chat header beside a face;
+            // a sentence would wrap and push the controls off the row.
+            'name' => ['nullable', 'string', 'max:40'],
+            // ⚠ `image` as well as the mime list: the extension is what the
+            // uploader chose to call it, the mime is what it is.
+            'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
+            'remove_avatar' => ['nullable', 'boolean'],
+            'char_limit' => ['nullable', 'integer', 'min:'.$identity::MIN_CHAR_LIMIT, 'max:'.$identity::MAX_CHAR_LIMIT],
+        ]);
+
+        $business = $this->business();
+        $updates = [
+            // ⚠ Empty means "back to the default", not an empty name. Storing
+            // '' would render a chat header with no title at all.
+            'ai_assistant_name' => trim((string) ($data['name'] ?? '')) ?: null,
+            'ai_message_char_limit' => $data['char_limit'] ?? null,
+        ];
+
+        if ($request->boolean('remove_avatar')) {
+            $this->forgetAvatar($business);
+            $updates['ai_assistant_avatar_path'] = null;
+        }
+
+        if ($request->hasFile('avatar')) {
+            // ⚠ The old file goes FIRST. Uploading a new face five times would
+            // otherwise leave four orphans on disk that nothing ever removes.
+            $this->forgetAvatar($business);
+            $updates['ai_assistant_avatar_path'] = $request->file('avatar')
+                ->store($identity::AVATAR_DIRECTORY, $identity::AVATAR_DISK);
+        }
+
+        $business->update($updates);
+
+        return back()->with('success', 'Assistant identity saved.');
+    }
+
+    /** Delete the stored face, if there is one. */
+    private function forgetAvatar(?Business $business): void
+    {
+        $path = $business?->ai_assistant_avatar_path;
+
+        if (is_string($path) && $path !== '') {
+            Storage::disk(
+                AssistantIdentity::AVATAR_DISK
+            )->delete($path);
+        }
+    }
+
+    /** The business in context, resolved by id rather than through the scope. */
+    private function business(): ?Business
+    {
+        return Business::withoutGlobalScopes()
+            ->find(app(BusinessContext::class)->id());
     }
 
     /**
@@ -156,7 +236,7 @@ class AiCredentialController extends Controller
         $this->authorize('foundation.organization.manage');
 
         $data = $request->validate([
-            'provider' => ['required', 'string', 'in:' . implode(',', array_keys(app(AiProviders::class)->all()))],
+            'provider' => ['required', 'string', 'in:'.implode(',', array_keys(app(AiProviders::class)->all()))],
             'label' => ['nullable', 'string', 'max:120'],
             'model' => ['nullable', 'string', 'max:120'],
             'secret' => ['required', 'string', 'min:16', 'max:400'],

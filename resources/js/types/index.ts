@@ -89,6 +89,7 @@ export interface SharedData {
     canUseAssistant: boolean;
     assistantSuggestions: string[];
     assistantLanguages: { code: string; label: string; native: string }[];
+    assistantIdentity: { name: string; avatar: string | null; charLimit: number };
     canViewAssets: boolean;
     canRunDepreciation: boolean;
     canManageChartOfAccounts: boolean;

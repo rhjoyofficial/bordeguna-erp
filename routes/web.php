@@ -31,13 +31,17 @@ Route::middleware(['auth', 'business'])->group(function () {
     // reachability guard rightly ignores it; its way in is the message
     // button rendered on every sidebar-layout page.
     Route::post('assistant/chat', [AssistantController::class, 'chat'])->name('assistant.chat');
+    // ⚠ The assistant's face, served rather than linked: the file lives on the
+    // private disk like every other upload in this system. Any signed-in member
+    // of the business may see it - it is the picture in their own chat header.
+    Route::get('assistant/avatar', [AssistantController::class, 'avatar'])->name('assistant.avatar');
 });
 
 // Business switching + team management routes live in the Foundation module
 // (app/Modules/Foundation/routes/web.php), loaded by FoundationServiceProvider.
 
-require __DIR__ . '/settings.php';
-require __DIR__ . '/auth.php';
+require __DIR__.'/settings.php';
+require __DIR__.'/auth.php';
 
 Route::fallback(function () {
     return auth()->check()

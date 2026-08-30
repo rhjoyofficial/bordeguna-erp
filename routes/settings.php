@@ -36,6 +36,11 @@ Route::middleware(['auth', 'business'])->group(function () {
     Route::patch('settings/ai-providers/assistant', [AiCredentialController::class, 'toggleAssistant'])->name('ai-providers.assistant');
     // Which two languages the chat toggle offers, and the monthly ceiling.
     Route::patch('settings/ai-providers/preferences', [AiCredentialController::class, 'updatePreferences'])->name('ai-providers.preferences');
+    // ⚠ POST, not PATCH, because it carries a file. PHP does not parse a
+    // multipart body on PATCH, so an avatar sent that way arrives empty with
+    // no error anywhere - the kind of failure that looks like a broken upload
+    // widget for a day.
+    Route::post('settings/ai-providers/identity', [AiCredentialController::class, 'updateIdentity'])->name('ai-providers.identity');
     Route::post('settings/ai-providers', [AiCredentialController::class, 'store'])->name('ai-providers.store');
     Route::patch('settings/ai-providers/{credential}/toggle-active', [AiCredentialController::class, 'toggleActive'])->name('ai-providers.toggle-active');
     Route::patch('settings/ai-providers/{credential}/model', [AiCredentialController::class, 'updateModel'])->name('ai-providers.model');

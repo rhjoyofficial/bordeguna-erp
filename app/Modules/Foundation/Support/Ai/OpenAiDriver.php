@@ -52,6 +52,7 @@ class OpenAiDriver implements AssistantDriver
         array $tools,
         callable $runTool,
         callable $onText,
+        ?callable $onStatus = null,
     ): string {
         return $this->stream($key, $model, $system, $messages, $onText);
     }
@@ -76,7 +77,7 @@ class OpenAiDriver implements AssistantDriver
             $response = Http::withToken($key)
                 ->timeout(120)
                 ->withOptions(['stream' => true])
-                ->post(self::BASE . '/chat/completions', [
+                ->post(self::BASE.'/chat/completions', [
                     'model' => $model,
                     'messages' => $this->body($system, $messages),
                     'stream' => true,
@@ -128,7 +129,7 @@ class OpenAiDriver implements AssistantDriver
     public function models(string $key): array
     {
         try {
-            $response = Http::withToken($key)->timeout(20)->get(self::BASE . '/models');
+            $response = Http::withToken($key)->timeout(20)->get(self::BASE.'/models');
         } catch (Throwable) {
             return [];
         }
@@ -177,7 +178,7 @@ class OpenAiDriver implements AssistantDriver
     private function post(string $key, array $payload): array
     {
         try {
-            $response = Http::withToken($key)->timeout(120)->post(self::BASE . '/chat/completions', $payload);
+            $response = Http::withToken($key)->timeout(120)->post(self::BASE.'/chat/completions', $payload);
         } catch (Throwable) {
             throw AssistantUnavailable::unreachable();
         }

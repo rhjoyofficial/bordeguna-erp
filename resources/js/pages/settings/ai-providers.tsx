@@ -8,7 +8,7 @@ import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { cn } from '@/lib/utils';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { ShieldCheck, Trash2 } from 'lucide-react';
+import { Bot, ShieldCheck, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 type Credential = {
@@ -42,6 +42,15 @@ type PageProps = {
     /** Null means no ceiling. */
     monthlyCap: number | null;
     usedThisMonth: number;
+    /** What the assistant is called, what it looks like, how long a message may be. */
+    identity: {
+        name: string;
+        avatar: string | null;
+        charLimit: number;
+        defaultName: string;
+        minCharLimit: number;
+        maxCharLimit: number;
+    };
     flash?: { success?: string };
 };
 
@@ -59,6 +68,7 @@ export default function AiProviders() {
         requiredLanguages,
         monthlyCap,
         usedThisMonth,
+        identity,
     } = usePage<PageProps>().props;
 
     const prefs = useForm<{ languages: string[]; monthly_cap: string }>({
@@ -74,6 +84,19 @@ export default function AiProviders() {
         if (current.includes(code)) return;
         prefs.setData('languages', [current[1] ?? current[0], code].filter(Boolean).slice(-2));
     };
+    // The name, the face and the input ceiling. One form, because they are one
+    // decision: what this thing is to the people who talk to it.
+    const identityForm = useForm<{ name: string; char_limit: string; avatar: File | null; remove_avatar: boolean }>({
+        name: identity.name === identity.defaultName ? '' : identity.name,
+        char_limit: String(identity.charLimit),
+        avatar: null,
+        remove_avatar: false,
+    });
+
+    // The picture the browser is holding, not the one on the server: it lets
+    // somebody see what they picked before they save it.
+    const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
     const [confirmingId, setConfirmingId] = useState<number | null>(null);
     const [testingId, setTestingId] = useState<number | null>(null);
 
@@ -203,6 +226,112 @@ export default function AiProviders() {
                                 no limit.
                             </p>
                         </div>
+                    </form>
+
+                    {/* Name, face, and the length of one message. */}
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            identityForm.post(route('ai-providers.identity'), {
+                                preserveScroll: true,
+                                forceFormData: true,
+                                onSuccess: () => {
+                                    identityForm.setData('avatar', null);
+                                    identityForm.setData('remove_avatar', false);
+                                    setAvatarPreview(null);
+                                },
+                            });
+                        }}
+                        className="border-border space-y-4 rounded-md border p-4"
+                    >
+                        <div>
+                            <p className="font-medium">Name and picture</p>
+                            <p className="text-muted-foreground max-w-2xl text-sm">
+                                What the assistant is called and what it looks like in the chat panel. This is a label only: renaming it grants it
+                                nothing and hides nothing. What it may read is decided by permissions, under Settings, Roles.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-wrap items-end gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-muted text-muted-foreground flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full border">
+                                    {avatarPreview || (identity.avatar && !identityForm.data.remove_avatar) ? (
+                                        <img src={avatarPreview ?? identity.avatar ?? undefined} alt="" className="size-full object-cover" />
+                                    ) : (
+                                        <Bot className="size-6" />
+                                    )}
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="avatar">Picture</Label>
+                                    <Input
+                                        id="avatar"
+                                        type="file"
+                                        accept="image/png,image/jpeg,image/webp"
+                                        className="w-64"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0] ?? null;
+                                            identityForm.setData('avatar', file);
+                                            identityForm.setData('remove_avatar', false);
+                                            setAvatarPreview(file ? URL.createObjectURL(file) : null);
+                                        }}
+                                    />
+                                    <InputError message={identityForm.errors.avatar} />
+                                    {identity.avatar && !identityForm.data.remove_avatar && (
+                                        <button
+                                            type="button"
+                                            className="text-muted-foreground hover:text-destructive text-left text-xs underline"
+                                            onClick={() => {
+                                                identityForm.setData('remove_avatar', true);
+                                                identityForm.setData('avatar', null);
+                                                setAvatarPreview(null);
+                                            }}
+                                        >
+                                            Remove the picture
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="assistant_name">Name</Label>
+                                <Input
+                                    id="assistant_name"
+                                    className="w-56"
+                                    maxLength={40}
+                                    placeholder={identity.defaultName}
+                                    value={identityForm.data.name}
+                                    onChange={(e) => identityForm.setData('name', e.target.value)}
+                                />
+                                <InputError message={identityForm.errors.name} />
+                                <p className="text-muted-foreground text-xs">Empty uses {identity.defaultName}.</p>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="char_limit">Longest message</Label>
+                                <Input
+                                    id="char_limit"
+                                    type="number"
+                                    min={identity.minCharLimit}
+                                    max={identity.maxCharLimit}
+                                    className="w-44"
+                                    value={identityForm.data.char_limit}
+                                    onChange={(e) => identityForm.setData('char_limit', e.target.value)}
+                                />
+                                <InputError message={identityForm.errors.char_limit} />
+                                <p className="text-muted-foreground text-xs">
+                                    {identity.minCharLimit} to {identity.maxCharLimit} characters.
+                                </p>
+                            </div>
+
+                            <Button type="submit" variant="secondary" disabled={identityForm.processing}>
+                                Save identity
+                            </Button>
+                        </div>
+
+                        <p className="text-muted-foreground max-w-2xl text-xs">
+                            The chat box stops typing at the limit and the server refuses anything longer, so a pasted document cannot become one very
+                            expensive question.
+                        </p>
                     </form>
 
                     <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">

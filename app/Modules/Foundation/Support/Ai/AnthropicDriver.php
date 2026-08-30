@@ -84,6 +84,7 @@ class AnthropicDriver implements AssistantDriver
         array $tools,
         callable $runTool,
         callable $onText,
+        ?callable $onStatus = null,
     ): string {
         $client = new Client(apiKey: $key);
         $rounds = 0;
@@ -112,8 +113,11 @@ class AnthropicDriver implements AssistantDriver
                     }
 
                     // ⚠ Announced before it runs, so the wait has a reason
-                    // attached to it on screen.
-                    $onText($this->announce((string) $block->name));
+                    // attached to it on screen - as a STATUS the panel replaces
+                    // when the answer comes, never as text in the answer.
+                    if ($onStatus !== null) {
+                        $onStatus($this->announce((string) $block->name));
+                    }
 
                     $results[] = [
                         'type' => 'tool_result',
@@ -165,16 +169,19 @@ class AnthropicDriver implements AssistantDriver
      * up" is honest; echoing `read_data {"table":"sales_invoices"}` would put
      * the schema on screen for somebody who may not be allowed to know it
      * exists.
+     *
+     * ⚠ No trailing newline any more. These are labels for a transient status
+     * line, not lines of an answer.
      */
     private function announce(string $tool): string
     {
         return match ($tool) {
-            'read_data' => "Looking that up...\n",
-            'list_todos', 'list_notes' => "Checking your list...\n",
-            'create_todo' => "Adding that to your list...\n",
-            'complete_todo' => "Updating your list...\n",
-            'create_note' => "Writing that note...\n",
-            default => "Working on it...\n",
+            'read_data' => 'Looking that up',
+            'list_todos', 'list_notes' => 'Checking your list',
+            'create_todo' => 'Adding that to your list',
+            'complete_todo' => 'Updating your list',
+            'create_note' => 'Writing that note',
+            default => 'Working on it',
         };
     }
 

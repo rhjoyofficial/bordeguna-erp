@@ -58,15 +58,20 @@ interface AssistantDriver
      * closure, in AssistantTools. A driver that reached into the database
      * itself would be a second place those checks had to be right.
      *
-     * ⚠ `$onText` is called with progress as well as the answer, because a tool
-     * loop can take several seconds and a silent panel is indistinguishable
-     * from a hung one.
+     * ⚠⚠ PROGRESS GOES TO `$onStatus`, THE ANSWER GOES TO `$onText`, AND THE
+     * TWO MUST NOT BE THE SAME CHANNEL. Until 30 Aug 2026 "Looking that up..."
+     * was pushed through $onText, so it was appended to the reply bubble and
+     * stayed there once the answer arrived - a status line welded onto the
+     * front of the answer. A status is something that is true while you wait
+     * and false afterwards; it belongs to the panel's typing indicator, not to
+     * the transcript.
      *
      * @param  array<int, array<string,mixed>>  $system
      * @param  array<int, array<string,mixed>>  $messages
      * @param  array<int, array<string,mixed>>  $tools
      * @param  callable(string, array<string,mixed>): string  $runTool
      * @param  callable(string): void  $onText
+     * @param  null|callable(string): void  $onStatus  What to show WHILE waiting.
      */
     public function chatWithTools(
         string $key,
@@ -76,6 +81,7 @@ interface AssistantDriver
         array $tools,
         callable $runTool,
         callable $onText,
+        ?callable $onStatus = null,
     ): string;
 
     public function models(string $key): array;

@@ -4,6 +4,7 @@ namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
 use App\Modules\Foundation\Support\Ai\AiProviders;
+use App\Modules\Foundation\Support\Ai\AssistantDriver;
 use App\Modules\Foundation\Support\Ai\AssistantLanguages;
 use App\Modules\Foundation\Support\Ai\AssistantTools;
 use App\Modules\Foundation\Support\Ai\AssistantUnavailable;
@@ -25,6 +26,10 @@ use App\Modules\Foundation\Support\Ai\AssistantUnavailable;
  */
 class ErpAssistant
 {
+    /** The tool set built for the turn in progress, kept so the caller can ask
+     * what it used once the turn is over. */
+    private ?AssistantTools $tools = null;
+
     /**
      * The feature map the guidance is built from: label, where it lives in
      * the navigation, and the permission that gates it (null = everyone).
@@ -170,8 +175,13 @@ PROMPT;
      *
      * @throws AssistantUnavailable
      */
-    public function streamReply(User $user, array $messages, callable $onText, ?string $language = null): string
-    {
+    public function streamReply(
+        User $user,
+        array $messages,
+        callable $onText,
+        ?string $language = null,
+        ?callable $onStatus = null,
+    ): string {
         [$driver, $key, $model] = $this->provider();
 
         // ⚠⚠ The language line goes LAST in the system blocks, after everything
@@ -181,7 +191,9 @@ PROMPT;
         $system = $this->systemBlocks($user);
         $system[] = ['type' => 'text', 'text' => AssistantLanguages::instructionFor($language)];
 
-        $tools = app(AssistantTools::class);
+        // ⚠ Held on the instance so the caller can ask what ran, after the
+        // turn. The controller records it; see toolsUsed() below.
+        $tools = $this->tools = app(AssistantTools::class);
         $definitions = $tools->definitions($user);
 
         // ⚠⚠ THE TOOLS ARE BUILT FOR THIS PERSON, and the closure below closes
@@ -197,10 +209,25 @@ PROMPT;
                 $definitions,
                 fn (string $tool, array $input): string => $tools->run($user, $tool, $input),
                 $onText,
+                $onStatus,
             );
         }
 
         return $driver->stream($key, $model, $system, $messages, $onText);
+    }
+
+    /**
+     * Which tools the last turn actually ran, by name.
+     *
+     * ⚠ Empty when no turn has run, and empty when a turn needed no tool -
+     * those two are the same thing to a reader of the log, and deliberately so:
+     * the interesting fact is which data was touched, not that nothing was.
+     *
+     * @return list<string>
+     */
+    public function toolsUsed(): array
+    {
+        return $this->tools?->used() ?? [];
     }
 
     /**
@@ -220,7 +247,7 @@ PROMPT;
      * take effect on the next message, and a process-lifetime cache is the exact
      * trap this project has been bitten by before.
      *
-     * @return array{0: \App\Modules\Foundation\Support\Ai\AssistantDriver, 1: string, 2: string}
+     * @return array{0: AssistantDriver, 1: string, 2: string}
      */
     private function provider(): array
     {
