@@ -1,4 +1,5 @@
-import Heading from '@/components/heading';
+import { Field, FormRow } from '@/components/form/field';
+import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -499,7 +500,7 @@ export default function DailyAttendance({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Daily attendance" />
             <div className="flex flex-col gap-6 px-4 py-6">
-                <Heading
+                <ReportHeading
                     title="Daily attendance"
                     description="What the engine made of each day, and the review step that turns a proposal into a payroll-eligible fact."
                 />
@@ -508,23 +509,14 @@ export default function DailyAttendance({
                     Running the engine is a different kind of action and lives in
                     its own strip below, so nobody presses it looking for Show. */}
                 <div className="border-border rounded-xl border">
-                    <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="from" className="text-muted-foreground text-xs">
-                                From
-                            </Label>
-                            <Input id="from" type="date" className="h-9" value={filters.from} onChange={(e) => reload({ from: e.target.value })} />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="to" className="text-muted-foreground text-xs">
-                                To
-                            </Label>
-                            <Input id="to" type="date" className="h-9" value={filters.to} onChange={(e) => reload({ to: e.target.value })} />
-                        </div>
-                        <div className="grid gap-1.5 sm:col-span-2">
-                            <Label htmlFor="employee" className="text-muted-foreground text-xs">
-                                Employee
-                            </Label>
+                    <FormRow className="p-4">
+                        <Field label="From" htmlFor="from">
+                            <Input id="from" type="date" value={filters.from} onChange={(e) => reload({ from: e.target.value })} />
+                        </Field>
+                        <Field label="To" htmlFor="to">
+                            <Input id="to" type="date" value={filters.to} onChange={(e) => reload({ to: e.target.value })} />
+                        </Field>
+                        <Field label="Employee" htmlFor="employee">
                             <SearchSelect
                                 id="employee"
                                 value={filters.employee_id ?? ''}
@@ -537,8 +529,8 @@ export default function DailyAttendance({
                                     </option>
                                 ))}
                             </SearchSelect>
-                        </div>
-                    </div>
+                        </Field>
+                    </FormRow>
 
                     <div className="border-border flex flex-wrap items-center gap-2 border-t px-4 py-3">
                         <span className="text-muted-foreground text-xs">Show only</span>
