@@ -1,3 +1,4 @@
+import { useCompactControls } from '@/components/form/compact-controls';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -44,7 +45,7 @@ export function SearchableSelect({
     clearable = false,
     invalid = false,
     searchThreshold = 8,
-    fit = false,
+    fit,
 }: {
     value: string;
     onChange: (value: string) => void;
@@ -77,6 +78,11 @@ export function SearchableSelect({
 }) {
     const [open, setOpen] = useState(false);
     const selected = options.find((option) => option.value === value);
+
+    // ⚠ Content-width inside a filter bar unless the page says otherwise. See
+    // CompactControls for why this is a context and not a prop on every page.
+    const compact = useCompactControls();
+    const fits = fit ?? compact;
     const showSearch = options.length >= searchThreshold;
 
     // cmdk filters on the `value` prop of each item, so a list of two products
@@ -113,7 +119,7 @@ export function SearchableSelect({
                         aria-invalid={invalid || undefined}
                         className={cn(
                             'bg-background h-10 justify-between font-normal',
-                            fit ? 'w-auto max-w-[18rem] min-w-[9rem]' : 'w-full',
+                            fits ? 'w-auto max-w-[18rem] min-w-[9rem]' : 'w-full',
                             (!selected || value === '') && 'text-muted-foreground',
                             invalid && 'border-destructive',
                             className,

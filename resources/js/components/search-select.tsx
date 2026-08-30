@@ -91,7 +91,7 @@ export function SearchSelect({
     searchThreshold,
     searchPlaceholder,
     emptyText,
-    fit = false,
+    fit,
 }: {
     children: ReactNode;
     value: string | number;

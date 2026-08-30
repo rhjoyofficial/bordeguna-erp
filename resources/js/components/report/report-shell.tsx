@@ -1,3 +1,4 @@
+import { CompactControls } from '@/components/form/compact-controls';
 import { Button } from '@/components/ui/button';
 import { FormEventHandler, ReactNode } from 'react';
 
@@ -40,10 +41,12 @@ export function ReportHeading({ title, description, actions }: { title: ReactNod
  */
 export function FilterBar({ onSubmit, children, label = 'Show' }: { onSubmit: FormEventHandler; children: ReactNode; label?: string }) {
     return (
-        <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3 print:hidden">
-            {children}
-            <Button variant="outline">{label}</Button>
-        </form>
+        <CompactControls>
+            <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3 print:hidden">
+                {children}
+                <Button variant="outline">{label}</Button>
+            </form>
+        </CompactControls>
     );
 }
 
