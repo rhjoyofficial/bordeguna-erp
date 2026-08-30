@@ -37,6 +37,25 @@ class OpenAiDriver implements AssistantDriver
         return 'gpt-4o-mini';
     }
 
+    /**
+     * ⚠⚠ NO TOOL SUPPORT HERE, and it says so rather than pretending. This
+     * driver answers from the system prompt alone, so a question about live
+     * data gets a truthful "I cannot look that up" instead of a confident guess
+     * assembled from nothing. Wiring tools for this provider is a separate
+     * piece of work, not a line to sneak in.
+     */
+    public function chatWithTools(
+        string $key,
+        string $model,
+        array $system,
+        array $messages,
+        array $tools,
+        callable $runTool,
+        callable $onText,
+    ): string {
+        return $this->stream($key, $model, $system, $messages, $onText);
+    }
+
     public function chat(string $key, string $model, array $system, array $messages): string
     {
         $response = $this->post($key, [

@@ -87,6 +87,7 @@ export interface SharedData {
     canManageCrmSettings: boolean;
     canManageReasons: boolean;
     canUseAssistant: boolean;
+    assistantSuggestions: string[];
     canViewAssets: boolean;
     canRunDepreciation: boolean;
     canManageChartOfAccounts: boolean;

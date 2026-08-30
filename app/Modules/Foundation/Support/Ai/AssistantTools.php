@@ -15,10 +15,11 @@ use Throwable;
  * two exceptions are the asker's own notes and to-dos, and they say so in their
  * names.
  *
- * ⚠⚠ THE TOOL LIST IS BUILT PER PERSON. `read_data` is only offered when the
- * asker can read something, and its description names only the tables they may
- * see. Somebody with no read permissions is never told the tool exists, so the
- * model cannot suggest a question that would only be refused.
+ * ⚠⚠ THE TOOL LIST IS BUILT PER PERSON, AND EVERYTHING IS OFF BY DEFAULT. Each
+ * group of tools needs its own grant, held by no role until somebody gives it.
+ * `read_data` additionally needs the asker's module permissions to allow at
+ * least one table, and its description names only those tables - so somebody is
+ * never told data exists that they could not have read anyway.
  *
  * ⚠ Every dispatch runs through DataQuery or PersonalItems, which re-check
  * permission and ownership themselves. Nothing here is trusted to have got the
@@ -26,6 +27,36 @@ use Throwable;
  */
 class AssistantTools
 {
+    /**
+     * ⚠⚠ EVERY CAPABILITY IS OFF UNTIL SOMEBODY GRANTS IT (Joy, 30 Aug 2026).
+     * `foundation.ai.use` opens the panel and nothing more. Reading data,
+     * touching notes and touching to-dos are three further grants, held by NO
+     * ROLE by default - not even Owner. The assistant a business has not
+     * configured can do precisely nothing.
+     *
+     * ⚠⚠ AN AI PERMISSION ONLY EVER NARROWS, NEVER WIDENS. `ai.read` grants the
+     * ABILITY TO USE the reading tool; it does not grant access to any table.
+     * ReadableData still requires the module permission for every table, so the
+     * two are AND, never OR. Somebody holding `ai.read` and nothing else reads
+     * nothing at all, and that is the intended behaviour rather than a bug.
+     */
+    public const READ = 'foundation.ai.read';
+
+    public const NOTES = 'foundation.ai.notes';
+
+    public const TODOS = 'foundation.ai.todos';
+
+    /** Which permission each tool needs. ⛔ A tool absent from this map is
+     * callable by nobody - default closed, like every other map here. */
+    private const TOOL_PERMISSIONS = [
+        'read_data' => self::READ,
+        'list_todos' => self::TODOS,
+        'create_todo' => self::TODOS,
+        'complete_todo' => self::TODOS,
+        'list_notes' => self::NOTES,
+        'create_note' => self::NOTES,
+    ];
+
     public function __construct(
         private readonly ReadableData $readable,
         private readonly DataQuery $query,
@@ -45,7 +76,9 @@ class AssistantTools
         $tools = [];
         $tables = $this->readable->forUser($user);
 
-        if ($tables !== []) {
+        // ⚠ TWO grants required: the AI reading permission AND at least one
+        // table their module permissions already allow. Either alone is nothing.
+        if ($tables !== [] && $user->can(self::READ)) {
             $describe = collect($tables)
                 ->map(fn (array $spec, string $table) => sprintf(
                     '%s (%s): columns %s',
@@ -93,9 +126,10 @@ class AssistantTools
             ];
         }
 
-        // ⚠ The two writing tools. Both act on the asker's own rows only, and
+        // ⚠ The writing tools. Both act on the asker's own rows only, and
         // neither takes a parameter naming a person - there is nothing for the
-        // model to put somebody else's id into.
+        // model to put somebody else's id into. Each group needs its own grant.
+        if ($user->can(self::TODOS)) {
         $tools[] = [
             'name' => 'list_todos',
             'description' => "List the current user's own to-do items. Nobody else's list can be read.",
@@ -134,6 +168,9 @@ class AssistantTools
             ],
         ];
 
+        }
+
+        if ($user->can(self::NOTES)) {
         $tools[] = [
             'name' => 'list_notes',
             'description' => "List the current user's own notes. Nobody else's notes can be read.",
@@ -152,6 +189,7 @@ class AssistantTools
                 'required' => ['title'],
             ],
         ];
+        }
 
         return $tools;
     }
@@ -168,6 +206,18 @@ class AssistantTools
      */
     public function run(User $user, string $tool, array $input): string
     {
+        // ⚠⚠ RE-CHECKED HERE, NOT JUST WHEN THE LIST WAS BUILT. A model can name
+        // a tool it was never offered - it has seen thousands of APIs and will
+        // guess. Trusting definitions() to have gated it would make the tool
+        // list a suggestion rather than a boundary.
+        $required = self::TOOL_PERMISSIONS[$tool] ?? null;
+
+        if ($required === null || ! $user->can($required)) {
+            return (string) json_encode([
+                'refused' => 'You do not have permission to use that.',
+            ], JSON_UNESCAPED_UNICODE);
+        }
+
         try {
             $result = match ($tool) {
                 'read_data' => $this->query->run($user, $input),
@@ -211,7 +261,9 @@ class AssistantTools
      */
     public function suggestions(User $user): array
     {
-        $tables = array_keys($this->readable->forUser($user));
+        // ⚠ Never suggest what the person cannot do. Without the reading grant
+        // there is nothing to suggest about data at all.
+        $tables = $user->can(self::READ) ? array_keys($this->readable->forUser($user)) : [];
 
         $byTable = [
             'stock_batches' => 'What stock do we have left?',
@@ -231,9 +283,14 @@ class AssistantTools
             }
         }
 
-        // Everybody has these two, because everybody has their own list.
-        $suggestions[] = 'What is on my to-do list?';
-        $suggestions[] = 'Remind me to check the stock count tomorrow.';
+        if ($user->can(self::TODOS)) {
+            $suggestions[] = 'What is on my to-do list?';
+            $suggestions[] = 'Remind me to check the stock count tomorrow.';
+        }
+
+        if ($user->can(self::NOTES)) {
+            $suggestions[] = 'Show me my notes.';
+        }
 
         return array_slice($suggestions, 0, 5);
     }

@@ -75,8 +75,31 @@ class FoundationPermissionsSeeder extends Seeder
         ],
     ];
 
+    /**
+     * ⚠⚠ CREATED BUT GRANTED TO NOBODY (Joy, 30 Aug 2026). These exist so they
+     * can be handed out on Settings > Roles, and until somebody does the
+     * assistant can do precisely nothing - it cannot read a single row, touch a
+     * note or add a to-do, even for an Owner.
+     *
+     * ⛔ Deliberately NOT added to ROLE_PERMISSIONS above. Putting them on Owner
+     * "so it works out of the box" would undo the whole point: the default is
+     * that an AI can do nothing, and every capability is a decision somebody
+     * made on purpose.
+     *
+     * @var list<string>
+     */
+    private const UNGRANTED_PERMISSIONS = [
+        'foundation.ai.read',
+        'foundation.ai.notes',
+        'foundation.ai.todos',
+    ];
+
     public function run(): void
     {
+        foreach (self::UNGRANTED_PERMISSIONS as $name) {
+            Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
+        }
+
         $permissionNames = collect(self::ROLE_PERMISSIONS)->flatten()->unique();
 
         foreach ($permissionNames as $name) {

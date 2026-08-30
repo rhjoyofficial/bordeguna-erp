@@ -50,6 +50,34 @@ interface AssistantDriver
      *
      * @return array<string, string>
      */
+    /**
+     * One turn that may call tools before it answers.
+     *
+     * ⚠⚠ THE DRIVER NEVER DECIDES WHAT A TOOL MAY DO. It receives `$runTool`
+     * and calls it; every permission and ownership check lives behind that
+     * closure, in AssistantTools. A driver that reached into the database
+     * itself would be a second place those checks had to be right.
+     *
+     * ⚠ `$onText` is called with progress as well as the answer, because a tool
+     * loop can take several seconds and a silent panel is indistinguishable
+     * from a hung one.
+     *
+     * @param  array<int, array<string,mixed>>  $system
+     * @param  array<int, array<string,mixed>>  $messages
+     * @param  array<int, array<string,mixed>>  $tools
+     * @param  callable(string, array<string,mixed>): string  $runTool
+     * @param  callable(string): void  $onText
+     */
+    public function chatWithTools(
+        string $key,
+        string $model,
+        array $system,
+        array $messages,
+        array $tools,
+        callable $runTool,
+        callable $onText,
+    ): string;
+
     public function models(string $key): array;
 
     /** The label shown to a human, e.g. "Anthropic (Claude)". */

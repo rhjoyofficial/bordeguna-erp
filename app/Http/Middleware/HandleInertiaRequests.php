@@ -117,6 +117,15 @@ class HandleInertiaRequests extends Middleware
             // AssistantController authorizes the same permission, because a
             // hidden button is still a URL anybody can POST to, and every
             // message spends money.
+            // ⚠ Built from what this person may actually see, so nobody is
+            // offered a question that would only be refused. Resolved lazily -
+            // it costs a permission check per page and only the assistant reads
+            // it.
+            'assistantSuggestions' => fn () => $request->user() !== null
+                && $request->user()->can('foundation.ai.use')
+                && \App\Modules\Foundation\Support\AssistantAvailability::enabledForCurrentBusiness()
+                    ? app(\App\Modules\Foundation\Support\ErpAssistant::class)->suggestions($request->user())
+                    : [],
             'canUseAssistant' => fn () => $request->user() !== null
                 && $request->user()->can('foundation.ai.use')
                 && \App\Modules\Foundation\Support\AssistantAvailability::enabledForCurrentBusiness(),

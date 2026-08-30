@@ -33,7 +33,7 @@ function loadTranscript(): ChatMessage[] {
 }
 
 export default function ErpAssistant() {
-    const { current_business_id } = usePage<SharedData>().props;
+    const { current_business_id, assistantSuggestions } = usePage<SharedData>().props;
     const [open, setOpen] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>(loadTranscript);
     const [draft, setDraft] = useState('');
@@ -171,9 +171,29 @@ export default function ErpAssistant() {
 
                     <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-3">
                         {messages.length === 0 && (
-                            <p className="text-muted-foreground px-1 pt-2 text-sm">
-                                Ask me anything about using this ERP - where a screen is, how a workflow runs, what a report means. English or Bangla.
-                            </p>
+                            <div className="space-y-3 px-1 pt-2">
+                                <p className="text-muted-foreground text-sm">
+                                    Ask me about using this ERP, or about your own data - stock, invoices, your notes and to-do list. English or
+                                    Bangla.
+                                </p>
+                                {/* ⚠ Built server-side from what this person may
+                                    actually see, so nobody is offered a question
+                                    that would only come back refused. */}
+                                {assistantSuggestions.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {assistantSuggestions.map((suggestion) => (
+                                            <button
+                                                key={suggestion}
+                                                type="button"
+                                                onClick={() => setDraft(suggestion)}
+                                                className="border-input hover:bg-accent rounded-full border px-2.5 py-1 text-left text-xs"
+                                            >
+                                                {suggestion}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         )}
                         {messages.map((message, index) => (
                             <div key={index} className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>

@@ -4,6 +4,7 @@ namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
 use App\Modules\Foundation\Support\Ai\AiProviders;
+use App\Modules\Foundation\Support\Ai\AssistantTools;
 use App\Modules\Foundation\Support\Ai\AssistantUnavailable;
 
 /**
@@ -170,7 +171,36 @@ PROMPT;
     {
         [$driver, $key, $model] = $this->provider();
 
+        $tools = app(AssistantTools::class);
+        $definitions = $tools->definitions($user);
+
+        // ⚠⚠ THE TOOLS ARE BUILT FOR THIS PERSON, and the closure below closes
+        // over the SAME $user. Everything the assistant can reach is decided by
+        // who asked, and there is no path where the model supplies the identity
+        // it is acting as.
+        if ($definitions !== []) {
+            return $driver->chatWithTools(
+                $key,
+                $model,
+                $this->systemBlocks($user),
+                $messages,
+                $definitions,
+                fn (string $tool, array $input): string => $tools->run($user, $tool, $input),
+                $onText,
+            );
+        }
+
         return $driver->stream($key, $model, $this->systemBlocks($user), $messages, $onText);
+    }
+
+    /**
+     * Opening suggestions for this person, built from what they may see.
+     *
+     * @return list<string>
+     */
+    public function suggestions(User $user): array
+    {
+        return app(AssistantTools::class)->suggestions($user);
     }
 
     /**

@@ -17,6 +17,10 @@ use Throwable;
  */
 class AnthropicDriver implements AssistantDriver
 {
+    /** ⚠ A model that keeps asking for one more lookup would bill forever
+     * and never answer. Six is generous for the questions this is for. */
+    private const MAX_TOOL_ROUNDS = 6;
+
     public function label(): string
     {
         return 'Anthropic (Claude)';
@@ -51,6 +55,127 @@ class AnthropicDriver implements AssistantDriver
         }
 
         return 'I could not produce an answer. Please try rephrasing your question.';
+    }
+
+    /**
+     * One turn that may call tools before answering.
+     *
+     * ⚠⚠ THE LOOP IS NOT STREAMED, and the answer is emitted at the end. A
+     * streamed response cannot be inspected for tool calls until it has
+     * finished, so a tool-using turn would have to be buffered anyway. Instead
+     * each tool call announces itself through $onText, which is better than a
+     * silent panel: a question that reads three tables takes a few seconds, and
+     * silence is indistinguishable from a hang.
+     *
+     * ⚠⚠ A HARD CEILING ON ITERATIONS. Without it a model that keeps asking for
+     * one more lookup bills indefinitely and the panel never answers. Six is
+     * generous for the questions this assistant is for; hitting it is reported
+     * rather than hidden.
+     *
+     * ⚠ camelCase throughout - `inputSchema`, `toolUseID`, `stopReason`. The
+     * PHP SDK maps these to the API's snake_case on the wire, and the
+     * snake_case forms are accepted silently while doing nothing.
+     */
+    public function chatWithTools(
+        string $key,
+        string $model,
+        array $system,
+        array $messages,
+        array $tools,
+        callable $runTool,
+        callable $onText,
+    ): string {
+        $client = new Client(apiKey: $key);
+        $rounds = 0;
+
+        try {
+            $response = $client->messages->create(
+                maxTokens: 4096,
+                messages: $messages,
+                model: $model,
+                system: $system,
+                tools: $tools,
+            );
+
+            while ($response->stopReason === 'tool_use') {
+                if (++$rounds > self::MAX_TOOL_ROUNDS) {
+                    $onText("\n\nI stopped after looking things up several times without reaching an answer. Try asking for one thing at a time.");
+
+                    return 'stopped after too many lookups';
+                }
+
+                $results = [];
+
+                foreach ($response->content as $block) {
+                    if (($block->type ?? null) !== 'tool_use') {
+                        continue;
+                    }
+
+                    // ⚠ Announced before it runs, so the wait has a reason
+                    // attached to it on screen.
+                    $onText($this->announce((string) $block->name));
+
+                    $results[] = [
+                        'type' => 'tool_result',
+                        'toolUseID' => $block->id,
+                        'content' => $runTool((string) $block->name, (array) $block->input),
+                    ];
+                }
+
+                if ($results === []) {
+                    break;
+                }
+
+                $messages[] = ['role' => 'assistant', 'content' => $response->content];
+                $messages[] = ['role' => 'user', 'content' => $results];
+
+                $response = $client->messages->create(
+                    maxTokens: 4096,
+                    messages: $messages,
+                    model: $model,
+                    system: $system,
+                    tools: $tools,
+                );
+            }
+        } catch (APIStatusException $e) {
+            throw $this->translate($e, $model);
+        }
+
+        if ($response->stopReason === 'refusal') {
+            return 'I cannot help with that. Ask me something about using this ERP.';
+        }
+
+        $answer = '';
+
+        foreach ($response->content as $block) {
+            if (($block->type ?? null) === 'text') {
+                $answer .= $block->text;
+            }
+        }
+
+        $onText($answer);
+
+        return $answer;
+    }
+
+    /**
+     * What to show while a tool runs.
+     *
+     * ⚠ Describes the ACTION, never the table or the arguments. "Looking that
+     * up" is honest; echoing `read_data {"table":"sales_invoices"}` would put
+     * the schema on screen for somebody who may not be allowed to know it
+     * exists.
+     */
+    private function announce(string $tool): string
+    {
+        return match ($tool) {
+            'read_data' => "Looking that up...\n",
+            'list_todos', 'list_notes' => "Checking your list...\n",
+            'create_todo' => "Adding that to your list...\n",
+            'complete_todo' => "Updating your list...\n",
+            'create_note' => "Writing that note...\n",
+            default => "Working on it...\n",
+        };
     }
 
     public function stream(string $key, string $model, array $system, array $messages, callable $onText): string
