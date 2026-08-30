@@ -1,13 +1,12 @@
 import { CustomerImportPanel } from '@/components/customer-import-panel';
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
-import InputError from '@/components/input-error';
+import { Field, FormGroup, FormRow } from '@/components/form/field';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
@@ -140,103 +139,94 @@ export default function CustomersIndex({
 
                 {mayManage && <CustomerImportPanel />}
 
-                <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="name">Name</Label>
-                        <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
-                        <InputError message={errors.name} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="code">Code</Label>
-                        <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="DIST-001" />
-                        <InputError message={errors.code} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="type">Type</Label>
-                        <SearchSelect id="type" value={data.type} onChange={(e) => setData('type', e.target.value)}>
-                            {types.map((t) => (
-                                <option key={t.value} value={t.value}>
-                                    {t.label}
-                                </option>
-                            ))}
-                        </SearchSelect>
-                        <InputError message={errors.type} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="phone">Phone</Label>
-                        <Input id="phone" value={data.phone} onChange={(e) => setData('phone', e.target.value)} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="payment_terms">Payment terms</Label>
-                        <Input
-                            id="payment_terms"
-                            value={data.payment_terms}
-                            onChange={(e) => setData('payment_terms', e.target.value)}
-                            placeholder="Net 30"
-                        />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="credit_limit">Credit limit</Label>
-                        <Input id="credit_limit" value={data.credit_limit} onChange={(e) => setData('credit_limit', e.target.value)} />
-                        <InputError message={errors.credit_limit} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="price_group_id">Price group</Label>
+                {/* ⚠ Thirteen fields in one equal four-column grid gave a code,
+                    a phone and an address the same width (30 Aug 2026 audit).
+                    Three rows now, each field as wide as what it holds. */}
+                <form onSubmit={submit} className="flex flex-col gap-5 rounded-lg border p-4">
+                    <FormGroup title="Identity">
+                        <Field label="Name" htmlFor="name" size="grow" error={errors.name}>
+                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
+                        </Field>
+                        <Field label="Code" htmlFor="code" size="sm" error={errors.code}>
+                            <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="DIST-001" />
+                        </Field>
+                        <Field label="Type" htmlFor="type" error={errors.type}>
+                            <SearchSelect id="type" value={data.type} onChange={(e) => setData('type', e.target.value)}>
+                                {types.map((t) => (
+                                    <option key={t.value} value={t.value}>
+                                        {t.label}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                        </Field>
+                    </FormGroup>
+
+                    <FormGroup title="Commercial">
                         {/* ⚠ A select over real rows, never typed - free text here
                             once meant `Distributor` vs `distributor` silently
                             charged a distributor the retail price. Blank means
                             RETAIL, the default group. */}
-                        <SearchSelect id="price_group_id" value={data.price_group_id} onChange={(e) => setData('price_group_id', e.target.value)}>
-                            <option value="">Default (RETAIL)</option>
-                            {priceGroups.map((g) => (
-                                <option key={g.id} value={g.id}>
-                                    {g.code}
-                                </option>
-                            ))}
-                        </SearchSelect>
-                        <InputError message={errors.price_group_id} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="contact_name">Contact person</Label>
-                        <Input id="contact_name" value={data.contact_name} onChange={(e) => setData('contact_name', e.target.value)} />
-                        <InputError message={errors.contact_name} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input id="email" type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} />
-                        <InputError message={errors.email} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="bin">BIN (optional)</Label>
-                        <Input id="bin" value={data.bin} onChange={(e) => setData('bin', e.target.value)} />
-                        <InputError message={errors.bin} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="tin">TIN (optional)</Label>
-                        <Input id="tin" value={data.tin} onChange={(e) => setData('tin', e.target.value)} />
-                        <InputError message={errors.tin} />
-                    </div>
-                    <div className="grid gap-2 md:col-span-2">
-                        <Label htmlFor="address">Address</Label>
-                        <textarea
-                            id="address"
-                            className="border-input bg-background min-h-20 rounded-md border px-3 py-2 text-sm"
-                            value={data.address}
-                            onChange={(e) => setData('address', e.target.value)}
-                        />
-                        <InputError message={errors.address} />
-                    </div>
-                    <div className="grid gap-2 md:col-span-2">
-                        <Label htmlFor="note">Note</Label>
-                        <textarea
-                            id="note"
-                            className="border-input bg-background min-h-20 rounded-md border px-3 py-2 text-sm"
-                            value={data.note}
-                            onChange={(e) => setData('note', e.target.value)}
-                        />
-                        <InputError message={errors.note} />
-                    </div>
-                    <div className="flex items-end gap-2 md:col-span-4">
+                        <Field label="Price group" htmlFor="price_group_id" error={errors.price_group_id}>
+                            <SearchSelect id="price_group_id" value={data.price_group_id} onChange={(e) => setData('price_group_id', e.target.value)}>
+                                <option value="">Default (RETAIL)</option>
+                                {priceGroups.map((g) => (
+                                    <option key={g.id} value={g.id}>
+                                        {g.code}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                        </Field>
+                        <Field label="Payment terms" htmlFor="payment_terms" size="sm">
+                            <Input
+                                id="payment_terms"
+                                value={data.payment_terms}
+                                onChange={(e) => setData('payment_terms', e.target.value)}
+                                placeholder="Net 30"
+                            />
+                        </Field>
+                        <Field label="Credit limit" htmlFor="credit_limit" size="sm" error={errors.credit_limit}>
+                            <Input id="credit_limit" value={data.credit_limit} onChange={(e) => setData('credit_limit', e.target.value)} />
+                        </Field>
+                    </FormGroup>
+
+                    <FormGroup title="Contact">
+                        <Field label="Contact person" htmlFor="contact_name" size="md" error={errors.contact_name}>
+                            <Input id="contact_name" value={data.contact_name} onChange={(e) => setData('contact_name', e.target.value)} />
+                        </Field>
+                        <Field label="Phone" htmlFor="phone" size="md">
+                            <Input id="phone" value={data.phone} onChange={(e) => setData('phone', e.target.value)} />
+                        </Field>
+                        <Field label="Email" htmlFor="email" size="lg" error={errors.email}>
+                            <Input id="email" type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} />
+                        </Field>
+                        <Field label="BIN (optional)" htmlFor="bin" size="sm" error={errors.bin}>
+                            <Input id="bin" value={data.bin} onChange={(e) => setData('bin', e.target.value)} />
+                        </Field>
+                        <Field label="TIN (optional)" htmlFor="tin" size="sm" error={errors.tin}>
+                            <Input id="tin" value={data.tin} onChange={(e) => setData('tin', e.target.value)} />
+                        </Field>
+                    </FormGroup>
+
+                    <FormRow>
+                        <Field label="Address" htmlFor="address" size="grow" error={errors.address}>
+                            <textarea
+                                id="address"
+                                className="border-input bg-background min-h-20 rounded-md border px-3 py-2 text-sm"
+                                value={data.address}
+                                onChange={(e) => setData('address', e.target.value)}
+                            />
+                        </Field>
+                        <Field label="Note" htmlFor="note" size="grow" error={errors.note}>
+                            <textarea
+                                id="note"
+                                className="border-input bg-background min-h-20 rounded-md border px-3 py-2 text-sm"
+                                value={data.note}
+                                onChange={(e) => setData('note', e.target.value)}
+                            />
+                        </Field>
+                    </FormRow>
+
+                    <div className="flex items-center gap-2">
                         <Button type="submit" disabled={processing}>
                             {editing ? 'Save changes' : 'Add customer'}
                         </Button>
@@ -245,7 +235,7 @@ export default function CustomersIndex({
                                 <Button type="button" variant="ghost" onClick={cancel}>
                                     Cancel
                                 </Button>
-                                <span className="text-muted-foreground self-center text-sm">Editing {editing.name}</span>
+                                <span className="text-muted-foreground text-sm">Editing {editing.name}</span>
                             </>
                         )}
                     </div>

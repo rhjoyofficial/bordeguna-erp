@@ -77,3 +77,16 @@ export function FormRow({ children, className }: { children: ReactNode; classNam
         </CompactControls>
     );
 }
+
+/**
+ * A FormRow with a small title above it, for a long form that reads better
+ * as "Identity / Commercial / Contact" than as one wall of thirteen boxes.
+ */
+export function FormGroup({ title, children, className }: { title: ReactNode; children: ReactNode; className?: string }) {
+    return (
+        <div className={cn('flex flex-col gap-2', className)}>
+            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{title}</p>
+            <FormRow>{children}</FormRow>
+        </div>
+    );
+}
