@@ -1,4 +1,5 @@
 import { Pagination } from '@/components/data-table/pagination';
+import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
@@ -194,9 +195,8 @@ export default function PhoneBookIndex({
                         </p>
                     </div>
 
-                    <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-                        <div className="grid gap-2 md:col-span-2">
-                            <Label htmlFor="search">Search</Label>
+                    <FormRow className="rounded-lg border p-4">
+                        <Field label="Search" htmlFor="search" size="lg">
                             <Input
                                 id="search"
                                 value={search}
@@ -204,9 +204,8 @@ export default function PhoneBookIndex({
                                 onKeyDown={(e) => e.key === 'Enter' && applyFilters({ search })}
                                 placeholder="Name, company, email or number"
                             />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="group_filter">Group</Label>
+                        </Field>
+                        <Field label="Group" htmlFor="group_filter">
                             <SearchSelect id="group_filter" value={filters.group ?? ''} onChange={(e) => applyFilters({ group: e.target.value })}>
                                 <option value="">Every group</option>
                                 {groups.map((g) => (
@@ -215,70 +214,64 @@ export default function PhoneBookIndex({
                                     </option>
                                 ))}
                             </SearchSelect>
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="status_filter">Status</Label>
+                        </Field>
+                        <Field label="Status" htmlFor="status_filter">
                             <SearchSelect id="status_filter" value={filters.status} onChange={(e) => applyFilters({ status: e.target.value })}>
                                 <option value="active">Active</option>
                                 <option value="inactive">Inactive</option>
                                 <option value="all">All</option>
                             </SearchSelect>
-                        </div>
-                    </div>
+                        </Field>
+                    </FormRow>
 
                     {can.manage && (
-                        <form onSubmit={submitContact} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
-                                <Input id="name" value={contactForm.data.name} onChange={(e) => contactForm.setData('name', e.target.value)} />
-                                <InputError message={contactForm.errors.name} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="company">Company</Label>
-                                <Input
-                                    id="company"
-                                    value={contactForm.data.company}
-                                    onChange={(e) => contactForm.setData('company', e.target.value)}
-                                />
-                                <InputError message={contactForm.errors.company} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="phone">Phone</Label>
-                                <Input
-                                    id="phone"
-                                    value={contactForm.data.phone}
-                                    onChange={(e) => contactForm.setData('phone', e.target.value)}
-                                    placeholder="01712345678"
-                                />
-                                <InputError message={contactForm.errors.phone} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">Email</Label>
-                                <Input id="email" value={contactForm.data.email} onChange={(e) => contactForm.setData('email', e.target.value)} />
-                                <InputError message={contactForm.errors.email} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="address">Address</Label>
-                                <Input
-                                    id="address"
-                                    value={contactForm.data.address}
-                                    onChange={(e) => contactForm.setData('address', e.target.value)}
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="source">Where from</Label>
-                                <Input
-                                    id="source"
-                                    value={contactForm.data.source}
-                                    onChange={(e) => contactForm.setData('source', e.target.value)}
-                                    placeholder="Trade fair 2026"
-                                />
-                            </div>
-                            <div className="grid gap-2 md:col-span-2">
-                                <Label htmlFor="note">Note</Label>
-                                <Input id="note" value={contactForm.data.note} onChange={(e) => contactForm.setData('note', e.target.value)} />
-                            </div>
-                            <div className="flex items-end gap-2 md:col-span-4">
+                        <form onSubmit={submitContact} className="flex flex-col gap-4 rounded-lg border p-4">
+                            {/* Each field as wide as what it holds (30 Aug 2026 audit):
+                                a phone is a phone box, an address takes the room. */}
+                            <FormRow>
+                                <Field label="Name" htmlFor="name" size="md" error={contactForm.errors.name}>
+                                    <Input id="name" value={contactForm.data.name} onChange={(e) => contactForm.setData('name', e.target.value)} />
+                                </Field>
+                                <Field label="Company" htmlFor="company" size="md" error={contactForm.errors.company}>
+                                    <Input
+                                        id="company"
+                                        value={contactForm.data.company}
+                                        onChange={(e) => contactForm.setData('company', e.target.value)}
+                                    />
+                                </Field>
+                                <Field label="Phone" htmlFor="phone" size="md" error={contactForm.errors.phone}>
+                                    <Input
+                                        id="phone"
+                                        value={contactForm.data.phone}
+                                        onChange={(e) => contactForm.setData('phone', e.target.value)}
+                                        placeholder="01712345678"
+                                    />
+                                </Field>
+                                <Field label="Email" htmlFor="email" size="lg" error={contactForm.errors.email}>
+                                    <Input id="email" value={contactForm.data.email} onChange={(e) => contactForm.setData('email', e.target.value)} />
+                                </Field>
+                            </FormRow>
+                            <FormRow>
+                                <Field label="Address" htmlFor="address" size="grow">
+                                    <Input
+                                        id="address"
+                                        value={contactForm.data.address}
+                                        onChange={(e) => contactForm.setData('address', e.target.value)}
+                                    />
+                                </Field>
+                                <Field label="Where from" htmlFor="source" size="md">
+                                    <Input
+                                        id="source"
+                                        value={contactForm.data.source}
+                                        onChange={(e) => contactForm.setData('source', e.target.value)}
+                                        placeholder="Trade fair 2026"
+                                    />
+                                </Field>
+                                <Field label="Note" htmlFor="note" size="grow">
+                                    <Input id="note" value={contactForm.data.note} onChange={(e) => contactForm.setData('note', e.target.value)} />
+                                </Field>
+                            </FormRow>
+                            <div className="flex items-center gap-2">
                                 <Button type="submit" disabled={contactForm.processing}>
                                     {editing ? 'Save contact' : 'Add contact'}
                                 </Button>
@@ -431,37 +424,36 @@ export default function PhoneBookIndex({
                     </div>
 
                     {can.manage && (
-                        <form onSubmit={submitGroup} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="group_name">Name</Label>
-                                <Input id="group_name" value={groupForm.data.name} onChange={(e) => groupForm.setData('name', e.target.value)} />
-                                <InputError message={groupForm.errors.name} />
-                            </div>
-                            <div className="grid gap-2 md:col-span-2">
-                                <Label htmlFor="group_description">Description</Label>
-                                <Input
-                                    id="group_description"
-                                    value={groupForm.data.description}
-                                    onChange={(e) => groupForm.setData('description', e.target.value)}
-                                />
-                            </div>
-                            <div className="flex items-end gap-2">
-                                <Button type="submit" disabled={groupForm.processing}>
-                                    {editingGroup ? 'Save group' : 'Add group'}
-                                </Button>
-                                {editingGroup && (
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        onClick={() => {
-                                            setEditingGroup(null);
-                                            groupForm.reset();
-                                        }}
-                                    >
-                                        Cancel
+                        <form onSubmit={submitGroup}>
+                            <FormRow className="rounded-lg border p-4">
+                                <Field label="Name" htmlFor="group_name" size="md" error={groupForm.errors.name}>
+                                    <Input id="group_name" value={groupForm.data.name} onChange={(e) => groupForm.setData('name', e.target.value)} />
+                                </Field>
+                                <Field label="Description" htmlFor="group_description" size="grow">
+                                    <Input
+                                        id="group_description"
+                                        value={groupForm.data.description}
+                                        onChange={(e) => groupForm.setData('description', e.target.value)}
+                                    />
+                                </Field>
+                                <div className="flex items-center gap-2">
+                                    <Button type="submit" disabled={groupForm.processing}>
+                                        {editingGroup ? 'Save group' : 'Add group'}
                                     </Button>
-                                )}
-                            </div>
+                                    {editingGroup && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={() => {
+                                                setEditingGroup(null);
+                                                groupForm.reset();
+                                            }}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    )}
+                                </div>
+                            </FormRow>
                         </form>
                     )}
 
