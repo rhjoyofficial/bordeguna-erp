@@ -1,4 +1,5 @@
 import { BusyButton } from '@/components/busy-button';
+import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -280,38 +281,36 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Payroll" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                    <div>
-                        <h2 className="text-lg font-medium">Payroll</h2>
-                        {period ? (
-                            <p className="text-muted-foreground text-sm">
-                                {period.label} covers {period.start_date} to {period.end_date}, on a fixed {period.divisor_days}-day divisor.
-                            </p>
-                        ) : (
-                            <p className="text-muted-foreground text-sm">Nothing calculated for this month yet.</p>
-                        )}
-                    </div>
-                    <div className="flex flex-wrap items-end gap-3">
-                        <div className="grid gap-1">
-                            <Label htmlFor="year" className="text-muted-foreground text-xs">
-                                Year
-                            </Label>
-                            <Input id="year" type="number" className="w-24" value={y} onChange={(e) => setY(e.target.value)} />
+                <ReportHeading
+                    title="Payroll"
+                    description={
+                        period
+                            ? `${period.label} covers ${period.start_date} to ${period.end_date}, on a fixed ${period.divisor_days}-day divisor.`
+                            : 'Nothing calculated for this month yet.'
+                    }
+                    actions={
+                        <div className="flex flex-wrap items-end gap-3">
+                            <div className="grid gap-1">
+                                <Label htmlFor="year" className="text-muted-foreground text-xs">
+                                    Year
+                                </Label>
+                                <Input id="year" type="number" className="w-24" value={y} onChange={(e) => setY(e.target.value)} />
+                            </div>
+                            <div className="grid gap-1">
+                                <Label htmlFor="month" className="text-muted-foreground text-xs">
+                                    Month
+                                </Label>
+                                <Input id="month" type="number" min={1} max={12} className="w-20" value={m} onChange={(e) => setM(e.target.value)} />
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => go(Number(y), Number(m))}>
+                                View
+                            </Button>
+                            <Button size="sm" disabled={busy} onClick={calculate}>
+                                {busy ? 'Calculating…' : run ? 'Recalculate' : 'Calculate'}
+                            </Button>
                         </div>
-                        <div className="grid gap-1">
-                            <Label htmlFor="month" className="text-muted-foreground text-xs">
-                                Month
-                            </Label>
-                            <Input id="month" type="number" min={1} max={12} className="w-20" value={m} onChange={(e) => setM(e.target.value)} />
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => go(Number(y), Number(m))}>
-                            View
-                        </Button>
-                        <Button size="sm" disabled={busy} onClick={calculate}>
-                            {busy ? 'Calculating…' : run ? 'Recalculate' : 'Calculate'}
-                        </Button>
-                    </div>
-                </div>
+                    }
+                />
 
                 {periods.length > 0 && (
                     <div className="flex flex-wrap gap-2">
