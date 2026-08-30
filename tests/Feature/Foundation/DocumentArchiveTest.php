@@ -213,3 +213,34 @@ it('serves a document inline for preview and as a download only when asked', fun
     $download->assertOk();
     expect($download->headers->get('content-disposition'))->toStartWith('attachment');
 });
+
+it('gives every business a usable starting set of document kinds', function () {
+    // ⚠ Idempotent, and it must stay that way: run twice, still one of each.
+    // A seeder that duplicates on a second run is one nobody dares re-run after
+    // a deploy, which is exactly when it is needed.
+    (new App\Modules\Foundation\database\seeders\DocumentCategorySeeder)->run();
+    $afterFirst = DocumentCategory::withoutGlobalScopes()->count();
+
+    (new App\Modules\Foundation\database\seeders\DocumentCategorySeeder)->run();
+
+    expect(DocumentCategory::withoutGlobalScopes()->count())->toBe($afterFirst)
+        ->and($afterFirst)->toBeGreaterThan(0);
+
+    // ⚠⚠ And it does not overwrite a decision somebody made.
+    $category = DocumentCategory::query()->first();
+    $category->update(['name' => 'Renamed by a human', 'retention_months' => 84]);
+
+    (new App\Modules\Foundation\database\seeders\DocumentCategorySeeder)->run();
+
+    expect($category->fresh()->name)->toBe('Renamed by a human')
+        ->and($category->fresh()->retention_months)->toBe(84);
+});
+
+it('leaves every seeded retention unset, which means keep', function () {
+    // Statutory retention is Joy's and his accountant's decision. A number
+    // invented here would look authoritative and its failure direction is
+    // documents being destroyed.
+    (new App\Modules\Foundation\database\seeders\DocumentCategorySeeder)->run();
+
+    expect(DocumentCategory::withoutGlobalScopes()->whereNotNull('retention_months')->count())->toBe(0);
+});
