@@ -578,6 +578,7 @@ export default function PayrollInputs({
                     </div>
                     <div className="flex flex-wrap gap-3">
                         <SearchSelect
+                            fit
                             value={filters.employee_id ?? ''}
                             onChange={(e) => reload({ employee_id: e.target.value === '' ? null : Number(e.target.value) })}
                         >
@@ -589,6 +590,7 @@ export default function PayrollInputs({
                             ))}
                         </SearchSelect>
                         <SearchSelect
+                            fit
                             value={filters.payroll_period_id ?? ''}
                             onChange={(e) => reload({ payroll_period_id: e.target.value === '' ? null : Number(e.target.value) })}
                         >
