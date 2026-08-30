@@ -19,7 +19,7 @@ class MessageProvider extends Model
     use BelongsToBusiness;
 
     protected $fillable = [
-        'business_id', 'channel', 'driver', 'name', 'credentials',
+        'business_id', 'channel', 'driver', 'name', 'credentials', 'config',
         'sender_id', 'is_active', 'priority', 'cost_per_part',
     ];
 
@@ -35,6 +35,10 @@ class MessageProvider extends Model
             // ⚠⚠ `encrypted:array` - at rest this is ciphertext. Losing
             // APP_KEY makes these unreadable, which is the correct trade.
             'credentials' => 'encrypted:array',
+            // ⚠ NOT encrypted, on purpose. This is the endpoint and the field
+            // names - the things somebody has to be able to read back and
+            // correct when a gateway changes its API. Nothing secret goes here.
+            'config' => 'array',
             'is_active' => 'boolean',
             'cost_per_part' => 'decimal:4',
         ];

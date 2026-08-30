@@ -111,6 +111,17 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         Route::post('settings/messaging', [MessageProviderController::class, 'store'])->name('settings.messaging.store');
         Route::put('settings/messaging/{provider}', [MessageProviderController::class, 'update'])->name('settings.messaging.update');
         Route::post('settings/messaging/{provider}/toggle', [MessageProviderController::class, 'toggle'])->name('settings.messaging.toggle');
+
+        // ⚠⚠ A TEST SENDS A REAL MESSAGE AND COSTS REAL MONEY - one message,
+        // deliberately, so a wrong endpoint or a wrong field name is found for
+        // the price of one SMS instead of the price of a campaign. It is a POST
+        // because it spends.
+        Route::post('settings/messaging/{provider}/test', [MessageProviderController::class, 'test'])->name('settings.messaging.test');
+        Route::post('settings/messaging/{provider}/balance', [MessageProviderController::class, 'balance'])->name('settings.messaging.balance');
+
+        // The approval threshold. ⚠ Not under the send permission: the number
+        // that decides what needs approving is not for the person sending.
+        Route::put('settings/messaging', [MessageProviderController::class, 'settings'])->name('settings.messaging.settings');
     });
 
     // ── The phone book (Joy, 29 Aug 2026) ───────────────────────────────────

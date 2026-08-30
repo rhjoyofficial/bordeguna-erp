@@ -15,12 +15,18 @@ class DriverRegistry
 {
     /** @var array<string,class-string<MessageDriver>> */
     private const DRIVERS = [
+        // ⚠⚠ ONE DRIVER FOR EVERY HTTP GATEWAY, not one per vendor. Joy has not
+        // chosen a provider, so the class that sends must not know which one it
+        // is: BulkSMSBD, Alpha SMS and whatever he signs up to next are all
+        // settings rows against this same key. See ProviderPresets.
+        'http_sms' => HttpSmsDriver::class,
         'recording_sms' => RecordingSmsDriver::class,
         'smtp_mail' => SmtpMailDriver::class,
     ];
 
     /** @var array<string,string> driver key => channel it belongs to */
     private const CHANNELS = [
+        'http_sms' => 'sms',
         'recording_sms' => 'sms',
         'smtp_mail' => 'email',
     ];

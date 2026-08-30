@@ -11,6 +11,7 @@ use App\Modules\Crm\Models\MessageCampaign;
 use App\Modules\Crm\Models\MessageDelivery;
 use App\Modules\Crm\Models\MessageOptOut;
 use App\Modules\Crm\Models\MessageProvider;
+use App\Modules\Crm\Models\MessagingSetting;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -24,16 +25,19 @@ use RuntimeException;
 /**
  * Sending to the phone book: one page per channel, one engine underneath.
  *
- * ⚠⚠ THE THRESHOLD ABOVE WHICH A SEND NEEDS APPROVING. Joy has not named a
- * number yet, so this is a default rather than a decision, and it is written
- * down as one: 50 recipients. It errs small on purpose. A threshold set too high
- * is discovered by a bill; one set too low is discovered by somebody clicking
- * approve, which is the cheaper mistake. Change it here when Joy says.
+ * ⚠⚠ THE THRESHOLD ABOVE WHICH A SEND NEEDS APPROVING IS A SETTING, not a
+ * constant. Joy confirmed 50 as the default on 30 August 2026 and asked that the
+ * number itself be changeable, so it lives in `messaging_settings` and moving it
+ * is a form, not a deploy. It errs small on purpose: a threshold set too high is
+ * discovered by a bill, one set too low is discovered by somebody clicking
+ * approve, and the second is the cheaper mistake.
+ *
+ * ⚠ Read through MessagingSetting::approvalAbove() every time rather than
+ * cached on the instance - a threshold that was raised this morning must apply
+ * to the send being planned this afternoon.
  */
 class MessagingController extends Controller
 {
-    private const APPROVAL_ABOVE = 50;
-
     public function index(Request $request, string $channel, PlanCampaignSend $planner): Response
     {
         abort_unless(in_array($channel, ['sms', 'email'], true), 404);
@@ -87,7 +91,7 @@ class MessagingController extends Controller
                     'id' => $o->id, 'address' => $o->address, 'reason' => $o->reason,
                     'at' => $o->created_at?->toDateString(),
                 ]),
-            'approvalAbove' => self::APPROVAL_ABOVE,
+            'approvalAbove' => MessagingSetting::approvalAbove(),
             'can' => [
                 'send' => $request->user()->can('crm.campaigns.send'),
                 'approve' => $request->user()->can('crm.campaigns.approve'),
@@ -148,7 +152,7 @@ class MessagingController extends Controller
             'unreachable' => $plan['unreachable'],
             'duplicates' => $plan['duplicates'],
             'over_cap' => $plan['over_cap'],
-            'needs_approval' => $plan['count'] > self::APPROVAL_ABOVE,
+            'needs_approval' => $plan['count'] > MessagingSetting::approvalAbove(),
         ]);
     }
 
@@ -167,7 +171,7 @@ class MessagingController extends Controller
         // an approval and stops. The person who pressed the button is told so
         // plainly, because a button that silently does something else is worse
         // than a button that refuses.
-        if ($plan['count'] > self::APPROVAL_ABOVE && $campaign->approvalRequest === null) {
+        if ($plan['count'] > MessagingSetting::approvalAbove() && $campaign->approvalRequest === null) {
             $campaign->update([
                 'status' => CampaignStatus::PendingApproval,
                 'estimated_recipients' => $plan['count'],
@@ -279,7 +283,7 @@ class MessagingController extends Controller
 
     private function threshold(): string
     {
-        return self::APPROVAL_ABOVE.' recipients';
+        return MessagingSetting::approvalAbove().' recipients';
     }
 
     /**
