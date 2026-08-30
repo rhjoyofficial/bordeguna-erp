@@ -1,5 +1,5 @@
 import { Pagination } from '@/components/data-table/pagination';
-import InputError from '@/components/input-error';
+import { Field, FormRow } from '@/components/form/field';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -199,88 +199,83 @@ export default function RecruitmentIndex({
                     </div>
 
                     {can.manage && (
-                        <form onSubmit={submitOpening} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-                            <div className="grid gap-2 md:col-span-2">
-                                <Label htmlFor="title">Role</Label>
-                                <Input id="title" value={openingForm.data.title} onChange={(e) => openingForm.setData('title', e.target.value)} />
-                                <InputError message={openingForm.errors.title} />
-                            </div>
+                        <form onSubmit={submitOpening} className="flex flex-col gap-4 rounded-lg border p-4">
+                            {/* Sized fields (30 Aug 2026 audit): the role grows, the
+                                pickers fit, a count is a small box, dates size themselves. */}
+                            <FormRow>
+                                <Field label="Role" htmlFor="title" size="grow" error={openingForm.errors.title}>
+                                    <Input id="title" value={openingForm.data.title} onChange={(e) => openingForm.setData('title', e.target.value)} />
+                                </Field>
+                                <Field label="Department" htmlFor="department_id">
+                                    <SearchSelect
+                                        id="department_id"
+                                        value={openingForm.data.department_id}
+                                        onChange={(e) => openingForm.setData('department_id', e.target.value)}
+                                    >
+                                        <option value="">Not set</option>
+                                        {departments.map((d) => (
+                                            <option key={d.id} value={d.id}>
+                                                {d.name}
+                                            </option>
+                                        ))}
+                                    </SearchSelect>
+                                </Field>
+                                <Field label="Designation" htmlFor="designation_id">
+                                    <SearchSelect
+                                        id="designation_id"
+                                        value={openingForm.data.designation_id}
+                                        onChange={(e) => openingForm.setData('designation_id', e.target.value)}
+                                    >
+                                        <option value="">Not set</option>
+                                        {designations.map((d) => (
+                                            <option key={d.id} value={d.id}>
+                                                {d.name}
+                                            </option>
+                                        ))}
+                                    </SearchSelect>
+                                </Field>
+                            </FormRow>
+                            <FormRow>
+                                <Field label="How many" htmlFor="openings" size="xs" error={openingForm.errors.openings}>
+                                    <Input
+                                        id="openings"
+                                        type="number"
+                                        min={1}
+                                        value={openingForm.data.openings}
+                                        onChange={(e) => openingForm.setData('openings', Number(e.target.value))}
+                                    />
+                                </Field>
+                                <Field label="Status" htmlFor="status">
+                                    <SearchSelect
+                                        id="status"
+                                        value={openingForm.data.status}
+                                        onChange={(e) => openingForm.setData('status', e.target.value)}
+                                    >
+                                        {statuses.map((s) => (
+                                            <option key={s.value} value={s.value}>
+                                                {s.label}
+                                            </option>
+                                        ))}
+                                    </SearchSelect>
+                                </Field>
+                                <Field label="Opened" htmlFor="opened_on" error={openingForm.errors.opened_on}>
+                                    <Input
+                                        id="opened_on"
+                                        type="date"
+                                        value={openingForm.data.opened_on}
+                                        onChange={(e) => openingForm.setData('opened_on', e.target.value)}
+                                    />
+                                </Field>
+                                <Field label="Closes" htmlFor="closes_on" error={openingForm.errors.closes_on}>
+                                    <Input
+                                        id="closes_on"
+                                        type="date"
+                                        value={openingForm.data.closes_on}
+                                        onChange={(e) => openingForm.setData('closes_on', e.target.value)}
+                                    />
+                                </Field>
+                            </FormRow>
                             <div className="grid gap-2">
-                                <Label htmlFor="department_id">Department</Label>
-                                <SearchSelect
-                                    id="department_id"
-                                    value={openingForm.data.department_id}
-                                    onChange={(e) => openingForm.setData('department_id', e.target.value)}
-                                >
-                                    <option value="">Not set</option>
-                                    {departments.map((d) => (
-                                        <option key={d.id} value={d.id}>
-                                            {d.name}
-                                        </option>
-                                    ))}
-                                </SearchSelect>
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="designation_id">Designation</Label>
-                                <SearchSelect
-                                    id="designation_id"
-                                    value={openingForm.data.designation_id}
-                                    onChange={(e) => openingForm.setData('designation_id', e.target.value)}
-                                >
-                                    <option value="">Not set</option>
-                                    {designations.map((d) => (
-                                        <option key={d.id} value={d.id}>
-                                            {d.name}
-                                        </option>
-                                    ))}
-                                </SearchSelect>
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="openings">How many</Label>
-                                <Input
-                                    id="openings"
-                                    type="number"
-                                    min={1}
-                                    value={openingForm.data.openings}
-                                    onChange={(e) => openingForm.setData('openings', Number(e.target.value))}
-                                />
-                                <InputError message={openingForm.errors.openings} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="status">Status</Label>
-                                <SearchSelect
-                                    id="status"
-                                    value={openingForm.data.status}
-                                    onChange={(e) => openingForm.setData('status', e.target.value)}
-                                >
-                                    {statuses.map((s) => (
-                                        <option key={s.value} value={s.value}>
-                                            {s.label}
-                                        </option>
-                                    ))}
-                                </SearchSelect>
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="opened_on">Opened</Label>
-                                <Input
-                                    id="opened_on"
-                                    type="date"
-                                    value={openingForm.data.opened_on}
-                                    onChange={(e) => openingForm.setData('opened_on', e.target.value)}
-                                />
-                                <InputError message={openingForm.errors.opened_on} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="closes_on">Closes</Label>
-                                <Input
-                                    id="closes_on"
-                                    type="date"
-                                    value={openingForm.data.closes_on}
-                                    onChange={(e) => openingForm.setData('closes_on', e.target.value)}
-                                />
-                                <InputError message={openingForm.errors.closes_on} />
-                            </div>
-                            <div className="grid gap-2 md:col-span-4">
                                 <Label htmlFor="description">What the role is</Label>
                                 <textarea
                                     id="description"
@@ -289,7 +284,7 @@ export default function RecruitmentIndex({
                                     onChange={(e) => openingForm.setData('description', e.target.value)}
                                 />
                             </div>
-                            <div className="flex gap-2 md:col-span-4">
+                            <div className="flex gap-2">
                                 <Button type="submit" disabled={openingForm.processing}>
                                     {editingOpening ? 'Save opening' : 'Add opening'}
                                 </Button>
@@ -385,95 +380,82 @@ export default function RecruitmentIndex({
                     </div>
 
                     {can.manage && (
-                        <form onSubmit={submitApplicant} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="job_opening_id">For which role</Label>
-                                <SearchSelect
-                                    fit
-                                    id="job_opening_id"
-                                    value={applicantForm.data.job_opening_id}
-                                    onChange={(e) => applicantForm.setData('job_opening_id', e.target.value)}
-                                >
-                                    <option value="">Choose an opening</option>
-                                    {openings.map((o) => (
-                                        <option key={o.id} value={o.id}>
-                                            {o.title}
-                                        </option>
-                                    ))}
-                                </SearchSelect>
-                                <InputError message={applicantForm.errors.job_opening_id} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="applicant_name">Name</Label>
-                                <Input
-                                    id="applicant_name"
-                                    value={applicantForm.data.name}
-                                    onChange={(e) => applicantForm.setData('name', e.target.value)}
-                                />
-                                <InputError message={applicantForm.errors.name} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="applicant_phone">Phone</Label>
-                                <Input
-                                    id="applicant_phone"
-                                    value={applicantForm.data.phone}
-                                    onChange={(e) => applicantForm.setData('phone', e.target.value)}
-                                    placeholder="01712345678"
-                                />
-                                <InputError message={applicantForm.errors.phone} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="applicant_email">Email</Label>
-                                <Input
-                                    id="applicant_email"
-                                    value={applicantForm.data.email}
-                                    onChange={(e) => applicantForm.setData('email', e.target.value)}
-                                />
-                                <InputError message={applicantForm.errors.email} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="applicant_source">Where from</Label>
-                                <Input
-                                    id="applicant_source"
-                                    value={applicantForm.data.source}
-                                    onChange={(e) => applicantForm.setData('source', e.target.value)}
-                                    placeholder="Referral, Facebook, walk-in"
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="expected_salary">Salary asked for</Label>
-                                <Input
-                                    id="expected_salary"
-                                    inputMode="decimal"
-                                    value={applicantForm.data.expected_salary}
-                                    onChange={(e) => applicantForm.setData('expected_salary', e.target.value)}
-                                />
-                                <InputError message={applicantForm.errors.expected_salary} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="applied_on">Applied on</Label>
-                                <Input
-                                    id="applied_on"
-                                    type="date"
-                                    value={applicantForm.data.applied_on}
-                                    onChange={(e) => applicantForm.setData('applied_on', e.target.value)}
-                                />
-                                <InputError message={applicantForm.errors.applied_on} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="cv">CV</Label>
-                                <Input id="cv" type="file" onChange={(e) => applicantForm.setData('cv', e.target.files?.[0] ?? null)} />
-                                <InputError message={applicantForm.errors.cv} />
-                            </div>
-                            <div className="grid gap-2 md:col-span-4">
-                                <Label htmlFor="applicant_note">Note</Label>
-                                <Input
-                                    id="applicant_note"
-                                    value={applicantForm.data.note}
-                                    onChange={(e) => applicantForm.setData('note', e.target.value)}
-                                />
-                            </div>
-                            <div className="md:col-span-4">
+                        <form onSubmit={submitApplicant} className="flex flex-col gap-4 rounded-lg border p-4">
+                            <FormRow>
+                                <Field label="For which role" htmlFor="job_opening_id" error={applicantForm.errors.job_opening_id}>
+                                    <SearchSelect
+                                        id="job_opening_id"
+                                        value={applicantForm.data.job_opening_id}
+                                        onChange={(e) => applicantForm.setData('job_opening_id', e.target.value)}
+                                    >
+                                        <option value="">Choose an opening</option>
+                                        {openings.map((o) => (
+                                            <option key={o.id} value={o.id}>
+                                                {o.title}
+                                            </option>
+                                        ))}
+                                    </SearchSelect>
+                                </Field>
+                                <Field label="Name" htmlFor="applicant_name" size="md" error={applicantForm.errors.name}>
+                                    <Input
+                                        id="applicant_name"
+                                        value={applicantForm.data.name}
+                                        onChange={(e) => applicantForm.setData('name', e.target.value)}
+                                    />
+                                </Field>
+                                <Field label="Phone" htmlFor="applicant_phone" size="md" error={applicantForm.errors.phone}>
+                                    <Input
+                                        id="applicant_phone"
+                                        value={applicantForm.data.phone}
+                                        onChange={(e) => applicantForm.setData('phone', e.target.value)}
+                                        placeholder="01712345678"
+                                    />
+                                </Field>
+                                <Field label="Email" htmlFor="applicant_email" size="lg" error={applicantForm.errors.email}>
+                                    <Input
+                                        id="applicant_email"
+                                        value={applicantForm.data.email}
+                                        onChange={(e) => applicantForm.setData('email', e.target.value)}
+                                    />
+                                </Field>
+                            </FormRow>
+                            <FormRow>
+                                <Field label="Where from" htmlFor="applicant_source" size="md">
+                                    <Input
+                                        id="applicant_source"
+                                        value={applicantForm.data.source}
+                                        onChange={(e) => applicantForm.setData('source', e.target.value)}
+                                        placeholder="Referral, Facebook, walk-in"
+                                    />
+                                </Field>
+                                <Field label="Salary asked for" htmlFor="expected_salary" size="sm" error={applicantForm.errors.expected_salary}>
+                                    <Input
+                                        id="expected_salary"
+                                        inputMode="decimal"
+                                        value={applicantForm.data.expected_salary}
+                                        onChange={(e) => applicantForm.setData('expected_salary', e.target.value)}
+                                    />
+                                </Field>
+                                <Field label="Applied on" htmlFor="applied_on" error={applicantForm.errors.applied_on}>
+                                    <Input
+                                        id="applied_on"
+                                        type="date"
+                                        value={applicantForm.data.applied_on}
+                                        onChange={(e) => applicantForm.setData('applied_on', e.target.value)}
+                                    />
+                                </Field>
+                                <Field label="CV" htmlFor="cv" size="lg" error={applicantForm.errors.cv}>
+                                    <Input id="cv" type="file" onChange={(e) => applicantForm.setData('cv', e.target.files?.[0] ?? null)} />
+                                </Field>
+                                <Field label="Note" htmlFor="applicant_note" size="grow">
+                                    <Input
+                                        id="applicant_note"
+                                        value={applicantForm.data.note}
+                                        onChange={(e) => applicantForm.setData('note', e.target.value)}
+                                    />
+                                </Field>
+                            </FormRow>
+                            <div>
                                 <Button type="submit" disabled={applicantForm.processing}>
                                     Add applicant
                                 </Button>
@@ -481,9 +463,8 @@ export default function RecruitmentIndex({
                         </form>
                     )}
 
-                    <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-3">
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="applicant_search">Search</Label>
+                    <FormRow className="rounded-lg border p-4">
+                        <Field label="Search" htmlFor="applicant_search" size="lg">
                             <Input
                                 id="applicant_search"
                                 value={search}
@@ -491,9 +472,8 @@ export default function RecruitmentIndex({
                                 onKeyDown={(e) => e.key === 'Enter' && applyFilters({ search })}
                                 placeholder="Name or email"
                             />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="opening_filter">Opening</Label>
+                        </Field>
+                        <Field label="Opening" htmlFor="opening_filter">
                             <SearchSelect id="opening_filter" value={filters.opening} onChange={(e) => applyFilters({ opening: e.target.value })}>
                                 <option value="">Every opening</option>
                                 {openings.map((o) => (
@@ -502,9 +482,8 @@ export default function RecruitmentIndex({
                                     </option>
                                 ))}
                             </SearchSelect>
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="stage_filter">Stage</Label>
+                        </Field>
+                        <Field label="Stage" htmlFor="stage_filter">
                             <SearchSelect id="stage_filter" value={filters.stage} onChange={(e) => applyFilters({ stage: e.target.value })}>
                                 <option value="">Every stage</option>
                                 {stages.map((s) => (
@@ -513,8 +492,8 @@ export default function RecruitmentIndex({
                                     </option>
                                 ))}
                             </SearchSelect>
-                        </div>
-                    </div>
+                        </Field>
+                    </FormRow>
 
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full text-sm">
@@ -588,47 +567,44 @@ export default function RecruitmentIndex({
                     </div>
 
                     {moving && (
-                        <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-                            <div className="md:col-span-4">
-                                <h3 className="font-medium">Move {moving.name}</h3>
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="move_stage">To</Label>
-                                <SearchSelect id="move_stage" value={moveStage} onChange={(e) => setMoveStage(e.target.value)}>
-                                    {stages.map((s) => (
-                                        <option key={s.value} value={s.value}>
-                                            {s.label}
-                                        </option>
-                                    ))}
-                                </SearchSelect>
-                            </div>
-                            {needsReason && (
-                                <div className="grid gap-2 md:col-span-2">
-                                    <Label htmlFor="move_reason">Why</Label>
-                                    <Input id="move_reason" value={moveReason} onChange={(e) => setMoveReason(e.target.value)} />
-                                </div>
-                            )}
-                            {moveStage === 'hired' && (
-                                <div className="grid gap-2 md:col-span-2">
-                                    <Label htmlFor="move_employee">Their employee record, once it exists</Label>
-                                    <SearchSelect id="move_employee" value={moveEmployee} onChange={(e) => setMoveEmployee(e.target.value)}>
-                                        <option value="">Not created yet</option>
-                                        {employees.map((e) => (
-                                            <option key={e.id} value={e.id}>
-                                                {e.name}
+                        <div className="flex flex-col gap-3 rounded-lg border p-4">
+                            <h3 className="font-medium">Move {moving.name}</h3>
+                            <FormRow>
+                                <Field label="To" htmlFor="move_stage">
+                                    <SearchSelect id="move_stage" value={moveStage} onChange={(e) => setMoveStage(e.target.value)}>
+                                        {stages.map((s) => (
+                                            <option key={s.value} value={s.value}>
+                                                {s.label}
                                             </option>
                                         ))}
                                     </SearchSelect>
+                                </Field>
+                                {needsReason && (
+                                    <Field label="Why" htmlFor="move_reason" size="grow">
+                                        <Input id="move_reason" value={moveReason} onChange={(e) => setMoveReason(e.target.value)} />
+                                    </Field>
+                                )}
+                                {moveStage === 'hired' && (
+                                    <Field label="Their employee record, once it exists" htmlFor="move_employee">
+                                        <SearchSelect id="move_employee" value={moveEmployee} onChange={(e) => setMoveEmployee(e.target.value)}>
+                                            <option value="">Not created yet</option>
+                                            {employees.map((e) => (
+                                                <option key={e.id} value={e.id}>
+                                                    {e.name}
+                                                </option>
+                                            ))}
+                                        </SearchSelect>
+                                    </Field>
+                                )}
+                                <div className="flex items-center gap-2">
+                                    <Button type="button" onClick={submitMove}>
+                                        Move
+                                    </Button>
+                                    <Button type="button" variant="ghost" onClick={() => setMoving(null)}>
+                                        Cancel
+                                    </Button>
                                 </div>
-                            )}
-                            <div className="flex items-end gap-2 md:col-span-4">
-                                <Button type="button" onClick={submitMove}>
-                                    Move
-                                </Button>
-                                <Button type="button" variant="ghost" onClick={() => setMoving(null)}>
-                                    Cancel
-                                </Button>
-                            </div>
+                            </FormRow>
                         </div>
                     )}
 
