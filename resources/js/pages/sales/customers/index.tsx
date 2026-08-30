@@ -2,6 +2,7 @@ import { CustomerImportPanel } from '@/components/customer-import-panel';
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -127,6 +128,16 @@ export default function CustomersIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Customers" />
             <div className="flex flex-col gap-6 p-4">
+                <ReportHeading
+                    title="Customers"
+                    description={
+                        <>
+                            Everyone the business sells to. The price group decides what each of them is charged, so it is a commercial decision
+                            rather than a label. {customers.total} on file.
+                        </>
+                    }
+                />
+
                 {mayManage && <CustomerImportPanel />}
 
                 <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">

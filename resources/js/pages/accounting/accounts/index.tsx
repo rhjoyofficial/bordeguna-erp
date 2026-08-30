@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { EmptyRow, ReportHeading, ReportPage, ReportTable, StatRow, StatTile } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -104,14 +105,19 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Chart of accounts" />
-            <div className="flex flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-lg font-semibold">Chart of accounts</h1>
-                    <p className="text-muted-foreground text-sm">
-                        One chart, shared by every business. Balances are kept separately per business and come from the ledger, never from this
-                        screen.
-                    </p>
-                </div>
+            <ReportPage>
+                <ReportHeading
+                    title="Chart of accounts"
+                    description="One chart, shared by every business. Balances are kept separately per business and come from the ledger, never from this screen."
+                />
+
+                {/* Counts of the rows below, not ledger figures. */}
+                <StatRow>
+                    <StatTile label="Accounts" value={accounts.length} />
+                    <StatTile label="Can be posted to" value={accounts.filter((a) => a.is_postable).length} hint="The rest are grouping headings." />
+                    <StatTile label="Groups" value={accounts.filter((a) => !a.is_postable).length} />
+                    <StatTile label="Inactive" value={accounts.filter((a) => !a.is_active).length} />
+                </StatRow>
 
                 {canManageChartOfAccounts && (
                     <form
@@ -142,13 +148,7 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="type">Type</Label>
-                            <SearchSelect
-                                fit
-                                id="type"
-                                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                                value={data.type}
-                                onChange={(e) => setData({ ...data, type: e.target.value, parent_id: '' })}
-                            >
+                            <SearchSelect fit id="type" value={data.type} onChange={(e) => setData({ ...data, type: e.target.value, parent_id: '' })}>
                                 {types.map((type) => (
                                     <option key={type.value} value={type.value}>
                                         {type.label}
@@ -159,13 +159,7 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="parent_id">Sits under</Label>
-                            <SearchSelect
-                                fit
-                                id="parent_id"
-                                className="border-input bg-background h-10 w-full min-w-0 rounded-md border px-3 text-sm"
-                                value={data.parent_id}
-                                onChange={(e) => setData('parent_id', e.target.value)}
-                            >
+                            <SearchSelect fit id="parent_id" value={data.parent_id} onChange={(e) => setData('parent_id', e.target.value)}>
                                 <option value="">Top level</option>
                                 {parentOptions.map((account) => (
                                     <option key={account.id} value={account.id}>
@@ -194,69 +188,63 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                     </form>
                 )}
 
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
+                <ReportTable
+                    minWidth="44rem"
+                    head={
+                        <>
                             <th className="py-2">Code</th>
                             <th className="py-2">Account</th>
                             <th className="py-2">Type</th>
                             <th className="py-2">Normal balance</th>
                             <th className="py-2 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {accounts.map((account) => {
-                            const depth = depthOf(account, byId);
+                        </>
+                    }
+                >
+                    {accounts.map((account) => {
+                        const depth = depthOf(account, byId);
 
-                            return (
-                                <tr key={account.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                    <td className="text-muted-foreground py-2 font-mono">{account.code}</td>
-                                    <td className="py-2" style={{ paddingLeft: `${depth * 1.5}rem` }}>
-                                        <span className={account.is_postable ? '' : 'font-semibold'}>{account.name}</span>
-                                        {!account.is_postable && <span className="text-muted-foreground ml-2 text-xs">group</span>}
-                                        {!account.is_active && (
-                                            <Badge variant="destructive" className="ml-2">
-                                                Inactive
-                                            </Badge>
-                                        )}
-                                    </td>
-                                    <td className="text-muted-foreground py-2">{account.type_label}</td>
-                                    <td className="text-muted-foreground py-2">{account.normal_balance === 'debit' ? 'Debit' : 'Credit'}</td>
-                                    <td className="py-2 text-right">
-                                        {canManageChartOfAccounts && (
-                                            <>
-                                                <Button variant="ghost" size="sm" onClick={() => startEdit(account)}>
-                                                    Edit
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    disabled={account.is_system}
-                                                    onClick={() => destroy(account)}
-                                                    title={
-                                                        account.is_system
-                                                            ? 'The system posts to this account. Deactivate it instead of deleting it.'
-                                                            : undefined
-                                                    }
-                                                >
-                                                    Delete
-                                                </Button>
-                                            </>
-                                        )}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                        {accounts.length === 0 && (
-                            <tr>
-                                <td colSpan={5} className="text-muted-foreground py-4 text-center">
-                                    No accounts yet.
+                        return (
+                            <tr key={account.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                <td className="text-muted-foreground py-2 font-mono">{account.code}</td>
+                                <td className="py-2" style={{ paddingLeft: `${depth * 1.5}rem` }}>
+                                    <span className={account.is_postable ? '' : 'font-semibold'}>{account.name}</span>
+                                    {!account.is_postable && <span className="text-muted-foreground ml-2 text-xs">group</span>}
+                                    {!account.is_active && (
+                                        <Badge variant="destructive" className="ml-2">
+                                            Inactive
+                                        </Badge>
+                                    )}
+                                </td>
+                                <td className="text-muted-foreground py-2">{account.type_label}</td>
+                                <td className="text-muted-foreground py-2">{account.normal_balance === 'debit' ? 'Debit' : 'Credit'}</td>
+                                <td className="py-2 text-right">
+                                    {canManageChartOfAccounts && (
+                                        <>
+                                            <Button variant="ghost" size="sm" onClick={() => startEdit(account)}>
+                                                Edit
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={account.is_system}
+                                                onClick={() => destroy(account)}
+                                                title={
+                                                    account.is_system
+                                                        ? 'The system posts to this account. Deactivate it instead of deleting it.'
+                                                        : undefined
+                                                }
+                                            >
+                                                Delete
+                                            </Button>
+                                        </>
+                                    )}
                                 </td>
                             </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                        );
+                    })}
+                    {accounts.length === 0 && <EmptyRow colSpan={5}>No accounts yet.</EmptyRow>}
+                </ReportTable>
+            </ReportPage>
         </AppLayout>
     );
 }

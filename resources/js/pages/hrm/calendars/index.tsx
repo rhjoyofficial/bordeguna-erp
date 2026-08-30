@@ -1,4 +1,5 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -234,10 +235,11 @@ export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Calendars" />
             <div className="flex flex-col gap-4 p-4">
-                <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-lg font-medium">Holiday calendars</h2>
-                    <CalendarDialog weekdays={weekdays} trigger={<Button size="sm">New calendar</Button>} />
-                </div>
+                <ReportHeading
+                    title="Holiday calendars"
+                    description="Named per year. The weekly off-days and the holidays listed under each one are what make a day non-working, and attendance and payroll both read them."
+                    actions={<CalendarDialog weekdays={weekdays} trigger={<Button size="sm">New calendar</Button>} />}
+                />
 
                 {calendars.length === 0 ? (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">

@@ -1,5 +1,5 @@
+import { EmptyRow, FilterBar, Footnote, ReportHeading, ReportPage, ReportTable, StatRow, StatTile, Verdict } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -70,24 +70,23 @@ export default function CustomerStatementIndex({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Customer statement" />
-            <div className="flex flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-lg font-semibold">Customer statement</h1>
-                    <p className="text-muted-foreground max-w-2xl text-sm">
-                        One customer&apos;s account for the period: every invoice, return, payment and refund in the order it happened, with the
-                        balance after each one.
-                    </p>
-                </div>
+            <ReportPage>
+                <ReportHeading
+                    title="Customer statement"
+                    description="One customer's account for the period: every invoice, return, payment and refund in the order it happened, with the balance after each one."
+                />
 
-                <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+                <FilterBar onSubmit={submit}>
                     <div className="grid gap-2">
                         <Label htmlFor="customer">Customer</Label>
+                        {/* No hand-written width. The picker sizes itself now; the
+                            w-80 that used to live here was left over from the native
+                            select this replaced. */}
                         <SearchSelect
                             fit
                             id="customer"
                             value={filters.customer}
                             onChange={(e) => setFilters({ ...filters, customer: e.target.value })}
-                            className="border-input bg-background h-9 w-80 rounded-md border px-3 text-sm"
                         >
                             <option value="">Choose a customer</option>
                             {customers.map((option) => (
@@ -106,8 +105,7 @@ export default function CustomerStatementIndex({
                         <Label htmlFor="to">To</Label>
                         <Input id="to" type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
                     </div>
-                    <Button variant="outline">Show</Button>
-                </form>
+                </FilterBar>
 
                 {customer === null && <p className="text-muted-foreground py-6 text-center text-sm">Choose a customer to see their statement.</p>}
 
@@ -115,73 +113,76 @@ export default function CustomerStatementIndex({
                     <>
                         {/* C-CST-1: the tie-out, shown only when there was something to check against. */}
                         {summary.checked && !summary.consistent && (
-                            <div className="border-destructive/40 bg-destructive/5 text-destructive rounded-md border px-4 py-3 text-sm font-medium">
+                            <Verdict tone="bad">
                                 This statement does not agree with the ledger: the documents close at {side(summary.closing, summary.closing_side)}{' '}
                                 but the customer&apos;s share of Accounts Receivable is {summary.ledger_closing}. A posting is missing a document or a
                                 document is missing a posting. Run accounting:reconcile to find which.
-                            </div>
+                            </Verdict>
                         )}
 
-                        <div className="overflow-x-auto">
-                            <table className="w-full min-w-[56rem] text-sm">
-                                <thead>
-                                    <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
-                                        <th className="py-2">Date</th>
-                                        <th className="py-2">Detail</th>
-                                        <th className="py-2">Reference</th>
-                                        <th className="py-2 text-right">Charges</th>
-                                        <th className="py-2 text-right">Payments &amp; credits</th>
-                                        <th className="py-2 text-right">Balance</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                        <td className="text-muted-foreground py-2">{from}</td>
-                                        <td className="py-2 font-medium" colSpan={4}>
-                                            Opening balance
-                                        </td>
-                                        <td className="py-2 text-right font-medium tabular-nums">{side(summary.opening, summary.opening_side)}</td>
-                                    </tr>
-                                    {lines.map((line, index) => (
-                                        <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                            <td className="text-muted-foreground py-2">{line.date}</td>
-                                            <td className="py-2">{line.label}</td>
-                                            <td className="text-muted-foreground py-2">{line.reference}</td>
-                                            <td className="py-2 text-right tabular-nums">{line.charge}</td>
-                                            <td className="py-2 text-right tabular-nums">{line.settlement}</td>
-                                            <td className="py-2 text-right tabular-nums">{side(line.balance, line.balance_side)}</td>
-                                        </tr>
-                                    ))}
-                                    {lines.length === 0 && (
-                                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                            <td colSpan={6} className="text-muted-foreground py-6 text-center">
-                                                No transactions in this period.
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                                <tfoot>
-                                    <tr className="font-medium">
-                                        <td className="py-2" colSpan={3}>
-                                            Closing balance
-                                        </td>
-                                        <td className="py-2 text-right tabular-nums">{summary.charges}</td>
-                                        <td className="py-2 text-right tabular-nums">{summary.settlements}</td>
-                                        <td className="py-2 text-right tabular-nums">{side(summary.closing, summary.closing_side)}</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
+                        <StatRow>
+                            <StatTile label="Opening balance" value={side(summary.opening, summary.opening_side)} hint={`As at ${from}`} />
+                            <StatTile label="Charges" value={summary.charges} hint="Invoices raised in the period." />
+                            <StatTile label="Payments and credits" value={summary.settlements} hint="Received or credited back." />
+                            <StatTile
+                                label="Closing balance"
+                                value={side(summary.closing, summary.closing_side)}
+                                tone={summary.closing_side === 'credit' ? 'good' : undefined}
+                            />
+                        </StatRow>
 
-                        <p className="text-muted-foreground max-w-2xl text-sm">
+                        <ReportTable
+                            minWidth="56rem"
+                            head={
+                                <>
+                                    <th className="py-2">Date</th>
+                                    <th className="py-2">Detail</th>
+                                    <th className="py-2">Reference</th>
+                                    <th className="py-2 text-right">Charges</th>
+                                    <th className="py-2 text-right">Payments &amp; credits</th>
+                                    <th className="py-2 text-right">Balance</th>
+                                </>
+                            }
+                            foot={
+                                <tr className="font-medium">
+                                    <td className="py-2" colSpan={3}>
+                                        Closing balance
+                                    </td>
+                                    <td className="py-2 text-right tabular-nums">{summary.charges}</td>
+                                    <td className="py-2 text-right tabular-nums">{summary.settlements}</td>
+                                    <td className="py-2 text-right tabular-nums">{side(summary.closing, summary.closing_side)}</td>
+                                </tr>
+                            }
+                        >
+                            <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                <td className="text-muted-foreground py-2">{from}</td>
+                                <td className="py-2 font-medium" colSpan={4}>
+                                    Opening balance
+                                </td>
+                                <td className="py-2 text-right font-medium tabular-nums">{side(summary.opening, summary.opening_side)}</td>
+                            </tr>
+                            {lines.map((line, index) => (
+                                <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                    <td className="text-muted-foreground py-2">{line.date}</td>
+                                    <td className="py-2">{line.label}</td>
+                                    <td className="text-muted-foreground py-2">{line.reference}</td>
+                                    <td className="py-2 text-right tabular-nums">{line.charge}</td>
+                                    <td className="py-2 text-right tabular-nums">{line.settlement}</td>
+                                    <td className="py-2 text-right tabular-nums">{side(line.balance, line.balance_side)}</td>
+                                </tr>
+                            ))}
+                            {lines.length === 0 && <EmptyRow colSpan={6}>No transactions in this period.</EmptyRow>}
+                        </ReportTable>
+
+                        <Footnote>
                             {summary.closing_side === 'credit'
                                 ? 'A balance marked Cr means the business owes this customer, usually an advance or an over-payment.'
                                 : 'The closing balance is what this customer owes as at the end of the period.'}{' '}
                             Which individual invoices remain unpaid is the receivables ageing&apos;s question.
-                        </p>
+                        </Footnote>
                     </>
                 )}
-            </div>
+            </ReportPage>
         </AppLayout>
     );
 }
