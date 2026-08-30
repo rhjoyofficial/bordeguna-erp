@@ -127,7 +127,7 @@ export function AppSidebar() {
                 // already see.
                 ...(canViewCalendar ? [{ title: 'Calendar', url: '/calendar', icon: CalendarDays }] : []),
                 ...(canViewNotes ? [{ title: 'Notes', url: '/notes', icon: PenSquare }] : []),
-                ...(canViewFiles ? [{ title: 'Files', url: '/files', icon: FolderOpen }] : []),
+                ...(canViewFiles ? [{ title: 'Documents', url: '/files', icon: FolderOpen }] : []),
                 ...(canUseChat ? [{ title: 'Chat', url: '/chat', icon: MessageSquare }] : []),
                 { title: 'Switch business', url: '/businesses/switch', icon: Repeat },
             ],

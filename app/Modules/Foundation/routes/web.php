@@ -53,6 +53,10 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
 
     Route::middleware('can:files.manage')->group(function () {
         Route::post('files', [FileManagerController::class, 'store'])->name('files.store');
+        // ⚠ Created from the archive screen, not from settings: the moment
+        // somebody needs a new kind of document is the moment they are
+        // filing one that fits nothing existing.
+        Route::post('files/categories', [FileManagerController::class, 'storeCategory'])->name('files.categories.store');
         // ⚠ Refuses anything that is not a LIBRARY file. Evidence attached to a
         // record is removed from that record, where the loss is visible.
         Route::delete('files/{attachment}', [FileManagerController::class, 'destroy'])->name('files.destroy');
