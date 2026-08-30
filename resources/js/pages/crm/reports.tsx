@@ -1,3 +1,5 @@
+import { Breakdown, PairedBars } from '@/components/charts/chart-primitives';
+import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -60,13 +62,10 @@ export default function CrmReports({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="CRM reports" />
             <div className="flex flex-col gap-8 p-4">
-                <div>
-                    <h1 className="text-lg font-semibold">CRM reports</h1>
-                    <p className="text-muted-foreground max-w-3xl text-sm">
-                        Every figure is worked out when you open this page, so nothing here can drift from the records it came from. Revenue and
-                        campaign return arrive with Sales - there are no invoices yet, and a column of zeros would be worse than an absent one.
-                    </p>
-                </div>
+                <ReportHeading
+                    title="CRM reports"
+                    description="Every figure is worked out when you open this page, so nothing here can drift from the records it came from. Revenue and campaign return arrive with Sales - there are no invoices yet, and a column of zeros would be worse than an absent one."
+                />
 
                 {/* ── Funnel ─────────────────────────────────────────────── */}
                 <section className="flex flex-col gap-3">
@@ -80,19 +79,41 @@ export default function CrmReports({
                                 `. ${funnel.duplicatesExcluded} duplicate${funnel.duplicatesExcluded === 1 ? '' : 's'} excluded, so nobody is counted twice.`}
                         </p>
                     </div>
-                    <div className="flex flex-wrap gap-3">
-                        {funnel.stages.map((stage) => (
-                            <div key={stage.status} className="min-w-32 rounded-md border p-3">
-                                <p className="text-2xl font-semibold tabular-nums">{stage.count}</p>
-                                <p className="text-muted-foreground text-xs">{stage.label}</p>
-                            </div>
-                        ))}
+                    {/* ⚠ Numbers where Joy wanted a picture (30 Aug 2026 audit, root
+                        cause D). The stage tiles stay for the exact figures; the
+                        bars beside them are the same figures drawn with the
+                        hand-rolled primitives every other chart in the app uses -
+                        no chart library, by the 29 Aug decision. */}
+                    <div className="grid gap-4 lg:grid-cols-[auto_1fr]">
+                        <div className="flex flex-wrap gap-3 lg:max-w-md">
+                            {funnel.stages.map((stage) => (
+                                <div key={stage.status} className="min-w-32 rounded-md border p-3">
+                                    <p className="text-2xl font-semibold tabular-nums">{stage.count}</p>
+                                    <p className="text-muted-foreground text-xs">{stage.label}</p>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="rounded-lg border p-4">
+                            <Breakdown points={funnel.stages.map((stage) => ({ label: stage.label, value: stage.count }))} empty="No leads yet." />
+                        </div>
                     </div>
                 </section>
 
                 {/* ── Sources ────────────────────────────────────────────── */}
                 <section className="flex flex-col gap-2">
                     <h2 className="text-sm font-medium">Which source and campaign produced customers</h2>
+                    <div className="rounded-lg border p-4">
+                        <PairedBars
+                            points={sources.map((row) => ({
+                                label: row.campaign && row.campaign !== '-' ? `${row.source} / ${row.campaign}` : row.source,
+                                a: row.leads,
+                                b: row.converted,
+                            }))}
+                            aLabel="Leads"
+                            bLabel="Converted"
+                            empty="No lead has an attribution yet."
+                        />
+                    </div>
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full min-w-[36rem] text-sm">
                             <thead className="bg-muted/50 text-left">
