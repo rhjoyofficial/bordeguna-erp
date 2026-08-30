@@ -1,5 +1,6 @@
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,13 +56,10 @@ export default function Depreciation({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Depreciation" />
             <div className="flex flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-lg font-semibold">Depreciation</h1>
-                    <p className="text-muted-foreground max-w-3xl text-sm">
-                        One month's wear on everything the business owns, charged against that month's profit. Run it once the month has finished.
-                        Running the same month twice is harmless - each asset can only be charged once per month - but nothing here reverses a charge.
-                    </p>
-                </div>
+                <ReportHeading
+                    title="Depreciation"
+                    description="One month's wear on everything the business owns, charged against that month's profit. Run it once the month has finished. Running the same month twice is harmless - each asset can only be charged once per month - but nothing here reverses a charge."
+                />
 
                 {/*
                   ⚠⚠ Not a cosmetic warning. With no mapping the engine still writes
