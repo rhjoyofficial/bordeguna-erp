@@ -52,6 +52,7 @@ import {
     Tag,
     Tags,
     Timer,
+    Grid3x3,
     TrendingDown,
     TrendingUp,
     Truck,
@@ -158,6 +159,10 @@ export function AppSidebar() {
                           // link at all until 19 Aug. Gated, because the route is:
                           // opening stock sets the FIFO layers behind every margin.
                           ...(canRecordOpeningStock ? [{ title: 'Opening stock', url: '/inventory/opening-stock', icon: ClipboardCheck }] : []),
+                          // C-BIN-4/6. Placement is floor work, gated like the
+                          // other floor work; the pick list prints what this
+                          // screen records.
+                          ...(canRecordOpeningStock ? [{ title: 'Bin placement', url: '/inventory/bin-placement', icon: Grid3x3 }] : []),
                           // C-IMP-7. The whole point of the import screen is that Joy
                           // stops sending files to be loaded for him, so it has to be
                           // findable without being told where it is.
@@ -173,6 +178,9 @@ export function AppSidebar() {
                           // typing.
                           ...(canManageBom ? [{ title: 'Recipes (BOM)', url: '/inventory/bills-of-material', icon: ListTree }] : []),
                           { title: 'Warehouses', url: '/inventory/warehouses', icon: Warehouse },
+                          // WMS bins phase 1: route, screen and this line ship
+                          // in one commit - the reachability rule.
+                          { title: 'Bins', url: '/inventory/bins', icon: Grid3x3 },
                           { title: 'Categories', url: '/inventory/categories', icon: Tags },
                           // INV-4: the brands table existed with only a seeder writing
                           // to it - master data Joy could not enter himself.

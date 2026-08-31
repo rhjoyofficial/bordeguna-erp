@@ -27,7 +27,7 @@ use App\Modules\Inventory\Models\Warehouse;
 class PickPlan
 {
     /**
-     * @return array{on_hand: float, shortfall: float, batches: list<array{batch_number:?string, expiry_date:?string, take:float, available:float}>}
+     * @return array{on_hand: float, shortfall: float, batches: list<array{batch_number:?string, expiry_date:?string, bin:?string, take:float, available:float}>}
      */
     public static function for(Product $product, Warehouse $warehouse, float $quantity): array
     {
@@ -35,6 +35,7 @@ class PickPlan
             ->where('product_id', $product->id)
             ->where('warehouse_id', $warehouse->id)
             ->consumable()
+            ->with('bin:id,code')
             ->get();
 
         $onHand = round((float) $batches->sum(fn (StockBatch $batch) => (float) $batch->current_quantity), 4);
@@ -54,6 +55,9 @@ class PickPlan
             $plan[] = [
                 'batch_number' => $batch->batch_number,
                 'expiry_date' => $batch->expiry_date?->toDateString(),
+                // C-BIN-6: the FIFO batch the ledger will consume and the
+                // shelf it sits on, together. Null when nobody has placed it.
+                'bin' => $batch->bin?->code,
                 'take' => round($take, 4),
                 'available' => round($available, 4),
             ];

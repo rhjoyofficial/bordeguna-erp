@@ -7,6 +7,7 @@ import { Head, Link } from '@inertiajs/react';
 interface Batch {
     batch_number: string | null;
     expiry_date: string | null;
+    bin: string | null;
     take: number;
     available: number;
 }
@@ -146,6 +147,9 @@ export default function PickList({
                                                             {line.batches.map((batch, position) => (
                                                                 <li key={`${line.id}-${position}`}>
                                                                     {batch.batch_number ?? 'no batch number'}
+                                                                    {/* C-BIN-6: the shelf beside the batch it
+                                                                        guides to - the whole point of bins. */}
+                                                                    {batch.bin && ` · bin ${batch.bin}`}
                                                                     {batch.expiry_date && ` · expires ${batch.expiry_date}`} · take{' '}
                                                                     {quantity(batch.take)}
                                                                 </li>

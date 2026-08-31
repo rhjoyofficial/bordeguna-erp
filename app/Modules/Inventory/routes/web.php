@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Inventory\Http\Controllers\BillOfMaterialController;
+use App\Modules\Inventory\Http\Controllers\BinPlacementController;
 use App\Modules\Inventory\Http\Controllers\BrandController;
 use App\Modules\Inventory\Http\Controllers\CategoryController;
 use App\Modules\Inventory\Http\Controllers\ExpiryController;
@@ -18,6 +19,7 @@ use App\Modules\Inventory\Http\Controllers\StockController;
 use App\Modules\Inventory\Http\Controllers\StockRequestController;
 use App\Modules\Inventory\Http\Controllers\UnitConversionController;
 use App\Modules\Inventory\Http\Controllers\UnitOfMeasureController;
+use App\Modules\Inventory\Http\Controllers\WarehouseBinController;
 use App\Modules\Inventory\Http\Controllers\WarehouseController;
 use Illuminate\Support\Facades\Route;
 
@@ -42,6 +44,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::get('brands', [BrandController::class, 'index'])->name('brands.index');
         Route::get('units', [UnitOfMeasureController::class, 'index'])->name('units.index');
         Route::get('warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
+        // C-BIN-4: bins reveal less than the stock screen already shows.
+        Route::get('bins', [WarehouseBinController::class, 'index'])->name('bins.index');
     });
 
     // C-IMP-4. Importing is a different power from editing one row: replacing
@@ -119,6 +123,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::put('warehouses/{warehouse}', [WarehouseController::class, 'update'])->name('warehouses.update');
         Route::patch('warehouses/{warehouse}/toggle-active', [WarehouseController::class, 'toggleActive'])->name('warehouses.toggle-active');
         Route::delete('warehouses/{warehouse}', [WarehouseController::class, 'destroy'])->name('warehouses.destroy');
+
+        // WMS bins phase 1 (C-BIN-4): warehouse structure, the same power that
+        // creates the warehouse around them. Nothing here moves stock.
+        Route::post('bins', [WarehouseBinController::class, 'store'])->name('bins.store');
+        Route::put('bins/{bin}', [WarehouseBinController::class, 'update'])->name('bins.update');
+        Route::patch('bins/{bin}/toggle-active', [WarehouseBinController::class, 'toggleActive'])->name('bins.toggle-active');
+        Route::delete('bins/{bin}', [WarehouseBinController::class, 'destroy'])->name('bins.destroy');
     });
 
     // Stock movements. Reading the stock book is gated like the catalog above
@@ -144,6 +155,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::get('opening-stock/import', [OpeningStockImportController::class, 'create'])->name('opening-stock.import');
         Route::post('opening-stock/import/preview', [OpeningStockImportController::class, 'preview'])->name('opening-stock.import.preview');
         Route::post('opening-stock/import', [OpeningStockImportController::class, 'store'])->name('opening-stock.import.store');
+
+        // Bin placement (C-BIN-4): the floor act that gives the pick list its
+        // shelf address - the same hands that already move stock. It writes
+        // `bin_id` and an activity row, never a movement or a journal.
+        Route::get('bin-placement', [BinPlacementController::class, 'index'])->name('bin-placement.index');
+        Route::patch('stock/batches/{batch}/bin', [BinPlacementController::class, 'update'])->name('stock.batches.bin');
     });
     // storeAdjustment/storeTransfer authorize inventory.stock.adjust internally
     Route::post('stock/adjustments', [StockController::class, 'storeAdjustment'])->name('stock.adjustments.store');

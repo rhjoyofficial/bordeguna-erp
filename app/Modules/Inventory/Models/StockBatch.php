@@ -9,15 +9,18 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class StockBatch extends Model
 {
-    use BelongsToBusiness, HasFactory;
+    use BelongsToBusiness, HasFactory, LogsActivity;
 
     protected $fillable = [
         'business_id',
         'product_id',
         'warehouse_id',
+        'bin_id',
         'batch_number',
         'expiry_date',
         'manufactured_date',
@@ -56,10 +59,30 @@ class StockBatch extends Model
         ];
     }
 
+    /**
+     * C-BIN-7. The placement is the ONLY thing about a batch the activity log
+     * carries: "who moved this batch to that shelf" needs an answer, while
+     * quantity history already lives in stock movements. Batch creation with a
+     * null bin is an empty diff and logs nothing.
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['bin_id'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
     /** The unit the supplier invoiced, when this batch was converted on receipt. */
     public function purchaseUnit(): BelongsTo
     {
         return $this->belongsTo(UnitOfMeasure::class, 'purchase_unit_id');
+    }
+
+    /** Where in the warehouse this batch physically sits (C-BIN-1), if placed. */
+    public function bin(): BelongsTo
+    {
+        return $this->belongsTo(WarehouseBin::class, 'bin_id');
     }
 
     public function product(): BelongsTo
