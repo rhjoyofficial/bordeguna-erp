@@ -27,7 +27,9 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
+        // C-LAND-4: login goes through the landing decision, which sends each
+        // person to the first screen their role and permissions call for.
+        $response->assertRedirect(route('landing', absolute: false));
     }
 
     public function test_users_can_not_authenticate_with_invalid_password()

@@ -19,11 +19,18 @@ interface Role {
     locked_permissions: string[];
     permissions: string[];
     members_count: number;
+    landing_page: string | null;
+}
+
+interface LandingOption {
+    key: string;
+    label: string;
 }
 
 interface RolesProps {
     roles: Role[];
     available_permissions: string[];
+    landing_options: LandingOption[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Roles', href: '/settings/roles' }];
@@ -118,22 +125,29 @@ function CreateRoleForm({ availablePermissions }: { availablePermissions: string
     );
 }
 
-function RoleRow({ role, availablePermissions }: { role: Role; availablePermissions: string[] }) {
+function RoleRow({ role, availablePermissions, landingOptions }: { role: Role; availablePermissions: string[]; landingOptions: LandingOption[] }) {
     const [editing, setEditing] = useState(false);
     // Seeded fresh each time edit opens, so re-editing never carries stale state.
     const [name, setName] = useState(role.name);
     const [permissions, setPermissions] = useState<string[]>(role.permissions);
+    const [landingPage, setLandingPage] = useState<string>(role.landing_page ?? '');
 
     const startEdit = () => {
         setName(role.name);
         setPermissions(role.permissions);
+        setLandingPage(role.landing_page ?? '');
         setEditing(true);
     };
 
     const toggle = (permission: string) =>
         setPermissions(permissions.includes(permission) ? permissions.filter((p) => p !== permission) : [...permissions, permission]);
 
-    const save = () => router.put(route('roles.update', role.id), { name, permissions }, { onSuccess: () => setEditing(false) });
+    const save = () =>
+        router.put(
+            route('roles.update', role.id),
+            { name, permissions, landing_page: landingPage === '' ? null : landingPage },
+            { onSuccess: () => setEditing(false) },
+        );
     const remove = () => router.delete(route('roles.destroy', role.id));
 
     const canDelete = !role.is_system && role.members_count === 0;
@@ -176,17 +190,24 @@ function RoleRow({ role, availablePermissions }: { role: Role; availablePermissi
             </div>
 
             {!editing && (
-                <div className="flex flex-wrap gap-1.5">
-                    {role.permissions.length > 0 ? (
-                        role.permissions.map((permission) => (
-                            <Badge key={permission} variant="secondary" className="font-normal">
-                                {permission}
-                            </Badge>
-                        ))
-                    ) : (
-                        <span className="text-muted-foreground text-sm">No permissions</span>
+                <>
+                    <div className="flex flex-wrap gap-1.5">
+                        {role.permissions.length > 0 ? (
+                            role.permissions.map((permission) => (
+                                <Badge key={permission} variant="secondary" className="font-normal">
+                                    {permission}
+                                </Badge>
+                            ))
+                        ) : (
+                            <span className="text-muted-foreground text-sm">No permissions</span>
+                        )}
+                    </div>
+                    {role.landing_page && (
+                        <p className="text-muted-foreground text-xs">
+                            After login: {landingOptions.find((option) => option.key === role.landing_page)?.label ?? role.landing_page}
+                        </p>
                     )}
-                </div>
+                </>
             )}
 
             {editing && (
@@ -204,6 +225,27 @@ function RoleRow({ role, availablePermissions }: { role: Role; availablePermissi
                         onToggle={toggle}
                         idPrefix={`edit-role-${role.id}`}
                     />
+                    {/* C-LAND-2: what a holder of this role sees first after
+                        login. Blank = the automatic defaults (owners the
+                        dashboard, HR the HR dashboard, sellers the counter,
+                        everyone else their own profile). Nobody is ever sent
+                        to a page their permissions cannot open. */}
+                    <div className="grid max-w-sm gap-2">
+                        <Label htmlFor={`role-landing-${role.id}`}>After login, go to</Label>
+                        <select
+                            id={`role-landing-${role.id}`}
+                            value={landingPage}
+                            onChange={(e) => setLandingPage(e.target.value)}
+                            className="border-input bg-background h-10 rounded-md border px-3 text-sm"
+                        >
+                            <option value="">Automatic (by what this role can do)</option>
+                            {landingOptions.map((option) => (
+                                <option key={option.key} value={option.key}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                     <div className="flex gap-2">
                         <Button size="sm" onClick={save} disabled={name.trim() === ''}>
                             Save
@@ -218,7 +260,7 @@ function RoleRow({ role, availablePermissions }: { role: Role; availablePermissi
     );
 }
 
-export default function Roles({ roles, available_permissions }: RolesProps) {
+export default function Roles({ roles, available_permissions, landing_options }: RolesProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Roles" />
@@ -235,7 +277,7 @@ export default function Roles({ roles, available_permissions }: RolesProps) {
                     <div>
                         <h3 className="text-muted-foreground mb-1 text-sm font-medium">Roles</h3>
                         {roles.map((role) => (
-                            <RoleRow key={role.id} role={role} availablePermissions={available_permissions} />
+                            <RoleRow key={role.id} role={role} availablePermissions={available_permissions} landingOptions={landing_options} />
                         ))}
                     </div>
                 </div>

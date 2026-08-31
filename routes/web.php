@@ -9,11 +9,20 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return auth()->check()
-        ? redirect()->route('dashboard')
+        ? redirect()->route('landing')
         : redirect()->route('login');
 })->name('home');
 
 Route::middleware(['auth', 'business'])->group(function () {
+    // C-LAND-4: what each person sees first. Login and `/` come through here;
+    // the business middleware has already resolved the tenant and the
+    // permission team, so the resolver never re-implements either. Visiting
+    // /dashboard directly still shows the dashboard - this route decides
+    // where login GOES, it forbids nothing.
+    Route::get('landing', function () {
+        return redirect(\App\Support\LandingPages::resolveFor(request()->user()));
+    })->name('landing');
+
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('approvals', [ApprovalInboxController::class, 'index'])->name('approvals.index');

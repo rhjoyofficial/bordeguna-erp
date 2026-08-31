@@ -4,6 +4,7 @@ namespace App\Modules\Foundation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Support\LandingPages;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -44,11 +45,14 @@ class RoleManagementController extends Controller
                 'locked_permissions' => $role->name === 'Owner' ? [self::OWNER_LOCKED_PERMISSION] : [],
                 'permissions' => $role->permissions->pluck('name')->values(),
                 'members_count' => $role->users()->count(),
+                // C-LAND-2: what a holder of this role sees first after login.
+                'landing_page' => $role->landing_page,
             ]);
 
         return Inertia::render('settings/roles', [
             'roles' => $roles,
             'available_permissions' => Permission::orderBy('name')->pluck('name'),
+            'landing_options' => LandingPages::options(),
         ]);
     }
 
@@ -86,11 +90,18 @@ class RoleManagementController extends Controller
             ],
             'permissions' => ['array'],
             'permissions.*' => ['string', Rule::exists('permissions', 'name')],
+            // C-LAND-1: a catalogue key, never a URL. Null clears the
+            // assignment and the capability defaults take over.
+            'landing_page' => ['nullable', 'string', Rule::in(LandingPages::keys())],
         ]);
 
         // System role names are referenced by code/seeders — keep them fixed.
         if (! $isSystem && $data['name'] !== $role->name) {
             $role->update(['name' => $data['name']]);
+        }
+
+        if (array_key_exists('landing_page', $data)) {
+            $role->update(['landing_page' => $data['landing_page']]);
         }
 
         $permissions = $data['permissions'] ?? [];

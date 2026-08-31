@@ -33,7 +33,11 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        // C-LAND-4: the landing route decides what this person sees first -
+        // per role, per capability - after the business middleware has
+        // resolved the tenant. `intended()` still wins for a deep link
+        // somebody followed before logging in.
+        return redirect()->intended(route('landing', absolute: false));
     }
 
     /**
