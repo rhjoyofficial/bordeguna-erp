@@ -1,0 +1,84 @@
+<?php
+
+namespace App\Modules\Inventory\Actions;
+
+use App\Models\User;
+use App\Modules\Accounting\Support\FiscalYear;
+use App\Modules\Foundation\Models\Business;
+use App\Modules\Inventory\Enums\StockBatchStatus;
+use App\Modules\Inventory\Models\Brand;
+use App\Modules\Inventory\Models\Category;
+use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\StockBatch;
+use App\Modules\Inventory\Models\StockCount;
+use App\Modules\Inventory\Models\Warehouse;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Opens a count: snapshots what the book expects per product in scope and
+ * writes NOTHING else - no adjustment, no movement, no journal (acceptance 1).
+ */
+class StartStockCount
+{
+    public function handle(
+        Warehouse $warehouse,
+        User $createdBy,
+        ?Category $category = null,
+        ?Brand $brand = null,
+        ?string $note = null,
+    ): StockCount {
+        return DB::transaction(function () use ($warehouse, $createdBy, $category, $brand, $note) {
+            // The book per product: every active batch, because the shelf
+            // holds expired stock too and the counter will meet it.
+            $expected = StockBatch::query()
+                ->where('warehouse_id', $warehouse->id)
+                ->where('status', StockBatchStatus::Active)
+                ->where('current_quantity', '>', 0)
+                ->selectRaw('product_id, SUM(current_quantity) as quantity')
+                ->groupBy('product_id')
+                ->pluck('quantity', 'product_id');
+
+            $inScope = Product::query()
+                ->whereIn('id', $expected->keys())
+                ->stocked()
+                ->when($category, fn ($query) => $query->where('category_id', $category->id))
+                ->when($brand, fn ($query) => $query->where('brand_id', $brand->id))
+                ->pluck('id');
+
+            $count = StockCount::create([
+                'business_id' => $warehouse->business_id,
+                'warehouse_id' => $warehouse->id,
+                'count_number' => $this->nextNumber($warehouse->business_id, now()),
+                'category_id' => $category?->id,
+                'brand_id' => $brand?->id,
+                'note' => $note,
+                'created_by' => $createdBy->id,
+            ]);
+
+            foreach ($inScope as $productId) {
+                $count->lines()->create([
+                    'product_id' => $productId,
+                    'expected_quantity' => (string) $expected[$productId],
+                ]);
+            }
+
+            return $count->load('lines');
+        });
+    }
+
+    private function nextNumber(int $businessId, Carbon $date): string
+    {
+        $business = Business::withoutGlobalScopes()->findOrFail($businessId);
+        $prefix = 'CNT-'.FiscalYear::containing($date, $business)->label().'-';
+
+        $latest = StockCount::query()
+            ->where('count_number', 'like', $prefix.'%')
+            ->orderByDesc('count_number')
+            ->value('count_number');
+
+        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
+
+        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+    }
+}

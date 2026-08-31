@@ -16,6 +16,7 @@ use App\Modules\Inventory\Http\Controllers\ProductImportController;
 use App\Modules\Inventory\Http\Controllers\ProductionRunController;
 use App\Modules\Inventory\Http\Controllers\ProductionYieldController;
 use App\Modules\Inventory\Http\Controllers\StockController;
+use App\Modules\Inventory\Http\Controllers\StockCountController;
 use App\Modules\Inventory\Http\Controllers\StockRequestController;
 use App\Modules\Inventory\Http\Controllers\UnitConversionController;
 use App\Modules\Inventory\Http\Controllers\UnitOfMeasureController;
@@ -213,6 +214,25 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         // the document it feeds.
         Route::get('opening-stock/count-sheet', [OpeningStockCountSheetController::class, 'show'])->name('opening-stock.count-sheet');
     });
+
+    // Stock counts / cycle counting (C-CNT). Reading rides reports.view like
+    // the other report screens; every write authorizes the SAME dual rule as
+    // the manual adjustment internally (stock.request OR stock.adjust may
+    // RAISE - the threshold decides whether variances post).
+    //
+    // ⚠⚠ Nothing behind these routes moves stock. Variances go through
+    // CreateInventoryAdjustment; the production run stays the sixth and last
+    // sanctioned stock document.
+    Route::middleware('can:inventory.reports.view')->group(function () {
+        Route::get('stock-counts', [StockCountController::class, 'index'])->name('stock-counts.index');
+        Route::get('stock-counts/{stockCount}', [StockCountController::class, 'show'])->whereNumber('stockCount')->name('stock-counts.show');
+        Route::get('stock-counts/{stockCount}/sheet', [StockCountController::class, 'sheet'])->whereNumber('stockCount')->name('stock-counts.sheet');
+    });
+    Route::post('stock-counts', [StockCountController::class, 'store'])->name('stock-counts.store');
+    Route::patch('stock-counts/{stockCount}/lines/{line}', [StockCountController::class, 'updateLine'])->scopeBindings()->name('stock-counts.lines.update');
+    Route::post('stock-counts/{stockCount}/lines', [StockCountController::class, 'addLine'])->name('stock-counts.lines.store');
+    Route::post('stock-counts/{stockCount}/complete', [StockCountController::class, 'complete'])->name('stock-counts.complete');
+    Route::post('stock-counts/{stockCount}/cancel', [StockCountController::class, 'cancel'])->name('stock-counts.cancel');
 
     // Approval queue — index/store/approve/reject each authorize internally
     Route::get('stock-requests', [StockRequestController::class, 'index'])->name('stock-requests.index');

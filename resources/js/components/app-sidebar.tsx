@@ -155,6 +155,10 @@ export function AppSidebar() {
                           { title: 'Production', url: '/inventory/production-runs', icon: Factory },
                           { title: 'Production yield', url: '/inventory/production-yield', icon: FileBarChart },
                           { title: 'Stock requests', url: '/inventory/stock-requests', icon: ClipboardList },
+                          // C-CNT: cycle counting - the recurring answer to
+                          // "is the shelf what the book says". Route, screen
+                          // and this line ship in one commit.
+                          { title: 'Stock counts', url: '/inventory/stock-counts', icon: ClipboardCheck },
                           // ⚠⚠ The cutover's one irreversible document, and it had no
                           // link at all until 19 Aug. Gated, because the route is:
                           // opening stock sets the FIFO layers behind every margin.

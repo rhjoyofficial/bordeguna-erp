@@ -82,6 +82,12 @@ class WarehouseController extends Controller
             return back()->with('error', 'This warehouse still holds stock and cannot be deleted.');
         }
 
+        // ⚠ Count history keeps its warehouse (the FK refuses too - RESTRICT);
+        // this check turns the refusal into a sentence, not a blank 500.
+        if ($warehouse->stockCounts()->exists()) {
+            return back()->with('error', 'Stock counts have been recorded in this warehouse. Switch it off instead of deleting it.');
+        }
+
         $warehouse->delete();
 
         return back()->with('success', 'Warehouse deleted.');
