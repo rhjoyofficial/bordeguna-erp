@@ -18,6 +18,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     // The write gates below are unchanged.
     Route::middleware('can:purchasing.reports.view')->group(function () {
         Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+        // C-360: the supplier profile - deliberately WITHOUT bank details,
+        // which stay behind suppliers.manage. ⚠ whereNumber, because
+        // suppliers/template and suppliers/export follow below.
+        Route::get('suppliers/{supplier}', [SupplierController::class, 'show'])
+            ->whereNumber('supplier')->name('suppliers.show');
     });
 
     // ⚠ Exporting the supplier list hands over bank account numbers, BIN and

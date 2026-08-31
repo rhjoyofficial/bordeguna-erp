@@ -3,10 +3,17 @@
 namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Purchasing\Models\GoodsReceipt;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierCreditNote;
+use App\Modules\Purchasing\Models\SupplierPayment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -22,6 +29,115 @@ class SupplierController extends Controller
         'bin', 'tin', 'bank_name', 'bank_branch',
         'bank_account_name', 'bank_account_number', 'mfs_number', 'notes',
     ];
+
+    /**
+     * The supplier 360 (C-360): one screen that answers "tell me about this
+     * supplier". The payable is the SAME identity Ageing::payables uses -
+     * bills − payments − credit notes - summed from the documents, so this
+     * page can never disagree with the ageing.
+     *
+     * ⚠ Bank details stay OFF this page (C-360-5). The list deliberately hides
+     * them behind suppliers.manage, and a profile must not be the side door.
+     */
+    public function show(Supplier $supplier): Response
+    {
+        $bills = SupplierBill::query()->where('supplier_id', $supplier->id)
+            ->orderBy('bill_date')->orderBy('id')->get();
+        $payments = SupplierPayment::query()->where('supplier_id', $supplier->id)->get();
+        $credits = SupplierCreditNote::query()->where('supplier_id', $supplier->id)->get();
+
+        $billed = Money::sum($bills->map(fn (SupplierBill $bill) => Money::ofTaka((string) $bill->total)));
+        $paid = Money::sum($payments->map(fn (SupplierPayment $payment) => Money::ofTaka((string) $payment->amount)));
+        $credited = Money::sum($credits->map(fn (SupplierCreditNote $credit) => Money::ofTaka((string) $credit->total)));
+        $payable = Money::ofMinor($billed->minor - $paid->minor - $credited->minor);
+
+        $today = Carbon::today();
+
+        $openBills = $bills
+            ->filter(fn (SupplierBill $bill) => $bill->outstanding()->minor > 0)
+            ->values()
+            ->map(fn (SupplierBill $bill) => [
+                'id' => $bill->id,
+                'bill_number' => $bill->bill_number,
+                'bill_date' => $bill->bill_date?->toDateString(),
+                'due_date' => $bill->due_date?->toDateString(),
+                'total' => Money::ofTaka((string) $bill->total)->format(),
+                'outstanding' => $bill->outstanding()->format(),
+                // ⚠ Date-string comparison, the recurring trap.
+                'days_overdue' => ($bill->due_date !== null && $bill->due_date->toDateString() < $today->toDateString())
+                    ? (int) Carbon::parse($bill->due_date->toDateString())->diffInDays($today)
+                    : 0,
+            ]);
+
+        $purchaseOrders = PurchaseOrder::query()->where('supplier_id', $supplier->id)->get();
+        $receipts = GoodsReceipt::query()
+            ->whereIn('purchase_order_id', $purchaseOrders->pluck('id'))
+            ->with('purchaseOrder:id,po_number')
+            ->get();
+
+        // The document history, newest first: what happened with this
+        // supplier, in the words the documents themselves use.
+        $recent = collect()
+            ->concat($bills->map(fn (SupplierBill $bill) => [
+                'date' => $bill->bill_date?->toDateString(),
+                'kind' => 'bill',
+                'label' => "Bill {$bill->bill_number}",
+                'amount' => Money::ofTaka((string) $bill->total)->format(),
+            ]))
+            ->concat($payments->map(fn (SupplierPayment $payment) => [
+                'date' => $payment->paid_on?->toDateString(),
+                'kind' => 'payment',
+                'label' => 'Payment made',
+                'amount' => '-'.Money::ofTaka((string) $payment->amount)->format(),
+            ]))
+            ->concat($credits->map(fn (SupplierCreditNote $credit) => [
+                'date' => $credit->credit_date?->toDateString(),
+                'kind' => 'credit',
+                'label' => "Credit note {$credit->credit_note_number}",
+                'amount' => '-'.Money::ofTaka((string) $credit->total)->format(),
+            ]))
+            ->concat($purchaseOrders->map(fn (PurchaseOrder $po) => [
+                'date' => $po->created_at?->toDateString(),
+                'kind' => 'po',
+                'label' => "PO {$po->po_number} ({$po->status->value})",
+                'amount' => null,
+            ]))
+            ->concat($receipts->map(fn (GoodsReceipt $receipt) => [
+                'date' => $receipt->received_at?->toDateString(),
+                'kind' => 'receipt',
+                'label' => 'Goods received against PO '.($receipt->purchaseOrder?->po_number ?? '?'),
+                'amount' => null,
+            ]))
+            ->sortByDesc('date')
+            ->take(15)
+            ->values();
+
+        return Inertia::render('purchasing/suppliers/show', [
+            'supplier' => [
+                'id' => $supplier->id,
+                'code' => $supplier->code,
+                'name' => $supplier->name,
+                'contact_name' => $supplier->contact_name,
+                'phone' => $supplier->phone,
+                'email' => $supplier->email,
+                'address' => $supplier->address,
+                'payment_terms' => $supplier->payment_terms,
+                'is_active' => $supplier->is_active,
+            ],
+            'payable' => [
+                'amount' => $payable->format(),
+                'is_credit' => $payable->minor < 0,
+            ],
+            'totals' => [
+                'billed' => $billed->format(),
+                'paid' => $paid->format(),
+                'credited' => $credited->format(),
+                'open_pos' => $purchaseOrders->filter(fn (PurchaseOrder $po) => in_array($po->status->value, ['open', 'partially_received'], true))->count(),
+            ],
+            'open_bills' => $openBills,
+            'recent' => $recent,
+        ]);
+    }
 
     public function index(Request $request): Response
     {

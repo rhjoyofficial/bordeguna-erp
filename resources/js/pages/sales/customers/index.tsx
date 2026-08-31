@@ -279,17 +279,25 @@ export default function CustomersIndex({
                             {customers.data.map((customer) => (
                                 <tr key={customer.id} className="border-t">
                                     <td className="p-3">
-                                        {/* ⚠⚠ A converted lead's history had NO door on this
-                                            side at all: every call, note and product interest
-                                            recorded before they became a customer was
-                                            unreachable the moment they did. */}
+                                        {/* C-360: the name opens the customer's own page -
+                                            balance, open invoices, history in one place. */}
                                         <Link
-                                            href={`/crm/customer/${customer.id}/timeline`}
+                                            href={`/sales/customers/${customer.id}`}
                                             className="font-medium underline-offset-4 hover:underline"
                                         >
                                             {customer.name}
                                         </Link>
-                                        {customer.code && <div className="text-muted-foreground text-xs">{customer.code}</div>}
+                                        <div className="text-muted-foreground text-xs">
+                                            {customer.code && <span>{customer.code} · </span>}
+                                            {/* ⚠⚠ A converted lead's history had NO door on this
+                                                side at all: every call, note and product interest
+                                                recorded before they became a customer was
+                                                unreachable the moment they did. The timeline door
+                                                stays. */}
+                                            <Link href={`/crm/customer/${customer.id}/timeline`} className="underline-offset-4 hover:underline">
+                                                CRM timeline
+                                            </Link>
+                                        </div>
                                     </td>
                                     <td className="p-3">
                                         <Badge variant="secondary">{customer.type}</Badge>

@@ -3,12 +3,16 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\CustomerStatement;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
+use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -16,6 +20,88 @@ use Inertia\Response;
 
 class CustomerController extends Controller
 {
+    /**
+     * The customer 360 (C-360): one screen that answers "tell me about this
+     * customer". It OWNS nothing - the balance is the CustomerStatement's own
+     * closing under the C-CST-2 identity, open invoices derive from their
+     * allocations, and the movement list is the statement's lines - so this
+     * page can never disagree with the reports it summarises.
+     */
+    public function show(Customer $customer): Response
+    {
+        // A window from before the business existed to today: the closing IS
+        // the outstanding balance, the charges and settlements ARE lifetime
+        // totals, and the ledger tie-out comes along for free.
+        $statement = CustomerStatement::for($customer, Carbon::parse('2000-01-01'), Carbon::today());
+        $balance = $statement->closing();
+
+        $today = Carbon::today();
+
+        $openInvoices = SalesInvoice::query()
+            ->where('customer_id', $customer->id)
+            ->orderBy('invoice_date')->orderBy('id')
+            ->get()
+            ->filter(fn (SalesInvoice $invoice) => $invoice->outstanding()->minor > 0)
+            ->values()
+            ->map(fn (SalesInvoice $invoice) => [
+                'id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'invoice_date' => $invoice->invoice_date?->toDateString(),
+                'due_date' => $invoice->due_date?->toDateString(),
+                'total' => $invoice->totalMoney()->format(),
+                'outstanding' => $invoice->outstanding()->format(),
+                // ⚠ Date-string comparison, the recurring trap.
+                'days_overdue' => ($invoice->due_date !== null && $invoice->due_date->toDateString() < $today->toDateString())
+                    ? (int) Carbon::parse($invoice->due_date->toDateString())->diffInDays($today)
+                    : 0,
+            ]);
+
+        $limit = $customer->credit_limit === null ? null : Money::ofTaka((string) $customer->credit_limit);
+
+        return Inertia::render('sales/customers/show', [
+            'customer' => [
+                'id' => $customer->id,
+                'code' => $customer->code,
+                'name' => $customer->name,
+                'type' => $customer->type?->label(),
+                'contact_name' => $customer->contact_name,
+                'phone' => $customer->phone,
+                'email' => $customer->email,
+                'address' => $customer->address,
+                'payment_terms' => $customer->payment_terms,
+                'price_group' => $customer->priceGroup?->name ?? 'Retail (default)',
+                'is_active' => $customer->is_active,
+                'note' => $customer->note,
+            ],
+            'balance' => [
+                'amount' => $balance->format(),
+                'is_credit' => $balance->minor < 0,
+                // Null when AR is unmapped - say nothing rather than show a
+                // tick that was never tested (the C-GLA-7 stance).
+                'ledger_agrees' => $statement->hasIndependentCheck() ? $statement->isConsistent() : null,
+            ],
+            'totals' => [
+                'invoiced' => $statement->charges->format(),
+                'settled' => $statement->settlements->absolute()->format(),
+            ],
+            'credit' => [
+                'limit' => $limit?->format(),
+                'over' => $limit !== null && $limit->minor > 0 && $balance->minor > $limit->minor,
+            ],
+            'open_invoices' => $openInvoices,
+            'recent' => $statement->lines->reverse()->take(15)->values()
+                ->map(fn ($line) => [
+                    'date' => $line->date->toDateString(),
+                    'kind' => $line->kind,
+                    'label' => $line->label,
+                    'reference' => $line->reference,
+                    'amount' => $line->amount->format(),
+                    'balance' => $line->balance->format(),
+                ]),
+            'statement_url' => '/accounting/customer-statement?customer='.$customer->id,
+        ]);
+    }
+
     public function index(Request $request): Response
     {
         $filters = [

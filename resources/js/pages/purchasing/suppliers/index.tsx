@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface Supplier {
@@ -220,7 +220,11 @@ export default function SuppliersIndex({
                             <tr key={supplier.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2 font-medium">{supplier.code ?? '-'}</td>
                                 <td className="py-2">
-                                    {supplier.name}
+                                    {/* C-360: the name opens the supplier's own page -
+                                        payable, open bills, history in one place. */}
+                                    <Link href={`/purchasing/suppliers/${supplier.id}`} className="font-medium underline-offset-4 hover:underline">
+                                        {supplier.name}
+                                    </Link>
                                     {!supplier.is_active && (
                                         <Badge variant="secondary" className="ml-2">
                                             Inactive

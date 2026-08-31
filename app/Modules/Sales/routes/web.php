@@ -17,6 +17,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     // anything is gated per operation, the same split Purchasing uses.
     Route::middleware('can:sales.reports.view')->group(function () {
         Route::get('customers', [CustomerController::class, 'index'])->name('customers.index');
+        // C-360: the customer profile. ⚠ whereNumber, because
+        // customers/template and customers/export are real routes below that a
+        // bare {customer} would swallow.
+        Route::get('customers/{customer}', [CustomerController::class, 'show'])
+            ->whereNumber('customer')->name('customers.show');
         Route::get('prices', [ProductPriceController::class, 'index'])->name('prices.index');
         Route::get('invoices', [SalesInvoiceController::class, 'index'])->name('invoices.index');
         Route::get('deliveries', [DeliveryController::class, 'index'])->name('deliveries.index');
