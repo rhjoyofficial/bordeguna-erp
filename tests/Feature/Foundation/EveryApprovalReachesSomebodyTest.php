@@ -162,7 +162,10 @@ it('seeds the change request workflows its column-driven keys point at', functio
 });
 
 it('gives every approvable model a row in the approval inbox that can be acted on', function () {
-    $source = file_get_contents(base_path('app/Http/Controllers/ApprovalInboxController.php'));
+    // The presentation moved from the controller into ApprovalCards on 31 Aug
+    // 2026 (Joy: "if I do not get enough details information, why I approve or
+    // reject it?"); the guard follows the cases.
+    $source = file_get_contents(base_path('app/Support/ApprovalCards.php'));
     $missing = [];
 
     foreach (approvableModels() as $model) {
@@ -173,6 +176,30 @@ it('gives every approvable model a row in the approval inbox that can be acted o
     }
 
     expect($missing)->toBe([], 'these approvable models fall through to the inbox fallback, which renders a row with NO approve or reject link - visible, unactionable, and indistinguishable from having nothing to do: '.implode(', ', $missing));
+});
+
+it('makes every inbox case state the facts its decision needs', function () {
+    // ⚠⚠ Joy's 31 Aug rule. Each `instanceof` case in ApprovalCards must pass
+    // a `details:` argument - the labelled facts (amounts, quantities, what
+    // the book holds, what saying yes spends) an approver decides on. A case
+    // that omits it would render the old bare summary row, which is exactly
+    // the screen this rule retired.
+    $source = file_get_contents(base_path('app/Support/ApprovalCards.php'));
+
+    $cases = preg_split('/\binstanceof\s+/', $source);
+    array_shift($cases); // everything before the first case
+
+    $bare = [];
+
+    foreach ($cases as $case) {
+        preg_match('/^(\w+)/', $case, $name);
+
+        if (! str_contains($case, 'details:')) {
+            $bare[] = $name[1] ?? '(unparsed)';
+        }
+    }
+
+    expect($bare)->toBe([], 'these inbox cases build a card without stating its decision facts: '.implode(', ', $bare));
 });
 
 it('keeps the workflow seeders idempotent, because a deploy runs them again', function () {

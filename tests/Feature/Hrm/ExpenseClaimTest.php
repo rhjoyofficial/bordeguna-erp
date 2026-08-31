@@ -345,8 +345,10 @@ it('carries a claim from the employee to the approver inbox to the money, with n
         ->and($row['approve_url'])->toBe(route('hrm.expense-claims.approve', $claim))
         ->and($row['summary'])->toContain('EC-00001')
         ->and($row['summary'])->toContain('Courier to Savar')
-        // ⚠ The receipt count is on the line so nobody approves blind.
-        ->and($row['summary'])->toContain('1 receipt(s)');
+        // ⚠ The receipt count is on the CARD so nobody approves blind - it
+        // moved from the summary string into the labelled details when the
+        // inbox became decision cards (31 Aug 2026).
+        ->and(collect($row['details'])->firstWhere('label', 'Receipts')['value'])->toContain('1 attached');
 
     // Press exactly what the inbox offered.
     $this->actingAs($this->finance)->post($row['approve_url'])->assertSessionHasNoErrors();

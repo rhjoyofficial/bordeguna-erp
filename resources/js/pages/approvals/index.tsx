@@ -3,12 +3,27 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 
-interface ApprovalRow {
+interface Detail {
+    label: string;
+    value: string;
+}
+
+interface CardLine {
+    description: string;
+    quantity: string;
+    amount: string;
+}
+
+interface ApprovalCard {
     id: number;
     type: string;
     summary: string;
+    details: Detail[];
+    reason: string | null;
+    lines: CardLine[];
+    view_url: string | null;
     stage: string | null;
     requested_by: string | null;
     requested_at: string;
@@ -17,25 +32,123 @@ interface ApprovalRow {
 }
 
 interface ApprovalsIndexProps {
-    requests: ApprovalRow[];
+    requests: ApprovalCard[];
     counts: { label: string; count: number }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Approvals', href: '/approvals' }];
 
+/**
+ * One request, presented as a DECISION CARD (Joy, 31 Aug 2026: "if I do not
+ * get enough details information, why I approve or reject it?"). The facts,
+ * the document lines, the requester's own words and a link to the full record
+ * all sit on the card, so the decision can be taken right here.
+ */
+function RequestCard({ card }: { card: ApprovalCard }) {
+    const approve = () => {
+        if (card.approve_url) {
+            router.post(card.approve_url, {}, { preserveScroll: true });
+        }
+    };
+
+    const reject = (review_note: string) => {
+        if (card.reject_url) {
+            router.post(card.reject_url, { review_note }, { preserveScroll: true });
+        }
+    };
+
+    return (
+        <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{card.type}</Badge>
+                        {card.stage && <span className="text-muted-foreground text-xs">waiting on: {card.stage}</span>}
+                    </div>
+                    <p className="mt-2 text-sm font-medium">{card.summary}</p>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                        Requested by {card.requested_by ?? 'unknown'} · {card.requested_at}
+                    </p>
+                </div>
+                <div className="flex items-center gap-1 whitespace-nowrap">
+                    {card.view_url && (
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={card.view_url}>Open record</Link>
+                        </Button>
+                    )}
+                    {card.approve_url && (
+                        <ConfirmDialog
+                            trigger={<Button size="sm">Approve</Button>}
+                            title={`Approve ${card.type.toLowerCase()}`}
+                            description={card.summary}
+                            confirmLabel="Approve"
+                            onConfirm={() => approve()}
+                        />
+                    )}
+                    {card.reject_url && (
+                        <ConfirmDialog
+                            trigger={
+                                <Button variant="ghost" size="sm">
+                                    Reject
+                                </Button>
+                            }
+                            title={`Reject ${card.type.toLowerCase()}`}
+                            description={`${card.summary}. This cannot be undone.`}
+                            confirmLabel="Reject"
+                            destructive
+                            withNote
+                            noteLabel="Reason for rejecting (optional)"
+                            notePlaceholder="Add a note for the requester…"
+                            onConfirm={(note) => reject(note ?? '')}
+                        />
+                    )}
+                </div>
+            </div>
+
+            {card.details.length > 0 && (
+                <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-3 lg:grid-cols-4">
+                    {card.details.map((detail) => (
+                        <div key={detail.label}>
+                            <dt className="text-muted-foreground text-xs">{detail.label}</dt>
+                            <dd>{detail.value}</dd>
+                        </div>
+                    ))}
+                </dl>
+            )}
+
+            {card.lines.length > 0 && (
+                <div className="mt-3 overflow-x-auto rounded-md border">
+                    <table className="w-full text-sm">
+                        <thead className="bg-muted/50 text-left">
+                            <tr>
+                                <th className="px-3 py-1.5 font-medium">Item</th>
+                                <th className="px-3 py-1.5 text-right font-medium">Qty × rate</th>
+                                <th className="px-3 py-1.5 text-right font-medium">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {card.lines.map((line, index) => (
+                                <tr key={index} className="border-t">
+                                    <td className="px-3 py-1.5">{line.description}</td>
+                                    <td className="px-3 py-1.5 text-right whitespace-nowrap">{line.quantity}</td>
+                                    <td className="px-3 py-1.5 text-right whitespace-nowrap">{line.amount}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {card.reason && (
+                <blockquote className="border-muted-foreground/30 text-muted-foreground mt-3 border-l-2 pl-3 text-sm whitespace-pre-line">
+                    {card.reason}
+                </blockquote>
+            )}
+        </div>
+    );
+}
+
 export default function ApprovalsIndex({ requests, counts }: ApprovalsIndexProps) {
-    const approve = (row: ApprovalRow) => {
-        if (row.approve_url) {
-            router.post(row.approve_url);
-        }
-    };
-
-    const reject = (row: ApprovalRow, review_note: string) => {
-        if (row.reject_url) {
-            router.post(row.reject_url, { review_note });
-        }
-    };
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Approvals" />
@@ -53,57 +166,11 @@ export default function ApprovalsIndex({ requests, counts }: ApprovalsIndexProps
                     )}
                 </div>
 
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
-                            <th className="py-2">Type</th>
-                            <th className="py-2">Details</th>
-                            <th className="py-2">Requested by</th>
-                            <th className="py-2">Requested</th>
-                            <th className="py-2 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {requests.map((row) => (
-                            <tr key={`${row.type}-${row.id}`} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                <td className="py-2">
-                                    <Badge variant="outline">{row.type}</Badge>
-                                    {row.stage && <span className="text-muted-foreground ml-2 text-xs">{row.stage}</span>}
-                                </td>
-                                <td className="py-2">{row.summary}</td>
-                                <td className="text-muted-foreground py-2">{row.requested_by}</td>
-                                <td className="text-muted-foreground py-2">{row.requested_at}</td>
-                                <td className="py-2 text-right whitespace-nowrap">
-                                    <Button variant="ghost" size="sm" onClick={() => approve(row)}>
-                                        Approve
-                                    </Button>
-                                    <ConfirmDialog
-                                        trigger={
-                                            <Button variant="ghost" size="sm">
-                                                Reject
-                                            </Button>
-                                        }
-                                        title={`Reject ${row.type.toLowerCase()}`}
-                                        description={`${row.summary}. This cannot be undone.`}
-                                        confirmLabel="Reject"
-                                        destructive
-                                        withNote
-                                        noteLabel="Reason for rejecting (optional)"
-                                        notePlaceholder="Add a note for the requester…"
-                                        onConfirm={(note) => reject(row, note)}
-                                    />
-                                </td>
-                            </tr>
-                        ))}
-                        {requests.length === 0 && (
-                            <tr>
-                                <td colSpan={5} className="text-muted-foreground py-4 text-center">
-                                    Nothing pending - you're all caught up.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                {requests.map((card) => (
+                    <RequestCard key={`${card.type}-${card.id}`} card={card} />
+                ))}
+
+                {requests.length === 0 && <p className="text-muted-foreground py-4 text-center text-sm">Nothing pending - you're all caught up.</p>}
             </div>
         </AppLayout>
     );

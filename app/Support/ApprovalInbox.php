@@ -17,8 +17,10 @@ use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\PayrollUnlockRequest;
 use App\Modules\Hrm\Models\SalaryRevision;
+use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Support\Collection;
 
 /**
@@ -46,8 +48,10 @@ class ApprovalInbox
                 'workflow.stages',
                 'requestedBy:id,name',
                 'approvable' => fn ($morphTo) => $morphTo->morphWith([
-                    StockRequest::class => ['product:id,name,sku', 'warehouse:id,name', 'targetWarehouse:id,name'],
-                    PurchaseOrder::class => ['supplier:id,name', 'lines'],
+                    StockRequest::class => ['product:id,name,sku', 'warehouse:id,name', 'targetWarehouse:id,name', 'reason:id,name'],
+                    PurchaseOrder::class => ['supplier:id,name', 'lines.product:id,name,sku'],
+                    SalesOrder::class => ['customer:id,name', 'warehouse:id,name', 'lines.product:id,name,sku'],
+                    InventoryAdjustment::class => ['product:id,name,sku', 'warehouse:id,name', 'reason:id,name'],
                     ChangeRequest::class => ['subject', 'requestedBy:id,name'],
                     AttendanceCorrection::class => ['employee:id,employee_code,first_name,last_name', 'punch:id,punched_at'],
                     LeaveRequest::class => ['employee:id,employee_code,first_name,last_name', 'leaveType:id,name'],
