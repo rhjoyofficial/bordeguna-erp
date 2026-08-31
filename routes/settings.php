@@ -20,6 +20,18 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/appearance', function () {
         return Inertia::render('settings/appearance');
     })->name('appearance');
+
+    // C-I18N-5: one's own UI language. Auth only, no permission - a user may
+    // set their own and can reach nobody else's row through it.
+    Route::patch('settings/locale', function (\Illuminate\Http\Request $request) {
+        $data = $request->validate([
+            'locale' => ['required', 'in:en,bn'],
+        ]);
+
+        $request->user()->update($data);
+
+        return back();
+    })->name('locale.update');
 });
 
 Route::middleware(['auth', 'business'])->group(function () {

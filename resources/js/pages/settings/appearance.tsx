@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
 import AccentPicker from '@/components/accent-picker';
@@ -8,6 +8,7 @@ import SidebarColorPicker from '@/components/sidebar-color-picker';
 import TopbarColorPicker from '@/components/topbar-color-picker';
 import { Button } from '@/components/ui/button';
 import { resetThemePreferences } from '@/hooks/use-appearance';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 
 import AppLayout from '@/layouts/app-layout';
@@ -26,11 +27,17 @@ export default function Appearance() {
     // localStorage and the DOM would not otherwise be reflected in their
     // active swatch until the next navigation.
     const [resetKey, setResetKey] = useState(0);
+    const { t, locale } = useTranslation();
 
     const handleReset = () => {
         resetThemePreferences();
         setResetKey((count) => count + 1);
     };
+
+    // C-I18N-5: account-level, unlike the theme - it follows the person to
+    // any device. The page reloads through Inertia so every label switches at
+    // once.
+    const setLocale = (next: 'en' | 'bn') => router.patch('/settings/locale', { locale: next }, { preserveScroll: true });
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -38,6 +45,16 @@ export default function Appearance() {
 
             <SettingsLayout narrow>
                 <div key={resetKey} className="space-y-6">
+                    <HeadingSmall title={t('language.heading')} description={t('language.description')} />
+                    <div className="flex gap-2">
+                        <Button variant={locale === 'en' ? 'default' : 'outline'} size="sm" onClick={() => setLocale('en')}>
+                            English
+                        </Button>
+                        <Button variant={locale === 'bn' ? 'default' : 'outline'} size="sm" onClick={() => setLocale('bn')}>
+                            বাংলা
+                        </Button>
+                    </div>
+
                     <HeadingSmall title="Appearance settings" description="Personal to your account, saved to this browser" />
                     <AppearanceTabs />
 

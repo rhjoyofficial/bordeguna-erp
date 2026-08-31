@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -91,30 +92,29 @@ function RequestCorrectionDialog({
     const [reason, setReason] = useState('');
     const [evidence, setEvidence] = useState<File | null>(null);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const { t } = useTranslation();
 
-    const selected = types.find((t) => t.value === type);
+    const selected = types.find((option) => option.value === type);
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button variant="ghost" size="sm">
-                    Request correction
+                    {t('correction.request')}
                 </Button>
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Request a correction for {day.date}</DialogTitle>
-                    <DialogDescription>
-                        Your manager reviews this first, then HR. Nothing changes until it is approved, and your original punches are never altered.
-                    </DialogDescription>
+                    <DialogTitle>{t('correction.title_for', { date: day.date })}</DialogTitle>
+                    <DialogDescription>{t('correction.description')}</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="ctype">What is wrong</Label>
+                        <Label htmlFor="ctype">{t('correction.what_is_wrong')}</Label>
                         <SearchSelect id="ctype" value={type} onChange={(e) => setType(e.target.value)}>
-                            {types.map((t) => (
-                                <option key={t.value} value={t.value}>
-                                    {t.label}
+                            {types.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
                                 </option>
                             ))}
                         </SearchSelect>
@@ -122,14 +122,14 @@ function RequestCorrectionDialog({
                     {selected?.needs_time && (
                         <div className="grid gap-4 sm:grid-cols-2">
                             <div className="grid gap-2">
-                                <Label htmlFor="ctime">Correct time</Label>
+                                <Label htmlFor="ctime">{t('correction.correct_time')}</Label>
                                 <Input id="ctime" type="datetime-local" value={correctedAt} onChange={(e) => setCorrectedAt(e.target.value)} />
                                 {errors.corrected_at && <p className="text-destructive text-xs">{errors.corrected_at}</p>}
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="cdir">Direction</Label>
+                                <Label htmlFor="cdir">{t('correction.direction')}</Label>
                                 <SearchSelect id="cdir" value={direction} onChange={(e) => setDirection(e.target.value)}>
-                                    <option value="">- Unknown -</option>
+                                    <option value="">{t('correction.unknown')}</option>
                                     {directions.map((d) => (
                                         <option key={d.value} value={d.value}>
                                             {d.label}
@@ -139,18 +139,14 @@ function RequestCorrectionDialog({
                             </div>
                         </div>
                     )}
-                    {selected?.needs_punch && (
-                        <p className="text-muted-foreground text-xs">
-                            Amending or disregarding a specific punch needs HR to pick it - ask them, or choose “Add a missing punch”.
-                        </p>
-                    )}
+                    {selected?.needs_punch && <p className="text-muted-foreground text-xs">{t('correction.needs_hr')}</p>}
                     <div className="grid gap-2">
-                        <Label htmlFor="creason">Reason</Label>
-                        <Input id="creason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What happened" />
+                        <Label htmlFor="creason">{t('correction.reason')}</Label>
+                        <Input id="creason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('correction.what_happened')} />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="cevidence">Evidence (optional)</Label>
+                        <Label htmlFor="cevidence">{t('correction.evidence')}</Label>
                         <Input
                             id="cevidence"
                             type="file"
@@ -162,7 +158,7 @@ function RequestCorrectionDialog({
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button variant="outline">{t('correction.cancel')}</Button>
                     </DialogClose>
                     <Button
                         disabled={reason.trim() === '' || selected?.needs_punch}
@@ -190,7 +186,7 @@ function RequestCorrectionDialog({
                             )
                         }
                     >
-                        Send request
+                        {t('correction.send')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -227,6 +223,7 @@ export default function Clock({ employee, today, punches, filters, summary, stat
     const [myTo, setMyTo] = useState(filters.to);
     const [myStatus, setMyStatus] = useState(filters.status);
     const [mySort, setMySort] = useState(filters.sort);
+    const { t } = useTranslation();
 
     const statusLabel = statuses.find((s) => s.value === filters.status)?.label ?? null;
 
@@ -248,7 +245,7 @@ export default function Clock({ employee, today, punches, filters, summary, stat
         setLocationError(null);
 
         if (!navigator.geolocation) {
-            setLocationError('This browser cannot share location. Ask HR to record your attendance manually.');
+            setLocationError(t('clock.no_geolocation'));
             return;
         }
 
@@ -277,11 +274,7 @@ export default function Clock({ employee, today, punches, filters, summary, stat
             },
             (error) => {
                 setBusy(null);
-                setLocationError(
-                    error.code === error.PERMISSION_DENIED
-                        ? 'Location permission was denied. Allow it in your browser, or ask HR to record your attendance manually.'
-                        : 'Could not read your location. Try again, or ask HR to record your attendance manually.',
-                );
+                setLocationError(error.code === error.PERMISSION_DENIED ? t('clock.location_denied') : t('clock.location_failed'));
             },
             { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
         );
@@ -289,7 +282,7 @@ export default function Clock({ employee, today, punches, filters, summary, stat
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Clock in/out" />
+            <Head title={t('clock.title')} />
             <div className="px-4 pt-4">
                 <SelfServiceTabs active="/hrm/clock" />
             </div>
@@ -309,41 +302,36 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                     <>
                         <div className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap gap-3 rounded-xl border p-4">
                             <Button onClick={() => punch('in')} disabled={busy !== null}>
-                                {busy === 'in' ? 'Recording…' : 'Clock in'}
+                                {busy === 'in' ? t('clock.recording') : t('clock.clock_in')}
                             </Button>
                             <Button variant="outline" onClick={() => punch('out')} disabled={busy !== null}>
-                                {busy === 'out' ? 'Recording…' : 'Clock out'}
+                                {busy === 'out' ? t('clock.recording') : t('clock.clock_out')}
                             </Button>
                         </div>
 
                         {locationError && <p className="text-destructive text-sm">{locationError}</p>}
 
-                        <p className="text-muted-foreground text-xs">
-                            Your location, accuracy, IP address and device details are recorded with each punch.
-                        </p>
+                        <p className="text-muted-foreground text-xs">{t('clock.privacy_note')}</p>
                     </>
                 ) : (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                        <p className="text-sm font-medium">Clocking in here is not switched on for you.</p>
-                        <p className="text-muted-foreground mt-1 text-sm">
-                            Use the punch machine at the office. If your work takes you away from the office, ask HR to switch on clocking in from a
-                            browser for you. Everything below still shows your own attendance.
-                        </p>
+                        <p className="text-sm font-medium">{t('clock.not_switched_on')}</p>
+                        <p className="text-muted-foreground mt-1 text-sm">{t('clock.use_machine')}</p>
                     </div>
                 )}
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">Today</h3>
+                    <h3 className="mb-3 text-sm font-medium">{t('clock.today')}</h3>
                     {punches.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">Nothing recorded yet today.</p>
+                        <p className="text-muted-foreground text-sm">{t('clock.nothing_today')}</p>
                     ) : (
                         <table className="w-full min-w-[32rem] text-sm">
                             <thead>
                                 <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
-                                    <th className="py-2">Time</th>
-                                    <th className="py-2">Direction</th>
-                                    <th className="py-2">Source</th>
-                                    <th className="py-2">Status</th>
+                                    <th className="py-2">{t('clock.time')}</th>
+                                    <th className="py-2">{t('clock.direction')}</th>
+                                    <th className="py-2">{t('clock.source')}</th>
+                                    <th className="py-2">{t('common.status')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -355,11 +343,11 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                                         <td className="py-2">
                                             {p.needs_review ? (
                                                 <span className="text-muted-foreground text-xs">
-                                                    <Badge variant="outline">Flagged</Badge>
+                                                    <Badge variant="outline">{t('clock.flagged')}</Badge>
                                                     {p.review_reason && <span className="ml-2">{p.review_reason}</span>}
                                                 </span>
                                             ) : (
-                                                <Badge variant="secondary">Recorded</Badge>
+                                                <Badge variant="secondary">{t('clock.recorded')}</Badge>
                                             )}
                                         </td>
                                     </tr>
@@ -376,12 +364,12 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                   record attendance on the wrong day.
                 */}
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">My attendance</h3>
+                    <h3 className="mb-3 text-sm font-medium">{t('clock.my_attendance')}</h3>
 
                     <div className="mb-4 flex flex-wrap items-end gap-3">
                         <div className="grid gap-1.5">
                             <label htmlFor="my-from" className="text-muted-foreground text-xs">
-                                From
+                                {t('clock.from')}
                             </label>
                             <input
                                 id="my-from"
@@ -393,7 +381,7 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                         </div>
                         <div className="grid gap-1.5">
                             <label htmlFor="my-to" className="text-muted-foreground text-xs">
-                                To
+                                {t('clock.to')}
                             </label>
                             <input
                                 id="my-to"
@@ -405,10 +393,10 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                         </div>
                         <div className="grid gap-1.5">
                             <label htmlFor="my-status" className="text-muted-foreground text-xs">
-                                Status
+                                {t('common.status')}
                             </label>
                             <SearchSelect id="my-status" value={myStatus} onChange={(e) => setMyStatus(e.target.value)}>
-                                <option value="">All statuses</option>
+                                <option value="">{t('clock.all_statuses')}</option>
                                 {statuses.map((s) => (
                                     <option key={s.value} value={s.value}>
                                         {s.label}
@@ -418,14 +406,14 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                         </div>
                         <div className="grid gap-1.5">
                             <label htmlFor="my-sort" className="text-muted-foreground text-xs">
-                                Date order
+                                {t('clock.date_order')}
                             </label>
                             <SearchSelect id="my-sort" value={mySort} onChange={(e) => setMySort(e.target.value)}>
-                                <option value="newest">Newest first</option>
-                                <option value="oldest">Oldest first</option>
+                                <option value="newest">{t('clock.newest_first')}</option>
+                                <option value="oldest">{t('clock.oldest_first')}</option>
                             </SearchSelect>
                         </div>
-                        <Button onClick={() => showHistory()}>Show</Button>
+                        <Button onClick={() => showHistory()}>{t('clock.show')}</Button>
                     </div>
 
                     {/*
@@ -436,30 +424,28 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                       The list below is the thing that narrows, and it says so.
                     */}
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                        <MyTile label="Days attended" value={summary.attended} />
-                        <MyTile label="Present" value={summary.present} />
-                        <MyTile label="Late" value={summary.late} warn={summary.late > 0} />
-                        <MyTile label="Absent" value={summary.absent} bad={summary.absent > 0} />
-                        <MyTile label="On leave" value={summary.on_leave} />
-                        <MyTile label="Hours worked" value={summary.worked_hours} />
+                        <MyTile label={t('clock.days_attended')} value={summary.attended} />
+                        <MyTile label={t('clock.present')} value={summary.present} />
+                        <MyTile label={t('clock.late')} value={summary.late} warn={summary.late > 0} />
+                        <MyTile label={t('clock.absent')} value={summary.absent} bad={summary.absent > 0} />
+                        <MyTile label={t('clock.on_leave')} value={summary.on_leave} />
+                        <MyTile label={t('clock.hours_worked')} value={summary.worked_hours} />
                     </div>
 
                     {summary.holds_payroll > 0 && (
-                        <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
-                            {summary.holds_payroll} day{summary.holds_payroll === 1 ? '' : 's'} in this period still need a correction before payroll
-                            can include them. Use "Something wrong?" below.
-                        </p>
+                        <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">{t('clock.holds_payroll', { count: summary.holds_payroll })}</p>
                     )}
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <div className="mb-3 flex flex-wrap items-baseline gap-2">
                         <h3 className="text-sm font-medium">
-                            {statusLabel ? `${statusLabel} days` : 'Days'} from {filters.from} to {filters.to}
+                            {statusLabel ? `${statusLabel} ${t('clock.days').toLowerCase()}` : t('clock.days')}{' '}
+                            {t('clock.days_range', { from: filters.from, to: filters.to })}
                         </h3>
                         {statusLabel && (
                             <span className="text-muted-foreground text-xs">
-                                Showing {statusLabel} only. The totals above still cover every day in this period.
+                                {t('clock.showing_only', { status: statusLabel })}
                                 <button
                                     type="button"
                                     className="ml-2 underline underline-offset-2"
@@ -468,7 +454,7 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                                         showHistory({ status: '' });
                                     }}
                                 >
-                                    Show all statuses
+                                    {t('clock.show_all_statuses')}
                                 </button>
                             </span>
                         )}
@@ -476,8 +462,8 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                     {recent_days.length === 0 ? (
                         <p className="text-muted-foreground text-sm">
                             {statusLabel
-                                ? `No ${statusLabel.toLowerCase()} days between ${filters.from} and ${filters.to}.`
-                                : 'Nothing processed yet.'}
+                                ? t('clock.no_days_between', { status: statusLabel.toLowerCase(), from: filters.from, to: filters.to })
+                                : t('clock.nothing_processed')}
                         </p>
                     ) : (
                         <table className="w-full min-w-[40rem] text-sm">
@@ -488,21 +474,21 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                                         <button
                                             type="button"
                                             className="hover:text-foreground inline-flex items-center gap-1 font-medium"
-                                            title="Sort by date"
+                                            title={t('clock.sort_by_date')}
                                             onClick={() => {
                                                 const next = mySort === 'newest' ? 'oldest' : 'newest';
                                                 setMySort(next);
                                                 showHistory({ sort: next });
                                             }}
                                         >
-                                            Date
+                                            {t('common.date')}
                                             <span aria-hidden="true">{filters.sort === 'oldest' ? '↑' : '↓'}</span>
-                                            <span className="sr-only">{filters.sort === 'oldest' ? 'oldest first' : 'newest first'}</span>
+                                            <span className="sr-only">{filters.sort === 'oldest' ? t('clock.oldest_first') : t('clock.newest_first')}</span>
                                         </button>
                                     </th>
-                                    <th className="py-2">Status</th>
-                                    <th className="py-2">In / Out</th>
-                                    <th className="py-2 text-right">Something wrong?</th>
+                                    <th className="py-2">{t('common.status')}</th>
+                                    <th className="py-2">{t('clock.in_out')}</th>
+                                    <th className="py-2 text-right">{t('clock.something_wrong')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -513,7 +499,7 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                                             {day.status}
                                             {day.holds_payroll && (
                                                 <Badge variant="outline" className="ml-2">
-                                                    Needs fixing
+                                                    {t('clock.needs_fixing')}
                                                 </Badge>
                                             )}
                                         </td>
@@ -522,7 +508,7 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                                         </td>
                                         <td className="py-2 text-right">
                                             {day.is_locked ? (
-                                                <span className="text-muted-foreground text-xs">Period closed - ask HR</span>
+                                                <span className="text-muted-foreground text-xs">{t('clock.period_closed')}</span>
                                             ) : (
                                                 <RequestCorrectionDialog day={day} types={correction_types} directions={directions} />
                                             )}

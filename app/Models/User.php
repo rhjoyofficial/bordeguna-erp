@@ -29,6 +29,8 @@ class User extends Authenticatable
         'is_super_admin',
         'is_active',
         'receives_hr_notifications',
+        // C-I18N-1: the person's own UI language, 'en' or 'bn'.
+        'locale',
     ];
 
     public function businesses(): BelongsToMany

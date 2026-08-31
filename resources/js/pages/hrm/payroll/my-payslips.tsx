@@ -2,6 +2,7 @@ import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 
@@ -33,17 +34,19 @@ const headClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b 
 const money = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function MyPayslips({ employee, password_hint, password_unavailable, payslips }: Props) {
+    const { t } = useTranslation();
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="My payslips" />
+            <Head title={t('payslips.title')} />
             <div className="px-4 pt-4">
                 <SelfServiceTabs active="/hrm/my-payslips" />
             </div>
             <div className="flex flex-col gap-6 p-4">
                 <div>
-                    <h2 className="text-lg font-medium">My payslips</h2>
+                    <h2 className="text-lg font-medium">{t('payslips.title')}</h2>
                     <p className="text-muted-foreground text-sm">
-                        {employee.name} - {employee.employee_code}. A payslip appears here once its payroll has been approved.
+                        {employee.name} - {employee.employee_code}. {t('payslips.appears_after_approval')}
                     </p>
                 </div>
 
@@ -52,12 +55,12 @@ export default function MyPayslips({ employee, password_hint, password_unavailab
                         <p className="text-destructive text-sm">{password_unavailable}</p>
                     </div>
                 ) : (
-                    <p className="text-muted-foreground text-xs">Downloaded payslips are password protected. Your password: {password_hint}</p>
+                    <p className="text-muted-foreground text-xs">{t('payslips.password_note', { hint: password_hint })}</p>
                 )}
 
                 {payslips.length === 0 ? (
                     <div className={cardClass}>
-                        <p className="text-muted-foreground text-sm">No payslips yet.</p>
+                        <p className="text-muted-foreground text-sm">{t('payslips.none')}</p>
                     </div>
                 ) : (
                     <div className={cardClass}>
@@ -65,12 +68,12 @@ export default function MyPayslips({ employee, password_hint, password_unavailab
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className={headClass}>
-                                        <th className="py-2">Period</th>
-                                        <th className="py-2 text-right">Gross</th>
-                                        <th className="py-2 text-right">Earnings</th>
-                                        <th className="py-2 text-right">Deductions</th>
-                                        <th className="py-2 text-right">Net</th>
-                                        <th className="py-2">Payment</th>
+                                        <th className="py-2">{t('payslips.period')}</th>
+                                        <th className="py-2 text-right">{t('payslips.gross')}</th>
+                                        <th className="py-2 text-right">{t('payslips.earnings')}</th>
+                                        <th className="py-2 text-right">{t('payslips.deductions')}</th>
+                                        <th className="py-2 text-right">{t('payslips.net')}</th>
+                                        <th className="py-2">{t('payslips.payment')}</th>
                                         <th />
                                     </tr>
                                 </thead>
@@ -88,20 +91,22 @@ export default function MyPayslips({ employee, password_hint, password_unavailab
                                             <td className="py-2">
                                                 <Badge variant="outline">{payslip.payment_status}</Badge>
                                                 {payslip.paid_total > 0 && (
-                                                    <span className="text-muted-foreground ml-2 text-xs">{money(payslip.paid_total)} paid</span>
+                                                    <span className="text-muted-foreground ml-2 text-xs">
+                                                        {money(payslip.paid_total)} {t('payslips.paid')}
+                                                    </span>
                                                 )}
                                             </td>
                                             <td className="py-2">
                                                 <div className="flex justify-end gap-1">
                                                     <a href={route('hrm.payslips.show', payslip.id)}>
                                                         <Button size="sm" variant="ghost">
-                                                            View
+                                                            {t('payslips.view')}
                                                         </Button>
                                                     </a>
                                                     {password_unavailable === null && (
                                                         <a href={route('hrm.payslips.pdf', payslip.id)}>
                                                             <Button size="sm" variant="outline">
-                                                                PDF
+                                                                {t('payslips.pdf')}
                                                             </Button>
                                                         </a>
                                                     )}

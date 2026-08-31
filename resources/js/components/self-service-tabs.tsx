@@ -1,3 +1,4 @@
+import { TranslationKey, useTranslation } from '@/lib/i18n';
 import { Link } from '@inertiajs/react';
 
 /**
@@ -9,18 +10,20 @@ import { Link } from '@inertiajs/react';
  * unchanged - a bookmark to /hrm/clock still works - because moving a page and
  * breaking its address are different jobs and only the first was asked for.
  */
-const TABS = [
-    { title: 'My profile', url: '/hrm/my-profile' },
-    { title: 'Clock in/out', url: '/hrm/clock' },
-    { title: 'My leave', url: '/hrm/my-leave' },
-    { title: 'My payslips', url: '/hrm/my-payslips' },
-    { title: 'My expenses', url: '/hrm/my-expenses' },
+const TABS: { key: TranslationKey; url: string }[] = [
+    { key: 'tabs.my_profile', url: '/hrm/my-profile' },
+    { key: 'tabs.clock', url: '/hrm/clock' },
+    { key: 'tabs.my_leave', url: '/hrm/my-leave' },
+    { key: 'tabs.my_payslips', url: '/hrm/my-payslips' },
+    { key: 'tabs.my_expenses', url: '/hrm/my-expenses' },
     // Show cause notices issued to this employee (Joy, 24 Aug 2026) - the
     // employee's own printable copies of what HR put on record.
-    { title: 'My notices', url: '/hrm/my-notices' },
+    { key: 'tabs.my_notices', url: '/hrm/my-notices' },
 ];
 
 export default function SelfServiceTabs({ active }: { active: string }) {
+    const { t } = useTranslation();
+
     return (
         <div className="border-border mb-4 flex gap-1 overflow-x-auto border-b">
             {TABS.map((tab) => (
@@ -33,7 +36,7 @@ export default function SelfServiceTabs({ active }: { active: string }) {
                             : 'text-muted-foreground hover:text-foreground -mb-px border-b-2 border-transparent px-3 py-2 text-sm whitespace-nowrap'
                     }
                 >
-                    {tab.title}
+                    {t(tab.key)}
                 </Link>
             ))}
         </div>
