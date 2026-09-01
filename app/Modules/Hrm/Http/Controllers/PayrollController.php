@@ -34,8 +34,16 @@ class PayrollController extends Controller
     {
         $this->authorize('hrm.payroll.manage');
 
-        $year = $request->integer('year') ?: (int) Carbon::today()->year;
-        $month = $request->integer('month') ?: (int) Carbon::today()->month;
+        // ⚠⚠ DEFAULTS TO THE NEWEST PAYROLL THERE IS, NOT TO TODAY. Landing on
+        // the calendar month meant that on 1 September this screen opened
+        // September - a month with no run - and answered "nothing calculated"
+        // while an approved August payroll sat one click away. Joy hit exactly
+        // that on cutover morning. A payroll month is not a calendar month, and
+        // the useful default is the work in hand.
+        $newest = $this->newestPeriodWithARun();
+
+        $year = $request->integer('year') ?: (int) ($newest?->year ?? Carbon::today()->year);
+        $month = $request->integer('month') ?: (int) ($newest?->month ?? Carbon::today()->month);
 
         $period = PayrollPeriod::where('year', $year)->where('month', $month)->first();
         $run = $period?->latestRun();
@@ -99,6 +107,20 @@ class PayrollController extends Controller
                     'label' => $p->label(),
                 ]),
         ]);
+    }
+
+    /**
+     * The payroll month with actual work in it, newest first.
+     *
+     * ⚠ A period with no run at all is not "the newest payroll": it is an empty
+     * shell that some other screen created. Landing on one shows the same blank
+     * page the calendar default did.
+     */
+    private function newestPeriodWithARun(): ?PayrollPeriod
+    {
+        return PayrollPeriod::whereHas('runs')
+            ->orderByDesc('year')->orderByDesc('month')
+            ->first();
     }
 
     /**

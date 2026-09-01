@@ -1,4 +1,5 @@
 import { BusyButton } from '@/components/busy-button';
+import { MonthSelect } from '@/components/month-select';
 import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -300,7 +301,7 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
                                 <Label htmlFor="month" className="text-muted-foreground text-xs">
                                     Month
                                 </Label>
-                                <Input id="month" type="number" min={1} max={12} className="w-20" value={m} onChange={(e) => setM(e.target.value)} />
+                                <MonthSelect id="month" value={m} onChange={setM} />
                             </div>
                             <Button variant="outline" size="sm" onClick={() => go(Number(y), Number(m))}>
                                 View

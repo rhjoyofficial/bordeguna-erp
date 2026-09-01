@@ -420,6 +420,34 @@ it('renders the payroll screen with its lifecycle state', function () {
             ->has('payslips', 1));
 });
 
+it('opens on the newest payroll there is, not on whatever month it is today', function () {
+    // ⚠⚠ Joy, cutover morning: "when I clicked on the Open record, shows
+    // nothing." The screen defaulted to the calendar month, so on 1 September
+    // it opened September - no run, no payslips, "nothing calculated" - while an
+    // approved August payroll sat one click away. A payroll month is not a
+    // calendar month and the useful default is the work in hand.
+    calculatedRun();
+
+    cycleHr()->get(route('hrm.payroll.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('year', 2026)
+            ->where('month', 7)
+            ->where('run.status', 'calculated')
+            ->has('payslips', 1));
+});
+
+it('still lets an explicit month win over the default', function () {
+    calculatedRun();
+
+    // An explicit month always wins over the default, including an empty one.
+    cycleHr()->get(route('hrm.payroll.index', ['year' => 2026, 'month' => 12]))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('month', 12)
+            ->where('run', null));
+});
+
 // --- The validation report is prose somebody reads before releasing salary ----
 
 /**

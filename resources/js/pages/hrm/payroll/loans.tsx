@@ -1,4 +1,5 @@
 import { BusyButton } from '@/components/busy-button';
+import { MonthSelect } from '@/components/month-select';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
@@ -72,6 +73,7 @@ interface Props {
     employees: { id: number; name: string; outstanding: number }[];
     types: { value: string; label: string }[];
     moneyAccounts: { id: number; name: string }[];
+    recoverableFrom: { year: number; month: number; label: string };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Loans & advances', href: '/hrm/loans' }];
@@ -81,15 +83,25 @@ const headClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b 
 
 const money = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function RequestDialog({ employees, types }: { employees: Props['employees']; types: Props['types'] }) {
-    const now = new Date();
+function RequestDialog({
+    employees,
+    types,
+    recoverableFrom,
+}: {
+    employees: Props['employees'];
+    types: Props['types'];
+    recoverableFrom: Props['recoverableFrom'];
+}) {
     const [open, setOpen] = useState(false);
     const [employeeId, setEmployeeId] = useState('');
     const [type, setType] = useState(types[0]?.value ?? 'loan');
     const [principal, setPrincipal] = useState('');
     const [installment, setInstallment] = useState('');
-    const [year, setYear] = useState(String(now.getFullYear()));
-    const [month, setMonth] = useState(String(now.getMonth() + 1));
+    // ⚠ The first payroll month that can still recover this, which is not
+    // necessarily this calendar month: an advance handed out in August comes off
+    // the August salary while that salary is unpaid, however late it is entered.
+    const [year, setYear] = useState(String(recoverableFrom.year));
+    const [month, setMonth] = useState(String(recoverableFrom.month));
     const [reason, setReason] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -172,8 +184,11 @@ function RequestDialog({ employees, types }: { employees: Props['employees']; ty
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="loan_month">Start month</Label>
-                            <Input id="loan_month" type="number" min="1" max="12" value={month} onChange={(e) => setMonth(e.target.value)} />
+                            <MonthSelect id="loan_month" value={month} onChange={setMonth} />
                             {errors.start_month && <p className="text-destructive text-xs">{errors.start_month}</p>}
+                            <p className="text-muted-foreground text-xs">
+                                The salary this comes off. {recoverableFrom.label} is the earliest one still unpaid.
+                            </p>
                         </div>
                     </div>
 
@@ -510,7 +525,7 @@ function LoanCard({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: Props
     );
 }
 
-export default function Loans({ filters, loans, employees, types, moneyAccounts }: Props) {
+export default function Loans({ filters, loans, employees, types, moneyAccounts, recoverableFrom }: Props) {
     const reload = (employeeId: number | null) =>
         router.get(route('hrm.loans.index'), { employee_id: employeeId }, { preserveState: true, preserveScroll: true, replace: true });
 
@@ -535,7 +550,7 @@ export default function Loans({ filters, loans, employees, types, moneyAccounts 
                                     </option>
                                 ))}
                             </SearchSelect>
-                            <RequestDialog employees={employees} types={types} />
+                            <RequestDialog employees={employees} types={types} recoverableFrom={recoverableFrom} />
                         </>
                     }
                 />

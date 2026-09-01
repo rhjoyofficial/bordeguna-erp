@@ -5,6 +5,7 @@ namespace App\Modules\Hrm\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\DisburseLoan;
 use App\Modules\Hrm\Actions\RequestLoan;
 use App\Modules\Hrm\Actions\SettleLoan;
@@ -14,13 +15,15 @@ use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\LoanInstallment;
 use App\Modules\Hrm\Models\LoanLedgerEntry;
+use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Support\LoanSchedule;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rules\Enum as EnumRule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -67,6 +70,7 @@ class LoanController extends Controller
             'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name'])
                 ->map(fn (MoneyAccount $a) => ['id' => $a->id, 'name' => $a->name]),
+            'recoverableFrom' => $this->earliestRecoverableMonth(),
         ]);
     }
 
@@ -190,9 +194,36 @@ class LoanController extends Controller
         return $request->validate(['note' => ['nullable', 'string', 'max:500']])['note'] ?? null;
     }
 
+    /**
+     * The earliest payroll month a repayment could still come out of.
+     *
+     * ⚠⚠ NOT "this calendar month". On 1 September 2026 three advances handed
+     * out during August had to be recovered from the August payroll, which was
+     * approved but unpaid. Defaulting the form to September would have set the
+     * schedule a month late and nobody would have noticed until the money did
+     * not come off. The oldest month still unpaid is the honest default; if
+     * every month is paid, next month's salary is the first one that can carry
+     * it.
+     *
+     * @return array{year: int, month: int, label: string}
+     */
+    private function earliestRecoverableMonth(): array
+    {
+        $open = PayrollPeriod::orderBy('year')->orderBy('month')->get()
+            ->first(fn (PayrollPeriod $p) => $p->latestRun()?->status?->isPaidOut() !== true);
+
+        $fallback = Carbon::today()->startOfMonth();
+
+        return [
+            'year' => (int) ($open?->year ?? $fallback->year),
+            'month' => (int) ($open?->month ?? $fallback->month),
+            'label' => $open?->label() ?? $fallback->format('F Y'),
+        ];
+    }
+
     private function businessId(): int
     {
-        return app(\App\Modules\Foundation\Support\BusinessContext::class)->id();
+        return app(BusinessContext::class)->id();
     }
 
     /**
@@ -250,7 +281,7 @@ class LoanController extends Controller
      * What a set of terms would produce, for the form to show before anyone
      * commits to it.
      */
-    public function preview(Request $request): \Illuminate\Http\JsonResponse
+    public function preview(Request $request): JsonResponse
     {
         $this->authorize('hrm.payroll.manage');
 

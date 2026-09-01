@@ -569,3 +569,63 @@ it('carries the account list to the screen that has to ask for it', function () 
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->has('moneyAccounts'));
 });
+
+// --- Making the screens land where the work is -----------------------------------
+
+it('offers the earliest unpaid payroll month, not this calendar month', function () {
+    // Joy, 1 September 2026: the August payroll was still unpaid, and every
+    // advance handed out during August had to come off it. A form defaulting to
+    // September would have set the schedule a month late, silently.
+    $last = now()->subMonthNoOverflow();
+    $period = PayrollPeriod::forMonth((int) $last->year, (int) $last->month);
+    PayrollRun::create([
+        'business_id' => $this->business->id,
+        'payroll_period_id' => $period->id,
+        'version' => 1,
+        'status' => PayrollStatus::Approved,
+        'employee_count' => 1,
+        'total_earnings' => 50000,
+        'total_deductions' => 0,
+        'total_net' => 50000,
+    ]);
+
+    loanHr()->get(route('hrm.loans.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('recoverableFrom.year', (int) $last->year)
+            ->where('recoverableFrom.month', (int) $last->month));
+});
+
+it('moves on to a month that can still carry it once every payroll is paid', function () {
+    $last = now()->subMonthNoOverflow();
+    $period = PayrollPeriod::forMonth((int) $last->year, (int) $last->month);
+    PayrollRun::create([
+        'business_id' => $this->business->id,
+        'payroll_period_id' => $period->id,
+        'version' => 1,
+        'status' => PayrollStatus::Disbursed,
+        'employee_count' => 1,
+        'total_earnings' => 50000,
+        'total_deductions' => 0,
+        'total_net' => 50000,
+    ]);
+
+    // `$this->period` (this month) was created in the setup and has no run, so
+    // it is unpaid and is the first month that can still carry a repayment.
+    loanHr()->get(route('hrm.loans.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('recoverableFrom.year', (int) now()->year)
+            ->where('recoverableFrom.month', (int) now()->month));
+});
+
+it('picks a month by name rather than by number', function () {
+    // ⚠ The VALUE stays the number every payroll route expects; only the
+    // reading changes. A control that changed the value would have meant
+    // touching the server for a wording fix.
+    $source = file_get_contents(resource_path('js/components/month-select.tsx'));
+
+    expect($source)->toContain("'September'")
+        ->and(file_get_contents(resource_path('js/pages/hrm/payroll/loans.tsx')))->toContain('<MonthSelect id="loan_month"')
+        ->and(file_get_contents(resource_path('js/pages/hrm/payroll/index.tsx')))->toContain('<MonthSelect id="month"');
+});
