@@ -12,6 +12,7 @@ import {
     BookOpenText,
     Boxes,
     CalendarCheck,
+    CalendarClock,
     CalendarDays,
     CalendarRange,
     ChartColumn,
@@ -247,6 +248,10 @@ export function AppSidebar() {
                           // source at all. Reading the list is open to the business; only
                           // purchasing.expense.record may add one.
                           { title: 'Expenses', url: '/purchasing/expenses', icon: ReceiptText },
+                          // ⚠ Linked deliberately. A reminder nobody can reach
+                          // is a note, and this is the screen that stops a
+                          // hosting bill being remembered by hand.
+                          { title: 'Recurring expenses', url: '/purchasing/recurring-expenses', icon: CalendarClock },
                       ],
                   },
               ]

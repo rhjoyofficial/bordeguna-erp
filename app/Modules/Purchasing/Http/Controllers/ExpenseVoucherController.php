@@ -15,9 +15,12 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Purchasing\Actions\RecordExpenseVoucher;
+use App\Modules\Purchasing\Actions\SettleRecurringOccurrence;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
+use App\Modules\Purchasing\Models\RecurringExpenseOccurrence;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Support\ExpenseVoucherCsv;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -87,6 +90,13 @@ class ExpenseVoucherController extends Controller
         return Inertia::render('purchasing/expenses/index', [
             'vouchers' => $vouchers,
             'canRecord' => $request->user()?->can('purchasing.expense.record') ?? false,
+
+            // ⚠⚠ AUTO-FILL, NEVER AUTO-POST (Joy, 1 Sep 2026: "auto fill is
+            // better, if needs them change"). Arriving from a due standing cost
+            // opens this screen's dialog with the prediction already in it and
+            // every field still editable. Nothing is written until somebody
+            // presses save, because a voucher here is paid the moment it exists.
+            'prefill' => $this->prefillFrom($request),
 
             // ⚠ EXPENSE accounts only, and postable only. The action refuses
             // everything else outright, so offering a revenue account here would
@@ -258,6 +268,44 @@ class ExpenseVoucherController extends Controller
         ]);
     }
 
+    /**
+     * The prediction behind a due standing cost, or null.
+     *
+     * ⚠ Business-scoped through the model's own global scope, and only an OPEN
+     * occurrence prefills: one already recorded would invite a second voucher
+     * for a month already paid.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function prefillFrom(Request $request): ?array
+    {
+        $id = $request->integer('from_recurring');
+
+        if ($id === 0) {
+            return null;
+        }
+
+        $occurrence = RecurringExpenseOccurrence::with('recurringExpense')->find($id);
+
+        if ($occurrence === null || ! $occurrence->status->isOpen()) {
+            return null;
+        }
+
+        $schedule = $occurrence->recurringExpense;
+
+        return [
+            'occurrence_id' => $occurrence->id,
+            'label' => trim(($schedule?->name ?? 'Standing cost').' '.$occurrence->period_label),
+            'spent_on' => $occurrence->due_on->toDateString(),
+            'money_account_id' => $schedule?->money_account_id === null ? '' : (string) $schedule->money_account_id,
+            'supplier_id' => $schedule?->supplier_id === null ? '' : (string) $schedule->supplier_id,
+            'reference' => $schedule?->referenceFor(CarbonImmutable::parse($occurrence->due_on)) ?? '',
+            'expense_account_id' => $schedule?->expense_account_id === null ? '' : (string) $schedule->expense_account_id,
+            'amount' => (string) $occurrence->expected_amount,
+            'description' => trim(($schedule?->name ?? '').' '.$occurrence->period_label),
+        ];
+    }
+
     public function store(Request $request, RecordExpenseVoucher $action): RedirectResponse
     {
         $businessId = app(BusinessContext::class)->id();
@@ -285,6 +333,9 @@ class ExpenseVoucherController extends Controller
             'lines.*.account_id' => ['required', 'integer', 'distinct', 'exists:accounts,id'],
             'lines.*.amount' => ['required', 'numeric', 'gt:0'],
             'lines.*.description' => ['nullable', 'string', 'max:255'],
+            // Set only when the voucher answers a due standing cost.
+            'recurring_occurrence_id' => ['nullable', 'integer', Rule::exists('recurring_expense_occurrences', 'id')
+                ->where('business_id', $businessId)],
         ]);
 
         $moneyAccount = MoneyAccount::findOrFail($data['money_account_id']);
@@ -313,7 +364,7 @@ class ExpenseVoucherController extends Controller
         // do it. No rule is added: the decision was made in the engine, all that
         // happens here is that a human can read it.
         try {
-            $action->handle(
+            $voucher = $action->handle(
                 moneyAccount: $moneyAccount,
                 spentOn: $data['spent_on'],
                 lines: $lines,
@@ -325,6 +376,17 @@ class ExpenseVoucherController extends Controller
             );
         } catch (PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['spent_on' => $e->getMessage()]);
+        }
+
+        // ⚠ Tied back AFTER the voucher exists, and only then. The standing cost
+        // is satisfied by a real payment or it is still due; there is no state
+        // in between worth recording.
+        if (! empty($data['recurring_occurrence_id'])) {
+            $occurrence = RecurringExpenseOccurrence::find($data['recurring_occurrence_id']);
+
+            if ($occurrence !== null && $occurrence->status->isOpen()) {
+                app(SettleRecurringOccurrence::class)->recorded($occurrence, $voucher, $request->user());
+            }
         }
 
         return redirect()

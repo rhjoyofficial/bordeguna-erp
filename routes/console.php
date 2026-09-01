@@ -4,6 +4,7 @@ use App\Modules\Crm\Console\Commands\NotifyFollowUpsDue;
 use App\Modules\Hrm\Console\Commands\AccrueEarnedLeave;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
 use App\Modules\Inventory\Actions\ProposeExpiredStockWriteOffs;
+use App\Modules\Purchasing\Console\Commands\RollAndRemindRecurringExpenses;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -77,6 +78,20 @@ Schedule::call(fn () => app(ProposeExpiredStockWriteOffs::class)->handle())
 // ⚠ 08:30 Dhaka, before the shop opens rather than at midnight, so the message
 // is waiting at the start of the working day instead of ageing overnight.
 Schedule::command(NotifyFollowUpsDue::class)
+    ->dailyAt('08:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Standing costs (Joy, 1 September 2026). Rolls every schedule forward and tells
+// whoever can pay them what is about to be due.
+//
+// ⚠ 08:30 Dhaka, alongside the CRM digest and for the same reason: the message
+// waits at the start of the working day rather than ageing overnight.
+//
+// ⛔ It generates REMINDERS and nothing else. No voucher, no journal, no money -
+// an expense voucher here is paid the moment it exists, so a job that made one
+// would record a payment nobody had made, every month, for ever.
+Schedule::command(RollAndRemindRecurringExpenses::class)
     ->dailyAt('08:30')
     ->withoutOverlapping()
     ->runInBackground();

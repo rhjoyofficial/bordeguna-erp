@@ -104,8 +104,22 @@ interface Voucher {
     evidence: { id: number; name: string; uploaded_by: string | null; url: string }[];
 }
 
+/** The prediction carried over from a due standing cost. */
+interface Prefill {
+    occurrence_id: number;
+    label: string;
+    spent_on: string;
+    money_account_id: string;
+    supplier_id: string;
+    reference: string;
+    expense_account_id: string;
+    amount: string;
+    description: string;
+}
+
 interface Props {
     vouchers: Paginated<Voucher>;
+    prefill: Prefill | null;
     canRecord: boolean;
     expenseAccounts: { id: number; label: string }[];
     moneyAccounts: { id: number; name: string; type: string }[];
@@ -136,17 +150,30 @@ const EMPTY_LINE = { account_id: '', amount: '', description: '' };
  * today: until then every picker inside every dialog was unclickable, and this
  * form is four pickers deep. See PortalledOverlayIsClickableTest.
  */
-function RecordExpenseDialog({ expenseAccounts, moneyAccounts, suppliers, today }: Omit<Props, 'vouchers' | 'canRecord'>) {
-    const [open, setOpen] = useState(false);
+function RecordExpenseDialog({ expenseAccounts, moneyAccounts, suppliers, today, prefill }: Omit<Props, 'vouchers' | 'canRecord'>) {
+    // ⚠⚠ Opens ALREADY OPEN when the person arrived from a due standing cost.
+    // They pressed "Record payment" one screen ago; making them press a second
+    // button to see the form they asked for would be the software forgetting
+    // what it was just told.
+    const [open, setOpen] = useState(prefill !== null);
 
     const { data, setData, post, errors, processing, reset, clearErrors } = useForm({
-        money_account_id: '',
-        spent_on: today,
-        supplier_id: '',
+        money_account_id: prefill?.money_account_id ?? '',
+        spent_on: prefill?.spent_on ?? today,
+        supplier_id: prefill?.supplier_id ?? '',
         paid_to: '',
-        reference: '',
+        reference: prefill?.reference ?? '',
         note: '',
-        lines: [{ ...EMPTY_LINE }],
+        // ⚠ Every value here is EDITABLE, and the amount most of all. The
+        // schedule predicts; the voucher must state what actually left, which
+        // for anything billed in dollars is never the same figure twice.
+        lines: [
+            prefill === null
+                ? { ...EMPTY_LINE }
+                : { account_id: prefill.expense_account_id, amount: prefill.amount, description: prefill.description },
+        ],
+        // Carried through so saving settles the month it answers.
+        recurring_occurrence_id: prefill?.occurrence_id ?? '',
     });
 
     const setLine = (index: number, key: keyof typeof EMPTY_LINE, value: string) =>
@@ -186,10 +213,11 @@ function RecordExpenseDialog({ expenseAccounts, moneyAccounts, suppliers, today 
             </DialogTrigger>
             <DialogContent className="sm:max-w-3xl">
                 <DialogHeader>
-                    <DialogTitle>Record an expense</DialogTitle>
+                    <DialogTitle>{prefill === null ? 'Record an expense' : `Record ${prefill.label}`}</DialogTitle>
                     <DialogDescription>
                         This is paid at the moment you record it, so enter it once the money has actually left. Something to be settled later is a
                         supplier bill instead.
+                        {prefill !== null && ' Filled in from the standing cost; change anything that is not right.'}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -402,7 +430,7 @@ function ExportDialog() {
     );
 }
 
-export default function ExpensesIndex({ vouchers, canRecord, expenseAccounts, moneyAccounts, suppliers, today }: Props) {
+export default function ExpensesIndex({ vouchers, canRecord, expenseAccounts, moneyAccounts, suppliers, today, prefill }: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Expenses" />
@@ -419,6 +447,7 @@ export default function ExpensesIndex({ vouchers, canRecord, expenseAccounts, mo
                                     moneyAccounts={moneyAccounts}
                                     suppliers={suppliers}
                                     today={today}
+                                    prefill={prefill}
                                 />
                             )}
                         </>

@@ -2,6 +2,7 @@
 
 use App\Modules\Purchasing\Http\Controllers\ExpenseVoucherController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
+use App\Modules\Purchasing\Http\Controllers\RecurringExpenseController;
 use App\Modules\Purchasing\Http\Controllers\SupplierBillController;
 use App\Modules\Purchasing\Http\Controllers\SupplierController;
 use App\Modules\Purchasing\Http\Controllers\SupplierCreditNoteController;
@@ -120,11 +121,23 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         // more secret than the voucher on the screen it was read from.
         Route::get('expenses/export', [ExpenseVoucherController::class, 'export'])->name('expenses.export');
         Route::get('expenses/{voucher}/print', [ExpenseVoucherController::class, 'print'])->name('expenses.print');
+
+        // Standing costs. Reading what the business has committed to is the same
+        // right as reading what it spent.
+        Route::get('recurring-expenses', [RecurringExpenseController::class, 'index'])->name('recurring-expenses.index');
     });
 
     Route::middleware('can:purchasing.expense.record')->group(function () {
         Route::post('expenses', [ExpenseVoucherController::class, 'store'])->name('expenses.store');
         Route::post('expenses/{voucher}/evidence', [ExpenseVoucherController::class, 'uploadEvidence'])->name('expenses.evidence.store');
         Route::delete('expenses/{voucher}/evidence/{attachment}', [ExpenseVoucherController::class, 'deleteEvidence'])->name('expenses.evidence.destroy');
+
+        // ⚠ Committing the business to a monthly cost, and deciding a month was
+        // not taken, are both decisions with money behind them - the same
+        // permission that records the payment.
+        Route::post('recurring-expenses', [RecurringExpenseController::class, 'store'])->name('recurring-expenses.store');
+        Route::patch('recurring-expenses/{recurringExpense}', [RecurringExpenseController::class, 'update'])->name('recurring-expenses.update');
+        Route::post('recurring-expenses/{recurringExpense}/status', [RecurringExpenseController::class, 'status'])->name('recurring-expenses.status');
+        Route::post('recurring-occurrences/{occurrence}/skip', [RecurringExpenseController::class, 'skip'])->name('recurring-occurrences.skip');
     });
 });
