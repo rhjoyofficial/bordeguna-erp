@@ -3,14 +3,22 @@ import InputError from '@/components/input-error';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
-
-const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 /**
  * The receipts behind one voucher, and the way to add another.
@@ -96,6 +104,15 @@ interface Voucher {
     evidence: { id: number; name: string; uploaded_by: string | null; url: string }[];
 }
 
+interface Props {
+    vouchers: Paginated<Voucher>;
+    canRecord: boolean;
+    expenseAccounts: { id: number; label: string }[];
+    moneyAccounts: { id: number; name: string; type: string }[];
+    suppliers: { id: number; name: string }[];
+    today: string;
+}
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Purchasing', href: '/purchasing/purchase-orders' },
     { title: 'Expenses', href: '/purchasing/expenses' },
@@ -103,36 +120,26 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const EMPTY_LINE = { account_id: '', amount: '', description: '' };
 
-export default function ExpensesIndex({
-    vouchers,
-    canRecord,
-    expenseAccounts,
-    moneyAccounts,
-    suppliers,
-    today,
-}: {
-    vouchers: Paginated<Voucher>;
-    canRecord: boolean;
-    expenseAccounts: { id: number; label: string }[];
-    moneyAccounts: { id: number; name: string; type: string }[];
-    suppliers: { id: number; name: string }[];
-    today: string;
-}) {
-    // ⚠ Held locally rather than pushed through a visit: these filter the FILE,
-    // not the list on screen, so picking a date must not reload the page.
-    const [exportFrom, setExportFrom] = useState('');
-    const [exportTo, setExportTo] = useState('');
+/**
+ * Recording an expense, behind a button.
+ *
+ * Joy, 1 September 2026: "here will button i click it will a pop up come will
+ * add and it will be listed."
+ *
+ * ⚠ The form used to sit permanently open across the top half of the page, so
+ * the screen shouted "fill me in" at somebody who had come to read the list.
+ * The restyle's own rule already said the primary action belongs in the heading
+ * row; this page was the one that never followed it, which is why it was the
+ * page Joy disliked most.
+ *
+ * ⚠⚠ A dialog here is only possible because of the pointer-events fix earlier
+ * today: until then every picker inside every dialog was unclickable, and this
+ * form is four pickers deep. See PortalledOverlayIsClickableTest.
+ */
+function RecordExpenseDialog({ expenseAccounts, moneyAccounts, suppliers, today }: Omit<Props, 'vouchers' | 'canRecord'>) {
+    const [open, setOpen] = useState(false);
 
-    const exportUrl = (() => {
-        const params = new URLSearchParams();
-        if (exportFrom) params.set('from', exportFrom);
-        if (exportTo) params.set('to', exportTo);
-        const query = params.toString();
-
-        return `/purchasing/expenses/export${query ? `?${query}` : ''}`;
-    })();
-
-    const { data, setData, post, errors, processing, reset } = useForm({
+    const { data, setData, post, errors, processing, reset, clearErrors } = useForm({
         money_account_id: '',
         spent_on: today,
         supplier_id: '',
@@ -151,8 +158,14 @@ export default function ExpensesIndex({
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         post(route('purchasing.expenses.store'), {
-            onSuccess: () => reset(),
             preserveScroll: true,
+            // ⚠ Closing only on SUCCESS. A dialog that shuts on a failed save
+            // takes the refusal away with it, and the person retypes the whole
+            // voucher wondering what happened.
+            onSuccess: () => {
+                reset();
+                setOpen(false);
+            },
         });
     };
 
@@ -161,95 +174,102 @@ export default function ExpensesIndex({
     const total = data.lines.reduce((sum, line) => sum + (Number.parseFloat(line.amount) || 0), 0);
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Expenses" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Expenses"
-                    description="Rent, fuel, utilities, repairs - money spent on running the business rather than on stock. Each one is paid at the moment it is recorded; a bill to be settled later is a supplier bill instead."
-                />
+        <Dialog
+            open={open}
+            onOpenChange={(next) => {
+                setOpen(next);
+                if (!next) clearErrors();
+            }}
+        >
+            <DialogTrigger asChild>
+                <Button size="sm">Record expense</Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-3xl">
+                <DialogHeader>
+                    <DialogTitle>Record an expense</DialogTitle>
+                    <DialogDescription>
+                        This is paid at the moment you record it, so enter it once the money has actually left. Something to be settled later is a
+                        supplier bill instead.
+                    </DialogDescription>
+                </DialogHeader>
 
-                {canRecord && (
-                    <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-md border p-4">
-                        <div className="flex flex-wrap items-end gap-3">
-                            <div className="grid gap-2">
-                                <Label htmlFor="spent_on">Date</Label>
-                                <Input id="spent_on" type="date" value={data.spent_on} onChange={(e) => setData('spent_on', e.target.value)} />
-                                <InputError message={errors.spent_on} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="money_account_id">Paid from</Label>
-                                {/*
-                                  ⚠⚠ Only accounts that already have a ledger account appear
-                                  here. An unmapped one is refused by the engine with an error
-                                  naming an account nobody remembers creating, so it is not
-                                  offered at all. The bank & cash screen warns about them.
-                                */}
-                                <SearchSelect
-                                    fit
-                                    id="money_account_id"
-                                    value={data.money_account_id}
-                                    onChange={(e) => setData('money_account_id', e.target.value)}
-                                >
-                                    <option value="">Choose an account</option>
-                                    {moneyAccounts.map((account) => (
-                                        <option key={account.id} value={account.id}>
-                                            {account.name}
-                                        </option>
-                                    ))}
-                                </SearchSelect>
-                                <InputError message={errors.money_account_id} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="supplier_id">Supplier (optional)</Label>
-                                <SearchSelect fit id="supplier_id" value={data.supplier_id} onChange={(e) => setData('supplier_id', e.target.value)}>
-                                    <option value="">Not a supplier</option>
-                                    {suppliers.map((supplier) => (
-                                        <option key={supplier.id} value={supplier.id}>
-                                            {supplier.name}
-                                        </option>
-                                    ))}
-                                </SearchSelect>
-                                <InputError message={errors.supplier_id} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                {/* A landlord or an electricity board is not a supplier of
-                                    goods and should not have to become one to be paid. */}
-                                <Label htmlFor="paid_to">Paid to</Label>
-                                <Input
-                                    id="paid_to"
-                                    value={data.paid_to}
-                                    onChange={(e) => setData('paid_to', e.target.value)}
-                                    className="w-52"
-                                    placeholder="e.g. Adabor landlord"
-                                />
-                                <InputError message={errors.paid_to} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="reference">Reference</Label>
-                                <Input
-                                    id="reference"
-                                    value={data.reference}
-                                    onChange={(e) => setData('reference', e.target.value)}
-                                    className="w-40"
-                                    placeholder="Receipt no."
-                                />
-                                <InputError message={errors.reference} />
-                            </div>
+                <form onSubmit={submit} className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-2">
+                            <Label htmlFor="spent_on">Date the money left</Label>
+                            <Input id="spent_on" type="date" value={data.spent_on} onChange={(e) => setData('spent_on', e.target.value)} />
+                            <InputError message={errors.spent_on} />
                         </div>
 
-                        <div className="flex flex-col gap-2">
-                            <Label>What it was spent on</Label>
-                            {data.lines.map((line, index) => (
-                                <div key={index} className="flex flex-wrap items-end gap-3">
+                        <div className="grid gap-2">
+                            <Label htmlFor="money_account_id">Paid from</Label>
+                            {/*
+                              ⚠⚠ Only accounts that already have a ledger account appear
+                              here. An unmapped one is refused by the engine with an error
+                              naming an account nobody remembers creating, so it is not
+                              offered at all. The bank & cash screen warns about them.
+                            */}
+                            <SearchSelect
+                                id="money_account_id"
+                                value={data.money_account_id}
+                                onChange={(e) => setData('money_account_id', e.target.value)}
+                            >
+                                <option value="">Choose an account</option>
+                                {moneyAccounts.map((account) => (
+                                    <option key={account.id} value={account.id}>
+                                        {account.name}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                            <InputError message={errors.money_account_id} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="supplier_id">Supplier (optional)</Label>
+                            <SearchSelect id="supplier_id" value={data.supplier_id} onChange={(e) => setData('supplier_id', e.target.value)}>
+                                <option value="">Not a supplier</option>
+                                {suppliers.map((supplier) => (
+                                    <option key={supplier.id} value={supplier.id}>
+                                        {supplier.name}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                            <InputError message={errors.supplier_id} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            {/* A landlord or an electricity board is not a supplier of
+                                goods and should not have to become one to be paid. */}
+                            <Label htmlFor="paid_to">Paid to</Label>
+                            <Input
+                                id="paid_to"
+                                value={data.paid_to}
+                                onChange={(e) => setData('paid_to', e.target.value)}
+                                placeholder="e.g. Adabor landlord"
+                            />
+                            <InputError message={errors.paid_to} />
+                        </div>
+
+                        <div className="grid gap-2 sm:col-span-2">
+                            <Label htmlFor="reference">Reference</Label>
+                            <Input
+                                id="reference"
+                                value={data.reference}
+                                onChange={(e) => setData('reference', e.target.value)}
+                                placeholder="Receipt or transfer number, or your own, e.g. NIKOLA-2026-09"
+                            />
+                            <InputError message={errors.reference} />
+                        </div>
+                    </div>
+
+                    <div className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-md border p-3">
+                        <Label>What it was spent on</Label>
+
+                        {data.lines.map((line, index) => (
+                            <div key={index} className="grid gap-2">
+                                <div className="grid gap-2 sm:grid-cols-[1fr_8rem]">
                                     <SearchSelect
-                                        fit
                                         aria-label={`Expense account, line ${index + 1}`}
-                                        className={`${selectClass} w-72`}
                                         value={line.account_id}
                                         onChange={(e) => setLine(index, 'account_id', e.target.value)}
                                     >
@@ -264,15 +284,16 @@ export default function ExpensesIndex({
                                         aria-label={`Amount, line ${index + 1}`}
                                         value={line.amount}
                                         onChange={(e) => setLine(index, 'amount', e.target.value)}
-                                        className="w-32 text-right"
+                                        className="text-right"
                                         placeholder="0.00"
                                         inputMode="decimal"
                                     />
+                                </div>
+                                <div className="flex items-center gap-2">
                                     <Input
                                         aria-label={`Description, line ${index + 1}`}
                                         value={line.description}
                                         onChange={(e) => setLine(index, 'description', e.target.value)}
-                                        className="w-64"
                                         placeholder="Description (optional)"
                                     />
                                     {data.lines.length > 1 && (
@@ -290,50 +311,119 @@ export default function ExpensesIndex({
                                             Remove
                                         </Button>
                                     )}
-                                    <InputError message={errors[`lines.${index}.account_id` as keyof typeof errors]} />
-                                    <InputError message={errors[`lines.${index}.amount` as keyof typeof errors]} />
-                                    <InputError message={errors[`lines.${index}.account` as keyof typeof errors]} />
                                 </div>
-                            ))}
-                            <InputError message={errors.lines} />
-                            <div>
-                                <Button type="button" variant="ghost" size="sm" onClick={() => setData('lines', [...data.lines, { ...EMPTY_LINE }])}>
-                                    Add another line
-                                </Button>
+                                <InputError message={errors[`lines.${index}.account_id` as keyof typeof errors]} />
+                                <InputError message={errors[`lines.${index}.amount` as keyof typeof errors]} />
+                                <InputError message={errors[`lines.${index}.account` as keyof typeof errors]} />
                             </div>
-                        </div>
+                        ))}
 
-                        <div className="flex items-center gap-4">
-                            <Button disabled={processing}>Record expense</Button>
-                            <span className="text-muted-foreground text-sm">
-                                Total <span className="text-foreground font-medium tabular-nums">{total.toFixed(2)}</span>
-                            </span>
-                        </div>
-                    </form>
-                )}
+                        <InputError message={errors.lines} />
 
-                <div className="flex flex-wrap items-end gap-3">
-                    <div className="grid gap-1">
-                        <Label htmlFor="export-from" className="text-muted-foreground text-xs">
-                            Export from
-                        </Label>
-                        <Input id="export-from" type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} />
+                        <div>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setData('lines', [...data.lines, { ...EMPTY_LINE }])}>
+                                Add another line
+                            </Button>
+                        </div>
                     </div>
-                    <div className="grid gap-1">
-                        <Label htmlFor="export-to" className="text-muted-foreground text-xs">
-                            to
-                        </Label>
-                        <Input id="export-to" type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} />
+                </form>
+
+                <DialogFooter className="sm:justify-between">
+                    <span className="text-muted-foreground self-center text-sm">
+                        Total <span className="text-foreground font-medium tabular-nums">{total.toFixed(2)}</span>
+                    </span>
+                    <div className="flex gap-2">
+                        <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                        </DialogClose>
+                        <Button disabled={processing} onClick={submit}>
+                            {processing ? 'Recording…' : 'Record expense'}
+                        </Button>
                     </div>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/**
+ * ⚠ The dates filter the FILE, not the list on screen, so they live here rather
+ * than in a visit: picking one must not reload the page.
+ */
+function ExportDialog() {
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+
+    const url = (() => {
+        const params = new URLSearchParams();
+        if (from) params.set('from', from);
+        if (to) params.set('to', to);
+        const query = params.toString();
+
+        return `/purchasing/expenses/export${query ? `?${query}` : ''}`;
+    })();
+
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                    Export
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Export expenses</DialogTitle>
+                    <DialogDescription>
+                        One row per expense line, so the amounts add up. Leave both dates empty to export everything.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                        <Label htmlFor="export-from">From</Label>
+                        <Input id="export-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="export-to">To</Label>
+                        <Input id="export-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
                     {/* ⚠ A plain anchor, not a router visit: this is a file download,
                         and Inertia would try to render the CSV as a page. */}
-                    <Button variant="outline" size="sm" asChild>
-                        <a href={exportUrl}>Export to CSV</a>
+                    <Button asChild>
+                        <a href={url}>Download CSV</a>
                     </Button>
-                    <p className="text-muted-foreground text-xs">
-                        Leave both dates empty for everything. One row per expense line, so the amounts add up.
-                    </p>
-                </div>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+export default function ExpensesIndex({ vouchers, canRecord, expenseAccounts, moneyAccounts, suppliers, today }: Props) {
+    return (
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Expenses" />
+            <div className="flex flex-col gap-6 p-4">
+                <ReportHeading
+                    title="Expenses"
+                    description="Rent, fuel, utilities, subscriptions - money spent on running the business rather than on stock. Each one is paid at the moment it is recorded; a bill to be settled later is a supplier bill instead."
+                    actions={
+                        <>
+                            <ExportDialog />
+                            {canRecord && (
+                                <RecordExpenseDialog
+                                    expenseAccounts={expenseAccounts}
+                                    moneyAccounts={moneyAccounts}
+                                    suppliers={suppliers}
+                                    today={today}
+                                />
+                            )}
+                        </>
+                    }
+                />
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full min-w-[52rem] text-sm">
@@ -352,7 +442,7 @@ export default function ExpensesIndex({
                             {vouchers.data.map((voucher) => (
                                 <tr key={voucher.id} className="border-t align-top">
                                     <td className="p-3 font-medium">{voucher.voucher_number}</td>
-                                    <td className="p-3">{voucher.spent_on ?? '-'}</td>
+                                    <td className="p-3 whitespace-nowrap">{voucher.spent_on ?? '-'}</td>
                                     <td className="p-3">{voucher.payee}</td>
                                     <td className="p-3">{voucher.paid_from ?? '-'}</td>
                                     <td className="text-muted-foreground p-3">
@@ -363,7 +453,7 @@ export default function ExpensesIndex({
                                             </div>
                                         ))}
                                     </td>
-                                    <td className="p-3 text-right tabular-nums">{voucher.total}</td>
+                                    <td className="p-3 text-right font-medium tabular-nums">{voucher.total}</td>
                                     <td className="p-3">
                                         <EvidenceCell voucher={voucher} canRecord={canRecord} />
                                     </td>
@@ -371,8 +461,11 @@ export default function ExpensesIndex({
                             ))}
                             {vouchers.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="text-muted-foreground p-6 text-center">
-                                        No expenses recorded yet.
+                                    {/* ⚠ colSpan matches the SEVEN headers above. It said six,
+                                        so the empty message sat short of the table's width. */}
+                                    <td colSpan={7} className="text-muted-foreground p-8 text-center">
+                                        <p>No expenses recorded yet.</p>
+                                        {canRecord && <p className="mt-1 text-xs">Use “Record expense” above to add the first one.</p>}
                                     </td>
                                 </tr>
                             )}
