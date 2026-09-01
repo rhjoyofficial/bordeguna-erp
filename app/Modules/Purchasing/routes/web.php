@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Purchasing\Http\Controllers\ExpenseImportController;
 use App\Modules\Purchasing\Http\Controllers\ExpenseVoucherController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\RecurringExpenseController;
@@ -129,6 +130,14 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
 
     Route::middleware('can:purchasing.expense.record')->group(function () {
         Route::post('expenses', [ExpenseVoucherController::class, 'store'])->name('expenses.store');
+
+        // The importer. Gated with RECORDING rather than with viewing, because
+        // a file of thirty rows is thirty payments - the same act as pressing
+        // the button thirty times, and the same permission.
+        Route::get('expenses/import', [ExpenseImportController::class, 'create'])->name('expenses.import');
+        Route::get('expenses/import/template', [ExpenseImportController::class, 'template'])->name('expenses.import.template');
+        Route::post('expenses/import/preview', [ExpenseImportController::class, 'preview'])->name('expenses.import.preview');
+        Route::post('expenses/import', [ExpenseImportController::class, 'store'])->name('expenses.import.store');
         Route::post('expenses/{voucher}/evidence', [ExpenseVoucherController::class, 'uploadEvidence'])->name('expenses.evidence.store');
         Route::delete('expenses/{voucher}/evidence/{attachment}', [ExpenseVoucherController::class, 'deleteEvidence'])->name('expenses.evidence.destroy');
 

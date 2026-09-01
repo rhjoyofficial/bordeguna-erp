@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 /**
@@ -440,7 +440,18 @@ export default function ExpensesIndex({ vouchers, canRecord, expenseAccounts, mo
                     description="Rent, fuel, utilities, subscriptions - money spent on running the business rather than on stock. Each one is paid at the moment it is recorded; a bill to be settled later is a supplier bill instead."
                     actions={
                         <>
+                            {/* The engine's rendering: PDF, Excel, CSV and a printable
+                                page with letterhead and signature blocks. The quick CSV
+                                dialog stays for a fast date-ranged pull. */}
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href="/hrm/reports/purchasing_expense_register">Full report</Link>
+                            </Button>
                             <ExportDialog />
+                            {canRecord && (
+                                <Button variant="outline" size="sm" asChild>
+                                    <Link href={route('purchasing.expenses.import')}>Import a file</Link>
+                                </Button>
+                            )}
                             {canRecord && (
                                 <RecordExpenseDialog
                                     expenseAccounts={expenseAccounts}

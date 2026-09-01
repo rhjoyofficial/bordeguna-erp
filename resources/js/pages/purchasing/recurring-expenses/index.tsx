@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface Prefill {
@@ -394,14 +394,22 @@ export default function RecurringExpensesIndex({ canRecord, due, schedules, tota
                     title="Recurring expenses"
                     description="Subscriptions and monthly bills that arrive whether or not anybody remembers them. This predicts and reminds; the money is recorded on the expense screen, by you."
                     actions={
-                        canRecord ? (
-                            <ScheduleDialog
-                                frequencies={frequencies}
-                                expenseAccounts={expenseAccounts}
-                                moneyAccounts={moneyAccounts}
-                                suppliers={suppliers}
-                            />
-                        ) : undefined
+                        <>
+                            {/* The engine's rendering of this same list: PDF, Excel,
+                                CSV and a printable page with the letterhead and the
+                                three signature blocks. */}
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href="/hrm/reports/purchasing_standing_costs">Print or export</Link>
+                            </Button>
+                            {canRecord && (
+                                <ScheduleDialog
+                                    frequencies={frequencies}
+                                    expenseAccounts={expenseAccounts}
+                                    moneyAccounts={moneyAccounts}
+                                    suppliers={suppliers}
+                                />
+                            )}
+                        </>
                     }
                 />
 

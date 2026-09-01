@@ -614,9 +614,17 @@ it('estimates the row count without producing a row', function () {
 
 it('has every registered report declaring a permission, columns and a group', function () {
     app(ReportRegistry::class)->all()->each(function (ReportDefinition $definition) {
+        // ⚠ The permission's module must match the group, or a purchasing
+        // report could quietly gate itself behind an HRM grant nobody holding
+        // the purchasing role has. Widened 1 Sep 2026 when Purchasing began
+        // registering its own definitions into this same engine.
+        $module = match ($definition->group()) {
+            'Attendance', 'Payroll' => 'hrm.',
+            'Purchases' => 'purchasing.',
+        };
+
         expect($definition->key())->not->toBeEmpty()
-            ->and($definition->permission())->toStartWith('hrm.')
-            ->and($definition->group())->toBeIn(['Attendance', 'Payroll'])
+            ->and($definition->permission())->toStartWith($module)
             ->and($definition->columns())->not->toBeEmpty();
 
         foreach ($definition->columns() as $column) {
