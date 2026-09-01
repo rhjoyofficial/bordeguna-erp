@@ -555,7 +555,11 @@ export default function Disbursement({ run, batches, payslips, methods, moneyAcc
                     <div className={cardClass}>
                         <p className="text-sm font-medium">Payslips by email</p>
                         <p className="text-muted-foreground text-sm">
-                            Each PDF is password protected: the employee's own code followed by their date of birth as ddmmyyyy.
+                            {/* ⚠ The EXAMPLE is the point. Joy read the old wording, typed the date on its own,
+                                and could not open his own employee's payslip. The rule is now the date alone, and
+                                it is still shown with a worked example. */}
+                            Each PDF is password protected with the employee's date of birth as DDMMYYYY, with no spaces or slashes. For example{' '}
+                            <strong>20121992</strong> for someone born on 20 December 1992.
                         </p>
                         <ul className="mt-2 space-y-1 text-sm">
                             {email_summary.sent > 0 && <li>{email_summary.sent} sent.</li>}

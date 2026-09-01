@@ -30,6 +30,58 @@
 
     .business { font-size: 11px; font-weight: bold; color: #111827; margin: 0 0 1px; }
 
+    /* The letterhead. Centred because that is where a company's mark belongs on
+       a document that leaves the building, and because three signatories at the
+       foot expect a masthead at the head. */
+    .letterhead { text-align: center; margin: 0 0 6px; }
+
+    /* ⚠ Sized in mm, not px: this block is drawn by dompdf at print scale, and a
+       logo measured in screen pixels comes out either postage-stamp or half the
+       page depending on the upload. Height is capped and the width left to the
+       aspect ratio, so a wide wordmark and a square mark both behave. */
+    .letterhead img { max-height: 18mm; max-width: 70mm; }
+
+    .doc-title { text-align: center; }
+    .doc-title h1 { margin: 4px 0 2px; }
+    .doc-title .subtitle { margin: 0 0 8px; }
+
+    /* ⚠⚠ NORMAL FLOW, NEVER `position: fixed`. The provenance stamp below is
+       fixed precisely so it repeats on every page - and that is exactly what
+       these three boxes must NOT do. A signature block on page 1 of 9 invites a
+       signature on page 1 of 9. In flow, it is emitted after the last row, which
+       puts it at the foot of the last page and nowhere else. */
+    .signatures {
+        width: 100%;
+        margin-top: 14mm;
+        border-collapse: collapse;
+        page-break-inside: avoid;
+    }
+
+    .signatures td {
+        width: 33.33%;
+        vertical-align: bottom;
+        padding: 0 6mm;
+        border: none;
+        text-align: center;
+    }
+
+    /* The room a wet signature actually needs. */
+    .signatures .space { height: 16mm; }
+
+    .signatures .rule {
+        border-top: 1px solid #374151;
+        padding-top: 3px;
+        font-size: 9px;
+        font-weight: bold;
+        color: #111827;
+    }
+
+    .signatures .who {
+        font-size: 7.5px;
+        color: #6b7280;
+        padding-top: 1px;
+    }
+
     .filters {
         margin: 0 0 10px;
         padding: 5px 7px;
@@ -128,15 +180,31 @@
     </div>
 @endif
 
-@if ($dataset->meta->businessName)
-    <div class="business">{{ $dataset->meta->businessName }}</div>
-@endif
+{{-- ⚠ The logo arrives as a data URI, already inlined by ReportLetterhead.
+     dompdf carries no session and could never fetch it from the private disk
+     behind an authenticated route, so a src="/..." would print a broken image
+     on the PDF while the browser print view looked perfect. --}}
+<div class="letterhead">
+    @if ($dataset->meta->logo)
+        <img src="{{ $dataset->meta->logo }}" alt="">
+    @endif
 
-<h1>{{ $dataset->meta->title }}</h1>
+    @if ($dataset->meta->businessName)
+        {{-- ⚠ Deliberately NOT set in the brand script. dompdf has no Berkshire
+             Swash and would fall back silently, printing the wordmark in the
+             wrong face on the one document that goes outside. The logo above
+             already carries the wordmark drawn correctly. --}}
+        <div class="business">{{ $dataset->meta->businessName }}</div>
+    @endif
+</div>
 
-@if ($dataset->meta->subtitle)
-    <p class="subtitle">{{ $dataset->meta->subtitle }}</p>
-@endif
+<div class="doc-title">
+    <h1>{{ $dataset->meta->title }}</h1>
+
+    @if ($dataset->meta->subtitle)
+        <p class="subtitle">{{ $dataset->meta->subtitle }}</p>
+    @endif
+</div>
 
 @if (count($dataset->meta->filters) > 0)
     <div class="filters">
@@ -198,6 +266,22 @@
          copy rather than living in a docblock the signatories never see. --}}
     <div class="report-note">{{ $dataset->meta->note }}</div>
 @endif
+
+{{-- Three signatories in one row, at the foot of the LAST page (Joy, 1 Sep
+     2026). In normal flow on purpose - see the .signatures comment above for
+     why this must not be fixed like the stamp is.
+
+     ⚠ All three are left blank to be signed by hand. The stamp below already
+     records who generated the report and when; printing a name above a
+     signature line would be the document asserting who approved it before
+     anybody had. --}}
+<table class="signatures">
+    <tr>
+        <td><div class="space"></div><div class="rule">Prepared by</div><div class="who">Name &amp; designation</div></td>
+        <td><div class="space"></div><div class="rule">Checked by</div><div class="who">Name &amp; designation</div></td>
+        <td><div class="space"></div><div class="rule">Approved by</div><div class="who">Name &amp; designation</div></td>
+    </tr>
+</table>
 
 <div class="stamp">
     {{ $dataset->meta->stamp() }}

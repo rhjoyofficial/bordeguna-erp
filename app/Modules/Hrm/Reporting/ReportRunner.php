@@ -119,6 +119,13 @@ class ReportRunner
             generatedAt: $declared->generatedAt ?? Carbon::now(),
             periodLocked: $declared->periodLocked,
             lockNote: $declared->lockNote,
+            note: $declared->note,
+            // ⚠ Resolved HERE, where the business context is known, rather than
+            // in the template. A queued report renders inside a job that
+            // restores the context it was given; a template reaching for
+            // "the current business" would render the wrong letterhead, or
+            // none, exactly when nobody is watching.
+            logo: ReportLetterhead::logoFor($this->context->id()),
         );
     }
 

@@ -385,8 +385,22 @@ it('reconciles the same way however many payment events land', function () {
 
 // --- SAL-07 / C9b: the payslip PDF ------------------------------------------------
 
-it('builds the payslip password from the employee code and date of birth', function () {
-    expect(PayslipPassword::for($this->employee))->toBe('BDG-00000131121995');
+it('builds the payslip password from the date of birth alone', function () {
+    // Shortened by Joy on 1 September 2026: "payslip password is very long,
+    // make it very short like 20121992". ⚠ Little was given up - the employee
+    // code is printed on the payslip itself and runs in sequence, so it added
+    // characters rather than secrecy. The date of birth was always the only
+    // private half.
+    expect(PayslipPassword::for($this->employee))->toBe('31121995');
+});
+
+it('has no password at all for an employee with no date of birth', function () {
+    // ⛔ Never a weaker fallback. An export that claims protection it does not
+    // have is worse than one that will not open.
+    $this->employee->update(['date_of_birth' => null]);
+
+    expect(PayslipPassword::for($this->employee->fresh()))->toBeNull()
+        ->and(PayslipPassword::missingReason($this->employee->fresh()))->toContain('date of birth');
 });
 
 it('renders a protected PDF', function () {

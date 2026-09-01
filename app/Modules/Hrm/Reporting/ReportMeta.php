@@ -55,6 +55,13 @@ final class ReportMeta
          * describes how the report must be read.
          */
         public readonly ?string $note = null,
+        /**
+         * The business's own logo, already inlined as a data URI by
+         * `ReportLetterhead` so that dompdf and the browser draw the same
+         * document. Null when the business has never uploaded one, and the
+         * report simply prints without it.
+         */
+        public readonly ?string $logo = null,
     ) {}
 
     public function generatedAtString(): string
