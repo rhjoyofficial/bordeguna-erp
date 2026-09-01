@@ -19,6 +19,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rules\Enum as EnumRule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -61,6 +62,11 @@ class LoanController extends Controller
                 ]),
             'types' => collect(LoanType::cases())
                 ->map(fn (LoanType $t) => ['value' => $t->value, 'label' => $t->label()]),
+            // Approving disburses, so the screen has to be able to ask where the
+            // money came from at the moment it asks whether to lend it.
+            'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
+                ->orderBy('name')->get(['id', 'name'])
+                ->map(fn (MoneyAccount $a) => ['id' => $a->id, 'name' => $a->name]),
         ]);
     }
 
@@ -103,7 +109,29 @@ class LoanController extends Controller
         abort_if($approval === null, 404);
         abort_unless($approval->canBeActionedBy($request->user()), 403);
 
-        $note = $this->note($request);
+        $data = $request->validate([
+            'note' => ['nullable', 'string', 'max:500'],
+            'money_account_id' => ['nullable', 'integer', Rule::exists('money_accounts', 'id')],
+            // ⚠ The day the money actually left, which is often not today.
+            'disbursed_on' => ['nullable', 'date', 'before_or_equal:today'],
+        ]);
+
+        $note = $data['note'] ?? null;
+
+        // ⚠⚠ ASKED BEFORE THE APPROVAL IS RECORDED, NEVER AFTER. This screen
+        // used to post nothing at all, so the final approval went through and
+        // the disbursement then threw "the account this loan was paid from" -
+        // leaving an approved loan that had never been paid out, and a 500 in
+        // place of a question. The account is a fact only the person handing
+        // the money over knows, so it is asked, not defaulted.
+        $isFinalStage = $approval->remainingStages() <= 1;
+        $account = isset($data['money_account_id']) ? MoneyAccount::find($data['money_account_id']) : null;
+
+        if ($isFinalStage && $account === null) {
+            throw ValidationException::withMessages([
+                'money_account_id' => 'Say which account this money was paid from. Approving disburses it, and the ledger cannot record cash leaving an account nobody named.',
+            ]);
+        }
 
         if (! $approval->approve($request->user(), $note)) {
             $notify->handle($approval->fresh(), $loan->summaryLine());
@@ -111,17 +139,13 @@ class LoanController extends Controller
             return back()->with('success', 'Approved. Sent to the next stage.');
         }
 
-        // ⚠ The final approver says which account the money leaves from. Same
-        // question a payroll disbursement asks, and for the same reason: where
-        // the cash came from is a fact only the person handing it over knows.
-        $account = $request->filled('money_account_id')
-            ? MoneyAccount::find($request->integer('money_account_id'))
-            : null;
-
-        $applied = $disburse->handle($loan, $account, $request->user());
+        $applied = $disburse->handle($loan, $account, $request->user(), $data['disbursed_on'] ?? null);
 
         return back()->with('success', sprintf(
-            'Loan approved and disbursed. %d installment(s) scheduled from %s.',
+            '%s disbursed from %s on %s. %d installment(s) scheduled from %s.',
+            $applied->type->label(),
+            $account?->name ?? 'no account',
+            $applied->disbursed_on?->format('j M Y') ?? 'today',
             $applied->installments()->count(),
             $applied->startsOn()->format('F Y'),
         ));

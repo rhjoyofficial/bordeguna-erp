@@ -94,7 +94,20 @@ class SettleExpenseClaim
         }
 
         return DB::transaction(function () use ($claim, $expenseAccount, $period, $actor) {
-            $adjustment = PayrollAdjustment::create([
+            // ⚠⚠ THE `source_key` IS WHAT MAKES PAYROLL PAY THIS. `scopePayable`
+            // pays a manual adjustment only once its own approval is approved,
+            // and a GENERATED one only when it carries a source key and no
+            // approval request. This used to be a plain `create()`: no approval
+            // was ever raised for it and none could be raised afterwards, so the
+            // reimbursement sat on the claim screen looking settled and never
+            // reached a payslip. The money disappeared silently, which is the
+            // worst way for money to disappear.
+            //
+            // Generated is also the honest description. The human decision
+            // happened when the claim was approved; asking a second time would
+            // be theatre - the same reasoning `ApplySalaryRevision` follows for
+            // back pay.
+            $adjustment = PayrollAdjustment::once("expense_claim:{$claim->id}", [
                 'business_id' => $claim->business_id,
                 'employee_id' => $claim->employee_id,
                 'payroll_period_id' => $period->id,
@@ -108,6 +121,15 @@ class SettleExpenseClaim
                 'origin_id' => $claim->id,
                 'requested_by' => $actor->id,
             ]);
+
+            // `once` returns null when the key is already taken, which here means
+            // the claim was already put on a salary. `assertSettleable` catches
+            // that first; this keeps the failure loud if it ever gets past.
+            if ($adjustment === null) {
+                throw ValidationException::withMessages([
+                    'payroll_period_id' => "Claim {$claim->claim_number} is already on a salary.",
+                ]);
+            }
 
             $claim->update([
                 'expense_account_id' => $expenseAccount->id,

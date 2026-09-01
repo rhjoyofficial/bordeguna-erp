@@ -71,6 +71,7 @@ interface Props {
     loans: LoanRow[];
     employees: { id: number; name: string; outstanding: number }[];
     types: { value: string; label: string }[];
+    moneyAccounts: { id: number; name: string }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Loans & advances', href: '/hrm/loans' }];
@@ -293,7 +294,96 @@ function SettleDialog({ loan }: { loan: LoanRow }) {
     );
 }
 
-function LoanCard({ loan }: { loan: LoanRow }) {
+/**
+ * Approving an advance pays it out, so this is the moment to ask the two things
+ * only the person handing the money over knows: which account it left, and on
+ * what day.
+ *
+ * ⚠⚠ The button used to post nothing at all. The approval went through, the
+ * disbursement then failed for want of an account, and the screen showed a
+ * blank error over a loan that was approved and unpaid. Both answers are asked
+ * here, before anything is recorded.
+ */
+function ApproveDialog({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: Props['moneyAccounts'] }) {
+    const [open, setOpen] = useState(false);
+    const [accountId, setAccountId] = useState(String(moneyAccounts[0]?.id ?? ''));
+    const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10));
+    const [note, setNote] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm">Approve &amp; disburse</Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>
+                        Approve {loan.reference} for {loan.employee}
+                    </DialogTitle>
+                    <DialogDescription>
+                        Approving pays out {money(loan.principal)} and creates the repayment schedule. The ledger records the money leaving the
+                        account below on the day below, so both must be what actually happened, not what is convenient today.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="approve_account">Paid from</Label>
+                        <SearchSelect id="approve_account" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+                            <option value="">Select an account</option>
+                            {moneyAccounts.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                    {a.name}
+                                </option>
+                            ))}
+                        </SearchSelect>
+                        {errors.money_account_id && <p className="text-destructive text-xs">{errors.money_account_id}</p>}
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="approve_date">Paid on</Label>
+                        <Input id="approve_date" type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
+                        <p className="text-muted-foreground text-xs">
+                            The day the money actually left. An advance written up a fortnight later still belongs to the day it was handed over.
+                        </p>
+                        {errors.disbursed_on && <p className="text-destructive text-xs">{errors.disbursed_on}</p>}
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="approve_note">Note</Label>
+                        <Input id="approve_note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
+                        {errors.note && <p className="text-destructive text-xs">{errors.note}</p>}
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <BusyButton
+                        busyLabel="Approving…"
+                        disabled={accountId === '' || paidOn === ''}
+                        onClick={() =>
+                            router.post(
+                                route('hrm.loans.approve', loan.id),
+                                { money_account_id: Number(accountId), disbursed_on: paidOn, note: note || null },
+                                {
+                                    preserveScroll: true,
+                                    onSuccess: () => {
+                                        setErrors({});
+                                        setOpen(false);
+                                    },
+                                    onError: setErrors,
+                                },
+                            )
+                        }
+                    >
+                        Approve &amp; disburse
+                    </BusyButton>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function LoanCard({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: Props['moneyAccounts'] }) {
     const [showDetail, setShowDetail] = useState(false);
     const progress = loan.principal > 0 ? Math.min(100, (loan.repaid / loan.principal) * 100) : 0;
 
@@ -324,13 +414,7 @@ function LoanCard({ loan }: { loan: LoanRow }) {
                             >
                                 Reject
                             </Button>
-                            <BusyButton
-                                size="sm"
-                                busyLabel="Approving…"
-                                onClick={() => router.post(route('hrm.loans.approve', loan.id), {}, { preserveScroll: true })}
-                            >
-                                Approve &amp; disburse
-                            </BusyButton>
+                            <ApproveDialog loan={loan} moneyAccounts={moneyAccounts} />
                         </>
                     )}
                     {loan.can_settle && <SettleDialog loan={loan} />}
@@ -426,7 +510,7 @@ function LoanCard({ loan }: { loan: LoanRow }) {
     );
 }
 
-export default function Loans({ filters, loans, employees, types }: Props) {
+export default function Loans({ filters, loans, employees, types, moneyAccounts }: Props) {
     const reload = (employeeId: number | null) =>
         router.get(route('hrm.loans.index'), { employee_id: employeeId }, { preserveState: true, preserveScroll: true, replace: true });
 
@@ -463,7 +547,7 @@ export default function Loans({ filters, loans, employees, types }: Props) {
                 ) : (
                     <div className="flex flex-col gap-4">
                         {loans.map((loan) => (
-                            <LoanCard key={loan.id} loan={loan} />
+                            <LoanCard key={loan.id} loan={loan} moneyAccounts={moneyAccounts} />
                         ))}
                     </div>
                 )}

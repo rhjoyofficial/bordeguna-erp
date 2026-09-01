@@ -462,3 +462,54 @@ it('will not add a claim to salary without naming the month', function () {
         ])
         ->assertSessionHasErrors('payroll_period_id');
 });
+
+it('puts a claim settled to salary where payroll will actually pay it', function () {
+    // ⚠⚠ THE DEFECT THIS TEST EXISTS FOR. Settling to salary used to create a
+    // plain adjustment: no approval request of its own, and no source key. But
+    // `scopePayable` pays a MANUAL adjustment only once its own approval is
+    // approved, and a GENERATED one only when it has a source key and no
+    // approval. This row was neither, so payroll skipped it forever - and it
+    // could not be approved afterwards either, because the approve route 404s
+    // when there is no approval request. The claim looked settled on screen and
+    // the employee was never paid.
+    //
+    // The old assertions could not see any of that: they checked the row
+    // existed. Whether payroll would PAY it is the only question that matters.
+    $claim = claimFor($this->employee->id, $this->business->id);
+    $claim->submitForApproval($this->finance);
+    $claim->approvalRequest->update(['status' => ApprovalStatus::Approved]);
+
+    $this->actingAs($this->finance)
+        ->post("/hrm/expense-claims/{$claim->id}/settle", [
+            'method' => 'payroll',
+            'expense_account_id' => $this->head->id,
+            'payroll_period_id' => $this->period->id,
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $adjustment = PayrollAdjustment::sole();
+
+    expect($adjustment->source_key)->toBe("expense_claim:{$claim->id}")
+        ->and(PayrollAdjustment::payable()->pluck('id')->all())->toBe([$adjustment->id]);
+});
+
+it('never adds the same claim to a salary twice, even by two routes at once', function () {
+    // The unique index on (business_id, source_key) is the real guarantee; a
+    // duplicated reimbursement is money paid twice.
+    $claim = claimFor($this->employee->id, $this->business->id);
+    $claim->submitForApproval($this->finance);
+    $claim->approvalRequest->update(['status' => ApprovalStatus::Approved]);
+
+    $post = fn () => $this->actingAs($this->finance)
+        ->post("/hrm/expense-claims/{$claim->id}/settle", [
+            'method' => 'payroll',
+            'expense_account_id' => $this->head->id,
+            'payroll_period_id' => $this->period->id,
+        ]);
+
+    $post()->assertSessionHasNoErrors();
+    $post();
+
+    expect(PayrollAdjustment::count())->toBe(1);
+});

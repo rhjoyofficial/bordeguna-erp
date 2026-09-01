@@ -141,3 +141,28 @@ it('meets the recovery on the same account', function () {
 
     expect(LedgerIntegrity::verifyAllBusinesses()['problems'])->toBeEmpty();
 });
+
+it('dates the disbursement on the day the money left, not the day it was entered', function () {
+    // Joy, 1 September 2026: three advances handed out on 11, 17 and 23 August
+    // were written up on 1 September. Dating them today would put August cash in
+    // September and leave the bank book disagreeing with the bank.
+    //
+    // ⚠ The date here is a back-date relative to this file's frozen clock
+    // (2026-08-03), not the real August dates: a journal cannot be posted in the
+    // future, so the test crosses a month boundary backwards instead.
+    app(DisburseLoan::class)->handle($this->loan, $this->bank, $this->user, '2026-07-28');
+
+    $loan = $this->loan->fresh();
+
+    expect($loan->disbursed_on->toDateString())->toBe('2026-07-28')
+        // The loan ledger and the accounting ledger record ONE event. If they
+        // date it differently, the two records of the same debt disagree.
+        ->and($loan->ledgerEntries()->sole()->occurred_on->toDateString())->toBe('2026-07-28')
+        ->and(Journal::first()->journal_date->toDateString())->toBe('2026-07-28');
+});
+
+it('still dates a disbursement today when no day is given', function () {
+    app(DisburseLoan::class)->handle($this->loan, $this->bank, $this->user);
+
+    expect($this->loan->fresh()->disbursed_on->toDateString())->toBe(now()->toDateString());
+});

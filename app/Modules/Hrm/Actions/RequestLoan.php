@@ -8,7 +8,7 @@ use App\Modules\Hrm\Enums\LoanStatus;
 use App\Modules\Hrm\Enums\LoanType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\Loan;
-use App\Modules\Hrm\Models\SalaryStructure;
+use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Support\LoanSchedule;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -125,14 +125,29 @@ class RequestLoan
             throw ValidationException::withMessages(['start_month' => 'That is not a month.']);
         }
 
-        $start = Carbon::create($year, $month, 1)->startOfDay();
+        $period = PayrollPeriod::where('year', $year)->where('month', $month)->first();
 
-        if ($start->lt(Carbon::today()->startOfMonth())) {
-            // Recovery cannot begin in a month that has already been paid — the
-            // schedule would be due before it existed, and WFL-06 sends
-            // corrections to closed months forward as adjustments instead.
+        // ⚠⚠ THE TEST IS WHETHER THAT SALARY HAS BEEN PAID, NOT WHETHER THE
+        // CALENDAR HAS MOVED ON. This used to refuse any month before the
+        // current one, and on 1 September 2026 that refused the August payroll
+        // Joy was still holding open - three advances handed out in August had
+        // nowhere to be recovered from. A payroll month stays recoverable for
+        // as long as nobody has been paid; only then is it too late, and WFL-06
+        // sends the difference forward as an arrear instead.
+        if ($period?->latestRun()?->status?->isPaidOut() === true) {
             throw ValidationException::withMessages([
-                'start_month' => 'Repayment cannot start in a month that has already passed.',
+                'start_month' => sprintf(
+                    'The %s salary has already been paid, so nothing can be recovered from it. Start the repayment in a later month.',
+                    $period->label(),
+                ),
+            ]);
+        }
+
+        // A past month with no payroll period at all will never be run, so a
+        // schedule starting there would wait for a salary that is not coming.
+        if ($period === null && Carbon::create($year, $month, 1)->startOfDay()->lt(Carbon::today()->startOfMonth())) {
+            throw ValidationException::withMessages([
+                'start_month' => 'That month has no payroll to recover from. Start the repayment in a month that still has a salary to come.',
             ]);
         }
     }

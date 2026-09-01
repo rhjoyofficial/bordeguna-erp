@@ -10,6 +10,7 @@ use App\Modules\Hrm\Enums\LoanStatus;
 use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\LoanLedgerEntry;
 use App\Modules\Hrm\Support\LoanSchedule;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -39,17 +40,26 @@ class DisburseLoan
      * never needs to answer the question - the same on-ramp every other
      * integration uses.
      */
-    public function handle(Loan $loan, ?MoneyAccount $moneyAccount = null, ?User $disbursedBy = null): Loan
+    public function handle(Loan $loan, ?MoneyAccount $moneyAccount = null, ?User $disbursedBy = null, ?string $disbursedOn = null): Loan
     {
         if ($loan->isApplied()) {
             return $loan;
         }
 
-        return DB::transaction(function () use ($loan, $moneyAccount, $disbursedBy) {
+        // ⚠⚠ THE DAY THE MONEY LEFT, NOT THE DAY IT WAS TYPED IN. The ledger
+        // entry follows `disbursed_on`, so forcing today put August cash into
+        // September and made the cash book disagree with the bank. Advances are
+        // routinely written up days after they are handed over, and on 1
+        // September 2026 three August advances were entered at once.
+        $on = $disbursedOn === null
+            ? now()->toDateString()
+            : Carbon::parse($disbursedOn)->toDateString();
+
+        return DB::transaction(function () use ($loan, $moneyAccount, $disbursedBy, $on) {
             $loan->update([
                 'status' => LoanStatus::Active,
                 'money_account_id' => $moneyAccount?->id,
-                'disbursed_on' => now()->toDateString(),
+                'disbursed_on' => $on,
                 'applied_at' => now(),
             ]);
 
@@ -82,7 +92,9 @@ class DisburseLoan
             'entry_type' => LoanLedgerEntryType::Disbursement,
             // Positive: this is what the employee now owes.
             'amount' => round((float) $loan->principal, 2),
-            'occurred_on' => now()->toDateString(),
+            // ⚠ The same day as the journal. The loan ledger and the accounting
+            // ledger record one event and must not date it differently.
+            'occurred_on' => $loan->disbursed_on?->toDateString() ?? now()->toDateString(),
             'note' => sprintf(
                 '%s %s of %s disbursed.',
                 $loan->type->label(),

@@ -4,9 +4,11 @@ use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Actions\AssignSchedule;
 use App\Modules\Hrm\Actions\CalculatePayroll;
 use App\Modules\Hrm\Actions\CarryForwardNegativeNet;
 use App\Modules\Hrm\Actions\DisburseLoan;
+use App\Modules\Hrm\Actions\PostLoanRepayments;
 use App\Modules\Hrm\Actions\RequestLoan;
 use App\Modules\Hrm\Actions\RequestPayrollAdjustment;
 use App\Modules\Hrm\Actions\SaveSalaryStructure;
@@ -21,6 +23,8 @@ use App\Modules\Hrm\Enums\LoanLedgerEntryType;
 use App\Modules\Hrm\Enums\LoanStatus;
 use App\Modules\Hrm\Enums\LoanType;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
+use App\Modules\Hrm\Enums\PayrollBalanceEntryType;
+use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Enums\ScheduleScope;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
@@ -36,6 +40,7 @@ use App\Support\ApprovalInbox;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -91,7 +96,7 @@ beforeEach(function () {
         'effective_from' => '2025-01-01',
     ]);
 
-    app(\App\Modules\Hrm\Actions\AssignSchedule::class)->handle(ScheduleScope::Business, null, [
+    app(AssignSchedule::class)->handle(ScheduleScope::Business, null, [
         'schedule_type' => 'fixed',
         'shift_id' => $this->shift->id,
         'holiday_calendar_id' => $this->calendar->id,
@@ -291,8 +296,8 @@ it('records a repayment exactly once for an installment', function () {
     $run = disburseRun(app(CalculatePayroll::class)->handle($this->period));
 
     // Re-posting is what a retried job or a repeated transition would do.
-    app(\App\Modules\Hrm\Actions\PostLoanRepayments::class)->handle($run);
-    app(\App\Modules\Hrm\Actions\PostLoanRepayments::class)->handle($run);
+    app(PostLoanRepayments::class)->handle($run);
+    app(PostLoanRepayments::class)->handle($run);
 
     expect(LoanLedgerEntry::where('entry_type', LoanLedgerEntryType::Repayment)->count())->toBe(1);
     expect($loan->fresh()->outstanding())->toBe(55000.0);
@@ -399,7 +404,7 @@ it('does not let a carried-forward balance change the loan installment', functio
 
     PayrollBalanceEntry::create([
         'employee_id' => $this->employee->id,
-        'entry_type' => \App\Modules\Hrm\Enums\PayrollBalanceEntryType::CarriedForward,
+        'entry_type' => PayrollBalanceEntryType::CarriedForward,
         'amount' => 7000,
         'occurred_on' => now()->subYear()->toDateString(),
         'note' => 'Older shortfall',
@@ -438,7 +443,7 @@ it('renders the loans screen with its schedule and ledger', function () {
 
     loanHr()->get(route('hrm.loans.index'))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/payroll/loans')
             ->has('loans', 1)
             ->where('loans.0.outstanding', 60000)
@@ -470,4 +475,97 @@ it('previews a schedule before anyone commits to it', function () {
         ->assertOk()
         ->assertJsonPath('count', 12)
         ->assertJsonPath('total', 50000);
+});
+
+// --- Recovering from a month the calendar has passed but payroll has not ---------
+
+it('recovers from a payroll month that is late but still unpaid', function () {
+    // ⚠⚠ The real case, 1 September 2026. August payroll was calculated,
+    // reviewed and approved but NOT paid, and three advances handed out during
+    // August had to come out of it. The old rule refused any month before this
+    // one and stranded all three.
+    $last = now()->subMonthNoOverflow();
+    $period = PayrollPeriod::forMonth((int) $last->year, (int) $last->month);
+    PayrollRun::create([
+        'business_id' => $this->business->id,
+        'payroll_period_id' => $period->id,
+        'version' => 1,
+        'status' => PayrollStatus::Approved,
+        'employee_count' => 1,
+        'total_earnings' => 50000,
+        'total_deductions' => 0,
+        'total_net' => 50000,
+    ]);
+
+    $loan = app(RequestLoan::class)->handle(
+        $this->employee, LoanType::Advance, 12400, 12400,
+        (int) $last->year, (int) $last->month, 'Advance taken during the month', $this->hr,
+    );
+
+    expect($loan->start_year)->toBe((int) $last->year)
+        ->and($loan->start_month)->toBe((int) $last->month)
+        ->and($loan->installment_count)->toBe(1);
+});
+
+it('refuses to recover from a payroll month that has already been paid', function () {
+    $last = now()->subMonthNoOverflow();
+    $period = PayrollPeriod::forMonth((int) $last->year, (int) $last->month);
+    PayrollRun::create([
+        'business_id' => $this->business->id,
+        'payroll_period_id' => $period->id,
+        'version' => 1,
+        'status' => PayrollStatus::Disbursed,
+        'employee_count' => 1,
+        'total_earnings' => 50000,
+        'total_deductions' => 0,
+        'total_net' => 50000,
+    ]);
+
+    // Paid is paid. WFL-06 sends the difference to the next payroll instead.
+    expect(fn () => app(RequestLoan::class)->handle(
+        $this->employee, LoanType::Advance, 12400, 12400,
+        (int) $last->year, (int) $last->month, 'Too late', $this->hr,
+    ))->toThrow(ValidationException::class);
+});
+
+it('deducts a late advance from the unpaid month it was recovered against', function () {
+    // The whole point, followed to the payslip: an advance dated to a month the
+    // calendar has left behind must actually come off that month's salary.
+    $last = now()->subMonthNoOverflow();
+    $period = PayrollPeriod::forMonth((int) $last->year, (int) $last->month);
+
+    $loan = app(RequestLoan::class)->handle(
+        $this->employee, LoanType::Advance, 12400, 12400,
+        (int) $last->year, (int) $last->month, 'Advance taken during the month', $this->hr,
+    );
+    approveIfPending($loan->approvalRequest, $this->hr);
+    app(DisburseLoan::class)->handle($loan, null, $this->hr, $last->copy()->day(17)->toDateString());
+
+    $run = app(CalculatePayroll::class)->handle($period->fresh());
+    $payslip = $run->payslips()->where('employee_id', $this->employee->id)->sole();
+    $line = $payslip->lines->firstWhere('code', 'loan_repayment');
+
+    expect($line)->not->toBeNull()
+        ->and((float) $line->amount)->toBe(12400.0)
+        ->and((float) $payslip->total_deductions)->toBe(12400.0);
+});
+
+it('asks which account the money came from before it records the approval', function () {
+    // ⚠⚠ The screen used to post nothing. The approval went through and the
+    // disbursement then threw for want of an account, leaving a loan approved
+    // and unpaid behind a blank error page.
+    $loan = requestLoan();
+
+    loanHr()->post(route('hrm.loans.approve', $loan))
+        ->assertSessionHasErrors('money_account_id');
+
+    expect($loan->fresh()->status)->toBe(LoanStatus::Pending)
+        ->and($loan->fresh()->approvalRequest->status->value)->toBe('pending')
+        ->and($loan->fresh()->installments()->count())->toBe(0);
+});
+
+it('carries the account list to the screen that has to ask for it', function () {
+    loanHr()->get(route('hrm.loans.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->has('moneyAccounts'));
 });
