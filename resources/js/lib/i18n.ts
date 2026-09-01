@@ -138,6 +138,48 @@ const dictionary = {
     'tabs.my_expenses': { en: 'My expenses', bn: 'আমার খরচ' },
     'tabs.my_notices': { en: 'My notices', bn: 'আমার নোটিশ' },
 
+    // ── The POS counter ────────────────────────────────────
+    // The till is where the language matters most: the person behind it serves
+    // customers all day and has no time to read a second language.
+    'pos.title': { en: 'Counter sale', bn: 'কাউন্টার বিক্রি' },
+    'pos.search_placeholder': { en: 'Search product or SKU', bn: 'পণ্য বা এসকেইউ খুঁজুন' },
+    'pos.search_aria': { en: 'Search products', bn: 'পণ্য খোঁজা' },
+    'pos.all': { en: 'All', bn: 'সব' },
+    'pos.no_match': { en: 'Nothing matches that search.', bn: 'এই খোঁজায় কিছু মেলেনি।' },
+    'pos.no_price_set': { en: 'No price set', bn: 'দাম দেওয়া নেই' },
+    'pos.order': { en: 'Order', bn: 'অর্ডার' },
+    'pos.item_one': { en: '{count} item', bn: '{count} পণ্য' },
+    'pos.item_many': { en: '{count} items', bn: '{count} পণ্য' },
+    'pos.clear': { en: 'Clear', bn: 'মুছুন' },
+    'pos.customer': { en: 'Customer', bn: 'ক্রেতা' },
+    'pos.default': { en: 'default', bn: 'ডিফল্ট' },
+    'pos.sold_from': { en: 'Sold from', bn: 'যে গুদাম থেকে' },
+    'pos.paid_into': { en: 'Paid into', bn: 'টাকা যেখানে জমা' },
+    'pos.on_account': { en: 'On account (unpaid)', bn: 'বাকিতে (অপরিশোধিত)' },
+    'pos.reference': { en: 'Reference', bn: 'রেফারেন্স' },
+    'pos.reference_placeholder': { en: 'bKash trxID, cheque no.', bn: 'বিকাশ ট্রানজেকশন আইডি, চেক নম্বর' },
+    'pos.tap_to_start': { en: 'Tap a product to start the sale.', bn: 'বিক্রি শুরু করতে একটি পণ্যে চাপ দিন।' },
+    'pos.remove': { en: 'Remove', bn: 'বাদ দিন' },
+    'pos.remove_aria': { en: 'Remove {name}', bn: '{name} বাদ দিন' },
+    'pos.line': { en: 'line', bn: 'লাইন' },
+    'pos.quantity': { en: 'Quantity', bn: 'পরিমাণ' },
+    'pos.unit_price': { en: 'Unit price', bn: 'একক দাম' },
+    'pos.line_discount': { en: 'Line discount', bn: 'লাইনের ছাড়' },
+    'pos.less': { en: 'less', bn: 'ছাড়' },
+    'pos.subtotal': { en: 'Subtotal', bn: 'উপমোট' },
+    'pos.invoice_discount': { en: 'Discount on the whole bill', bn: 'পুরো বিলে ছাড়' },
+    'pos.total': { en: 'Total', bn: 'মোট' },
+    'pos.take_payment': { en: 'Take payment and finish', bn: 'টাকা নিয়ে শেষ করুন' },
+    'pos.finish_on_account': { en: 'Finish on account', bn: 'বাকিতে শেষ করুন' },
+    'pos.price_lookup_failed': {
+        en: 'Could not look the price up just now. Enter it by hand.',
+        bn: 'এখন দাম আনা গেল না। হাতে লিখে দিন।',
+    },
+    'pos.no_price_for_product': {
+        en: 'No price is set for this product.',
+        bn: 'এই পণ্যের কোনো দাম দেওয়া নেই।',
+    },
+
     // ── The language picker ─────────────────────────────────────────────
     'language.heading': { en: 'Language', bn: 'ভাষা' },
     'language.description': {

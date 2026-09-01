@@ -1,0 +1,100 @@
+<?php
+
+use Normalizer;
+
+/**
+ * The Bangla dictionary is the one place in this system where a defect is
+ * invisible to everybody who reviews it in English.
+ *
+ * TypeScript already refuses a key that carries only one language. What it
+ * cannot see is a key that carries English twice: `bn: 'Total'` compiles, ships,
+ * and shows a Bangla-speaking counter clerk an English word. Nor can it see a
+ * Bangla string typed in decomposed form, which renders correctly in the editor
+ * and then sorts and compares as a different string everywhere else
+ * (the standing NFC rule).
+ *
+ * ⚠ Digits, dates and money never come through here (Joy's 31 August decision),
+ * so a Bangla string is allowed to contain English digits and punctuation - it
+ * just has to contain some Bangla.
+ */
+function dictionaryEntries(): array
+{
+    $source = file_get_contents(resource_path('js/lib/i18n.ts'));
+
+    preg_match_all(
+        "/'([a-z0-9_.]+)':\s*\{\s*en:\s*'((?:[^'\\\\]|\\\\.)*)'\s*,\s*bn:\s*'((?:[^'\\\\]|\\\\.)*)'\s*,?\s*\}/su",
+        $source,
+        $matches,
+        PREG_SET_ORDER,
+    );
+
+    return $matches;
+}
+
+it('parses every entry in the dictionary', function () {
+    $source = file_get_contents(resource_path('js/lib/i18n.ts'));
+
+    preg_match_all("/^\s*'[a-z0-9_.]+':/m", $source, $declared);
+
+    // ⚠ If a key is declared in a shape this file cannot read, every check
+    // below skips it in silence - which is exactly the failure this file
+    // exists to prevent. Count the keys, not the `bn:` occurrences: the type
+    // declaration carries one of those too.
+    expect(dictionaryEntries())->toHaveCount(count($declared[0]));
+    expect($declared[0])->not->toBeEmpty();
+});
+
+it('never ships an English string as the Bangla one', function () {
+    $englishOnly = [];
+
+    foreach (dictionaryEntries() as [, $key, $en, $bn]) {
+        if (preg_match('/\p{Bengali}/u', $bn) !== 1) {
+            $englishOnly[$key] = $bn;
+        }
+
+        expect(trim($bn))->not->toBe('', "Key {$key} has an empty Bangla string.");
+        expect(trim($en))->not->toBe('', "Key {$key} has an empty English string.");
+    }
+
+    expect($englishOnly)->toBe([], 'These keys carry no Bangla at all: '.implode(', ', array_keys($englishOnly)));
+});
+
+it('keeps every Bangla string in NFC', function () {
+    $decomposed = [];
+
+    foreach (dictionaryEntries() as [, $key, , $bn]) {
+        if (Normalizer::normalize($bn, Normalizer::FORM_C) !== $bn) {
+            $decomposed[] = $key;
+        }
+    }
+
+    expect($decomposed)->toBe([], 'These keys are not in NFC: '.implode(', ', $decomposed));
+});
+
+it('keeps the same placeholders in both languages', function () {
+    foreach (dictionaryEntries() as [, $key, $en, $bn]) {
+        preg_match_all('/\{(\w+)\}/', $en, $inEnglish);
+        preg_match_all('/\{(\w+)\}/', $bn, $inBangla);
+
+        sort($inEnglish[1]);
+        sort($inBangla[1]);
+
+        // A dropped {name} does not fail to compile; it renders as a sentence
+        // with a hole in it, in the language nobody reviewing this reads.
+        expect($inBangla[1])->toBe($inEnglish[1], "Key {$key} has different placeholders in each language.");
+    }
+});
+
+it('translates the POS counter, the screen that is read all day', function () {
+    $counter = file_get_contents(resource_path('js/pages/sales/counter/create.tsx'));
+
+    expect($counter)->toContain("import { useTranslation } from '@/lib/i18n';");
+
+    // The strings a clerk actually stares at. A future edit that reintroduces
+    // any of them as a literal is the whole regression.
+    expect($counter)
+        ->not->toContain('>Total<')
+        ->not->toContain('>Subtotal<')
+        ->not->toContain("'Take payment and finish'")
+        ->not->toContain('Tap a product to start the sale.');
+});

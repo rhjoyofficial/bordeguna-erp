@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler, useMemo, useState } from 'react';
@@ -71,6 +72,8 @@ export default function CounterSale({
     moneyAccounts: Option[];
     walkInId: number | null;
 }) {
+    const { t } = useTranslation();
+
     const { data, setData, post, errors, processing } = useForm({
         customer_id: walkInId ? String(walkInId) : '',
         warehouse_id: String(warehouses.find((w) => w.is_default)?.id ?? warehouses[0]?.id ?? ''),
@@ -122,7 +125,7 @@ export default function CounterSale({
         });
 
         if (!response.ok) {
-            patchLine(productId, { explanation: 'Could not look the price up just now. Enter it by hand.' });
+            patchLine(productId, { explanation: t('pos.price_lookup_failed') });
 
             return;
         }
@@ -130,7 +133,7 @@ export default function CounterSale({
         const body = await response.json();
         patchLine(productId, {
             unit_price: body.unit_price ?? '',
-            explanation: body.unit_price ? body.explanation : 'No price is set for this product.',
+            explanation: body.unit_price ? body.explanation : t('pos.no_price_for_product'),
         });
     };
 
@@ -181,17 +184,17 @@ export default function CounterSale({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Counter Sale" />
+            <Head title={t('pos.title')} />
             <form onSubmit={submit} className="flex flex-col gap-4 p-4 lg:h-[calc(100vh-4rem)] lg:flex-row lg:overflow-hidden">
                 {/* The catalogue: search, category chips, one card per product. */}
                 <div className="flex min-w-0 flex-1 flex-col gap-3 lg:overflow-hidden">
                     <div className="flex flex-wrap items-center gap-2">
                         <Input
                             className="max-w-xs"
-                            placeholder="Search product or SKU"
+                            placeholder={t('pos.search_placeholder')}
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            aria-label="Search products"
+                            aria-label={t('pos.search_aria')}
                         />
                         <div className="flex flex-wrap gap-1.5">
                             <button
@@ -203,7 +206,7 @@ export default function CounterSale({
                                         : 'border-border text-muted-foreground hover:text-foreground rounded-full border px-3 py-1 text-xs'
                                 }
                             >
-                                All
+                                {t('pos.all')}
                             </button>
                             {categories.map((c) => (
                                 <button
@@ -224,7 +227,7 @@ export default function CounterSale({
 
                     <div className="lg:overflow-y-auto">
                         {shown.length === 0 ? (
-                            <p className="text-muted-foreground p-4 text-sm">Nothing matches that search.</p>
+                            <p className="text-muted-foreground p-4 text-sm">{t('pos.no_match')}</p>
                         ) : (
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
                                 {shown.map((p) => {
@@ -250,7 +253,7 @@ export default function CounterSale({
                                                 {price !== undefined ? (
                                                     money(price)
                                                 ) : (
-                                                    <span className="text-muted-foreground font-normal">No price set</span>
+                                                    <span className="text-muted-foreground font-normal">{t('pos.no_price_set')}</span>
                                                 )}
                                             </p>
                                         </button>
@@ -265,16 +268,16 @@ export default function CounterSale({
                 <div className="border-sidebar-border/70 dark:border-sidebar-border flex w-full flex-col rounded-xl border lg:w-[26rem] lg:shrink-0">
                     <div className="border-border flex items-center justify-between border-b px-4 py-3">
                         <h2 className="text-sm font-semibold">
-                            Order
+                            {t('pos.order')}
                             {data.lines.length > 0 && (
                                 <span className="text-muted-foreground ml-2 font-normal">
-                                    {data.lines.length} item{data.lines.length === 1 ? '' : 's'}
+                                    {t(data.lines.length === 1 ? 'pos.item_one' : 'pos.item_many', { count: data.lines.length })}
                                 </span>
                             )}
                         </h2>
                         {data.lines.length > 0 && (
                             <Button type="button" variant="ghost" size="sm" onClick={reset}>
-                                Clear
+                                {t('pos.clear')}
                             </Button>
                         )}
                     </div>
@@ -283,13 +286,13 @@ export default function CounterSale({
                         <div className="grid grid-cols-2 gap-2">
                             <div className="grid gap-1">
                                 <Label htmlFor="customer" className="text-xs">
-                                    Customer
+                                    {t('pos.customer')}
                                 </Label>
                                 <SearchSelect id="customer" value={data.customer_id} onChange={(e) => changeCustomer(e.target.value)}>
                                     {customers.map((c) => (
                                         <option key={c.id} value={c.id}>
                                             {c.name}
-                                            {c.is_system ? ' (default)' : ''}
+                                            {c.is_system ? ` (${t('pos.default')})` : ''}
                                         </option>
                                     ))}
                                 </SearchSelect>
@@ -297,7 +300,7 @@ export default function CounterSale({
                             </div>
                             <div className="grid gap-1">
                                 <Label htmlFor="warehouse" className="text-xs">
-                                    Sold from
+                                    {t('pos.sold_from')}
                                 </Label>
                                 <SearchSelect id="warehouse" value={data.warehouse_id} onChange={(e) => setData('warehouse_id', e.target.value)}>
                                     {warehouses.map((w) => (
@@ -310,12 +313,12 @@ export default function CounterSale({
                             </div>
                             <div className="grid gap-1">
                                 <Label htmlFor="money" className="text-xs">
-                                    Paid into
+                                    {t('pos.paid_into')}
                                 </Label>
                                 {/* ⚠ "On account" is a real choice, not a missing value: the
                                     invoice then stands open as a receivable. */}
                                 <SearchSelect id="money" value={data.money_account_id} onChange={(e) => setData('money_account_id', e.target.value)}>
-                                    <option value="">On account (unpaid)</option>
+                                    <option value="">{t('pos.on_account')}</option>
                                     {moneyAccounts.map((a) => (
                                         <option key={a.id} value={a.id}>
                                             {a.name}
@@ -326,21 +329,21 @@ export default function CounterSale({
                             </div>
                             <div className="grid gap-1">
                                 <Label htmlFor="reference" className="text-xs">
-                                    Reference
+                                    {t('pos.reference')}
                                 </Label>
                                 <Input
                                     id="reference"
                                     className="h-9"
                                     value={data.reference}
                                     onChange={(e) => setData('reference', e.target.value)}
-                                    placeholder="bKash trxID, cheque no."
+                                    placeholder={t('pos.reference_placeholder')}
                                 />
                             </div>
                         </div>
 
                         <div className="flex flex-col gap-2 lg:max-h-[40vh] lg:overflow-y-auto">
                             {data.lines.length === 0 ? (
-                                <p className="text-muted-foreground py-6 text-center text-sm">Tap a product to start the sale.</p>
+                                <p className="text-muted-foreground py-6 text-center text-sm">{t('pos.tap_to_start')}</p>
                             ) : (
                                 data.lines.map((line) => {
                                     const product = productsById.get(line.product_id);
@@ -357,9 +360,9 @@ export default function CounterSale({
                                                     type="button"
                                                     onClick={() => removeLine(line.product_id)}
                                                     className="text-muted-foreground hover:text-destructive text-xs"
-                                                    aria-label={`Remove ${product?.name ?? 'line'}`}
+                                                    aria-label={t('pos.remove_aria', { name: product?.name ?? t('pos.line') })}
                                                 >
-                                                    Remove
+                                                    {t('pos.remove')}
                                                 </button>
                                             </div>
                                             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -377,7 +380,7 @@ export default function CounterSale({
                                                     </Button>
                                                     <Input
                                                         className="h-8 w-16 text-center"
-                                                        aria-label="Quantity"
+                                                        aria-label={t('pos.quantity')}
                                                         value={line.quantity}
                                                         onChange={(e) => setQuantity(line.product_id, e.target.value, false)}
                                                         onBlur={() => void fetchPrice(line.product_id, line.quantity)}
@@ -396,16 +399,16 @@ export default function CounterSale({
                                                     <span className="text-muted-foreground text-xs">@</span>
                                                     <Input
                                                         className="h-8 w-24"
-                                                        aria-label="Unit price"
+                                                        aria-label={t('pos.unit_price')}
                                                         value={line.unit_price}
                                                         onChange={(e) => patchLine(line.product_id, { unit_price: e.target.value })}
                                                     />
                                                 </div>
                                                 <div className="flex items-center gap-1">
-                                                    <span className="text-muted-foreground text-xs">less</span>
+                                                    <span className="text-muted-foreground text-xs">{t('pos.less')}</span>
                                                     <Input
                                                         className="h-8 w-20"
-                                                        aria-label="Line discount"
+                                                        aria-label={t('pos.line_discount')}
                                                         value={line.discount}
                                                         onChange={(e) => patchLine(line.product_id, { discount: e.target.value })}
                                                     />
@@ -428,12 +431,12 @@ export default function CounterSale({
 
                     <div className="border-border mt-auto flex flex-col gap-2 border-t p-4">
                         <div className="text-muted-foreground flex items-center justify-between text-sm">
-                            <span>Subtotal</span>
+                            <span>{t('pos.subtotal')}</span>
                             <span className="tabular-nums">{money(subtotal)}</span>
                         </div>
                         <div className="flex items-center justify-between gap-3">
                             <Label htmlFor="invoice_discount" className="text-muted-foreground text-sm font-normal">
-                                Discount on the whole bill
+                                {t('pos.invoice_discount')}
                             </Label>
                             <Input
                                 id="invoice_discount"
@@ -444,7 +447,7 @@ export default function CounterSale({
                         </div>
                         <InputError message={errors.invoice_discount} />
                         <div className="flex items-baseline justify-between">
-                            <span className="text-sm font-medium">Total</span>
+                            <span className="text-sm font-medium">{t('pos.total')}</span>
                             <span className="text-2xl font-semibold tabular-nums">{money(total)}</span>
                         </div>
 
@@ -454,7 +457,7 @@ export default function CounterSale({
                             before this every one of them arrived as a blank error. */}
                         <InputError message={errors.lines} />
                         <Button type="submit" disabled={processing || data.lines.length === 0} size="lg" className="w-full">
-                            {data.money_account_id ? 'Take payment and finish' : 'Finish on account'}
+                            {data.money_account_id ? t('pos.take_payment') : t('pos.finish_on_account')}
                         </Button>
                     </div>
                 </div>
