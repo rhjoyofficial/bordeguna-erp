@@ -40,7 +40,7 @@ class PayrollController extends Controller
         // while an approved August payroll sat one click away. Joy hit exactly
         // that on cutover morning. A payroll month is not a calendar month, and
         // the useful default is the work in hand.
-        $newest = $this->newestPeriodWithARun();
+        $newest = $this->landingPeriod();
 
         $year = $request->integer('year') ?: (int) ($newest?->year ?? Carbon::today()->year);
         $month = $request->integer('month') ?: (int) ($newest?->month ?? Carbon::today()->month);
@@ -110,17 +110,27 @@ class PayrollController extends Controller
     }
 
     /**
-     * The payroll month with actual work in it, newest first.
+     * The payroll month to land on: the newest one with work in it, and failing
+     * that the newest month that exists at all.
      *
-     * ⚠ A period with no run at all is not "the newest payroll": it is an empty
-     * shell that some other screen created. Landing on one shows the same blank
-     * page the calendar default did.
+     * ⚠ A period with no run is not "the newest payroll" while a calculated one
+     * exists - landing on an empty shell shows the same blank page the calendar
+     * default did, which is the whole defect this replaced.
+     *
+     * ⚠⚠ But when NOTHING has been calculated yet, the newest period IS the
+     * answer, and falling back to today is wrong. Joy cleared August on
+     * 1 September to run it fresh; the screen then opened September, a month he
+     * has no intention of running, with August one unexplained click away. The
+     * first payroll a business ever runs is the case this has to get right.
      */
-    private function newestPeriodWithARun(): ?PayrollPeriod
+    private function landingPeriod(): ?PayrollPeriod
     {
-        return PayrollPeriod::whereHas('runs')
+        $newest = fn (?callable $filter = null) => PayrollPeriod::query()
+            ->when($filter !== null, $filter)
             ->orderByDesc('year')->orderByDesc('month')
             ->first();
+
+        return $newest(fn ($q) => $q->whereHas('runs')) ?? $newest();
     }
 
     /**

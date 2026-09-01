@@ -437,6 +437,21 @@ it('opens on the newest payroll there is, not on whatever month it is today', fu
             ->has('payslips', 1));
 });
 
+it('opens on the newest payroll month even when nothing has been calculated', function () {
+    // ⚠⚠ The first payroll a business ever runs, and the case a fallback to
+    // today gets wrong. Joy cleared August on 1 September to run it fresh; the
+    // screen then opened September - a month he had no intention of running -
+    // with August one unexplained click away.
+    expect(PayrollRun::count())->toBe(0);
+
+    cycleHr()->get(route('hrm.payroll.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('year', 2026)
+            ->where('month', 7)
+            ->where('run', null));
+});
+
 it('still lets an explicit month win over the default', function () {
     calculatedRun();
 
