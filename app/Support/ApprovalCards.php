@@ -22,6 +22,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Sales\Models\SalesOrder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -39,6 +40,14 @@ use Illuminate\Support\Str;
  * a new approvable type cannot compile a card without stating its facts, and
  * EveryApprovalReachesSomebodyTest checks the source so a type cannot skip
  * this class entirely.
+ *
+ * ⚠⚠ `view_url` must carry the FILTERS its target screen needs (Joy, 1 Sep
+ * 2026: "when I clicked on the Open record, shows nothing"). Every one of
+ * these screens filters something - a payroll screen defaults to TODAY'S
+ * month, a leave screen to today's year - so a bare index link silently shows
+ * the WRONG period and reads as an empty page. The link must name the record's
+ * own period, employee or warehouse; ApprovalCardLinksTest follows the links
+ * and insists the record is on the page that comes back.
  *
  * Lives at the app level beside ApprovalInbox and for the same reason: it
  * must know every consuming module.
@@ -70,7 +79,7 @@ class ApprovalCards
                     $approvable->reason ? ['label' => 'Reason', 'value' => $approvable->reason->name] : null,
                 ]),
                 reason: $approvable->note,
-                viewUrl: route('inventory.stock-requests.index'),
+                viewUrl: route('inventory.stock-requests.index', ['status' => 'pending']),
                 approveUrl: route('inventory.stock-requests.approve', $approvable),
                 rejectUrl: route('inventory.stock-requests.reject', $approvable),
             );
@@ -151,7 +160,10 @@ class ApprovalCards
                         : ['label' => 'Balance', 'value' => 'Covers the whole request'],
                 ]),
                 reason: $approvable->reason,
-                viewUrl: route('hrm.leave.index'),
+                viewUrl: route('hrm.leave.index', array_filter([
+                    'employee_id' => $approvable->employee_id,
+                    'year' => $this->yearOf($approvable->start_date),
+                ])),
                 approveUrl: route('hrm.leave.approve', $approvable),
                 rejectUrl: route('hrm.leave.reject', $approvable),
             );
@@ -169,7 +181,10 @@ class ApprovalCards
                     $approvable->place ? ['label' => 'Place', 'value' => $approvable->place] : null,
                 ]),
                 reason: $approvable->reason,
-                viewUrl: route('hrm.leave.index'),
+                viewUrl: route('hrm.leave.index', array_filter([
+                    'employee_id' => $approvable->employee_id,
+                    'year' => $this->yearOf($approvable->movement_date),
+                ])),
                 approveUrl: route('hrm.movements.approve', $approvable),
                 rejectUrl: route('hrm.movements.reject', $approvable),
             );
@@ -198,7 +213,10 @@ class ApprovalCards
                     ['label' => 'Net total', 'value' => $this->money($approvable->total_net)],
                 ]),
                 reason: null,
-                viewUrl: route('hrm.payroll.index'),
+                viewUrl: route('hrm.payroll.index', array_filter([
+                    'year' => $approvable->period?->year,
+                    'month' => $approvable->period?->month,
+                ])),
                 approveUrl: route('hrm.payroll.approve', $approvable),
                 rejectUrl: route('hrm.payroll.reject', $approvable),
             );
@@ -214,7 +232,10 @@ class ApprovalCards
                     ['label' => 'Version', 'value' => 'v'.($approvable->run?->version ?? 0)],
                 ]),
                 reason: $approvable->reason,
-                viewUrl: route('hrm.payroll.index'),
+                viewUrl: route('hrm.payroll.index', array_filter([
+                    'year' => $approvable->run?->period?->year,
+                    'month' => $approvable->run?->period?->month,
+                ])),
                 approveUrl: route('hrm.payroll.unlock.approve', $approvable),
                 rejectUrl: route('hrm.payroll.unlock.reject', $approvable),
             );
@@ -233,7 +254,7 @@ class ApprovalCards
                     ['label' => 'Repayment starts', 'value' => $approvable->startsOn()->format('F Y')],
                 ]),
                 reason: $approvable->reason,
-                viewUrl: route('hrm.loans.index'),
+                viewUrl: route('hrm.loans.index', array_filter(['employee_id' => $approvable->employee_id])),
                 approveUrl: route('hrm.loans.approve', $approvable),
                 rejectUrl: route('hrm.loans.reject', $approvable),
             );
@@ -251,7 +272,9 @@ class ApprovalCards
                     $approvable->is_holiday_work ? ['label' => 'Holiday work', 'value' => 'Yes'] : null,
                 ]),
                 reason: $approvable->reason,
-                viewUrl: route('hrm.payroll.inputs.index'),
+                viewUrl: route('hrm.payroll.inputs.index', array_filter([
+                    'employee_id' => $approvable->employee_id,
+                ])),
                 approveUrl: route('hrm.overtime.approve', $approvable),
                 rejectUrl: route('hrm.overtime.reject', $approvable),
             );
@@ -268,7 +291,9 @@ class ApprovalCards
                     ['label' => 'Amount', 'value' => $this->money($approvable->amount)],
                 ]),
                 reason: $approvable->basis_note,
-                viewUrl: route('hrm.payroll.inputs.index'),
+                viewUrl: route('hrm.payroll.inputs.index', array_filter([
+                    'payroll_period_id' => $approvable->event?->payroll_period_id,
+                ])),
                 approveUrl: route('hrm.bonus.awards.approve', $approvable),
                 rejectUrl: route('hrm.bonus.awards.reject', $approvable),
             );
@@ -286,7 +311,10 @@ class ApprovalCards
                     ['label' => 'Amount', 'value' => $this->money($approvable->amount)],
                 ]),
                 reason: $approvable->reason,
-                viewUrl: route('hrm.payroll.inputs.index'),
+                viewUrl: route('hrm.payroll.inputs.index', array_filter([
+                    'employee_id' => $approvable->employee_id,
+                    'payroll_period_id' => $approvable->payroll_period_id,
+                ])),
                 approveUrl: route('hrm.adjustments.approve', $approvable),
                 rejectUrl: route('hrm.adjustments.reject', $approvable),
             );
@@ -388,7 +416,10 @@ class ApprovalCards
                     $approvable->reason ? ['label' => 'Reason', 'value' => $approvable->reason->name] : null,
                 ]),
                 reason: $approvable->note,
-                viewUrl: route('inventory.stock.index'),
+                viewUrl: route('inventory.stock.index', array_filter([
+                    'search' => $approvable->product?->sku,
+                    'warehouse_id' => $approvable->warehouse_id,
+                ])),
                 approveUrl: route('inventory.stock.adjustments.approve', $approvable),
                 rejectUrl: route('inventory.stock.adjustments.reject', $approvable),
             );
@@ -488,6 +519,20 @@ class ApprovalCards
         $trimmed = rtrim(rtrim($string, '0'), '.');
 
         return ($trimmed === '' || $trimmed === '-') ? '0' : $trimmed;
+    }
+
+    /**
+     * The year a dated record belongs to, for a screen whose filters are
+     * year-scoped. Null dates simply drop out of the query string, leaving the
+     * screen on its own default.
+     */
+    private function yearOf(mixed $date): ?int
+    {
+        if ($date === null || $date === '') {
+            return null;
+        }
+
+        return Carbon::parse((string) $date)->year;
     }
 
     private function money(mixed $value): string
