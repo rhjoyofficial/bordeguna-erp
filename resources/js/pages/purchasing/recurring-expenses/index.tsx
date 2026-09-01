@@ -482,10 +482,14 @@ export default function RecurringExpensesIndex({ canRecord, due, schedules, tota
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
-                    <table className="w-full min-w-[52rem] text-sm">
+                    <table className="w-full min-w-[52rem] table-fixed text-sm">
                         <thead className="bg-muted/50 text-left">
                             <tr>
-                                <th className="p-3">What</th>
+                                {/* ⚠ Capped, and the table is fixed-layout so the cap
+                                    holds: the note under a name is the longest text on
+                                    the page, and left to auto-layout it starves every
+                                    other column (Joy, 1 Sep 2026). */}
+                                <th className="w-[40%] p-3">What</th>
                                 <th className="p-3">Supplier</th>
                                 <th className="p-3">Charge to</th>
                                 <th className="p-3">Paid from</th>
