@@ -9,6 +9,7 @@ import {
     BadgeDollarSign,
     Banknote,
     BookOpen,
+    BookOpenText,
     Boxes,
     CalendarCheck,
     CalendarDays,
@@ -26,6 +27,7 @@ import {
     FileWarning,
     Fingerprint,
     FolderOpen,
+    Grid3x3,
     HandCoins,
     Landmark,
     LayoutDashboard,
@@ -52,7 +54,6 @@ import {
     Tag,
     Tags,
     Timer,
-    Grid3x3,
     TrendingDown,
     TrendingUp,
     Truck,
@@ -370,6 +371,9 @@ export function AppSidebar() {
                                     // reach means employees are never paid back.
                                     { title: 'Expense claims', url: '/hrm/expense-claims', icon: HandCoins },
                                     { title: 'Payroll runs', url: '/hrm/payroll', icon: Banknote },
+                                    // ⚠ Linked deliberately. The payroll screen shows ONE
+                                    // month; the register is the only place the months add up.
+                                    { title: 'Salary history', url: '/hrm/payroll/history', icon: BookOpenText },
                                 ]
                               : []),
                       ],

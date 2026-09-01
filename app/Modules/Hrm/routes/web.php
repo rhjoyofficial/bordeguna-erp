@@ -20,6 +20,7 @@ use App\Modules\Hrm\Http\Controllers\LeaveController;
 use App\Modules\Hrm\Http\Controllers\LeaveTypeController;
 use App\Modules\Hrm\Http\Controllers\LoanController;
 use App\Modules\Hrm\Http\Controllers\PayrollController;
+use App\Modules\Hrm\Http\Controllers\PayrollHistoryController;
 use App\Modules\Hrm\Http\Controllers\PayrollInputController;
 use App\Modules\Hrm\Http\Controllers\PayslipController;
 use App\Modules\Hrm\Http\Controllers\ReportController;
@@ -268,6 +269,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // Payroll calculation (PAY-01..13). The WFL-02 lifecycle beyond
     // Draft/Calculated arrives in Phase 3c.
     Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
+    // The salary register - every payroll month the business has ever run,
+    // and one person's own wage record. Registered BEFORE any payroll/{run}
+    // pattern could swallow the word `history`.
+    Route::get('payroll/history', [PayrollHistoryController::class, 'index'])->name('payroll.history');
     Route::post('payroll/calculate', [PayrollController::class, 'calculate'])->name('payroll.calculate');
     Route::get('payroll/{run}/progress', [PayrollController::class, 'progress'])->name('payroll.progress');
 
