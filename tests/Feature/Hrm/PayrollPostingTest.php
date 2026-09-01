@@ -472,3 +472,20 @@ it('leaves the ledger consistent and balancing', function () {
     $result = LedgerIntegrity::verifyAllBusinesses();
     expect($result['problems'])->toBeEmpty();
 });
+
+it('refuses a salary payment that cannot say which account it left', function () {
+    // ⚠⚠ This throw is real, and until today it reached the screen as a blank
+    // 500 in the middle of disbursement, with the payment rolled back so it
+    // read as "nothing happened" rather than "you have not said where the money
+    // came from". The screen now always names an account, and the controller
+    // turns this into a message on that field rather than an error page.
+    $run = ($this->buildRun)();
+    app(TransitionPayrollRun::class)->markApproved($run, $this->user);
+    $run = app(TransitionPayrollRun::class)->disburse($run->fresh(), $this->user);
+
+    $payslip = $run->payslips()->first();
+
+    expect(fn () => app(RecordPayslipPayment::class)->paid(
+        $payslip, $this->user, 100.0, null, Carbon::parse('2026-08-01'), null, null, null,
+    ))->toThrow(MappingNotFound::class);
+});

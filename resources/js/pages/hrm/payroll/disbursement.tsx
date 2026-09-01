@@ -80,6 +80,7 @@ interface Props {
     batches: BatchRow[];
     payslips: PayslipRow[];
     methods: { value: string; label: string }[];
+    moneyAccounts: { id: number; name: string }[];
     formats: { key: string; name: string; description: string }[];
     email_summary: {
         sendable: number;
@@ -102,12 +103,16 @@ function statusVariant(status: string): 'default' | 'secondary' | 'outline' | 'd
     return 'outline';
 }
 
-function PayDialog({ payslip, methods }: { payslip: PayslipRow; methods: Props['methods'] }) {
+function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; methods: Props['methods']; moneyAccounts: Props['moneyAccounts'] }) {
     const [open, setOpen] = useState(false);
     const [amount, setAmount] = useState(String(payslip.outstanding));
     const [method, setMethod] = useState('');
     const [paidOn, setPaidOn] = useState(today());
     const [reference, setReference] = useState('');
+    // ⚠⚠ The account is asked, never assumed. Without it the posting threw
+    // MappingNotFound and the screen showed a blank 500 mid-disbursement, with
+    // the payment rolled back so it looked as though nothing had happened.
+    const [account, setAccount] = useState(String(moneyAccounts[0]?.id ?? ''));
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     return (
@@ -150,6 +155,18 @@ function PayDialog({ payslip, methods }: { payslip: PayslipRow; methods: Props['
                         </div>
                     </div>
                     <div className="grid gap-2">
+                        <Label htmlFor="pay_account">Paid from</Label>
+                        <SearchSelect id="pay_account" value={account} onChange={(e) => setAccount(e.target.value)}>
+                            <option value="">Select an account</option>
+                            {moneyAccounts.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                    {a.name}
+                                </option>
+                            ))}
+                        </SearchSelect>
+                        {errors.money_account_id && <p className="text-destructive text-xs">{errors.money_account_id}</p>}
+                    </div>
+                    <div className="grid gap-2">
                         <Label htmlFor="pay_reference">Reference</Label>
                         <Input id="pay_reference" value={reference} onChange={(e) => setReference(e.target.value)} />
                     </div>
@@ -159,11 +176,17 @@ function PayDialog({ payslip, methods }: { payslip: PayslipRow; methods: Props['
                         <Button variant="outline">Cancel</Button>
                     </DialogClose>
                     <Button
-                        disabled={amount === ''}
+                        disabled={amount === '' || account === ''}
                         onClick={() =>
                             router.post(
                                 route('hrm.payslips.payments.store', payslip.id),
-                                { amount: Number(amount), method: method || null, paid_on: paidOn, reference: reference || null },
+                                {
+                                    amount: Number(amount),
+                                    method: method || null,
+                                    paid_on: paidOn,
+                                    reference: reference || null,
+                                    money_account_id: Number(account),
+                                },
                                 {
                                     preserveScroll: true,
                                     onError: (e: Record<string, string>) => setErrors(e),
@@ -240,10 +263,16 @@ function FailDialog({ payslip }: { payslip: PayslipRow }) {
     );
 }
 
-function BatchCard({ batch, formats }: { batch: BatchRow; formats: Props['formats'] }) {
+function BatchCard({ batch, formats, moneyAccounts }: { batch: BatchRow; formats: Props['formats']; moneyAccounts: Props['moneyAccounts'] }) {
     const [format, setFormat] = useState(formats[0]?.key ?? 'generic_csv');
     const [adviceReference, setAdviceReference] = useState(batch.advice_reference ?? '');
     const [failReason, setFailReason] = useState('');
+    // ⚠⚠ The button used to post only the date and the advice reference, while
+    // the route has always REQUIRED the account the money left from. Confirming
+    // a batch therefore failed validation every time, in silence, and August's
+    // salary could not be recorded as paid by this route at all.
+    const [account, setAccount] = useState(String(moneyAccounts[0]?.id ?? ''));
+    const [errors, setErrors] = useState<Record<string, string>>({});
     const fileRef = useRef<HTMLInputElement>(null);
 
     return (
@@ -316,15 +345,31 @@ function BatchCard({ batch, formats }: { batch: BatchRow; formats: Props['format
 
                 {!batch.confirmed_at && (
                     <div className="grid gap-2">
+                        <Label htmlFor={`account_${batch.id}`}>Paid from</Label>
+                        <SearchSelect id={`account_${batch.id}`} value={account} onChange={(e) => setAccount(e.target.value)}>
+                            <option value="">Select an account</option>
+                            {moneyAccounts.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                    {a.name}
+                                </option>
+                            ))}
+                        </SearchSelect>
+                        {errors.money_account_id && <p className="text-destructive text-xs">{errors.money_account_id}</p>}
+
                         <Label htmlFor={`fail_${batch.id}`}>Confirm the whole batch, or record it as failed</Label>
                         <div className="flex flex-wrap gap-2">
                             <Button
                                 size="sm"
+                                disabled={account === ''}
                                 onClick={() =>
                                     router.post(
                                         route('hrm.batches.confirm', batch.id),
-                                        { paid_on: today(), advice_reference: adviceReference || null },
-                                        { preserveScroll: true },
+                                        { paid_on: today(), advice_reference: adviceReference || null, money_account_id: Number(account) },
+                                        {
+                                            preserveScroll: true,
+                                            onError: (e: Record<string, string>) => setErrors(e),
+                                            onSuccess: () => setErrors({}),
+                                        },
                                     )
                                 }
                             >
@@ -359,7 +404,15 @@ function BatchCard({ batch, formats }: { batch: BatchRow; formats: Props['format
     );
 }
 
-function PayslipRowView({ payslip, methods }: { payslip: PayslipRow; methods: Props['methods'] }) {
+function PayslipRowView({
+    payslip,
+    methods,
+    moneyAccounts,
+}: {
+    payslip: PayslipRow;
+    methods: Props['methods'];
+    moneyAccounts: Props['moneyAccounts'];
+}) {
     const [open, setOpen] = useState(false);
 
     return (
@@ -397,7 +450,7 @@ function PayslipRowView({ payslip, methods }: { payslip: PayslipRow; methods: Pr
                         </a>
                         {payslip.outstanding > 0 && !payslip.is_blocked && (
                             <>
-                                <PayDialog payslip={payslip} methods={methods} />
+                                <PayDialog payslip={payslip} methods={methods} moneyAccounts={moneyAccounts} />
                                 <FailDialog payslip={payslip} />
                             </>
                         )}
@@ -450,7 +503,7 @@ function PayslipRowView({ payslip, methods }: { payslip: PayslipRow; methods: Pr
     );
 }
 
-export default function Disbursement({ run, batches, payslips, methods, formats, email_summary }: Props) {
+export default function Disbursement({ run, batches, payslips, methods, moneyAccounts, formats, email_summary }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Payroll', href: '/hrm/payroll' },
         { title: `Disbursement - ${run.period ?? ''}`, href: `/hrm/payroll/${run.id}/disbursement` },
@@ -549,7 +602,7 @@ export default function Disbursement({ run, batches, payslips, methods, formats,
                             <p className="text-muted-foreground text-sm">No batches yet.</p>
                         </div>
                     ) : (
-                        batches.map((batch) => <BatchCard key={batch.id} batch={batch} formats={formats} />)
+                        batches.map((batch) => <BatchCard key={batch.id} batch={batch} formats={formats} moneyAccounts={moneyAccounts} />)
                     )}
                 </div>
 
@@ -570,7 +623,7 @@ export default function Disbursement({ run, batches, payslips, methods, formats,
                             </thead>
                             <tbody>
                                 {payslips.map((payslip) => (
-                                    <PayslipRowView key={payslip.id} payslip={payslip} methods={methods} />
+                                    <PayslipRowView key={payslip.id} payslip={payslip} methods={methods} moneyAccounts={moneyAccounts} />
                                 ))}
                             </tbody>
                         </table>

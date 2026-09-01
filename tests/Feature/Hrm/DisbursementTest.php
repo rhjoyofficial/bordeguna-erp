@@ -46,6 +46,7 @@ use App\Modules\Hrm\Payroll\Payslip\PayslipPdf;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -574,3 +575,31 @@ function disAccount(): MoneyAccount
         ['type' => MoneyAccountType::Bank, 'account_number' => '1501202536477001'],
     );
 }
+
+// --- Can the screen actually do what the route demands? --------------------------
+
+it('gives the disbursement screen the accounts it has to ask about', function () {
+    $run = disRun();
+
+    disHr()->get(route('hrm.payroll.disbursement', $run))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('hrm/payroll/disbursement')
+            ->has('moneyAccounts'));
+});
+
+it('sends the account from the screen, not only from a test', function () {
+    // ⚠⚠ THE TRAP THIS REPO KEEPS FALLING INTO. The HTTP test above passes
+    // `money_account_id` by hand, so it proves the route works and says nothing
+    // about whether anything ever sends it. The screen sent only the date and
+    // the advice reference, the route has always REQUIRED the account, and so
+    // "Confirm batch paid" failed validation every single time - in silence.
+    // August's salary could not be recorded as paid by any route at all.
+    $source = file_get_contents(resource_path('js/pages/hrm/payroll/disbursement.tsx'));
+
+    $confirm = substr($source, strpos($source, "route('hrm.batches.confirm'"), 400);
+    expect($confirm)->toContain('money_account_id');
+
+    $payment = substr($source, strpos($source, "route('hrm.payslips.payments.store'"), 400);
+    expect($payment)->toContain('money_account_id');
+});

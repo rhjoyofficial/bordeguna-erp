@@ -3,6 +3,7 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Actions\ConfirmDisbursementBatch;
@@ -23,6 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rules\Enum as EnumRule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -112,6 +114,15 @@ class DisbursementController extends Controller
                     ]),
                 ]),
             'methods' => SalaryPaymentMethod::options(),
+            // ⚠⚠ Recording a payment means saying which account it left, and
+            // this screen never had the list to ask with. Both routes out -
+            // confirming a batch and recording one payslip - died on that: the
+            // batch route validated `money_account_id` as required and the
+            // screen never sent it, and the per-payslip route posted to the
+            // ledger without one and threw a blank 500.
+            'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
+                ->orderBy('name')->get(['id', 'name'])
+                ->map(fn (MoneyAccount $a) => ['id' => $a->id, 'name' => $a->name]),
             'formats' => $formats->options(),
             // Counted before anybody presses send, because "8 queued" tells HR
             // nothing about the ninth person.
@@ -231,16 +242,29 @@ class DisbursementController extends Controller
             'money_account_id' => ['nullable', 'integer', 'exists:money_accounts,id'],
         ]);
 
-        $action->paid(
-            $payslip,
-            $request->user(),
-            (float) $data['amount'],
-            isset($data['method']) ? SalaryPaymentMethod::from($data['method']) : null,
-            isset($data['paid_on']) ? Carbon::parse($data['paid_on']) : null,
-            $data['reference'] ?? null,
-            $payslip->batch(),
-            isset($data['money_account_id']) ? MoneyAccount::find($data['money_account_id']) : null,
-        );
+        // ⚠⚠ A MISSING ACCOUNT IS A QUESTION, NOT A 500. With accounting on,
+        // posting a payment from no account throws MappingNotFound deep in the
+        // ledger, the transaction rolls back, and the screen shows a blank error
+        // page mid-disbursement - so it reads as "nothing happened" when what
+        // happened is that nobody said where the money came from. It stays
+        // nullable in the rules because an installation with no accounting has
+        // no account to name.
+        try {
+            $action->paid(
+                $payslip,
+                $request->user(),
+                (float) $data['amount'],
+                isset($data['method']) ? SalaryPaymentMethod::from($data['method']) : null,
+                isset($data['paid_on']) ? Carbon::parse($data['paid_on']) : null,
+                $data['reference'] ?? null,
+                $payslip->batch(),
+                isset($data['money_account_id']) ? MoneyAccount::find($data['money_account_id']) : null,
+            );
+        } catch (MappingNotFound $exception) {
+            throw ValidationException::withMessages([
+                'money_account_id' => 'Say which account this salary was paid from. '.$exception->getMessage(),
+            ]);
+        }
 
         return back()->with('success', 'Payment recorded.');
     }
