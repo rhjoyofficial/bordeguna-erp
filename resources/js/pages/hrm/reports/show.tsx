@@ -65,6 +65,19 @@ export default function ReportShow({ report, parameters, columns, formats, queue
                 return;
             }
 
+            // ⚠⚠ A CHECKBOX SPEAKS '1' AND '', NOT 'true' AND 'false'. Both the
+            // control below and Laravel's `boolean` rule accept 1/0/'1'/'0'
+            // and reject the string 'true'. A boolean parameter defaulting to
+            // true therefore arrived here as 'true', rendered UNCHECKED (a lie
+            // about its own state), and was refused by the validator on every
+            // export - which, in the new tab a print view opens, is a redirect
+            // to an empty form with no error anywhere. Five of the six reports
+            // with a checkbox default to true, the salary sheet among them.
+            if (parameter.type === 'boolean') {
+                values[parameter.key] = parameter.default === true || parameter.default === 1 || parameter.default === '1' ? '1' : '';
+                return;
+            }
+
             values[parameter.key] = parameter.default === null || parameter.default === false ? '' : String(parameter.default);
         });
 
