@@ -489,3 +489,23 @@ it('refuses a salary payment that cannot say which account it left', function ()
         $payslip, $this->user, 100.0, null, Carbon::parse('2026-08-01'), null, null, null,
     ))->toThrow(MappingNotFound::class);
 });
+
+it('files a reimbursement as the cost it was, not as pay', function () {
+    // ⚠⚠ Money the employee spent on the company's behalf is the company's cost
+    // of what they bought. It reaches the payslip only because salary is the
+    // convenient way to hand it back. With no mapping of its own it fell
+    // through to the wage default, so every reimbursement inflated Salaries and
+    // Wages and understated the real expense by the same amount - and balanced
+    // perfectly while doing it, which is why nothing ever noticed.
+    $run = ($this->buildRun)([
+        ['basic', 'earning', '25000.00'],
+        ['reimbursement', 'earning', '2005.00'],
+    ], '27005.00');
+
+    app(TransitionPayrollRun::class)->markApproved($run, $this->user);
+
+    $on = fn (string $slug) => (int) JournalLine::where('account_id', Account::bySlug($slug)->id)->sum('amount_minor');
+
+    expect($on('fuel_and_conveyance'))->toBe(200500)
+        ->and($on('salaries_expense'))->toBe(2500000);
+});
