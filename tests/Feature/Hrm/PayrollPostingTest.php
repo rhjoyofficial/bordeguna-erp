@@ -285,6 +285,41 @@ it('takes the superseded version out when a run is reopened', function () {
         ->and((int) JournalLine::sum('amount_minor'))->toBe(0);
 });
 
+it('removes the superseded accrual from the month it was in, not from today', function () {
+    // ⚠⚠ THE ASSERTION THIS FILE WAS MISSING, AND IT COST A CUTOVER MORNING.
+    // The two above check the COUNT and the BALANCE, and both stay correct when
+    // the reversal lands in the wrong month: it balances against the entry it
+    // reverses wherever it sits. Only the DATE tells the truth.
+    //
+    // A payroll accrual is replaced rather than undone, and the replacement is
+    // dated at the period end. So a reversal dated today would leave the
+    // period's month carrying two full wage accruals and the current month a
+    // negative one - a wage bill wrong in both months, with nothing out of
+    // balance to give it away.
+    $run = ($this->buildRun)();
+    app(TransitionPayrollRun::class)->markApproved($run, $this->user);
+
+    $original = Journal::sole();
+    expect($original->journal_date->toDateString())->toBe('2026-07-23');
+
+    app(TransitionPayrollRun::class)->reopen($run->fresh(), $this->user, 'Recalculating');
+
+    $reversal = Journal::whereNotNull('reverses_journal_id')->sole();
+
+    // Today is 2026-08-03 in this file. A reversal dated there would be the bug.
+    expect($reversal->journal_date->toDateString())->toBe('2026-07-23')
+        ->and($reversal->reverses_journal_id)->toBe($original->id);
+
+    // The month the wages belong to nets to zero on its own, without waiting
+    // for a later month to cancel it out.
+    $julyMinor = (int) JournalLine::whereHas(
+        'journal',
+        fn ($q) => $q->whereBetween('journal_date', ['2026-07-01', '2026-07-31'])
+    )->sum('amount_minor');
+
+    expect($julyMinor)->toBe(0);
+});
+
 // ─── The payment ────────────────────────────────────────────────────────────
 
 it('records where the salary money actually went', function () {

@@ -175,6 +175,26 @@ class PostPayrollAccrual
      * ⚠ Through ReverseJournal like everything else, so the correction faces
      * every guard the original faced - including the period lock. A payroll
      * cancelled after its month is closed cannot silently reopen that month.
+     *
+     * ⚠⚠ DATED ON THE ENTRY IT REMOVES, NOT TODAY, AND THIS IS THE EXCEPTION
+     * ReverseJournal DOCUMENTS RATHER THAN A BREACH OF IT. Everywhere else a
+     * reversal is an event of its own and belongs to the day it was decided.
+     * A payroll accrual is not undone; it is REPLACED, and the replacement is
+     * dated by `accountingDate()` at the end of the period the work was done
+     * in. Dating only the removal today splits the pair across two months:
+     * reversing v3 on 1 September while v3 and v4 both sit on 23 August leaves
+     * AUGUST carrying two full wage accruals and SEPTEMBER a negative one.
+     * Everything balances, so nothing complains - the books are simply wrong in
+     * both months until the fiscal year closes over them.
+     *
+     * Found on cutover day, 1 September 2026, before Joy reopened the approved
+     * August run to add three advances. Journal 1 was live: "Payroll August
+     * 2026 v3", dated 2026-08-23.
+     *
+     * ⚠ If that month has since been CLOSED the period lock refuses, and the
+     * whole transition is refused with it. That is the right answer: reopening
+     * a payroll whose month is closed is a decision about the month, and
+     * somebody has to make it out loud.
      */
     public function reverse(PayrollRun $run, User $reversedBy): ?Journal
     {
@@ -184,7 +204,11 @@ class PostPayrollAccrual
             return null;
         }
 
-        return app(ReverseJournal::class)->handle($journal, $reversedBy);
+        return app(ReverseJournal::class)->handle(
+            $journal,
+            $reversedBy,
+            Carbon::parse($journal->journal_date)->startOfDay(),
+        );
     }
 
     public function existingJournal(PayrollRun $run): ?Journal
