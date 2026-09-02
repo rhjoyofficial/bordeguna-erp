@@ -24,6 +24,7 @@ import {
     Factory,
     FileBarChart,
     FileText,
+    LifeBuoy,
     FileUp,
     FileWarning,
     Fingerprint,
@@ -283,6 +284,7 @@ export function AppSidebar() {
                               ? [
                                     { title: 'Leads', url: '/crm/leads', icon: UserPlus },
                                     { title: 'Pipeline', url: '/crm/pipeline', icon: UserPlus },
+                                    { title: 'Tickets', url: '/crm/tickets', icon: LifeBuoy },
                                     // ⚠ The work queue is the screen an agent lives in all
                                     // day. Without it, follow-ups exist and nobody sees them.
                                     { title: 'Follow-ups', url: '/crm/queue', icon: CalendarCheck },

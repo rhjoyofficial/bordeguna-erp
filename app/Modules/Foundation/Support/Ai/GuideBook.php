@@ -417,6 +417,21 @@ class GuideBook
                 'keywords' => ['cadence', 'follow up', 'reminder', 'dormant', 'sleeping customer', 'first call', 'automatic task', 'rhythm'],
             ],
             [
+                'key' => 'crm.tickets',
+                'topic' => 'Customers and leads',
+                'title' => 'Log a customer complaint and resolve it before the clock runs out',
+                'path' => 'CRM > Tickets',
+                'permission' => 'crm.leads.view',
+                'steps' => [
+                    'Open CRM > Tickets and log what happened: the customer (or a caller name and phone), category, and priority.',
+                    'The priority sets the clock - high gets 24 hours, normal 72, low a week - stamped when the ticket opens and never rewritten.',
+                    'Keep every call and action as a reply on the ticket; tick internal for notes the customer should not see.',
+                    'Resolving REQUIRES writing what fixed it. A ticket resolved after its deadline stays marked late forever - honesty over a green board.',
+                    'Overdue open tickets sort to the top: that is the work.',
+                ],
+                'keywords' => ['ticket', 'complaint', 'support', 'ovijog', 'customer problem', 'sla', 'service'],
+            ],
+            [
                 'key' => 'crm.pipeline',
                 'topic' => 'Customers and leads',
                 'title' => 'Work the sales pipeline: deals, stages, won and lost',

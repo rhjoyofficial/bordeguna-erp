@@ -11,6 +11,7 @@ use App\Modules\Crm\Http\Controllers\CrmSettingsController;
 use App\Modules\Crm\Http\Controllers\LeadController;
 use App\Modules\Crm\Http\Controllers\OpportunityController;
 use App\Modules\Crm\Http\Controllers\CadenceController;
+use App\Modules\Crm\Http\Controllers\TicketController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->group(function () {
@@ -23,6 +24,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         Route::get('leads/duplicates', [LeadController::class, 'duplicates'])->name('leads.duplicates');
         // The pipeline board: reading deals is reading the sales work.
         Route::get('pipeline', [OpportunityController::class, 'index'])->name('pipeline');
+        // Tickets: complaints with a running clock. Reading them is reading
+        // the customer work.
+        Route::get('tickets', [TicketController::class, 'index'])->name('tickets');
     });
 
     Route::middleware('can:crm.leads.manage')->group(function () {
@@ -38,6 +42,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         Route::post('opportunities/{opportunity}/stage', [OpportunityController::class, 'stage'])->name('opportunities.stage');
         Route::post('opportunities/{opportunity}/won', [OpportunityController::class, 'won'])->name('opportunities.won');
         Route::post('opportunities/{opportunity}/lost', [OpportunityController::class, 'lost'])->name('opportunities.lost');
+        // Ticket writes travel with the same trust that works the leads.
+        Route::post('tickets', [TicketController::class, 'store'])->name('tickets.store');
+        Route::post('tickets/{ticket}/reply', [TicketController::class, 'reply'])->name('tickets.reply');
+        Route::post('tickets/{ticket}/resolve', [TicketController::class, 'resolve'])->name('tickets.resolve');
+        Route::post('tickets/{ticket}/assign', [TicketController::class, 'assign'])->name('tickets.assign');
     });
 
     // ⚠⚠ Conversion creates MASTER DATA with a permanent code, so it is its own
