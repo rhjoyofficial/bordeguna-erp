@@ -47,6 +47,7 @@ interface EditableEmployee {
     mfs_provider: string | null;
     mfs_account_number: string | null;
     salary_payment_method: string | null;
+    reports_to: number | string | null;
 }
 
 interface EditProps {
@@ -54,6 +55,7 @@ interface EditProps {
     employment_types: Option[];
     mfs_providers: Option[];
     payment_methods: Option[];
+    supervisor_options: Option[];
 }
 
 type FormData = Omit<EditableEmployee, 'id' | 'employee_code' | 'name'>;
@@ -87,9 +89,10 @@ const FIELD_KEYS: (keyof FormData)[] = [
     'mfs_provider',
     'mfs_account_number',
     'salary_payment_method',
+    'reports_to',
 ];
 
-export default function EmployeeEdit({ employee, employment_types, mfs_providers, payment_methods }: EditProps) {
+export default function EmployeeEdit({ employee, employment_types, mfs_providers, payment_methods, supervisor_options }: EditProps) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employees', href: '/hrm/employees' },
         { title: employee.employee_code, href: `/hrm/employees/${employee.id}` },
@@ -157,6 +160,24 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                         {/* Joy, 23 Aug 2026: who brought this person in. Free
                             text - referrers are often outside the company. */}
                         <Text field="referred_by" label="Referred by" />
+                        {/* The reporting line (Module 1, Slice 1). Blank is a
+                            real answer: the founder answers to nobody. */}
+                        <div className="grid gap-2">
+                            <Label htmlFor="reports_to">Reports to</Label>
+                            <SearchSelect
+                                id="reports_to"
+                                value={data.reports_to === null || data.reports_to === '' ? '' : String(data.reports_to)}
+                                onChange={(e) => setData('reports_to', e.target.value)}
+                            >
+                                <option value="">Nobody (top of the chart)</option>
+                                {supervisor_options.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                            <InputError message={errors.reports_to} />
+                        </div>
                     </div>
                 </section>
 

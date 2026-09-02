@@ -11,6 +11,7 @@ use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
 use App\Modules\Hrm\Http\Controllers\DisbursementController;
 use App\Modules\Hrm\Http\Controllers\EmployeeAttendanceController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
+use App\Modules\Hrm\Http\Controllers\OrgChartController;
 use App\Modules\Hrm\Http\Controllers\ExpenseClaimController;
 use App\Modules\Hrm\Http\Controllers\RecruitmentController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
@@ -43,6 +44,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
 
     // Each action authorizes hrm.employees.manage internally; {employee} is a
     // central record, confined to the current business in the controller.
+    // The organization chart (Module 1, Slice 1) - the phone book's shape,
+    // open to every signed-in member; see OrgChartController for the why.
+    Route::get('org-chart', [OrgChartController::class, 'show'])->name('org-chart');
     Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
     Route::get('employees/create', [EmployeeController::class, 'create'])->name('employees.create');
     Route::post('employees', [EmployeeController::class, 'store'])->name('employees.store');

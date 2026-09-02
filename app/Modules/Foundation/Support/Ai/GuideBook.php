@@ -611,6 +611,33 @@ class GuideBook
                 'keywords' => ['attendance', 'daily attendance', 'correction', 'missing punch', 'needs review', 'absent fix'],
             ],
             [
+                'key' => 'self.orgchart',
+                'topic' => 'Your own profile and self-service',
+                'title' => 'See the organization chart: who reports to whom',
+                'path' => 'Org chart (top of the sidebar)',
+                'permission' => null,
+                'steps' => [
+                    'Open "Org chart" in the sidebar. Everyone still employed appears, indented under the person they report to.',
+                    'Someone with no reporting line recorded sits at the top level; the note at the top counts how many lines are still unrecorded.',
+                    'The chart shows names, codes and designations only - never salary or contact details.',
+                ],
+                'keywords' => ['org chart', 'organization chart', 'organogram', 'hierarchy', 'who reports', 'supervisor', 'boss', 'team structure'],
+            ],
+            [
+                'key' => 'hrm.set_supervisor',
+                'topic' => 'People (HR administration)',
+                'title' => 'Set who an employee reports to',
+                'path' => 'HRM > Employees',
+                'permission' => 'hrm.employees.manage',
+                'steps' => [
+                    'Open HRM > Employees, open the person, press Edit.',
+                    'Set "Reports to" - pick their supervisor, or "Nobody (top of the chart)" for the founder.',
+                    'The form refuses a choice that would make the chain circle back on itself.',
+                    'The Org chart page updates immediately; approval chains that follow the reporting line use this same field.',
+                ],
+                'keywords' => ['supervisor', 'reports to', 'reporting line', 'manager assign', 'set boss', 'hierarchy set'],
+            ],
+            [
                 'key' => 'hrm.employees',
                 'topic' => 'People (HR administration)',
                 'title' => 'Add an employee, assign shift and schedule',

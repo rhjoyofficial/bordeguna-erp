@@ -67,6 +67,7 @@ import {
     Wallet,
     Warehouse,
     Waves,
+    Network,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -124,6 +125,9 @@ export function AppSidebar() {
                 // under My profile now (SelfServiceTabs), not as sidebar rows.
                 // Their routes are unchanged, so old bookmarks still land.
                 ...(hasEmployeeProfile ? [{ title: 'My profile', url: '/hrm/my-profile', icon: UserCircle }] : []),
+                // Module 1, Slice 1: the reporting tree - the phone book's
+                // shape, so it sits with the other everyone-features.
+                { title: 'Org chart', url: '/hrm/org-chart', icon: Network },
                 // ⚠ Top level rather than inside a module group, because the
                 // calendar belongs to no module: it reads HR, CRM, Sales and
                 // Purchasing and shows each reader only the sources they may

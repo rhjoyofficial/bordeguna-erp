@@ -290,6 +290,20 @@ class EmployeeController extends Controller
             // SAL-08: the method varies per employee, and payroll validation
             // needs it to know which account details it should be insisting on.
             'payment_methods' => SalaryPaymentMethod::options(),
+            // The reporting line (Module 1, Slice 1). Everyone active in this
+            // business except the person being edited - the one choice the
+            // cycle rule would always refuse.
+            'supervisor_options' => Employee::query()
+                ->whereKeyNot($employee->id)
+                ->where('status', EmployeeStatus::Active)
+                ->whereHas('assignments')
+                ->orderBy('first_name')
+                ->get()
+                ->map(fn (Employee $candidate) => [
+                    'value' => (string) $candidate->id,
+                    'label' => $candidate->fullName().' ('.$candidate->employee_code.')',
+                ])
+                ->values(),
         ]);
     }
 
