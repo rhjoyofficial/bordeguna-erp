@@ -145,6 +145,7 @@ export function AppSidebar() {
                 ...(canViewFiles ? [{ title: 'Documents', url: '/files', icon: FolderOpen }] : []),
                 ...(canUseChat ? [{ title: 'Chat', url: '/chat', icon: MessageSquare }] : []),
                 { title: 'Switch business', url: '/businesses/switch', icon: Repeat },
+                { title: 'Group partners', url: '/group/partners', icon: Network },
             ],
         },
         // ⚠ The last two ungated groups, closed 24 Aug 2026: "open to the

@@ -488,6 +488,20 @@ class GuideBook
                 'keywords' => ['letter', 'appointment letter', 'experience certificate', 'increment letter', 'confirmation letter', 'certificate', 'chithi'],
             ],
             [
+                'key' => 'group.partners',
+                'topic' => 'The group',
+                'title' => 'Link the same customer or supplier across group companies',
+                'path' => 'Group partners',
+                'permission' => null,
+                'steps' => [
+                    'Open Group partners: parties whose phone appears in more than one company are suggested automatically.',
+                    'Give the party one group name and press Link as one party - the company rows stay exactly as they are; the link only states they are the same person.',
+                    'A linked party shows its outstanding balance in each company you belong to, and the group total.',
+                    'Unlink any time - nothing about the companies or their documents changes either way.',
+                ],
+                'keywords' => ['group', 'link partner', 'same customer', 'group company', 'cross company', 'one party'],
+            ],
+            [
                 'key' => 'hrm.my_team',
                 'topic' => 'People',
                 'title' => 'See your team: who is in today, and what waits on you',

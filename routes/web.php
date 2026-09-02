@@ -28,6 +28,12 @@ Route::middleware(['auth', 'business'])->group(function () {
     // MY WORK (Module 1, Slice 3): the personal queue - approvals, follow-ups,
     // to-dos, waiting-on-others, and the role-gated warning sections.
     Route::get('work', App\Http\Controllers\MyWorkController::class)->name('work');
+
+    // ── The group layer (Module 6): reads THROUGH per-company records for
+    // the businesses the viewer belongs to. Links, never migrations.
+    Route::get('group/partners', [App\Modules\Foundation\Http\Controllers\GroupPartnerController::class, 'index'])->name('group.partners');
+    Route::post('group/partners/link', [App\Modules\Foundation\Http\Controllers\GroupPartnerController::class, 'link'])->name('group.partners.link');
+    Route::delete('group/partners/{link}', [App\Modules\Foundation\Http\Controllers\GroupPartnerController::class, 'unlink'])->name('group.partners.unlink');
     Route::get('approvals', [ApprovalInboxController::class, 'index'])->name('approvals.index');
 
     // The header search. A GET on purpose (the hand-written-fetch trap: a GET
