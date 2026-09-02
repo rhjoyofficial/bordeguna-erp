@@ -219,6 +219,7 @@ export function AppSidebar() {
                       label: 'Sales',
                       items: [
                           ...(canSell ? [{ title: 'Counter sale', url: '/sales/counter', icon: Store }] : []),
+                          ...(canSell ? [{ title: 'Cashier shifts', url: '/sales/shifts', icon: Store }] : []),
                           // ⚠ The order book: what is promised, to whom, and how
                           // much of it has left. Shipped WITH its screens in one
                           // commit - the reachability lesson this file records.

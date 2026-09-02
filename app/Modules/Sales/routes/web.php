@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
+use App\Modules\Sales\Http\Controllers\PosShiftController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
 use App\Modules\Sales\Http\Controllers\CustomerImportController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
@@ -98,6 +99,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
 
     // Selling: the counter, and the distributor challan. Same engine.
     Route::middleware('can:sales.sell')->group(function () {
+        // Cashier shifts (Module 3, Slice 1): custody of the till.
+        Route::get('shifts', [PosShiftController::class, 'index'])->name('shifts');
+        Route::post('shifts/open', [PosShiftController::class, 'open'])->name('shifts.open');
+        Route::post('shifts/{shift}/movement', [PosShiftController::class, 'movement'])->name('shifts.movement');
+        Route::post('shifts/{shift}/close', [PosShiftController::class, 'close'])->name('shifts.close');
         Route::get('counter', [CounterSaleController::class, 'create'])->name('counter.create');
         Route::post('counter', [CounterSaleController::class, 'store'])->name('counter.store');
         // ⚠ A price check for the counter screen, answered by the SAME resolver

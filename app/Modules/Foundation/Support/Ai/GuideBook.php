@@ -329,6 +329,21 @@ class GuideBook
                 'keywords' => ['pos', 'counter', 'counter sale', 'sell', 'cash sale', 'bikri', 'scan', 'barcode'],
             ],
             [
+                'key' => 'sales.shifts',
+                'topic' => 'Selling',
+                'title' => 'Cashier shifts: open the till, record movements, close with a count',
+                'path' => 'Sales > Cashier shifts',
+                'permission' => 'sales.sell',
+                'steps' => [
+                    'Open Sales > Cashier shifts, pick the till and type the counted opening float BEFORE selling starts.',
+                    'Sell normally at the counter - cash sales are counted into the shift automatically.',
+                    'Any cash taken out (change, small purchases) or put in must be recorded as a till movement WITH a reason.',
+                    'At closing, count every note and coin and type the total. The system computes the expected cash and the over/short itself - the difference is never typed by hand.',
+                    '⚠ One till can hold only one open shift at a time; close the running shift before opening the next.',
+                ],
+                'keywords' => ['shift', 'till', 'cash drawer', 'float', 'over short', 'closing count', 'cash count', 'drawer', 'z report'],
+            ],
+            [
                 'key' => 'sales.order_flow',
                 'topic' => 'Selling',
                 'title' => 'Sales order to invoice to delivery: the credit-sale flow',
