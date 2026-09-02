@@ -108,7 +108,7 @@ class HrLetterController extends Controller
             'employee_code' => $employee->employee_code,
             'designation' => $assignment?->designation?->name,
             'department' => $assignment?->department?->name,
-            'join_date' => $employee->join_date?->toDateString(),
+            'joining_date' => $employee->joining_date?->toDateString(),
         ];
 
         return match ($type) {

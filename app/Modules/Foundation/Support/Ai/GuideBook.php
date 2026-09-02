@@ -432,6 +432,20 @@ class GuideBook
                 'keywords' => ['ticket', 'complaint', 'support', 'ovijog', 'customer problem', 'sla', 'service'],
             ],
             [
+                'key' => 'hrm.probation',
+                'topic' => 'People',
+                'title' => 'Confirm an employee whose probation has ended',
+                'path' => 'HRM > Employees',
+                'permission' => 'hrm.employees.manage',
+                'steps' => [
+                    'Open HRM > Employees: an amber panel on top lists every probation that has RUN OUT without a confirmation - computed fresh, never a stale flag.',
+                    'Open the employee and press Confirm: the type flips to permanent, the confirmation date is recorded, and leave entitlements are granted in the same action.',
+                    'To extend a probation instead, edit the employee and raise probation months - the panel recalculates.',
+                    'After confirming, draft the confirmation letter from HR letters on the same profile.',
+                ],
+                'keywords' => ['probation', 'confirm', 'confirmation', 'permanent', 'probation ended', 'overdue confirmation'],
+            ],
+            [
                 'key' => 'hrm.letters',
                 'topic' => 'People',
                 'title' => 'Draft an appointment, confirmation, increment or experience letter',

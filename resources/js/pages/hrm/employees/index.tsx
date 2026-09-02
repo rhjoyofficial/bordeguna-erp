@@ -63,7 +63,16 @@ function EmployeeCard({ employee }: { employee: EmployeeRow }) {
     );
 }
 
-export default function EmployeesIndex({ employees }: { employees: EmployeeRow[] }) {
+interface ProbationOverdueRow {
+    id: number;
+    employee_code: string;
+    name: string;
+    joining_date: string;
+    probation_months: number;
+    probation_ended_on: string;
+}
+
+export default function EmployeesIndex({ employees, probationOverdue = [] }: { employees: EmployeeRow[]; probationOverdue: ProbationOverdueRow[] }) {
     const [view, setView] = useState<'table' | 'cards'>(() => {
         if (typeof window === 'undefined') return 'table';
         return window.localStorage.getItem('employees:view') === 'cards' ? 'cards' : 'table';
@@ -78,6 +87,30 @@ export default function EmployeesIndex({ employees }: { employees: EmployeeRow[]
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Employees" />
             <div className="flex flex-col gap-4 p-4">
+                {/* Probation tracking: probations that ran out with nobody
+                    confirmed. Computed fresh - no flag to go stale. */}
+                {probationOverdue.length > 0 && (
+                    <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
+                        <p className="text-sm font-semibold text-amber-700">
+                            {probationOverdue.length === 1
+                                ? 'One probation has ended without a confirmation'
+                                : `${probationOverdue.length} probations have ended without a confirmation`}
+                        </p>
+                        <div className="mt-2 space-y-1">
+                            {probationOverdue.map((row) => (
+                                <p key={row.id} className="text-sm">
+                                    <Link className="font-medium underline-offset-2 hover:underline" href={`/hrm/employees/${row.id}`}>
+                                        {row.employee_code} · {row.name}
+                                    </Link>
+                                    <span className="text-muted-foreground">
+                                        {' '}
+                                        - {row.probation_months} months ended {row.probation_ended_on}. Open the profile to confirm or extend.
+                                    </span>
+                                </p>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 <div className="flex items-center justify-between">
                     <p className="text-muted-foreground text-sm">{employees.length} in this business</p>
                     <div className="flex items-center gap-2">

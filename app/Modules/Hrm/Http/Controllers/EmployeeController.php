@@ -51,6 +51,31 @@ class EmployeeController extends Controller
         // must order by employee_code, nothing else"). Every listing and picker
         // in the application follows this, so the same person sits in the same
         // place on every screen and a name spelled two ways cannot move them.
+        // Probation tracking (Module 5, Slice 3): probations that RAN OUT with
+        // nobody confirmed. Computed fresh every load - no flag to go stale.
+        // The rule and the click (ConfirmEmployee) have existed since August;
+        // this is only the surface that makes them happen.
+        $probationOverdue = Employee::query()
+            ->where('status', 'active')
+            ->where('employment_type', 'probation')
+            ->whereNull('confirmation_date')
+            ->whereNotNull('probation_months')
+            ->whereHas('assignments', fn ($query) => $query->active()->where('is_primary', true))
+            ->orderBy('employee_code')
+            ->get()
+            ->filter(fn (Employee $employee) => $employee->joining_date !== null
+                && $employee->joining_date->copy()->addMonthsNoOverflow((int) $employee->probation_months)->lte(now()))
+            ->map(fn (Employee $employee) => [
+                'id' => $employee->id,
+                'employee_code' => $employee->employee_code,
+                'name' => $employee->fullName(),
+                'joining_date' => $employee->joining_date->toDateString(),
+                'probation_months' => $employee->probation_months,
+                'probation_ended_on' => $employee->joining_date->copy()
+                    ->addMonthsNoOverflow((int) $employee->probation_months)->toDateString(),
+            ])
+            ->values();
+
         $employees = Employee::whereHas('assignments', fn ($query) => $query->active()->where('is_primary', true))
             ->with([
                 'assignments' => fn ($query) => $query->active()->where('is_primary', true)->with(['office:id,name', 'designation:id,name']),
@@ -78,6 +103,7 @@ class EmployeeController extends Controller
 
         return Inertia::render('hrm/employees/index', [
             'employees' => $employees,
+            'probationOverdue' => $probationOverdue,
         ]);
     }
 

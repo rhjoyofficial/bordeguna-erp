@@ -43,7 +43,7 @@ beforeEach(function () {
             'business_id' => $this->business->id,
             'employee_code' => $code,
             'first_name' => 'Emp', 'last_name' => $code,
-            'join_date' => $joined,
+            'joining_date' => $joined,
             'status' => 'active',
             'employment_type' => $type,
             'probation_months' => $months,

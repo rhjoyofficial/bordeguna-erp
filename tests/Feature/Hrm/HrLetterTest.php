@@ -43,7 +43,7 @@ beforeEach(function () {
         'business_id' => $this->business->id,
         'employee_code' => 'BDG-000009',
         'first_name' => 'Rakib', 'last_name' => 'Hossain',
-        'join_date' => '2026-07-01',
+        'joining_date' => '2026-07-01',
         'status' => 'active',
         'employment_type' => 'probation',
         'probation_months' => 3,
@@ -81,6 +81,7 @@ it('issues an appointment letter as a snapshot the future cannot rewrite', funct
 
     $snapshot = json_decode($letter->body_data, true);
     expect($snapshot['employee_name'])->toBe('Rakib Hossain')
+        ->and($snapshot['joining_date'])->toBe('2026-07-01')
         ->and((float) $snapshot['gross_salary'])->toBe(15000.0);
 
     // The future must not rewrite the paper: raise the salary, reprint.

@@ -42,7 +42,7 @@ beforeEach(function () {
             'employee_code' => $code,
             'first_name' => $first,
             'last_name' => 'Islam',
-            'join_date' => '2026-07-01',
+            'joining_date' => '2026-07-01',
             'status' => 'active',
             'employment_type' => 'permanent',
         ]);
