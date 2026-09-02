@@ -750,6 +750,20 @@ class GuideBook
                 'keywords' => ['report', 'profit', 'loss', 'balance sheet', 'trial balance', 'ledger', 'ageing', 'statement', 'valuation', 'cogs', 'hisab'],
             ],
             [
+                'key' => 'accounting.amortizations',
+                'topic' => 'Money and the books',
+                'title' => 'Spread a cost or income over its months (prepaid, accrued, deferred)',
+                'path' => 'Finance & Accounts > Accruals & prepayments',
+                'permission' => 'accounting.view',
+                'steps' => [
+                    'Use this when money and its meaning land in different months: a year of hosting paid in advance (prepaid expense), a cost you recognise before its bill arrives (accrued expense), or money received up front that is earned monthly (deferred income).',
+                    'Open Finance & Accounts > Accruals & prepayments > New schedule: pick the kind, the balance-sheet account where the amount waits, the P&L account each month lands in, the total, the first month and how many months.',
+                    'A real journal posts for each month automatically on the 1st, or press Release due months now. The final month carries the rounding remainder so the schedule releases exactly its total.',
+                    'Cancelling stops future months only - released months are posted ledger and stay. Creating and releasing need the journal posting permission.',
+                ],
+                'keywords' => ['prepaid', 'accrual', 'accrued', 'deferred', 'amortization', 'advance payment spread', 'monthly release', 'agrim khoroch'],
+            ],
+            [
                 'key' => 'accounting.bank_statements',
                 'topic' => 'Money and the books',
                 'title' => 'Match the bank statement against the book',

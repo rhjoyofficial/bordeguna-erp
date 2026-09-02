@@ -58,6 +58,14 @@ Schedule::command(ProcessAttendanceDaily::class)
 // ⚠ It COMMITS rather than previewing. The job adds days, it is idempotent per
 // employee and month, and a scheduled job that needs a flag to act is a job
 // that never acts.
+// Prepaids, accruals and deferred income release their month (Module 2,
+// Slice 4). Idempotent by the released_through pointer; each schedule posts
+// as its own creator.
+Schedule::command(\App\Modules\Accounting\Console\Commands\ReleaseDueAmortizations::class)
+    ->monthlyOn(1, '02:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 Schedule::command(AccrueEarnedLeave::class)
     ->monthlyOn(1, '01:00')
     ->withoutOverlapping()

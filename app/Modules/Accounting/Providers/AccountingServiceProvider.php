@@ -11,7 +11,7 @@ class AccountingServiceProvider extends ServiceProvider
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
-            $this->commands([VerifyAccountingLedger::class, ReconcileSubledgers::class]);
+            $this->commands([VerifyAccountingLedger::class, ReconcileSubledgers::class, \App\Modules\Accounting\Console\Commands\ReleaseDueAmortizations::class]);
         }
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
