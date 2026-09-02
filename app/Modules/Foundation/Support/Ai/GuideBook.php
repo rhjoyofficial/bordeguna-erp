@@ -432,6 +432,20 @@ class GuideBook
                 'keywords' => ['ticket', 'complaint', 'support', 'ovijog', 'customer problem', 'sla', 'service'],
             ],
             [
+                'key' => 'hrm.my_team',
+                'topic' => 'People',
+                'title' => 'See your team: who is in today, and what waits on you',
+                'path' => 'My team',
+                'permission' => null,
+                'steps' => [
+                    'Open My team from the sidebar: everyone who reports to you, in employee-code order, with today at a glance.',
+                    'A card shows todays attendance status and any leave request still waiting for a decision.',
+                    'Deciding happens in the APPROVALS inbox - one place decides, this page only shows. The Open approvals button takes you there.',
+                    'Who reports to whom is set on the employee transfer form; the org chart shows the whole tree.',
+                ],
+                'keywords' => ['my team', 'team', 'direct reports', 'subordinates', 'team attendance', 'who is in'],
+            ],
+            [
                 'key' => 'crm.pipeline',
                 'topic' => 'Customers and leads',
                 'title' => 'Work the sales pipeline: deals, stages, won and lost',

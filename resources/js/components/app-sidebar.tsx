@@ -132,6 +132,7 @@ export function AppSidebar() {
                 // under My profile now (SelfServiceTabs), not as sidebar rows.
                 // Their routes are unchanged, so old bookmarks still land.
                 ...(hasEmployeeProfile ? [{ title: 'My profile', url: '/hrm/my-profile', icon: UserCircle }] : []),
+                ...(hasEmployeeProfile ? [{ title: 'My team', url: '/hrm/my-team', icon: Network }] : []),
                 // Module 1, Slice 1: the reporting tree - the phone book's
                 // shape, so it sits with the other everyone-features.
                 { title: 'Org chart', url: '/hrm/org-chart', icon: Network },

@@ -29,6 +29,7 @@ use App\Modules\Hrm\Http\Controllers\SalaryController;
 use App\Modules\Hrm\Http\Controllers\SalaryRevisionController;
 use App\Modules\Hrm\Http\Controllers\ScheduleController;
 use App\Modules\Hrm\Http\Controllers\SelfLeaveController;
+use App\Modules\Hrm\Http\Controllers\MyTeamController;
 use App\Modules\Hrm\Http\Controllers\SelfServiceController;
 use App\Modules\Hrm\Http\Controllers\SettlementController;
 use App\Modules\Hrm\Http\Controllers\ShiftController;
@@ -156,6 +157,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // Period locks (COR-05) — the deadline COR-02 hangs on.
     Route::post('attendance/period-locks', [AttendanceCorrectionController::class, 'lock'])->name('attendance.locks.store');
     Route::patch('attendance/period-locks/{lock}/unlock', [AttendanceCorrectionController::class, 'unlock'])->name('attendance.locks.unlock');
+
+    // The manager's team view - self-scope: whoever supervises sees theirs;
+    // read-only, approvals stay with the inbox.
+    Route::get('my-team', [MyTeamController::class, 'show'])->name('my-team');
 
     // Employee self-service leave and movement — self-scope, no manage gate.
     Route::get('my-leave', [SelfLeaveController::class, 'show'])->name('my-leave');
