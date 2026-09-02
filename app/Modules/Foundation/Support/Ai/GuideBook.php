@@ -750,6 +750,20 @@ class GuideBook
                 'keywords' => ['report', 'profit', 'loss', 'balance sheet', 'trial balance', 'ledger', 'ageing', 'statement', 'valuation', 'cogs', 'hisab'],
             ],
             [
+                'key' => 'accounting.bank_statements',
+                'topic' => 'Money and the books',
+                'title' => 'Match the bank statement against the book',
+                'path' => 'Finance & Accounts > Bank statements',
+                'permission' => 'accounting.view',
+                'steps' => [
+                    'Open Finance & Accounts > Bank statements and pick the account (BRAC Bank, bKash, and so on).',
+                    'Import the statement as CSV - it needs a date column plus either a signed amount column or the usual debit/credit pair. Save the bank Excel file as CSV first.',
+                    'Certain matches are made automatically: exact amount, right direction, within three days, exactly one candidate. Everything else waits for you: Match against a book line (must agree to the paisa), or Ignore a bank charge that is not booked yet - then book it as an expense.',
+                    'The right-hand list shows book movements the bank has not confirmed - both halves of the same truth on one screen. Acting needs the journal posting permission.',
+                ],
+                'keywords' => ['bank statement', 'bank matching', 'reconcile bank', 'statement import', 'brac statement', 'milano', 'bank milan'],
+            ],
+            [
                 'key' => 'accounting.budgets',
                 'topic' => 'Money and the books',
                 'title' => 'Set a budget and watch the actuals against it',

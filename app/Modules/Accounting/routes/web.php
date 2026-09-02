@@ -14,6 +14,7 @@ use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\AccountingPeriodController;
 use App\Modules\Accounting\Http\Controllers\BudgetController;
+use App\Modules\Accounting\Http\Controllers\BankStatementController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
@@ -49,6 +50,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // waited a month for. View for accounting eyes; acting re-checks
         // chart.manage in the controller.
         // Budgets (Module 2, Slice 2): the plan the actuals are judged against.
+        // Bank statements (Module 2, Slice 3): the bank's truth beside the book.
+        Route::get('bank-statements', [BankStatementController::class, 'show'])->name('bank-statements');
+        Route::post('bank-statements/import', [BankStatementController::class, 'import'])->name('bank-statements.import');
+        Route::post('bank-statements/{line}/match', [BankStatementController::class, 'match'])->name('bank-statements.match');
+        Route::post('bank-statements/{line}/unmatch', [BankStatementController::class, 'unmatch'])->name('bank-statements.unmatch');
+        Route::post('bank-statements/{line}/ignore', [BankStatementController::class, 'ignore'])->name('bank-statements.ignore');
         Route::get('budgets', [BudgetController::class, 'show'])->name('budgets');
         Route::post('budgets', [BudgetController::class, 'save'])->name('budgets.save');
         Route::get('period-close', [AccountingPeriodController::class, 'show'])->name('period-close');
