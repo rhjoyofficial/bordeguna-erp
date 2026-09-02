@@ -16,6 +16,7 @@ use App\Modules\Accounting\Http\Controllers\AccountingPeriodController;
 use App\Modules\Accounting\Http\Controllers\BudgetController;
 use App\Modules\Accounting\Http\Controllers\BankStatementController;
 use App\Modules\Accounting\Http\Controllers\AmortizationController;
+use App\Modules\Accounting\Http\Controllers\DunningController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
@@ -53,6 +54,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // Budgets (Module 2, Slice 2): the plan the actuals are judged against.
         // Bank statements (Module 2, Slice 3): the bank's truth beside the book.
         // Accruals & prepayments (Module 2, Slice 4).
+        // Payment reminders (Module 2, Slice 5): a human's click, logged.
+        Route::get('dunning', [DunningController::class, 'index'])->name('dunning');
+        Route::post('dunning/{customer}/remind', [DunningController::class, 'remind'])->name('dunning.remind');
         Route::get('amortizations', [AmortizationController::class, 'index'])->name('amortizations');
         Route::post('amortizations', [AmortizationController::class, 'store'])->name('amortizations.store');
         Route::post('amortizations/release', [AmortizationController::class, 'release'])->name('amortizations.release');

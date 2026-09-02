@@ -450,6 +450,7 @@ export function AppSidebar() {
                           { title: 'Budgets', url: '/accounting/budgets', icon: Target },
                           { title: 'Bank statements', url: '/accounting/bank-statements', icon: Landmark },
                           { title: 'Accruals & prepayments', url: '/accounting/amortizations', icon: CalendarClock },
+                          { title: 'Payment reminders', url: '/accounting/dunning', icon: BellRing },
                           { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },
                           // ⚠⚠ Directly under the screen that NAMES the accounts,
                           // because this is the only way to move money between

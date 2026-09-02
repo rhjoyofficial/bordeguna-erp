@@ -750,6 +750,20 @@ class GuideBook
                 'keywords' => ['report', 'profit', 'loss', 'balance sheet', 'trial balance', 'ledger', 'ageing', 'statement', 'valuation', 'cogs', 'hisab'],
             ],
             [
+                'key' => 'accounting.dunning',
+                'topic' => 'Money and the books',
+                'title' => 'Chase overdue invoices: payment reminders',
+                'path' => 'Finance & Accounts > Payment reminders',
+                'permission' => 'accounting.view',
+                'steps' => [
+                    'Open Finance & Accounts > Payment reminders. Everyone with an overdue invoice appears, oldest debt first, with the same figures as the receivables ageing and when they were last chased.',
+                    'Press Send reminder: a polite email lists their open invoices, ages and the total, and the send is logged with your name. Nothing ever sends itself.',
+                    'A customer without an email address cannot be reminded - add the address on the customer page first.',
+                    'Viewing needs accounting view; sending needs the receipt-recording permission, because chasing money is the collections job.',
+                ],
+                'keywords' => ['reminder', 'dunning', 'overdue', 'chase payment', 'baki taka', 'collection', 'due letter', 'tagada'],
+            ],
+            [
                 'key' => 'accounting.amortizations',
                 'topic' => 'Money and the books',
                 'title' => 'Spread a cost or income over its months (prepaid, accrued, deferred)',
