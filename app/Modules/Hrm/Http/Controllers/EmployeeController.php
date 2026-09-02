@@ -36,6 +36,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Support\RecordTimeline;
 
 class EmployeeController extends Controller
 {
@@ -268,6 +269,8 @@ class EmployeeController extends Controller
                 ->map(fn (Employee $candidate) => ['id' => $candidate->id, 'name' => $candidate->fullName().' ('.$candidate->employee_code.')']),
             'document_types' => collect(EmployeeDocumentType::cases())
                 ->map(fn (EmployeeDocumentType $type) => ['value' => $type->value, 'label' => $type->label()]),
+            // The record's own story (Module 1, Slice 4).
+            'timeline' => RecordTimeline::for($employee),
         ]);
     }
 

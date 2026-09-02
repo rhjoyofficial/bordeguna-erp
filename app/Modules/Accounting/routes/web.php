@@ -12,6 +12,7 @@ use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
 use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
 use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
+use App\Modules\Accounting\Http\Controllers\AccountingPeriodController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
@@ -43,6 +44,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // `accounting.journal.post` below. Musa can read a journal and cannot
         // post one, which is the same separation that already keeps him from
         // approving his own payroll run.
+        // Period close (Module 2, Slice 1) - the screen the lock engine
+        // waited a month for. View for accounting eyes; acting re-checks
+        // chart.manage in the controller.
+        Route::get('period-close', [AccountingPeriodController::class, 'show'])->name('period-close');
+        Route::post('period-close', [AccountingPeriodController::class, 'close'])->name('period-close.close');
+        Route::post('period-close/unlock', [AccountingPeriodController::class, 'unlock'])->name('period-close.unlock');
         Route::get('journals', [JournalController::class, 'index'])->name('journals.index');
         Route::get('journals/{journal}', [JournalController::class, 'show'])->name('journals.show');
 

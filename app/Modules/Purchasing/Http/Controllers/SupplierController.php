@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Support\RecordTimeline;
 
 class SupplierController extends Controller
 {
@@ -136,6 +137,8 @@ class SupplierController extends Controller
             ],
             'open_bills' => $openBills,
             'recent' => $recent,
+            // The record's own story (Module 1, Slice 4).
+            'timeline' => RecordTimeline::for($supplier),
         ]);
     }
 

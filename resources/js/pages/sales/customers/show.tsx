@@ -1,4 +1,5 @@
 import { ReportHeading } from '@/components/report/report-shell';
+import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -44,6 +45,7 @@ interface CustomerInfo {
  * derived from the same documents the statement reads, never stored here.
  */
 export default function CustomerShow({
+    timeline,
     customer,
     balance,
     totals,
@@ -52,6 +54,7 @@ export default function CustomerShow({
     recent,
     statement_url,
 }: {
+    timeline?: TimelineEntry[];
     customer: CustomerInfo;
     balance: { amount: string; is_credit: boolean; ledger_agrees: boolean | null };
     totals: { invoiced: string; settled: string };
@@ -201,6 +204,10 @@ export default function CustomerShow({
                         </div>
                     </div>
                 </div>
+            </div>
+            <div className="border-border bg-card mx-4 mb-4 rounded-lg border p-4">
+                <h2 className="mb-3 text-sm font-semibold">Timeline</h2>
+                <RecordTimeline entries={timeline ?? []} />
             </div>
         </AppLayout>
     );

@@ -27,6 +27,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use InvalidArgumentException;
 use RuntimeException;
+use App\Support\RecordTimeline;
 
 /**
  * ⚠⚠ C-PUR-E1. Every refusal below already carried a message written for a
@@ -149,6 +150,8 @@ class PurchaseOrderController extends Controller
             'can_cancel' => $canApprove
                 && $purchaseOrder->status !== PurchaseOrderStatus::Cancelled
                 && ($purchaseOrder->status === PurchaseOrderStatus::Open || $purchaseOrder->hasNoOutstandingReceivedStock()),
+            // The record's own story (Module 1, Slice 4).
+            'timeline' => RecordTimeline::for($purchaseOrder),
         ]);
     }
 

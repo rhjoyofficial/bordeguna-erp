@@ -1,4 +1,5 @@
 import { SearchSelect } from '@/components/search-select';
+import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -107,6 +108,7 @@ interface EmployeeDetail {
 }
 
 interface ShowProps {
+    timeline?: TimelineEntry[];
     employee: EmployeeDetail;
     transitionable_statuses: Option[];
     can_confirm: boolean;
@@ -754,6 +756,7 @@ function LoginAccountCard({ employee, lifetime }: { employee: EmployeeDetail; li
 }
 
 export default function EmployeeShow({
+    timeline,
     employee,
     transitionable_statuses,
     can_confirm,
@@ -908,6 +911,10 @@ export default function EmployeeShow({
                 </div>
 
                 <DocumentsCard employeeId={employee.id} documents={employee.documents} documentTypes={document_types} />
+            </div>
+            <div className="border-border bg-card mx-4 mb-4 rounded-lg border p-4">
+                <h2 className="mb-3 text-sm font-semibold">Timeline</h2>
+                <RecordTimeline entries={timeline ?? []} />
             </div>
         </AppLayout>
     );

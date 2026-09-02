@@ -1,4 +1,5 @@
 import { ReportHeading } from '@/components/report/report-shell';
+import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -39,12 +40,14 @@ interface SupplierInfo {
  * the manage permission, and a profile must not be the side door.
  */
 export default function SupplierShow({
+    timeline,
     supplier,
     payable,
     totals,
     open_bills,
     recent,
 }: {
+    timeline?: TimelineEntry[];
     supplier: SupplierInfo;
     payable: { amount: string; is_credit: boolean };
     totals: { billed: string; paid: string; credited: string; open_pos: number };
@@ -182,6 +185,10 @@ export default function SupplierShow({
                         </div>
                     </div>
                 </div>
+            </div>
+            <div className="border-border bg-card mx-4 mb-4 rounded-lg border p-4">
+                <h2 className="mb-3 text-sm font-semibold">Timeline</h2>
+                <RecordTimeline entries={timeline ?? []} />
             </div>
         </AppLayout>
     );

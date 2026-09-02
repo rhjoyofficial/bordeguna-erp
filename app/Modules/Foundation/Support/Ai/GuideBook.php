@@ -611,6 +611,19 @@ class GuideBook
                 'keywords' => ['attendance', 'daily attendance', 'correction', 'missing punch', 'needs review', 'absent fix'],
             ],
             [
+                'key' => 'self.timeline',
+                'topic' => 'Your own profile and self-service',
+                'title' => "Read a record's history: the Timeline",
+                'path' => "The Timeline section at the foot of a record's page",
+                'permission' => null,
+                'steps' => [
+                    'Open a customer, supplier, purchase order or employee - the Timeline at the bottom of the page tells its story: created, what changed and when, submitted for approval, who approved and with what note.',
+                    'It is read-only and comes from the audit record the system already keeps - if an event is not on the timeline, it was never recorded.',
+                    'The full company-wide audit trail (every change to everything) lives at Settings > Audit, for administrators.',
+                ],
+                'keywords' => ['timeline', 'history', 'who changed', 'audit', 'record history', 'log', 'itihash'],
+            ],
+            [
                 'key' => 'self.mywork',
                 'topic' => 'Your own profile and self-service',
                 'title' => 'Start the day on one page: My work',
@@ -735,6 +748,20 @@ class GuideBook
                     '⚠ A balanced trial balance proves the arithmetic, not the truth - a missing transaction balances perfectly.',
                 ],
                 'keywords' => ['report', 'profit', 'loss', 'balance sheet', 'trial balance', 'ledger', 'ageing', 'statement', 'valuation', 'cogs', 'hisab'],
+            ],
+            [
+                'key' => 'accounting.period_close',
+                'topic' => 'Money and the books',
+                'title' => 'Close a period, or unlock it for a correction',
+                'path' => 'Finance & Accounts > Period close',
+                'permission' => 'accounting.view',
+                'steps' => [
+                    'Open Finance & Accounts > Period close. The page shows where the boundary stands and a pre-close checklist (unpaid salaries, unbilled receipts, attendance still under review) - the checklist informs, it never blocks.',
+                    'Pick the date and close: everything ON OR BEFORE it is sealed - no journal, voucher, receipt or payment can land there.',
+                    'To correct something inside a closed period: Unlock with a written reason (required, kept on record with your name), make the correction, then close again.',
+                    'Closing and unlocking need the chart-management permission; viewing the page needs only accounting view.',
+                ],
+                'keywords' => ['period close', 'close books', 'lock month', 'month end', 'year end', 'unlock period', 'reopen', 'boundary', 'hisab bondho'],
             ],
             [
                 'key' => 'accounting.journal',

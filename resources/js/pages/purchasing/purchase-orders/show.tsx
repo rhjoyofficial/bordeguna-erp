@@ -1,4 +1,5 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
@@ -280,6 +281,7 @@ function ReturnGoodsForm({ order }: { order: Order }) {
 }
 
 export default function PurchaseOrderShow({
+    timeline,
     order,
     can_approve,
     can_receive,
@@ -287,6 +289,7 @@ export default function PurchaseOrderShow({
     can_return,
     can_cancel,
 }: {
+    timeline?: TimelineEntry[];
     order: Order;
     can_approve: boolean;
     can_receive: boolean;
@@ -468,6 +471,10 @@ export default function PurchaseOrderShow({
                         ))}
                     </div>
                 )}
+            </div>
+            <div className="border-border bg-card mx-4 mb-4 rounded-lg border p-4">
+                <h2 className="mb-3 text-sm font-semibold">Timeline</h2>
+                <RecordTimeline entries={timeline ?? []} />
             </div>
         </AppLayout>
     );
