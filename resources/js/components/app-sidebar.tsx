@@ -280,6 +280,7 @@ export function AppSidebar() {
                           ...(canViewCrm
                               ? [
                                     { title: 'Leads', url: '/crm/leads', icon: UserPlus },
+                                    { title: 'Pipeline', url: '/crm/pipeline', icon: UserPlus },
                                     // ⚠ The work queue is the screen an agent lives in all
                                     // day. Without it, follow-ups exist and nobody sees them.
                                     { title: 'Follow-ups', url: '/crm/queue', icon: CalendarCheck },

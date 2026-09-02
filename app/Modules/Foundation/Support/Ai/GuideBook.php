@@ -403,6 +403,21 @@ class GuideBook
                 'keywords' => ['promotion', 'buy one get one', 'bogo', 'free item', 'offer', 'deal', 'free', 'buy 2 get 1'],
             ],
             [
+                'key' => 'crm.pipeline',
+                'topic' => 'Customers and leads',
+                'title' => 'Work the sales pipeline: deals, stages, won and lost',
+                'path' => 'CRM > Pipeline',
+                'permission' => 'crm.leads.view',
+                'steps' => [
+                    'Open CRM > Pipeline: every open deal sits in one stage - Qualification, Proposal, Negotiation or Closing - with the money it is worth.',
+                    'Add a deal with the form on top: it belongs to a lead being courted or an existing customer being grown, never to nobody.',
+                    'Move a deal between stages from its card. Win it with one press; losing asks WHY and keeps the reason.',
+                    'Won and lost are outcomes, not columns - decided deals drop off the board into the Recently decided list below.',
+                    '⚠ Winning a deal records the win only; the actual order still goes through Sales > Sales orders or the counter as always.',
+                ],
+                'keywords' => ['pipeline', 'opportunity', 'deal', 'stage', 'kanban', 'won', 'lost deal', 'sales funnel'],
+            ],
+            [
                 'key' => 'sales.order_flow',
                 'topic' => 'Selling',
                 'title' => 'Sales order to invoice to delivery: the credit-sale flow',

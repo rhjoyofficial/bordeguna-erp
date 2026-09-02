@@ -9,6 +9,7 @@ use App\Modules\Crm\Http\Controllers\MessagingController;
 use App\Modules\Crm\Http\Controllers\CrmReportController;
 use App\Modules\Crm\Http\Controllers\CrmSettingsController;
 use App\Modules\Crm\Http\Controllers\LeadController;
+use App\Modules\Crm\Http\Controllers\OpportunityController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->group(function () {
@@ -19,6 +20,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         // ⚠ Duplicate detection is a READ. It must be available to anyone who can
         // see leads, or the warning cannot fire on the screen that needs it.
         Route::get('leads/duplicates', [LeadController::class, 'duplicates'])->name('leads.duplicates');
+        // The pipeline board: reading deals is reading the sales work.
+        Route::get('pipeline', [OpportunityController::class, 'index'])->name('pipeline');
     });
 
     Route::middleware('can:crm.leads.manage')->group(function () {
@@ -28,6 +31,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         // which of two leads should be worked. A working-list correction, so it
         // needs no permission beyond managing leads.
         Route::post('leads/{lead}/duplicate-of', [LeadController::class, 'linkDuplicate'])->name('leads.duplicate-of');
+
+        // Deals move with the same trust that works the leads they grew from.
+        Route::post('opportunities', [OpportunityController::class, 'store'])->name('opportunities.store');
+        Route::post('opportunities/{opportunity}/stage', [OpportunityController::class, 'stage'])->name('opportunities.stage');
+        Route::post('opportunities/{opportunity}/won', [OpportunityController::class, 'won'])->name('opportunities.won');
+        Route::post('opportunities/{opportunity}/lost', [OpportunityController::class, 'lost'])->name('opportunities.lost');
     });
 
     // ⚠⚠ Conversion creates MASTER DATA with a permanent code, so it is its own
