@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useState } from 'react';
 
 interface ReturnableLine {
     delivery_line_id: number;
@@ -41,6 +41,7 @@ export default function ReturnCreate({
     lines,
     can_refund,
     moneyAccounts,
+    invoiceLookupError = null,
 }: {
     deliveries: { id: number; delivery_number: string; delivered_at: string; customer: { id: number; name: string } | null }[];
     deliveryId: number | null;
@@ -48,7 +49,16 @@ export default function ReturnCreate({
     lines: ReturnableLine[];
     can_refund: boolean;
     moneyAccounts: { id: number; name: string; type: string }[];
+    invoiceLookupError: string | null;
 }) {
+    // The counter entry: the customer holds a receipt with an INVOICE number,
+    // so let the cashier type that instead of hunting for the challan.
+    const [invoiceNumber, setInvoiceNumber] = useState('');
+    const findByInvoice = () => {
+        if (invoiceNumber.trim() !== '') {
+            router.get(route('sales.returns.create'), { invoice_number: invoiceNumber.trim() }, { preserveState: false });
+        }
+    };
     const { data, setData, post, errors, processing, transform } = useForm<{
         delivery_id: string;
         returned_at: string;
@@ -101,6 +111,27 @@ export default function ReturnCreate({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Record return" />
             <div className="flex flex-col gap-6 p-4">
+                <div className="grid max-w-md gap-2">
+                    <Label>Receipt / invoice number the customer is holding</Label>
+                    <div className="flex gap-2">
+                        <Input
+                            placeholder="e.g. INV-0042"
+                            value={invoiceNumber}
+                            onChange={(e) => setInvoiceNumber(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    findByInvoice();
+                                }
+                            }}
+                        />
+                        <Button type="button" variant="outline" onClick={findByInvoice}>
+                            Find
+                        </Button>
+                    </div>
+                    {invoiceLookupError && <p className="text-destructive text-sm">{invoiceLookupError}</p>}
+                </div>
+
                 <div className="grid max-w-md gap-2">
                     <Label>Challan the goods came back from</Label>
                     <SearchableSelect

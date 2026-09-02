@@ -55,6 +55,7 @@ export default function InvoiceShow({
     isSettled,
     journal,
     moneyAccounts,
+    returnDeliveryId = null,
 }: {
     invoice: Invoice;
     outstanding: string;
@@ -63,6 +64,7 @@ export default function InvoiceShow({
     isSettled: boolean;
     journal: { id: number; journal_date: string; memo: string | null; lines: JournalLine[] } | null;
     moneyAccounts: { id: number; name: string }[];
+    returnDeliveryId: number | null;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Sales', href: '/sales/invoices' },
@@ -98,6 +100,12 @@ export default function InvoiceShow({
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/sales/invoices/${invoice.id}/print`}>Print / send</Link>
                         </Button>
+                        {/* A counter return starts where the receipt points. */}
+                        {returnDeliveryId !== null && (
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={`/sales/returns/create?delivery_id=${returnDeliveryId}`}>Record a return</Link>
+                            </Button>
+                        )}
                     </div>
                 </div>
 

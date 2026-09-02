@@ -359,6 +359,21 @@ class GuideBook
                 'keywords' => ['hold', 'held cart', 'park', 'parked', 'suspend', 'resume', 'waiting customer', 'queue'],
             ],
             [
+                'key' => 'sales.counter_return',
+                'topic' => 'Selling',
+                'title' => 'Take a return or exchange at the counter',
+                'path' => 'Sales > Returns > Record return',
+                'permission' => 'sales.returns.record',
+                'steps' => [
+                    'Ask for the receipt and open Sales > Returns > Record return; type the invoice number from the receipt in the top box and press Find - the system locates the delivery itself.',
+                    'Per line, enter how much goes BACK TO STOCK and how much is WRITTEN OFF (damaged) - the caps shown are what was actually sold and not yet returned.',
+                    'Cash back to the customer: fill the refund box in the same form - return and refund post as ONE transaction. Only Owner or Manager may refund cash.',
+                    'An EXCHANGE is a return plus a fresh counter sale: record the return (with cash refund if sizes differ in price), then sell the replacement at Sales > Counter sale as normal.',
+                    '⚠ There is no separate exchange document on purpose - two honest documents beat one clever one, and the books stay readable.',
+                ],
+                'keywords' => ['return', 'exchange', 'refund', 'ferot', 'customer return', 'money back', 'damaged goods', 'receipt'],
+            ],
+            [
                 'key' => 'sales.order_flow',
                 'topic' => 'Selling',
                 'title' => 'Sales order to invoice to delivery: the credit-sale flow',

@@ -229,6 +229,13 @@ class SalesInvoiceController extends Controller
 
         return Inertia::render('sales/invoices/show', [
             'invoice' => $invoice,
+            // The delivery a return against this invoice would come back on -
+            // the invoice page is where a counter return naturally starts.
+            'returnDeliveryId' => $invoice->lines
+                ->pluck('deliveryLine.delivery.id')
+                ->filter()
+                ->unique()
+                ->first(),
             'outstanding' => $invoice->outstanding()->toTaka(),
             'received' => $invoice->receivedTotal()->toTaka(),
             'costReleased' => $invoice->costReleased()->toTaka(),

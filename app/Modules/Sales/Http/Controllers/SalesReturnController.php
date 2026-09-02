@@ -69,6 +69,31 @@ class SalesReturnController extends Controller
         $deliveryId = $request->integer('delivery_id') ?: null;
         $delivery = null;
         $lines = [];
+        $invoiceLookupError = null;
+
+        // ⚠ The counter entry: a customer at the till holds a RECEIPT with an
+        // invoice number, not a challan number. Resolve the delivery through
+        // the invoice so the cashier types the number they were handed. Same
+        // screen, same caps, same engine - only the way in changes.
+        $invoiceNumber = trim((string) $request->query('invoice_number', ''));
+        if ($deliveryId === null && $invoiceNumber !== '') {
+            $invoice = \App\Modules\Sales\Models\SalesInvoice::query()
+                ->with('lines.deliveryLine:id,delivery_id')
+                ->where('invoice_number', $invoiceNumber)
+                ->first();
+
+            $deliveryId = $invoice?->lines
+                ->pluck('deliveryLine.delivery_id')
+                ->filter()
+                ->unique()
+                ->first();
+
+            if ($deliveryId === null) {
+                $invoiceLookupError = $invoice === null
+                    ? "No invoice carries the number \"{$invoiceNumber}\". Check the receipt - the number starts with INV."
+                    : "Invoice {$invoiceNumber} has no delivery to return against.";
+            }
+        }
 
         if ($deliveryId !== null) {
             $delivery = Delivery::query()
@@ -101,6 +126,7 @@ class SalesReturnController extends Controller
             'deliveryId' => $deliveryId,
             'delivery' => $delivery?->only(['id', 'delivery_number', 'customer']),
             'lines' => $lines,
+            'invoiceLookupError' => $invoiceLookupError,
             'can_refund' => $request->user()->can('sales.returns.refund'),
             'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
