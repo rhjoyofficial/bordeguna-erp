@@ -106,7 +106,7 @@ class RecruitmentController extends Controller
                 ->map(fn (JobOpeningStatus $s) => ['value' => $s->value, 'label' => $s->label()])->values(),
             // ⚠ Offered so a hire can be LINKED to a record that already exists.
             // Nothing here creates one.
-            'employees' => Employee::query()->orderBy('first_name')->get(['id', 'first_name', 'last_name'])
+            'employees' => Employee::query()->orderBy('employee_code')->get(['id', 'first_name', 'last_name'])
                 ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName()]),
             'can' => ['manage' => $request->user()->can('recruitment.manage')],
         ]);

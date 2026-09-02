@@ -62,7 +62,7 @@ class DailyAttendanceController extends Controller
             ->get()
             // Date first, then person, so a range reads as a diary rather than a
             // heap. A single day is unchanged: one date, sorted by name.
-            ->sortBy(fn (DailyAttendance $day) => $day->attendance_date->toDateString().'|'.$day->employee?->fullName())
+            ->sortBy(fn (DailyAttendance $day) => $day->attendance_date->toDateString().'|'.($day->employee?->employee_code ?? ''))
             ->values();
 
         // Every applied fix in the window, so a corrected row can say what was

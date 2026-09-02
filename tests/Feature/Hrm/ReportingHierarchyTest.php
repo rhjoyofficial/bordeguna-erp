@@ -12,17 +12,15 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
- * Module 1, Slice 1 of the master plan (2 Sep 2026): the reporting hierarchy.
+ * Module 1, Slice 1 of the master plan (2 Sep 2026): the reporting hierarchy
+ * made VISIBLE - and guarded.
  *
- * The system had NO concept of who reports to whom - the boss's staff-benefit
- * spec needs an approval chain, the HRM spec's manager-self-service needs a
- * team, and the collection pack has been gathering "reports to" codes with
- * nowhere to put them. `reports_to` is that place.
- *
- * ⚠⚠ A hierarchy's one structural failure is a CYCLE: A reports to B reports
- * to A leaves every walk up the chain spinning forever. The rule pins both
- * the self-loop and the longer cycle, because the second is the one a form
- * full of honest data can still produce.
+ * The line itself already existed: employee_assignments.supervisor_id,
+ * written by the Reassign flow since 22 July and populated in production. The
+ * first cut of this slice added a duplicate employees.reports_to in ignorance
+ * of it; the duplicate was removed the same evening (the 31 Aug lesson again:
+ * VERIFY IN CODE FIRST). What this slice really adds is the org chart page
+ * and the cycle guard the reassign path never had.
  */
 beforeEach(function () {
     $this->business = Business::create(['name' => 'Chain Co', 'slug' => 'chain-co']);
@@ -50,6 +48,12 @@ beforeEach(function () {
     $this->founder = $make('Moin', 'Chowdhury');
     $this->manager = $make('Musa', 'Islam');
     $this->staffer = $make('Rakib', 'Hossain');
+
+    // The line lives on the current primary assignment, set here the way the
+    // Reassign flow stores it.
+    $this->setSupervisor = function (Employee $employee, ?int $supervisorId) {
+        $employee->currentAssignment()->update(['supervisor_id' => $supervisorId]);
+    };
 });
 
 function chainOwner()
@@ -57,79 +61,39 @@ function chainOwner()
     return test()->actingAs(test()->owner)->withSession(['current_business_id' => test()->business->id]);
 }
 
-/** The minimum master-field payload the update route insists on. */
-function hierarchyPayload(Employee $employee, array $overrides = []): array
-{
-    return array_merge([
-        'first_name' => $employee->first_name,
-        'last_name' => $employee->last_name,
-        'employment_type' => 'permanent',
-        'joining_date' => '2025-01-01',
-    ], $overrides);
-}
+it('refuses a reassignment that would circle the reporting chain', function () {
+    // Musa answers to Moin, Rakib to Musa: a real chain.
+    ($this->setSupervisor)($this->manager, $this->founder->id);
+    ($this->setSupervisor)($this->staffer, $this->manager->id);
 
-it('stores who an employee reports to, through the ordinary edit route', function () {
+    // Now Moin is reassigned to answer to Rakib - every walk up would spin.
     chainOwner()
-        ->patch(route('hrm.employees.update', $this->staffer), hierarchyPayload($this->staffer, [
-            'reports_to' => $this->manager->id,
-        ]))
+        ->post(route('hrm.employees.transfer', $this->founder), [
+            'effective_from' => now()->toDateString(),
+            'office_id' => $this->office->id,
+            'supervisor_id' => $this->staffer->id,
+        ])
+        ->assertSessionHasErrors('supervisor_id');
+
+    expect($this->founder->fresh()->currentAssignment()->supervisor_id)->toBeNull();
+});
+
+it('accepts an honest reassignment and records the line on the new posting', function () {
+    chainOwner()
+        ->post(route('hrm.employees.transfer', $this->staffer), [
+            'effective_from' => now()->toDateString(),
+            'office_id' => $this->office->id,
+            'supervisor_id' => $this->manager->id,
+        ])
         ->assertSessionHasNoErrors();
 
-    expect($this->staffer->fresh()->reports_to)->toBe($this->manager->id)
-        ->and($this->staffer->fresh()->supervisor->id)->toBe($this->manager->id)
-        ->and($this->manager->fresh()->directReports->pluck('id'))->toContain($this->staffer->id);
-});
-
-it('clears the supervisor when the field is emptied - the founder reports to nobody', function () {
-    $this->staffer->update(['reports_to' => $this->manager->id]);
-
-    chainOwner()
-        ->patch(route('hrm.employees.update', $this->staffer), hierarchyPayload($this->staffer, [
-            'reports_to' => null,
-        ]))
-        ->assertSessionHasNoErrors();
-
-    expect($this->staffer->fresh()->reports_to)->toBeNull();
-});
-
-it('refuses an employee reporting to themselves', function () {
-    chainOwner()
-        ->patch(route('hrm.employees.update', $this->manager), hierarchyPayload($this->manager, [
-            'reports_to' => $this->manager->id,
-        ]))
-        ->assertSessionHasErrors('reports_to');
-
-    expect($this->manager->fresh()->reports_to)->toBeNull();
-});
-
-it('refuses the cycle a form full of honest data can produce', function () {
-    // Musa reports to Moin, Rakib reports to Musa: a real chain.
-    $this->manager->update(['reports_to' => $this->founder->id]);
-    $this->staffer->update(['reports_to' => $this->manager->id]);
-
-    // Now somebody sets Moin to report to Rakib - every walk up would spin.
-    chainOwner()
-        ->patch(route('hrm.employees.update', $this->founder), hierarchyPayload($this->founder, [
-            'reports_to' => $this->staffer->id,
-        ]))
-        ->assertSessionHasErrors('reports_to');
-
-    expect($this->founder->fresh()->reports_to)->toBeNull();
-});
-
-it('offers the supervisor choices on the edit screen, never including the employee themselves', function () {
-    chainOwner()
-        ->get(route('hrm.employees.edit', $this->staffer))
-        ->assertInertia(fn (Assert $page) => $page
-            ->component('hrm/employees/edit')
-            ->has('supervisor_options')
-            ->where('supervisor_options', fn ($options) => collect($options)
-                ->pluck('value')->doesntContain((string) $this->staffer->id)));
+    expect($this->staffer->fresh()->currentAssignment()->supervisor_id)->toBe($this->manager->id)
+        ->and($this->staffer->fresh()->currentSupervisor()->id)->toBe($this->manager->id);
 });
 
 it('renders the organization chart to any signed-in member, roots first', function () {
-    $this->manager->update(['reports_to' => $this->founder->id]);
-    $this->staffer->update(['reports_to' => $this->manager->id]);
+    ($this->setSupervisor)($this->manager, $this->founder->id);
+    ($this->setSupervisor)($this->staffer, $this->manager->id);
 
     // An ordinary staff login with NO permission at all - the chart is the
     // company phone book's shape, not a payroll document.
@@ -149,12 +113,32 @@ it('renders the organization chart to any signed-in member, roots first', functi
             ->where('tree.0.reports.0.reports.0.name', 'Rakib Hossain'));
 });
 
-it('keeps a separated employee off the chart', function () {
-    $this->manager->update(['reports_to' => $this->founder->id]);
-    $this->staffer->update(['reports_to' => $this->manager->id, 'status' => 'separated']);
+it('keeps a separated employee off the chart and surfaces their orphaned reports at the root', function () {
+    ($this->setSupervisor)($this->manager, $this->founder->id);
+    ($this->setSupervisor)($this->staffer, $this->manager->id);
+    $this->manager->update(['status' => 'separated']);
 
     chainOwner()
         ->get(route('hrm.org-chart'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('tree.0.reports.0.reports', []));
+            // Moin stays a root with nobody under him; Rakib does not vanish
+            // with his departed manager - he surfaces at the root.
+            ->has('tree', 2)
+            ->where('tree.0.name', 'Moin Chowdhury')
+            ->where('tree.0.reports', [])
+            ->where('tree.1.name', 'Rakib Hossain'));
+});
+
+it('orders chart siblings by employee code, never by name (Joy, 2 Sep)', function () {
+    // A name that sorts FIRST alphabetically gets the HIGHEST code, so a
+    // name sort and a code sort cannot agree.
+    app(CreateEmployee::class)->handle(
+        ['first_name' => 'Aaa', 'last_name' => 'Aaa', 'employment_type' => 'permanent', 'joining_date' => '2025-01-01'],
+        ['office_id' => $this->office->id],
+    );
+
+    chainOwner()
+        ->get(route('hrm.org-chart'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('tree', fn ($tree) => collect($tree)->last()['name'] === 'Aaa Aaa'));
 });

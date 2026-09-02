@@ -76,7 +76,7 @@ class DisbursementController extends Controller
                     'confirmed_by' => $batch->confirmer?->name,
                 ]),
             'payslips' => $run->payslips
-                ->sortBy(fn (Payslip $p) => $p->employee?->fullName())
+                ->sortBy(fn (Payslip $p) => $p->employee?->employee_code ?? '')
                 ->values()
                 ->map(fn (Payslip $payslip) => [
                     'id' => $payslip->id,

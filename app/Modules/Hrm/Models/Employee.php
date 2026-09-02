@@ -39,7 +39,6 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
 
     protected $fillable = [
         'employee_code',
-        'reports_to',
         'biometric_enroll_id',
         'may_clock_in_remotely',
         'remote_clock_in_granted_by',
@@ -91,7 +90,6 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
      */
     public const EDITABLE_FIELDS = [
         'first_name', 'last_name', 'employment_type', 'probation_months', 'biometric_enroll_id',
-        'reports_to',
         'personal_email', 'phone', 'present_address', 'permanent_address',
         'national_id', 'birth_certificate_no', 'date_of_birth',
         'joining_date', 'confirmation_date', 'contract_end_date',
@@ -333,26 +331,24 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
      * @return array<string, mixed>
      */
     /**
-     * Who this employee answers to. Null is a real answer: the founder, and
-     * anyone whose chain has not been recorded yet (Module 1, Slice 1).
+     * Who this employee answers to right now: the supervisor on the current
+     * primary assignment. ⚠ The reporting line lives on the ASSIGNMENT, not
+     * the employee - it is part of the posting, changes with a transfer, and
+     * keeps its history (here since 22 July; an employee-level duplicate was
+     * added and removed on 2 Sep, the day the org chart made it visible).
      */
-    public function supervisor(): BelongsTo
+    public function currentSupervisor(): ?self
     {
-        return $this->belongsTo(self::class, 'reports_to');
-    }
-
-    public function directReports(): HasMany
-    {
-        return $this->hasMany(self::class, 'reports_to');
+        return $this->currentAssignment()?->supervisor;
     }
 
     /**
-     * Would making $candidate the supervisor of $employee close a loop?
+     * Would making $candidateId the supervisor of $employee close a loop?
      *
-     * ⚠⚠ Walks UP from the candidate: if the walk ever reaches the employee
-     * being edited, the chain would circle. Capped rather than trusted,
-     * because the one thing a cycle guard must never do is loop forever on
-     * the exact data it exists to refuse.
+     * ⚠⚠ Walks UP the current-assignment graph from the candidate: if the
+     * walk ever reaches the employee being reassigned, the chain would
+     * circle. Capped rather than trusted, because the one thing a cycle
+     * guard must never do is loop forever on the data it exists to refuse.
      */
     public static function wouldCreateReportingCycle(self $employee, int $candidateId): bool
     {
@@ -363,7 +359,7 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
                 return true;
             }
 
-            $current = self::whereKey($current)->value('reports_to');
+            $current = self::whereKey($current)->first()?->currentAssignment()?->supervisor_id;
         }
 
         return false;
@@ -373,21 +369,6 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
     {
         return [
             'first_name' => ['required', 'string', 'max:255'],
-            // The reporting line. Self and cycles are refused with the same
-            // message, because to the person filling the form they are the
-            // same mistake at different distances.
-            'reports_to' => [
-                'nullable', 'integer', Rule::exists('employees', 'id'),
-                function (string $attribute, mixed $value, \Closure $fail) use ($employee) {
-                    if ($employee === null || $value === null) {
-                        return;
-                    }
-
-                    if ((int) $value === $employee->id || self::wouldCreateReportingCycle($employee, (int) $value)) {
-                        $fail('This would make the reporting chain circle back on itself.');
-                    }
-                },
-            ],
             'last_name' => ['required', 'string', 'max:255'],
             'employment_type' => ['required', new Enum(EmploymentType::class)],
             // Joy, 24 Aug 2026: probation is 6 months by default but "can vary

@@ -290,20 +290,6 @@ class EmployeeController extends Controller
             // SAL-08: the method varies per employee, and payroll validation
             // needs it to know which account details it should be insisting on.
             'payment_methods' => SalaryPaymentMethod::options(),
-            // The reporting line (Module 1, Slice 1). Everyone active in this
-            // business except the person being edited - the one choice the
-            // cycle rule would always refuse.
-            'supervisor_options' => Employee::query()
-                ->whereKeyNot($employee->id)
-                ->where('status', EmployeeStatus::Active)
-                ->whereHas('assignments')
-                ->orderBy('first_name')
-                ->get()
-                ->map(fn (Employee $candidate) => [
-                    'value' => (string) $candidate->id,
-                    'label' => $candidate->fullName().' ('.$candidate->employee_code.')',
-                ])
-                ->values(),
         ]);
     }
 
@@ -519,6 +505,17 @@ class EmployeeController extends Controller
             'designation_id' => ['nullable', Rule::exists('designations', 'id')->where('business_id', $businessId)],
             'supervisor_id' => ['nullable', Rule::in($eligibleSupervisors)],
         ]);
+
+        // ⚠⚠ The one structural failure a hierarchy has: a chain that circles
+        // (A answers to B answers to A). This guard was missing from the day
+        // supervisor_id shipped; the org chart made the graph visible and the
+        // gap with it (Module 1, Slice 1).
+        if (($data['supervisor_id'] ?? null) !== null
+            && Employee::wouldCreateReportingCycle($employee, (int) $data['supervisor_id'])) {
+            return back()->withErrors([
+                'supervisor_id' => 'This would make the reporting chain circle back on itself.',
+            ]);
+        }
 
         $action->handle($employee, $current, $data['effective_from'], [
             'office_id' => $data['office_id'] ?? null,

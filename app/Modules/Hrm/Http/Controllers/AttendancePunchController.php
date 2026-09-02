@@ -162,8 +162,7 @@ class AttendancePunchController extends Controller
             // Ordered by the person, then their day in time order, so one
             // employee's fortnight reads as a continuous story.
             return $query->join('employees', 'employees.id', '=', 'attendance_punches.employee_id')
-                ->orderBy('employees.first_name', $direction)
-                ->orderBy('employees.last_name', $direction)
+                ->orderBy('employees.employee_code', $direction)
                 ->orderBy('attendance_punches.punched_at')
                 ->select('attendance_punches.*');
         }

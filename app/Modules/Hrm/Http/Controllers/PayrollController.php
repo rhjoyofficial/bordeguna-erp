@@ -97,7 +97,7 @@ class PayrollController extends Controller
             'payslips' => $run === null ? [] : $run->payslips()
                 ->with(['employee:id,employee_code,first_name,last_name', 'lines'])
                 ->get()
-                ->sortBy(fn (Payslip $p) => $p->employee?->fullName())
+                ->sortBy(fn (Payslip $p) => $p->employee?->employee_code ?? '')
                 ->values()
                 ->map(fn (Payslip $payslip) => $this->present($payslip)),
             'periods' => PayrollPeriod::orderByDesc('year')->orderByDesc('month')->limit(12)->get()

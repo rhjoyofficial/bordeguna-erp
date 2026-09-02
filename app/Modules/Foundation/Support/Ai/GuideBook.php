@@ -630,8 +630,8 @@ class GuideBook
                 'path' => 'HRM > Employees',
                 'permission' => 'hrm.employees.manage',
                 'steps' => [
-                    'Open HRM > Employees, open the person, press Edit.',
-                    'Set "Reports to" - pick their supervisor, or "Nobody (top of the chart)" for the founder.',
+                    'Open HRM > Employees, open the person, and press "Reassign" on their page.',
+                    'Set the Supervisor there, with the effective date - the reporting line is part of the posting, so it keeps its history when someone transfers.',
                     'The form refuses a choice that would make the chain circle back on itself.',
                     'The Org chart page updates immediately; approval chains that follow the reporting line use this same field.',
                 ],
