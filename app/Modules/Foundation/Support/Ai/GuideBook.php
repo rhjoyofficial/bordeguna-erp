@@ -388,6 +388,21 @@ class GuideBook
                 'keywords' => ['slip', 'thermal', 'receipt paper', 'reprint', 'print receipt', '80mm', 'rasid'],
             ],
             [
+                'key' => 'sales.promotions',
+                'topic' => 'Selling',
+                'title' => 'Run a Buy X Get Y free promotion',
+                'path' => 'Sales > Promotions',
+                'permission' => 'sales.prices.manage',
+                'steps' => [
+                    'Open Sales > Promotions: name the deal, pick what the customer buys and how many, what they get free, and the dates.',
+                    'The counter applies it BY ITSELF: when a cart holds enough of the buy product, the free item is added at a price of zero. Buy 3 get 1 means 7 bought earns 2 free.',
+                    'The free item still leaves stock and its cost still posts - the books record what a promotion really costs.',
+                    'Pause a deal any time from the same screen; it also stops by itself after the last day. A deal is never deleted.',
+                    '⚠ A CHEAPER PRICE (10 percent off, festival price) is not a promotion here - set it on Sales > Discounts, which prices through the ordinary price list.',
+                ],
+                'keywords' => ['promotion', 'buy one get one', 'bogo', 'free item', 'offer', 'deal', 'free', 'buy 2 get 1'],
+            ],
+            [
                 'key' => 'sales.order_flow',
                 'topic' => 'Selling',
                 'title' => 'Sales order to invoice to delivery: the credit-sale flow',

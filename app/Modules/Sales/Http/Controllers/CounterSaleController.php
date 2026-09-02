@@ -184,16 +184,22 @@ class CounterSaleController extends Controller
         // changes nothing about which sales are refused, only whether the
         // refusal can be read. The key is `lines` because that is what the
         // counter screen renders.
+        $saleLines = collect($data['lines'])->map(fn (array $line) => [
+            'product' => $products[$line['product_id']],
+            'quantity' => (string) $line['quantity'],
+            'unitPrice' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
+            'discount' => isset($line['discount']) ? (string) $line['discount'] : '0',
+        ])->all();
+
+        // Buy X Get Y: the SERVER decides what the cart earned, and the free
+        // line arrives priced at zero - revenue 0, cost still posts.
+        $saleLines = array_merge($saleLines, app(\App\Modules\Sales\Support\ApplyPromotions::class)->earnedLines($saleLines));
+
         try {
             $sale = $action->handle(
                 customer: Customer::findOrFail($data['customer_id']),
                 warehouse: Warehouse::findOrFail($data['warehouse_id']),
-                lines: collect($data['lines'])->map(fn (array $line) => [
-                    'product' => $products[$line['product_id']],
-                    'quantity' => (string) $line['quantity'],
-                    'unitPrice' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
-                    'discount' => isset($line['discount']) ? (string) $line['discount'] : '0',
-                ])->all(),
+                lines: $saleLines,
                 createdBy: $request->user(),
                 moneyAccount: isset($data['money_account_id'])
                     ? MoneyAccount::findOrFail($data['money_account_id'])

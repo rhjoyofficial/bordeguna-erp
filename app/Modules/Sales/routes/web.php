@@ -2,6 +2,7 @@
 
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\PosShiftController;
+use App\Modules\Sales\Http\Controllers\PromotionController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
 use App\Modules\Sales\Http\Controllers\CustomerImportController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
@@ -86,6 +87,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     Route::get('prices/export', [PriceImportController::class, 'export'])->name('prices.export');
 
     Route::middleware('can:sales.prices.manage')->group(function () {
+        // Buy X Get Y free: a pricing decision, so the pricing permission.
+        Route::get('promotions', [PromotionController::class, 'index'])->name('promotions');
+        Route::post('promotions', [PromotionController::class, 'store'])->name('promotions.store');
+        Route::post('promotions/{promotion}/toggle', [PromotionController::class, 'toggle'])->name('promotions.toggle');
         Route::post('prices', [ProductPriceController::class, 'store'])->name('prices.store');
         Route::post('prices/{productPrice}/close', [ProductPriceController::class, 'close'])->name('prices.close');
 
