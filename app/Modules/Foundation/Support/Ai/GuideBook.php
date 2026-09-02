@@ -611,6 +611,19 @@ class GuideBook
                 'keywords' => ['attendance', 'daily attendance', 'correction', 'missing punch', 'needs review', 'absent fix'],
             ],
             [
+                'key' => 'self.mywork',
+                'topic' => 'Your own profile and self-service',
+                'title' => 'Start the day on one page: My work',
+                'path' => 'My work (top of the sidebar)',
+                'permission' => null,
+                'steps' => [
+                    'Open "My work" in the sidebar. Everything waiting on you is gathered there: approvals you can act on, follow-ups assigned to you, your own to-dos, and the requests you are waiting on others to decide.',
+                    'Roles that hold the permissions also see attendance rows needing review and standing costs falling due this week.',
+                    'Each card links to the screen where the work is actually done - My work gathers, it never decides.',
+                ],
+                'keywords' => ['my work', 'work queue', 'today', 'pending', 'waiting', 'what to do', 'inbox', 'kaj'],
+            ],
+            [
                 'key' => 'self.search',
                 'topic' => 'Your own profile and self-service',
                 'title' => 'Find anything fast: the search box',

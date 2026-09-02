@@ -25,6 +25,9 @@ Route::middleware(['auth', 'business'])->group(function () {
 
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
+    // MY WORK (Module 1, Slice 3): the personal queue - approvals, follow-ups,
+    // to-dos, waiting-on-others, and the role-gated warning sections.
+    Route::get('work', App\Http\Controllers\MyWorkController::class)->name('work');
     Route::get('approvals', [ApprovalInboxController::class, 'index'])->name('approvals.index');
 
     // The header search. A GET on purpose (the hand-written-fetch trap: a GET
