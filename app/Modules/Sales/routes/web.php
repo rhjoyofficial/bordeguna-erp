@@ -147,6 +147,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // nobody's business outside.
         Route::get('invoices/{invoice}/print', [SalesInvoiceController::class, 'print'])
             ->whereNumber('invoice')->name('invoices.print');
+        // The 80mm counter slip - same reading permission, reprint = revisit.
+        Route::get('invoices/{invoice}/slip', [SalesInvoiceController::class, 'slip'])
+            ->whereNumber('invoice')->name('invoices.slip');
         Route::get('deliveries/{delivery}/print', [DeliveryController::class, 'print'])
             ->whereNumber('delivery')->name('deliveries.print');
         Route::get('receipts/{receipt}/print', [SalesInvoiceController::class, 'printReceipt'])

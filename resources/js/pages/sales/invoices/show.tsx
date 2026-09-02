@@ -100,6 +100,9 @@ export default function InvoiceShow({
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/sales/invoices/${invoice.id}/print`}>Print / send</Link>
                         </Button>
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={`/sales/invoices/${invoice.id}/slip`}>Thermal slip</Link>
+                        </Button>
                         {/* A counter return starts where the receipt points. */}
                         {returnDeliveryId !== null && (
                             <Button variant="outline" size="sm" asChild>

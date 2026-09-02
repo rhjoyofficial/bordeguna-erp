@@ -274,6 +274,35 @@ class SalesInvoiceController extends Controller
     }
 
     /**
+     * The thermal slip (POS spec §19): the paper a counter customer walks
+     * away with. 80mm of shop name, lines, payment and seller - and a barcode
+     * of the invoice number, which is the SAME number the returns screen
+     * accepts, so a scan closes the loop. Reprint is visiting this page
+     * again; the slip computes nothing itself.
+     */
+    public function slip(SalesInvoice $invoice): Response
+    {
+        $invoice->load([
+            'customer:id,name,phone',
+            'lines.product:id,name,sku',
+            'allocations.receipt.moneyAccount:id,name',
+        ]);
+
+        return Inertia::render('sales/invoices/slip', [
+            'invoice' => $invoice,
+            'outstanding' => $invoice->outstanding()->toTaka(),
+            'payments' => $invoice->allocations->map(fn ($allocation) => [
+                'account' => $allocation->receipt?->moneyAccount?->name,
+                'amount' => $allocation->amount,
+                'received_on' => $allocation->receipt?->received_on,
+            ])->values(),
+            'soldBy' => \App\Models\User::query()->where('id', $invoice->created_by)->value('name'),
+            'issuer' => BusinessIdentity::forCurrent()->toArray(),
+            'barcodeSvg' => \App\Modules\Inventory\Support\Code128::svg($invoice->invoice_number, 56, 11),
+        ]);
+    }
+
+    /**
      * The money receipt, which is the paper that proves a payment was made.
      *
      * ⚠ A receipt may settle SEVERAL invoices at once, so it is printed from

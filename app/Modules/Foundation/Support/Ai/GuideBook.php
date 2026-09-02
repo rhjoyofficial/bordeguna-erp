@@ -374,6 +374,20 @@ class GuideBook
                 'keywords' => ['return', 'exchange', 'refund', 'ferot', 'customer return', 'money back', 'damaged goods', 'receipt'],
             ],
             [
+                'key' => 'sales.thermal_slip',
+                'topic' => 'Selling',
+                'title' => 'Print the counter slip (80mm thermal receipt)',
+                'path' => 'Sales > Invoices > open the invoice > Thermal slip',
+                'permission' => 'sales.reports.view',
+                'steps' => [
+                    'After a counter sale the invoice opens; press Thermal slip and then Print slip - the page is sized for 80mm paper.',
+                    'The slip shows the shop, the lines, what was paid and through which till, who sold it, and a barcode of the invoice number.',
+                    'Reprint any time: open the invoice again and press Thermal slip - the paper never carries anything the record does not.',
+                    'The barcode is the invoice number the returns screen accepts: scan it into the Find box on Record return and the sale opens itself.',
+                ],
+                'keywords' => ['slip', 'thermal', 'receipt paper', 'reprint', 'print receipt', '80mm', 'rasid'],
+            ],
+            [
                 'key' => 'sales.order_flow',
                 'topic' => 'Selling',
                 'title' => 'Sales order to invoice to delivery: the credit-sale flow',
