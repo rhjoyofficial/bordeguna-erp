@@ -611,6 +611,19 @@ class GuideBook
                 'keywords' => ['attendance', 'daily attendance', 'correction', 'missing punch', 'needs review', 'absent fix'],
             ],
             [
+                'key' => 'self.search',
+                'topic' => 'Your own profile and self-service',
+                'title' => 'Find anything fast: the search box',
+                'path' => 'The search box in the header (or press Ctrl+K)',
+                'permission' => null,
+                'steps' => [
+                    'Press Ctrl+K anywhere, or click the search box in the header, and type at least two characters.',
+                    'It finds products, customers (by name OR phone), suppliers, employees, leads - and DOCUMENT NUMBERS: type an invoice, sales order, purchase order, expense reference or journal number and land on the document itself.',
+                    'You only ever see what your own role could open anyway - the results are filtered by your permissions.',
+                ],
+                'keywords' => ['search', 'find', 'lookup', 'ctrl k', 'invoice number', 'po number', 'journal number', 'phone lookup', 'khoja'],
+            ],
+            [
                 'key' => 'self.orgchart',
                 'topic' => 'Your own profile and self-service',
                 'title' => 'See the organization chart: who reports to whom',

@@ -7,6 +7,11 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\ExpenseVoucher;
+use App\Modules\Accounting\Models\Journal;
+use App\Modules\Crm\Models\Lead;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -64,7 +69,8 @@ class GlobalSearchController extends Controller
 
         if ($user->can('sales.reports.view')) {
             $customers = Customer::query()
-                ->where('name', 'like', $like)
+                // A phone number is how the counter remembers a person.
+                ->where(fn ($w) => $w->where('name', 'like', $like)->orWhere('phone', 'like', $like))
                 ->orderBy('name')
                 ->limit(self::PER_GROUP)
                 ->get(['id', 'name'])
@@ -129,6 +135,95 @@ class GlobalSearchController extends Controller
 
             if ($employees->isNotEmpty()) {
                 $groups[] = ['title' => 'Employees', 'items' => $employees->values()];
+            }
+        }
+
+        // ── Document numbers (Module 1, Slice 2): "PO-2026-00042" lands on
+        // the order itself, not on a list to hunt through. Same law as above:
+        // each group wears its destination screen's permission.
+        if ($user->can('sales.reports.view')) {
+            $orders = SalesOrder::query()
+                ->where('order_number', 'like', $like)
+                ->orderByDesc('id')
+                ->limit(self::PER_GROUP)
+                ->get(['id', 'order_number'])
+                ->map(fn (SalesOrder $o) => [
+                    'label' => $o->order_number,
+                    'sub' => 'Sales order',
+                    'url' => '/sales/orders/'.$o->id,
+                ]);
+
+            if ($orders->isNotEmpty()) {
+                $groups[] = ['title' => 'Sales orders', 'items' => $orders->values()];
+            }
+        }
+
+        if ($user->can('purchasing.reports.view')) {
+            $purchaseOrders = PurchaseOrder::query()
+                ->where('po_number', 'like', $like)
+                ->orderByDesc('id')
+                ->limit(self::PER_GROUP)
+                ->get(['id', 'po_number'])
+                ->map(fn (PurchaseOrder $po) => [
+                    'label' => $po->po_number,
+                    'sub' => 'Purchase order',
+                    'url' => '/purchasing/purchase-orders/'.$po->id,
+                ]);
+
+            if ($purchaseOrders->isNotEmpty()) {
+                $groups[] = ['title' => 'Purchase orders', 'items' => $purchaseOrders->values()];
+            }
+
+            // The list is the expenses page; the reference is how a standing
+            // cost is remembered (NIKOLA-2026-09), so it lands on the list
+            // filtered to exactly that voucher.
+            $vouchers = ExpenseVoucher::query()
+                ->where(fn ($w) => $w->where('voucher_number', 'like', $like)->orWhere('reference', 'like', $like))
+                ->orderByDesc('id')
+                ->limit(self::PER_GROUP)
+                ->get(['id', 'voucher_number', 'reference'])
+                ->map(fn (ExpenseVoucher $v) => [
+                    'label' => $v->voucher_number,
+                    'sub' => $v->reference ?? 'Expense',
+                    'url' => '/purchasing/expenses?search='.urlencode($q),
+                ]);
+
+            if ($vouchers->isNotEmpty()) {
+                $groups[] = ['title' => 'Expenses', 'items' => $vouchers->values()];
+            }
+        }
+
+        if ($user->can('accounting.view')) {
+            $journals = Journal::query()
+                ->where('journal_number', 'like', $like)
+                ->orderByDesc('id')
+                ->limit(self::PER_GROUP)
+                ->get(['id', 'journal_number', 'memo'])
+                ->map(fn (Journal $j) => [
+                    'label' => $j->journal_number,
+                    'sub' => mb_strimwidth((string) $j->memo, 0, 40, '...'),
+                    'url' => '/accounting/journals/'.$j->id,
+                ]);
+
+            if ($journals->isNotEmpty()) {
+                $groups[] = ['title' => 'Journals', 'items' => $journals->values()];
+            }
+        }
+
+        if ($user->can('crm.leads.view')) {
+            $leads = Lead::query()
+                ->where(fn ($w) => $w->where('name', 'like', $like)->orWhere('phone', 'like', $like))
+                ->orderByDesc('id')
+                ->limit(self::PER_GROUP)
+                ->get(['id', 'name', 'phone'])
+                ->map(fn (Lead $l) => [
+                    'label' => $l->name,
+                    'sub' => $l->phone ?? 'Lead',
+                    'url' => '/crm/leads?search='.urlencode($q),
+                ]);
+
+            if ($leads->isNotEmpty()) {
+                $groups[] = ['title' => 'Leads', 'items' => $leads->values()];
             }
         }
 
