@@ -146,6 +146,7 @@ export function AppSidebar() {
                 ...(canUseChat ? [{ title: 'Chat', url: '/chat', icon: MessageSquare }] : []),
                 { title: 'Switch business', url: '/businesses/switch', icon: Repeat },
                 { title: 'Group partners', url: '/group/partners', icon: Network },
+                { title: 'Group products', url: '/group/products', icon: Network },
             ],
         },
         // ⚠ The last two ungated groups, closed 24 Aug 2026: "open to the

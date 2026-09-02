@@ -488,6 +488,20 @@ class GuideBook
                 'keywords' => ['letter', 'appointment letter', 'experience certificate', 'increment letter', 'confirmation letter', 'certificate', 'chithi'],
             ],
             [
+                'key' => 'group.products',
+                'topic' => 'The group',
+                'title' => 'Link the same product across group companies and compare stock',
+                'path' => 'Group products',
+                'permission' => null,
+                'steps' => [
+                    'Open Group products: SKUs that live in more than one company are suggested automatically.',
+                    'Link them under one group name - nothing is renamed and no stock moves; the link only states they are the same product.',
+                    'A linked product shows stock and todays list price side by side for each company you belong to, and the group stock total.',
+                    'Unlink any time; every company product stands exactly as before.',
+                ],
+                'keywords' => ['group product', 'same product', 'cross company stock', 'compare stock', 'group sku'],
+            ],
+            [
                 'key' => 'group.partners',
                 'topic' => 'The group',
                 'title' => 'Link the same customer or supplier across group companies',

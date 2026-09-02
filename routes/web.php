@@ -34,6 +34,9 @@ Route::middleware(['auth', 'business'])->group(function () {
     Route::get('group/partners', [App\Modules\Foundation\Http\Controllers\GroupPartnerController::class, 'index'])->name('group.partners');
     Route::post('group/partners/link', [App\Modules\Foundation\Http\Controllers\GroupPartnerController::class, 'link'])->name('group.partners.link');
     Route::delete('group/partners/{link}', [App\Modules\Foundation\Http\Controllers\GroupPartnerController::class, 'unlink'])->name('group.partners.unlink');
+    Route::get('group/products', [App\Modules\Foundation\Http\Controllers\GroupProductController::class, 'index'])->name('group.products');
+    Route::post('group/products/link', [App\Modules\Foundation\Http\Controllers\GroupProductController::class, 'link'])->name('group.products.link');
+    Route::delete('group/products/{link}', [App\Modules\Foundation\Http\Controllers\GroupProductController::class, 'unlink'])->name('group.products.unlink');
     Route::get('approvals', [ApprovalInboxController::class, 'index'])->name('approvals.index');
 
     // The header search. A GET on purpose (the hand-written-fetch trap: a GET
