@@ -46,9 +46,16 @@ class AssistantTools
 
     public const TODOS = 'foundation.ai.todos';
 
+    /** The grant that opens the panel at all. how_to needs nothing beyond it:
+     * teaching somebody how to use what they can already reach discloses
+     * nothing, and the GuideBook filters its articles by their permissions
+     * anyway. */
+    public const USE = 'foundation.ai.use';
+
     /** Which permission each tool needs. ⛔ A tool absent from this map is
      * callable by nobody - default closed, like every other map here. */
     private const TOOL_PERMISSIONS = [
+        'how_to' => self::USE,
         'read_data' => self::READ,
         'list_todos' => self::TODOS,
         'create_todo' => self::TODOS,
@@ -75,6 +82,7 @@ class AssistantTools
         private readonly ReadableData $readable,
         private readonly DataQuery $query,
         private readonly PersonalItems $personal,
+        private readonly GuideBook $guide,
     ) {}
 
     /**
@@ -98,6 +106,31 @@ class AssistantTools
     public function definitions(User $user): array
     {
         $tools = [];
+
+        // ⚠ First in the list on purpose: how-do-I is the panel's core job,
+        // and the model reaches for tools roughly in the order it meets them.
+        if ($user->can(self::USE)) {
+            $tools[] = [
+                'name' => 'how_to',
+                'description' => 'Step-by-step instructions for performing a task in this ERP: where the screen is '
+                    .'and what to do, in order. Call this FIRST for any "how do I", "where is", or "what are the '
+                    .'steps" question. The articles returned are already filtered to what THIS person may reach; '
+                    .'`blocked` names features that exist but their role does not include, so you can say who can '
+                    .'grant them (an Owner, under Settings > Roles). When `found` is false, offer the returned '
+                    .'`topics` instead of guessing steps.',
+                'inputSchema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'query' => [
+                            'type' => 'string',
+                            'description' => 'The task in a few words, e.g. "request a movement", "import prices", "run payroll".',
+                        ],
+                    ],
+                    'required' => ['query'],
+                ],
+            ];
+        }
+
         $tables = $this->readable->forUser($user);
 
         // ⚠ TWO grants required: the AI reading permission AND at least one
@@ -256,6 +289,7 @@ class AssistantTools
 
         try {
             $result = match ($tool) {
+                'how_to' => $this->guide->lookup($user, (string) ($input['query'] ?? '')),
                 'read_data' => $this->query->run($user, $input),
                 'list_todos' => $this->personal->listTodos($user, (bool) ($input['include_done'] ?? false)),
                 'create_todo' => $this->personal->createTodo(
@@ -328,6 +362,12 @@ class AssistantTools
         ];
 
         $suggestions = [];
+
+        // Everyone who can open the panel can be taught the system, so the
+        // how-do-I suggestion leads - it is the one thing always on offer.
+        if ($user->can(self::USE)) {
+            $suggestions[] = 'How do I request leave or a movement?';
+        }
 
         foreach ($byTable as $table => $question) {
             if (in_array($table, $tables, true)) {

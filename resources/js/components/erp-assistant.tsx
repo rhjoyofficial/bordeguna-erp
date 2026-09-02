@@ -4,7 +4,8 @@ import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
 import { type SharedData } from '@/types';
 import { usePage } from '@inertiajs/react';
-import { Bot, MessageCircle, Send, Trash2, X } from 'lucide-react';
+import { Send, Trash2, X } from 'lucide-react';
+import HudhudIcon from '@/components/hudhud-icon';
 import { FormEventHandler, KeyboardEventHandler, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string; at?: number };
@@ -287,7 +288,7 @@ export default function ErpAssistant() {
         <Avatar className="h-7 w-7 shrink-0 overflow-hidden rounded-full">
             {aiAvatar ? <AvatarImage src={aiAvatar} alt={aiName} /> : null}
             <AvatarFallback className="bg-primary/10 text-primary">
-                <Bot className="h-4 w-4" />
+                <HudhudIcon className="h-5 w-5" />
             </AvatarFallback>
         </Avatar>
     );
@@ -298,9 +299,9 @@ export default function ErpAssistant() {
                 type="button"
                 onClick={() => setOpen((value) => !value)}
                 aria-label={'Open ' + aiName}
-                className="border-border bg-primary text-primary-foreground focus-visible:ring-ring fixed right-4 bottom-4 z-40 flex h-11 w-11 items-center justify-center rounded-full border shadow-lg transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:outline-none"
+                className="border-border bg-card text-card-foreground focus-visible:ring-ring fixed right-4 bottom-4 z-40 flex h-11 w-11 items-center justify-center rounded-full border shadow-lg transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:outline-none"
             >
-                <MessageCircle className="h-5 w-5" />
+                <HudhudIcon className="h-7 w-7" />
             </button>
 
             {open && (
