@@ -271,15 +271,17 @@
      2026). In normal flow on purpose - see the .signatures comment above for
      why this must not be fixed like the stamp is.
 
-     ⚠ All three are left blank to be signed by hand. The stamp below already
-     records who generated the report and when; printing a name above a
-     signature line would be the document asserting who approved it before
-     anybody had. --}}
+     ⚠ A name prints under a line ONLY when the source document records that
+     the act happened - a payroll run knows who calculated, reviewed and
+     approved it (Joy, 2 Sep 2026). Anything unrecorded keeps the blank line
+     and the generic hint, because printing a name above an unsigned line
+     would otherwise be the document asserting who approved it before anybody
+     had. The space above the rule stays for the wet signature either way. --}}
 <table class="signatures">
     <tr>
-        <td><div class="space"></div><div class="rule">Prepared by</div><div class="who">Name &amp; designation</div></td>
-        <td><div class="space"></div><div class="rule">Checked by</div><div class="who">Name &amp; designation</div></td>
-        <td><div class="space"></div><div class="rule">Approved by</div><div class="who">Name &amp; designation</div></td>
+        <td><div class="space"></div><div class="rule">Prepared by</div><div class="who">{{ $dataset->meta->preparedBy ?? 'Name & designation' }}</div></td>
+        <td><div class="space"></div><div class="rule">Checked by</div><div class="who">{{ $dataset->meta->checkedBy ?? 'Name & designation' }}</div></td>
+        <td><div class="space"></div><div class="rule">Approved by</div><div class="who">{{ $dataset->meta->approvedBy ?? 'Name & designation' }}</div></td>
     </tr>
 </table>
 

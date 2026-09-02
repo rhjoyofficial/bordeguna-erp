@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Reporting\Definitions;
 
+use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\Payslip;
@@ -40,6 +41,8 @@ use Illuminate\Support\LazyCollection;
  */
 class SalarySheetReport implements ReportDefinition
 {
+    use SignsFromPayrollRun;
+
     use CountsRows;
 
     public function key(): string
@@ -143,6 +146,8 @@ class SalarySheetReport implements ReportDefinition
     {
         $run = $this->run($parameters);
 
+        $signs = $this->signatories($run);
+
         return new ReportMeta(
             title: 'Salary sheet',
             subtitle: $run === null
@@ -155,6 +160,9 @@ class SalarySheetReport implements ReportDefinition
             lockNote: ($run?->status?->isFinal() ?? false)
                 ? null
                 : 'This payroll run is not yet locked — a recalculation can still change these figures.',
+            preparedBy: $signs['preparedBy'],
+            checkedBy: $signs['checkedBy'],
+            approvedBy: $signs['approvedBy'],
         );
     }
 

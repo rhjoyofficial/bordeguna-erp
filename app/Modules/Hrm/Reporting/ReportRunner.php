@@ -126,6 +126,9 @@ class ReportRunner
             // "the current business" would render the wrong letterhead, or
             // none, exactly when nobody is watching.
             logo: ReportLetterhead::logoFor($this->context->id()),
+            preparedBy: $declared->preparedBy,
+            checkedBy: $declared->checkedBy,
+            approvedBy: $declared->approvedBy,
         );
     }
 

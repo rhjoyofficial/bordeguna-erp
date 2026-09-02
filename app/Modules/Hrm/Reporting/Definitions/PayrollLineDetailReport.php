@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Reporting\Definitions;
 
+use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\PayslipLine;
 use App\Modules\Hrm\Reporting\Concerns\CountsRows;
@@ -39,6 +40,8 @@ use Illuminate\Support\LazyCollection;
  */
 class PayrollLineDetailReport implements ReportDefinition
 {
+    use SignsFromPayrollRun;
+
     use CountsRows, ResolvesAssignments;
 
     public function key(): string
@@ -133,12 +136,17 @@ class PayrollLineDetailReport implements ReportDefinition
     {
         $run = $this->run($parameters);
 
+        $signs = $this->signatories($run);
+
         return new ReportMeta(
             title: 'Payroll detail for accounting',
             subtitle: $run === null
                 ? null
                 : sprintf('%s — run v%d (%s)', (string) $run->period?->label(), $run->version, $run->status->label()),
             periodLocked: $run?->status?->isFinal() ?? false,
+            preparedBy: $signs['preparedBy'],
+            checkedBy: $signs['checkedBy'],
+            approvedBy: $signs['approvedBy'],
         );
     }
 

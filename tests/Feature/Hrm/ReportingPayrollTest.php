@@ -551,5 +551,14 @@ it('registers fourteen of the fifteen reports, with only the bank advice missing
         // much company forgive, must need track"). Counted here so a report
         // added by accident still shows up as a change somebody has to explain.
         ->and($keys)->toContain('payroll_forgiveness_register')
-        ->and($keys)->toHaveCount(19);
+        // 20-21: the purchasing pair (1 Sep 2026, `e86a6f9`) - the expense
+        // register and the standing-costs report were registered into THIS
+        // engine so they inherit the writers and the letterhead, and this
+        // canary was not raised with them. It failed from that commit until
+        // 2 Sep, unseen because the suite was piped through `tail`, which
+        // swallowed the exit code - the canary did its job the first time
+        // somebody actually looked.
+        ->and($keys)->toContain('purchasing_expense_register')
+        ->and($keys)->toContain('purchasing_standing_costs')
+        ->and($keys)->toHaveCount(21);
 });

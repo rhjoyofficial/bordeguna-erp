@@ -62,6 +62,20 @@ final class ReportMeta
          * report simply prints without it.
          */
         public readonly ?string $logo = null,
+        /**
+         * The three signature-row names, filled ONLY when the underlying
+         * document actually records that the act happened (Joy, 2 Sep 2026:
+         * "how added will prepared by, who review will be checked by, who
+         * approve will be approve by; if anywhere data miss ... will be
+         * empty"). A payroll run knows its calculator, reviewer and approver;
+         * a plain data report knows none of them and keeps the blank lines.
+         *
+         * ⚠ This deliberately preserves the original caution: the printed
+         * name asserts a recorded fact, never a prediction of who WILL sign.
+         */
+        public readonly ?string $preparedBy = null,
+        public readonly ?string $checkedBy = null,
+        public readonly ?string $approvedBy = null,
     ) {}
 
     public function generatedAtString(): string

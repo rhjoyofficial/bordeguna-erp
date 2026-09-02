@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Reporting\Definitions;
 
+use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\PayslipLine;
 use App\Modules\Hrm\Reporting\Concerns\ResolvesAssignments;
@@ -40,6 +41,8 @@ use Illuminate\Support\LazyCollection;
  */
 class CostAllocationReport implements ReportDefinition
 {
+    use SignsFromPayrollRun;
+
     use ResolvesAssignments;
 
     public function key(): string
@@ -192,6 +195,8 @@ class CostAllocationReport implements ReportDefinition
     {
         $run = $this->run($parameters);
 
+        $signs = $this->signatories($run);
+
         return new ReportMeta(
             title: 'Cost allocation',
             subtitle: $run === null
@@ -199,6 +204,9 @@ class CostAllocationReport implements ReportDefinition
                 : sprintf('%s — run v%d (%s)', (string) $run->period?->label(), $run->version, $run->status->label()),
             periodLocked: $run?->status?->isFinal() ?? false,
             lockNote: 'Cost is grouped by where each employee was assigned, never split between businesses (C7c).',
+            preparedBy: $signs['preparedBy'],
+            checkedBy: $signs['checkedBy'],
+            approvedBy: $signs['approvedBy'],
         );
     }
 

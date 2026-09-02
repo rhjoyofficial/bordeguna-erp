@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Reporting\Definitions;
 
+use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\Payslip;
 use App\Modules\Hrm\Reporting\Concerns\CountsRows;
@@ -50,6 +51,8 @@ use Illuminate\Support\LazyCollection;
  */
 class PayrollVarianceReport implements ReportDefinition
 {
+    use SignsFromPayrollRun;
+
     use CountsRows, ResolvesAssignments;
 
     /** The pseudo-component under which each employee's net is compared. */
@@ -293,6 +296,8 @@ class PayrollVarianceReport implements ReportDefinition
         $current = $this->run($parameters->int('run_id'));
         $previous = $this->run($parameters->int('compare_run_id'));
 
+        $signs = $this->signatories($current);
+
         return new ReportMeta(
             title: 'Payroll variance',
             subtitle: $current === null || $previous === null
@@ -304,6 +309,9 @@ class PayrollVarianceReport implements ReportDefinition
                 ),
             periodLocked: ($current?->status?->isFinal() ?? false) && ($previous?->status?->isFinal() ?? false),
             lockNote: 'A joiner or leaver shows a change but no percentage — there is no previous figure for one to be a percentage of.',
+            preparedBy: $signs['preparedBy'],
+            checkedBy: $signs['checkedBy'],
+            approvedBy: $signs['approvedBy'],
         );
     }
 

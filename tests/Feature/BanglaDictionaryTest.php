@@ -1,7 +1,5 @@
 <?php
 
-use Normalizer;
-
 /**
  * The Bangla dictionary is the one place in this system where a defect is
  * invisible to everybody who reviews it in English.
