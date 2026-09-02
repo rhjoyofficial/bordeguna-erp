@@ -35,12 +35,13 @@ class GuideBook
     public function lookup(User $user, string $query): array
     {
         $terms = $this->terms($query);
+        $weights = $this->termWeights($terms);
 
         $reachable = [];
         $blocked = [];
 
         foreach ($this->articles() as $article) {
-            $score = $this->score($article, $terms);
+            $score = $this->score($article, $terms, $weights);
 
             if ($score <= 0) {
                 continue;
@@ -102,19 +103,82 @@ class GuideBook
         return $matches[0];
     }
 
-    /** @param array{title:string, keywords:list<string>} $article */
-    private function score(array $article, array $terms): int
+    /**
+     * ⚠ Whole tokens, not substrings, and a rare term outweighs a common one.
+     * The first cut used str_contains and "add a movement" ranked the
+     * customers article (keyword "add customer", and "add" inside "address")
+     * above the movement screens; the second matched tokens but let "add" -
+     * which sits in five titles - tie everything. A term found in many
+     * articles now carries little weight and the distinctive noun decides,
+     * because a guide that answers the wrong article confidently is worse
+     * than one that answers nothing.
+     *
+     * @param  array{title:string, keywords:list<string>}  $article
+     * @param  array<string, int>  $weights
+     */
+    private function score(array $article, array $terms, array $weights): int
     {
-        $haystack = mb_strtolower($article['title'].' '.implode(' ', $article['keywords']));
+        $titleTokens = $this->terms($article['title']);
+        $keywordTokens = $this->terms(implode(' ', $article['keywords']));
         $score = 0;
 
         foreach ($terms as $term) {
-            if (str_contains($haystack, $term)) {
-                $score++;
+            $weight = $weights[$term] ?? 0;
+
+            if ($this->hits($titleTokens, $term)) {
+                $score += $weight * 2;
+            } elseif ($this->hits($keywordTokens, $term)) {
+                $score += $weight;
             }
         }
 
         return $score;
+    }
+
+    /**
+     * How much each query term is worth: the fewer articles carry it, the
+     * more it says about which one is meant.
+     *
+     * @param  list<string>  $terms
+     * @return array<string, int>
+     */
+    private function termWeights(array $terms): array
+    {
+        $weights = [];
+
+        foreach ($terms as $term) {
+            $df = 0;
+
+            foreach ($this->articles() as $article) {
+                $tokens = $this->terms($article['title'].' '.implode(' ', $article['keywords']));
+
+                if ($this->hits($tokens, $term)) {
+                    $df++;
+                }
+            }
+
+            $weights[$term] = $df === 0 ? 0 : max(1, 6 - $df);
+        }
+
+        return $weights;
+    }
+
+    /**
+     * A term matches a token exactly, or as a prefix once it is long enough
+     * that a prefix means something ("payrol" finds payroll; "add" no longer
+     * finds address).
+     *
+     * @param  list<string>  $tokens
+     */
+    private function hits(array $tokens, string $term): bool
+    {
+        foreach ($tokens as $token) {
+            if ($token === $term || (mb_strlen($term) >= 4 && str_starts_with($token, $term))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
