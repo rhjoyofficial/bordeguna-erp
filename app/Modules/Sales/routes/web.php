@@ -4,6 +4,7 @@ use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\PosShiftController;
 use App\Modules\Sales\Http\Controllers\PromotionController;
 use App\Modules\Sales\Http\Controllers\QuotationController;
+use App\Modules\Sales\Http\Controllers\SalesTargetController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
 use App\Modules\Sales\Http\Controllers\CustomerImportController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
@@ -96,6 +97,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     Route::get('prices/export', [PriceImportController::class, 'export'])->name('prices.export');
 
     Route::middleware('can:sales.prices.manage')->group(function () {
+        // Targets + commission: a compensation decision, so the same gate
+        // as pricing. Calculation only - payroll pays, by a human hand.
+        Route::get('targets', [SalesTargetController::class, 'index'])->name('targets');
+        Route::post('targets', [SalesTargetController::class, 'store'])->name('targets.store');
         // Buy X Get Y free: a pricing decision, so the pricing permission.
         Route::get('promotions', [PromotionController::class, 'index'])->name('promotions');
         Route::post('promotions', [PromotionController::class, 'store'])->name('promotions.store');

@@ -234,6 +234,7 @@ export function AppSidebar() {
                           // price rows, so nothing downstream learns a new idea.
                           ...(canManagePrices ? [{ title: 'Discounts', url: '/sales/discounts', icon: Percent }] : []),
                           ...(canManagePrices ? [{ title: 'Promotions', url: '/sales/promotions', icon: Percent }] : []),
+                          ...(canManagePrices ? [{ title: 'Targets', url: '/sales/targets', icon: BadgeDollarSign }] : []),
                           // C-IMP-7. Reachable, or it is the fifth screen built
                           // and never found.
                           ...(canImportPrices ? [{ title: 'Import prices', url: '/sales/prices/import', icon: Upload }] : []),

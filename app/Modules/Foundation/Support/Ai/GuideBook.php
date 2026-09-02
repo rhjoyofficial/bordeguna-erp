@@ -447,6 +447,20 @@ class GuideBook
                 'keywords' => ['pipeline', 'opportunity', 'deal', 'stage', 'kanban', 'won', 'lost deal', 'sales funnel'],
             ],
             [
+                'key' => 'sales.targets',
+                'topic' => 'Selling',
+                'title' => 'Set monthly sales targets and see the would-be commission',
+                'path' => 'Sales > Targets',
+                'permission' => 'sales.prices.manage',
+                'steps' => [
+                    'Open Sales > Targets, pick the salesperson, the month, the target amount and (optionally) a commission percent.',
+                    'The table shows the invoices that person actually wrote in the month, the achievement percent, and what the commission WOULD be.',
+                    'Setting a target again for the same person and month REPLACES it - one target per month, never two.',
+                    '⚠ Nothing here pays anyone. To pay a commission, add it in the payroll month as an allowance or bonus - the payroll run is the only payer of money.',
+                ],
+                'keywords' => ['target', 'commission', 'sales target', 'incentive', 'achievement', 'quota', 'bonus calculation'],
+            ],
+            [
                 'key' => 'sales.quotations',
                 'topic' => 'Selling',
                 'title' => 'Quote a price, and turn an accepted quote into an order',
