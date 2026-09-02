@@ -502,6 +502,19 @@ class GuideBook
                 'keywords' => ['group product', 'same product', 'cross company stock', 'compare stock', 'group sku'],
             ],
             [
+                'key' => 'group.cockpit',
+                'topic' => 'The group',
+                'title' => 'See the whole group breathe on one screen',
+                'path' => 'Group cockpit',
+                'permission' => null,
+                'steps' => [
+                    'Open Group cockpit: each company you belong to shows cash now, what is owed to it, what it owes, and this months income and spend - read fresh from its own books.',
+                    'The bottom row is the group total. Today it is a plain sum; when intercompany transfers are recorded and paired, they will be eliminated here.',
+                    'Nothing consolidated is ever stored - the companies books remain the only books.',
+                ],
+                'keywords' => ['cockpit', 'group view', 'all companies', 'group cash', 'consolidated', 'overview'],
+            ],
+            [
                 'key' => 'group.partners',
                 'topic' => 'The group',
                 'title' => 'Link the same customer or supplier across group companies',
