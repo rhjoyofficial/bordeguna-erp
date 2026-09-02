@@ -3,6 +3,7 @@
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\PosShiftController;
 use App\Modules\Sales\Http\Controllers\PromotionController;
+use App\Modules\Sales\Http\Controllers\QuotationController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
 use App\Modules\Sales\Http\Controllers\CustomerImportController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
@@ -40,6 +41,14 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     // ⚠ Taking an order is order-book data entry, the same trust level as
     // selling (Staff included). Approving it is not - see below.
     Route::middleware('can:sales.orders.record')->group(function () {
+        // Quotations: a promise of a price. Same trust as taking the order
+        // that accepting one creates.
+        Route::get('quotations', [QuotationController::class, 'index'])->name('quotations.index');
+        Route::post('quotations', [QuotationController::class, 'store'])->name('quotations.store');
+        Route::post('quotations/{quotation}/send', [QuotationController::class, 'send'])->name('quotations.send');
+        Route::post('quotations/{quotation}/accept', [QuotationController::class, 'accept'])->name('quotations.accept');
+        Route::post('quotations/{quotation}/reject', [QuotationController::class, 'reject'])->name('quotations.reject');
+        Route::get('quotations/{quotation}/print', [QuotationController::class, 'print'])->name('quotations.print');
         Route::post('orders', [SalesOrderController::class, 'store'])->name('orders.store');
         // C-SO-3: exposure is SHOWN at order time, enforced by nobody.
         Route::post('orders/exposure', [SalesOrderController::class, 'exposure'])->name('orders.exposure');

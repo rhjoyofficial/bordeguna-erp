@@ -90,6 +90,7 @@ export function AppSidebar() {
         canViewPurchasing,
         canViewSales,
         canSell,
+        canRecordOrders,
         canManagePrices,
         canRecordOpeningStock,
         canImportCatalogue,
@@ -224,6 +225,7 @@ export function AppSidebar() {
                           // much of it has left. Shipped WITH its screens in one
                           // commit - the reachability lesson this file records.
                           ...(canViewSales ? [{ title: 'Sales orders', url: '/sales/orders', icon: ClipboardList }] : []),
+                          ...(canRecordOrders ? [{ title: 'Quotations', url: '/sales/quotations', icon: FileText }] : []),
                           ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
                           ...(canViewSales || canManagePrices ? [{ title: 'Selling prices', url: '/sales/prices', icon: BadgeDollarSign }] : []),
                           // Joy's own word for it, 23 Aug: a place to set a

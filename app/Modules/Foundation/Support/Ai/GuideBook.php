@@ -418,6 +418,22 @@ class GuideBook
                 'keywords' => ['pipeline', 'opportunity', 'deal', 'stage', 'kanban', 'won', 'lost deal', 'sales funnel'],
             ],
             [
+                'key' => 'sales.quotations',
+                'topic' => 'Selling',
+                'title' => 'Quote a price, and turn an accepted quote into an order',
+                'path' => 'Sales > Quotations',
+                'permission' => 'sales.orders.record',
+                'steps' => [
+                    'Open Sales > Quotations: pick the customer (or a lead still being courted), the products, quantities, and the validity date.',
+                    'Leave the price blank to quote the list price, or type the negotiated number - it is kept exactly as written.',
+                    'Print it on the letterhead and hand it over; press Mark sent so the record shows it left the building.',
+                    'When the customer agrees, press Accepted - the sales order is created at the quoted prices, and the order page opens.',
+                    '⚠ An expired quote refuses acceptance: quote again at current prices. A quote to a LEAD also refuses until the lead is converted to a customer.',
+                    'A quotation reserves no stock and posts nothing - it is a promise of a price, nothing more.',
+                ],
+                'keywords' => ['quotation', 'quote', 'proposal', 'price offer', 'estimate', 'dor', 'quoted price'],
+            ],
+            [
                 'key' => 'sales.order_flow',
                 'topic' => 'Selling',
                 'title' => 'Sales order to invoice to delivery: the credit-sale flow',
