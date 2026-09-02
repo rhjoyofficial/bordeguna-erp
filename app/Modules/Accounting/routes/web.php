@@ -17,6 +17,7 @@ use App\Modules\Accounting\Http\Controllers\BudgetController;
 use App\Modules\Accounting\Http\Controllers\BankStatementController;
 use App\Modules\Accounting\Http\Controllers\AmortizationController;
 use App\Modules\Accounting\Http\Controllers\DunningController;
+use App\Modules\Accounting\Http\Controllers\CashForecastController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
@@ -55,6 +56,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // Bank statements (Module 2, Slice 3): the bank's truth beside the book.
         // Accruals & prepayments (Module 2, Slice 4).
         // Payment reminders (Module 2, Slice 5): a human's click, logged.
+        // The cash forecast (Module 2, Slice 6): the weeks ahead, read-only.
+        Route::get('cash-forecast', [CashForecastController::class, 'index'])->name('cash-forecast');
         Route::get('dunning', [DunningController::class, 'index'])->name('dunning');
         Route::post('dunning/{customer}/remind', [DunningController::class, 'remind'])->name('dunning.remind');
         Route::get('amortizations', [AmortizationController::class, 'index'])->name('amortizations');

@@ -419,6 +419,7 @@ export function AppSidebar() {
                           // balance sheet says what we hold; only this answers
                           // "profitable, so why is there none in the bank".
                           { title: 'Cash flow', url: '/accounting/cash-flow', icon: Waves },
+                          { title: 'Cash forecast', url: '/accounting/cash-forecast', icon: TrendingUp },
                           // ⚠ The two ageings sit next to the statements rather
                           // than under Sales and Purchasing, because they are
                           // read against the balance sheet they must agree

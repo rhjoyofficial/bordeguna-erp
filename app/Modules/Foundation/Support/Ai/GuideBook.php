@@ -750,6 +750,20 @@ class GuideBook
                 'keywords' => ['report', 'profit', 'loss', 'balance sheet', 'trial balance', 'ledger', 'ageing', 'statement', 'valuation', 'cogs', 'hisab'],
             ],
             [
+                'key' => 'accounting.cash_forecast',
+                'topic' => 'Money and the books',
+                'title' => 'See the weeks ahead: the cash forecast',
+                'path' => 'Finance & Accounts > Cash forecast',
+                'permission' => 'accounting.view',
+                'steps' => [
+                    'Open Finance & Accounts > Cash forecast: eight weeks ahead, built only from documents that already exist - invoices due in, supplier bills and standing costs due out, and the last approved payroll as a labelled estimate on the 1st.',
+                    'Overdue receivables land in week one - money late is money expected now, not never.',
+                    'The first week the running balance goes negative is flagged in red: collect sooner or move a payment later. The Payment reminders screen is the collect-sooner tool.',
+                    'Read-only: the forecast never writes anything, and a week with no documents honestly forecasts zero.',
+                ],
+                'keywords' => ['cash forecast', 'cash flow ahead', 'runway', 'cash position future', 'taka thakbe', 'projection'],
+            ],
+            [
                 'key' => 'accounting.dunning',
                 'topic' => 'Money and the books',
                 'title' => 'Chase overdue invoices: payment reminders',
