@@ -432,6 +432,20 @@ class GuideBook
                 'keywords' => ['ticket', 'complaint', 'support', 'ovijog', 'customer problem', 'sla', 'service'],
             ],
             [
+                'key' => 'hrm.letters',
+                'topic' => 'People',
+                'title' => 'Draft an appointment, confirmation, increment or experience letter',
+                'path' => 'HRM > Employees > open the employee > HR letters',
+                'permission' => 'hrm.employees.manage',
+                'steps' => [
+                    'Open the employee, press HR letters, pick the letter type and press Draft letter - the system fills it from the record as it stands today.',
+                    'The words are FROZEN at issue: a later salary change never rewrites a letter already given. Reprint any time from the same list.',
+                    'Print on the letterhead and the boss signs by hand - the system drafts, a person commits.',
+                    'An increment letter needs an applied salary revision to describe; a confirmation letter needs the confirmation recorded first.',
+                ],
+                'keywords' => ['letter', 'appointment letter', 'experience certificate', 'increment letter', 'confirmation letter', 'certificate', 'chithi'],
+            ],
+            [
                 'key' => 'hrm.my_team',
                 'topic' => 'People',
                 'title' => 'See your team: who is in today, and what waits on you',

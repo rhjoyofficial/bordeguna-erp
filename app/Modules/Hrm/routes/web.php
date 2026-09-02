@@ -30,6 +30,7 @@ use App\Modules\Hrm\Http\Controllers\SalaryRevisionController;
 use App\Modules\Hrm\Http\Controllers\ScheduleController;
 use App\Modules\Hrm\Http\Controllers\SelfLeaveController;
 use App\Modules\Hrm\Http\Controllers\MyTeamController;
+use App\Modules\Hrm\Http\Controllers\HrLetterController;
 use App\Modules\Hrm\Http\Controllers\SelfServiceController;
 use App\Modules\Hrm\Http\Controllers\SettlementController;
 use App\Modules\Hrm\Http\Controllers\ShiftController;
@@ -62,6 +63,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // permission rather than the employee one, and it pays nobody.
     Route::get('employees/{employee}/settlement', [SettlementController::class, 'show'])->name('employees.settlement');
     Route::post('employees/{employee}/confirm', [EmployeeController::class, 'confirm'])->name('employees.confirm');
+    // HR letters: drafted from a frozen snapshot, signed by the boss.
+    Route::get('employees/{employee}/letters', [HrLetterController::class, 'index'])->name('employees.letters');
+    Route::post('employees/{employee}/letters', [HrLetterController::class, 'store'])->name('employees.letters.store');
+    Route::get('letters/{letter}/print', [HrLetterController::class, 'print'])->name('letters.print');
     Route::post('employees/{employee}/separation', [EmployeeController::class, 'separate'])->name('employees.separate');
     Route::post('employees/{employee}/transfer', [EmployeeController::class, 'transfer'])->name('employees.transfer');
     Route::post('employees/{employee}/documents', [EmployeeController::class, 'uploadDocument'])->name('employees.documents.store');
