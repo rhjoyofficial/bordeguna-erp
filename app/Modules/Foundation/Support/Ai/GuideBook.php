@@ -432,6 +432,20 @@ class GuideBook
                 'keywords' => ['ticket', 'complaint', 'support', 'ovijog', 'customer problem', 'sla', 'service'],
             ],
             [
+                'key' => 'hrm.performance',
+                'topic' => 'People',
+                'title' => 'Set goals and write the periodic review',
+                'path' => 'HRM > Employees > open the employee > Performance',
+                'permission' => 'hrm.employees.manage',
+                'steps' => [
+                    'Open the employee and press Performance: goals on the left, reviews on the right.',
+                    'Set a goal with a due date; when it is decided, press Achieved or Missed - the outcome is stamped with who and when.',
+                    'Write ONE review per period (for example 2026-Q3) with a rating out of 5; saving the same period again replaces it.',
+                    '⚠ Nothing here changes pay. A bonus for good performance goes into the payroll month by hand, as always.',
+                ],
+                'keywords' => ['performance', 'goal', 'review', 'rating', 'appraisal', 'kpi', 'evaluation'],
+            ],
+            [
                 'key' => 'hrm.checklists',
                 'topic' => 'People',
                 'title' => 'Run the joiner or leaver checklist',

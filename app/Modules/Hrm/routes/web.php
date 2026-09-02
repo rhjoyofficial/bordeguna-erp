@@ -32,6 +32,7 @@ use App\Modules\Hrm\Http\Controllers\SelfLeaveController;
 use App\Modules\Hrm\Http\Controllers\MyTeamController;
 use App\Modules\Hrm\Http\Controllers\HrLetterController;
 use App\Modules\Hrm\Http\Controllers\ChecklistController;
+use App\Modules\Hrm\Http\Controllers\PerformanceController;
 use App\Modules\Hrm\Http\Controllers\SelfServiceController;
 use App\Modules\Hrm\Http\Controllers\SettlementController;
 use App\Modules\Hrm\Http\Controllers\ShiftController;
@@ -71,6 +72,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // Joiner / leaver checklists: who ticked what, when.
     Route::get('employees/{employee}/checklist', [ChecklistController::class, 'show'])->name('employees.checklist');
     Route::post('employees/{employee}/checklist/{item}/toggle', [ChecklistController::class, 'toggle'])->name('employees.checklist.toggle');
+    // Performance phase 1: goals with outcomes, one review per period.
+    Route::get('employees/{employee}/performance', [PerformanceController::class, 'show'])->name('employees.performance');
+    Route::post('employees/{employee}/goals', [PerformanceController::class, 'storeGoal'])->name('employees.goals.store');
+    Route::post('employees/{employee}/reviews', [PerformanceController::class, 'storeReview'])->name('employees.reviews.store');
+    Route::post('goals/{goal}/outcome', [PerformanceController::class, 'outcome'])->name('goals.outcome');
     Route::post('employees/{employee}/separation', [EmployeeController::class, 'separate'])->name('employees.separate');
     Route::post('employees/{employee}/transfer', [EmployeeController::class, 'transfer'])->name('employees.transfer');
     Route::post('employees/{employee}/documents', [EmployeeController::class, 'uploadDocument'])->name('employees.documents.store');

@@ -817,6 +817,9 @@ export default function EmployeeShow({
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/hrm/employees/${employee.id}/checklist`}>Checklist</Link>
                         </Button>
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={`/hrm/employees/${employee.id}/performance`}>Performance</Link>
+                        </Button>
                         {can_transfer && (
                             <TransferDialog employeeId={employee.id} offices={offices_tree} designations={designations} supervisors={supervisors} />
                         )}
