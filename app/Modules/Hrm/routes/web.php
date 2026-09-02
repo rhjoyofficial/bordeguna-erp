@@ -31,6 +31,7 @@ use App\Modules\Hrm\Http\Controllers\ScheduleController;
 use App\Modules\Hrm\Http\Controllers\SelfLeaveController;
 use App\Modules\Hrm\Http\Controllers\MyTeamController;
 use App\Modules\Hrm\Http\Controllers\HrLetterController;
+use App\Modules\Hrm\Http\Controllers\ChecklistController;
 use App\Modules\Hrm\Http\Controllers\SelfServiceController;
 use App\Modules\Hrm\Http\Controllers\SettlementController;
 use App\Modules\Hrm\Http\Controllers\ShiftController;
@@ -67,6 +68,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::get('employees/{employee}/letters', [HrLetterController::class, 'index'])->name('employees.letters');
     Route::post('employees/{employee}/letters', [HrLetterController::class, 'store'])->name('employees.letters.store');
     Route::get('letters/{letter}/print', [HrLetterController::class, 'print'])->name('letters.print');
+    // Joiner / leaver checklists: who ticked what, when.
+    Route::get('employees/{employee}/checklist', [ChecklistController::class, 'show'])->name('employees.checklist');
+    Route::post('employees/{employee}/checklist/{item}/toggle', [ChecklistController::class, 'toggle'])->name('employees.checklist.toggle');
     Route::post('employees/{employee}/separation', [EmployeeController::class, 'separate'])->name('employees.separate');
     Route::post('employees/{employee}/transfer', [EmployeeController::class, 'transfer'])->name('employees.transfer');
     Route::post('employees/{employee}/documents', [EmployeeController::class, 'uploadDocument'])->name('employees.documents.store');

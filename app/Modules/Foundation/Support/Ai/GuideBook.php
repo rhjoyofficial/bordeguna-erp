@@ -432,6 +432,20 @@ class GuideBook
                 'keywords' => ['ticket', 'complaint', 'support', 'ovijog', 'customer problem', 'sla', 'service'],
             ],
             [
+                'key' => 'hrm.checklists',
+                'topic' => 'People',
+                'title' => 'Run the joiner or leaver checklist',
+                'path' => 'HRM > Employees > open the employee > Checklist',
+                'permission' => 'hrm.employees.manage',
+                'steps' => [
+                    'Open the employee and press Checklist: onboarding on the left, offboarding on the right, with a progress count on each.',
+                    'Tick what has actually happened - every tick records who and when. Untick a mis-click and it is as if it never was.',
+                    'For a leaver, the offboarding panel turns amber until the list is finished: assets back, handover done, settlement printed, login disabled.',
+                    'The items themselves are data planted on first use; ask for changes and they can be renamed or extended without code.',
+                ],
+                'keywords' => ['checklist', 'onboarding', 'offboarding', 'joiner', 'leaver', 'handover', 'asset return', 'exit'],
+            ],
+            [
                 'key' => 'hrm.probation',
                 'topic' => 'People',
                 'title' => 'Confirm an employee whose probation has ended',
