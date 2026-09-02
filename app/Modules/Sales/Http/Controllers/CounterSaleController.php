@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
@@ -17,6 +18,7 @@ use App\Modules\Sales\Models\Customer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -30,7 +32,7 @@ use Inertia\Response;
  */
 class CounterSaleController extends Controller
 {
-    public function create(ResolveSellingPrice $resolver): Response
+    public function create(Request $request, ResolveSellingPrice $resolver): Response
     {
         $products = Product::query()->where('is_active', true)->stocked()
             ->orderBy('name')->get(['id', 'name', 'sku', 'category_id']);
@@ -56,7 +58,73 @@ class CounterSaleController extends Controller
             'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
             'walkInId' => Customer::walkIn()?->id,
+            // Held carts: bookmarks, not transactions. Newest first, with just
+            // enough to recognise whose cart it was.
+            'heldCarts' => DB::table('pos_held_carts')->where('business_id', app(BusinessContext::class)->id())->orderByDesc('id')->get()
+                ->map(fn ($cart) => [
+                    'id' => $cart->id,
+                    'label' => $cart->label,
+                    'customer_id' => $cart->customer_id,
+                    'item_count' => count(json_decode($cart->payload, true)['lines'] ?? []),
+                    'held_by' => DB::table('users')->where('id', $cart->held_by)->value('name'),
+                    'held_at' => $cart->created_at,
+                ]),
+            // ⚠ Resuming does NOT delete the hold - a browser closed mid-resume
+            // loses nothing. The hold is consumed only when its sale completes,
+            // or discarded on purpose.
+            'resumeCart' => $request->query('resume')
+                ? tap(DB::table('pos_held_carts')->where('business_id', app(BusinessContext::class)->id())->find((int) $request->query('resume')), function (&$cart) {
+                    if ($cart !== null) {
+                        $payload = json_decode($cart->payload, true);
+                        $cart = [
+                            'id' => $cart->id,
+                            'label' => $cart->label,
+                            'customer_id' => $cart->customer_id,
+                            'warehouse_id' => $cart->warehouse_id,
+                            'lines' => $payload['lines'] ?? [],
+                        ];
+                    }
+                })
+                : null,
         ]);
+    }
+
+    /**
+     * Park the cart so the queue keeps moving. Saves the counter state and
+     * NOTHING else: no stock reserved, no document posted, no price frozen -
+     * on resume the resolver prices the lines again, as it always does.
+     */
+    public function hold(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'label' => ['nullable', 'string', 'max:120'],
+            'customer_id' => ['nullable', 'integer', 'exists:customers,id'],
+            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            'lines' => ['required', 'array', 'min:1'],
+            'lines.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
+            'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.discount' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        DB::table('pos_held_carts')->insert([
+            'business_id' => app(BusinessContext::class)->id(),
+            'label' => $data['label'] ?? null,
+            'customer_id' => $data['customer_id'] ?? null,
+            'warehouse_id' => $data['warehouse_id'],
+            'payload' => json_encode(['lines' => $data['lines']]),
+            'held_by' => $request->user()->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return redirect()->route('sales.counter.create')->with('success', 'Cart held. Resume it from the held list when the customer returns.');
+    }
+
+    public function discard(int $cart): RedirectResponse
+    {
+        DB::table('pos_held_carts')->where('business_id', app(BusinessContext::class)->id())->where('id', $cart)->delete();
+
+        return back()->with('success', 'Held cart discarded.');
     }
 
     /**
@@ -94,6 +162,7 @@ class CounterSaleController extends Controller
             // documents describe both. That is the seam where retail meets
             // credit, and it is a deliberate feature of the counter screen.
             'money_account_id' => ['nullable', 'integer', 'exists:money_accounts,id'],
+            'held_cart_id' => ['nullable', 'integer', 'exists:pos_held_carts,id'],
             'invoice_discount' => ['nullable', 'numeric', 'min:0'],
             'reference' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string'],
@@ -135,6 +204,12 @@ class CounterSaleController extends Controller
             );
         } catch (NoSellingPriceException|InsufficientStockException|PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        }
+
+        // The bookmark became a real invoice - it must not linger to be
+        // sold twice.
+        if (isset($data['held_cart_id'])) {
+            DB::table('pos_held_carts')->where('business_id', app(BusinessContext::class)->id())->where('id', $data['held_cart_id'])->delete();
         }
 
         return redirect()

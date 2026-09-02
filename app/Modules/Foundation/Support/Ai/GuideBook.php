@@ -344,6 +344,21 @@ class GuideBook
                 'keywords' => ['shift', 'till', 'cash drawer', 'float', 'over short', 'closing count', 'cash count', 'drawer', 'z report'],
             ],
             [
+                'key' => 'sales.held_carts',
+                'topic' => 'Selling',
+                'title' => 'Hold a cart and resume it when the customer returns',
+                'path' => 'Sales > Counter sale',
+                'permission' => 'sales.sell',
+                'steps' => [
+                    'With items in the cart, type a short label (who the cart belongs to) at the bottom of the order panel and press Hold - the queue keeps moving.',
+                    'Held carts appear at the top of the order panel; press Resume to load one back onto the counter.',
+                    'On resume every price is asked again from the price list - a hold saves products and quantities, never a price.',
+                    'Finishing the sale removes the hold automatically; use Discard only for a cart nobody is coming back for.',
+                    '⚠ Holding reserves NO stock - if the shelf empties while the cart waits, the sale will refuse at the till, correctly.',
+                ],
+                'keywords' => ['hold', 'held cart', 'park', 'parked', 'suspend', 'resume', 'waiting customer', 'queue'],
+            ],
+            [
                 'key' => 'sales.order_flow',
                 'topic' => 'Selling',
                 'title' => 'Sales order to invoice to delivery: the credit-sale flow',

@@ -171,6 +171,11 @@ const dictionary = {
     'pos.total': { en: 'Total', bn: 'মোট' },
     'pos.take_payment': { en: 'Take payment and finish', bn: 'টাকা নিয়ে শেষ করুন' },
     'pos.finish_on_account': { en: 'Finish on account', bn: 'বাকিতে শেষ করুন' },
+    'pos.held_carts': { en: 'Held carts', bn: 'ধরে রাখা কার্ট' },
+    'pos.hold_cart': { en: 'Hold', bn: 'ধরে রাখুন' },
+    'pos.resume_cart': { en: 'Resume', bn: 'ফিরিয়ে আনুন' },
+    'pos.discard_cart': { en: 'Discard', bn: 'বাতিল' },
+    'pos.hold_label_placeholder': { en: 'Who is this for? e.g. uncle in the blue shirt', bn: 'কার কার্ট? যেমন নীল শার্টের কাকা' },
     'pos.price_lookup_failed': {
         en: 'Could not look the price up just now. Enter it by hand.',
         bn: 'এখন দাম আনা গেল না। হাতে লিখে দিন।',

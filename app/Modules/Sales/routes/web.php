@@ -106,6 +106,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::post('shifts/{shift}/close', [PosShiftController::class, 'close'])->name('shifts.close');
         Route::get('counter', [CounterSaleController::class, 'create'])->name('counter.create');
         Route::post('counter', [CounterSaleController::class, 'store'])->name('counter.store');
+        // Held carts: park and resume. A hold is a bookmark, never a document.
+        Route::post('counter/hold', [CounterSaleController::class, 'hold'])->name('counter.hold');
+        Route::delete('counter/hold/{cart}', [CounterSaleController::class, 'discard'])->name('counter.hold.discard');
         // ⚠ A price check for the counter screen, answered by the SAME resolver
         // the sale uses. A screen that computes its own price is a second
         // pricing engine that disagrees with the invoice.

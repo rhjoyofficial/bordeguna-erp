@@ -28,7 +28,7 @@ class PosShiftController extends Controller
     {
         $this->authorize('sales.sell');
 
-        $open = DB::table('pos_shifts')->where('status', 'open')->first();
+        $open = DB::table('pos_shifts')->where('business_id', app(BusinessContext::class)->id())->where('status', 'open')->first();
 
         return Inertia::render('sales/shifts', [
             'open_shift' => $open === null ? null : [
@@ -45,7 +45,7 @@ class PosShiftController extends Controller
             ],
             'tills' => MoneyAccount::query()->where('type', 'cash')->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name']),
-            'closed_shifts' => DB::table('pos_shifts')->where('status', 'closed')
+            'closed_shifts' => DB::table('pos_shifts')->where('business_id', app(BusinessContext::class)->id())->where('status', 'closed')
                 ->orderByDesc('id')->limit(30)
                 ->get()
                 ->map(fn ($shift) => [
@@ -72,7 +72,7 @@ class PosShiftController extends Controller
                 // ⚠ One open shift per till: two people cannot both hold
                 // custody of the same drawer.
                 function (string $attribute, mixed $value, \Closure $fail) {
-                    if (DB::table('pos_shifts')->where('money_account_id', $value)->where('status', 'open')->exists()) {
+                    if (DB::table('pos_shifts')->where('business_id', app(BusinessContext::class)->id())->where('money_account_id', $value)->where('status', 'open')->exists()) {
                         $fail('That till already has an open shift - close it first.');
                     }
                 },
@@ -97,7 +97,7 @@ class PosShiftController extends Controller
     {
         $this->authorize('sales.sell');
 
-        $row = DB::table('pos_shifts')->where('id', $shift)->where('status', 'open')->first();
+        $row = DB::table('pos_shifts')->where('business_id', app(BusinessContext::class)->id())->where('id', $shift)->where('status', 'open')->first();
         abort_if($row === null, 404);
 
         $data = $request->validate([
@@ -124,7 +124,7 @@ class PosShiftController extends Controller
     {
         $this->authorize('sales.sell');
 
-        $row = DB::table('pos_shifts')->where('id', $shift)->where('status', 'open')->first();
+        $row = DB::table('pos_shifts')->where('business_id', app(BusinessContext::class)->id())->where('id', $shift)->where('status', 'open')->first();
         abort_if($row === null, 404);
 
         $data = $request->validate([

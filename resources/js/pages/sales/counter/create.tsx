@@ -6,8 +6,8 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
-import { FormEventHandler, useMemo, useState } from 'react';
+import { Head, router, useForm } from '@inertiajs/react';
+import { FormEventHandler, useEffect, useMemo, useState } from 'react';
 
 interface Option {
     id: number;
@@ -34,6 +34,25 @@ interface Line {
     unit_price: string;
     discount: string;
     explanation?: string;
+}
+
+// A held cart is a bookmark of the counter state, never a document: nothing
+// reserved, nothing posted, prices re-resolved on resume.
+interface HeldCart {
+    id: number;
+    label: string | null;
+    customer_id: number | null;
+    item_count: number;
+    held_by: string | null;
+    held_at: string;
+}
+
+interface ResumeCart {
+    id: number;
+    label: string | null;
+    customer_id: number | null;
+    warehouse_id: number;
+    lines: { product_id: number | string; quantity: number | string; unit_price?: number | string | null; discount?: number | string | null }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -63,6 +82,8 @@ export default function CounterSale({
     customers,
     moneyAccounts,
     walkInId,
+    heldCarts = [],
+    resumeCart = null,
 }: {
     warehouses: Option[];
     products: ProductCard[];
@@ -71,17 +92,27 @@ export default function CounterSale({
     customers: Option[];
     moneyAccounts: Option[];
     walkInId: number | null;
+    heldCarts: HeldCart[];
+    resumeCart: ResumeCart | null;
 }) {
     const { t } = useTranslation();
 
     const { data, setData, post, errors, processing } = useForm({
-        customer_id: walkInId ? String(walkInId) : '',
-        warehouse_id: String(warehouses.find((w) => w.is_default)?.id ?? warehouses[0]?.id ?? ''),
+        customer_id: resumeCart?.customer_id ? String(resumeCart.customer_id) : walkInId ? String(walkInId) : '',
+        warehouse_id: resumeCart?.warehouse_id
+            ? String(resumeCart.warehouse_id)
+            : String(warehouses.find((w) => w.is_default)?.id ?? warehouses[0]?.id ?? ''),
         money_account_id: String(moneyAccounts[0]?.id ?? ''),
         invoice_discount: '0',
         reference: '',
         note: '',
-        lines: [] as Line[],
+        held_cart_id: resumeCart?.id ?? null,
+        lines: (resumeCart?.lines ?? []).map((line) => ({
+            product_id: String(line.product_id),
+            quantity: String(line.quantity),
+            unit_price: '',
+            discount: String(line.discount ?? '0'),
+        })) as Line[],
     });
 
     const [search, setSearch] = useState('');
@@ -169,7 +200,33 @@ export default function CounterSale({
         data.lines.forEach((l) => void fetchPrice(l.product_id, l.quantity, customerId));
     };
 
-    const reset = () => setData((current) => ({ ...current, lines: [], invoice_discount: '0', reference: '', note: '' }));
+    const reset = () => setData((current) => ({ ...current, lines: [], invoice_discount: '0', reference: '', note: '', held_cart_id: null }));
+
+    // A resumed cart carries products and quantities but NO prices - the
+    // resolver answers again, exactly as it would for a fresh cart. Prices may
+    // have changed while the cart sat held, and that is correct.
+    useEffect(() => {
+        if (resumeCart !== null) {
+            resumeCart.lines.forEach((line) => void fetchPrice(String(line.product_id), String(line.quantity)));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const [holdLabel, setHoldLabel] = useState('');
+
+    // Park the cart so the queue keeps moving. Nothing posts, nothing reserves.
+    const holdCart = () => {
+        router.post(
+            route('sales.counter.hold'),
+            {
+                label: holdLabel || null,
+                customer_id: data.customer_id || null,
+                warehouse_id: data.warehouse_id,
+                lines: data.lines,
+            },
+            { preserveScroll: true, onSuccess: () => setHoldLabel('') },
+        );
+    };
 
     const subtotal = data.lines.reduce((sum, line) => {
         const gross = (Number(line.quantity) || 0) * (Number(line.unit_price) || 0);
@@ -281,6 +338,44 @@ export default function CounterSale({
                             </Button>
                         )}
                     </div>
+
+                    {/* Held carts: bookmarks waiting for their customer to come
+                        back. Resume loads one; the hold itself survives until
+                        its sale completes or it is discarded on purpose. */}
+                    {heldCarts.length > 0 && (
+                        <div className="border-border bg-muted/30 space-y-1.5 border-b px-4 py-2.5">
+                            <p className="text-muted-foreground text-xs font-medium">{t('pos.held_carts')}</p>
+                            {heldCarts.map((cart) => (
+                                <div key={cart.id} className="flex items-center gap-2 text-sm">
+                                    <span className="min-w-0 flex-1 truncate">
+                                        {cart.label ?? `#${cart.id}`}
+                                        <span className="text-muted-foreground ml-1 text-xs">
+                                            ({t(cart.item_count === 1 ? 'pos.item_one' : 'pos.item_many', { count: cart.item_count })})
+                                        </span>
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7"
+                                        disabled={resumeCart?.id === cart.id}
+                                        onClick={() => router.get(route('sales.counter.create'), { resume: cart.id })}
+                                    >
+                                        {t('pos.resume_cart')}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-destructive h-7"
+                                        onClick={() => router.delete(route('sales.counter.hold.discard', cart.id), { preserveScroll: true })}
+                                    >
+                                        {t('pos.discard_cart')}
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
 
                     <div className="flex flex-col gap-3 p-4">
                         <div className="grid grid-cols-2 gap-2">
@@ -459,6 +554,21 @@ export default function CounterSale({
                         <Button type="submit" disabled={processing || data.lines.length === 0} size="lg" className="w-full">
                             {data.money_account_id ? t('pos.take_payment') : t('pos.finish_on_account')}
                         </Button>
+
+                        {/* Hold: park this cart and serve the next person. */}
+                        {data.lines.length > 0 && (
+                            <div className="flex gap-2">
+                                <Input
+                                    className="h-9 flex-1"
+                                    placeholder={t('pos.hold_label_placeholder')}
+                                    value={holdLabel}
+                                    onChange={(e) => setHoldLabel(e.target.value)}
+                                />
+                                <Button type="button" variant="outline" className="h-9" onClick={holdCart}>
+                                    {t('pos.hold_cart')}
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </form>
