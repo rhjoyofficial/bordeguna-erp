@@ -750,6 +750,19 @@ class GuideBook
                 'keywords' => ['report', 'profit', 'loss', 'balance sheet', 'trial balance', 'ledger', 'ageing', 'statement', 'valuation', 'cogs', 'hisab'],
             ],
             [
+                'key' => 'accounting.budgets',
+                'topic' => 'Money and the books',
+                'title' => 'Set a budget and watch the actuals against it',
+                'path' => 'Finance & Accounts > Budgets',
+                'permission' => 'accounting.view',
+                'steps' => [
+                    'Open Finance & Accounts > Budgets. The grid is accounts down and the twelve fiscal months across (July to June).',
+                    'Add the accounts you plan for, type the monthly figures, Save. Editing needs the chart-management permission; viewing needs only accounting view.',
+                    'The judgment lives in Reports > Budget vs actual: plan, ledger actual, variance and percent used per account - positive variance is room left, negative is overspent. It exports and prints with the letterhead like every report.',
+                ],
+                'keywords' => ['budget', 'budgets', 'plan', 'budget vs actual', 'variance', 'overspent', 'yearly plan', 'borad'],
+            ],
+            [
                 'key' => 'accounting.period_close',
                 'topic' => 'Money and the books',
                 'title' => 'Close a period, or unlock it for a correction',

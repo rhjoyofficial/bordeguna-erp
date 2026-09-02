@@ -560,5 +560,9 @@ it('registers fourteen of the fifteen reports, with only the bank advice missing
         // somebody actually looked.
         ->and($keys)->toContain('purchasing_expense_register')
         ->and($keys)->toContain('purchasing_standing_costs')
-        ->and($keys)->toHaveCount(21);
+        // 22: budget vs actual (Module 2, Slice 2) - Accounting's first report
+        // in the shared engine, registered by AccountingServiceProvider so it
+        // inherits the writers, the letterhead and the signature row.
+        ->and($keys)->toContain('accounting_budget_vs_actual')
+        ->and($keys)->toHaveCount(22);
 });

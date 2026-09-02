@@ -13,6 +13,7 @@ use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
 use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\AccountingPeriodController;
+use App\Modules\Accounting\Http\Controllers\BudgetController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
@@ -47,6 +48,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // Period close (Module 2, Slice 1) - the screen the lock engine
         // waited a month for. View for accounting eyes; acting re-checks
         // chart.manage in the controller.
+        // Budgets (Module 2, Slice 2): the plan the actuals are judged against.
+        Route::get('budgets', [BudgetController::class, 'show'])->name('budgets');
+        Route::post('budgets', [BudgetController::class, 'save'])->name('budgets.save');
         Route::get('period-close', [AccountingPeriodController::class, 'show'])->name('period-close');
         Route::post('period-close', [AccountingPeriodController::class, 'close'])->name('period-close.close');
         Route::post('period-close/unlock', [AccountingPeriodController::class, 'unlock'])->name('period-close.unlock');

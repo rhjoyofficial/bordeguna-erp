@@ -620,6 +620,8 @@ it('has every registered report declaring a permission, columns and a group', fu
         // registering its own definitions into this same engine.
         $module = match ($definition->group()) {
             'Attendance', 'Payroll' => 'hrm.',
+            // Widened again 3 Sep 2026: Accounting joined with budget vs actual.
+            'Accounting' => 'accounting.',
             'Purchases' => 'purchasing.',
         };
 

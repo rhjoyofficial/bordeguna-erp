@@ -70,6 +70,7 @@ import {
     Network,
     ListChecks,
     LockKeyhole,
+    Target,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -446,6 +447,7 @@ export function AppSidebar() {
                           { title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen },
                           // Module 2, Slice 1: the boundary the whole ledger obeys.
                           { title: 'Period close', url: '/accounting/period-close', icon: LockKeyhole },
+                          { title: 'Budgets', url: '/accounting/budgets', icon: Target },
                           { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },
                           // ⚠⚠ Directly under the screen that NAMES the accounts,
                           // because this is the only way to move money between
