@@ -10,6 +10,7 @@ use App\Modules\Crm\Http\Controllers\CrmReportController;
 use App\Modules\Crm\Http\Controllers\CrmSettingsController;
 use App\Modules\Crm\Http\Controllers\LeadController;
 use App\Modules\Crm\Http\Controllers\OpportunityController;
+use App\Modules\Crm\Http\Controllers\CadenceController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->group(function () {
@@ -50,6 +51,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
     // inventing a source mid-campaign is how a report ends up with four
     // spellings of "Meta" (C-CRM-14).
     Route::middleware('can:crm.settings.manage')->group(function () {
+        // Cadences: standing rhythms that write tasks. Paused, never deleted.
+        Route::get('cadences', [CadenceController::class, 'index'])->name('cadences');
+        Route::post('cadences', [CadenceController::class, 'store'])->name('cadences.store');
+        Route::post('cadences/{cadence}/toggle', [CadenceController::class, 'toggle'])->name('cadences.toggle');
         Route::get('settings', [CrmSettingsController::class, 'index'])->name('settings.index');
         Route::post('settings/sources', [CrmSettingsController::class, 'storeSource'])->name('settings.sources.store');
         Route::put('settings/sources/{leadSource}', [CrmSettingsController::class, 'updateSource'])->name('settings.sources.update');

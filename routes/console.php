@@ -74,6 +74,12 @@ Schedule::command(AccrueEarnedLeave::class)
 // ⚠ Proposes only. Expired stock is already unsellable the moment its date
 // passes (StockBatch::scopeConsumable), so a customer is protected whether or
 // not this ever runs - this raises the write-off a human then approves.
+// One nudge per sleeping customer, per active cadence - never a second
+// while the first stays open.
+Schedule::command(\App\Modules\Crm\Console\Commands\SweepDormantCustomersCommand::class)
+    ->dailyAt('07:30')
+    ->onOneServer();
+
 Schedule::call(fn () => app(ProposeExpiredStockWriteOffs::class)->handle())
     ->dailyAt('23:30')
     ->name('inventory:propose-expired-write-offs')

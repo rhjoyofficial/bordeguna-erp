@@ -181,6 +181,9 @@ class LeadController extends Controller
 
         $this->recordAttribution($lead, $data['attribution'], $request);
 
+        // Standing rhythm: a fresh lead gets its first-call task at once.
+        app(\App\Modules\Crm\Support\ApplyLeadCadences::class)->handle($lead, $request->user());
+
         return back()->with('success', 'Lead captured.');
     }
 

@@ -290,6 +290,7 @@ export function AppSidebar() {
                                 ]
                               : []),
                           ...(canManageCrmSettings ? [{ title: 'Sources & campaigns', url: '/crm/settings', icon: Megaphone }] : []),
+                          ...(canManageCrmSettings ? [{ title: 'Cadences', url: '/crm/cadences', icon: Repeat }] : []),
                           // ⚠ Linked in the same slice as the route and the
                           // screen. Seven modules in this project have shipped
                           // complete and unreachable because this line was left

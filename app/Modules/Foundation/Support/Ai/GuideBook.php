@@ -403,6 +403,20 @@ class GuideBook
                 'keywords' => ['promotion', 'buy one get one', 'bogo', 'free item', 'offer', 'deal', 'free', 'buy 2 get 1'],
             ],
             [
+                'key' => 'crm.cadences',
+                'topic' => 'Customers and leads',
+                'title' => 'Set a follow-up cadence so nobody is forgotten',
+                'path' => 'CRM > Cadences',
+                'permission' => 'crm.settings.manage',
+                'steps' => [
+                    'Open CRM > Cadences and start a rhythm: WHEN A NEW LEAD ARRIVES creates a first-call task automatically, due after the days you choose.',
+                    'WHEN A CUSTOMER GOES QUIET watches for customers with no invoice in N days and raises ONE follow-up task - never a second while the first is open.',
+                    'The tasks land on the follow-up queue and the overdue digest exactly like hand-made tasks; complete them there.',
+                    'Pause a cadence any time; it is never deleted. A customer who has never bought is a lead, not a dormant customer - the sweep ignores them.',
+                ],
+                'keywords' => ['cadence', 'follow up', 'reminder', 'dormant', 'sleeping customer', 'first call', 'automatic task', 'rhythm'],
+            ],
+            [
                 'key' => 'crm.pipeline',
                 'topic' => 'Customers and leads',
                 'title' => 'Work the sales pipeline: deals, stages, won and lost',
