@@ -623,6 +623,8 @@ it('has every registered report declaring a permission, columns and a group', fu
             // Widened again 3 Sep 2026: Accounting joined with budget vs actual.
             'Accounting' => 'accounting.',
             'Purchases' => 'purchasing.',
+            // Widened 3 Sep 2026 again: sales by brand joined the engine.
+            'Sales' => 'sales.',
         };
 
         expect($definition->key())->not->toBeEmpty()

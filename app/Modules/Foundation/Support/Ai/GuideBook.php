@@ -601,6 +601,20 @@ class GuideBook
                 'keywords' => ['pipeline', 'opportunity', 'deal', 'stage', 'kanban', 'won', 'lost deal', 'sales funnel'],
             ],
             [
+                'key' => 'sales.by_brand',
+                'topic' => 'Selling',
+                'title' => 'See how much each brand sold',
+                'path' => 'HRM > Reports > Sales by brand',
+                'permission' => 'sales.reports.view',
+                'steps' => [
+                    'Open Reports and pick Sales by brand; choose the period (or leave it open for everything to date).',
+                    'Each brand shows its distinct products, units and invoiced value - read from the invoices, never recomputed.',
+                    'Products without a brand appear under No brand, so the brand totals always foot to total sales.',
+                    'Costs are deliberately NOT split by brand - hosting and storage are shared, as decided. This is a sales calculation.',
+                ],
+                'keywords' => ['brand', 'brand sales', 'laladia', 'bionic', 'brand wise', 'brand report'],
+            ],
+            [
                 'key' => 'sales.targets',
                 'topic' => 'Selling',
                 'title' => 'Set monthly sales targets and see the would-be commission',

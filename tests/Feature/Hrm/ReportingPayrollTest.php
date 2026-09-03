@@ -564,5 +564,8 @@ it('registers fourteen of the fifteen reports, with only the bank advice missing
         // in the shared engine, registered by AccountingServiceProvider so it
         // inherits the writers, the letterhead and the signature row.
         ->and($keys)->toContain('accounting_budget_vs_actual')
-        ->and($keys)->toHaveCount(22);
+        // 23: sales by brand (3 Sep 2026) - the calculation Joy asked for when
+        // the interview revealed the "companies" are brands of Bor de Guna.
+        ->and($keys)->toContain('sales_by_brand')
+        ->and($keys)->toHaveCount(23);
 });
