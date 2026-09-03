@@ -1,8 +1,8 @@
 import HeadingSmall from '@/components/heading-small';
 import SelfServiceTabs from '@/components/self-service-tabs';
 import { Button } from '@/components/ui/button';
+import { Field, FormRow } from '@/components/form/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
@@ -79,73 +79,78 @@ export default function MyExpenseClaims({
                     </p>
                 )}
 
-                <form onSubmit={submit} className="border-border grid gap-4 rounded-md border p-4 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                        <Label htmlFor="spent_on">When you spent it</Label>
-                        <Input
-                            id="spent_on"
-                            type="date"
-                            max={today}
-                            value={form.data.spent_on}
-                            onChange={(e) => form.setData('spent_on', e.target.value)}
-                        />
-                        {form.errors.spent_on && <p className="text-destructive text-sm">{form.errors.spent_on}</p>}
-                    </div>
+                {/* ⚠⚠ TWO ROWS, Joy's own layout (3 Sep 2026): when / how much /
+                    category, then what it was for / receipt. Field+FormRow, NOT a
+                    grid: a grid gives a date and an amount a full half-screen each,
+                    which is root cause B of the 30 Aug audit all over again. */}
+                <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
+                    <FormRow>
+                        <Field label="When you spent it" htmlFor="spent_on" error={form.errors.spent_on}>
+                            <Input
+                                id="spent_on"
+                                type="date"
+                                max={today}
+                                value={form.data.spent_on}
+                                onChange={(e) => form.setData('spent_on', e.target.value)}
+                            />
+                        </Field>
 
-                    <div className="grid gap-2">
-                        <Label htmlFor="amount">How much (BDT)</Label>
-                        <Input
-                            id="amount"
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            value={form.data.amount}
-                            onChange={(e) => form.setData('amount', e.target.value)}
-                        />
-                        {form.errors.amount && <p className="text-destructive text-sm">{form.errors.amount}</p>}
-                    </div>
+                        <Field label="How much (BDT)" htmlFor="amount" size="sm" error={form.errors.amount}>
+                            <Input
+                                id="amount"
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                className="text-right tabular-nums"
+                                value={form.data.amount}
+                                onChange={(e) => form.setData('amount', e.target.value)}
+                            />
+                        </Field>
 
-                    <div className="grid gap-2 sm:col-span-2">
-                        <Label>Expense category</Label>
-                        <select
-                            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-                            value={form.data.expense_category_id}
-                            onChange={(e) => form.setData('expense_category_id', e.target.value)}
+                        <Field label="Expense category" htmlFor="expense_category_id" error={form.errors.expense_category_id}>
+                            <select
+                                id="expense_category_id"
+                                className="border-input bg-background h-10 rounded-md border px-3 py-2 text-sm"
+                                value={form.data.expense_category_id}
+                                onChange={(e) => form.setData('expense_category_id', e.target.value)}
+                            >
+                                <option value="">Choose the category…</option>
+                                {categories.map((category: { id: number; name: string }) => (
+                                    <option key={category.id} value={String(category.id)}>
+                                        {category.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </Field>
+                    </FormRow>
+
+                    <FormRow>
+                        <Field label="What it was for" htmlFor="purpose" size="grow" error={form.errors.purpose}>
+                            <Input
+                                id="purpose"
+                                value={form.data.purpose}
+                                placeholder="Courier to Savar for the Rahman order"
+                                onChange={(e) => form.setData('purpose', e.target.value)}
+                            />
+                        </Field>
+
+                        <Field
+                            label="Receipt"
+                            htmlFor="receipt"
+                            size="lg"
+                            error={form.errors.receipt}
+                            hint="A photo from your phone is fine. Without it the claim cannot be approved."
                         >
-                            <option value="">Choose the category…</option>
-                            {categories.map((category: { id: number; name: string }) => (
-                                <option key={category.id} value={String(category.id)}>
-                                    {category.name}
-                                </option>
-                            ))}
-                        </select>
-                        {form.errors.expense_category_id && <p className="text-destructive text-sm">{form.errors.expense_category_id}</p>}
+                            <Input
+                                id="receipt"
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                onChange={(e) => form.setData('receipt', e.target.files?.[0] ?? null)}
+                            />
+                        </Field>
+                    </FormRow>
 
-                        <Label htmlFor="purpose">What it was for</Label>
-                        <Input
-                            id="purpose"
-                            value={form.data.purpose}
-                            placeholder="Courier to Savar for the Rahman order"
-                            onChange={(e) => form.setData('purpose', e.target.value)}
-                        />
-                        {form.errors.purpose && <p className="text-destructive text-sm">{form.errors.purpose}</p>}
-                    </div>
-
-                    <div className="grid gap-2 sm:col-span-2">
-                        <Label htmlFor="receipt">Receipt</Label>
-                        <Input
-                            id="receipt"
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png,.webp"
-                            onChange={(e) => form.setData('receipt', e.target.files?.[0] ?? null)}
-                        />
-                        <p className="text-muted-foreground text-xs">A photo from your phone is fine. Without it the claim cannot be approved.</p>
-                        {form.errors.receipt && <p className="text-destructive text-sm">{form.errors.receipt}</p>}
-                    </div>
-
-                    <div className="sm:col-span-2">
-                        <Button disabled={form.processing}>Send for approval</Button>
-                    </div>
+                    <Button disabled={form.processing}>Send for approval</Button>
                 </form>
 
                 <div className="border-border overflow-x-auto rounded-md border">

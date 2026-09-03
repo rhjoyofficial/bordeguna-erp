@@ -12,8 +12,20 @@ import { cn } from '@/lib/utils';
  * knows exactly how wide `dd/mm/yyyy` plus the picker icon is - so `w-auto`
  * gives the right answer everywhere without a per-screen decision.
  *
- * ⚠ Only the date and time family. A number box shrunk to its content would
- * jump width as digits are typed, and a text box needs the room.
+ * ⚠ Only the date and time family shrink to their content. A number box shrunk
+ * that way would jump width as digits are typed.
+ *
+ * ⚠⚠ A NUMBER BOX IS AS WIDE AS A NUMBER (Joy again, 3 September 2026 - "why do
+ * you always make long width input? use them as they need"). An amount, a
+ * quantity, a percentage, a day of the month: none of them is ever long, and
+ * `w-full` handed each one a whole grid column - 22 of them across 14 screens.
+ * So numbers get a FIXED short width rather than a self-sizing one, which keeps
+ * the box still while it is typed into.
+ *
+ * ⚠ `max-w-full` is what makes that safe inside a `Field`: a Field sets the
+ * width on the WRAPPER and expects the control to fill it, so a `w-36` number
+ * inside a `size="xs"` (w-24) Field would otherwise hang out of its own field.
+ * Clamped, it takes the smaller of the two and both callers stay right.
  *
  * ⚠ The width still comes LAST through cn(), so a screen that genuinely needs a
  * different one passes it and wins. This is a better default, not a rule.
@@ -21,7 +33,11 @@ import { cn } from '@/lib/utils';
 const SELF_SIZING = ['date', 'time', 'datetime-local', 'month', 'week'];
 
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(({ className, type, ...props }, ref) => {
-    const width = type && SELF_SIZING.includes(type) ? 'w-auto min-w-0' : 'w-full';
+    const width = type && SELF_SIZING.includes(type)
+        ? 'w-auto min-w-0'
+        : type === 'number'
+          ? 'w-36 max-w-full'
+          : 'w-full';
 
     return (
         <input
