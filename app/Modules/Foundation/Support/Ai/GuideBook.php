@@ -529,6 +529,33 @@ class GuideBook
                 'keywords' => ['cockpit', 'group view', 'all companies', 'group cash', 'consolidated', 'overview'],
             ],
             [
+                'key' => 'foundation.hudhud_reports',
+                'topic' => 'The group',
+                'title' => 'Ask Hudhud to run a report for you',
+                'path' => 'The assistant panel',
+                'permission' => 'foundation.ai.use',
+                'steps' => [
+                    'Ask in plain words: "how much did each brand sell this month" or "show the expense register for August".',
+                    'Hudhud runs the SAME report the Reports screen would, with your own permissions - a report your role cannot open, it cannot open for you either.',
+                    'Long reports come back summarised with the first rows; export the full letterhead copy from HRM > Reports.',
+                ],
+                'keywords' => ['hudhud report', 'ask report', 'assistant report', 'run report', 'ai report'],
+            ],
+            [
+                'key' => 'foundation.health',
+                'topic' => 'The group',
+                'title' => 'Check business health: everything waiting on a human',
+                'path' => 'Business health',
+                'permission' => null,
+                'steps' => [
+                    'Open Business health from the sidebar: overdue tickets, run-out probations, attendance needing review, low stock, the cash forecast, follow-ups past due, and approvals waiting on YOU.',
+                    'Every number is read fresh from its own module the moment you open the page - nothing is stored, so nothing goes stale.',
+                    'Press any amber card and it takes you to the exact screen where the fix lives.',
+                    'You only see the signals your permissions let you act on. All clear means all clear.',
+                ],
+                'keywords' => ['health', 'attention', 'needs attention', 'dashboard', 'problems', 'alerts', 'what needs me'],
+            ],
+            [
                 'key' => 'group.partners',
                 'topic' => 'The group',
                 'title' => 'Link the same customer or supplier across group companies',

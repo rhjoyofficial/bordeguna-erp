@@ -23,6 +23,7 @@ import {
     Contact,
     Factory,
     FileBarChart,
+    Activity,
     FileText,
     LifeBuoy,
     FileUp,
@@ -126,6 +127,7 @@ export function AppSidebar() {
                 { title: 'Dashboard', url: '/dashboard', icon: LayoutGrid },
                 // Module 1, Slice 3: the day on one page.
                 { title: 'My work', url: '/work', icon: ListChecks },
+                { title: 'Business health', url: '/health', icon: Activity },
                 ...(canReviewApprovals ? [{ title: 'Approvals', url: '/approvals', icon: CheckSquare, badge: pendingApprovalsCount }] : []),
                 // ⚠ ONE self-service entry, on Joy's reorganisation (23 Aug
                 // 2026): Clock in/out, My leave and My payslips live as tabs

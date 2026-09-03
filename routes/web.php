@@ -38,6 +38,9 @@ Route::middleware(['auth', 'business'])->group(function () {
     Route::post('group/products/link', [App\Modules\Foundation\Http\Controllers\GroupProductController::class, 'link'])->name('group.products.link');
     Route::delete('group/products/{link}', [App\Modules\Foundation\Http\Controllers\GroupProductController::class, 'unlink'])->name('group.products.unlink');
     Route::get('group/cockpit', [App\Modules\Foundation\Http\Controllers\GroupCockpitController::class, 'index'])->name('group.cockpit');
+
+    // Module 7: the morning walk around the shop, done by the system.
+    Route::get('health', [App\Modules\Foundation\Http\Controllers\BusinessHealthController::class, 'index'])->name('health');
     Route::get('approvals', [ApprovalInboxController::class, 'index'])->name('approvals.index');
 
     // The header search. A GET on purpose (the hand-written-fetch trap: a GET

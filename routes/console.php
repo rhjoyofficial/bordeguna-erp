@@ -76,6 +76,11 @@ Schedule::command(AccrueEarnedLeave::class)
 // not this ever runs - this raises the write-off a human then approves.
 // One nudge per sleeping customer, per active cadence - never a second
 // while the first stays open.
+// The morning briefing to everyone who reads money.
+Schedule::command(\App\Modules\Foundation\Console\Commands\SendMorningBriefing::class)
+    ->dailyAt('07:00')
+    ->onOneServer();
+
 Schedule::command(\App\Modules\Crm\Console\Commands\SweepDormantCustomersCommand::class)
     ->dailyAt('07:30')
     ->onOneServer();

@@ -56,6 +56,7 @@ class AssistantTools
      * callable by nobody - default closed, like every other map here. */
     private const TOOL_PERMISSIONS = [
         'how_to' => self::USE,
+        'run_report' => self::USE,
         'read_data' => self::READ,
         'list_todos' => self::TODOS,
         'create_todo' => self::TODOS,
@@ -83,6 +84,7 @@ class AssistantTools
         private readonly DataQuery $query,
         private readonly PersonalItems $personal,
         private readonly GuideBook $guide,
+        private readonly ReportTool $reports,
     ) {}
 
     /**
@@ -194,6 +196,33 @@ class AssistantTools
         // neither takes a parameter naming a person - there is nothing for the
         // model to put somebody else's id into. Each group needs its own grant.
         if ($user->can(self::TODOS)) {
+            // Reports: the same 23 definitions the Reports screen runs,
+            // each behind its own permission, rows capped for narration.
+            $available = $this->reports->available($user);
+            if ($available !== []) {
+                $tools[] = [
+                    'name' => 'run_report',
+                    'description' => 'Run one of the registered business reports and summarise its rows. '
+                        .'Only the reports listed below are available to THIS person; each runs with the exact '
+                        ."figures the Reports screen would show. Pass 'report' with the key, and optionally "
+                        ."'<range>_from' / '<range>_to' dates (YYYY-MM-DD) where a report takes a period. "
+                        ."Rows are capped: when 'truncated' is true, say so and point to the Reports screen "
+                        ."for the full export.
+
+Available reports:
+"
+                        .collect($available)->map(fn ($report) => "- {$report['key']}: {$report['name']} - {$report['description']}")->implode("
+"),
+                    'input_schema' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'report' => ['type' => 'string', 'description' => 'The report key, from the list above.'],
+                        ],
+                        'required' => ['report'],
+                    ],
+                ];
+            }
+
             $tools[] = [
                 'name' => 'list_todos',
                 'description' => "List the current user's own to-do items. Nobody else's list can be read.",
@@ -291,6 +320,7 @@ class AssistantTools
             $result = match ($tool) {
                 'how_to' => $this->guide->lookup($user, (string) ($input['query'] ?? '')),
                 'read_data' => $this->query->run($user, $input),
+                'run_report' => $this->reports->run($user, $input),
                 'list_todos' => $this->personal->listTodos($user, (bool) ($input['include_done'] ?? false)),
                 'create_todo' => $this->personal->createTodo(
                     $user,

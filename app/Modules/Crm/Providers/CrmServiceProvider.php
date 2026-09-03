@@ -17,7 +17,7 @@ class CrmServiceProvider extends ServiceProvider
         // nowhere else - including the test suite, which then proves nothing
         // about it.
         if ($this->app->runningInConsole()) {
-            $this->commands([NotifyFollowUpsDue::class]);
+            $this->commands([NotifyFollowUpsDue::class, \App\Modules\Crm\Console\Commands\SweepDormantCustomersCommand::class]);
         }
     }
 }

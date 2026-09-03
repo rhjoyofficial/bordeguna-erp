@@ -28,7 +28,7 @@ class FoundationServiceProvider extends ServiceProvider
         \App\Modules\Foundation\Support\Ai\ReadOnlyConnection::register();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([TeardownSandbox::class, CutoverPreflight::class]);
+            $this->commands([TeardownSandbox::class, CutoverPreflight::class, \App\Modules\Foundation\Console\Commands\SendMorningBriefing::class]);
 
             // ⚠⚠ Fires before the first migration in a run. Catches the case
             // where DB_DATABASE was overridden per-command but the container's
