@@ -100,7 +100,12 @@ class ReportController extends Controller
         $definition = $this->reports->findOrFail($report, $request->user());
 
         $validated = $request->validate(
-            array_merge($this->rules($definition), ['format' => 'required|string']),
+            array_merge($this->rules($definition), [
+                'format' => 'required|string',
+                // Joy, 3 Sep 2026: tick the box and the named people's
+                // signature images are drawn above their lines.
+                'with_signatures' => 'nullable|boolean',
+            ]),
         );
 
         $writer = $this->writers->findOrFail($validated['format']);
@@ -141,6 +146,18 @@ class ReportController extends Controller
         }
 
         $dataset = $this->runner->run($definition, $parameters, $request->user());
+
+        // Signatures ride the direct path only; a queued render has no box to
+        // have ticked. Missing images leave lines blank - never an error.
+        if ($request->boolean('with_signatures')) {
+            $dataset = new \App\Modules\Hrm\Reporting\ReportDataset(
+                columns: $dataset->columns,
+                rows: $dataset->rows,
+                meta: $dataset->meta->withSignatures(\App\Modules\Hrm\Reporting\SignatureImages::forMeta($dataset->meta)),
+                totals: $dataset->totals,
+            );
+        }
+
         $path = $writer->write($dataset);
 
         if (! $writer->isDownload()) {

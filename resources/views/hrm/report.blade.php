@@ -67,6 +67,8 @@
 
     /* The room a wet signature actually needs. */
     .signatures .space { height: 16mm; }
+    .signatures .space.sig { text-align: center; }
+    .signatures .space.sig img { max-height: 14mm; max-width: 90%; }
 
     .signatures .rule {
         border-top: 1px solid #374151;
@@ -279,9 +281,9 @@
      had. The space above the rule stays for the wet signature either way. --}}
 <table class="signatures">
     <tr>
-        <td><div class="space"></div><div class="rule">Prepared by</div><div class="who">{{ $dataset->meta->preparedBy ?? 'Name & designation' }}</div></td>
-        <td><div class="space"></div><div class="rule">Checked by</div><div class="who">{{ $dataset->meta->checkedBy ?? 'Name & designation' }}</div></td>
-        <td><div class="space"></div><div class="rule">Approved by</div><div class="who">{{ $dataset->meta->approvedBy ?? 'Name & designation' }}</div></td>
+        <td>@if($dataset->meta->signatures['prepared'] ?? null)<div class="space sig"><img src="{{ $dataset->meta->signatures['prepared'] }}" alt=""></div>@else<div class="space"></div>@endif<div class="rule">Prepared by</div><div class="who">{{ $dataset->meta->preparedBy ?? 'Name & designation' }}</div></td>
+        <td>@if($dataset->meta->signatures['checked'] ?? null)<div class="space sig"><img src="{{ $dataset->meta->signatures['checked'] }}" alt=""></div>@else<div class="space"></div>@endif<div class="rule">Checked by</div><div class="who">{{ $dataset->meta->checkedBy ?? 'Name & designation' }}</div></td>
+        <td>@if($dataset->meta->signatures['approved'] ?? null)<div class="space sig"><img src="{{ $dataset->meta->signatures['approved'] }}" alt=""></div>@else<div class="space"></div>@endif<div class="rule">Approved by</div><div class="who">{{ $dataset->meta->approvedBy ?? 'Name & designation' }}</div></td>
     </tr>
 </table>
 

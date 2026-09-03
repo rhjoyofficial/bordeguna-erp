@@ -60,6 +60,7 @@ interface Document {
 
 interface EmployeeDetail {
     photo_url: string | null;
+    has_signature: boolean;
     referred_by: string | null;
     id: number;
     employee_code: string;
@@ -147,6 +148,47 @@ function Field({ label, value }: { label: string; value: string | null }) {
  * accumulated, deliberately separate from the documents list below because a
  * face is not a certificate.
  */
+function SignatureUpload({ employeeId, hasSignature }: { employeeId: number; hasSignature: boolean }) {
+    const fileRef = useRef<HTMLInputElement>(null);
+
+    return (
+        <span className="inline-flex items-center gap-1">
+            <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const form = new FormData();
+                    form.append('signature', file);
+                    router.post(route('hrm.employees.signature.store', employeeId), form, {
+                        forceFormData: true,
+                        preserveScroll: true,
+                        onFinish: () => {
+                            if (fileRef.current) fileRef.current.value = '';
+                        },
+                    });
+                }}
+            />
+            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+                {hasSignature ? 'Replace signature' : 'Upload signature'}
+            </Button>
+            {hasSignature && (
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive"
+                    onClick={() => router.delete(route('hrm.employees.signature.destroy', employeeId), { preserveScroll: true })}
+                >
+                    Remove
+                </Button>
+            )}
+        </span>
+    );
+}
+
 function ProfilePhoto({ employeeId, photoUrl, name }: { employeeId: number; photoUrl: string | null; name: string }) {
     const fileRef = useRef<HTMLInputElement>(null);
     const [busy, setBusy] = useState(false);
@@ -820,6 +862,7 @@ export default function EmployeeShow({
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/hrm/employees/${employee.id}/performance`}>Performance</Link>
                         </Button>
+                        <SignatureUpload employeeId={employee.id} hasSignature={employee.has_signature} />
                         {can_transfer && (
                             <TransferDialog employeeId={employee.id} offices={offices_tree} designations={designations} supervisors={supervisors} />
                         )}

@@ -243,6 +243,7 @@ class EmployeeController extends Controller
                 // stale files - and it is EXCLUDED from the documents list
                 // below, because a face is not a certificate.
                 'photo_url' => $employee->attachmentInCollection('photo')?->url(),
+                'has_signature' => $employee->attachmentInCollection('signature') !== null,
                 // the files themselves goes through attachments.show, which
                 // enforces the Employee's canAccessAttachments gate on top of
                 // the business scope.
@@ -624,6 +625,44 @@ class EmployeeController extends Controller
         );
 
         return back()->with('success', 'Photo updated.');
+    }
+
+    /**
+     * The digital signature (Joy, 3 Sep 2026): one PNG per employee, drawn
+     * onto reports above their Prepared/Checked/Approved line when the
+     * signatures box is ticked. Same shape as the photo: singleton, private
+     * disk, HR-managed.
+     */
+    public function uploadSignature(Request $request, Employee $employee, StoreAttachment $action): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+
+        $request->validate([
+            'signature' => ['required', 'image', 'mimes:png,webp', 'max:1024'],
+        ]);
+
+        $action->handle(
+            attachable: $employee,
+            file: $request->file('signature'),
+            collection: 'signature',
+            uploadedBy: $request->user(),
+            singleton: true,
+        );
+
+        return back()->with('success', 'Signature saved. Reports can now sign for this person.');
+    }
+
+    public function destroySignature(Employee $employee, DeleteAttachment $action): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+
+        $signature = $employee->attachments()->where('collection', 'signature')->first();
+        abort_if($signature === null, 404);
+
+        $action->handle($signature);
+
+        return back()->with('success', 'Signature removed.');
     }
 
     public function destroyPhoto(Employee $employee, DeleteAttachment $action): RedirectResponse

@@ -474,6 +474,20 @@ class GuideBook
                 'keywords' => ['probation', 'confirm', 'confirmation', 'permanent', 'probation ended', 'overdue confirmation'],
             ],
             [
+                'key' => 'hrm.report_signatures',
+                'topic' => 'People',
+                'title' => 'Put digital signatures on a report',
+                'path' => 'HRM > Reports > any report',
+                'permission' => 'hrm.employees.manage',
+                'steps' => [
+                    'First, HR uploads each persons signature once: open the employee, press Upload signature, pick a PNG with a transparent or white background.',
+                    'On any report page, tick ADD DIGITAL SIGNATURES before exporting - the images of the named Prepared/Checked/Approved people are drawn above their lines.',
+                    'No signature on file leaves that line blank for ink - a report never fails because an image is missing.',
+                    'The names come from who actually calculated, reviewed and approved - the signatures follow the record, never the other way.',
+                ],
+                'keywords' => ['signature', 'digital signature', 'sign report', 'prepared by', 'checked by', 'approved by', 'swakkhor'],
+            ],
+            [
                 'key' => 'hrm.letters',
                 'topic' => 'People',
                 'title' => 'Draft an appointment, confirmation, increment or experience letter',

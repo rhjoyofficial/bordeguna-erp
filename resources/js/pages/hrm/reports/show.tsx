@@ -55,6 +55,7 @@ interface Props {
  * the download.
  */
 export default function ReportShow({ report, parameters, columns, formats, queue_threshold }: Props) {
+    const [withSignatures, setWithSignatures] = useState(false);
     const initial = useMemo(() => {
         const values: Record<string, string> = {};
 
@@ -123,6 +124,7 @@ export default function ReportShow({ report, parameters, columns, formats, queue
             if (value !== '') query.append(key, value);
         });
         query.append('format', format.key);
+        if (withSignatures) query.append('with_signatures', '1');
 
         const url = `/hrm/reports/${report.key}/run?${query.toString()}`;
 
@@ -227,7 +229,12 @@ export default function ReportShow({ report, parameters, columns, formats, queue
 
                         {errors.length > 0 && <p className="text-destructive text-sm">Please choose: {errors.join(', ')}.</p>}
 
-                        <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+                        <label className="text-muted-foreground flex items-center gap-2 border-t pt-4 text-sm">
+                            <input type="checkbox" checked={withSignatures} onChange={(e) => setWithSignatures(e.target.checked)} />
+                            Add digital signatures (Prepared / Checked / Approved, where a signature is on file)
+                        </label>
+
+                        <div className="flex flex-wrap items-center gap-2">
                             {formats.map((format) => (
                                 <Button key={format.key} variant={format.key === 'xlsx' ? 'default' : 'outline'} onClick={() => run(format)}>
                                     {format.label}

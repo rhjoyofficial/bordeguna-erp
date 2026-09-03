@@ -76,7 +76,34 @@ final class ReportMeta
         public readonly ?string $preparedBy = null,
         public readonly ?string $checkedBy = null,
         public readonly ?string $approvedBy = null,
+        /**
+         * Inline signature images for the three lines, keyed
+         * prepared|checked|approved, set only when the export asked for
+         * digital signatures. Null = draw the blank rule for ink.
+         */
+        public readonly ?array $signatures = null,
     ) {}
+
+    /** A copy of this meta carrying signature images; the original stays as it is. */
+    public function withSignatures(?array $signatures): self
+    {
+        return new self(
+            title: $this->title,
+            subtitle: $this->subtitle,
+            filters: $this->filters,
+            businessName: $this->businessName,
+            generatedBy: $this->generatedBy,
+            generatedAt: $this->generatedAt,
+            periodLocked: $this->periodLocked,
+            lockNote: $this->lockNote,
+            note: $this->note,
+            logo: $this->logo,
+            preparedBy: $this->preparedBy,
+            checkedBy: $this->checkedBy,
+            approvedBy: $this->approvedBy,
+            signatures: $signatures,
+        );
+    }
 
     public function generatedAtString(): string
     {
