@@ -8,6 +8,7 @@ use App\Modules\Foundation\Models\ChangeRequest;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\BonusAward;
 use App\Modules\Hrm\Models\ExpenseClaim;
+use App\Modules\Hrm\Support\ExpenseCategories;
 use App\Modules\Hrm\Models\LeaveRequest;
 use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\Movement;
@@ -352,6 +353,16 @@ class ApprovalCards
                     ['label' => 'Employee', 'value' => $approvable->employee?->fullName()],
                     ['label' => 'Amount', 'value' => $this->money($approvable->amount)],
                     ['label' => 'Spent on', 'value' => $approvable->spent_on?->toDateString()],
+                    // ⚠ Approving is now a POSTING, not a promise: the last yes
+                    // writes the journal. An approver is therefore told the
+                    // category, the account it lands in, and when the category
+                    // is a catch-all that the accountant flagged for scrutiny.
+                    ...(($category = ExpenseCategories::describe($approvable->expense_category_id)) === null ? [] : [
+                        ['label' => 'Category', 'value' => $category['name']
+                            .($category['is_exception'] ? ' — a catch-all category: look twice at what this really was' : '')],
+                        ['label' => 'Books', 'value' => 'Approving posts Dr '.$category['account']
+                            .' / Cr Employee Reimbursements Payable. The cash moves later, when accounts pays it back.'],
+                    ]),
                     // An approver deciding on somebody's own money should not
                     // have to open the claim to learn whether it came with proof.
                     ['label' => 'Receipts', 'value' => $approvable->attachments->count() === 0

@@ -71,13 +71,15 @@ beforeEach(function () {
  * as the reason it could not answer.
  */
 it('reads the chart of accounts, which is shared rather than business scoped', function () {
-    Account::create(['code' => '6225', 'name' => 'Software and Hosting', 'type' => 'expense', 'is_postable' => true]);
+    Account::firstOrCreate(['code' => '6225'], ['name' => 'Software and Hosting', 'type' => 'expense', 'is_postable' => true]);
     Account::create(['code' => '1010', 'name' => 'Cash in Hand', 'type' => 'asset', 'is_postable' => true]);
 
     $result = json_decode($this->tools->run($this->user, 'read_data', ['table' => 'accounts']), true);
 
     expect($result)->not->toHaveKey('refused')
-        ->and($result['total'])->toBe(2)
+        // ⚠ Not a literal 2: the chart grows (2145 arrived with expense
+        // claims). What matters is that the count is the WHOLE shared chart.
+        ->and($result['total'])->toBe(Account::count())
         ->and(collect($result['rows'])->pluck('code')->all())->toContain('6225');
 });
 

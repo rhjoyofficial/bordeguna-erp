@@ -49,11 +49,17 @@ beforeEach(function () {
     $this->user->businesses()->attach($this->business->id);
     $this->user->assignRole('Owner');
 
-    $this->account = Account::create([
-        'business_id' => $this->business->id,
-        'code' => '6225', 'name' => 'Software and Hosting', 'type' => AccountType::Expense,
-        'is_postable' => true, 'is_active' => true,
-    ]);
+    // ⚠ firstOrCreate: the chart of accounts OWNS 6225 now (it was planted by
+    // hand in production for the hosting bill and joined the seeder with the
+    // expense-claim categories). A test that insists on creating it collides.
+    $this->account = Account::firstOrCreate(
+        ['code' => '6225'],
+        [
+            'business_id' => $this->business->id,
+            'name' => 'Software and Hosting', 'type' => AccountType::Expense,
+            'is_postable' => true, 'is_active' => true,
+        ],
+    );
 
     $this->bank = MoneyAccount::create([
         'business_id' => $this->business->id, 'name' => 'BRAC Bank', 'type' => 'bank', 'is_active' => true,

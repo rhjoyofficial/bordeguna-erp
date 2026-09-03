@@ -95,6 +95,15 @@ beforeEach(function () {
     ]);
 });
 
+function plantedCategory(): int
+{
+    \App\Modules\Hrm\Support\ExpenseCategories::ensureDefaults(
+        app(\App\Modules\Foundation\Support\BusinessContext::class)->id(),
+    );
+
+    return (int) DB::table('expense_categories')->value('id');
+}
+
 function claimFor(int $employeeId, int $businessId, string $amount = '450.0000'): ExpenseClaim
 {
     return ExpenseClaim::create([
@@ -128,6 +137,7 @@ function payrollRunFor(PayrollPeriod $period, PayrollStatus $status): PayrollRun
 it('lets an employee raise a claim with a receipt, with no management permission', function () {
     $this->actingAs($this->staffUser)
         ->post('/hrm/my-expenses', [
+            'expense_category_id' => plantedCategory(),
             'spent_on' => '2026-08-26',
             'amount' => '450',
             'purpose' => 'Courier to Savar',
@@ -150,6 +160,7 @@ it('refuses a claim with no receipt', function () {
     // asked for later is proof that often never arrives.
     $this->actingAs($this->staffUser)
         ->post('/hrm/my-expenses', [
+            'expense_category_id' => plantedCategory(),
             'spent_on' => '2026-08-26',
             'amount' => '450',
             'purpose' => 'Courier to Savar',
@@ -209,14 +220,17 @@ it('will not settle a claim nobody has approved', function () {
 });
 
 it('pays an approved claim now, and the voucher carries the receipt', function () {
-    $this->actingAs($this->staffUser)->post('/hrm/my-expenses', [
-        'spent_on' => '2026-08-26',
-        'amount' => '450',
-        'purpose' => 'Courier to Savar',
-        'receipt' => UploadedFile::fake()->image('receipt.jpg'),
-    ]);
-
-    $claim = ExpenseClaim::sole();
+    // ⚠ Deliberately a LEGACY claim - created without a category, the way
+    // every claim before 3 Sep 2026 exists in production. The voucher route
+    // must keep working for them; category claims settle via the payable.
+    $claim = claimFor($this->employee->id, $this->business->id, '450');
+    app(\App\Modules\Foundation\Actions\StoreAttachment::class)->handle(
+        $claim,
+        UploadedFile::fake()->image('receipt.jpg'),
+        ExpenseClaim::EVIDENCE_COLLECTION,
+        $this->staffUser,
+    );
+    $claim->submitForApproval($this->staffUser);
     $claim->approvalRequest->update(['status' => ApprovalStatus::Approved]);
 
     $this->actingAs($this->finance)
@@ -320,6 +334,7 @@ it('gives each claim its own number', function () {
 it('carries a claim from the employee to the approver inbox to the money, with no shortcuts', function () {
     $this->actingAs($this->staffUser)
         ->post('/hrm/my-expenses', [
+            'expense_category_id' => plantedCategory(),
             'spent_on' => '2026-08-26',
             'amount' => '450',
             'purpose' => 'Courier to Savar',

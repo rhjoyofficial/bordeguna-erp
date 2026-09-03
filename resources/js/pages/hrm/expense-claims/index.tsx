@@ -12,6 +12,7 @@ type Claim = {
     claim_number: string;
     spent_on: string | null;
     amount: string;
+    category: string | null;
     purpose: string;
     state: string;
     is_settled: boolean;
@@ -19,6 +20,7 @@ type Claim = {
     settlement_method: string | null;
     settled_by: string | null;
     expense_account: string | null;
+    is_booked: boolean;
     employee: string | null;
     employee_code: string | null;
     receipts: { id: number; name: string; url: string }[];
@@ -77,6 +79,35 @@ function SettleRow({
             },
             { preserveScroll: true },
         );
+
+    // ⚠⚠ A category claim was EXPENSED AT APPROVAL. There is no expense head
+    // left to pick and no salary route left to take - the only honest act is
+    // paying the money over, which clears what the company already owes.
+    if (claim.is_booked) {
+        return (
+            <div className="space-y-2">
+                <p className="text-muted-foreground text-xs">
+                    Already booked at approval{claim.expense_account ? ` to ${claim.expense_account}` : ''}. Paying clears the payable.
+                </p>
+                <div className="grid gap-1">
+                    <Label className="text-muted-foreground text-xs">Pay from</Label>
+                    <div className="w-56">
+                        <SearchSelect value={account} onChange={(e) => setAccount(e.target.value)}>
+                            <option value="">Cash, bank or wallet</option>
+                            {moneyAccounts.map((a) => (
+                                <option key={a.id} value={String(a.id)}>
+                                    {a.name} ({a.type})
+                                </option>
+                            ))}
+                        </SearchSelect>
+                    </div>
+                </div>
+                <BusyButton size="sm" busyLabel="Paying…" disabled={account === ''} onClick={() => settle('payment')}>
+                    Pay now
+                </BusyButton>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-2">
@@ -170,6 +201,7 @@ export default function ExpenseClaims({
                                 <th className="p-3">Claim</th>
                                 <th className="p-3">Who</th>
                                 <th className="p-3">Date</th>
+                                <th className="p-3">Category</th>
                                 <th className="p-3">What for</th>
                                 <th className="p-3 text-right">Amount</th>
                                 <th className="p-3">Receipt</th>
@@ -179,7 +211,7 @@ export default function ExpenseClaims({
                         <tbody>
                             {claims.length === 0 && (
                                 <tr>
-                                    <td colSpan={7} className="text-muted-foreground p-3">
+                                    <td colSpan={8} className="text-muted-foreground p-3">
                                         Nobody has claimed anything yet.
                                     </td>
                                 </tr>
@@ -192,6 +224,7 @@ export default function ExpenseClaims({
                                         <span className="text-muted-foreground block text-xs">{claim.employee_code}</span>
                                     </td>
                                     <td className="p-3">{claim.spent_on ?? '-'}</td>
+                                    <td className="p-3">{claim.category ?? '-'}</td>
                                     <td className="p-3">{claim.purpose}</td>
                                     <td className="p-3 text-right tabular-nums">{money(claim.amount)}</td>
                                     <td className="p-3">

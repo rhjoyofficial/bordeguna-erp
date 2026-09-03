@@ -401,6 +401,8 @@ export function AppSidebar() {
                                     // ⚠ Linked deliberately: a settlement screen nobody can
                                     // reach means employees are never paid back.
                                     { title: 'Expense claims', url: '/hrm/expense-claims', icon: HandCoins },
+                                    // The COA mapping behind the categories staff pick.
+                                    { title: 'Expense categories', url: '/hrm/expense-categories', icon: Tags },
                                     ...(canAccessSalary ? [{ title: 'Staff purchases', url: '/hrm/staff-purchases', icon: Store }] : []),
                                     { title: 'Payroll runs', url: '/hrm/payroll', icon: Banknote },
                                     // ⚠ Linked deliberately. The payroll screen shows ONE

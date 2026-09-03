@@ -40,6 +40,7 @@ class ExpenseClaim extends Model
         'spent_on',
         'amount',
         'purpose',
+        'expense_category_id',
         'expense_account_id',
         'settlement_method',
         'settled_at',

@@ -40,7 +40,7 @@ beforeEach(function () {
     $this->reader->businesses()->attach($this->business->id);
     $this->reader->assignRole('Reader');
 
-    $this->hosting = Account::create(['code' => '6225', 'name' => 'Software and Hosting', 'type' => 'expense', 'is_postable' => true]);
+    $this->hosting = Account::firstOrCreate(['code' => '6225'], ['name' => 'Software and Hosting', 'type' => 'expense', 'is_postable' => true]);
     $this->rent = Account::create(['code' => '6210', 'name' => 'Rent', 'type' => 'expense', 'is_postable' => true]);
 });
 

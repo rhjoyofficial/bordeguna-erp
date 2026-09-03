@@ -44,6 +44,12 @@ class SettleExpenseClaim
     {
         $this->assertSettleable($claim);
 
+        // A category claim was EXPENSED AT APPROVAL - paying it now clears
+        // the payable against the till, and must not expense a second time.
+        if ($claim->approval_journal_id !== null) {
+            return $this->payPostedClaim($claim, $moneyAccount, $actor);
+        }
+
         return DB::transaction(function () use ($claim, $moneyAccount, $expenseAccount, $actor) {
             $voucher = $this->recordVoucher->handle(
                 moneyAccount: $moneyAccount,
@@ -82,6 +88,15 @@ class SettleExpenseClaim
     public function withSalary(ExpenseClaim $claim, Account $expenseAccount, PayrollPeriod $period, User $actor): ExpenseClaim
     {
         $this->assertSettleable($claim);
+
+        // ⚠ A category claim was expensed at approval; routing it through
+        // salary would expense it a second time inside payroll. Pay it from
+        // a money account instead - the payable is waiting to be cleared.
+        if ($claim->approval_journal_id !== null) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'method' => "Claim {$claim->claim_number} was booked at approval - pay it now from a cash or bank account. The salary route is for older claims only.",
+            ]);
+        }
 
         // ⚠⚠ THE PERIOD IS NAMED, NEVER GUESSED. An adjustment belongs to one
         // payroll month, and picking "the current one" silently would put a
@@ -157,6 +172,40 @@ class SettleExpenseClaim
             $copy->collection = ExpenseVoucher::EVIDENCE_COLLECTION;
             $copy->save();
         }
+    }
+
+    /**
+     * Dr Employee Reimbursements Payable / Cr the money account - the mirror
+     * of what approval posted, and nothing else.
+     */
+    private function payPostedClaim(ExpenseClaim $claim, MoneyAccount $moneyAccount, User $actor): ExpenseClaim
+    {
+        return DB::transaction(function () use ($claim, $moneyAccount, $actor) {
+            $payable = Account::bySlug('employee_reimbursements_payable');
+            $cash = Account::findOrFail($moneyAccount->account_id);
+            $amount = \App\Modules\Accounting\Support\Money::ofTaka((string) $claim->amount);
+
+            $journal = app(\App\Modules\Accounting\Actions\PostJournal::class)->handle(
+                new \App\Modules\Accounting\Support\JournalDraft(
+                    date: now()->startOfDay(),
+                    lines: [
+                        \App\Modules\Accounting\Support\JournalLineDraft::debit($payable->id, $amount, 'Reimbursed '.$claim->claim_number, $claim->employee),
+                        \App\Modules\Accounting\Support\JournalLineDraft::credit($cash->id, $amount, $moneyAccount->label(), null, $moneyAccount),
+                    ],
+                    memo: 'Reimbursement of expense claim '.$claim->claim_number,
+                    source: $claim,
+                ),
+                $actor,
+            );
+
+            $claim->update([
+                'settlement_method' => ExpenseClaim::SETTLE_PAYMENT,
+                'settled_at' => now(),
+                'settled_by' => $actor->id,
+            ]);
+
+            return $claim->fresh();
+        });
     }
 
     private function assertSettleable(ExpenseClaim $claim): void

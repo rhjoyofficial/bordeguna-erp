@@ -34,6 +34,7 @@ use App\Modules\Hrm\Http\Controllers\HrLetterController;
 use App\Modules\Hrm\Http\Controllers\ChecklistController;
 use App\Modules\Hrm\Http\Controllers\PerformanceController;
 use App\Modules\Hrm\Http\Controllers\StaffPurchaseController;
+use App\Modules\Hrm\Http\Controllers\ExpenseCategoryController;
 use App\Modules\Hrm\Http\Controllers\SelfServiceController;
 use App\Modules\Hrm\Http\Controllers\SettlementController;
 use App\Modules\Hrm\Http\Controllers\ShiftController;
@@ -233,6 +234,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // Paying claims back is a payroll act, not a self-service one.
     Route::middleware('can:hrm.payroll.manage')->group(function () {
         Route::get('expense-claims', [ExpenseClaimController::class, 'index'])->name('expense-claims.index');
+        // The COA mapping behind the categories - the accountant's table.
+        Route::get('expense-categories', [ExpenseCategoryController::class, 'index'])->name('expense-categories');
+        Route::patch('expense-categories/{category}', [ExpenseCategoryController::class, 'update'])->name('expense-categories.update');
         Route::post('expense-claims/{claim}/settle', [ExpenseClaimController::class, 'settle'])->name('expense-claims.settle');
     });
 

@@ -35,7 +35,7 @@ beforeEach(function () {
     $this->poster->assignRole('Poster');
 
     $this->prepaid = Account::create(['code' => '1180', 'name' => 'Prepaid Expenses', 'type' => 'asset', 'is_postable' => true]);
-    $this->hosting = Account::create(['code' => '6225', 'name' => 'Software and Hosting', 'type' => 'expense', 'is_postable' => true]);
+    $this->hosting = Account::firstOrCreate(['code' => '6225'], ['name' => 'Software and Hosting', 'type' => 'expense', 'is_postable' => true]);
 });
 
 it('releases the months due, posting real journals with the remainder in the final month', function () {

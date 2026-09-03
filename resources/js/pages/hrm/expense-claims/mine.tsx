@@ -13,6 +13,7 @@ type Claim = {
     claim_number: string;
     spent_on: string | null;
     amount: string;
+    category: string | null;
     purpose: string;
     state: string;
     is_settled: boolean;
@@ -32,10 +33,19 @@ const money = (value: string) => Number(value).toLocaleString('en-BD', { minimum
  * proof cannot be approved by anybody honestly, so it cannot be submitted
  * either.
  */
-export default function MyExpenseClaims({ claims, today }: { claims: Claim[]; today: string }) {
-    const form = useForm<{ spent_on: string; amount: string; purpose: string; receipt: File | null }>({
+export default function MyExpenseClaims({
+    categories = [],
+    claims,
+    today,
+}: {
+    categories: { id: number; name: string }[];
+    claims: Claim[];
+    today: string;
+}) {
+    const form = useForm<{ spent_on: string; amount: string; expense_category_id: string; purpose: string; receipt: File | null }>({
         spent_on: today,
         amount: '',
+        expense_category_id: '',
         purpose: '',
         receipt: null,
     });
@@ -96,6 +106,21 @@ export default function MyExpenseClaims({ claims, today }: { claims: Claim[]; to
                     </div>
 
                     <div className="grid gap-2 sm:col-span-2">
+                        <Label>Expense category</Label>
+                        <select
+                            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+                            value={form.data.expense_category_id}
+                            onChange={(e) => form.setData('expense_category_id', e.target.value)}
+                        >
+                            <option value="">Choose the category…</option>
+                            {categories.map((category: { id: number; name: string }) => (
+                                <option key={category.id} value={String(category.id)}>
+                                    {category.name}
+                                </option>
+                            ))}
+                        </select>
+                        {form.errors.expense_category_id && <p className="text-destructive text-sm">{form.errors.expense_category_id}</p>}
+
                         <Label htmlFor="purpose">What it was for</Label>
                         <Input
                             id="purpose"
@@ -129,6 +154,7 @@ export default function MyExpenseClaims({ claims, today }: { claims: Claim[]; to
                             <tr>
                                 <th className="p-3">Claim</th>
                                 <th className="p-3">Date</th>
+                                <th className="p-3">Category</th>
                                 <th className="p-3">What for</th>
                                 <th className="p-3 text-right">Amount</th>
                                 <th className="p-3">Receipt</th>
@@ -138,7 +164,7 @@ export default function MyExpenseClaims({ claims, today }: { claims: Claim[]; to
                         <tbody>
                             {claims.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="text-muted-foreground p-3">
+                                    <td colSpan={7} className="text-muted-foreground p-3">
                                         You have not claimed anything yet.
                                     </td>
                                 </tr>
@@ -147,6 +173,7 @@ export default function MyExpenseClaims({ claims, today }: { claims: Claim[]; to
                                 <tr key={claim.id} className="border-border border-t">
                                     <td className="p-3 font-medium">{claim.claim_number}</td>
                                     <td className="p-3">{claim.spent_on ?? '-'}</td>
+                                    <td className="p-3">{claim.category ?? '-'}</td>
                                     <td className="p-3">{claim.purpose}</td>
                                     <td className="p-3 text-right tabular-nums">{money(claim.amount)}</td>
                                     <td className="p-3">

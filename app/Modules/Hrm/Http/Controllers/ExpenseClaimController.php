@@ -51,8 +51,11 @@ class ExpenseClaimController extends Controller
             ->get()
             ->map(fn (ExpenseClaim $claim) => $this->row($claim));
 
+        \App\Modules\Hrm\Support\ExpenseCategories::ensureDefaults(app(BusinessContext::class)->id());
+
         return Inertia::render('hrm/expense-claims/mine', [
             'claims' => $claims,
+            'categories' => \App\Modules\Hrm\Support\ExpenseCategories::active(app(BusinessContext::class)->id()),
             'today' => now()->toDateString(),
         ]);
     }
@@ -69,6 +72,13 @@ class ExpenseClaimController extends Controller
             'spent_on' => ['required', 'date', 'before_or_equal:today'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'purpose' => ['required', 'string', 'max:1000'],
+            // The accountant's structure: a category from the dropdown, so
+            // the COA mapping is decided by data, never by the claimant.
+            'expense_category_id' => ['required', 'integer',
+                \Illuminate\Validation\Rule::exists('expense_categories', 'id')
+                    ->where('business_id', app(BusinessContext::class)->id())
+                    ->where('is_active', true),
+            ],
             // ⚠⚠ THE RECEIPT IS REQUIRED AT SUBMISSION, not optional. Joy's
             // requirement was that the office keeps the proof, and proof asked
             // for later is proof that often never arrives.
@@ -87,6 +97,7 @@ class ExpenseClaimController extends Controller
             'spent_on' => $data['spent_on'],
             'amount' => $data['amount'],
             'purpose' => $data['purpose'],
+            'expense_category_id' => $data['expense_category_id'],
             'created_by' => $request->user()->id,
         ]);
 
@@ -165,7 +176,17 @@ class ExpenseClaimController extends Controller
             return back()->with('success', 'Approved. Sent to the next stage.');
         }
 
-        return back()->with('success', "Claim {$claim->claim_number} approved. It can now be paid.");
+        // FINAL approval: the expense becomes real NOW - Dr the category's
+        // account, Cr Employee Reimbursements Payable. Cash moves later.
+        $journal = app(\App\Modules\Hrm\Actions\PostExpenseClaimApproval::class)
+            ->handle($claim->fresh(), $request->user());
+
+        // ⚠ The posting is skipped for a legacy claim with no category, and
+        // when accounting is off. Saying "booked" either way would be a lie
+        // the accountant only discovers in the ledger.
+        return back()->with('success', $journal === null
+            ? "Claim {$claim->claim_number} approved. It can now be paid."
+            : "Claim {$claim->claim_number} approved and booked to the expense. It can now be paid.");
     }
 
     public function reject(Request $request, ExpenseClaim $claim): RedirectResponse
@@ -196,7 +217,12 @@ class ExpenseClaimController extends Controller
 
         $data = $request->validate([
             'method' => ['required', Rule::in([ExpenseClaim::SETTLE_PAYMENT, ExpenseClaim::SETTLE_PAYROLL])],
-            'expense_account_id' => ['required', 'integer', Rule::exists('accounts', 'id')],
+            // Legacy claims (no category) still name the account by hand;
+            // a category claim already fixed it at approval.
+            'expense_account_id' => [
+                Rule::requiredIf(fn () => $claim->approval_journal_id === null),
+                'nullable', 'integer', Rule::exists('accounts', 'id'),
+            ],
             // ⚠ Required only for the pay-now route. A salary settlement moves
             // no money today and has no account to move it from.
             'money_account_id' => [
@@ -215,7 +241,9 @@ class ExpenseClaimController extends Controller
             ],
         ]);
 
-        $expenseAccount = Account::findOrFail($data['expense_account_id']);
+        $expenseAccount = isset($data['expense_account_id'])
+            ? Account::findOrFail($data['expense_account_id'])
+            : Account::findOrFail($claim->expense_account_id);
 
         if ($data['method'] === ExpenseClaim::SETTLE_PAYROLL) {
             $period = PayrollPeriod::findOrFail($data['payroll_period_id']);
@@ -252,6 +280,14 @@ class ExpenseClaimController extends Controller
             'is_approved' => $claim->isApproved(),
             'settlement_method' => $claim->settlement_method,
             'settled_by' => $claim->settledBy?->name,
+            // The category is what BOTH audiences recognise; the account is
+            // the accountant's word for the same thing. Legacy claims carry
+            // no category and show only the account, as they always did.
+            'category' => \App\Modules\Hrm\Support\ExpenseCategories::describe($claim->expense_category_id)['name'] ?? null,
+            // ⚠ A booked claim has ALREADY hit the expense account; the only
+            // thing left is paying the payable off. The screen must not offer
+            // an expense head or the salary route for it - both are refused.
+            'is_booked' => $claim->approval_journal_id !== null,
             'expense_account' => $claim->expenseAccount?->label(),
             'receipts' => $claim->attachments->map(fn (Attachment $file) => [
                 'id' => $file->id,

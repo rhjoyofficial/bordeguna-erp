@@ -69,7 +69,7 @@ it('projects the weeks ahead from real documents only', function () {
     ]);
 
     // A standing cost of 4,900 due OUT in ~2 weeks.
-    $account = Account::create(['code' => '6225', 'name' => 'Hosting', 'type' => 'expense', 'is_postable' => true]);
+    $account = Account::firstOrCreate(['code' => '6225'], ['name' => 'Hosting', 'type' => 'expense', 'is_postable' => true]);
     $schedule = DB::table('recurring_expenses')->insertGetId([
         'business_id' => $this->business->id, 'name' => 'Hosting', 'amount' => 4900,
         'amount_varies' => 0, 'frequency' => 'monthly', 'day_of_month' => 28,
