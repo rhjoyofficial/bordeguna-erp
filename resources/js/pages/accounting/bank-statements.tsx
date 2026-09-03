@@ -50,7 +50,7 @@ export default function BankStatements({ accounts, money_account_id, statement_l
         importForm.post('/accounting/bank-statements/import', { preserveScroll: true, forceFormData: true });
     };
 
-    const act = (line: number, action: string, payload: Record<string, unknown> = {}) =>
+    const act = (line: number, action: string, payload: Record<string, string | number> = {}) =>
         router.post(`/accounting/bank-statements/${line}/${action}`, payload, { preserveScroll: true });
 
     const statusBadge = (status: string) =>

@@ -184,7 +184,7 @@ function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'custo
 
 function TicketCard({ ticket }: { ticket: TicketRow }) {
     const [open, setOpen] = useState(false);
-    const reply = useForm({ body: '', is_internal: false });
+    const reply = useForm<{ body: string; is_internal: boolean }>({ body: '', is_internal: false });
     const resolve = useForm({ resolution: '' });
     const done = ticket.status === 'resolved' || ticket.status === 'closed';
 
