@@ -2,13 +2,16 @@
 
 namespace App\Modules\Hrm\Actions;
 
+use App\Modules\Hrm\Enums\LoanInstallmentStatus;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\SalaryStructure;
 use App\Modules\Hrm\Support\ScheduleResolver;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The pre-calculation checks (WFL-03), run before anything is computed.
@@ -110,6 +113,68 @@ class ValidatePayrollRun
                 $unrecorded === 1 ? '' : 's',
                 $unrecorded === 1 ? 'has' : 'have',
             );
+        }
+
+        foreach ($this->loanWarnings($employee, $period) as $warning) {
+            $warnings[] = $warning;
+        }
+
+        return $warnings;
+    }
+
+    /**
+     * ⚠⚠ The August 2026 wipe bug, remembered as a check. An active loan whose
+     * month has NO scheduled installment produces no deduction line and no
+     * complaint - the run foots perfectly and the money is simply not
+     * recovered. That once happened because a script set installments to a
+     * status outside the enum; it can equally happen from an exhausted or
+     * hand-edited schedule. Whatever the cause, the validator now says so.
+     *
+     * The corrupt-status check reads the table RAW, because hydrating a row
+     * whose status is not in the enum would throw before it could warn.
+     *
+     * @return list<string>
+     */
+    private function loanWarnings(Employee $employee, PayrollPeriod $period): array
+    {
+        $warnings = [];
+
+        $loans = Loan::with('installments')
+            ->forEmployee($employee->id)
+            ->recoverable()
+            ->applied()
+            ->get();
+
+        foreach ($loans as $loan) {
+            if ($loan->outstanding() <= 0.005) {
+                continue;
+            }
+
+            $corrupt = DB::table('loan_installments')
+                ->where('loan_id', $loan->id)
+                ->whereNotIn('status', array_column(LoanInstallmentStatus::cases(), 'value'))
+                ->pluck('status')
+                ->unique();
+
+            if ($corrupt->isNotEmpty()) {
+                $warnings[] = sprintf(
+                    'Loan %s has installment rows with unknown status "%s" - payroll cannot see them. '
+                    .'Fix the installment status before calculating, or nothing will be recovered.',
+                    $loan->reference,
+                    $corrupt->join('", "'),
+                );
+
+                continue;
+            }
+
+            if ($loan->installmentDueIn((int) $period->year, (int) $period->month) === null) {
+                $warnings[] = sprintf(
+                    'Loan %s still has %s outstanding but no scheduled installment for this month - '
+                    .'payroll will deduct nothing. Check the installment schedule, or settle the loan.',
+                    $loan->reference,
+                    number_format($loan->outstanding(), 2),
+                );
+            }
         }
 
         return $warnings;
