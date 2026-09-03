@@ -30,6 +30,12 @@ class StoreAttachment
         string $disk = 'local',
         ?string $expiresAt = null,
     ): Attachment {
+        // ⚠ No raw files kept (Joy, 3 Sep 2026): every image is downscaled
+        // and re-encoded before it is ever stored. Non-images and anything
+        // slimming cannot improve pass through untouched; the original name
+        // is kept so nobody's bill turns into slim_xyz.tmp.
+        $file = \App\Modules\Foundation\Support\ImageSlimmer::slim($file);
+
         return DB::transaction(function () use ($attachable, $file, $collection, $uploadedBy, $singleton, $disk, $expiresAt) {
             if ($singleton) {
                 $attachable->attachments()->where('collection', $collection)->get()
