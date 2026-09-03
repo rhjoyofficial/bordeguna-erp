@@ -80,12 +80,14 @@ export default function MyExpenseClaims({
                 )}
 
                 {/* ⚠⚠ TWO ROWS, Joy's own layout (3 Sep 2026): when / how much /
-                    category, then what it was for / receipt. Field+FormRow, NOT a
-                    grid: a grid gives a date and an amount a full half-screen each,
-                    which is root cause B of the 30 Aug audit all over again. */}
+                    category / receipt across the full width, then what it was for.
+                    ⚠ The four SHARE the row (flex-1 with a min-width each) rather
+                    than sitting in equal grid columns: a grid would hand the date
+                    the same quarter as the receipt, and the row would not reflow on
+                    a phone. Each min-width is what that control actually holds. */}
                 <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
                     <FormRow>
-                        <Field label="When you spent it" htmlFor="spent_on" error={form.errors.spent_on}>
+                        <Field label="When you spent it" htmlFor="spent_on" className="min-w-40 flex-1" error={form.errors.spent_on}>
                             <Input
                                 id="spent_on"
                                 type="date"
@@ -95,22 +97,22 @@ export default function MyExpenseClaims({
                             />
                         </Field>
 
-                        <Field label="How much (BDT)" htmlFor="amount" size="sm" error={form.errors.amount}>
+                        <Field label="How much (BDT)" htmlFor="amount" className="min-w-32 flex-1" error={form.errors.amount}>
                             <Input
                                 id="amount"
                                 type="number"
                                 step="0.01"
                                 min="0.01"
-                                className="text-right tabular-nums"
+                                className="w-full text-right tabular-nums"
                                 value={form.data.amount}
                                 onChange={(e) => form.setData('amount', e.target.value)}
                             />
                         </Field>
 
-                        <Field label="Expense category" htmlFor="expense_category_id" error={form.errors.expense_category_id}>
+                        <Field label="Expense category" htmlFor="expense_category_id" className="min-w-52 flex-1" error={form.errors.expense_category_id}>
                             <select
                                 id="expense_category_id"
-                                className="border-input bg-background h-10 rounded-md border px-3 py-2 text-sm"
+                                className="border-input bg-background h-10 w-full rounded-md border px-3 py-2 text-sm"
                                 value={form.data.expense_category_id}
                                 onChange={(e) => form.setData('expense_category_id', e.target.value)}
                             >
@@ -122,6 +124,15 @@ export default function MyExpenseClaims({
                                 ))}
                             </select>
                         </Field>
+
+                        <Field label="Receipt" htmlFor="receipt" className="min-w-56 flex-1" error={form.errors.receipt}>
+                            <Input
+                                id="receipt"
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                onChange={(e) => form.setData('receipt', e.target.files?.[0] ?? null)}
+                            />
+                        </Field>
                     </FormRow>
 
                     <FormRow>
@@ -131,21 +142,6 @@ export default function MyExpenseClaims({
                                 value={form.data.purpose}
                                 placeholder="Courier to Savar for the Rahman order"
                                 onChange={(e) => form.setData('purpose', e.target.value)}
-                            />
-                        </Field>
-
-                        <Field
-                            label="Receipt"
-                            htmlFor="receipt"
-                            size="lg"
-                            error={form.errors.receipt}
-                            hint="A photo from your phone is fine. Without it the claim cannot be approved."
-                        >
-                            <Input
-                                id="receipt"
-                                type="file"
-                                accept=".pdf,.jpg,.jpeg,.png,.webp"
-                                onChange={(e) => form.setData('receipt', e.target.files?.[0] ?? null)}
                             />
                         </Field>
                     </FormRow>

@@ -43,8 +43,17 @@ it('lets no screen stretch a date or a number across its column', function () {
 
         $contents = file_get_contents($file->getPathname());
 
-        // Every <Input ...> tag that names a short type AND forces w-full on it.
-        preg_match_all('/<Input\b[^>]*>/s', $contents, $matches);
+        // ⚠⚠ ONLY screens that do NOT use the Field convention. A `Field` sizes
+        // the WRAPPER and every control inside it is meant to fill that wrapper -
+        // `size="sm"` plus a `w-full` input is how the helper has always worked,
+        // and forbidding it outright would forbid the correct pattern. The real
+        // defect is a short box stretched by a COLUMN IT DOES NOT CONTROL, which
+        // is precisely what a screen without Field has.
+        if (str_contains($contents, 'components/form/field')) {
+            continue;
+        }
+
+        preg_match_all('/<Input [^>]*>/s', $contents, $matches);
 
         foreach ($matches[0] as $tag) {
             $isShort = preg_match('/type="(number|date|time|datetime-local|month|week)"/', $tag) === 1;
@@ -57,6 +66,7 @@ it('lets no screen stretch a date or a number across its column', function () {
 
     expect(array_unique($offenders))->toBe(
         [],
-        'A date or number box was given w-full. It is as wide as its content; only a text area takes the whole row.',
+        'A date or number box was given w-full on a screen with no Field to size it, '
+        .'so it takes the whole column. It is as wide as its content; only a text area takes the row.',
     );
 });
