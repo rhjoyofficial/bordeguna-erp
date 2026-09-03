@@ -133,6 +133,7 @@ export function AppSidebar() {
                 // Their routes are unchanged, so old bookmarks still land.
                 ...(hasEmployeeProfile ? [{ title: 'My profile', url: '/hrm/my-profile', icon: UserCircle }] : []),
                 ...(hasEmployeeProfile ? [{ title: 'My team', url: '/hrm/my-team', icon: Network }] : []),
+                ...(hasEmployeeProfile ? [{ title: 'Staff purchase', url: '/hrm/staff-purchase', icon: Store }] : []),
                 // Module 1, Slice 1: the reporting tree - the phone book's
                 // shape, so it sits with the other everyone-features.
                 { title: 'Org chart', url: '/hrm/org-chart', icon: Network },
@@ -397,6 +398,7 @@ export function AppSidebar() {
                                     // ⚠ Linked deliberately: a settlement screen nobody can
                                     // reach means employees are never paid back.
                                     { title: 'Expense claims', url: '/hrm/expense-claims', icon: HandCoins },
+                                    ...(canAccessSalary ? [{ title: 'Staff purchases', url: '/hrm/staff-purchases', icon: Store }] : []),
                                     { title: 'Payroll runs', url: '/hrm/payroll', icon: Banknote },
                                     // ⚠ Linked deliberately. The payroll screen shows ONE
                                     // month; the register is the only place the months add up.

@@ -33,6 +33,7 @@ use App\Modules\Hrm\Http\Controllers\MyTeamController;
 use App\Modules\Hrm\Http\Controllers\HrLetterController;
 use App\Modules\Hrm\Http\Controllers\ChecklistController;
 use App\Modules\Hrm\Http\Controllers\PerformanceController;
+use App\Modules\Hrm\Http\Controllers\StaffPurchaseController;
 use App\Modules\Hrm\Http\Controllers\SelfServiceController;
 use App\Modules\Hrm\Http\Controllers\SettlementController;
 use App\Modules\Hrm\Http\Controllers\ShiftController;
@@ -187,6 +188,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
 
     // Employee expense claims. Self-scope: raising and seeing your own needs no
     // management permission, exactly like the clock and My Leave.
+    // The Staff Product Benefit (office order BDG/HR/09/01/2026) -
+    // self-scope to apply; the authority's screens sit below.
+    Route::get('staff-purchase', [StaffPurchaseController::class, 'mine'])->name('staff-purchase');
+    Route::post('staff-purchase', [StaffPurchaseController::class, 'apply'])->name('staff-purchase.apply');
+    Route::get('staff-purchases', [StaffPurchaseController::class, 'index'])->name('staff-purchases.index');
+    Route::post('staff-purchases/{id}/approve', [StaffPurchaseController::class, 'approve'])->name('staff-purchases.approve');
+    Route::post('staff-purchases/{id}/reject', [StaffPurchaseController::class, 'reject'])->name('staff-purchases.reject');
+    Route::post('staff-purchases/{id}/fulfill', [StaffPurchaseController::class, 'fulfill'])->name('staff-purchases.fulfill');
+
     Route::get('my-expenses', [ExpenseClaimController::class, 'mine'])->name('my-expenses');
     Route::post('my-expenses', [ExpenseClaimController::class, 'store'])->name('my-expenses.store');
 
