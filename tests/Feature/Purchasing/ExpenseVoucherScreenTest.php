@@ -73,8 +73,8 @@ beforeEach(function () {
         'account_id' => Account::bySlug('cash_at_bank')->id,
     ]);
 
-    $this->rent = Account::where('code', '6200')->sole();
-    $this->fuel = Account::where('code', '6230')->sole();
+    $this->rent = Account::where('code', '6051')->sole();
+    $this->fuel = Account::where('code', '6011')->sole();
 
     $this->balanceOn = fn (string $code) => (int) JournalLine::whereIn(
         'account_id', Account::where('code', $code)->pluck('id')
@@ -107,7 +107,7 @@ it('records an expense through the screen and moves the money in the ledger', fu
         ->and($voucher->lines)->toHaveCount(1);
 
     // Dr Rent 25,000 · Cr Cash at Bank 25,000.
-    expect(($this->balanceOn)('6200'))->toBe(2500000)
+    expect(($this->balanceOn)('6051'))->toBe(2500000)
         ->and(JournalLine::where('account_id', $this->bank->account_id)->sum('amount_minor'))->toBe(-2500000);
 
     Journal::all()->each(fn (Journal $journal) => expect($journal->balance()->isZero())->toBeTrue());
@@ -123,8 +123,8 @@ it('splits one payment across several expense accounts', function () {
         ]))
         ->assertRedirect();
 
-    expect(($this->balanceOn)('6200'))->toBe(2500000)
-        ->and(($this->balanceOn)('6230'))->toBe(150050)
+    expect(($this->balanceOn)('6051'))->toBe(2500000)
+        ->and(($this->balanceOn)('6011'))->toBe(150050)
         ->and(ExpenseVoucher::sole()->total)->toBe('26500.5000');
 
     // ⚠ The whole-books check, on the smallest possible document. A voucher
@@ -239,7 +239,7 @@ it('offers only postable expense accounts and only mapped money accounts', funct
 
             $expense = collect($page->toArray()['props']['expenseAccounts']);
             // The parent header 6000 is not postable and must not be offered.
-            expect($expense->pluck('label')->implode('|'))->toContain('6200')
+            expect($expense->pluck('label')->implode('|'))->toContain('6051')
                 ->and($expense->pluck('label')->implode('|'))->not->toContain('6000 Operating Expenses');
 
             expect($page->toArray()['props']['canRecord'])->toBeTrue();

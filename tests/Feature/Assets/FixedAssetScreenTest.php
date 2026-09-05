@@ -163,7 +163,7 @@ it('refuses a non-asset account, a future acquisition and salvage above cost', f
 
     expect(FixedAsset::count())->toBe(0);
 })->with([
-    'expense account' => [fn () => ['account_id' => Account::where('code', '6200')->sole()->id], 'account_id'],
+    'expense account' => [fn () => ['account_id' => Account::where('code', '6051')->sole()->id], 'account_id'],
     'future date' => [['acquired_on' => '2026-12-01'], 'acquired_on'],
     'salvage above cost' => [['salvage_value' => '9999999.00'], 'salvage_value'],
     'zero cost' => [['cost' => '0'], 'cost'],

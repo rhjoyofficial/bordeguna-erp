@@ -57,7 +57,7 @@ beforeEach(function () {
     $this->cash = Account::bySlug('cash_in_hand');
     $this->capital = Account::bySlug('owners_capital');
     $this->opening = Account::bySlug('opening_balance_equity');
-    $this->rent = Account::where('code', '6200')->first();
+    $this->rent = Account::where('code', '6051')->first();
 
     $this->post = function (int $debit, int $credit, string $amount, string $date = '2026-08-03', JournalType $type = JournalType::Manual) {
         return app(PostJournal::class)->handle(new JournalDraft(
@@ -316,7 +316,7 @@ it('warns when an account carrying postings is later retired', function () {
     // complete is a legitimate move, and failing the command for it would train
     // people to ignore the command.
     expect($result['problems'])->toBeEmpty()
-        ->and(implode(' ', $result['warnings']))->toContain('6200');
+        ->and(implode(' ', $result['warnings']))->toContain('6051');
 });
 
 it('checks the numbers the user is actually shown', function () {

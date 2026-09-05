@@ -47,7 +47,7 @@ beforeEach(function () {
         'account_id' => Account::bySlug('cash_in_hand')->id,
     ]);
 
-    $this->rent = Account::where('code', '6200')->first();
+    $this->rent = Account::where('code', '6051')->first();
     $this->fuel = Account::bySlug('fuel_and_conveyance');
 
     $this->balanceOn = fn (string $code) => (int) JournalLine::where(
@@ -72,8 +72,8 @@ it('records what was spent and takes it out of the account it came from', functi
         ->and($voucher->lines)->toHaveCount(2);
 
     // Two expenses debited, one credit to the cash box.
-    expect(($this->balanceOn)('6200'))->toBe(1800000)
-        ->and(($this->balanceOn)('6230'))->toBe(250000)
+    expect(($this->balanceOn)('6051'))->toBe(1800000)
+        ->and(($this->balanceOn)('6011'))->toBe(250000)
         ->and(($this->balanceOn)('1110'))->toBe(-2050000);
 
     $journal = Journal::first();

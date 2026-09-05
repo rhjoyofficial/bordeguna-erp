@@ -178,7 +178,7 @@ it('produces a correct profit and loss and a balancing sheet from one real tradi
             date: Carbon::parse('2026-08-09'),
             lines: [
                 JournalLineDraft::debit(
-                    Account::where('code', '6200')->first()->id,
+                    Account::where('code', '6051')->first()->id,
                     Money::ofTaka('2000'),
                 ),
                 JournalLineDraft::credit(

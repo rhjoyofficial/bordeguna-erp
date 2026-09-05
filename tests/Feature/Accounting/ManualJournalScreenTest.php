@@ -63,7 +63,7 @@ beforeEach(function () {
     $this->bank = Account::bySlug('cash_at_bank');
     $this->capital = Account::bySlug('owners_capital');
     $this->opening = Account::bySlug('opening_balance_equity');
-    $this->rent = Account::where('code', '6200')->first();
+    $this->rent = Account::where('code', '6051')->first();
 
     $this->payload = fn (array $overrides = []) => array_replace([
         'journal_date' => '2026-08-03',

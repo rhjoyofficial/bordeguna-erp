@@ -74,7 +74,7 @@ it('keeps a van on the balance sheet instead of through the profit and loss', fu
     // Dr Vehicles, Cr the bank. Nothing touched an expense account.
     expect(($this->balanceOn)('1230'))->toBe(120000000)
         ->and(($this->balanceOn)('1120'))->toBe(-120000000)
-        ->and(($this->balanceOn)('6300'))->toBe(0);
+        ->and(($this->balanceOn)('6710'))->toBe(0);
 
     expect(Journal::first()->source->is($asset))->toBeTrue();
 });
@@ -87,7 +87,7 @@ it('charges one month of wear to the profit and loss', function () {
     // 1,200,000 over 36 months = 33,333.33 a month.
     expect($result['charged'])->toBe(1)
         ->and($result['total']->format())->toBe('33,333.33')
-        ->and(($this->balanceOn)('6300'))->toBe(3333333)
+        ->and(($this->balanceOn)('6710'))->toBe(3333333)
         // ⚠ A CREDIT to an account under Assets. Accumulated Depreciation is a
         // contra-asset: the van's original cost stays visible beside what has
         // been written off it.
@@ -106,7 +106,7 @@ it('charges the same month only once, however many times it is run', function ()
     // cost nobody is watching.
     expect($second['charged'])->toBe(0)
         ->and($second['skipped'])->toBe(1)
-        ->and(($this->balanceOn)('6300'))->toBe(3333333);
+        ->and(($this->balanceOn)('6710'))->toBe(3333333);
 });
 
 it('dates the charge to the month it belongs to, not the day it was run', function () {
@@ -170,7 +170,7 @@ it('refuses to file an asset anywhere but an asset account', function () {
     // be short by its value while the books still balanced perfectly.
     expect(fn () => app(RecordFixedAsset::class)->handle(
         assetCode: 'FA-0003', name: 'Van',
-        assetAccount: Account::where('code', '6200')->first(),
+        assetAccount: Account::where('code', '6051')->first(),
         acquiredOn: '2026-07-01', cost: '100', usefulLifeMonths: 12,
         createdBy: $this->user, moneyAccount: $this->bank,
     ))->toThrow(ValidationException::class, 'not an asset account');

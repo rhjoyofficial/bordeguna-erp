@@ -59,8 +59,8 @@ beforeEach(function () {
         'account_id' => Account::bySlug('cash_at_bank')->id,
     ]);
 
-    $this->rent = Account::where('code', '6200')->sole();
-    $this->fuel = Account::where('code', '6230')->sole();
+    $this->rent = Account::where('code', '6051')->sole();
+    $this->fuel = Account::where('code', '6011')->sole();
 
     /*
      * A voucher written straight to the table. The ledger is not what this file

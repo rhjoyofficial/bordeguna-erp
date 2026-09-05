@@ -58,8 +58,8 @@ beforeEach(function () {
     $this->revenue = Account::where('code', '4100')->first();      // Sales Revenue
     $this->returns = Account::where('code', '4200')->first();      // contra-income
     $this->cogs = Account::where('code', '5100')->first();         // Cost of Sales group
-    $this->rent = Account::where('code', '6200')->first();         // Operating Expenses group
-    $this->salaries = Account::where('code', '6100')->first();
+    $this->rent = Account::where('code', '6051')->first();         // Operating Expenses group
+    $this->salaries = Account::where('code', '6131')->first();
     $this->depreciation = Account::where('code', '1290')->first(); // contra-asset
 
     $this->post = function (int $debit, int $credit, string $amount, string $date = '2026-08-03') {

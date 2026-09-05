@@ -80,7 +80,14 @@ it('reads the chart of accounts, which is shared rather than business scoped', f
         // ⚠ Not a literal 2: the chart grows (2145 arrived with expense
         // claims). What matters is that the count is the WHOLE shared chart.
         ->and($result['total'])->toBe(Account::count())
-        ->and(collect($result['rows'])->pluck('code')->all())->toContain('6225');
+        // ⚠ It used to name one code here. The master expense chart made the
+        // chart longer than a single page, so a freshly created account sits
+        // off it - which says nothing about the bug this test guards. Real
+        // chart rows coming back, and `total` counting the whole chart rather
+        // than the page, is the property that matters.
+        ->and($result['rows'])->not->toBeEmpty()
+        ->and(collect($result['rows'])->every(fn ($row) => isset($row['code'])))->toBeTrue()
+        ->and($result['total'])->toBeGreaterThan(count($result['rows']));
 });
 
 /**

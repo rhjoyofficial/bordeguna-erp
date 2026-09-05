@@ -5,6 +5,7 @@ import { Field, FormRow } from '@/components/form/field';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
+import { useTranslation } from '@/lib/i18n';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
@@ -38,10 +39,18 @@ export default function MyExpenseClaims({
     claims,
     today,
 }: {
-    categories: { id: number; name: string }[];
+    categories: { id: number; name: string; name_bn: string | null }[];
     claims: Claim[];
     today: string;
 }) {
+    const { locale } = useTranslation();
+
+    // The category list is data, not interface text, so it cannot come from the
+    // compile-time dictionary: a category the accountant adds next month needs a
+    // Bangla label too. English is the fallback when the column is blank.
+    const label = (category: { name: string; name_bn: string | null }) =>
+        locale === 'bn' && category.name_bn ? category.name_bn : category.name;
+
     const form = useForm<{ spent_on: string; amount: string; expense_category_id: string; purpose: string; receipt: File | null }>({
         spent_on: today,
         amount: '',
@@ -117,9 +126,9 @@ export default function MyExpenseClaims({
                                 onChange={(e) => form.setData('expense_category_id', e.target.value)}
                             >
                                 <option value="">Choose the category…</option>
-                                {categories.map((category: { id: number; name: string }) => (
+                                {categories.map((category) => (
                                     <option key={category.id} value={String(category.id)}>
-                                        {category.name}
+                                        {label(category)}
                                     </option>
                                 ))}
                             </select>

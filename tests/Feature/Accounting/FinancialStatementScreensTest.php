@@ -52,7 +52,7 @@ beforeEach(function () {
     $bank = Account::bySlug('cash_at_bank');
     $capital = Account::bySlug('owners_capital');
     $revenue = Account::where('code', '4100')->first();
-    $rent = Account::where('code', '6200')->first();
+    $rent = Account::where('code', '6051')->first();
     $cogs = Account::where('code', '5100')->first();
     $stock = Account::bySlug('stock_on_hand');
 

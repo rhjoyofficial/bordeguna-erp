@@ -261,13 +261,13 @@ it('records what the business spent on running itself and still balances', funct
         'paid_to' => 'DUMMY Adabor landlord',
         'reference' => 'DUMMY-RCPT-01',
         'lines' => [
-            ['account_id' => Account::where('code', '6200')->sole()->id, 'amount' => '25000.00', 'description' => 'August rent'],
-            ['account_id' => Account::where('code', '6230')->sole()->id, 'amount' => '1500.50', 'description' => 'Delivery fuel'],
+            ['account_id' => Account::where('code', '6051')->sole()->id, 'amount' => '25000.00', 'description' => 'August rent'],
+            ['account_id' => Account::where('code', '6011')->sole()->id, 'amount' => '1500.50', 'description' => 'Delivery fuel'],
         ],
     ])->assertRedirect();
 
-    $rent = (int) JournalLine::where('account_id', Account::where('code', '6200')->sole()->id)->sum('amount_minor');
-    $fuel = (int) JournalLine::where('account_id', Account::where('code', '6230')->sole()->id)->sum('amount_minor');
+    $rent = (int) JournalLine::where('account_id', Account::where('code', '6051')->sole()->id)->sum('amount_minor');
+    $fuel = (int) JournalLine::where('account_id', Account::where('code', '6011')->sole()->id)->sum('amount_minor');
 
     expect($rent)->toBe(2500000)
         ->and($fuel)->toBe(150050);

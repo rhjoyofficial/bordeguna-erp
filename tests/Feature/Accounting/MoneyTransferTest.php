@@ -54,7 +54,7 @@ beforeEach(function () {
 
     $this->bankAccount = Account::bySlug('cash_at_bank');
     $this->tillAccount = Account::bySlug('cash_in_hand');
-    $this->charges = Account::where('code', '6290')->firstOrFail();
+    $this->charges = Account::where('code', '6471')->firstOrFail();
 
     $this->bank = MoneyAccount::create([
         'business_id' => $this->business->id, 'name' => 'BRAC Bank',

@@ -95,7 +95,10 @@ function postedJournal(int $businessId, int $userId, string $number, array $line
 
 it('reports income and expense from the ledger, in taka rather than paisa', function () {
     $sales = account($this->business->id, '4000', 'Sales', AccountType::Income);
-    $rent = account($this->business->id, '6200', 'Rent', AccountType::Expense);
+    // ⚠ 6200 is a group header since the master expense chart landed, and
+    // this test builds its own miniature chart rather than seeding the real
+    // one. Any code outside the planted band does the job.
+    $rent = account($this->business->id, '6950', 'Rent', AccountType::Expense);
     $bank = account($this->business->id, '1100', 'Bank', AccountType::Asset);
 
     // ⚠⚠ `amount_minor`, signed whole paisa. Income is credit-normal and so

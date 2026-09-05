@@ -64,7 +64,7 @@ beforeEach(function () {
         'code' => 'NIKOLA', 'name' => 'Nikola Host',
     ]);
 
-    $this->hosting = Account::where('code', '6225')->first() ?? Account::where('code', '6200')->first();
+    $this->hosting = Account::where('code', '6225')->first() ?? Account::where('code', '6051')->first();
 
     // A file, in memory, read the way the importer reads one.
     $this->plan = function (string $csv) {

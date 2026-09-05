@@ -49,7 +49,7 @@ beforeEach(function () {
     $this->cash = Account::bySlug('cash_in_hand');
     $this->bank = Account::bySlug('cash_at_bank');
     $this->capital = Account::bySlug('owners_capital');
-    $this->rent = Account::where('code', '6200')->first();
+    $this->rent = Account::where('code', '6051')->first();
 
     $this->post = fn (JournalDraft $draft) => app(PostJournal::class)->handle($draft, $this->user);
 

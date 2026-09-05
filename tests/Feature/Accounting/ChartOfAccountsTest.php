@@ -152,20 +152,20 @@ it('provides the named accounts the software itself has to find', function () {
 it('adds new accounts on a re-run without overwriting what somebody changed', function () {
     $this->seed(ChartOfAccountsSeeder::class);
 
-    $rent = Account::where('code', '6200')->first();
+    $rent = Account::where('code', '6051')->first();
     $rent->update(['name' => 'Office rent - Uttar Adabor']);
 
     // Somebody deleted an account they did not want. The re-run must put back
     // what is missing, and leave the rename alone.
-    Account::where('code', '6910')->delete();
+    Account::where('code', '6601')->delete();
 
     $this->seed(ChartOfAccountsSeeder::class);
 
     // ⚠ Idempotent per ROW. This project has twice shipped a seeder that skipped
     // its entire body once it found its first record already present, so a later
     // addition never reached an installation that ran the earlier version.
-    expect(Account::where('code', '6910')->exists())->toBeTrue()
-        ->and(Account::where('code', '6200')->first()->name)->toBe('Office rent - Uttar Adabor');
+    expect(Account::where('code', '6601')->exists())->toBeTrue()
+        ->and(Account::where('code', '6051')->first()->name)->toBe('Office rent - Uttar Adabor');
 });
 
 it('does not duplicate anything when run twice', function () {

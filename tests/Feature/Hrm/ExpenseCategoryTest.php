@@ -119,9 +119,9 @@ it('plants the default categories with their COA mapping, and requires one on a 
             ->where('categories', fn ($categories) => collect($categories)->contains(
                 fn ($category) => str_starts_with($category['name'], 'Mobile'))));
 
-    // The mapping behind the Mobile category is 6220 Internet and Telephone.
+    // The mapping behind the Mobile category is 6055 Mobile and Telephone.
     $mobile = DB::table('expense_categories')->where('id', categoryId('Mobile'))->first();
-    expect(Account::find($mobile->account_id)->code)->toBe('6220');
+    expect(Account::find($mobile->account_id)->code)->toBe('6055');
 
     // A claim without a category is refused - free text alone is over.
     ($this->asStaff)()->post(route('hrm.my-expenses.store'), [
@@ -141,7 +141,7 @@ it('posts Dr category account, Cr employee payable at FINAL approval - the 547 e
     $claim->refresh();
     expect($claim->approval_journal_id)->not->toBeNull();
 
-    $telephone = Account::query()->where('code', '6220')->firstOrFail();
+    $telephone = Account::query()->where('code', '6055')->firstOrFail();
     $payable = Account::bySlug('employee_reimbursements_payable');
 
     $lines = DB::table('journal_lines')->where('journal_id', $claim->approval_journal_id)->get();
@@ -162,7 +162,7 @@ it('settles by clearing the payable against the till, never expensing twice', fu
     expect($claim->settled_at)->not->toBeNull();
 
     $payable = Account::bySlug('employee_reimbursements_payable');
-    $telephone = Account::query()->where('code', '6220')->firstOrFail();
+    $telephone = Account::query()->where('code', '6055')->firstOrFail();
 
     // The payable nets to zero, the expense stands ONCE, cash went down.
     expect((int) DB::table('journal_lines')->where('account_id', $payable->id)->sum('amount_minor'))->toBe(0)
@@ -187,14 +187,14 @@ it('shows the accountant the mapping screen and remaps a category, but hides it 
         ->assertInertia(fn (Assert $page) => $page
             ->component('hrm/expense-categories')
             ->where('categories', fn ($categories) => collect($categories)->contains(
-                fn ($category) => $category['name'] === 'Other Approved Expense' && $category['is_exception'] === true))
+                fn ($category) => $category['name'] === 'Other Approved Business Expense' && $category['is_exception'] === true))
             ->where('accounts', fn ($accounts) => count($accounts) > 0));
 
     // ⚠ The screen a claimant must never reach: the mapping is the
     // accountant's, and staff who can pick the account can pick the answer.
     ($this->asStaff)()->get(route('hrm.expense-categories'))->assertForbidden();
 
-    $stationery = Account::query()->where('code', '6250')->firstOrFail();
+    $stationery = Account::query()->where('code', '6058')->firstOrFail();
     ($this->asApprover)()->patch(route('hrm.expense-categories.update', categoryId('Mobile')), [
         'account_id' => $stationery->id,
     ])->assertSessionHasNoErrors();
@@ -207,8 +207,8 @@ it('remaps only what comes next - a posted journal is history', function () {
     $claim = submitClaim();
     ($this->asApprover)()->post(route('hrm.expense-claims.approve', $claim));
 
-    $telephone = Account::query()->where('code', '6220')->firstOrFail();
-    $stationery = Account::query()->where('code', '6250')->firstOrFail();
+    $telephone = Account::query()->where('code', '6055')->firstOrFail();
+    $stationery = Account::query()->where('code', '6058')->firstOrFail();
 
     ($this->asApprover)()->patch(route('hrm.expense-categories.update', categoryId('Mobile')), [
         'account_id' => $stationery->id,
@@ -232,8 +232,8 @@ it('puts the category, the account it will hit and the exception warning on the 
 
     // Joy's 31 Aug rule: the card carries what saying yes will DO. Approval
     // now posts a journal, so the account it lands in belongs on the card.
-    expect($details->firstWhere('label', 'Category')['value'])->toStartWith('Other Approved Expense')
-        ->and($details->firstWhere('label', 'Books')['value'])->toContain('6910')
+    expect($details->firstWhere('label', 'Category')['value'])->toStartWith('Other Approved Business Expense')
+        ->and($details->firstWhere('label', 'Books')['value'])->toContain('6601')
         ->and($details->firstWhere('label', 'Books')['value'])->toContain('Employee Reimbursements Payable')
         ->and($details->firstWhere('label', 'Category')['value'])->toContain('look twice');
 });
@@ -259,7 +259,7 @@ it('carries the category onto the claim rows both audiences read', function () {
     ($this->asApprover)()->get(route('hrm.expense-claims.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('claims.0.is_booked', true)
-            ->where('claims.0.expense_account', fn ($value) => str_contains((string) $value, '6220')));
+            ->where('claims.0.expense_account', fn ($value) => str_contains((string) $value, '6055')));
 });
 
 /**
@@ -269,34 +269,55 @@ it('carries the category onto the claim rows both audiences read', function () {
  * Folding Courier, Travel, Packaging and Software into Miscellaneous would
  * leave every one of those questions unanswerable, so each has its own head.
  */
-it('maps every category the spec lists to the account the spec names', function () {
+it('maps every category the master chart lists to the account it names', function () {
     ($this->asStaff)()->get(route('hrm.my-expenses'));
 
+    // Section 19 of the Master Expense Chart of Accounts, in full. The point of
+    // the list is that a staff member reads it and recognises their own spending
+    // without being taught a single account code.
     $expected = [
-        'Mobile / Telecom' => '6220',
-        'Transport' => '6230',
-        'Courier' => '6235',
-        'Office Stationery' => '6250',
-        'Office Refreshment' => '6140',
-        'Printing & Photocopy' => '6250',
-        'Travel / TA' => '6232',
-        'Training' => '6140',
-        'Packaging' => '6255',
-        'Purchase of Materials' => '6910',
-        'Software / Subscription' => '6225',
-        'Other Approved Expense' => '6910',
+        'Conveyance' => '6011',
+        'Travel and TA' => '6019',
+        'Hotel and Accommodation' => '6014',
+        'Office Expense' => '6062',
+        'Mobile and Telephone' => '6055',
+        'Internet' => '6054',
+        // ⚠ Cost of Sales, not overhead: freight to bring goods in belongs in
+        // the cost of those goods.
+        'Product Inward Freight' => '5300',
+        'Product Sourcing' => '6174',
+        'Packaging' => '6206',
+        'Marketing' => '6289',
+        'Customer Gift' => '6331',
+        'Free Product' => '6332',
+        'Courier and Delivery' => '6371',
+        'Event and Guest Hospitality' => '6431',
+        'Employee Welfare' => '6138',
+        'Bank and MFS Charge' => '6471',
+        'Licence and Testing' => '6505',
+        'Repair and Maintenance' => '6556',
+        'Other Approved Business Expense' => '6601',
     ];
 
     foreach ($expected as $name => $code) {
-        $category = DB::table('expense_categories')->where('name', 'like', $name.'%')->first();
-        expect($category)->not->toBeNull("The spec lists the category {$name} and it was not planted");
+        $category = DB::table('expense_categories')->where('name', $name)->first();
+        expect($category)->not->toBeNull("The chart lists the category {$name} and it was not planted");
         expect(Account::find($category->account_id)->code)
             ->toBe($code, "Category {$name} must post to {$code}");
     }
 
-    // §6: a catch-all must be flagged so the approver looks twice; a specific
-    // category must NOT be, or the warning stops meaning anything.
-    expect((bool) DB::table('expense_categories')->where('name', 'like', 'Other%')->value('is_exception'))->toBeTrue()
-        ->and((bool) DB::table('expense_categories')->where('name', 'like', 'Purchase of Materials%')->value('is_exception'))->toBeTrue()
-        ->and((bool) DB::table('expense_categories')->where('name', 'like', 'Mobile%')->value('is_exception'))->toBeFalse();
+    // ⚠⚠ "Miscellaneous must NOT be the default category" is the document's own
+    // sentence. Exactly one catch-all, and it is flagged so the approver looks
+    // twice; a specific category must never be, or the warning stops meaning
+    // anything.
+    $flagged = DB::table('expense_categories')->where('is_active', true)->where('is_exception', true)->pluck('name');
+
+    expect($flagged->all())->toBe(['Other Approved Business Expense']);
+
+    // ⚠⚠ Section 18: raw material purchase is inventory and can never be an
+    // expense, so the old Purchase of Materials category is retired rather than
+    // remapped. It is deactivated, not deleted: a claim once pointed at it.
+    $materials = DB::table('expense_categories')->where('name', 'Purchase of Materials')->first();
+
+    expect($materials === null || (bool) $materials->is_active === false)->toBeTrue();
 });
