@@ -274,12 +274,20 @@ return new class extends Migration
 
             // Phase 1: vacate every old code.
             foreach (self::RENAMES as $old => $new) {
+                // ⚠⚠ (string) IS LOAD-BEARING. PHP turns a numeric-string array key
+                // into an int, so $old arrives as 6232 rather than '6232'. Binding
+                // an integer against a varchar column makes MySQL cast the WHOLE
+                // column to DOUBLE, and it then chokes on the 'TMP-6230' this loop
+                // has already written: "Truncated incorrect DOUBLE value". SQLite
+                // is happy either way, so only the scratch MySQL rehearsal saw it.
+                $old = (string) $old;
+
                 DB::table('accounts')->where('code', $old)->update(['code' => 'TMP-'.$old]);
             }
 
             // Phase 2: every target code is now guaranteed free.
             foreach (self::RENAMES as $old => $new) {
-                DB::table('accounts')->where('code', 'TMP-'.$old)->update(['code' => $new]);
+                DB::table('accounts')->where('code', 'TMP-'.(string) $old)->update(['code' => (string) $new]);
             }
 
             // Plant the headers and everything the document adds. The renamed
@@ -347,12 +355,12 @@ return new class extends Migration
             $operating = DB::table('accounts')->where('code', '6000')->value('id');
 
             foreach (self::RENAMES as $old => $new) {
-                DB::table('accounts')->where('code', $new)->update(['code' => 'TMP-'.$old]);
+                DB::table('accounts')->where('code', (string) $new)->update(['code' => 'TMP-'.(string) $old]);
             }
 
             foreach (self::RENAMES as $old => $new) {
-                DB::table('accounts')->where('code', 'TMP-'.$old)->update([
-                    'code' => $old,
+                DB::table('accounts')->where('code', 'TMP-'.(string) $old)->update([
+                    'code' => (string) $old,
                     'parent_id' => $operating,
                 ]);
             }
