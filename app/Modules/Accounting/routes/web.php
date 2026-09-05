@@ -11,6 +11,7 @@ use App\Modules\Accounting\Http\Controllers\FinanceDashboardController;
 use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
 use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
 use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
+use App\Modules\Accounting\Http\Controllers\IncomeVoucherController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\AccountingPeriodController;
 use App\Modules\Accounting\Http\Controllers\BudgetController;
@@ -126,6 +127,24 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // a payment made in August must still be nameable in December.
         Route::post('money-accounts', [MoneyAccountController::class, 'store'])->name('money-accounts.store');
         Route::put('money-accounts/{moneyAccount}', [MoneyAccountController::class, 'update'])->name('money-accounts.update');
+    });
+
+    // ⚠⚠ ROUTE, SCREEN, NAV LINK AND PERMISSION IN THE SAME CHANGE. This
+    // project has shipped ten engines that worked perfectly and could not be
+    // reached from anywhere, and `4900 Other Income` was itself an account no
+    // screen could write to for a month. The sidebar entry goes in beside this.
+    //
+    // ⚠ Reading sits behind `accounting.view` inside the controller; recording
+    // has its own permission because receiving money is a different act from
+    // reading the books, and Finance should be able to do it without being
+    // handed the manual-journal key.
+    Route::get('other-income', [IncomeVoucherController::class, 'index'])->name('other-income.index');
+    Route::get('other-income/{voucher}/print', [IncomeVoucherController::class, 'print'])->name('other-income.print');
+
+    Route::middleware('can:accounting.income.record')->group(function () {
+        Route::post('other-income', [IncomeVoucherController::class, 'store'])->name('other-income.store');
+        Route::post('other-income/{voucher}/evidence', [IncomeVoucherController::class, 'uploadEvidence'])->name('other-income.evidence.store');
+        Route::delete('other-income/{voucher}/evidence/{attachment}', [IncomeVoucherController::class, 'deleteEvidence'])->name('other-income.evidence.destroy');
     });
 
     // ⚠⚠ The highest-risk permission in the system (C-GL-6): the one action that

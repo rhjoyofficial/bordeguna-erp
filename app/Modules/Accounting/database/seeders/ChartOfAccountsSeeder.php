@@ -146,7 +146,18 @@ class ChartOfAccountsSeeder extends Seeder
         // discount from a return, which are different events that happened to
         // share a line in the default chart, and leaves 4200 to Phase 4.
         ['4210', 'Discounts Allowed', AccountType::Income, '4000', true, 'discounts_allowed'],
-        ['4900', 'Other Income', AccountType::Income, '4000', true, null],
+        // ⚠⚠ A HEADING, NOT A POSTABLE ACCOUNT, since the income voucher
+        // landed (6 Sep 2026). It was postable and unreachable for a month:
+        // nothing in the application could write to it, so scrap, interest and
+        // refunds had to be hand-written journals. Now it groups the heads
+        // below, and the profit and loss prints "Other Income" as its own
+        // section for the same reason the expense groups do.
+        ['4900', 'Other Income', AccountType::Income, '4000', false, null],
+        ['4910', 'Scrap and Waste Sales', AccountType::Income, '4900', true, null],
+        ['4920', 'Interest Income', AccountType::Income, '4900', true, null],
+        ['4930', 'Rent Received', AccountType::Income, '4900', true, null],
+        ['4940', 'Supplier Rebates and Refunds', AccountType::Income, '4900', true, null],
+        ['4990', 'Miscellaneous Income', AccountType::Income, '4900', true, null],
 
         // ─── 5000 Cost of Sales ─────────────────────────────────────────────
         ['5000', 'Cost of Sales', AccountType::Expense, null, false, null],

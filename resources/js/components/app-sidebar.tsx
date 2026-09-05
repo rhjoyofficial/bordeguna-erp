@@ -479,6 +479,14 @@ export function AppSidebar() {
                           // at all, so a bank-to-till withdrawal could only be a
                           // hand-written journal - which meant it went unrecorded.
                           { title: 'Money transfer', url: '/accounting/money-transfers', icon: ArrowLeftRight },
+                          // ⚠⚠ 4900 Other Income was postable from the day the
+                          // chart was seeded and NO SCREEN COULD REACH IT, so
+                          // scrap, interest, rent and supplier refunds had to be
+                          // hand-written journals. This link ships in the same
+                          // change as the route, the screen and the permission,
+                          // because an engine with no way in is the mistake this
+                          // project has made ten times.
+                          { title: 'Other income', url: '/accounting/other-income', icon: HandCoins },
                       ],
                   },
               ]

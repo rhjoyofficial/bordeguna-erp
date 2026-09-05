@@ -25,6 +25,13 @@ use Spatie\Permission\Models\Role;
  * risk permission in the whole system (C-GL-6): it is the one action that can
  * move money between any two accounts with no document behind it. Owner only.
  *
+ * `accounting.income.record` records money that came in and was not a sale.
+ * ⚠ It exists rather than reusing `accounting.journal.post` because the whole
+ * point of the income voucher is that recording other income should NOT require
+ * the one permission that can move money anywhere with no document. Owner and
+ * Finance; the document itself refuses sales revenue, so it can never become a
+ * back door into the sales figures.
+ *
  * ℹ `accounting.journal.post` gates nothing until slice 2.3. That is the right
  * way round - a permission that exists before its route is inert, a route that
  * exists before its permission is open.
@@ -40,9 +47,14 @@ class AccountingPermissionsSeeder extends Seeder
             'accounting.view',
             'accounting.chart.manage',
             'accounting.journal.post',
+            'accounting.income.record',
         ],
         'Finance' => [
             'accounting.view',
+            // ⚠ Receiving money is a different act from reading the books, and
+            // a smaller one than writing a journal by hand. Finance can record
+            // scrap, interest or a refund without being handed the ledger key.
+            'accounting.income.record',
         ],
         // Musa's role. He prepares and pays; reading a trial balance is part of
         // that, writing to it is not - the same separation that already keeps
