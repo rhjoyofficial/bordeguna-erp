@@ -272,21 +272,44 @@ return new class extends Migration
                 ]);
             }
 
-            // Phase 1: vacate every old code.
-            foreach (self::RENAMES as $old => $new) {
-                // ⚠⚠ (string) IS LOAD-BEARING. PHP turns a numeric-string array key
-                // into an int, so $old arrives as 6232 rather than '6232'. Binding
-                // an integer against a varchar column makes MySQL cast the WHOLE
-                // column to DOUBLE, and it then chokes on the 'TMP-6230' this loop
-                // has already written: "Truncated incorrect DOUBLE value". SQLite
-                // is happy either way, so only the scratch MySQL rehearsal saw it.
-                $old = (string) $old;
+            // ⚠⚠ ONLY THE MOVES THAT ARE STILL OUTSTANDING. Laravel will not run
+            // a migration twice, but `migrate:refresh` and a hand-run will, and
+            // a second pass over a chart already in its new shape is actively
+            // destructive: it would vacate 6200 (by then the Packaging
+            // Operations heading) and try to land it on 6051, which Office Rent
+            // already holds. Selecting the pairs whose source still exists and
+            // whose target is still free makes a second run a no-op instead.
+            $moves = [];
 
-                DB::table('accounts')->where('code', $old)->update(['code' => 'TMP-'.$old]);
+            foreach (self::RENAMES as $old => $new) {
+                // ⚠⚠ (string) IS LOAD-BEARING. PHP turns a numeric-string array
+                // key into an int, so $old arrives as 6232 rather than '6232'.
+                // Binding an integer against a varchar column makes MySQL cast
+                // the WHOLE column to DOUBLE, and it then chokes on the
+                // 'TMP-6230' this loop has already written: "Truncated incorrect
+                // DOUBLE value". SQLite is happy either way, so only the scratch
+                // MySQL rehearsal against real data ever saw it.
+                $old = (string) $old;
+                $new = (string) $new;
+
+                if (DB::table('accounts')->where('code', $old)->doesntExist()) {
+                    continue;
+                }
+
+                if (DB::table('accounts')->where('code', $new)->exists()) {
+                    continue;
+                }
+
+                $moves[$old] = $new;
+            }
+
+            // Phase 1: vacate every old code.
+            foreach ($moves as $old => $new) {
+                DB::table('accounts')->where('code', (string) $old)->update(['code' => 'TMP-'.(string) $old]);
             }
 
             // Phase 2: every target code is now guaranteed free.
-            foreach (self::RENAMES as $old => $new) {
+            foreach ($moves as $old => $new) {
                 DB::table('accounts')->where('code', 'TMP-'.(string) $old)->update(['code' => (string) $new]);
             }
 
@@ -306,6 +329,36 @@ return new class extends Migration
                     'is_active' => true,
                     'system_slug' => $slug,
                     'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            // ⚠⚠ A RENAMED ACCOUNT TAKES ITS NEW NAME TOO, and the first
+            // rehearsal proved why. Moving 6230 to 6011 without renaming it left
+            // production reading "6011 Fuel and Conveyance" while a fresh
+            // installation, planted straight from the seeder, read "6011
+            // Conveyance" - and 6016 Fuel and Vehicle Running now sat beside it
+            // saying almost the same thing. Two installations of the same
+            // software disagreeing about what an account is called is exactly
+            // the drift this whole change exists to remove.
+            //
+            // ⚠ Scoped to the twenty-two this migration moved. A name the
+            // accountant edited on any OTHER account is his and stays his.
+            $namesByCode = [];
+
+            foreach (self::BAND as [$code, $name, $parentCode, $isPostable, $slug]) {
+                $namesByCode[$code] = $name;
+            }
+
+            foreach (self::RENAMES as $old => $new) {
+                $new = (string) $new;
+
+                if (! isset($namesByCode[$new])) {
+                    continue;
+                }
+
+                DB::table('accounts')->where('code', $new)->update([
+                    'name' => $namesByCode[$new],
                     'updated_at' => now(),
                 ]);
             }

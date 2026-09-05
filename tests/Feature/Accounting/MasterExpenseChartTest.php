@@ -13,6 +13,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Support\ExpenseCategories;
 use Illuminate\Support\Carbon;
+use IlluminateSupportFacadesDB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -245,4 +246,44 @@ it('sends inward freight to cost of sales, not to overhead', function () {
     // the cost of those goods, so it must not land in the 6000 band.
     expect($account->code)->toBe('5300')
         ->and(str_starts_with($account->code, '6'))->toBeFalse();
+});
+
+// ─── THE UPGRADE PATH, NOT THE FRESH INSTALL ────────────────────────────────
+
+/**
+ * ⚠⚠ EVERY TEST ABOVE RUNS ON A CHART THE SEEDER PLANTED, so it can only ever
+ * describe a fresh installation. Production came the other way: through a
+ * rename of accounts that already existed and already had journals against
+ * them. The first scratch rehearsal proved the two do not automatically agree -
+ * the rename moved 6230 to 6011 and left it still called "Fuel and Conveyance",
+ * while a fresh install called the same code "Conveyance".
+ *
+ * So this puts an account back into its pre-migration shape and runs the real
+ * migration over it.
+ */
+it('gives a renamed account its new name, so an upgraded install matches a fresh one', function () {
+    $conveyance = Account::where('code', '6011')->sole();
+
+    // Back to exactly how production looked before today.
+    DB::table('accounts')->where('id', $conveyance->id)->update([
+        'code' => '6230',
+        'name' => 'Fuel and Conveyance',
+        'parent_id' => Account::where('code', '6000')->sole()->id,
+    ]);
+
+    $migration = require base_path('app/Modules/Accounting/database/migrations/2026_09_05_010000_apply_master_expense_chart_of_accounts.php');
+    $migration->up();
+
+    $moved = Account::find($conveyance->id);
+
+    expect($moved->code)->toBe('6011')
+        ->and($moved->name)->toBe('Conveyance')
+        // ⚠ Same row, so every journal line posted to it still resolves.
+        ->and($moved->id)->toBe($conveyance->id)
+        ->and($moved->system_slug)->toBe('fuel_and_conveyance')
+        ->and(Account::find($moved->parent_id)->code)->toBe('6010');
+
+    // And nothing was left behind at the old code.
+    expect(Account::where('code', '6230')->exists())->toBeFalse()
+        ->and(Account::where('code', 'like', 'TMP-%')->exists())->toBeFalse();
 });
