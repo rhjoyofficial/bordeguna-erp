@@ -1,0 +1,35 @@
+<?php
+
+use App\Http\Controllers\Api\Hq\HqReadController;
+use App\Http\Middleware\HqApiContext;
+use Illuminate\Support\Facades\Route;
+
+/*
+ | HQ read-first API - consumed by BordeGuna-HeadQuarter (docs/35 section D there).
+ |
+ | Authentication: a Sanctum personal access token issued to the dedicated `hq` user by
+ | `php artisan hq:api:token`. Every token carries the ability `hq:business:{id}` for exactly one
+ | business plus the ERP permission names it may exercise. HqApiContext checks the ability against
+ | the {business} in the URL and enters the tenant scope from the TOKEN, never from a header.
+ |
+ | Read-first: the only write in Phase 1 is POST tickets. Payroll, salary, journals, stock
+ | adjustments and approvals are never reachable here.
+ */
+Route::prefix('hq/v1')->name('hq.')->middleware(['auth:sanctum', 'throttle:120,1'])->group(function () {
+    Route::get('businesses', [HqReadController::class, 'businesses'])->name('businesses');
+
+    Route::prefix('{business}')->middleware(HqApiContext::class)->group(function () {
+        Route::get('overview', [HqReadController::class, 'overview'])->name('overview');
+        Route::get('stock', [HqReadController::class, 'stock'])->name('stock');
+        Route::get('stock/low', [HqReadController::class, 'lowStock'])->name('stock.low');
+        Route::get('products', [HqReadController::class, 'products'])->name('products');
+        Route::get('products/{sku}', [HqReadController::class, 'product'])->name('products.show');
+        Route::get('customers', [HqReadController::class, 'customers'])->name('customers');
+        Route::get('customers/{customer}', [HqReadController::class, 'customer'])->name('customers.show');
+        Route::get('tickets', [HqReadController::class, 'tickets'])->name('tickets');
+        Route::post('tickets', [HqReadController::class, 'storeTicket'])->name('tickets.store');
+        Route::get('approvals/pending', [HqReadController::class, 'pendingApprovals'])->name('approvals.pending');
+        Route::get('reports', [HqReadController::class, 'reports'])->name('reports');
+        Route::post('reports/{key}/run', [HqReadController::class, 'runReport'])->name('reports.run');
+    });
+});

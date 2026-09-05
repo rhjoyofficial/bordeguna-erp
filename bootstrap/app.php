@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Modules\Foundation\Exceptions\ApprovalAlreadyDecidedException;
 use App\Modules\Foundation\Http\Middleware\EnsurePageBusinessMatches;
 use App\Modules\Foundation\Http\Middleware\ResolveCurrentBusiness;
 use Illuminate\Auth\Middleware\Authorize;
@@ -9,7 +10,6 @@ use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Contracts\Session\Middleware\AuthenticatesSessions;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Application;
-use App\Modules\Foundation\Exceptions\ApprovalAlreadyDecidedException;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
@@ -24,6 +24,8 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        // HQ read-first API (BordeGuna-HeadQuarter docs/35): token auth, business taken from the token.
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )

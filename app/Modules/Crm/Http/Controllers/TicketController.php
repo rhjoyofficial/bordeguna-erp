@@ -3,8 +3,8 @@
 namespace App\Modules\Crm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Foundation\Models\Business;
 use App\Modules\Accounting\Support\FiscalYear;
+use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Http\RedirectResponse;
@@ -188,7 +188,8 @@ class TicketController extends Controller
         return $row;
     }
 
-    private function nextNumber(int $businessId): string
+    /** Public so the HQ API opens tickets with the same numbering as the screen. */
+    public function nextNumber(int $businessId): string
     {
         $business = Business::withoutGlobalScopes()->findOrFail($businessId);
         $prefix = 'TK-'.FiscalYear::containing(Carbon::now(), $business)->label().'-';
