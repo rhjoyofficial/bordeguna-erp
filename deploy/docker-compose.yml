@@ -60,9 +60,16 @@ services:
       # Traefik side means they stay unreachable rather than relying on us not
       # to publish ports.
       - traefik.enable=true
+      # Both hostnames answer: erp.bordeguna.com is canonical from 6 Sep 2026,
+      # the hstgr.cloud name stays routable so existing bookmarks keep working.
       - traefik.http.routers.bordeguna-erp.entrypoints=websecure
-      - traefik.http.routers.bordeguna-erp.rule=Host(`erp.srv1808022.hstgr.cloud`)
+      - traefik.http.routers.bordeguna-erp.rule=Host(`erp.bordeguna.com`) || Host(`erp.srv1808022.hstgr.cloud`)
       - traefik.http.routers.bordeguna-erp.tls.certresolver=letsencrypt
+      - traefik.http.routers.bordeguna-erp-http.entrypoints=web
+      - traefik.http.routers.bordeguna-erp-http.rule=Host(`erp.bordeguna.com`) || Host(`erp.srv1808022.hstgr.cloud`)
+      - traefik.http.routers.bordeguna-erp-http.middlewares=bordeguna-erp-redirect
+      - traefik.http.middlewares.bordeguna-erp-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.bordeguna-erp-redirect.redirectscheme.permanent=true
       - traefik.http.services.bordeguna-erp.loadbalancer.server.port=80
 
   db:
