@@ -1,4 +1,4 @@
-# Bor de Guna ERP — production stack for srv1808022.
+# Bor de Guna ERP — production stack. Serves https://erp.bordeguna.com.
 #
 # ⚠⚠ THIS STACK IS MANAGED BY HAND AND WILL NOT APPEAR IN HOSTINGER'S hPANEL.
 # The other four stacks on this host (traefik-rsf3, n8n-vb99, postgresql-4jjn,
@@ -60,13 +60,14 @@ services:
       # Traefik side means they stay unreachable rather than relying on us not
       # to publish ports.
       - traefik.enable=true
-      # Both hostnames answer: erp.bordeguna.com is canonical from 6 Sep 2026,
-      # the hstgr.cloud name stays routable so existing bookmarks keep working.
+      # erp.bordeguna.com is the ONLY hostname this stack answers on, from
+      # 6 Sep 2026. The old provider hostname was removed deliberately: Traefik
+      # has no route for it and answers 404.
       - traefik.http.routers.bordeguna-erp.entrypoints=websecure
-      - traefik.http.routers.bordeguna-erp.rule=Host(`erp.bordeguna.com`) || Host(`erp.srv1808022.hstgr.cloud`)
+      - traefik.http.routers.bordeguna-erp.rule=Host(`erp.bordeguna.com`)
       - traefik.http.routers.bordeguna-erp.tls.certresolver=letsencrypt
       - traefik.http.routers.bordeguna-erp-http.entrypoints=web
-      - traefik.http.routers.bordeguna-erp-http.rule=Host(`erp.bordeguna.com`) || Host(`erp.srv1808022.hstgr.cloud`)
+      - traefik.http.routers.bordeguna-erp-http.rule=Host(`erp.bordeguna.com`)
       - traefik.http.routers.bordeguna-erp-http.middlewares=bordeguna-erp-redirect
       - traefik.http.middlewares.bordeguna-erp-redirect.redirectscheme.scheme=https
       - traefik.http.middlewares.bordeguna-erp-redirect.redirectscheme.permanent=true

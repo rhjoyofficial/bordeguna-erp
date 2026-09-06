@@ -1,7 +1,7 @@
 # Production deployment — Bor de Guna ERP
 
 Target: `srv1808022` (Hostinger KVM, `200.97.162.40`), reached as `ssh vps`.
-Serves `https://erp.srv1808022.hstgr.cloud`.
+Serves `https://erp.bordeguna.com`.
 
 Design rationale is in `D:\WORK\BorDeGuna\VPS-DEPLOYMENT-PLAN.md`. This file is
 the runbook.
@@ -100,7 +100,7 @@ docker compose exec web curl -sS -o /dev/null -w '%{http_code}\n' http://localho
 
 Once that is green: restore the `labels:` block, `docker compose up -d web`, and
 the subdomain goes live over HTTPS with a Let's Encrypt certificate issued
-automatically. Wildcard DNS for `*.srv1808022.hstgr.cloud` already resolves, so
+automatically. An A record for `erp.bordeguna.com` points at the VPS, so
 there is no DNS step.
 
 ### Seeding
