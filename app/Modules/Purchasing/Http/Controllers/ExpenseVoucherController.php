@@ -50,8 +50,22 @@ class ExpenseVoucherController extends Controller
     {
         $businessId = app(BusinessContext::class)->id();
 
+        // ⚠ 6 Sep 2026: this screen had no filter of any kind, yet the header
+        // search had been linking here as `?search=NIKOLA-2026-09` since the
+        // day document numbers were added to it. The parameter was ignored,
+        // so every expense result landed on page one of everything and read
+        // as a broken search. One of the two is wrong; a list you cannot
+        // search is the one worth fixing.
+        $search = trim($request->string('search')->toString());
+
         $vouchers = ExpenseVoucher::query()
             ->with(['moneyAccount:id,name', 'supplier:id,name', 'lines.account:id,code,name', 'attachments.uploadedBy:id,name'])
+            ->when($search !== '', fn ($query) => $query->where(
+                fn ($w) => $w->where('voucher_number', 'like', '%'.$search.'%')
+                    ->orWhere('reference', 'like', '%'.$search.'%')
+                    ->orWhere('paid_to', 'like', '%'.$search.'%')
+                    ->orWhere('note', 'like', '%'.$search.'%')
+            ))
             ->orderByDesc('spent_on')
             ->orderByDesc('id')
             ->paginate(20)
@@ -89,6 +103,10 @@ class ExpenseVoucherController extends Controller
 
         return Inertia::render('purchasing/expenses/index', [
             'vouchers' => $vouchers,
+            // So the screen can say what it is filtered by. Arriving from the
+            // header search with no visible reason for a short list is the
+            // confusing half of the defect fixed above.
+            'filters' => ['search' => $search],
             'canRecord' => $request->user()?->can('purchasing.expense.record') ?? false,
 
             // ⚠⚠ AUTO-FILL, NEVER AUTO-POST (Joy, 1 Sep 2026: "auto fill is

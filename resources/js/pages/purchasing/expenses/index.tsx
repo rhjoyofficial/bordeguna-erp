@@ -119,6 +119,7 @@ interface Prefill {
 
 interface Props {
     vouchers: Paginated<Voucher>;
+    filters: { search: string };
     prefill: Prefill | null;
     canRecord: boolean;
     expenseAccounts: { id: number; label: string }[];
@@ -150,7 +151,7 @@ const EMPTY_LINE = { account_id: '', amount: '', description: '' };
  * today: until then every picker inside every dialog was unclickable, and this
  * form is four pickers deep. See PortalledOverlayIsClickableTest.
  */
-function RecordExpenseDialog({ expenseAccounts, moneyAccounts, suppliers, today, prefill }: Omit<Props, 'vouchers' | 'canRecord'>) {
+function RecordExpenseDialog({ expenseAccounts, moneyAccounts, suppliers, today, prefill }: Omit<Props, 'vouchers' | 'canRecord' | 'filters'>) {
     // ⚠⚠ Opens ALREADY OPEN when the person arrived from a due standing cost.
     // They pressed "Record payment" one screen ago; making them press a second
     // button to see the form they asked for would be the software forgetting
@@ -430,7 +431,22 @@ function ExportDialog() {
     );
 }
 
-export default function ExpensesIndex({ vouchers, canRecord, expenseAccounts, moneyAccounts, suppliers, today, prefill }: Props) {
+export default function ExpensesIndex({ vouchers, filters, canRecord, expenseAccounts, moneyAccounts, suppliers, today, prefill }: Props) {
+    // ⚠ The header search links here with `?search=NIKOLA-2026-09`. Until
+    // 6 Sep 2026 the controller ignored it AND nothing on the page said the
+    // list was filtered, so a search result looked like a broken search. The
+    // controller now filters; this is the half that tells the reader why.
+    const [search, setSearch] = useState(filters?.search ?? '');
+
+    const applySearch = (value: string) => {
+        setSearch(value);
+        router.get('/purchasing/expenses', value.trim() === '' ? {} : { search: value.trim() }, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Expenses" />
@@ -440,6 +456,14 @@ export default function ExpensesIndex({ vouchers, canRecord, expenseAccounts, mo
                     description="Rent, fuel, utilities, subscriptions - money spent on running the business rather than on stock. Each one is paid at the moment it is recorded; a bill to be settled later is a supplier bill instead."
                     actions={
                         <>
+                            <input
+                                type="search"
+                                value={search}
+                                onChange={(e) => applySearch(e.target.value)}
+                                placeholder="Search number, reference, payee"
+                                aria-label="Search expenses"
+                                className="border-input bg-background h-8 w-56 rounded-md border px-2 text-sm"
+                            />
                             {/* The engine's rendering: PDF, Excel, CSV and a printable
                                 page with letterhead and signature blocks. The quick CSV
                                 dialog stays for a fast date-ranged pull. */}

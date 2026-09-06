@@ -47,10 +47,13 @@ Route::middleware(['auth', 'business'])->group(function () {
     // needs no CSRF ceremony), JSON in and out, permission-filtered inside.
     Route::get('search', GlobalSearchController::class)->name('search');
 
-    // The bell's notifications. No index page on purpose: each one carries the
-    // url of the thing it is about, and the approvals queue is the work list.
+    // The bell's notifications, and the inbox behind it. The inbox exists
+    // because the bell shows five and production was holding ninety-nine
+    // unread: everything past the fifth had no URL anywhere in the app.
+    Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('notifications/read', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
     Route::post('notifications/{notification}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
+    Route::post('notifications/{notification}/unread', [NotificationController::class, 'markUnread'])->name('notifications.unread');
 
     // The floating chat guide. JSON in, JSON out - not a page, so the
     // reachability guard rightly ignores it; its way in is the message

@@ -263,3 +263,42 @@ it('sends the date as a plain calendar day, not a UTC timestamp', function () {
         ->get('/purchasing/expenses')
         ->assertInertia(fn (AssertableInertia $page) => $page->where('vouchers.data.0.spent_on', '2026-08-09'));
 });
+
+/**
+ * ⚠⚠ 6 Sep 2026. THE HEADER SEARCH HAD BEEN LINKING HERE WITH `?search=` SINCE
+ * DOCUMENT NUMBERS WERE ADDED TO IT, AND THIS SCREEN HAD NO FILTER AT ALL. The
+ * parameter was accepted and ignored, so every expense result landed on page
+ * one of every expense ever recorded and read as a search that did not work.
+ *
+ * The list is the destination for expenses (there is no voucher page), so the
+ * link is right and the missing filter was the defect.
+ */
+it('filters the list by voucher number, reference, payee or note', function () {
+    $this->actingAs($this->owner)->post('/purchasing/expenses', ($this->payload)());
+    $this->actingAs($this->owner)->post('/purchasing/expenses', ($this->payload)([
+        'paid_to' => 'Nikolahost',
+        'reference' => 'NIKOLA-2026-09',
+        'lines' => [['account_id' => $this->fuel->id, 'amount' => '4900.00', 'description' => 'Hosting']],
+    ]));
+
+    // The reference the search box sends.
+    $this->actingAs($this->owner)
+        ->get('/purchasing/expenses?search=NIKOLA-2026-09')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('filters.search', 'NIKOLA-2026-09')
+            ->has('vouchers.data', 1)
+            ->where('vouchers.data.0.reference', 'NIKOLA-2026-09'));
+
+    // The payee, because that is what a person actually remembers.
+    $this->actingAs($this->owner)
+        ->get('/purchasing/expenses?search=landlord')
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('vouchers.data', 1)
+            ->where('vouchers.data.0.reference', 'RCPT-4410'));
+
+    // And no filter still shows everything.
+    $this->actingAs($this->owner)
+        ->get('/purchasing/expenses')
+        ->assertInertia(fn (AssertableInertia $page) => $page->has('vouchers.data', 2));
+});

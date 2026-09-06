@@ -98,7 +98,7 @@ class HandleInertiaRequests extends Middleware
             // emails were switched off on Joy's instruction, so this is now the
             // ONLY way an approver learns something is waiting.
             //
-            // ⚠ Capped at five and shipped with a count, rather than the whole
+            // ⚠ Capped at eight and shipped with a count, rather than the whole
             // unread list. A dropdown is not an inbox, and serialising two
             // hundred rows into every page load to render five of them is a
             // cost paid on every request in the application.
@@ -106,7 +106,7 @@ class HandleInertiaRequests extends Middleware
             'recentNotifications' => fn () => $request->user()
                 ?->unreadNotifications()
                 ->latest()
-                ->limit(5)
+                ->limit(8)
                 ->get()
                 ->map(fn ($n) => [
                     'id' => $n->id,

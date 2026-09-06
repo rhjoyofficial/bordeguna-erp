@@ -2,7 +2,20 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { type SharedData } from '@/types';
 import { Link, router, usePage } from '@inertiajs/react';
-import { Bell, CheckSquare } from 'lucide-react';
+import { AlarmClock, ArrowRight, Bell, CheckSquare, FileWarning, Receipt, Users, type LucideIcon } from 'lucide-react';
+
+/**
+ * One icon per kind, so a stack of notifications can be told apart without
+ * reading every line. The payload has carried `kind` since 23 Aug and the bell
+ * ignored it, drawing the same tick on all of them.
+ */
+const ICONS: Record<string, LucideIcon> = {
+    approval: CheckSquare,
+    lateness: AlarmClock,
+    'follow-up': Users,
+    expense: Receipt,
+    'show-cause': FileWarning,
+};
 
 /**
  * The header bell.
@@ -30,7 +43,10 @@ export default function HeaderNotifications() {
     const notifications = recentNotifications ?? [];
     const unread = unreadNotificationsCount ?? 0;
 
-    if (!canReviewApprovals && unread === 0) {
+    // ⚠ The bell stays for anyone who has ever been sent anything, not only
+    // people with something unread: since 6 Sep it is also the way to the
+    // inbox, and a read notification still has to be findable.
+    if (!canReviewApprovals && unread === 0 && notifications.length === 0) {
         return null;
     }
 
@@ -57,7 +73,9 @@ export default function HeaderNotifications() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80 p-2">
                 <div className="flex items-center justify-between px-2 pt-1 pb-2">
-                    <p className="text-muted-foreground text-xs font-medium">Notifications</p>
+                    <p className="text-muted-foreground text-xs font-medium">
+                        Notifications{unread > 0 ? ` · ${unread} unread` : ''}
+                    </p>
                     {unread > 0 && (
                         <button
                             type="button"
@@ -69,22 +87,26 @@ export default function HeaderNotifications() {
                     )}
                 </div>
 
-                {notifications.map((n) => (
-                    <Link
-                        key={n.id}
-                        href={n.url ?? '/approvals'}
-                        onClick={() => router.post(`/notifications/${n.id}/read`, {}, { preserveScroll: true })}
-                        className="hover:bg-accent hover:text-accent-foreground flex items-start gap-3 rounded-md p-2 transition-colors"
-                    >
-                        <span className="bg-primary/10 text-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
-                            <CheckSquare className="h-4 w-4" />
-                        </span>
-                        <span className="min-w-0">
-                            <span className="block text-sm">{n.summary}</span>
-                            {n.at && <span className="text-muted-foreground block text-xs">{n.at}</span>}
-                        </span>
-                    </Link>
-                ))}
+                {notifications.map((n) => {
+                    const Icon = ICONS[n.kind] ?? Bell;
+
+                    return (
+                        <Link
+                            key={n.id}
+                            href={n.url ?? '/notifications'}
+                            onClick={() => router.post(`/notifications/${n.id}/read`, {}, { preserveScroll: true })}
+                            className="hover:bg-accent hover:text-accent-foreground flex items-start gap-3 rounded-md p-2 transition-colors"
+                        >
+                            <span className="bg-primary/10 text-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
+                                <Icon className="h-4 w-4" />
+                            </span>
+                            <span className="min-w-0">
+                                <span className="block text-sm">{n.summary}</span>
+                                {n.at && <span className="text-muted-foreground block text-xs">{n.at}</span>}
+                            </span>
+                        </Link>
+                    );
+                })}
 
                 {canReviewApprovals && pendingApprovalsCount > 0 && (
                     <Link
@@ -105,6 +127,15 @@ export default function HeaderNotifications() {
                 {notifications.length === 0 && pendingApprovalsCount === 0 && (
                     <p className="text-muted-foreground px-2 pb-2 text-sm">Nothing needs your attention.</p>
                 )}
+
+                {/* ⚠ The way to the other ninety-four. The dropdown shows five
+                    unread; without this row everything older had no URL. */}
+                <Link
+                    href="/notifications"
+                    className="text-muted-foreground hover:text-foreground mt-1 flex items-center justify-center gap-1 border-t pt-2 pb-1 text-xs"
+                >
+                    See all notifications <ArrowRight className="h-3 w-3" />
+                </Link>
             </DropdownMenuContent>
         </DropdownMenu>
     );
