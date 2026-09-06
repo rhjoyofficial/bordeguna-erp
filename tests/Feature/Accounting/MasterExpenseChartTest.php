@@ -13,7 +13,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Support\ExpenseCategories;
 use Illuminate\Support\Carbon;
-use IlluminateSupportFacadesDB;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
