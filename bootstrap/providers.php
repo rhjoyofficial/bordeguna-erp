@@ -2,6 +2,7 @@
 
 use App\Modules\Accounting\Providers\AccountingServiceProvider;
 use App\Modules\Assets\Providers\AssetsServiceProvider;
+use App\Modules\Commerce\Providers\CommerceServiceProvider;
 use App\Modules\Crm\Providers\CrmServiceProvider;
 use App\Modules\Foundation\Providers\FoundationServiceProvider;
 use App\Modules\Hrm\Providers\HrmServiceProvider;
@@ -14,6 +15,7 @@ return [
     AppServiceProvider::class,
     AccountingServiceProvider::class,
     AssetsServiceProvider::class,
+    CommerceServiceProvider::class,
     CrmServiceProvider::class,
     FoundationServiceProvider::class,
     HrmServiceProvider::class,

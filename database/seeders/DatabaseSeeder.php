@@ -7,6 +7,7 @@ use App\Modules\Accounting\database\seeders\AccountingPermissionsSeeder;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Assets\database\seeders\AssetAccountMappingSeeder;
 use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
+use App\Modules\Commerce\database\seeders\CommercePermissionsSeeder;
 use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
 use App\Modules\Foundation\database\seeders\FoundationSeeder;
 use App\Modules\Foundation\Support\SeedCredentials;
@@ -84,6 +85,7 @@ class DatabaseSeeder extends Seeder
         // Business::all(), so it must run after the real business and its roles
         // exist.
         $this->call(SalesPermissionsSeeder::class);
+        $this->call(CommercePermissionsSeeder::class);
         $this->call(ApprovalWorkflowSeeder::class);
         $this->call(HrmChangeRequestWorkflowSeeder::class);
         $this->call(BangladeshHolidayCalendarSeeder::class);
