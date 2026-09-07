@@ -438,6 +438,11 @@ export default function ExpensesIndex({ vouchers, filters, canRecord, expenseAcc
     // controller now filters; this is the half that tells the reader why.
     const [search, setSearch] = useState(filters?.search ?? '');
 
+    // ⚠ Read from the SERVER's filters, not from the input box. The box holds
+    // whatever is being typed right now; what emptied the table is what the
+    // server was actually asked for.
+    const isFiltered = (filters?.search ?? '') !== '';
+
     const applySearch = (value: string) => {
         setSearch(value);
         router.get('/purchasing/expenses', value.trim() === '' ? {} : { search: value.trim() }, {
@@ -528,8 +533,21 @@ export default function ExpensesIndex({ vouchers, filters, canRecord, expenseAcc
                                     {/* ⚠ colSpan matches the SEVEN headers above. It said six,
                                         so the empty message sat short of the table's width. */}
                                     <td colSpan={7} className="text-muted-foreground p-8 text-center">
-                                        <p>No expenses recorded yet.</p>
-                                        {canRecord && <p className="mt-1 text-xs">Use “Record expense” above to add the first one.</p>}
+                                        {/* ⚠ An empty table under a FILTER means "nothing matched",
+                                            not "nothing exists". Saying the latter sent somebody
+                                            looking for a missing voucher that was simply filtered
+                                            out, and made a working search read as lost data. */}
+                                        {isFiltered ? (
+                                            <>
+                                                <p>Nothing matches what you are looking for.</p>
+                                                <p className="mt-1 text-xs">Clear the filters to see every expense.</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p>No expenses recorded yet.</p>
+                                                {canRecord && <p className="mt-1 text-xs">Use “Record expense” above to add the first one.</p>}
+                                            </>
+                                        )}
                                     </td>
                                 </tr>
                             )}

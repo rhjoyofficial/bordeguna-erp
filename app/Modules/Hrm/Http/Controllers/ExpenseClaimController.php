@@ -294,9 +294,11 @@ class ExpenseClaimController extends Controller
             // the accountant's word for the same thing. Legacy claims carry
             // no category and show only the account, as they always did.
             'category' => ExpenseCategories::describe($claim->expense_category_id)['name'] ?? null,
-            // ⚠ A booked claim has ALREADY hit the expense account; the only
-            // thing left is paying the payable off. The screen must not offer
-            // an expense head or the salary route for it - both are refused.
+            // ⚠ A booked claim has ALREADY hit the expense account, so the screen
+            // must not offer an expense head for it: the cost is decided and only
+            // the payable is outstanding. ⭐ Both settlement routes ARE offered
+            // (Joy, 7 Sep) - paying now moves the payable to cash, adding it to
+            // salary moves it to wages, and neither expenses it a second time.
             'is_booked' => $claim->approval_journal_id !== null,
             'expense_account' => $claim->expenseAccount?->label(),
             'receipts' => $claim->attachments->map(fn (Attachment $file) => [
