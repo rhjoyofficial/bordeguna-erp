@@ -238,6 +238,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
         Route::get('expense-categories', [ExpenseCategoryController::class, 'index'])->name('expense-categories');
         Route::patch('expense-categories/{category}', [ExpenseCategoryController::class, 'update'])->name('expense-categories.update');
         Route::post('expense-claims/{claim}/settle', [ExpenseClaimController::class, 'settle'])->name('expense-claims.settle');
+        // The reimbursement voucher. Same permission as settling, because it is
+        // the paper record of the payment that permission authorises.
+        Route::get('expense-claims/{claim}/print', [ExpenseClaimController::class, 'print'])->name('expense-claims.print');
     });
 
     // ⚠ Approving sits OUTSIDE that permission group on purpose: the workflow

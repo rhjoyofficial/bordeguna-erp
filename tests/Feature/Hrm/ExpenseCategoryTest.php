@@ -170,15 +170,44 @@ it('settles by clearing the payable against the till, never expensing twice', fu
         ->and((int) DB::table('journal_lines')->whereNotNull('money_account_id')->sum('amount_minor'))->toBe(-54700);
 });
 
-it('refuses the salary route for a claim already expensed at approval', function () {
+it('takes the salary route for a claim already expensed at approval, without expensing it twice', function () {
+    // ⚠⚠ THIS TEST USED TO ASSERT THE OPPOSITE. Until 7 Sep 2026 the salary
+    // route was REFUSED for a claim booked at approval, because payroll posts a
+    // `reimbursement` earning against an EXPENSE account and the cost would have
+    // been recorded twice.
+    //
+    // Joy asked for both routes on every claim, so the refusal was replaced by a
+    // separate adjustment type whose earning code maps to the PAYABLE. What the
+    // test guards is unchanged - the cost may only be counted once - but the way
+    // it is guaranteed is now a mapping rather than a locked door.
     $claim = submitClaim();
     ($this->asApprover)()->post(route('hrm.expense-claims.approve', $claim));
 
     ($this->asApprover)()->post(route('hrm.expense-claims.settle', $claim->id), [
         'method' => 'payroll', 'payroll_period_id' => \App\Modules\Hrm\Models\PayrollPeriod::forMonth(2026, 9)->id,
-    ])->assertSessionHasErrors();
+    ])->assertSessionHasNoErrors();
 
-    expect($claim->fresh()->settled_at)->toBeNull();
+    $claim->refresh();
+
+    expect($claim->settled_at)->not->toBeNull()
+        ->and($claim->settlement_method)->toBe(ExpenseClaim::SETTLE_PAYROLL)
+        ->and($claim->payroll_adjustment_id)->not->toBeNull();
+
+    $adjustment = \App\Modules\Hrm\Models\PayrollAdjustment::findOrFail($claim->payroll_adjustment_id);
+
+    // ⛔ The line that decides whether the cost is counted twice. `Reimbursement`
+    // maps to an expense account; `ExpenseClaimSettlement` maps to the payable.
+    expect($adjustment->type)->toBe(\App\Modules\Hrm\Enums\PayrollAdjustmentType::ExpenseClaimSettlement);
+
+    // The expense stands exactly ONCE, from the approval posting. Nothing about
+    // choosing the salary route added a second one.
+    $telephone = Account::query()->where('code', '6055')->firstOrFail();
+    expect((int) DB::table('journal_lines')->where('account_id', $telephone->id)->sum('amount_minor'))->toBe(54700);
+
+    // ⚠ The payable is still outstanding, and that is correct: payroll clears it
+    // when the salary is actually posted, not when the claim is filed against it.
+    $payable = Account::bySlug('employee_reimbursements_payable');
+    expect((int) DB::table('journal_lines')->where('account_id', $payable->id)->sum('amount_minor'))->toBe(-54700);
 });
 
 it('shows the accountant the mapping screen and remaps a category, but hides it from staff', function () {

@@ -58,6 +58,20 @@ class PayrollAccountMappingSeeder extends Seeder
         // claim is settled has to be carried through to the posting instead.
         'payroll.earning.reimbursement' => 'fuel_and_conveyance',
 
+        /*
+         * ⛔ A CLAIM SETTLEMENT CLEARS A PAYABLE, IT DOES NOT EXPENSE.
+         *
+         * An expense claim is expensed the moment it is APPROVED (Dr the
+         * category's account, Cr Employee Reimbursements Payable). Paying it
+         * through salary must therefore debit that payable, not an expense
+         * account, or the same cost lands in the books twice.
+         *
+         * This is why it is a separate earning code from `reimbursement`, which
+         * stays pointed at an expense account for the hand-typed case where no
+         * claim exists and nothing has credited the payable.
+         */
+        'payroll.earning.expense_claim_settlement' => 'employee_reimbursements_payable',
+
         // ─── Deductions that create an obligation to somebody else ───────────
         'payroll.deduction.default' => 'employee_deductions_payable',
         // C-INT-2. Two different obligations to two different bodies, sharing

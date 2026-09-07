@@ -3,7 +3,11 @@
 namespace App\Modules\Hrm\Actions;
 
 use App\Models\User;
+use App\Modules\Accounting\Actions\PostJournal;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\JournalDraft;
+use App\Modules\Accounting\Support\JournalLineDraft;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Models\ExpenseClaim;
@@ -89,13 +93,25 @@ class SettleExpenseClaim
     {
         $this->assertSettleable($claim);
 
-        // ⚠ A category claim was expensed at approval; routing it through
-        // salary would expense it a second time inside payroll. Pay it from
-        // a money account instead - the payable is waiting to be cleared.
-        if ($claim->approval_journal_id !== null) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'method' => "Claim {$claim->claim_number} was booked at approval - pay it now from a cash or bank account. The salary route is for older claims only.",
-            ]);
+        // ⭐ BOTH ROUTES NOW WORK FOR EVERY CLAIM (Joy, 7 Sep 2026). This used
+        // to refuse any claim that had been expensed at approval, because
+        // payroll posts a `reimbursement` earning against an EXPENSE account and
+        // the same cost would have landed in the books twice.
+        //
+        // The fix is not to skip the posting, it is to post it to the right
+        // place: a claim-sourced settlement uses its own adjustment type, whose
+        // earning code maps to Employee Reimbursements Payable. Payroll then
+        // DEBITS the payable the approval credited, and the money reaches the
+        // employee as wages. Nothing is expensed twice and nothing is skipped.
+        //
+        // ⚠ A claim that carries a category but was approved BEFORE this
+        // existed has no approval journal yet, so there is no payable to clear.
+        // Post it now, exactly as approval would have, and then settle it the
+        // same way as any other. Without this the payroll line would debit a
+        // payable nothing had ever credited.
+        if ($claim->approval_journal_id === null && $claim->expense_category_id !== null) {
+            app(PostExpenseClaimApproval::class)->handle($claim, $actor);
+            $claim->refresh();
         }
 
         // ⚠⚠ THE PERIOD IS NAMED, NEVER GUESSED. An adjustment belongs to one
@@ -126,7 +142,14 @@ class SettleExpenseClaim
                 'business_id' => $claim->business_id,
                 'employee_id' => $claim->employee_id,
                 'payroll_period_id' => $period->id,
-                'type' => PayrollAdjustmentType::Reimbursement,
+                // ⛔ THE LINE THAT DECIDES WHETHER THE COST IS COUNTED TWICE.
+                // Already expensed at approval -> settlement, which maps to the
+                // payable. Never expensed (a legacy claim with no category) ->
+                // reimbursement, which maps to an expense account and is the
+                // only posting that cost will ever get.
+                'type' => $claim->approval_journal_id !== null
+                    ? PayrollAdjustmentType::ExpenseClaimSettlement
+                    : PayrollAdjustmentType::Reimbursement,
                 'amount' => (string) $claim->amount,
                 'reason' => 'Expense claim '.$claim->claim_number.': '.$claim->purpose,
                 // ⚠⚠ The polymorphic origin is what stops the same claim being
@@ -183,14 +206,14 @@ class SettleExpenseClaim
         return DB::transaction(function () use ($claim, $moneyAccount, $actor) {
             $payable = Account::bySlug('employee_reimbursements_payable');
             $cash = Account::findOrFail($moneyAccount->account_id);
-            $amount = \App\Modules\Accounting\Support\Money::ofTaka((string) $claim->amount);
+            $amount = Money::ofTaka((string) $claim->amount);
 
-            $journal = app(\App\Modules\Accounting\Actions\PostJournal::class)->handle(
-                new \App\Modules\Accounting\Support\JournalDraft(
+            $journal = app(PostJournal::class)->handle(
+                new JournalDraft(
                     date: now()->startOfDay(),
                     lines: [
-                        \App\Modules\Accounting\Support\JournalLineDraft::debit($payable->id, $amount, 'Reimbursed '.$claim->claim_number, $claim->employee),
-                        \App\Modules\Accounting\Support\JournalLineDraft::credit($cash->id, $amount, $moneyAccount->label(), null, $moneyAccount),
+                        JournalLineDraft::debit($payable->id, $amount, 'Reimbursed '.$claim->claim_number, $claim->employee),
+                        JournalLineDraft::credit($cash->id, $amount, $moneyAccount->label(), null, $moneyAccount),
                     ],
                     memo: 'Reimbursement of expense claim '.$claim->claim_number,
                     source: $claim,

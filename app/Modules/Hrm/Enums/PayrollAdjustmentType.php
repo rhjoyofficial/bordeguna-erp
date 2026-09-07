@@ -19,6 +19,22 @@ enum PayrollAdjustmentType: string
     case Penalty = 'penalty';
     case Recovery = 'recovery';
 
+    /*
+     * ⚠⚠ SEVENTH CASE, added 7 Sep 2026, and it exists for one reason:
+     * an expense claim that was already EXPENSED AT APPROVAL must not be
+     * expensed a second time when it is paid through salary.
+     *
+     * `Reimbursement` maps to an expense account, which is right when somebody
+     * types one by hand with no claim behind it. A claim-sourced settlement is
+     * different: the cost is already in the books and only the PAYABLE needs
+     * clearing, so this case maps to Employee Reimbursements Payable instead.
+     *
+     * Kept as its own case rather than remapping `Reimbursement`, because
+     * remapping would silently break every hand-typed reimbursement by debiting
+     * a payable nothing had credited.
+     */
+    case ExpenseClaimSettlement = 'expense_claim_settlement';
+
     public function label(): string
     {
         return match ($this) {
@@ -28,6 +44,7 @@ enum PayrollAdjustmentType: string
             self::Reimbursement => 'Reimbursement',
             self::Penalty => 'Penalty',
             self::Recovery => 'Recovery',
+            self::ExpenseClaimSettlement => 'Expense claim settlement',
         };
     }
 
@@ -42,7 +59,7 @@ enum PayrollAdjustmentType: string
 
     public function isEarning(): bool
     {
-        return in_array($this, [self::Addition, self::Arrear, self::Reimbursement], true);
+        return in_array($this, [self::Addition, self::Arrear, self::Reimbursement, self::ExpenseClaimSettlement], true);
     }
 
     /**
@@ -52,7 +69,12 @@ enum PayrollAdjustmentType: string
      */
     public function isSystemGenerated(): bool
     {
-        return $this === self::Arrear;
+        // ⚠ Both are produced BY something rather than typed: an arrear by an
+        // approved salary revision, a claim settlement by settling the claim.
+        // Being system generated is also what keeps them out of the manual
+        // adjustment dropdown, which is what stops somebody hand-typing a
+        // settlement that would debit a payable nothing credited.
+        return in_array($this, [self::Arrear, self::ExpenseClaimSettlement], true);
     }
 
     public function describe(): string
@@ -64,6 +86,7 @@ enum PayrollAdjustmentType: string
             self::Reimbursement => 'Money the employee spent on the company\'s behalf.',
             self::Penalty => 'A disciplinary deduction.',
             self::Recovery => 'Money owed to the company being taken back.',
+            self::ExpenseClaimSettlement => 'An approved expense claim being paid with this month salary.',
         };
     }
 }

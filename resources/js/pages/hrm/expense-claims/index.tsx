@@ -56,10 +56,18 @@ function SettleRow({
 
     if (claim.is_settled) {
         return (
-            <div className="text-muted-foreground text-xs">
-                {claim.settlement_method === 'payroll' ? 'Added to salary' : 'Paid'}
-                {claim.expense_account ? ` · ${claim.expense_account}` : ''}
-                {claim.settled_by ? ` · by ${claim.settled_by}` : ''}
+            <div className="space-y-1">
+                <div className="text-muted-foreground text-xs">
+                    {claim.settlement_method === 'payroll' ? 'Added to salary' : 'Paid'}
+                    {claim.expense_account ? ` · ${claim.expense_account}` : ''}
+                    {claim.settled_by ? ` · by ${claim.settled_by}` : ''}
+                </div>
+                {/* ⭐ Until this existed a claim paid from a booked position produced
+                    no printable document at all: cash left the till with nothing to
+                    file and nothing for the recipient to sign. */}
+                <a href={`/hrm/expense-claims/${claim.id}/print`} className="text-xs underline">
+                    Print voucher
+                </a>
             </div>
         );
     }
@@ -80,9 +88,10 @@ function SettleRow({
             { preserveScroll: true },
         );
 
-    // ⚠⚠ A category claim was EXPENSED AT APPROVAL. There is no expense head
-    // left to pick and no salary route left to take - the only honest act is
-    // paying the money over, which clears what the company already owes.
+    // ⚠⚠ A category claim was EXPENSED AT APPROVAL, so there is no expense
+    // head left to pick - the cost is already in the books and only the payable
+    // is outstanding. Both routes clear that payable: paying now moves it to
+    // cash, adding it to salary moves it to wages.
     if (claim.is_booked) {
         return (
             <div className="space-y-2">
@@ -105,6 +114,32 @@ function SettleRow({
                 <BusyButton size="sm" busyLabel="Paying…" disabled={account === ''} onClick={() => settle('payment')}>
                     Pay now
                 </BusyButton>
+
+                {/* ⭐ Joy, 7 Sep: every claim can go either way. Payroll posts this
+                    against the payable rather than an expense account, so the cost
+                    is not counted twice. */}
+                <div className="grid gap-1 border-t pt-2">
+                    <Label className="text-muted-foreground text-xs">Or add to salary of</Label>
+                    <div className="w-56">
+                        <SearchSelect value={period} onChange={(e) => setPeriod(e.target.value)}>
+                            <option value="">Pick a payroll month</option>
+                            {payrollPeriods.map((p) => (
+                                <option key={p.id} value={String(p.id)}>
+                                    {p.label}
+                                </option>
+                            ))}
+                        </SearchSelect>
+                    </div>
+                    <BusyButton
+                        size="sm"
+                        variant="outline"
+                        busyLabel="Adding…"
+                        disabled={period === ''}
+                        onClick={() => settle('payroll')}
+                    >
+                        Add to salary
+                    </BusyButton>
+                </div>
             </div>
         );
     }

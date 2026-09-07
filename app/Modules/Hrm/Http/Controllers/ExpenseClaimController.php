@@ -5,15 +5,19 @@ namespace App\Modules\Hrm\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
 use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\BusinessIdentity;
+use App\Modules\Hrm\Actions\PostExpenseClaimApproval;
 use App\Modules\Hrm\Actions\SettleExpenseClaim;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\ExpenseClaim;
 use App\Modules\Hrm\Models\PayrollPeriod;
+use App\Modules\Hrm\Support\ExpenseCategories;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -46,16 +50,19 @@ class ExpenseClaimController extends Controller
         $claims = ExpenseClaim::query()
             ->with(['approvalRequest', 'attachments', 'settledBy:id,name'])
             ->where('employee_id', $employee->id)
-            ->orderByDesc('spent_on')
+            // Joy, 7 Sep: newest ADDED first, not newest spent. A claim for
+            // last month's taxi entered this morning is the one waiting on
+            // somebody, so it belongs at the top; sorting by `spent_on` buried
+            // it under older entries that had already been dealt with.
             ->orderByDesc('id')
             ->get()
             ->map(fn (ExpenseClaim $claim) => $this->row($claim));
 
-        \App\Modules\Hrm\Support\ExpenseCategories::ensureDefaults(app(BusinessContext::class)->id());
+        ExpenseCategories::ensureDefaults(app(BusinessContext::class)->id());
 
         return Inertia::render('hrm/expense-claims/mine', [
             'claims' => $claims,
-            'categories' => \App\Modules\Hrm\Support\ExpenseCategories::active(app(BusinessContext::class)->id()),
+            'categories' => ExpenseCategories::active(app(BusinessContext::class)->id()),
             'today' => now()->toDateString(),
         ]);
     }
@@ -75,7 +82,7 @@ class ExpenseClaimController extends Controller
             // The accountant's structure: a category from the dropdown, so
             // the COA mapping is decided by data, never by the claimant.
             'expense_category_id' => ['required', 'integer',
-                \Illuminate\Validation\Rule::exists('expense_categories', 'id')
+                Rule::exists('expense_categories', 'id')
                     ->where('business_id', app(BusinessContext::class)->id())
                     ->where('is_active', true),
             ],
@@ -118,7 +125,10 @@ class ExpenseClaimController extends Controller
 
         $claims = ExpenseClaim::query()
             ->with(['employee:id,employee_code,first_name,last_name', 'approvalRequest', 'attachments', 'expenseAccount:id,code,name', 'settledBy:id,name'])
-            ->orderByDesc('spent_on')
+            // Joy, 7 Sep: newest ADDED first, not newest spent. A claim for
+            // last month's taxi entered this morning is the one waiting on
+            // somebody, so it belongs at the top; sorting by `spent_on` buried
+            // it under older entries that had already been dealt with.
             ->orderByDesc('id')
             ->get()
             ->map(fn (ExpenseClaim $claim) => $this->row($claim, withEmployee: true));
@@ -178,7 +188,7 @@ class ExpenseClaimController extends Controller
 
         // FINAL approval: the expense becomes real NOW - Dr the category's
         // account, Cr Employee Reimbursements Payable. Cash moves later.
-        $journal = app(\App\Modules\Hrm\Actions\PostExpenseClaimApproval::class)
+        $journal = app(PostExpenseClaimApproval::class)
             ->handle($claim->fresh(), $request->user());
 
         // ⚠ The posting is skipped for a legacy claim with no category, and
@@ -283,7 +293,7 @@ class ExpenseClaimController extends Controller
             // The category is what BOTH audiences recognise; the account is
             // the accountant's word for the same thing. Legacy claims carry
             // no category and show only the account, as they always did.
-            'category' => \App\Modules\Hrm\Support\ExpenseCategories::describe($claim->expense_category_id)['name'] ?? null,
+            'category' => ExpenseCategories::describe($claim->expense_category_id)['name'] ?? null,
             // ⚠ A booked claim has ALREADY hit the expense account; the only
             // thing left is paying the payable off. The screen must not offer
             // an expense head or the salary route for it - both are refused.
@@ -302,5 +312,60 @@ class ExpenseClaimController extends Controller
         }
 
         return $row;
+    }
+
+    /**
+     * The reimbursement voucher, for printing.
+     *
+     * ⛔ WHY THIS EXISTS. A claim that was expensed at approval clears the
+     * payable directly when it is paid and produces NO expense voucher, so
+     * there was no printable document at all: money left the till with nothing
+     * to file and nothing for the recipient to sign. The books were right and
+     * the paperwork did not exist.
+     *
+     * ⚠ Only a SETTLED claim can be printed. A voucher for money that has not
+     * moved is a document that says something untrue.
+     */
+    public function print(ExpenseClaim $claim): Response
+    {
+        $this->authorize('hrm.payroll.manage');
+
+        abort_unless($claim->isSettled(), 404);
+
+        $claim->load(['employee', 'expenseAccount', 'settledBy', 'voucher', 'adjustment.period']);
+
+        $settlementJournal = Journal::where('source_type', $claim->getMorphClass())
+            ->where('source_id', $claim->id)
+            ->where('id', '!=', $claim->approval_journal_id)
+            ->latest('id')
+            ->first();
+
+        return Inertia::render('hrm/expense-claims/print', [
+            // The same identity object every other printed document uses, so a
+            // letterhead cannot drift between one document and another.
+            'issuer' => BusinessIdentity::forCurrent()->toArray(),
+            'claim' => [
+                'claim_number' => $claim->claim_number,
+                'employee' => $claim->employee?->fullName() ?? '-',
+                'employee_code' => $claim->employee?->employee_code,
+                'spent_on' => $claim->spent_on?->toDateString(),
+                'settled_on' => $claim->settled_at?->toDateString(),
+                'purpose' => $claim->purpose,
+                'category' => $claim->expenseAccount?->label(),
+                'charged_to' => $claim->expenseAccount?->label(),
+                'amount' => (string) $claim->amount,
+                'method' => $claim->settlement_method === ExpenseClaim::SETTLE_PAYROLL
+                    ? 'Added to salary'
+                    : 'Paid directly',
+                'paid_from' => $claim->voucher?->moneyAccount?->name,
+                'salary_month' => $claim->adjustment?->period?->label(),
+                'settled_by' => $claim->settledBy?->name,
+                'approved_journal' => $claim->approval_journal_id
+                    ? Journal::find($claim->approval_journal_id)?->journal_number
+                    : null,
+                'settlement_journal' => $settlementJournal?->journal_number,
+                'voucher_number' => $claim->voucher?->voucher_number,
+            ],
+        ]);
     }
 }
