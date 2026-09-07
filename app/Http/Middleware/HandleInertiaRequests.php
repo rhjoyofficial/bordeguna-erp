@@ -204,6 +204,7 @@ class HandleInertiaRequests extends Middleware
             'canViewInventory' => fn () => (bool) $request->user()?->can('inventory.reports.view'),
             'canViewPurchasing' => fn () => (bool) $request->user()?->can('purchasing.reports.view'),
             'canViewSales' => fn () => (bool) $request->user()?->can('sales.reports.view'),
+            'canViewStores' => fn () => (bool) $request->user()?->can('commerce.stores.view'),
             'canSell' => fn () => (bool) $request->user()?->can('sales.sell'),
             'canRecordOrders' => fn () => (bool) $request->user()?->can('sales.orders.record'),
             'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),

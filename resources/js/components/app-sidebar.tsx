@@ -74,6 +74,7 @@ import {
     ListChecks,
     LockKeyhole,
     Target,
+    Globe,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -92,6 +93,7 @@ export function AppSidebar() {
         canViewInventory,
         canViewPurchasing,
         canViewSales,
+        canViewStores,
         canSell,
         canRecordOrders,
         canManagePrices,
@@ -252,6 +254,17 @@ export function AppSidebar() {
                           // commit, same reachability rule as the order book.
                           ...(canViewSales ? [{ title: 'Returns', url: '/sales/returns', icon: Undo2 }] : []),
                       ],
+                  },
+              ]
+            : []),
+        // ⚠⚠ Website management, added WITH its routes and screens in one
+        // commit, which is the reachability rule this file records. The Sales
+        // module was deployed and unreachable for want of these four lines.
+        ...(canViewStores
+            ? [
+                  {
+                      label: 'Websites',
+                      items: [{ title: 'Stores', url: '/commerce/stores', icon: Globe }],
                   },
               ]
             : []),
