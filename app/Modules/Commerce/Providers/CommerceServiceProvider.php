@@ -2,6 +2,8 @@
 
 namespace App\Modules\Commerce\Providers;
 
+use App\Modules\Commerce\Sections\SectionCatalogue;
+use App\Modules\Commerce\Sections\SectionTypeRegistry;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -14,6 +16,23 @@ use Illuminate\Support\ServiceProvider;
  */
 class CommerceServiceProvider extends ServiceProvider
 {
+    /**
+     * The section contract is registered as a SINGLETON built from code.
+     *
+     * ⚠ Registered in register() rather than boot() because the registry is
+     * a dependency other things resolve, and a registry that is only populated
+     * once boot() has run would be empty for anything resolved earlier.
+     */
+    public function register(): void
+    {
+        $this->app->singleton(SectionTypeRegistry::class, function () {
+            $registry = new SectionTypeRegistry;
+            $registry->registerMany(SectionCatalogue::all());
+
+            return $registry;
+        });
+    }
+
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
