@@ -353,7 +353,15 @@ class ExpenseClaimController extends Controller
                 'spent_on' => $claim->spent_on?->toDateString(),
                 'settled_on' => $claim->settled_at?->toDateString(),
                 'purpose' => $claim->purpose,
-                'category' => $claim->expenseAccount?->label(),
+                // ⚠ THE CATEGORY, NOT THE ACCOUNT. Both of these read the
+                // account before, so a voucher handed to the person being paid
+                // said "6250 - Office Stationery" - a chart code, on the one
+                // document the employee keeps. The claim list in this same
+                // controller already had it right: the category is what both
+                // audiences recognise, the account is the accountant's word for
+                // the same thing, and a legacy claim carrying no category falls
+                // back to the account exactly as it always did.
+                'category' => ExpenseCategories::describe($claim->expense_category_id)['name'] ?? null,
                 'charged_to' => $claim->expenseAccount?->label(),
                 'amount' => (string) $claim->amount,
                 'method' => $claim->settlement_method === ExpenseClaim::SETTLE_PAYROLL

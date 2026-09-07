@@ -35,7 +35,7 @@ const money = (value: string | number) => Number(value).toLocaleString('en-BD', 
  */
 function ReimbursementCopy({ claim, issuer, copyLabel }: { claim: Claim; issuer: Issuer; copyLabel: string }) {
     return (
-        <div className="official-document relative border-sidebar-border/70 dark:border-sidebar-border mx-auto w-full max-w-2xl rounded-xl border bg-white p-8 text-black dark:bg-white print:max-w-none print:rounded-none print:border-0 print:p-0">
+        <div className="official-document relative border-sidebar-border/70 dark:border-sidebar-border mx-auto w-full max-w-2xl rounded-xl border bg-white p-6 text-black dark:bg-white print:max-w-none print:rounded-none print:border-0 print:p-0">
             <DocumentLetterhead issuer={issuer} title="Reimbursement voucher" subtitle={`Claim ${claim.claim_number}`} />
 
             {/* ⭐ Joy, 7 Sep: the copy name is a WATERMARK, not a corner label. The
@@ -55,82 +55,82 @@ function ReimbursementCopy({ claim, issuer, copyLabel }: { claim: Claim; issuer:
                 </span>
             </div>
 
-            <div className="mt-4 flex flex-wrap justify-between gap-6 text-sm">
-                <div>
-                    <p className="text-black/60">Reimbursed to</p>
-                    <p className="font-medium">{claim.employee}</p>
-                    {claim.employee_code && <p className="text-xs text-black/50">{claim.employee_code}</p>}
-                </div>
-                <div className="text-right">
-                    <p>
-                        <span className="text-black/60">Spent on: </span>
-                        {claim.spent_on ?? '-'}
-                    </p>
-                    <p>
-                        <span className="text-black/60">Paid on: </span>
-                        {claim.settled_on ?? '-'}
-                    </p>
-                    <p>
-                        <span className="text-black/60">How: </span>
-                        {claim.method}
-                    </p>
-                    {/* ⚠ One of these two, never both: money either left an account
-                        today or it is going out with a named month's salary. */}
-                    {claim.paid_from && (
-                        <p>
-                            <span className="text-black/60">Paid from: </span>
-                            {claim.paid_from}
-                        </p>
-                    )}
-                    {claim.salary_month && (
-                        <p>
-                            <span className="text-black/60">With salary of: </span>
-                            {claim.salary_month}
-                        </p>
-                    )}
-                </div>
-            </div>
+            {/* ⭐ Joy, 7 Sep: "table structure is always good." A ruled grid is what
+                an official voucher looks like, and it is also denser than stacked
+                paragraphs - the same facts in less of the page. */}
+            <table className="mt-3 w-full border-collapse text-[11px]">
+                <tbody>
+                    <tr>
+                        <td className="w-28 border border-black/25 bg-black/[0.03] px-2 py-1 text-black/60">Reimbursed to</td>
+                        <td className="border border-black/25 px-2 py-1 font-medium">
+                            {claim.employee}
+                            {claim.employee_code && <span className="ml-2 text-black/50">{claim.employee_code}</span>}
+                        </td>
+                        <td className="w-24 border border-black/25 bg-black/[0.03] px-2 py-1 text-black/60">Spent on</td>
+                        <td className="w-28 border border-black/25 px-2 py-1">{claim.spent_on ?? '-'}</td>
+                    </tr>
+                    <tr>
+                        <td className="border border-black/25 bg-black/[0.03] px-2 py-1 text-black/60">How</td>
+                        <td className="border border-black/25 px-2 py-1">
+                            {claim.method}
+                            {/* ⚠ One of these two, never both: money either left an account
+                                today or it is going out with a named month's salary. */}
+                            {claim.paid_from && <span className="text-black/60"> - {claim.paid_from}</span>}
+                            {claim.salary_month && <span className="text-black/60"> - {claim.salary_month}</span>}
+                        </td>
+                        <td className="border border-black/25 bg-black/[0.03] px-2 py-1 text-black/60">Paid on</td>
+                        <td className="border border-black/25 px-2 py-1">{claim.settled_on ?? '-'}</td>
+                    </tr>
+                </tbody>
+            </table>
 
-            <table className="mt-6 w-full text-sm">
+            <table className="mt-2 w-full border-collapse text-[11px]">
                 <thead>
-                    <tr className="border-b border-black/20 text-left">
-                        <th className="py-2">What it was for</th>
-                        <th className="py-2 text-right">Amount</th>
+                    <tr className="bg-black/[0.03]">
+                        <th className="border border-black/25 px-2 py-1 text-left font-medium">What it was for</th>
+                        <th className="w-28 border border-black/25 px-2 py-1 text-right font-medium">Amount</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr className="border-b border-black/10">
-                        <td className="py-2">
-                            <span className="font-medium">{claim.purpose}</span>
-                            {claim.charged_to && <span className="block text-xs text-black/50">{claim.charged_to}</span>}
+                    <tr>
+                        <td className="border border-black/25 px-2 py-1 align-top">
+                            {claim.purpose}
+                            {/* ⚠ The CATEGORY, and only the account when there is
+                                none - a claim raised before categories existed.
+                                A chart code is the accountant's word for this
+                                line, and one copy of this voucher is handed to the
+                                person being paid. */}
+                            {(claim.category ?? claim.charged_to) && (
+                                <span className="block text-[10px] text-black/50">{claim.category ?? claim.charged_to}</span>
+                            )}
                         </td>
-                        <td className="py-2 text-right">{money(claim.amount)}</td>
+                        <td className="border border-black/25 px-2 py-1 text-right align-top">{money(claim.amount)}</td>
+                    </tr>
+                    <tr>
+                        <td className="border border-black/25 px-2 py-1 text-right font-semibold">Total</td>
+                        <td className="border border-black/25 px-2 py-1 text-right font-semibold">BDT {money(claim.amount)}</td>
                     </tr>
                 </tbody>
-                <tfoot>
-                    <tr>
-                        <td className="py-3 text-right font-semibold">Total</td>
-                        <td className="py-3 text-right text-lg font-semibold">BDT {money(claim.amount)}</td>
-                    </tr>
-                </tfoot>
             </table>
 
-            <div className="mt-12 flex justify-between gap-8 text-sm">
-                <div className="flex-1">
-                    <div className="border-t border-black/40 pt-1">Received by</div>
-                </div>
-                <div className="flex-1">
-                    <div className="border-t border-black/40 pt-1">Paid by</div>
-                </div>
-                <div className="flex-1">
-                    <div className="border-t border-black/40 pt-1">Approved by</div>
-                </div>
-            </div>
+            {/* ⭐ Signature labels centred in their own cells, and the space above
+                each one is the space somebody signs in. */}
+            <table className="mt-6 w-full border-collapse text-[11px]">
+                <tbody>
+                    <tr>
+                        {['Received by', 'Paid by', 'Approved by'].map((role) => (
+                            <td key={role} className="w-1/3 px-2 pt-10 align-bottom">
+                                <div className="border-t border-black/45 pt-1 text-center text-black/70">{role}</div>
+                            </td>
+                        ))}
+                    </tr>
+                </tbody>
+            </table>
 
             {/* ⭐ The journal numbers are printed on the document itself. Somebody
                 auditing this a year from now should be able to walk from the paper
                 to the ledger without asking anyone where it went. */}
-            <p className="mt-4 text-xs text-black/50">
+            <p className="mt-3 text-[10px] text-black/50">
                 {claim.approved_journal && <>Expense posted {claim.approved_journal}. </>}
                 {claim.settlement_journal && <>Payment posted {claim.settlement_journal}. </>}
                 {claim.voucher_number && <>Voucher {claim.voucher_number}. </>}

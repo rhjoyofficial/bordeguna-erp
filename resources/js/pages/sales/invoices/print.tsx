@@ -128,11 +128,11 @@ export default function InvoicePrint({
                     </div>
                 </div>
 
-                <div className="official-document border-sidebar-border/70 dark:border-sidebar-border mx-auto w-full max-w-3xl rounded-xl border bg-white p-10 text-black dark:bg-white print:max-w-none print:rounded-none print:border-0 print:p-0">
+                <div className="official-document border-sidebar-border/70 dark:border-sidebar-border mx-auto w-full max-w-3xl rounded-xl border bg-white p-6 text-black dark:bg-white print:max-w-none print:rounded-none print:border-0 print:p-0">
                     <DocumentLetterhead issuer={issuer} title="Invoice" subtitle={invoice.invoice_number} />
 
                     {/* ── Invoice meta and the parties ───────────────────── */}
-                    <div className="mt-6 grid gap-6 sm:grid-cols-2">
+                    <div className="mt-4 grid gap-6 sm:grid-cols-2">
                         <div>
                             <p className="text-[11px] tracking-widest text-black/50 uppercase">Billed to</p>
                             <p className="mt-1 font-semibold">{invoice.customer?.name ?? 'Walk-in customer'}</p>
@@ -174,22 +174,22 @@ export default function InvoicePrint({
                     </div>
 
                     {/* ── The lines ──────────────────────────────────────── */}
-                    <table className="mt-8 w-full text-sm">
+                    <table className="mt-4 w-full border-collapse text-[11px]">
                         <thead>
-                            <tr className="border-y border-black/25 text-left">
-                                <th className="w-8 py-2 pr-2 font-medium">#</th>
-                                <th className="py-2 pr-2 font-medium">Description</th>
-                                <th className="py-2 pr-2 text-right font-medium">Qty</th>
-                                <th className="py-2 pr-2 text-right font-medium">Rate</th>
-                                <th className="py-2 pr-2 text-right font-medium">Discount</th>
-                                <th className="py-2 text-right font-medium">Amount</th>
+                            <tr className="bg-black/[0.03] text-left">
+                                <th className="w-8 border border-black/25 px-2 py-1 font-medium">#</th>
+                                <th className="border border-black/25 px-2 py-1 font-medium">Description</th>
+                                <th className="w-16 border border-black/25 px-2 py-1 text-right font-medium">Qty</th>
+                                <th className="w-24 border border-black/25 px-2 py-1 text-right font-medium">Rate</th>
+                                <th className="w-24 border border-black/25 px-2 py-1 text-right font-medium">Discount</th>
+                                <th className="w-28 border border-black/25 px-2 py-1 text-right font-medium">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
                             {invoice.lines.map((line, index) => (
-                                <tr key={line.id} className="border-b border-black/10 align-top">
-                                    <td className="py-2 pr-2 text-black/50">{index + 1}</td>
-                                    <td className="py-2 pr-2">
+                                <tr key={line.id} className="align-top">
+                                    <td className="border border-black/25 px-2 py-1 text-black/50">{index + 1}</td>
+                                    <td className="border border-black/25 px-2 py-1">
                                         <p>{line.product?.name ?? line.description ?? 'Item'}</p>
                                         {/* The SKU sits under the name, not instead of it: the
                                             customer reads words, the warehouse reads the code. */}
@@ -198,17 +198,17 @@ export default function InvoicePrint({
                                             <p className="text-xs text-black/60">{line.description}</p>
                                         )}
                                     </td>
-                                    <td className="py-2 pr-2 text-right">{quantity(line.quantity)}</td>
-                                    <td className="py-2 pr-2 text-right">{money(line.unit_price)}</td>
-                                    <td className="py-2 pr-2 text-right">{money(line.line_discount)}</td>
-                                    <td className="py-2 text-right">{money(line.line_net)}</td>
+                                    <td className="border border-black/25 px-2 py-1 text-right">{quantity(line.quantity)}</td>
+                                    <td className="border border-black/25 px-2 py-1 text-right">{money(line.unit_price)}</td>
+                                    <td className="border border-black/25 px-2 py-1 text-right">{money(line.line_discount)}</td>
+                                    <td className="border border-black/25 px-2 py-1 text-right">{money(line.line_net)}</td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
 
                     {/* ── Totals ─────────────────────────────────────────── */}
-                    <div className="mt-5 flex justify-end">
+                    <div className="mt-3 flex justify-end">
                         <dl className="w-72 text-sm">
                             <div className="flex justify-between py-1">
                                 <dt className="text-black/55">Subtotal</dt>
@@ -251,13 +251,13 @@ export default function InvoicePrint({
 
                     {/* ⭐ The amount in words. A figure can have a digit added in front
                         of it; a sentence cannot. */}
-                    <div className="mt-4 border-y border-black/15 py-2 text-sm">
+                    <div className="mt-3 border-y border-black/15 py-1.5 text-sm">
                         <span className="text-black/55">Amount in words: </span>
                         <span className="font-medium">{total_in_words}</span>
                     </div>
 
                     {/* ── How to pay, and anything the seller wants to say ─── */}
-                    <div className="mt-6 grid gap-6 text-sm sm:grid-cols-2">
+                    <div className="mt-4 grid gap-6 text-sm sm:grid-cols-2">
                         <div>
                             <p className="text-[11px] tracking-widest text-black/50 uppercase">Payment</p>
                             <p className="mt-1 text-black/70">
@@ -274,10 +274,18 @@ export default function InvoicePrint({
                     </div>
 
                     {/* ── Signatures ─────────────────────────────────────── */}
-                    <div className="mt-16 flex justify-between text-sm">
-                        <div className="w-56 border-t border-black/40 pt-2 text-center text-black/60">Received by</div>
-                        <div className="w-56 border-t border-black/40 pt-2 text-center text-black/60">For {issuer.name}</div>
-                    </div>
+                    <table className="mt-10 w-full border-collapse text-[11px]">
+                        <tbody>
+                            <tr>
+                                <td className="w-1/2 px-6 pt-10 align-bottom">
+                                    <div className="border-t border-black/45 pt-1 text-center text-black/70">Received by</div>
+                                </td>
+                                <td className="w-1/2 px-6 pt-10 align-bottom">
+                                    <div className="border-t border-black/45 pt-1 text-center text-black/70">For {issuer.name}</div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
 
                     <p className="doc-footer mt-8 border-t border-black/10 pt-2 text-center text-[10px] text-black/45">
                         This is a computer-generated invoice from {issuer.name}. {invoice.invoice_number}

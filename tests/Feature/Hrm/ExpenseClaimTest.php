@@ -528,3 +528,91 @@ it('never adds the same claim to a salary twice, even by two routes at once', fu
 
     expect(PayrollAdjustment::count())->toBe(1);
 });
+
+/**
+ * ⛔⛔ THE VOUCHER IS THE ONE PIECE OF PAPER THE EMPLOYEE KEEPS.
+ *
+ * The print route shipped on 7 Sep with no test at all, and it was handing the
+ * page `$claim->expenseAccount->label()` under BOTH `category` and
+ * `charged_to`. `Account::label()` is "6230 - Fuel and Conveyance", so the copy
+ * given to the person being paid printed a chart-of-accounts code - on the one
+ * document whose whole premise is that an employee never has to meet the chart.
+ *
+ * ⚠ The claim LIST in the same controller already had this right. This pins the
+ * two together so they cannot drift apart again: the category is what both
+ * audiences recognise, and the account stays available for the office.
+ */
+it('prints a settled claim with the category the employee chose, not the chart code', function () {
+    $this->actingAs($this->staffUser)
+        ->post('/hrm/my-expenses', [
+            'expense_category_id' => plantedCategory(),
+            'spent_on' => '2026-08-26',
+            'amount' => '450',
+            'purpose' => 'Courier to Savar',
+            'receipt' => UploadedFile::fake()->image('receipt.jpg'),
+        ])
+        ->assertSessionHasNoErrors();
+
+    $claim = ExpenseClaim::sole();
+    $this->actingAs($this->finance)->post("/hrm/expense-claims/{$claim->id}/approve")->assertSessionHasNoErrors();
+
+    // ⚠ Approved is not paid, and a voucher for money that has not moved is a
+    // document that says something untrue.
+    $this->actingAs($this->finance)
+        ->get("/hrm/expense-claims/{$claim->id}/print")
+        ->assertNotFound();
+
+    $this->actingAs($this->finance)
+        ->post("/hrm/expense-claims/{$claim->id}/settle", [
+            'method' => 'payment',
+            'expense_account_id' => $this->head->id,
+            'money_account_id' => $this->money->id,
+        ])
+        ->assertSessionHasNoErrors();
+
+    $response = $this->actingAs($this->finance)->get("/hrm/expense-claims/{$claim->id}/print");
+    $response->assertOk();
+
+    $printed = $response->viewData('page')['props']['claim'];
+    $categoryName = DB::table('expense_categories')->where('id', $claim->expense_category_id)->value('name');
+
+    expect($printed['category'])->toBe($categoryName)
+        ->and($printed['category'])->not->toContain($this->head->code)
+        // The account is still on the payload for the office, and the journal
+        // numbers are there so somebody can walk from the paper to the ledger.
+        ->and($printed['charged_to'])->toContain($this->head->code)
+        ->and($printed['employee'])->toContain('Rakib')
+        ->and($printed['method'])->toBe('Paid directly');
+});
+
+/**
+ * ⚠ `expense_category_id` is NULLABLE and was only added on 4 Sep 2026, so a
+ * claim raised before that carries no category at all. The voucher must still
+ * say what the money was charged to rather than printing a blank line, which is
+ * why the page falls back to the account.
+ *
+ * ⚠⚠ Checked against production on 7 Sep rather than assumed: all three live
+ * claims (EC-00001, EC-00003, EC-00004) DO carry a category today, and EC-00002
+ * no longer exists. The fallback is therefore untested by the live data, which
+ * is precisely why it is tested here.
+ */
+it('prints a legacy claim with no category, falling back to the account', function () {
+    $claim = claimFor($this->employee->id, $this->business->id, '450');
+    $claim->submitForApproval($this->staffUser);
+    $claim->approvalRequest->update(['status' => ApprovalStatus::Approved]);
+
+    $this->actingAs($this->finance)
+        ->post("/hrm/expense-claims/{$claim->id}/settle", [
+            'method' => 'payment',
+            'expense_account_id' => $this->head->id,
+            'money_account_id' => $this->money->id,
+        ])
+        ->assertSessionHasNoErrors();
+
+    $printed = $this->actingAs($this->finance)
+        ->get("/hrm/expense-claims/{$claim->id}/print")
+        ->viewData('page')['props']['claim'];
+
+    expect($printed['category'])->toBeNull()
+        ->and($printed['charged_to'])->toContain('6230');
+});
