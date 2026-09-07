@@ -76,9 +76,15 @@ import {
     Target,
     Globe,
 } from 'lucide-react';
+import { useSidebarScrollMemory } from '@/hooks/use-sidebar-scroll-memory';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
+    // Clicking a link in the sidebar used to throw it back to the top,
+    // because this app has no persistent layout and the whole tree remounts
+    // on every visit. See the hook for why it is fixed there.
+    const sidebarScroll = useSidebarScrollMemory<HTMLDivElement>();
+
     const {
         pendingApprovalsCount,
         canReviewApprovals,
@@ -557,7 +563,7 @@ export function AppSidebar() {
                 </SidebarMenu>
             </SidebarHeader>
 
-            <SidebarContent>
+            <SidebarContent ref={sidebarScroll.ref} onScroll={sidebarScroll.onScroll}>
                 <NavGroups groups={navGroups} />
             </SidebarContent>
 
