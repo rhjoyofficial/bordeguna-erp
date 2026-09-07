@@ -154,6 +154,81 @@
     font-family: var(--font-brand);
 }
 
+/*
+  ⭐⭐ THE PAPER, NOT THE APPLICATION.
+
+  Joy printed the EC-00004 reimbursement voucher to PDF on 7 Sep 2026 and the
+  sheet came out with the ERP's own breadcrumb bar and an "Add New" button
+  across the top of it. The cause was not a missing class on that page: THIS
+  APPLICATION HAD NO `@media print` RULE AT ALL. Printing worked only as far as
+  the `print:hidden` utilities somebody had remembered to type, screen by
+  screen, and nobody had ever typed one on the shell that wraps all of them.
+
+  ⚠⚠ ONE BLOCK, NOT A CLASS PER SCREEN. Eleven documents are printed out of
+  this ERP and every one sits inside the same shell. A rule sprinkled per page
+  is a rule that will be forgotten on the twelfth, and the person who finds out
+  is a customer holding the paper.
+*/
+@media print {
+    /*
+      ⚠ A4 AND PORTRAIT, DECLARED RATHER THAN LEFT TO THE BROWSER. The PDF that
+      started this was 612x792pt - US Letter - because that is Chrome's default
+      on this machine, while every pad, printer and file in this office is A4.
+      Portrait because a voucher and an invoice ARE portrait documents: the
+      letterhead's three columns and the ruled tables were laid out for that
+      width, and a landscape sheet reflows them into something nobody designed.
+      The print dialog can still override it; this only decides what happens
+      when nobody chooses.
+    */
+    @page {
+        size: A4 portrait;
+        margin: 12mm;
+    }
+
+    /*
+      ⛔ THE BACKGROUNDS ARE THE DOCUMENT HERE, not decoration. The shaded
+      header cells are what makes a ruled table read as a table, and the
+      OFFICE COPY / EMPLOYEE COPY watermark is the ONLY thing telling two
+      otherwise identical copies apart. Chrome drops both unless asked.
+    */
+    *,
+    *::before,
+    *::after {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /*
+      Everything that exists only to be clicked. `data-app-chrome` is put on the
+      shell's own furniture - the top bar, the sidebar and the assistant button -
+      so this list does not have to know their class names, which change every
+      time the interface is restyled.
+    */
+    [data-app-chrome],
+    [data-sonner-toaster],
+    #nprogress {
+        display: none !important;
+    }
+
+    /*
+      Screen furniture on the content area itself: a viewport-height minimum
+      that prints as a trailing blank page, a background, a rounded corner and a
+      shadow that a printer renders as a grey smear down one edge.
+    */
+    html,
+    body {
+        background: #fff !important;
+    }
+
+    main {
+        min-height: 0 !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background: #fff !important;
+    }
+}
+
 @theme {
     --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 

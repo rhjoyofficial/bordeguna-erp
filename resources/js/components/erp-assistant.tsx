@@ -297,6 +297,7 @@ export default function ErpAssistant() {
         <>
             <button
                 type="button"
+                data-app-chrome
                 onClick={() => setOpen((value) => !value)}
                 aria-label={'Open ' + aiName}
                 className="border-border bg-card text-card-foreground focus-visible:ring-ring fixed right-4 bottom-4 z-40 flex h-11 w-11 items-center justify-center rounded-full border shadow-lg transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:outline-none"

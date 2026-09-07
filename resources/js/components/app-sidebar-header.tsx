@@ -8,7 +8,13 @@ import { type BreadcrumbItem as BreadcrumbItemType } from '@/types';
 
 export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: BreadcrumbItemType[] }) {
     return (
-        <header className="bg-topbar text-topbar-foreground border-topbar-border flex h-16 shrink-0 items-center justify-between gap-2 border-b px-6 transition-[width,height,background-color,color] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 md:px-4">
+        // ⚠ `data-app-chrome` is what keeps the breadcrumb bar, the search box
+        // and the Add New button OFF a printed voucher. It printed across the
+        // top of one, once. The rule lives in app.css under @media print.
+        <header
+            data-app-chrome
+            className="bg-topbar text-topbar-foreground border-topbar-border flex h-16 shrink-0 items-center justify-between gap-2 border-b px-6 transition-[width,height,background-color,color] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 md:px-4"
+        >
             <div className="flex items-center gap-2">
                 <SidebarTrigger className="-ml-1" />
                 <Breadcrumbs breadcrumbs={breadcrumbs} />

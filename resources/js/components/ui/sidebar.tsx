@@ -163,6 +163,7 @@ const Sidebar = React.forwardRef<
             <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
                 <SheetContent
                     data-sidebar="sidebar"
+                    data-app-chrome
                     data-mobile="true"
                     className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
                     style={
@@ -182,6 +183,11 @@ const Sidebar = React.forwardRef<
     return (
         <div
             ref={ref}
+            // ⚠ The hook goes on the OUTER element, not on the panel inside it:
+            // this div also owns the spacer that reserves the sidebar's width, and
+            // hiding only the panel would print a document indented by an empty
+            // navigation column.
+            data-app-chrome
             className="group peer hidden text-sidebar-foreground md:block"
             data-state={state}
             data-collapsible={state === 'collapsed' ? collapsible : ''}
