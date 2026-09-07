@@ -16,6 +16,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Support\AmountInWords;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -265,10 +266,56 @@ class SalesInvoiceController extends Controller
     {
         $invoice->load(['customer', 'lines.product:id,name,sku']);
 
+        $outstanding = $invoice->outstanding()->toTaka();
+        $received = $invoice->receivedTotal()->toTaka();
+
         return Inertia::render('sales/invoices/print', [
-            'invoice' => $invoice,
-            'outstanding' => $invoice->outstanding()->toTaka(),
-            'received' => $invoice->receivedTotal()->toTaka(),
+            // ⛔⛔ SHAPED HERE, NOT HANDED OVER AS A MODEL. Passing the model
+            // serialised `invoice_date` as a Carbon ISO-8601 string, so the
+            // printed invoice read "2026-09-04T18:00:00.000000Z" for an invoice
+            // dated the 5th - an unreadable timestamp AND a day early, because
+            // the cast renders in UTC while the date is a Dhaka date. A
+            // commercial document showing the wrong date is not a styling
+            // problem. Dates are formatted once, here, in words that cannot be
+            // misread by a reader in any timezone.
+            'invoice' => [
+                'id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'invoice_date' => $invoice->invoice_date?->format('d M Y'),
+                'due_date' => $invoice->due_date?->format('d M Y'),
+                'is_overdue' => $invoice->due_date !== null
+                    && $invoice->due_date->isPast()
+                    && $invoice->outstanding()->isPositive(),
+                'subtotal' => (string) $invoice->subtotal,
+                'invoice_discount' => (string) $invoice->invoice_discount,
+                'tax_total' => (string) $invoice->tax_total,
+                'total' => (string) $invoice->total,
+                'note' => $invoice->note,
+                'customer' => $invoice->customer === null ? null : [
+                    'name' => $invoice->customer->name,
+                    'code' => $invoice->customer->code,
+                    'address' => $invoice->customer->address,
+                    'phone' => $invoice->customer->phone,
+                    'email' => $invoice->customer->email,
+                ],
+                'lines' => $invoice->lines->values()->map(fn ($line) => [
+                    'id' => $line->id,
+                    'description' => $line->description,
+                    'quantity' => (string) $line->quantity,
+                    'unit_price' => (string) $line->unit_price,
+                    'line_discount' => (string) $line->line_discount,
+                    'line_net' => (string) $line->line_net,
+                    'product' => $line->product === null ? null : [
+                        'name' => $line->product->name,
+                        'sku' => $line->product->sku,
+                    ],
+                ])->all(),
+            ],
+            'outstanding' => $outstanding,
+            'received' => $received,
+            // ⭐ The oldest anti-tampering device on a commercial document: a
+            // figure can have a digit added in front of it, a sentence cannot.
+            'total_in_words' => AmountInWords::taka($invoice->total),
             'issuer' => BusinessIdentity::forCurrent()->toArray(),
         ]);
     }
