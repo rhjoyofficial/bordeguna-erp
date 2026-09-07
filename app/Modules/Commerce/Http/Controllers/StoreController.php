@@ -7,6 +7,8 @@ use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Commerce\Enums\StoreStatus;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Commerce\Models\StoreDomain;
+use App\Modules\Commerce\Themes\Theme;
+use App\Modules\Commerce\Themes\ThemeRegistry;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Sales\Enums\CustomerType;
@@ -84,6 +86,7 @@ class StoreController extends Controller
                 ->map(fn (Brand $brand) => ['id' => $brand->id, 'name' => $brand->name]),
             'priceGroups' => $this->priceGroupOptions(),
             'availabilityPolicies' => $this->availabilityPolicyOptions(),
+            'themes' => $this->themeOptions(),
         ]);
     }
 
@@ -99,6 +102,15 @@ class StoreController extends Controller
             'referral_cookie_name' => ['nullable', 'string', 'max:60'],
             'webhook_signature_header' => ['nullable', 'string', 'max:60'],
             'coupon_storage_key' => ['nullable', 'string', 'max:60'],
+            // ⛔ Validated against the REGISTRY, not against a list of
+            // strings. A store stores only the key, so a key nothing is
+            // registered under is a storefront that cannot render at all - and
+            // it would fail at the visitor rather than here.
+            'theme_key' => ['nullable', 'string', 'max:40', function ($attribute, $value, $fail) {
+                if ($value !== null && $value !== '' && ! app(ThemeRegistry::class)->has($value)) {
+                    $fail('No theme is registered under that key.');
+                }
+            }],
             'features' => ['nullable', 'array'],
             'features.*' => ['boolean'],
         ]);
@@ -190,6 +202,12 @@ class StoreController extends Controller
             'price_group' => $store->price_group->value,
             'availability_policy' => $store->availability_policy->value,
             'theme_key' => $store->theme_key,
+            'theme_name' => $store->theme_key !== null && app(ThemeRegistry::class)->has($store->theme_key)
+                ? app(ThemeRegistry::class)->get($store->theme_key)->name()
+                // ⚠ Says so rather than showing a blank: a store pointing at a
+                // theme that is no longer registered is a real state after a
+                // deploy, and it must be visible.
+                : ($store->theme_key !== null ? $store->theme_key.' (not registered)' : null),
             'status' => $store->status->value,
             'status_label' => $store->status->label(),
             'can_go_live' => $store->canGoLive(),
@@ -207,6 +225,18 @@ class StoreController extends Controller
                 'is_primary' => $domain->is_primary,
             ])->values(),
         ];
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string, description: string}>
+     */
+    private function themeOptions(): array
+    {
+        return array_map(fn (Theme $theme) => [
+            'value' => $theme->key(),
+            'label' => $theme->name(),
+            'description' => $theme->description(),
+        ], app(ThemeRegistry::class)->all());
     }
 
     private function priceGroupOptions(): array

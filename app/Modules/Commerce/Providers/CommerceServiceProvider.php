@@ -3,6 +3,8 @@
 namespace App\Modules\Commerce\Providers;
 
 use App\Modules\Commerce\Sections\SectionCatalogue;
+use App\Modules\Commerce\Themes\BionicClassicTheme;
+use App\Modules\Commerce\Themes\ThemeRegistry;
 use App\Modules\Commerce\Sections\SectionTypeRegistry;
 use Illuminate\Support\ServiceProvider;
 
@@ -28,6 +30,16 @@ class CommerceServiceProvider extends ServiceProvider
         $this->app->singleton(SectionTypeRegistry::class, function () {
             $registry = new SectionTypeRegistry;
             $registry->registerMany(SectionCatalogue::all());
+
+            return $registry;
+        });
+
+        // Themes are CODE registered by key, never uploadable packages. An
+        // upload path means arbitrary templating executing inside the system
+        // that holds the company's books.
+        $this->app->singleton(ThemeRegistry::class, function () {
+            $registry = new ThemeRegistry;
+            $registry->register(new BionicClassicTheme);
 
             return $registry;
         });

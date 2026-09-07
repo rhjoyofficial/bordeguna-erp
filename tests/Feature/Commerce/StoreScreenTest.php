@@ -209,3 +209,47 @@ it('keeps a user with no commerce permission out', function () {
         ->get(route('commerce.stores.index'))
         ->assertForbidden();
 });
+
+it('lets a store choose a registered theme', function () {
+    $store = Store::create(['key' => 'bionic', 'name' => 'Bionic', 'order_prefix' => 'BNC']);
+
+    asUser($this->owner, $this->business)
+        ->put(route('commerce.stores.update', $store), [
+            'name' => 'Bionic',
+            'price_group' => 'retail',
+            'availability_policy' => 'status_based',
+            'theme_key' => 'bionic-classic',
+        ])
+        ->assertRedirect();
+
+    expect($store->fresh()->theme_key)->toBe('bionic-classic');
+});
+
+it('⛔ refuses a theme key nothing is registered under', function () {
+    $store = Store::create(['key' => 'bionic', 'name' => 'Bionic', 'order_prefix' => 'BNC']);
+
+    // A store stores only the key. A key with no theme behind it is a storefront
+    // that cannot render, and it would fail at the visitor rather than here.
+    asUser($this->owner, $this->business)
+        ->put(route('commerce.stores.update', $store), [
+            'name' => 'Bionic',
+            'price_group' => 'retail',
+            'availability_policy' => 'status_based',
+            'theme_key' => 'not-a-real-theme',
+        ])
+        ->assertSessionHasErrors('theme_key');
+
+    expect($store->fresh()->theme_key)->toBeNull();
+});
+
+it('says so when a store points at a theme that is no longer registered', function () {
+    $store = Store::create(['key' => 'bionic', 'name' => 'Bionic', 'order_prefix' => 'BNC']);
+    // Written directly, as a deploy that dropped a theme would leave it.
+    $store->forceFill(['theme_key' => 'retired-theme'])->save();
+
+    asUser($this->owner, $this->business)
+        ->get(route('commerce.stores.edit', $store))
+        ->assertOk()
+        // ⚠ Visible rather than blank: it is a real state after a deploy.
+        ->assertInertia(fn (Assert $page) => $page->where('store.theme_name', 'retired-theme (not registered)'));
+});

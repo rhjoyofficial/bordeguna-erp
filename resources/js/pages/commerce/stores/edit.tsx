@@ -25,6 +25,7 @@ interface Store {
     price_group: string;
     availability_policy: string;
     theme_key: string | null;
+    theme_name: string | null;
     status: string;
     status_label: string;
     can_go_live: boolean;
@@ -41,6 +42,10 @@ interface Option {
     label: string;
 }
 
+interface ThemeOption extends Option {
+    description: string;
+}
+
 /**
  * One store's settings, its domains, and the switch that puts it in front of
  * the public.
@@ -55,11 +60,13 @@ export default function StoreEdit({
     brands,
     priceGroups,
     availabilityPolicies,
+    themes,
 }: {
     store: Store;
     brands: { id: number; name: string }[];
     priceGroups: Option[];
     availabilityPolicies: Option[];
+    themes: ThemeOption[];
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Websites', href: '/commerce/stores' },
@@ -71,6 +78,7 @@ export default function StoreEdit({
         brand_id: store.brand_id ? String(store.brand_id) : '',
         price_group: store.price_group,
         availability_policy: store.availability_policy,
+        theme_key: store.theme_key ?? '',
         referral_cookie_name: store.referral_cookie_name ?? '',
         webhook_signature_header: store.webhook_signature_header ?? '',
         coupon_storage_key: store.coupon_storage_key ?? '',
@@ -102,6 +110,7 @@ export default function StoreEdit({
                         <h1 className="text-lg font-medium">{store.name}</h1>
                         <p className="text-muted-foreground text-sm">
                             Key <code>{store.key}</code> · prefix <code>{store.order_prefix}</code> · both permanent
+                            {store.theme_name && <> · theme <strong>{store.theme_name}</strong></>}
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -207,6 +216,30 @@ export default function StoreEdit({
                                 </SelectContent>
                             </Select>
                             <InputError message={settings.errors.availability_policy} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="theme_key">Theme</Label>
+                            <Select
+                                value={settings.data.theme_key}
+                                onValueChange={(v) => settings.setData('theme_key', v)}
+                            >
+                                <SelectTrigger id="theme_key">
+                                    <SelectValue placeholder="No theme chosen yet" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {themes.map((theme) => (
+                                        <SelectItem key={theme.value} value={theme.value}>
+                                            {theme.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-muted-foreground text-xs">
+                                A theme decides how the store looks, never what it says. The store cannot go live
+                                without one, because there would be nothing to render.
+                            </p>
+                            <InputError message={settings.errors.theme_key} />
                         </div>
 
                         <div className="border-sidebar-border/70 mt-2 flex flex-col gap-3 rounded-lg border p-3">
