@@ -270,7 +270,13 @@ export function AppSidebar() {
             ? [
                   {
                       label: 'Websites',
-                      items: [{ title: 'Stores', url: '/commerce/stores', icon: Globe }],
+                      items: [
+                          { title: 'Stores', url: '/commerce/stores', icon: Globe },
+                          // ⚠ Pages get their own entry rather than living only
+                          // inside a store, because the question an author has is
+                          // "where is that article", not "which store was it on".
+                          { title: 'Pages', url: '/commerce/pages', icon: FileText },
+                      ],
                   },
               ]
             : []),

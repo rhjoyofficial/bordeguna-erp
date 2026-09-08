@@ -11,6 +11,14 @@ namespace App\Modules\Commerce\Sections;
  * must show the same facts, and that is only true if one authority decides what
  * the page contains.
  *
+ * ⚠ `$requireComplete` is the difference between SAVING a section and
+ * PUBLISHING one. An author composing a page over an afternoon legitimately has
+ * a half-filled hero, so a save tolerates a missing required field and refuses
+ * everything malformed: a wrong type, an over-long string, an unknown key, a
+ * value outside an enum, a script tag. Completeness is then enforced once, at
+ * the publish gate, where it is the last thing between unfinished work and a
+ * visitor.
+ *
  * ⚠ Returns every problem rather than throwing on the first. An author fixing a
  * section one error at a time is an author who gives up, and the same rule the
  * payroll validation already follows.
@@ -20,9 +28,9 @@ class SectionPayloadValidator
     /**
      * @return array<int, string> a list of human-readable problems; empty means valid
      */
-    public function validate(SectionType $type, array $payload): array
+    public function validate(SectionType $type, array $payload, bool $requireComplete = true): array
     {
-        return $this->checkFields($type->fields, $payload, '');
+        return $this->checkFields($type->fields, $payload, '', $requireComplete);
     }
 
     public function passes(SectionType $type, array $payload): bool
@@ -34,7 +42,7 @@ class SectionPayloadValidator
      * @param  array<int, Field>  $fields
      * @return array<int, string>
      */
-    private function checkFields(array $fields, array $payload, string $path): array
+    private function checkFields(array $fields, array $payload, string $path, bool $requireComplete = true): array
     {
         $problems = [];
 
@@ -44,14 +52,14 @@ class SectionPayloadValidator
             $value = $payload[$field->name] ?? null;
 
             if (! $present || $value === null || $value === '' || $value === []) {
-                if ($field->required) {
+                if ($field->required && $requireComplete) {
                     $problems[] = "[{$where}] is required.";
                 }
 
                 continue;
             }
 
-            $problems = [...$problems, ...$this->checkValue($field, $value, $where)];
+            $problems = [...$problems, ...$this->checkValue($field, $value, $where, $requireComplete)];
         }
 
         // ⚠ An unknown key is a problem, not something to ignore. It usually
@@ -72,7 +80,7 @@ class SectionPayloadValidator
     /**
      * @return array<int, string>
      */
-    private function checkValue(Field $field, mixed $value, string $where): array
+    private function checkValue(Field $field, mixed $value, string $where, bool $requireComplete = true): array
     {
         return match ($field->type) {
             FieldType::Text, FieldType::RichText => $this->checkText($field, $value, $where),
@@ -81,7 +89,7 @@ class SectionPayloadValidator
             FieldType::Enumeration => $this->checkChoice($field, $value, $where),
             FieldType::Boolean => is_bool($value) ? [] : ["[{$where}] must be true or false."],
             FieldType::Integer, FieldType::Decimal => $this->checkNumber($field, $value, $where),
-            FieldType::ListOf => $this->checkList($field, $value, $where),
+            FieldType::ListOf => $this->checkList($field, $value, $where, $requireComplete),
         };
     }
 
@@ -173,7 +181,7 @@ class SectionPayloadValidator
     /**
      * @return array<int, string>
      */
-    private function checkList(Field $field, mixed $value, string $where): array
+    private function checkList(Field $field, mixed $value, string $where, bool $requireComplete = true): array
     {
         if (! is_array($value) || ! array_is_list($value)) {
             return ["[{$where}] must be a list."];
@@ -197,7 +205,7 @@ class SectionPayloadValidator
                 continue;
             }
 
-            $problems = [...$problems, ...$this->checkFields($field->of, $entry, "{$where}.{$index}")];
+            $problems = [...$problems, ...$this->checkFields($field->of, $entry, "{$where}.{$index}", $requireComplete)];
         }
 
         return $problems;
