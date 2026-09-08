@@ -1,10 +1,12 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
+import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
 interface Voucher {
+    id: number;
     voucher_number: string;
     spent_on: string | null;
     paid_from: string | null;
@@ -27,7 +29,7 @@ const money = (value: string | number) => Number(value).toLocaleString('en-BD', 
  */
 function VoucherCopy({ voucher, issuer, copyLabel }: { voucher: Voucher; issuer: Issuer; copyLabel: string }) {
     return (
-        <div className="official-document relative border-sidebar-border/70 dark:border-sidebar-border mx-auto w-full max-w-2xl rounded-xl border bg-white p-8 text-black dark:bg-white print:max-w-none print:rounded-none print:border-0 print:p-0">
+        <div className="official-document border-sidebar-border/70 dark:border-sidebar-border relative mx-auto w-full max-w-2xl rounded-xl border bg-white p-8 text-black dark:bg-white print:max-w-none print:rounded-none print:border-0 print:p-0">
             <DocumentLetterhead issuer={issuer} title="Payment voucher" subtitle={`No. ${voucher.voucher_number}`} />
 
             {/* ⭐ Joy, 7 Sep: the copy name is a WATERMARK, not a corner label. The
@@ -38,10 +40,7 @@ function VoucherCopy({ voucher, issuer, copyLabel }: { voucher: Voucher; issuer:
                 ⚠ `aria-hidden` and pointer-events-none: it is decoration over the
                 document, and it must never sit between a reader and the text or be
                 announced to a screen reader as content. */}
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden"
-            >
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden">
                 <span className="-rotate-30 text-5xl font-bold tracking-[0.2em] whitespace-nowrap text-black/[0.07] uppercase select-none">
                     {copyLabel}
                 </span>
@@ -148,8 +147,9 @@ export default function ExpensePrint({ voucher, issuer }: { voucher: Voucher; is
                     <Button variant="outline" size="sm" asChild>
                         <Link href="/purchasing/expenses">Back</Link>
                     </Button>
+                    <DownloadPdfButton type="expense-voucher" id={voucher.id} />
                     <Button size="sm" onClick={() => window.print()}>
-                        Print / save as PDF
+                        Print
                     </Button>
                 </div>
 

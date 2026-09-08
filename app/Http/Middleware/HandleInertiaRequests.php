@@ -6,6 +6,7 @@ use App\Modules\Foundation\Support\Ai\AssistantIdentity;
 use App\Modules\Foundation\Support\Ai\AssistantLanguages;
 use App\Modules\Foundation\Support\AssistantAvailability;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\DocumentPdf;
 use App\Modules\Foundation\Support\ErpAssistant;
 use App\Modules\Hrm\Models\Employee;
 use App\Support\ApprovalInbox;
@@ -153,6 +154,12 @@ class HandleInertiaRequests extends Middleware
             // than the permission so the two cannot drift apart unnoticed.
             'canManageReasons' => fn () => (bool) $request->user()?->can('inventory.catalog.manage'),
             'canManageOrganization' => fn () => (bool) $request->user()?->can('foundation.organization.manage'),
+            // ⚠ NOT a permission - a deployment fact. PDF export needs a
+            // browser installed in the image, and where there is none the
+            // Download PDF button is not offered at all rather than offered
+            // and failing. Memoised per process, so this is not a filesystem
+            // lookup on every page in the application.
+            'pdfExport' => fn () => app(DocumentPdf::class)->isAvailable(),
             'canManageEmployees' => fn () => (bool) $request->user()?->can('hrm.employees.manage'),
             'canManageScheduling' => fn () => (bool) $request->user()?->can('hrm.scheduling.manage'),
             'canManageAttendance' => fn () => (bool) $request->user()?->can('hrm.attendance.manage'),

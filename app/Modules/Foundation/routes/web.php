@@ -4,10 +4,11 @@ use App\Modules\Foundation\Http\Controllers\AttachmentController;
 use App\Modules\Foundation\Http\Controllers\BusinessSettingsController;
 use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
 use App\Modules\Foundation\Http\Controllers\CalendarController;
+use App\Modules\Foundation\Http\Controllers\ChangeRequestController;
 use App\Modules\Foundation\Http\Controllers\ChatController;
+use App\Modules\Foundation\Http\Controllers\DocumentPdfController;
 use App\Modules\Foundation\Http\Controllers\FileManagerController;
 use App\Modules\Foundation\Http\Controllers\NoteController;
-use App\Modules\Foundation\Http\Controllers\ChangeRequestController;
 use App\Modules\Foundation\Http\Controllers\OrganizationController;
 use App\Modules\Foundation\Http\Controllers\PrinterProfileController;
 use App\Modules\Foundation\Http\Controllers\RoleManagementController;
@@ -102,6 +103,13 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     Route::patch('settings/business', [BusinessSettingsController::class, 'update'])->name('business.update');
     Route::post('settings/business/logo', [BusinessSettingsController::class, 'uploadLogo'])->name('business.logo.store');
     Route::delete('settings/business/logo', [BusinessSettingsController::class, 'deleteLogo'])->name('business.logo.destroy');
+
+    // ── Download any document as a PDF (Joy, 8 Sep 2026) ────────────────────
+    // ⚠ NO PERMISSION OF ITS OWN, deliberately. It renders the document's own
+    // print page in a headless browser as the person who asked, so the gate on
+    // that page is the gate here. See DocumentPdfController.
+    Route::get('documents/{type}/{id}/pdf', DocumentPdfController::class)
+        ->whereNumber('id')->name('documents.pdf');
 
     // ── Printer profiles (Joy, 8 Sep 2026) ──────────────────────────────────
     // What the paper at each counter is. Same admin permission as the business

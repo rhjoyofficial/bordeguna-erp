@@ -1,4 +1,5 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
+import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -66,8 +67,9 @@ export default function PurchaseOrderPrint({
                     <Button variant="outline" size="sm" asChild>
                         <Link href={`/purchasing/purchase-orders/${order.id}`}>Back to the order</Link>
                     </Button>
+                    <DownloadPdfButton type="purchase-order" id={order.id} />
                     <Button size="sm" onClick={() => window.print()}>
-                        Print / save as PDF
+                        Print
                     </Button>
                 </div>
 

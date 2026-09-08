@@ -1,10 +1,12 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
+import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
 interface Voucher {
+    id: number;
     voucher_number: string;
     received_on: string | null;
     received_into: string | null;
@@ -136,8 +138,9 @@ export default function IncomeVoucherPrint({ voucher, issuer }: { voucher: Vouch
                     <Button variant="outline" size="sm" asChild>
                         <Link href="/accounting/other-income">Back</Link>
                     </Button>
+                    <DownloadPdfButton type="income-voucher" id={voucher.id} />
                     <Button size="sm" onClick={() => window.print()}>
-                        Print / save as PDF
+                        Print
                     </Button>
                 </div>
 

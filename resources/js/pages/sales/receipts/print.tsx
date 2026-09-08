@@ -1,4 +1,5 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
+import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -63,8 +64,9 @@ export default function ReceiptPrint({
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/sales/receipts/${receipt.id}/slip`}>Till roll</Link>
                         </Button>
+                        <DownloadPdfButton type="receipt" id={receipt.id} />
                         <Button size="sm" onClick={() => window.print()}>
-                            Print / save as PDF
+                            Print
                         </Button>
                     </div>
                 </div>

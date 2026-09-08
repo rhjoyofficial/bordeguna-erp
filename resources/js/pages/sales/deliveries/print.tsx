@@ -1,4 +1,5 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
+import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -45,8 +46,9 @@ export default function DeliveryPrint({ delivery, issuer }: { delivery: Delivery
                     <Button variant="outline" size="sm" asChild>
                         <Link href="/sales/deliveries">Back to deliveries</Link>
                     </Button>
+                    <DownloadPdfButton type="delivery" id={delivery.id} />
                     <Button size="sm" onClick={() => window.print()}>
-                        Print / save as PDF
+                        Print
                     </Button>
                 </div>
 

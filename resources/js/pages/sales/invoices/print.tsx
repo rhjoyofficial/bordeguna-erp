@@ -1,4 +1,5 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
+import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -119,11 +120,10 @@ export default function InvoicePrint({
                             where "Save as PDF" lives, and it is the route that shapes
                             Bengali product names correctly - a server-rendered PDF here
                             would draw the glyphs but not join the conjuncts. */}
-                        <span className="text-muted-foreground hidden text-xs sm:inline">
-                            Choose “Save as PDF” in the dialog to download
-                        </span>
+                        <span className="text-muted-foreground hidden text-xs sm:inline">Choose “Save as PDF” in the dialog to download</span>
+                        <DownloadPdfButton type="invoice" id={invoice.id} />
                         <Button size="sm" onClick={() => window.print()}>
-                            Print / Download PDF
+                            Print
                         </Button>
                     </div>
                 </div>

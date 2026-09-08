@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AllowDocumentRenderToken;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Modules\Foundation\Exceptions\ApprovalAlreadyDecidedException;
@@ -60,6 +61,13 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $middleware->web(append: [
+            // ⚠⚠ FIRST IN THIS LIST AND THAT IS LOAD BEARING. It runs after the
+            // session has started, because it puts the business there for
+            // ResolveCurrentBusiness to find, and BEFORE EnsureUserIsActive
+            // below, so a render token belonging to a deactivated user is
+            // refused exactly as that user's own session would be. It does
+            // nothing at all unless a `render_token` is on the query string.
+            AllowDocumentRenderToken::class,
             // C-SEC-1. A deactivated user is rejected on every request, not
             // only at login - a session must not outlive the decision to
             // revoke it. Global for the same reason as the W3 guard below.
@@ -89,6 +97,13 @@ return Application::configure(basePath: dirname(__DIR__))
             EncryptCookies::class,
             StartSession::class,
             ShareErrorsFromSession::class,
+            // ⚠⚠ AFTER THE SESSION, BEFORE AUTHENTICATION, and it must be named
+            // HERE rather than only in the web group. Middleware missing from
+            // this list keeps its own position while prioritised middleware jump
+            // ahead of it - so `auth` ran first, saw a guest, and redirected
+            // every PDF render to the login page. Nothing about appending it to
+            // the group first had any effect at all.
+            AllowDocumentRenderToken::class,
             AuthenticatesRequests::class,
             ResolveCurrentBusiness::class,
             // W3: must run AFTER the business is resolved, or it compares the

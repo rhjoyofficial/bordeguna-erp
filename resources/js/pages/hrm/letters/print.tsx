@@ -1,4 +1,5 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
+import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -74,8 +75,8 @@ function Body({ type, data, issuer }: { type: string; data: LetterData; issuer: 
             <>
                 <p>{salutation}</p>
                 <p>
-                    We are pleased to confirm your employment as <strong>{data.designation ?? 'a member of our team'}</strong> with effect
-                    from <strong>{data.confirmation_date}</strong>, on the satisfactory completion of your probation.
+                    We are pleased to confirm your employment as <strong>{data.designation ?? 'a member of our team'}</strong> with effect from{' '}
+                    <strong>{data.confirmation_date}</strong>, on the satisfactory completion of your probation.
                 </p>
                 <p>All other terms of your appointment remain unchanged. We wish you continued success with {issuer.name}.</p>
             </>
@@ -87,9 +88,8 @@ function Body({ type, data, issuer }: { type: string; data: LetterData; issuer: 
             <>
                 <p>{salutation}</p>
                 <p>
-                    In recognition of your performance, your remuneration has been revised with effect from{' '}
-                    <strong>{data.effective_from}</strong>. Your gross monthly remuneration is now{' '}
-                    <strong>BDT {money(data.new_gross)}</strong>.
+                    In recognition of your performance, your remuneration has been revised with effect from <strong>{data.effective_from}</strong>.
+                    Your gross monthly remuneration is now <strong>BDT {money(data.new_gross)}</strong>.
                 </p>
                 <p>We thank you for your contribution and wish you continued success.</p>
             </>
@@ -103,7 +103,9 @@ function Body({ type, data, issuer }: { type: string; data: LetterData; issuer: 
                 This is to certify that <strong>{data.employee_name}</strong> (employee code {data.employee_code})
                 {data.still_employed ? ' has been employed' : ' was employed'} with {issuer.name} as{' '}
                 <strong>{data.designation ?? 'a member of our team'}</strong> from <strong>{data.join_date}</strong>
-                {data.still_employed ? ' to date.' : (
+                {data.still_employed ? (
+                    ' to date.'
+                ) : (
                     <>
                         {' '}
                         to <strong>{data.end_date}</strong>.
@@ -126,8 +128,9 @@ export default function LetterPrint({ letter, issuer }: LetterProps) {
             <Head title={letter.reference_no} />
             <div className="flex flex-col gap-4 p-4">
                 <div className="flex items-center gap-2 print:hidden">
+                    <DownloadPdfButton type="hr-letter" id={letter.id} />
                     <Button size="sm" onClick={() => window.print()}>
-                        Print / save as PDF
+                        Print
                     </Button>
                 </div>
 

@@ -62,6 +62,34 @@ RUN apk add --no-cache \
 # dompdf renders the payslip PDFs and needs gd; bcmath keeps money arithmetic
 # honest; intl is required by the framework's formatting.
 
+# ---------- the browser that exports documents as PDF ----------
+#
+# ⭐⭐ WHY A WHOLE BROWSER IS IN THIS IMAGE. dompdf, which is already here for
+# payslips, writes Bengali UNSHAPED - measured 8 Sep 2026 by rendering "ক্ষ কি"
+# and reading the content stream: six codepoints in, six glyphs out, logical
+# order, so the conjunct becomes three letters with a visible hasant and the
+# vowel lands on the wrong side. Chromium given the same text and the same font
+# emits FOUR glyphs, one of them a single conjunct. Every customer-facing
+# document in this ERP can carry a Bengali product or customer name, so this is
+# the difference between a correct document and a wrong one.
+#
+# ⚠ It prints the application's OWN pages over HTTP, which is why there is no
+# second set of PDF templates to keep in step with the screen.
+#
+# ⚠ NOT REQUIRED FOR THE APPLICATION TO RUN. `DocumentPdf::isAvailable()` looks
+# for the binary and the Download PDF button is simply not offered without it.
+# If this layer ever has to be removed, nothing else breaks.
+#
+# Verify after a build:  docker compose run --rm app chromium-browser --version
+RUN apk add --no-cache \
+        chromium \
+        nss \
+        freetype \
+        harfbuzz \
+        ca-certificates \
+        ttf-freefont \
+    && rm -rf /var/cache/apk/*
+
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html

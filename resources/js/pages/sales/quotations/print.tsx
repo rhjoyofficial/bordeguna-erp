@@ -1,4 +1,5 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
+import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -44,8 +45,9 @@ export default function QuotationPrint({ quotation, issuer }: { quotation: Quote
                     <Button variant="outline" size="sm" asChild>
                         <Link href="/sales/quotations">Back to quotations</Link>
                     </Button>
+                    <DownloadPdfButton type="quotation" id={quotation.id} />
                     <Button size="sm" onClick={() => window.print()}>
-                        Print / save as PDF
+                        Print
                     </Button>
                 </div>
 
