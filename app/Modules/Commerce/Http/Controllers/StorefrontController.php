@@ -8,6 +8,7 @@ use App\Modules\Commerce\Models\Page;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Commerce\Models\StoreProduct;
 use App\Modules\Commerce\Support\StorefrontPage;
+use App\Modules\Commerce\Support\StorefrontSeo;
 use App\Modules\Commerce\Themes\Theme;
 use App\Modules\Commerce\Themes\ThemeRegistry;
 use Illuminate\Http\Request;
@@ -47,7 +48,7 @@ class StorefrontController
         // address of a draft is still a member of the public.
         abort_if($page === null || ! $page->isPublished(), 404);
 
-        return $this->render($store, $page);
+        return $this->render($request, $store, $page);
     }
 
     /**
@@ -71,15 +72,26 @@ class StorefrontController
 
         $theme = $this->theme($store);
 
+        $product = StorefrontPage::present($store, $row);
+
         return view('storefront.product', [
             'store' => $store,
             'theme' => $theme,
-            'product' => StorefrontPage::present($store, $row),
-            'title' => $row->displayTitle(),
+            'product' => $product,
+            'seo' => [
+                'title' => StorefrontSeo::title($store, null, $row->displayTitle()),
+                'description' => $row->summary_override ?: StorefrontSeo::description($store, null),
+                'canonical' => StorefrontSeo::canonical($store, $request),
+                'robots' => StorefrontSeo::robots($store),
+                'schemas' => array_merge(
+                    StorefrontSeo::organisation($store, $request),
+                    [StorefrontSeo::product($store, $product, $request)],
+                ),
+            ],
         ]);
     }
 
-    private function render(Store $store, Page $page): View
+    private function render(Request $request, Store $store, Page $page): View
     {
         $theme = $this->theme($store);
 
@@ -88,7 +100,13 @@ class StorefrontController
             'theme' => $theme,
             'page' => $page,
             'sections' => StorefrontPage::sectionsFor($store, $page, $theme),
-            'title' => $page->title,
+            'seo' => [
+                'title' => StorefrontSeo::title($store, $page),
+                'description' => StorefrontSeo::description($store, $page),
+                'canonical' => StorefrontSeo::canonical($store, $request),
+                'robots' => StorefrontSeo::robots($store),
+                'schemas' => StorefrontSeo::organisation($store, $request),
+            ],
         ]);
     }
 

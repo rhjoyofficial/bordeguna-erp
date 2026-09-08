@@ -174,6 +174,41 @@ it('lets a manager configure a store but not publish one', function () {
     expect($store->fresh()->status)->toBe(StoreStatus::Draft);
 });
 
+it('keeps making a shop findable behind the same permission as publishing it', function () {
+    $store = Store::create(['key' => 'bionic', 'name' => 'Bionic', 'order_prefix' => 'BNC']);
+
+    // ⭐⭐ Being findable by the whole internet is the same class of act as going
+    // live, and it is the harder of the two to undo: a preview shop indexed
+    // under the company's name is removed by asking a third party, long after
+    // the wrong URLs have entered search results.
+    asUser($this->manager, $this->business)
+        ->post(route('commerce.stores.indexing', $store), ['is_indexable' => true])
+        ->assertForbidden();
+
+    expect($store->fresh()->is_indexable)->toBeFalse();
+
+    asUser($this->owner, $this->business)
+        ->post(route('commerce.stores.indexing', $store), ['is_indexable' => true])
+        ->assertRedirect();
+
+    expect($store->fresh()->is_indexable)->toBeTrue();
+});
+
+it('cannot be made findable by a settings form, because it is not a field', function () {
+    // ⚠ `is_indexable` is deliberately absent from $fillable. A shop must not
+    // become visible to search engines as a side effect of somebody saving an
+    // unrelated setting.
+    $store = Store::create(['key' => 'bionic', 'name' => 'Bionic', 'order_prefix' => 'BNC']);
+
+    asUser($this->owner, $this->business)
+        ->put(route('commerce.stores.update', $store), [
+            'name' => 'Bionic BD', 'availability_policy' => 'status_based', 'is_indexable' => true,
+        ])
+        ->assertRedirect();
+
+    expect($store->fresh()->is_indexable)->toBeFalse();
+});
+
 it('will not remove the primary domain out from under a live store', function () {
     $store = Store::create(['key' => 'bionic', 'name' => 'Bionic', 'order_prefix' => 'BNC']);
     $store->update(['theme_key' => 'bionic-classic']);

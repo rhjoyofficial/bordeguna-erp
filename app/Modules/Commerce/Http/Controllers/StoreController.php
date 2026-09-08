@@ -123,6 +123,11 @@ class StoreController extends Controller
             // means RETAIL, decided in one place by the price resolver.
             'price_group_id' => ['nullable', 'integer', Rule::exists('price_groups', 'id')->where('business_id', $this->businessId())],
             'availability_policy' => ['required', Rule::enum(AvailabilityPolicy::class)],
+            // Fallbacks a page uses when it sets none of its own. ⚠ NOT
+            // indexability - see `indexing()`, which is a different decision
+            // behind a different permission.
+            'seo_title' => ['nullable', 'string', 'max:255'],
+            'seo_description' => ['nullable', 'string', 'max:320'],
             'referral_cookie_name' => ['nullable', 'string', 'max:60'],
             'webhook_signature_header' => ['nullable', 'string', 'max:60'],
             'coupon_storage_key' => ['nullable', 'string', 'max:60'],
@@ -235,6 +240,31 @@ class StoreController extends Controller
         return back()->with('success', 'Store taken offline.');
     }
 
+    /**
+     * Whether search engines may index this shop.
+     *
+     * ⭐⭐ BEHIND `commerce.stores.publish`, NOT the ordinary settings
+     * permission, because it is the same class of act as taking a store live:
+     * the moment the whole internet may find it. And it is the harder of the two
+     * to undo - a preview shop indexed under the company's name is removed by
+     * asking a third party, long after the wrong URLs entered search results.
+     *
+     * ⚠ `forceFill`, because `is_indexable` is deliberately not fillable: this
+     * is a decision somebody takes, never a field a settings form posts.
+     */
+    public function indexing(Request $request, Store $store): RedirectResponse
+    {
+        $this->authorize('commerce.stores.publish');
+
+        $data = $request->validate(['is_indexable' => ['required', 'boolean']]);
+
+        $store->forceFill(['is_indexable' => $data['is_indexable']])->save();
+
+        return back()->with('success', $data['is_indexable']
+            ? 'Search engines may now index this shop.'
+            : 'This shop is hidden from search engines again. Anything already indexed has to be removed through the search engine itself.');
+    }
+
     private function summary(Store $store): array
     {
         return [
@@ -254,6 +284,9 @@ class StoreController extends Controller
                 // theme that is no longer registered is a real state after a
                 // deploy, and it must be visible.
                 : ($store->theme_key !== null ? $store->theme_key.' (not registered)' : null),
+            'seo_title' => $store->seo_title,
+            'seo_description' => $store->seo_description,
+            'is_indexable' => $store->is_indexable,
             'status' => $store->status->value,
             'status_label' => $store->status->label(),
             'can_go_live' => $store->canGoLive(),

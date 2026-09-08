@@ -26,6 +26,9 @@ interface Store {
        real answer rather than a missing one. */
     price_group_id: number | null;
     price_group_name: string;
+    seo_title: string | null;
+    seo_description: string | null;
+    is_indexable: boolean;
     availability_policy: string;
     theme_key: string | null;
     theme_name: string | null;
@@ -114,6 +117,8 @@ export default function StoreEdit({
         name: store.name,
         brand_id: store.brand_id ? String(store.brand_id) : '',
         price_group_id: store.price_group_id,
+        seo_title: store.seo_title ?? '',
+        seo_description: store.seo_description ?? '',
         availability_policy: store.availability_policy,
         theme_key: store.theme_key ?? '',
         referral_cookie_name: store.referral_cookie_name ?? '',
@@ -164,6 +169,19 @@ export default function StoreEdit({
                             <Link href={`/commerce/stores/${store.id}/catalogue`}>Catalogue</Link>
                         </Button>
                         <Badge variant={store.status === 'live' ? 'default' : 'secondary'}>{store.status_label}</Badge>
+                        {/* ⚠ Said out loud. A shop that is live but invisible to
+                            search engines is a normal, deliberate state during a
+                            cutover, and somebody looking at it should not have to
+                            guess which of the two it is in. */}
+                        <Badge variant={store.is_indexable ? 'default' : 'outline'}>{store.is_indexable ? 'Indexable' : 'Hidden from search'}</Badge>
+                        <Button
+                            variant="outline"
+                            onClick={() =>
+                                router.post(`/commerce/stores/${store.id}/indexing`, { is_indexable: !store.is_indexable }, { preserveScroll: true })
+                            }
+                        >
+                            {store.is_indexable ? 'Hide from search engines' : 'Allow search engines'}
+                        </Button>
                         {store.status === 'live' ? (
                             <Button
                                 variant="outline"

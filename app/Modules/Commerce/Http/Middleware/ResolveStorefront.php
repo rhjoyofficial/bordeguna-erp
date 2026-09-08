@@ -64,6 +64,10 @@ class ResolveStorefront
 
         $request->attributes->set('storefront_store', $store);
 
+        if ($redirect = $this->canonicalRedirect($request, $store)) {
+            return $redirect;
+        }
+
         $name = (string) $request->route()?->getName();
 
         if ($name === self::SHARED_ROUTE || str_starts_with($name, 'storefront.')) {
@@ -80,6 +84,39 @@ class ResolveStorefront
         // controller may return a View. Laravel converts that for a route;
         // nothing converts it here.
         return response(app(StorefrontController::class)->page($request));
+    }
+
+    /**
+     * One shop, one address.
+     *
+     * ⛔⛔ THE DEFECT THIS PREVENTS WAS MEASURED ON A LIVE SHOP. `www.laladia.com`
+     * served the ENTIRE site at 200 - not a redirect, a second complete copy,
+     * each page claiming to be canonical because the canonical tag was built
+     * from the REQUESTED host. That is the mechanism behind the "alternate page
+     * with proper canonical" exclusions in Search Console.
+     *
+     * ⚠ GET and HEAD only. A 301 on a POST may drop the body, and a dropped body
+     * on a shop is a lost order. There is no checkout in Phase 1, and the rule
+     * still goes in now rather than after there is one.
+     */
+    private function canonicalRedirect(Request $request, Store $store): ?Response
+    {
+        if (! $request->isMethodSafe()) {
+            return null;
+        }
+
+        $primary = $store->domains()->where('is_primary', true)->value('hostname');
+
+        if ($primary === null || $primary === $request->getHost()) {
+            return null;
+        }
+
+        $query = $request->getQueryString();
+
+        return redirect(
+            'https://'.$primary.$request->getPathInfo().($query === null ? '' : '?'.$query),
+            301,
+        );
     }
 
     /**

@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Commerce\Http\Controllers\StorefrontController;
+use App\Modules\Commerce\Http\Controllers\StorefrontSeoController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -25,6 +26,12 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::middleware('web')->group(function () {
+    // ⛔ ROUTES, NEVER FILES. A static robots.txt was copied into a forked shop
+    // and told crawlers its sitemap lived at the other shop's domain. See
+    // StorefrontSeoController.
+    Route::get('/robots.txt', [StorefrontSeoController::class, 'robots'])->name('storefront.robots');
+    Route::get('/sitemap.xml', [StorefrontSeoController::class, 'sitemap'])->name('storefront.sitemap');
+
     Route::get('/products/{slug}', [StorefrontController::class, 'product'])
         ->where('slug', '[a-z0-9-]+')
         ->name('storefront.product');

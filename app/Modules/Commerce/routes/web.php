@@ -73,6 +73,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('commerce')->name('commer
     Route::middleware('can:commerce.stores.publish')->group(function () {
         Route::post('stores/{store}/publish', [StoreController::class, 'publish'])
             ->whereNumber('store')->name('stores.publish');
+        // ⭐ Same permission as publishing, deliberately: being findable by the
+        // whole internet is the same kind of decision as going live, and it is
+        // the harder of the two to undo.
+        Route::post('stores/{store}/indexing', [StoreController::class, 'indexing'])
+            ->whereNumber('store')->name('stores.indexing');
         Route::post('stores/{store}/unpublish', [StoreController::class, 'unpublish'])
             ->whereNumber('store')->name('stores.unpublish');
     });

@@ -40,6 +40,8 @@ class Store extends Model
         'price_group_id',
         'availability_policy',
         'theme_key',
+        'seo_title',
+        'seo_description',
         'features',
         'referral_cookie_name',
         'webhook_signature_header',
@@ -56,6 +58,7 @@ class Store extends Model
             'status' => StoreStatus::class,
             'availability_policy' => AvailabilityPolicy::class,
             'features' => 'array',
+            'is_indexable' => 'boolean',
         ];
     }
 
@@ -68,6 +71,11 @@ class Store extends Model
      */
     protected $attributes = [
         'status' => 'draft',
+        // ⚠ Invisible until somebody says otherwise, mirrored from the column
+        // default per this repository's standing rule: a default only applies
+        // once the row is written, and code asking a fresh Store whether it is
+        // indexable must not read null.
+        'is_indexable' => false,
         'availability_policy' => 'status_based',
     ];
 

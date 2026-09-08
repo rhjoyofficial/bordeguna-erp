@@ -13,13 +13,30 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $title ? $title.' | '.$store->name : $store->name }}</title>
+    <title>{{ $seo['title'] }}</title>
 
-    {{-- ⛔ A preview hostname must never be indexed. Slice 1.9 makes this a real
-         setting; until then the safe answer is the one that cannot embarrass
-         anybody, because a preview shop indexed under the company's name is very
-         hard to undo. --}}
-    <meta name="robots" content="noindex, nofollow">
+    @if ($seo['description'])
+        <meta name="description" content="{{ $seo['description'] }}">
+    @endif
+
+    {{-- ⚠⚠ THE CANONICAL CARRIES THE QUERY STRING AND THE PRIMARY HOSTNAME. Built
+         from the path alone it told search engines that `?page=4` was page 1;
+         built from the REQUESTED host it let two hostnames each claim to be
+         canonical, which is how one shop became two complete copies of itself in
+         an index. Both were measured on a live shop on 5 September. --}}
+    <link rel="canonical" href="{{ $seo['canonical'] }}">
+
+    {{-- ⛔ A shop is `noindex` until somebody deliberately makes it indexable. A
+         preview shop in a search index is very hard to undo: removing it is a
+         request to a third party, not a change anybody here can make. --}}
+    <meta name="robots" content="{{ $seo['robots'] }}">
+
+    @foreach ($seo['schemas'] as $schema)
+        {{-- ⛔ Nothing here is claimed that the page does not have: no rating on
+             an unreviewed product, no availability this system does not hold for
+             the web, no address the business never entered. --}}
+        <script type="application/ld+json">{!! json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
+    @endforeach
 
     {{-- ⚠ Self-hosted, and the same face the ERP's own documents use. A shop and
          its paperwork disagreeing about typography reads as two companies. --}}
