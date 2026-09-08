@@ -5,8 +5,9 @@ namespace App\Modules\Commerce\Models;
 use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Commerce\Enums\StoreStatus;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Scopes\BusinessScope;
 use App\Modules\Inventory\Models\Brand;
-use App\Modules\Sales\Enums\CustomerType;
+use App\Modules\Sales\Models\PriceGroup;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -36,7 +37,7 @@ class Store extends Model
         'key',
         'name',
         'order_prefix',
-        'price_group',
+        'price_group_id',
         'availability_policy',
         'theme_key',
         'features',
@@ -54,7 +55,6 @@ class Store extends Model
         return [
             'status' => StoreStatus::class,
             'availability_policy' => AvailabilityPolicy::class,
-            'price_group' => CustomerType::class,
             'features' => 'array',
         ];
     }
@@ -68,9 +68,40 @@ class Store extends Model
      */
     protected $attributes = [
         'status' => 'draft',
-        'price_group' => 'retail',
         'availability_policy' => 'status_based',
     ];
+
+    /**
+     * ⚠⚠ NULL IS NOT "UNSET", IT IS RETAIL. `customers` already works this way
+     * and the mapping from "no group" to RETAIL lives in ONE place, the
+     * selling-price resolver. A default here would be a second opinion, and two
+     * opinions about what a visitor pays is how a shop charges the wrong amount
+     * without anybody seeing an error.
+     */
+    public function priceGroup(): BelongsTo
+    {
+        return $this->belongsTo(PriceGroup::class, 'price_group_id');
+    }
+
+    /**
+     * This store's own image library. ⚠ Store-scoped by construction, which is
+     * the point: a section or a product picture may only ever come from here,
+     * so one shop cannot end up showing another's photography.
+     */
+    public function media(): HasMany
+    {
+        return $this->hasMany(StoreMedia::class);
+    }
+
+    /**
+     * The catalogue published to this store. ⛔ Publishing does not fork the
+     * product master: a row here says a product APPEARS here and how it is
+     * presented, never what it is or what it costs.
+     */
+    public function products(): HasMany
+    {
+        return $this->hasMany(StoreProduct::class);
+    }
 
     public function brand(): BelongsTo
     {
@@ -116,7 +147,7 @@ class Store extends Model
         }
 
         return self::query()
-            ->withoutGlobalScope(\App\Modules\Foundation\Scopes\BusinessScope::class)
+            ->withoutGlobalScope(BusinessScope::class)
             ->find($domain->store_id);
     }
 

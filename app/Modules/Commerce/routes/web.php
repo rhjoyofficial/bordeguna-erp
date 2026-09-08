@@ -4,6 +4,7 @@ use App\Modules\Commerce\Http\Controllers\MediaController;
 use App\Modules\Commerce\Http\Controllers\MediaServeController;
 use App\Modules\Commerce\Http\Controllers\PageController;
 use App\Modules\Commerce\Http\Controllers\PageSectionController;
+use App\Modules\Commerce\Http\Controllers\StoreCatalogueController;
 use App\Modules\Commerce\Http\Controllers\StoreController;
 use Illuminate\Support\Facades\Route;
 
@@ -47,6 +48,28 @@ Route::middleware(['web', 'auth', 'business'])->prefix('commerce')->name('commer
 
     // ⛔ Owner only. Publishing points a real domain at real software and starts
     // taking money from the public.
+    // ── The catalogue: which products this shop sells (slice 1.7) ───────────
+    // ⚠ Read with the store, written with content management - the same pair
+    // the pages screen uses. Publishing a product is editorial work, not the
+    // Owner-only act of taking a whole store live.
+    Route::middleware('can:commerce.stores.view')->group(function () {
+        Route::get('stores/{store}/catalogue', [StoreCatalogueController::class, 'index'])
+            ->whereNumber('store')->name('stores.catalogue');
+    });
+
+    Route::middleware('can:commerce.content.manage')->group(function () {
+        Route::post('stores/{store}/catalogue', [StoreCatalogueController::class, 'store'])
+            ->whereNumber('store')->name('stores.catalogue.store');
+        Route::put('stores/{store}/catalogue/{storeProduct}', [StoreCatalogueController::class, 'update'])
+            ->whereNumber('store')->whereNumber('storeProduct')->name('stores.catalogue.update');
+        Route::post('stores/{store}/catalogue/{storeProduct}/unpublish', [StoreCatalogueController::class, 'unpublish'])
+            ->whereNumber('store')->whereNumber('storeProduct')->name('stores.catalogue.unpublish');
+        Route::post('stores/{store}/catalogue/{storeProduct}/publish', [StoreCatalogueController::class, 'publishAgain'])
+            ->whereNumber('store')->whereNumber('storeProduct')->name('stores.catalogue.publish');
+        Route::delete('stores/{store}/catalogue/{storeProduct}', [StoreCatalogueController::class, 'destroy'])
+            ->whereNumber('store')->whereNumber('storeProduct')->name('stores.catalogue.destroy');
+    });
+
     Route::middleware('can:commerce.stores.publish')->group(function () {
         Route::post('stores/{store}/publish', [StoreController::class, 'publish'])
             ->whereNumber('store')->name('stores.publish');

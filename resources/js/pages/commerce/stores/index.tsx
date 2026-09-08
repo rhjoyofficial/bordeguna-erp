@@ -21,7 +21,7 @@ interface Store {
     name: string;
     order_prefix: string;
     brand_name: string | null;
-    price_group: string;
+    price_group_name: string;
     availability_policy: string;
     theme_key: string | null;
     status: string;
@@ -35,6 +35,16 @@ interface Option {
     label: string;
 }
 
+/**
+ * ⚠ A price group is identified by its row id, not by a code string. `Option`
+ * above stays as it is because the theme and availability pickers are genuinely
+ * keyed by string, and widening it for everybody would hide the difference.
+ */
+interface PriceGroupOption {
+    value: number;
+    label: string;
+}
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Websites', href: '/commerce/stores' },
     { title: 'Stores', href: '/commerce/stores' },
@@ -45,7 +55,7 @@ const EMPTY = {
     name: '',
     order_prefix: '',
     brand_id: '' as string,
-    price_group: 'retail',
+    price_group_id: null as number | null,
     availability_policy: 'status_based',
 };
 
@@ -67,7 +77,7 @@ export default function StoresIndex({
 }: {
     stores: Store[];
     brands: { id: number; name: string }[];
-    priceGroups: Option[];
+    priceGroups: PriceGroupOption[];
     availabilityPolicies: Option[];
 }) {
     const { data, setData, post, errors, processing, reset } = useForm(EMPTY);
@@ -147,13 +157,22 @@ export default function StoresIndex({
 
                         <div className="grid gap-2">
                             <Label htmlFor="price_group">Price group</Label>
-                            <Select value={data.price_group} onValueChange={(v) => setData('price_group', v)}>
+                            <Select
+                                value={data.price_group_id === null ? 'default' : String(data.price_group_id)}
+                                onValueChange={(v) => setData('price_group_id', v === 'default' ? null : Number(v))}
+                            >
                                 <SelectTrigger id="price_group">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    {/* ⚠ "Retail (default)" is a real choice, not an
+                                        empty one: a store with no group is priced as
+                                        RETAIL by the selling-price resolver, and the
+                                        picker says so rather than showing a blank
+                                        somebody would read as unfinished setup. */}
+                                    <SelectItem value="default">Retail (default)</SelectItem>
                                     {priceGroups.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
+                                        <SelectItem key={option.value} value={String(option.value)}>
                                             {option.label}
                                         </SelectItem>
                                     ))}
@@ -162,7 +181,7 @@ export default function StoresIndex({
                             <p className="text-muted-foreground text-xs">
                                 Websites sell retail only. Dealer and distributor selling stays manual in the ERP.
                             </p>
-                            <InputError message={errors.price_group} />
+                            <InputError message={errors.price_group_id} />
                         </div>
 
                         <div className="grid gap-2">

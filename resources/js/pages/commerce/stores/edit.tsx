@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 interface Domain {
@@ -22,7 +22,10 @@ interface Store {
     order_prefix: string;
     brand_id: number | null;
     brand_name: string | null;
-    price_group: string;
+    /* ⚠ An id now, not a customer-type string. Null is RETAIL, which is a
+       real answer rather than a missing one. */
+    price_group_id: number | null;
+    price_group_name: string;
     availability_policy: string;
     theme_key: string | null;
     theme_name: string | null;
@@ -39,6 +42,16 @@ interface Store {
 
 interface Option {
     value: string;
+    label: string;
+}
+
+/**
+ * ⚠ A price group is identified by its row id, not by a code string. `Option`
+ * above stays as it is because the theme and availability pickers are genuinely
+ * keyed by string, and widening it for everybody would hide the difference.
+ */
+interface PriceGroupOption {
+    value: number;
     label: string;
 }
 
@@ -87,7 +100,7 @@ export default function StoreEdit({
 }: {
     store: Store;
     brands: { id: number; name: string }[];
-    priceGroups: Option[];
+    priceGroups: PriceGroupOption[];
     availabilityPolicies: Option[];
     themes: ThemeOption[];
     themeReports: ThemeReport[];
@@ -100,7 +113,7 @@ export default function StoreEdit({
     const settings = useForm({
         name: store.name,
         brand_id: store.brand_id ? String(store.brand_id) : '',
-        price_group: store.price_group,
+        price_group_id: store.price_group_id,
         availability_policy: store.availability_policy,
         theme_key: store.theme_key ?? '',
         referral_cookie_name: store.referral_cookie_name ?? '',
@@ -142,7 +155,14 @@ export default function StoreEdit({
                             )}
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                        {/* ⚠ A route nobody can find is not shipped. The catalogue
+                            screen is reached from the shop it belongs to, which is
+                            where somebody is standing when they think about what it
+                            sells. */}
+                        <Button variant="outline" asChild>
+                            <Link href={`/commerce/stores/${store.id}/catalogue`}>Catalogue</Link>
+                        </Button>
                         <Badge variant={store.status === 'live' ? 'default' : 'secondary'}>{store.status_label}</Badge>
                         {store.status === 'live' ? (
                             <Button
@@ -197,19 +217,28 @@ export default function StoreEdit({
 
                         <div className="grid gap-2">
                             <Label htmlFor="price_group">Price group</Label>
-                            <Select value={settings.data.price_group} onValueChange={(v) => settings.setData('price_group', v)}>
+                            <Select
+                                value={settings.data.price_group_id === null ? 'default' : String(settings.data.price_group_id)}
+                                onValueChange={(v) => settings.setData('price_group_id', v === 'default' ? null : Number(v))}
+                            >
                                 <SelectTrigger id="price_group">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    {/* ⚠ "Retail (default)" is a real choice, not an
+                                        empty one: a store with no group is priced as
+                                        RETAIL by the selling-price resolver, and the
+                                        picker says so rather than showing a blank
+                                        somebody would read as unfinished setup. */}
+                                    <SelectItem value="default">Retail (default)</SelectItem>
                                     {priceGroups.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
+                                        <SelectItem key={option.value} value={String(option.value)}>
                                             {option.label}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <InputError message={settings.errors.price_group} />
+                            <InputError message={settings.errors.price_group_id} />
                         </div>
 
                         <div className="grid gap-2">

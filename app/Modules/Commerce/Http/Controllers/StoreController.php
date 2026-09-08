@@ -12,7 +12,7 @@ use App\Modules\Commerce\Themes\ThemeCompatibility;
 use App\Modules\Commerce\Themes\ThemeRegistry;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Brand;
-use App\Modules\Sales\Enums\CustomerType;
+use App\Modules\Sales\Models\PriceGroup;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -34,6 +34,14 @@ use Inertia\Response;
  */
 class StoreController extends Controller
 {
+    /**
+     * Groups a public website may never be priced at. ⚠ Named by CODE because
+     * the code is what the seeder fixes and the name is what somebody may
+     * rename; a business that invents its own group is offered it, because
+     * somebody made that group on purpose.
+     */
+    private const TRADE_ONLY_GROUPS = ['DEALER', 'DISTRIBUTOR', 'CORPORATE'];
+
     public function index(): Response
     {
         return Inertia::render('commerce/stores/index', [
@@ -59,7 +67,12 @@ class StoreController extends Controller
             // thing on a settlement line that says whose money it is.
             'order_prefix' => ['required', 'string', 'max:10', 'regex:/^[A-Z0-9]{2,10}$/', Rule::unique('stores', 'order_prefix')],
             'brand_id' => ['nullable', 'integer', Rule::exists('brands', 'id')->where('business_id', $this->businessId())],
-            'price_group' => ['required', Rule::enum(CustomerType::class)],
+            // ⛔ A PRICE GROUP, NOT A CUSTOMER TYPE. Those are three different
+            // concepts by Joy's instruction of 10 Aug 2026, and this column used
+            // to hold the wrong one - which joined to nothing, so a store's
+            // pricing silently fell back to the default. Nullable because null
+            // means RETAIL, decided in one place by the price resolver.
+            'price_group_id' => ['nullable', 'integer', Rule::exists('price_groups', 'id')->where('business_id', $this->businessId())],
             'availability_policy' => ['required', Rule::enum(AvailabilityPolicy::class)],
         ], [
             'key.regex' => 'The key becomes this store\'s cookie and header names: lowercase letters, digits and hyphens, e.g. bionic.',
@@ -103,7 +116,12 @@ class StoreController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'brand_id' => ['nullable', 'integer', Rule::exists('brands', 'id')->where('business_id', $this->businessId())],
-            'price_group' => ['required', Rule::enum(CustomerType::class)],
+            // ⛔ A PRICE GROUP, NOT A CUSTOMER TYPE. Those are three different
+            // concepts by Joy's instruction of 10 Aug 2026, and this column used
+            // to hold the wrong one - which joined to nothing, so a store's
+            // pricing silently fell back to the default. Nullable because null
+            // means RETAIL, decided in one place by the price resolver.
+            'price_group_id' => ['nullable', 'integer', Rule::exists('price_groups', 'id')->where('business_id', $this->businessId())],
             'availability_policy' => ['required', Rule::enum(AvailabilityPolicy::class)],
             'referral_cookie_name' => ['nullable', 'string', 'max:60'],
             'webhook_signature_header' => ['nullable', 'string', 'max:60'],
@@ -226,7 +244,8 @@ class StoreController extends Controller
             'order_prefix' => $store->order_prefix,
             'brand_id' => $store->brand_id,
             'brand_name' => $store->brand?->name,
-            'price_group' => $store->price_group->value,
+            'price_group_id' => $store->price_group_id,
+            'price_group_name' => $store->priceGroup?->name ?? 'Retail (default)',
             'availability_policy' => $store->availability_policy->value,
             'theme_key' => $store->theme_key,
             'theme_name' => $store->theme_key !== null && app(ThemeRegistry::class)->has($store->theme_key)
@@ -287,14 +306,25 @@ class StoreController extends Controller
         ], app(ThemeRegistry::class)->all());
     }
 
+    /**
+     * ⚠ Websites are B2C only (ADR-005), so the trade tiers are not offered here
+     * at all. Wholesale and dealer selling stays manual in the ERP, and a
+     * dropdown offering "dealer" would invite somebody to put trade pricing on a
+     * public website.
+     *
+     * ⚠ Real price-group rows now, not customer types. The two are different
+     * concepts and this list used to hold the wrong one, which joined to nothing
+     * - so whatever was chosen here, the storefront would have quoted the
+     * default price.
+     */
     private function priceGroupOptions(): array
     {
-        // ⚠ Websites are B2C only (ADR-005), so the trade groups are not offered
-        // here at all. Wholesale and dealer selling stays manual in the ERP, and
-        // a dropdown that offered "dealer" would invite somebody to put trade
-        // pricing on a public website.
-        return collect([CustomerType::Retail, CustomerType::WalkIn])
-            ->map(fn (CustomerType $type) => ['value' => $type->value, 'label' => ucfirst(str_replace('_', ' ', $type->value))])
+        return PriceGroup::query()
+            ->where('is_active', true)
+            ->whereNotIn('code', self::TRADE_ONLY_GROUPS)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (PriceGroup $group) => ['value' => $group->id, 'label' => $group->name])
             ->values()->all();
     }
 

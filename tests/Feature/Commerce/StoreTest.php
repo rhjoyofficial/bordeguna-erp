@@ -3,10 +3,9 @@
 use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Commerce\Enums\StoreStatus;
 use App\Modules\Commerce\Models\Store;
-use App\Modules\Commerce\Models\StoreDomain;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
-use App\Modules\Sales\Enums\CustomerType;
+use Illuminate\Database\QueryException;
 
 /**
  * Phase 1, slice 1.1: the store and domain spine.
@@ -41,8 +40,18 @@ it('carries its database defaults the moment it is created, without a reload', f
     // `$store->status->isServable()` would fatal on null immediately after
     // creating it.
     expect($store->status)->toBe(StoreStatus::Draft)
-        ->and($store->price_group)->toBe(CustomerType::Retail)
         ->and($store->availability_policy)->toBe(AvailabilityPolicy::StatusBased);
+
+    // ⛔⛔ THIS ASSERTION USED TO READ `price_group === CustomerType::Retail`,
+    // and it was pinning a defect rather than a rule. Slice 1.1 stored a
+    // CUSTOMER TYPE in a column called price group, which joins to nothing:
+    // prices resolve through `product_prices.price_group_id`, so whatever was
+    // chosen the storefront would have quoted the default price with no error
+    // anywhere. Corrected in slice 1.7, where that price is first read.
+    //
+    // ⚠ Null is not "unset", it is RETAIL - the same rule `customers` already
+    // follows, decided in one place by the selling-price resolver.
+    expect($store->price_group_id)->toBeNull();
 });
 
 it('defaults the web to selling at zero, because the goods are made to order', function () {
@@ -77,7 +86,7 @@ it('refuses to let two stores share an order prefix, even across businesses', fu
     // thing on a settlement line that says whose money it is. Per-business
     // uniqueness would not be enough.
     expect(fn () => makeStore(['key' => 'laladia', 'name' => 'Copy', 'order_prefix' => 'LLD']))
-        ->toThrow(Illuminate\Database\QueryException::class);
+        ->toThrow(QueryException::class);
 });
 
 it('resolves a store from its hostname with no business context set', function () {
@@ -121,7 +130,7 @@ it('will not let two stores claim the same hostname', function () {
     $laladia = makeStore(['key' => 'laladia', 'name' => 'LaLaDia', 'order_prefix' => 'LLD']);
 
     expect(fn () => $laladia->domains()->create(['hostname' => 'bionic.garden']))
-        ->toThrow(Illuminate\Database\QueryException::class);
+        ->toThrow(QueryException::class);
 });
 
 it('keeps exactly one primary hostname, demoting the old one when a new one is promoted', function () {

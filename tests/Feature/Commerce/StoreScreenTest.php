@@ -6,7 +6,7 @@ use App\Modules\Commerce\Enums\StoreStatus;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
-use App\Modules\Sales\Enums\CustomerType;
+use App\Modules\Sales\Models\PriceGroup;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -53,17 +53,27 @@ it('shows the stores screen to a permitted user', function () {
 });
 
 it('offers only retail price groups, because a website is B2C', function () {
+    // ⚠⚠ REWRITTEN IN SLICE 1.7. This used to assert on CustomerType values,
+    // because the screen offered customer types where it meant price groups -
+    // two different concepts by Joy's instruction of 10 Aug 2026. The old list
+    // joined to nothing, so whichever option was chosen the storefront would
+    // have quoted the default price with no error anywhere.
+    $retail = PriceGroup::create(['code' => 'RETAIL', 'name' => 'Retail']);
+    PriceGroup::create(['code' => 'DEALER', 'name' => 'Dealer']);
+    PriceGroup::create(['code' => 'DISTRIBUTOR', 'name' => 'Distributor']);
+
     asUser($this->owner, $this->business)
         ->get(route('commerce.stores.index'))
-        ->assertInertia(function (Assert $page) {
+        ->assertInertia(function (Assert $page) use ($retail) {
+            $labels = collect($page->toArray()['props']['priceGroups'])->pluck('label');
             $values = collect($page->toArray()['props']['priceGroups'])->pluck('value');
 
             // ⛔ ADR-005. Wholesale, dealer and distributor selling stays manual
             // in the ERP. A dropdown offering "dealer" would invite somebody to
             // put trade pricing on a public website.
-            expect($values)->not->toContain(CustomerType::Dealer->value)
-                ->and($values)->not->toContain(CustomerType::Distributor->value)
-                ->and($values)->toContain(CustomerType::Retail->value);
+            expect($labels)->not->toContain('Dealer')
+                ->and($labels)->not->toContain('Distributor')
+                ->and($values)->toContain($retail->id);
         });
 });
 
