@@ -7,6 +7,7 @@ use App\Modules\Commerce\Enums\PageType;
 use App\Modules\Commerce\Models\Page;
 use App\Modules\Commerce\Models\PageSection;
 use App\Modules\Commerce\Models\Store;
+use App\Modules\Commerce\Models\StoreMedia;
 use App\Modules\Commerce\Sections\SectionType;
 use App\Modules\Commerce\Sections\SectionTypeRegistry;
 use App\Modules\Commerce\Themes\Theme;
@@ -127,6 +128,13 @@ class PageController extends Controller
                 ->values(),
             'categories' => Category::orderBy('name')->get(['id', 'name'])
                 ->map(fn (Category $category) => ['id' => $category->id, 'label' => $category->name])
+                ->values(),
+            // ⚠ Scoped to THIS store, not the business. A section on Bionic must
+            // not be able to point at LaLaDia's photography, and the surest way
+            // to stop that is never to offer it.
+            'media' => StoreMedia::where('store_id', $page->store_id)
+                ->orderByDesc('created_at')->get()
+                ->map(fn (StoreMedia $media) => $media->toReference())
                 ->values(),
         ]);
     }

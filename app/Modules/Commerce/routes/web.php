@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Commerce\Http\Controllers\MediaController;
+use App\Modules\Commerce\Http\Controllers\MediaServeController;
 use App\Modules\Commerce\Http\Controllers\PageController;
 use App\Modules\Commerce\Http\Controllers\PageSectionController;
 use App\Modules\Commerce\Http\Controllers\StoreController;
@@ -13,6 +15,19 @@ use Illuminate\Support\Facades\Route;
  * its own. Gating the group rather than each method keeps the permission a
  * route can be read off this file rather than hunted for in a controller.
  */
+/**
+ * ⛔⛔ THE ONE PUBLIC ROUTE IN THIS MODULE, and it is outside `auth` and
+ * `business` on purpose. A storefront image is fetched by strangers with no
+ * session and no tenant context. It carries a uuid rather than an id so the
+ * library of an unlaunched store cannot be walked, and it is the URL stored in
+ * nothing: pages reference the media ROW, and the URL is derived. That means
+ * nginx, which already mounts the storage volume read only, can take this exact
+ * path over later without a single stored value changing.
+ */
+Route::middleware('web')->get('media/{uuid}', MediaServeController::class)
+    ->where('uuid', '[0-9a-fA-F-]{36}')
+    ->name('commerce.media.show');
+
 Route::middleware(['web', 'auth', 'business'])->prefix('commerce')->name('commerce.')->group(function () {
     Route::middleware('can:commerce.stores.view')->group(function () {
         Route::get('stores', [StoreController::class, 'index'])->name('stores.index');
@@ -92,5 +107,23 @@ Route::middleware(['web', 'auth', 'business'])->prefix('commerce')->name('commer
             ->whereNumber('page')->whereNumber('section')->name('pages.sections.visibility');
         Route::delete('pages/{page}/sections/{section}', [PageSectionController::class, 'destroy'])
             ->whereNumber('page')->whereNumber('section')->name('pages.sections.destroy');
+    });
+
+    /* -------------------------------------------------------------------- */
+    /* The media library (slice 1.6) */
+    /* -------------------------------------------------------------------- */
+
+    Route::middleware('can:commerce.stores.view')->group(function () {
+        Route::get('media', [MediaController::class, 'index'])->name('media.index');
+    });
+
+    Route::middleware('can:commerce.content.manage')->group(function () {
+        Route::post('media', [MediaController::class, 'store'])->name('media.store');
+        // ⚠ `medium` because Laravel's singular of `media` is `medium`, and the
+        // route model binding is what decides the parameter name, not taste.
+        Route::put('media/{medium}', [MediaController::class, 'update'])
+            ->whereNumber('medium')->name('media.update');
+        Route::delete('media/{medium}', [MediaController::class, 'destroy'])
+            ->whereNumber('medium')->name('media.destroy');
     });
 });

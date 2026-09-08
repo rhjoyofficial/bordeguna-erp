@@ -4,6 +4,8 @@ namespace App\Modules\Commerce\Models;
 
 use App\Modules\Commerce\Enums\PageType;
 use App\Modules\Commerce\Sections\SectionPayloadValidator;
+use App\Modules\Commerce\Sections\SectionReferences;
+use App\Modules\Commerce\Sections\SectionType;
 use App\Modules\Commerce\Themes\Theme;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -161,6 +163,69 @@ class Page extends Model
             // visitor is the whole failure mode this contract exists to prevent.
             if ($theme !== null && ! $theme->canRender($type->key, $type->version)) {
                 $problems[] = "Section {$section->position} ({$type->label}): the store's theme cannot render [{$type->identity()}] and declares no fallback, so it would be blank.";
+            }
+
+            foreach ($this->mediaProblems($section, $type) as $problem) {
+                $problems[] = "Section {$section->position} ({$type->label}): {$problem}";
+            }
+        }
+
+        return $problems;
+    }
+
+    /**
+     * What is wrong with the images this section points at.
+     *
+     * ⛔⛔ TWO SEPARATE REFUSALS, AND BOTH ARE MEASURED DEFECTS FROM THE LIVE
+     * SHOPS RATHER THAN THEORY.
+     *
+     * The first is a DANGLING or FOREIGN reference. `laladia.com` carried a
+     * landing page whose hero image 404'd on production for weeks, and it went
+     * unnoticed because nothing ever asked whether the file behind the
+     * reference existed. Here the reference is an id in a table, so it can be
+     * asked, and it is asked before the page goes out rather than after. The
+     * same check catches a section on one store pointing at another store's
+     * picture, which is the fork-inherits-the-other-shop's-identifier defect
+     * wearing a different hat.
+     *
+     * The second is UNDECIDED ALT TEXT. The storefront audit found six alt
+     * attributes in a thousand-line template. Alt text is not a nice-to-have on
+     * a shop: it is what a blind customer is sold by, and what a search engine
+     * reads a photograph as. So an image may sit in the library undecided, and
+     * may not reach a published page that way. ⚠ Note it asks whether somebody
+     * DECIDED, not whether text is present: an empty alt is correct for a
+     * decorative flourish, and demanding a sentence there would only teach
+     * people to type "image".
+     *
+     * @return array<int, string>
+     */
+    private function mediaProblems(PageSection $section, SectionType $type): array
+    {
+        $ids = app(SectionReferences::class)->media($type, $section->payload ?? []);
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $problems = [];
+
+        $found = StoreMedia::query()
+            ->where('store_id', $this->store_id)
+            ->whereIn('id', $ids)
+            ->get()
+            ->keyBy('id');
+
+        foreach ($ids as $id) {
+            $media = $found->get($id);
+
+            if ($media === null) {
+                $problems[] = "it points at an image (#{$id}) that is not in this store's library.";
+
+                continue;
+            }
+
+            if (! $media->altTextIsDecided()) {
+                $problems[] = "the image \"{$media->original_name}\" has no alt text yet. Write what it shows, or mark it decorative.";
             }
         }
 

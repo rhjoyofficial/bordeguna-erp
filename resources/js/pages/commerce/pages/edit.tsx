@@ -9,7 +9,7 @@ import { type FormDataConvertible } from '@inertiajs/core';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { ArrowDown, ArrowUp, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { FormEventHandler, useState } from 'react';
-import { FieldSpec, Reference, SectionFields } from './section-fields';
+import { FieldSpec, MediaItem, Reference, SectionFields } from './section-fields';
 
 interface SectionRow {
     id: number;
@@ -70,12 +70,14 @@ export default function PageComposer({
     catalogue,
     products,
     categories,
+    media,
 }: {
     page: PageData;
     store: { id: number; name: string; key: string; status: string; theme_key: string | null; theme_name: string | null };
     catalogue: { group: string; types: CatalogueType[] }[];
     products: Reference[];
     categories: Reference[];
+    media: MediaItem[];
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Websites', href: '/commerce/stores' },
@@ -242,6 +244,7 @@ export default function PageComposer({
                                 total={page.sections.length}
                                 products={products}
                                 categories={categories}
+                                media={media}
                                 onMove={move}
                             />
                         ))}
@@ -291,6 +294,7 @@ function SectionCard({
     total,
     products,
     categories,
+    media,
     onMove,
 }: {
     page: PageData;
@@ -299,6 +303,7 @@ function SectionCard({
     total: number;
     products: Reference[];
     categories: Reference[];
+    media: MediaItem[];
     onMove: (index: number, by: number) => void;
 }) {
     const [payload, setPayload] = useState<Record<string, unknown>>(section.payload ?? {});
@@ -393,6 +398,7 @@ function SectionCard({
                                 onChange={setPayload}
                                 products={products}
                                 categories={categories}
+                                media={media}
                             />
 
                             {errors.length > 0 && (

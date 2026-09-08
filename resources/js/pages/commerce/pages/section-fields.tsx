@@ -36,6 +36,16 @@ export interface Reference {
     label: string;
 }
 
+export interface MediaItem {
+    id: number;
+    url: string;
+    alt: string;
+    alt_decided: boolean;
+    width: number | null;
+    height: number | null;
+    original_name: string;
+}
+
 type Payload = Record<string, unknown>;
 
 /** `story_title` reads as a column name; "Story title" reads as a question. */
@@ -58,6 +68,7 @@ export function SectionFields({
     onChange,
     products,
     categories,
+    media,
     errors = {},
     path = '',
 }: {
@@ -66,6 +77,7 @@ export function SectionFields({
     onChange: (payload: Payload) => void;
     products: Reference[];
     categories: Reference[];
+    media: MediaItem[];
     errors?: Record<string, string>;
     path?: string;
 }) {
@@ -93,6 +105,7 @@ export function SectionFields({
                             onChange={(next) => set(field.name, next)}
                             products={products}
                             categories={categories}
+                            media={media}
                             errors={errors}
                             path={key}
                         />
@@ -112,6 +125,7 @@ function FieldControl({
     onChange,
     products,
     categories,
+    media,
     errors,
     path,
 }: {
@@ -121,6 +135,7 @@ function FieldControl({
     onChange: (value: unknown) => void;
     products: Reference[];
     categories: Reference[];
+    media: MediaItem[];
     errors: Record<string, string>;
     path: string;
 }) {
@@ -151,15 +166,7 @@ function FieldControl({
 
     switch (field.type) {
         case 'media':
-            // ⚠ Honest placeholder. The media library is slice 1.6, and until it
-            // exists there is no row to point at. Saying so is better than a box
-            // that looks fillable and produces a section that can never publish.
-            return (
-                <div className="border-input text-muted-foreground rounded-md border border-dashed px-3 py-2 text-sm">
-                    The media library arrives in the next slice. Until then this image cannot be chosen, and a page needing one will not pass the
-                    publish check.
-                </div>
-            );
+            return <MediaPicker id={id} value={typeof value === 'number' ? value : null} onChange={onChange} media={media} />;
 
         case 'richtext':
             return (
@@ -247,6 +254,7 @@ function FieldControl({
                     onChange={onChange}
                     products={products}
                     categories={categories}
+                    media={media}
                     errors={errors}
                     path={path}
                 />
@@ -255,6 +263,64 @@ function FieldControl({
         default:
             return <div className="text-muted-foreground text-sm">This ERP has no control for a [{field.type}] field yet.</div>;
     }
+}
+
+/**
+ * Choose an image from this store's library.
+ *
+ * ⛔ The list offered is the STORE's, never the business's, so a section on one
+ * shop cannot reach for another shop's photography. That is the same class of
+ * defect as a fork inheriting the original's pixel id, and the cheapest place
+ * to stop it is by never offering the wrong thing.
+ *
+ * ⚠ An image whose alt text nobody has decided is shown and selectable, and
+ * labelled. It is a legitimate half-finished state; it is simply not a
+ * publishable one, and the publish gate says so with the file's name.
+ */
+function MediaPicker({ id, value, onChange, media }: { id: string; value: number | null; onChange: (value: unknown) => void; media: MediaItem[] }) {
+    const chosen = media.find((item) => item.id === value) ?? null;
+
+    if (media.length === 0) {
+        return (
+            <div className="border-input text-muted-foreground rounded-md border border-dashed px-3 py-2 text-sm">
+                This store has no images yet. Add some in Websites &rarr; Media, and they will appear here.
+            </div>
+        );
+    }
+
+    return (
+        <div className="grid gap-3">
+            {chosen && (
+                <div className="flex items-center gap-3 rounded-md border p-2">
+                    <img src={chosen.url} alt={chosen.alt} className="h-16 w-16 rounded object-cover" />
+                    <div className="min-w-0 flex-1 text-sm">
+                        <p className="truncate font-medium">{chosen.original_name}</p>
+                        <p className="text-muted-foreground text-xs">
+                            {chosen.width && chosen.height ? `${chosen.width} x ${chosen.height}` : 'size unknown'}
+                            {!chosen.alt_decided && <span className="text-destructive"> &middot; alt text not decided</span>}
+                        </p>
+                    </div>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
+                        Clear
+                    </Button>
+                </div>
+            )}
+
+            <Select value={value === null ? '' : String(value)} onValueChange={(next) => onChange(next === '' ? null : Number(next))}>
+                <SelectTrigger id={id}>
+                    <SelectValue placeholder="Choose an image" />
+                </SelectTrigger>
+                <SelectContent>
+                    {media.map((item) => (
+                        <SelectItem key={item.id} value={String(item.id)}>
+                            {item.original_name}
+                            {!item.alt_decided ? ' (no alt text)' : ''}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        </div>
+    );
 }
 
 /**
@@ -270,6 +336,7 @@ function ListField({
     onChange,
     products,
     categories,
+    media,
     errors,
     path,
 }: {
@@ -278,6 +345,7 @@ function ListField({
     onChange: (value: Payload[]) => void;
     products: Reference[];
     categories: Reference[];
+    media: MediaItem[];
     errors: Record<string, string>;
     path: string;
 }) {
@@ -327,6 +395,7 @@ function ListField({
                         onChange={(next) => replace(index, next)}
                         products={products}
                         categories={categories}
+                        media={media}
                         errors={errors}
                         path={`${path}.${index}`}
                     />

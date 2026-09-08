@@ -276,6 +276,7 @@ export function AppSidebar() {
                           // inside a store, because the question an author has is
                           // "where is that article", not "which store was it on".
                           { title: 'Pages', url: '/commerce/pages', icon: FileText },
+                          { title: 'Media', url: '/commerce/media', icon: FolderOpen },
                       ],
                   },
               ]
