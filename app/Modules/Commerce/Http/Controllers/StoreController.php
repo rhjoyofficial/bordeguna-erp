@@ -8,6 +8,7 @@ use App\Modules\Commerce\Enums\StoreStatus;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Commerce\Models\StoreDomain;
 use App\Modules\Commerce\Themes\Theme;
+use App\Modules\Commerce\Themes\ThemeCompatibility;
 use App\Modules\Commerce\Themes\ThemeRegistry;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Brand;
@@ -87,6 +88,11 @@ class StoreController extends Controller
             'priceGroups' => $this->priceGroupOptions(),
             'availabilityPolicies' => $this->availabilityPolicyOptions(),
             'themes' => $this->themeOptions(),
+            // ⭐ Computed for every theme the store is NOT already on, so the
+            // screen can say what a switch would cost before somebody commits
+            // to it. That is the difference between a decision and a gamble,
+            // and it is the reason slice 1.2 made a theme declare capabilities.
+            'themeReports' => $this->themeReports($store),
         ]);
     }
 
@@ -114,6 +120,27 @@ class StoreController extends Controller
             'features' => ['nullable', 'array'],
             'features.*' => ['boolean'],
         ]);
+
+        // ⛔⛔ THE REFUSAL. A theme that cannot draw a section on a PUBLISHED
+        // page does not error when it renders: it draws nothing, the page
+        // answers 200 with a hole where the hero was, and nobody finds out
+        // until a customer does. So the question is asked here, once, while
+        // the answer can still change something.
+        $newTheme = $data['theme_key'] ?? null;
+
+        if ($newTheme !== null && $newTheme !== '' && $newTheme !== $store->theme_key) {
+            $refusals = app(ThemeCompatibility::class)
+                ->refusals($store, app(ThemeRegistry::class)->get($newTheme));
+
+            if ($refusals !== []) {
+                throw ValidationException::withMessages([
+                    'theme_key' => array_merge(
+                        ['This theme cannot render everything on the published pages of this store. Take those pages down first, or choose another theme.'],
+                        $refusals,
+                    ),
+                ]);
+            }
+        }
 
         $store->update($data);
 
@@ -225,6 +252,27 @@ class StoreController extends Controller
                 'is_primary' => $domain->is_primary,
             ])->values(),
         ];
+    }
+
+    /**
+     * What switching to each other theme would do to this store.
+     *
+     * ⚠ Only themes the store is not already on. Reporting on the current one
+     * would be reporting on the state it is already in, and a screen that says
+     * "your current theme is compatible with your current pages" teaches the
+     * reader to ignore the panel.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function themeReports(Store $store): array
+    {
+        $compatibility = app(ThemeCompatibility::class);
+
+        return collect(app(ThemeRegistry::class)->all())
+            ->reject(fn (Theme $theme) => $theme->key() === $store->theme_key)
+            ->map(fn (Theme $theme) => $compatibility->report($store, $theme))
+            ->values()
+            ->all();
     }
 
     /**

@@ -55,18 +55,42 @@ interface ThemeOption extends Option {
  * reporting into LaLaDia's pixel, and it should be answerable before the store
  * is live rather than from a browser inspector afterwards.
  */
+interface CompatibilityRow {
+    page_id: number;
+    page_title: string;
+    page_path: string;
+    page_published: boolean;
+    section_position: number;
+    section_label: string;
+    identity: string;
+    reason: string;
+}
+
+interface ThemeReport {
+    theme_key: string;
+    theme_name: string;
+    can_switch: boolean;
+    blocking: CompatibilityRow[];
+    downgraded: CompatibilityRow[];
+    draft_warnings: CompatibilityRow[];
+    already_broken: CompatibilityRow[];
+    counts: { pages: number; sections: number; blocking: number; downgraded: number; draft_warnings: number };
+}
+
 export default function StoreEdit({
     store,
     brands,
     priceGroups,
     availabilityPolicies,
     themes,
+    themeReports,
 }: {
     store: Store;
     brands: { id: number; name: string }[];
     priceGroups: Option[];
     availabilityPolicies: Option[];
     themes: ThemeOption[];
+    themeReports: ThemeReport[];
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Websites', href: '/commerce/stores' },
@@ -110,7 +134,12 @@ export default function StoreEdit({
                         <h1 className="text-lg font-medium">{store.name}</h1>
                         <p className="text-muted-foreground text-sm">
                             Key <code>{store.key}</code> · prefix <code>{store.order_prefix}</code> · both permanent
-                            {store.theme_name && <> · theme <strong>{store.theme_name}</strong></>}
+                            {store.theme_name && (
+                                <>
+                                    {' '}
+                                    · theme <strong>{store.theme_name}</strong>
+                                </>
+                            )}
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -118,18 +147,14 @@ export default function StoreEdit({
                         {store.status === 'live' ? (
                             <Button
                                 variant="outline"
-                                onClick={() =>
-                                    router.post(route('commerce.stores.unpublish', store.id), {}, { preserveScroll: true })
-                                }
+                                onClick={() => router.post(route('commerce.stores.unpublish', store.id), {}, { preserveScroll: true })}
                             >
                                 Take offline
                             </Button>
                         ) : (
                             <Button
                                 disabled={!store.can_go_live}
-                                onClick={() =>
-                                    router.post(route('commerce.stores.publish', store.id), {}, { preserveScroll: true })
-                                }
+                                onClick={() => router.post(route('commerce.stores.publish', store.id), {}, { preserveScroll: true })}
                             >
                                 Take live
                             </Button>
@@ -139,8 +164,7 @@ export default function StoreEdit({
 
                 {!store.can_go_live && store.status !== 'live' && (
                     <div className="border-sidebar-border/70 text-muted-foreground rounded-xl border p-4 text-sm">
-                        This store cannot go live yet. It needs a theme and a primary domain, or there would be nothing
-                        to render.
+                        This store cannot go live yet. It needs a theme and a primary domain, or there would be nothing to render.
                     </div>
                 )}
 
@@ -150,20 +174,13 @@ export default function StoreEdit({
 
                         <div className="grid gap-2">
                             <Label htmlFor="name">Name</Label>
-                            <Input
-                                id="name"
-                                value={settings.data.name}
-                                onChange={(e) => settings.setData('name', e.target.value)}
-                            />
+                            <Input id="name" value={settings.data.name} onChange={(e) => settings.setData('name', e.target.value)} />
                             <InputError message={settings.errors.name} />
                         </div>
 
                         <div className="grid gap-2">
                             <Label htmlFor="brand_id">Brand</Label>
-                            <Select
-                                value={settings.data.brand_id}
-                                onValueChange={(v) => settings.setData('brand_id', v)}
-                            >
+                            <Select value={settings.data.brand_id} onValueChange={(v) => settings.setData('brand_id', v)}>
                                 <SelectTrigger id="brand_id">
                                     <SelectValue placeholder="No single brand (multi-brand store)" />
                                 </SelectTrigger>
@@ -180,10 +197,7 @@ export default function StoreEdit({
 
                         <div className="grid gap-2">
                             <Label htmlFor="price_group">Price group</Label>
-                            <Select
-                                value={settings.data.price_group}
-                                onValueChange={(v) => settings.setData('price_group', v)}
-                            >
+                            <Select value={settings.data.price_group} onValueChange={(v) => settings.setData('price_group', v)}>
                                 <SelectTrigger id="price_group">
                                     <SelectValue />
                                 </SelectTrigger>
@@ -200,10 +214,7 @@ export default function StoreEdit({
 
                         <div className="grid gap-2">
                             <Label htmlFor="availability_policy">Availability</Label>
-                            <Select
-                                value={settings.data.availability_policy}
-                                onValueChange={(v) => settings.setData('availability_policy', v)}
-                            >
+                            <Select value={settings.data.availability_policy} onValueChange={(v) => settings.setData('availability_policy', v)}>
                                 <SelectTrigger id="availability_policy">
                                     <SelectValue />
                                 </SelectTrigger>
@@ -220,10 +231,7 @@ export default function StoreEdit({
 
                         <div className="grid gap-2">
                             <Label htmlFor="theme_key">Theme</Label>
-                            <Select
-                                value={settings.data.theme_key}
-                                onValueChange={(v) => settings.setData('theme_key', v)}
-                            >
+                            <Select value={settings.data.theme_key} onValueChange={(v) => settings.setData('theme_key', v)}>
                                 <SelectTrigger id="theme_key">
                                     <SelectValue placeholder="No theme chosen yet" />
                                 </SelectTrigger>
@@ -236,19 +244,27 @@ export default function StoreEdit({
                                 </SelectContent>
                             </Select>
                             <p className="text-muted-foreground text-xs">
-                                A theme decides how the store looks, never what it says. The store cannot go live
-                                without one, because there would be nothing to render.
+                                A theme decides how the store looks, never what it says. The store cannot go live without one, because there would be
+                                nothing to render.
                             </p>
                             <InputError message={settings.errors.theme_key} />
+
+                            {/* ⭐ What a switch would cost, BEFORE it is made. An
+                                unsupported section does not error when it renders,
+                                it simply is not drawn, so this panel is the only
+                                place the cost is visible while it can still be
+                                avoided. */}
+                            {themeReports.map((report) => (
+                                <ThemeSwitchReport key={report.theme_key} report={report} />
+                            ))}
                         </div>
 
                         <div className="border-sidebar-border/70 mt-2 flex flex-col gap-3 rounded-lg border p-3">
                             <div>
                                 <h3 className="text-sm font-medium">Identifiers</h3>
                                 <p className="text-muted-foreground text-xs">
-                                    Leave blank and this store uses its own name, derived from the key. Fill one in only
-                                    to keep a legacy value that live cookies or existing webhook subscribers already
-                                    carry.
+                                    Leave blank and this store uses its own name, derived from the key. Fill one in only to keep a legacy value that
+                                    live cookies or existing webhook subscribers already carry.
                                 </p>
                             </div>
 
@@ -295,20 +311,15 @@ export default function StoreEdit({
                         <div>
                             <h2 className="font-medium">Domains</h2>
                             <p className="text-muted-foreground text-xs">
-                                One primary hostname serves the store; the others redirect to it. A hostname belongs to
-                                one store across the whole group.
+                                One primary hostname serves the store; the others redirect to it. A hostname belongs to one store across the whole
+                                group.
                             </p>
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            {store.domains.length === 0 && (
-                                <p className="text-muted-foreground text-sm">No domains yet.</p>
-                            )}
+                            {store.domains.length === 0 && <p className="text-muted-foreground text-sm">No domains yet.</p>}
                             {store.domains.map((d) => (
-                                <div
-                                    key={d.id}
-                                    className="border-sidebar-border/70 flex items-center justify-between rounded-lg border p-2"
-                                >
+                                <div key={d.id} className="border-sidebar-border/70 flex items-center justify-between rounded-lg border p-2">
                                     <span className="text-sm">
                                         {d.hostname}
                                         {d.is_primary && (
@@ -321,10 +332,7 @@ export default function StoreEdit({
                                         variant="ghost"
                                         size="sm"
                                         onClick={() =>
-                                            router.delete(
-                                                route('commerce.stores.domains.destroy', [store.id, d.id]),
-                                                { preserveScroll: true },
-                                            )
+                                            router.delete(route('commerce.stores.domains.destroy', [store.id, d.id]), { preserveScroll: true })
                                         }
                                     >
                                         Remove
@@ -362,5 +370,71 @@ export default function StoreEdit({
                 </div>
             </div>
         </AppLayout>
+    );
+}
+
+/**
+ * What switching to this theme would do to the pages this store already has.
+ *
+ * ⛔ The important half is the REFUSAL, and it names pages rather than counting
+ * them. "3 sections would go dark" tells nobody which three, and the person
+ * reading this is about to decide whether to take pages down.
+ *
+ * ⚠ A fallback is a downgrade, not a failure: the words stay on the page and
+ * the look changes. It is listed rather than waved through, because somebody
+ * should know which pages will not look the same afterwards.
+ */
+function ThemeSwitchReport({ report }: { report: ThemeReport }) {
+    const nothingToSay =
+        report.blocking.length === 0 && report.downgraded.length === 0 && report.draft_warnings.length === 0 && report.already_broken.length === 0;
+
+    if (nothingToSay) {
+        return (
+            <div className="text-muted-foreground rounded-md border border-dashed p-3 text-xs">
+                <strong>{report.theme_name}</strong> can render all {report.counts.sections} sections on this store.
+            </div>
+        );
+    }
+
+    return (
+        <div className={`rounded-md border p-3 text-xs ${report.can_switch ? '' : 'border-destructive/40 bg-destructive/5'}`}>
+            <p className="text-sm font-medium">
+                {report.theme_name}
+                {report.can_switch ? (
+                    <span className="text-muted-foreground font-normal"> can be switched to</span>
+                ) : (
+                    <span className="text-destructive font-normal"> cannot be switched to yet</span>
+                )}
+            </p>
+
+            <Rows
+                title={`${report.blocking.length} published ${report.blocking.length === 1 ? 'section' : 'sections'} would go blank`}
+                rows={report.blocking}
+                tone="destructive"
+            />
+            <Rows title={`${report.downgraded.length} would be drawn a different way`} rows={report.downgraded} tone="muted" />
+            <Rows title={`${report.draft_warnings.length} on unpublished pages would go blank`} rows={report.draft_warnings} tone="muted" />
+            <Rows title={`${report.already_broken.length} already broken, whichever theme you choose`} rows={report.already_broken} tone="muted" />
+        </div>
+    );
+}
+
+function Rows({ title, rows, tone }: { title: string; rows: CompatibilityRow[]; tone: 'destructive' | 'muted' }) {
+    if (rows.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mt-2">
+            <p className={tone === 'destructive' ? 'text-destructive font-medium' : 'text-muted-foreground font-medium'}>{title}</p>
+            <ul className="text-muted-foreground mt-1 list-disc space-y-0.5 pl-4">
+                {rows.map((row, index) => (
+                    <li key={`${row.page_id}-${row.section_position}-${index}`}>
+                        <span className="font-medium">{row.page_title}</span> <span className="font-mono">{row.page_path}</span> &middot; section{' '}
+                        {row.section_position} ({row.section_label}) &middot; {row.reason}
+                    </li>
+                ))}
+            </ul>
+        </div>
     );
 }
