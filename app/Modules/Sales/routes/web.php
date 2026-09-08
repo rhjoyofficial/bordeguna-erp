@@ -173,6 +173,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
             ->whereNumber('delivery')->name('deliveries.print');
         Route::get('receipts/{receipt}/print', [SalesInvoiceController::class, 'printReceipt'])
             ->whereNumber('receipt')->name('receipts.print');
+        // The same receipt on a till roll. Same permission - a thermal copy of a
+        // document is the same document.
+        Route::get('receipts/{receipt}/slip', [SalesInvoiceController::class, 'receiptSlip'])
+            ->whereNumber('receipt')->name('receipts.slip');
     });
 
     Route::middleware('can:sales.receipt.record')->group(function () {

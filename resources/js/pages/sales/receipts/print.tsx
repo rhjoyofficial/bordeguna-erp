@@ -28,7 +28,18 @@ const money = (value: string | number) => Number(value).toLocaleString('en-BD', 
  * several bills, and a receipt reached through one of them would name that bill
  * while stating an amount covering three.
  */
-export default function ReceiptPrint({ receipt, issuer }: { receipt: Receipt; issuer: Issuer }) {
+export default function ReceiptPrint({
+    receipt,
+    receivedOn,
+    issuer,
+}: {
+    receipt: Receipt;
+    /* ⚠ Formatted by the server. Slicing the first ten characters of
+       what Inertia serialises reads a UTC ISO string, which printed the
+       previous day for a Dhaka business. */
+    receivedOn: string | null;
+    issuer: Issuer;
+}) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Invoices', href: '/sales/invoices' },
         { title: 'Money receipt', href: `/sales/receipts/${receipt.id}/print` },
@@ -45,9 +56,17 @@ export default function ReceiptPrint({ receipt, issuer }: { receipt: Receipt; is
                     <Button variant="outline" size="sm" asChild>
                         <Link href={firstInvoice ? `/sales/invoices/${firstInvoice.id}` : '/sales/invoices'}>Back</Link>
                     </Button>
-                    <Button size="sm" onClick={() => window.print()}>
-                        Print / save as PDF
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        {/* ⚠ A separate document, not a print stylesheet on this
+                            one: an A4 page squeezed to 72mm is not a receipt,
+                            it is an A4 page nobody can read. */}
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={`/sales/receipts/${receipt.id}/slip`}>Till roll</Link>
+                        </Button>
+                        <Button size="sm" onClick={() => window.print()}>
+                            Print / save as PDF
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="official-document border-sidebar-border/70 dark:border-sidebar-border mx-auto w-full max-w-2xl rounded-xl border bg-white p-8 text-black dark:bg-white print:max-w-none print:border-0 print:p-0">
@@ -63,7 +82,7 @@ export default function ReceiptPrint({ receipt, issuer }: { receipt: Receipt; is
                         <div className="text-right">
                             <p>
                                 <span className="text-black/60">Date: </span>
-                                {receipt.received_on?.slice(0, 10)}
+                                {receivedOn}
                             </p>
                             {receipt.money_account && (
                                 <p>

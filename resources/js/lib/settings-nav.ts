@@ -1,5 +1,5 @@
 import { type NavItem } from '@/types';
-import { Bot, Building2, KeyRound, ListChecks, Network, Palette, Send, ShieldCheck, User, Users } from 'lucide-react';
+import { Bot, Building2, KeyRound, ListChecks, Network, Palette, Printer, Send, ShieldCheck, User, Users } from 'lucide-react';
 
 /**
  * Every settings destination, in one list, gated one by one.
@@ -69,6 +69,12 @@ export function settingsSections(access: SettingsAccess): SettingsSection[] {
                 ? [
                       { title: 'Business', url: '/settings/business', icon: Building2 },
                       { title: 'Organization', url: '/settings/organization', icon: Network },
+                      // ⚠ Same gate as the two above, and that is deliberate:
+                      // PrinterProfileController authorizes
+                      // foundation.organization.manage, not a permission of its
+                      // own. Which printer stands at which counter is company
+                      // configuration in the way an office is.
+                      { title: 'Printers', url: '/settings/printers', icon: Printer },
                   ]
                 : [],
         },

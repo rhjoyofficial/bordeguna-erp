@@ -9,6 +9,7 @@ use App\Modules\Foundation\Http\Controllers\FileManagerController;
 use App\Modules\Foundation\Http\Controllers\NoteController;
 use App\Modules\Foundation\Http\Controllers\ChangeRequestController;
 use App\Modules\Foundation\Http\Controllers\OrganizationController;
+use App\Modules\Foundation\Http\Controllers\PrinterProfileController;
 use App\Modules\Foundation\Http\Controllers\RoleManagementController;
 use App\Modules\Foundation\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
@@ -101,6 +102,15 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     Route::patch('settings/business', [BusinessSettingsController::class, 'update'])->name('business.update');
     Route::post('settings/business/logo', [BusinessSettingsController::class, 'uploadLogo'])->name('business.logo.store');
     Route::delete('settings/business/logo', [BusinessSettingsController::class, 'deleteLogo'])->name('business.logo.destroy');
+
+    // ── Printer profiles (Joy, 8 Sep 2026) ──────────────────────────────────
+    // What the paper at each counter is. Same admin permission as the business
+    // profile: which printer stands where is company configuration, not a new
+    // kind of authority. See ThermalProfile for how one is resolved.
+    Route::get('settings/printers', [PrinterProfileController::class, 'index'])->name('printers.index');
+    Route::post('settings/printers', [PrinterProfileController::class, 'store'])->name('printers.store');
+    Route::put('settings/printers/{printerProfile}', [PrinterProfileController::class, 'update'])->name('printers.update');
+    Route::delete('settings/printers/{printerProfile}', [PrinterProfileController::class, 'destroy'])->name('printers.destroy');
 
     // Streams a stored attachment inline; the binding is business-scoped so a
     // file from another business 404s.

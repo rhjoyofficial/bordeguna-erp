@@ -3,11 +3,15 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessIdentity;
+use App\Modules\Foundation\Support\DocumentMoney;
+use App\Modules\Foundation\Support\PrintableDocument;
+use App\Modules\Foundation\Support\ThermalProfile;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
@@ -327,25 +331,98 @@ class SalesInvoiceController extends Controller
      * accepts, so a scan closes the loop. Reprint is visiting this page
      * again; the slip computes nothing itself.
      */
+    /**
+     * The counter slip, drawn on whatever roll this outlet has.
+     *
+     * ⭐⭐ NOTHING HERE KNOWS WHAT A PRINTER IS. The controller describes the
+     * document and asks ThermalProfile what the paper is; the component draws
+     * one on the other. Buy a different machine, edit one row in Settings >
+     * Printers, and this method does not change.
+     *
+     * ⚠ THE OUTLET IS FOUND THROUGH THE DELIVERY. An invoice has no warehouse
+     * of its own - the goods leaving does. So the profile is resolved from the
+     * warehouse the stock actually left, and an invoice with no delivery yet
+     * falls back to the business default, which is correct rather than merely
+     * convenient: nothing has been handed over at any counter.
+     *
+     * ⚠ Dates and figures are formatted HERE. Handing Carbon to Inertia
+     * serialises it as a UTC ISO string, which printed the wrong day on the
+     * invoice document on 7 September - a document must never be handed a value
+     * it has to interpret.
+     */
     public function slip(SalesInvoice $invoice): Response
     {
         $invoice->load([
             'customer:id,name,phone',
             'lines.product:id,name,sku',
+            'lines.deliveryLine.delivery:id,warehouse_id',
             'allocations.receipt.moneyAccount:id,name',
         ]);
 
+        $warehouseId = $invoice->lines
+            ->pluck('deliveryLine.delivery.warehouse_id')
+            ->filter()
+            ->first();
+
+        $profile = ThermalProfile::resolve($warehouseId === null ? null : (int) $warehouseId);
+
+        $soldBy = User::query()->where('id', $invoice->created_by)->value('name');
+        $outstanding = $invoice->outstanding()->toTaka();
+
+        // ⚠ A walk-in customer is not named on the paper. The row exists so the
+        // books balance, but printing "Walk-in customer" on a receipt tells the
+        // person holding it nothing they did not already know.
+        $named = $invoice->customer !== null
+            && ! str_contains(strtolower((string) $invoice->customer->name), 'walk-in');
+
+        $document = new PrintableDocument(
+            title: 'Sales receipt',
+            number: (string) $invoice->invoice_number,
+            meta: array_values(array_filter([
+                ['label' => 'Date', 'value' => $invoice->invoice_date?->format('d M Y') ?? ''],
+                $soldBy === null ? null : ['label' => 'Sold by', 'value' => (string) $soldBy],
+            ])),
+            party: $named ? [
+                'heading' => 'Customer',
+                'name' => (string) $invoice->customer->name,
+                'lines' => array_values(array_filter([$invoice->customer->phone])),
+            ] : null,
+            lines: $invoice->lines->map(fn ($line) => [
+                'description' => (string) ($line->product?->name ?? $line->description ?? 'Item'),
+                'detail' => $line->product?->sku,
+                'quantity' => DocumentMoney::quantity($line->quantity),
+                'unit_price' => DocumentMoney::amount($line->unit_price),
+                'discount' => (float) $line->line_discount > 0 ? DocumentMoney::amount($line->line_discount) : null,
+                'net' => DocumentMoney::amount($line->line_net),
+            ])->values()->all(),
+            totals: array_values(array_filter([
+                ['label' => 'Subtotal', 'value' => DocumentMoney::amount($invoice->subtotal), 'emphasis' => false],
+                (float) $invoice->invoice_discount > 0
+                    ? ['label' => 'Discount', 'value' => '-'.DocumentMoney::amount($invoice->invoice_discount), 'emphasis' => false]
+                    : null,
+                ['label' => 'TOTAL', 'value' => 'BDT '.DocumentMoney::amount($invoice->total), 'emphasis' => true],
+                (float) $outstanding > 0
+                    ? ['label' => 'DUE', 'value' => 'BDT '.DocumentMoney::amount($outstanding), 'emphasis' => true]
+                    : null,
+            ])),
+            payments: $invoice->allocations->map(fn ($allocation) => [
+                'label' => 'Paid ('.($allocation->receipt?->moneyAccount?->name ?? 'cash').')',
+                'value' => DocumentMoney::amount($allocation->amount),
+            ])->values()->all(),
+            barcodeValue: (string) $invoice->invoice_number,
+            footerLines: [
+                'Thank you for shopping with us.',
+                'Keep this slip for returns or exchange.',
+            ],
+        );
+
         return Inertia::render('sales/invoices/slip', [
-            'invoice' => $invoice,
-            'outstanding' => $invoice->outstanding()->toTaka(),
-            'payments' => $invoice->allocations->map(fn ($allocation) => [
-                'account' => $allocation->receipt?->moneyAccount?->name,
-                'amount' => $allocation->amount,
-                'received_on' => $allocation->receipt?->received_on,
-            ])->values(),
-            'soldBy' => \App\Models\User::query()->where('id', $invoice->created_by)->value('name'),
+            'invoiceId' => $invoice->id,
+            'invoiceNumber' => (string) $invoice->invoice_number,
+            'document' => $document->toArray(),
+            'profile' => $profile->toArray(),
             'issuer' => BusinessIdentity::forCurrent()->toArray(),
-            'barcodeSvg' => \App\Modules\Inventory\Support\Code128::svg($invoice->invoice_number, 56, 11),
+            'barcode' => $profile->barcode((string) $invoice->invoice_number),
         ]);
     }
 
@@ -367,7 +444,80 @@ class SalesInvoiceController extends Controller
 
         return Inertia::render('sales/receipts/print', [
             'receipt' => $receipt,
+            // ⚠⚠ Formatted here, not sliced on the page. The page was taking the
+            // first ten characters of what Inertia serialised, which is a UTC
+            // ISO string - so a receipt taken after 6am Dhaka on the 1st printed
+            // the 31st. Identical to the invoice-date defect fixed on 7 Sep.
+            'receivedOn' => $receipt->received_on?->format('d M Y'),
             'issuer' => BusinessIdentity::forCurrent()->toArray(),
+        ]);
+    }
+
+    /**
+     * The same money receipt on a till roll.
+     *
+     * ⚠ A receipt may settle SEVERAL invoices at once, so each one is a line on
+     * the paper rather than the paper being about any single bill - the same
+     * rule the A4 version follows, kept here so the two cannot disagree.
+     *
+     * ⚠ No warehouse is involved in taking money, so this always resolves the
+     * business default profile. That is correct: a payment can be taken at a
+     * desk that sells nothing.
+     */
+    public function receiptSlip(CustomerReceipt $receipt): Response
+    {
+        $receipt->load([
+            'customer:id,name,phone',
+            'moneyAccount:id,name,type',
+            'allocations.invoice:id,invoice_number,invoice_date,total',
+        ]);
+
+        $profile = ThermalProfile::resolve(null);
+        $receivedBy = User::query()->where('id', $receipt->created_by)->value('name');
+
+        $document = new PrintableDocument(
+            title: 'Money receipt',
+            number: 'No. '.$receipt->id,
+            meta: array_values(array_filter([
+                ['label' => 'Date', 'value' => $receipt->received_on?->format('d M Y') ?? ''],
+                ['label' => 'Through', 'value' => (string) ($receipt->moneyAccount?->name ?? 'cash')],
+                $receivedBy === null ? null : ['label' => 'Received by', 'value' => (string) $receivedBy],
+            ])),
+            party: $receipt->customer === null ? null : [
+                'heading' => 'Received from',
+                'name' => (string) $receipt->customer->name,
+                'lines' => array_values(array_filter([$receipt->customer->phone])),
+            ],
+            // ⚠ The allocations ARE the lines. A receipt that named one invoice
+            // while carrying an amount covering three is the defect the A4
+            // version was written to avoid.
+            lines: $receipt->allocations->map(fn ($allocation) => [
+                'description' => 'Against '.($allocation->invoice?->invoice_number ?? 'account'),
+                'detail' => $allocation->invoice?->invoice_date?->format('d M Y'),
+                'quantity' => '1',
+                'unit_price' => DocumentMoney::amount($allocation->amount),
+                'discount' => null,
+                'net' => DocumentMoney::amount($allocation->amount),
+            ])->values()->all(),
+            totals: [
+                ['label' => 'RECEIVED', 'value' => 'BDT '.DocumentMoney::amount($receipt->amount), 'emphasis' => true],
+            ],
+            payments: [],
+            // ⛔ NO BARCODE, deliberately. The invoice slip carries one because
+            // the returns screen accepts that exact string; nothing in this ERP
+            // scans a receipt. A barcode nobody reads is decoration on a
+            // financial document, and it takes up a third of the roll.
+            barcodeValue: null,
+            footerLines: ['Thank you.'],
+        );
+
+        return Inertia::render('sales/receipts/slip', [
+            'receiptId' => $receipt->id,
+            'receiptNumber' => 'No. '.$receipt->id,
+            'document' => $document->toArray(),
+            'profile' => $profile->toArray(),
+            'issuer' => BusinessIdentity::forCurrent()->toArray(),
+            'barcode' => null,
         ]);
     }
 
