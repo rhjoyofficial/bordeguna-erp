@@ -77,6 +77,28 @@ class StoreProduct extends Model
     }
 
     /**
+     * ⛔⛔ `published_at` IS NOT FILLABLE, AND THAT IS NOT A DETAIL. Putting a
+     * product in front of the public is an act somebody takes, not a field a
+     * form posts - the same rule `Page` already follows.
+     *
+     * ⚠⚠ It was learned the hard way here. The publish action was written as
+     * `create([... 'published_at' => now()])`, mass assignment dropped the key
+     * silently, and publishing a product **published nothing** while reporting
+     * success. Unpublishing was the same in reverse. Nothing errored; the
+     * catalogue simply said everything was off sale. These two methods exist so
+     * that cannot be written by accident again.
+     */
+    public function publish(): void
+    {
+        $this->forceFill(['published_at' => now()])->save();
+    }
+
+    public function unpublish(): void
+    {
+        $this->forceFill(['published_at' => null])->save();
+    }
+
+    /**
      * What the shop calls this product.
      *
      * ⚠ The override is presentation, not a rename: "Sundarban Honey, 500g jar"

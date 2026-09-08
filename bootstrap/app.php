@@ -3,6 +3,7 @@
 use App\Http\Middleware\AllowDocumentRenderToken;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
 use App\Modules\Foundation\Exceptions\ApprovalAlreadyDecidedException;
 use App\Modules\Foundation\Http\Middleware\EnsurePageBusinessMatches;
 use App\Modules\Foundation\Http\Middleware\ResolveCurrentBusiness;
@@ -67,6 +68,11 @@ return Application::configure(basePath: dirname(__DIR__))
             // below, so a render token belonging to a deactivated user is
             // refused exactly as that user's own session would be. It does
             // nothing at all unless a `render_token` is on the query string.
+            // ⚠⚠ FIRST OF ALL. It decides whether this hostname is a shop,
+            // and on a shop the ERP does not exist. Running it after
+            // anything that assumes an authenticated back office would
+            // let that thing act on a stranger's request.
+            ResolveStorefront::class,
             AllowDocumentRenderToken::class,
             // C-SEC-1. A deactivated user is rejected on every request, not
             // only at login - a session must not outlive the decision to
@@ -97,6 +103,12 @@ return Application::configure(basePath: dirname(__DIR__))
             EncryptCookies::class,
             StartSession::class,
             ShareErrorsFromSession::class,
+            // ⚠⚠ BEFORE AUTHENTICATION, and this list is what decides that -
+            // not the order it was appended to the web group. Without the
+            // entry here `auth` ran first and redirected a customer on the
+            // shop's own hostname to the ERP's login form. Second time this
+            // exact trap has been hit today.
+            ResolveStorefront::class,
             // ⚠⚠ AFTER THE SESSION, BEFORE AUTHENTICATION, and it must be named
             // HERE rather than only in the web group. Middleware missing from
             // this list keeps its own position while prioritised middleware jump

@@ -3,9 +3,9 @@
 namespace App\Modules\Commerce\Providers;
 
 use App\Modules\Commerce\Sections\SectionCatalogue;
+use App\Modules\Commerce\Sections\SectionTypeRegistry;
 use App\Modules\Commerce\Themes\BionicClassicTheme;
 use App\Modules\Commerce\Themes\ThemeRegistry;
-use App\Modules\Commerce\Sections\SectionTypeRegistry;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -49,5 +49,9 @@ class CommerceServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+        // The public shop. Separate file on purpose: one is an
+        // authenticated back office, the other is anonymous traffic
+        // resolved by hostname.
+        $this->loadRoutesFrom(__DIR__.'/../routes/storefront.php');
     }
 }

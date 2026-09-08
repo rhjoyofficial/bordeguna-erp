@@ -108,8 +108,7 @@ it('publishes a catalogue to one shop and not to the other', function () {
     $this->bionic->products()->create([
         'product_id' => $this->product->id,
         'slug' => 'sundarban-honey-500g',
-        'published_at' => now(),
-    ]);
+    ])->publish();
 
     expect($this->bionic->products()->count())->toBe(1)
         ->and($this->laladia->products()->count())->toBe(0);
@@ -165,6 +164,31 @@ it('says which group a shop prices at, and that no group means retail', function
     $this->bionic->update(['price_group_id' => $this->dealer->id]);
 
     expect(CataloguePublishing::priceGroupLabel($this->bionic->fresh()))->toBe('Dealer');
+});
+
+it('cannot be published by mass assignment, because publishing is an act', function () {
+    // ⛔⛔ THE DEFECT THIS PINS SHIPPED AND WAS FOUND BY SLICE 1.8. The publish
+    // action was `create([... 'published_at' => now()])`; `published_at` is
+    // deliberately not fillable, so the key was dropped IN SILENCE and
+    // publishing a product published nothing while reporting success. Nothing
+    // errored - the catalogue simply said everything was off sale.
+    priceIt($this->product->id, null);
+
+    $row = $this->bionic->products()->create([
+        'product_id' => $this->product->id,
+        'slug' => 'honey',
+        'published_at' => now(),
+    ]);
+
+    expect($row->fresh()->isPublished())->toBeFalse();
+
+    $row->publish();
+
+    expect($row->fresh()->isPublished())->toBeTrue();
+
+    $row->unpublish();
+
+    expect($row->fresh()->isPublished())->toBeFalse();
 });
 
 it('keeps one business catalogue away from another', function () {

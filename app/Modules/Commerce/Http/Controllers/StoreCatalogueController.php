@@ -112,15 +112,16 @@ class StoreCatalogueController extends Controller
             throw ValidationException::withMessages(['product_id' => $refusal]);
         }
 
-        $store->products()->create([
+        $row = $store->products()->create([
             'product_id' => $product->id,
             'slug' => CataloguePublishing::slugFor($store, (string) $product->name),
             'position' => (int) $store->products()->max('position') + 1,
-            // ⚠ Published immediately. A row that exists but is invisible is a
-            // state somebody has to remember to finish, and the point of this
-            // screen is that publishing is one decision.
-            'published_at' => now(),
         ]);
+
+        // ⚠ Published immediately, and through the model's own method rather
+        // than in the array above: `published_at` is deliberately not fillable,
+        // so passing it to create() drops it in silence and publishes nothing.
+        $row->publish();
 
         return back()->with('success', $product->name.' is now on sale at '.$store->name.'.');
     }
@@ -165,7 +166,7 @@ class StoreCatalogueController extends Controller
 
         abort_unless($storeProduct->store_id === $store->id, 404);
 
-        $storeProduct->update(['published_at' => null]);
+        $storeProduct->unpublish();
 
         return back()->with('success', 'Taken off sale. The address and its wording are kept.');
     }
@@ -186,7 +187,7 @@ class StoreCatalogueController extends Controller
             throw ValidationException::withMessages(['published_at' => $refusal]);
         }
 
-        $storeProduct->update(['published_at' => now()]);
+        $storeProduct->publish();
 
         return back()->with('success', 'Back on sale.');
     }

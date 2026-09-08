@@ -54,8 +54,36 @@ final class CataloguePublishing
      */
     public static function hasPrice(Store $store, Product $product, ?Carbon $on = null): bool
     {
+        return self::priceFor($store, $product, $on) !== null;
+    }
+
+    /**
+     * What a visitor to this shop is quoted for this product, or null if
+     * nothing is in force.
+     *
+     * ⭐⭐ THE STOREFRONT AND THE PUBLISH GATE ASK THE SAME QUESTION THROUGH THIS
+     * ONE METHOD. Written twice they would come to disagree, and the shape of
+     * that disagreement is the worst one available: a gate that says a product
+     * is fine to publish and a page that then shows no price.
+     *
+     * ⚠ Most specific first: a price for THIS group beats the ungrouped default.
+     * `min_quantity` is ordered so the single-unit price wins, because a
+     * storefront quotes one of a thing.
+     */
+    public static function priceFor(Store $store, Product $product, ?Carbon $on = null): ?string
+    {
         $on ??= Carbon::now();
 
+        $price = self::inForce($store, $product, $on)
+            ->orderByRaw('price_group_id IS NULL')
+            ->orderBy('min_quantity')
+            ->first();
+
+        return $price?->unit_price === null ? null : (string) $price->unit_price;
+    }
+
+    private static function inForce(Store $store, Product $product, Carbon $on)
+    {
         return ProductPrice::query()
             ->where('product_id', $product->id)
             ->whereNull('customer_id')
@@ -69,8 +97,7 @@ final class CataloguePublishing
             ->where('effective_from', '<=', $on->toDateString())
             ->where(function ($query) use ($on) {
                 $query->whereNull('effective_to')->orWhere('effective_to', '>=', $on->toDateString());
-            })
-            ->exists();
+            });
     }
 
     /**

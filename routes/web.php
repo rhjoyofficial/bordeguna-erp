@@ -4,10 +4,32 @@ use App\Http\Controllers\ApprovalInboxController;
 use App\Http\Controllers\AssistantController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GlobalSearchController;
+use App\Http\Controllers\MyWorkController;
 use App\Http\Controllers\NotificationController;
+use App\Modules\Commerce\Http\Controllers\StorefrontController;
+use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
+use App\Modules\Foundation\Http\Controllers\BusinessHealthController;
+use App\Modules\Foundation\Http\Controllers\GroupCockpitController;
+use App\Modules\Foundation\Http\Controllers\GroupPartnerController;
+use App\Modules\Foundation\Http\Controllers\GroupProductController;
+use App\Support\LandingPages;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
+/*
+ * ⚠⚠ TWO FRONT DOORS, ONE ROUTE. On the ERP's own hostname this is the sign-in
+ * redirect it has always been. On a hostname somebody has attached to a live
+ * shop it is that shop's home page - ResolveStorefront has already resolved the
+ * store and set the tenant by the time this runs.
+ *
+ * ⚠ It is `home` rather than a storefront route because `/` is registered by the
+ * application itself, and ResolveStorefront names it as the one shared route.
+ */
+Route::get('/', function (Request $request) {
+    if (ResolveStorefront::current($request) !== null) {
+        return app(StorefrontController::class)->page($request);
+    }
+
     return auth()->check()
         ? redirect()->route('landing')
         : redirect()->route('login');
@@ -20,27 +42,27 @@ Route::middleware(['auth', 'business'])->group(function () {
     // /dashboard directly still shows the dashboard - this route decides
     // where login GOES, it forbids nothing.
     Route::get('landing', function () {
-        return redirect(\App\Support\LandingPages::resolveFor(request()->user()));
+        return redirect(LandingPages::resolveFor(request()->user()));
     })->name('landing');
 
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // MY WORK (Module 1, Slice 3): the personal queue - approvals, follow-ups,
     // to-dos, waiting-on-others, and the role-gated warning sections.
-    Route::get('work', App\Http\Controllers\MyWorkController::class)->name('work');
+    Route::get('work', MyWorkController::class)->name('work');
 
     // ── The group layer (Module 6): reads THROUGH per-company records for
     // the businesses the viewer belongs to. Links, never migrations.
-    Route::get('group/partners', [App\Modules\Foundation\Http\Controllers\GroupPartnerController::class, 'index'])->name('group.partners');
-    Route::post('group/partners/link', [App\Modules\Foundation\Http\Controllers\GroupPartnerController::class, 'link'])->name('group.partners.link');
-    Route::delete('group/partners/{link}', [App\Modules\Foundation\Http\Controllers\GroupPartnerController::class, 'unlink'])->name('group.partners.unlink');
-    Route::get('group/products', [App\Modules\Foundation\Http\Controllers\GroupProductController::class, 'index'])->name('group.products');
-    Route::post('group/products/link', [App\Modules\Foundation\Http\Controllers\GroupProductController::class, 'link'])->name('group.products.link');
-    Route::delete('group/products/{link}', [App\Modules\Foundation\Http\Controllers\GroupProductController::class, 'unlink'])->name('group.products.unlink');
-    Route::get('group/cockpit', [App\Modules\Foundation\Http\Controllers\GroupCockpitController::class, 'index'])->name('group.cockpit');
+    Route::get('group/partners', [GroupPartnerController::class, 'index'])->name('group.partners');
+    Route::post('group/partners/link', [GroupPartnerController::class, 'link'])->name('group.partners.link');
+    Route::delete('group/partners/{link}', [GroupPartnerController::class, 'unlink'])->name('group.partners.unlink');
+    Route::get('group/products', [GroupProductController::class, 'index'])->name('group.products');
+    Route::post('group/products/link', [GroupProductController::class, 'link'])->name('group.products.link');
+    Route::delete('group/products/{link}', [GroupProductController::class, 'unlink'])->name('group.products.unlink');
+    Route::get('group/cockpit', [GroupCockpitController::class, 'index'])->name('group.cockpit');
 
     // Module 7: the morning walk around the shop, done by the system.
-    Route::get('health', [App\Modules\Foundation\Http\Controllers\BusinessHealthController::class, 'index'])->name('health');
+    Route::get('health', [BusinessHealthController::class, 'index'])->name('health');
     Route::get('approvals', [ApprovalInboxController::class, 'index'])->name('approvals.index');
 
     // The header search. A GET on purpose (the hand-written-fetch trap: a GET
