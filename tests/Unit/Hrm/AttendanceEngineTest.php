@@ -358,6 +358,32 @@ it('leaves a holiday with no punches at all completely alone', function () {
         ->and($outcome->isProvisional)->toBeFalse();
 });
 
+it('records an approved holiday-work no-show as an absence', function () {
+    // ⭐ Joy's rule, 9 September 2026: work on an off day counts as ordinary
+    // work, and the mirror of that is that holiday work somebody APPROVED and
+    // then did not do is an absence, not a normal day off.
+    //
+    // ⚠ It is flagged rather than silently deducted. "Salary may be deducted"
+    // is a decision a person makes; the engine's job is to stop the day passing
+    // as an ordinary weekly off nobody looks at.
+    $outcome = engineRun([], ['is_holiday' => true, 'holiday_work_approved' => true]);
+
+    expect($outcome->status)->toBe(AttendanceStatus::Absent)
+        ->and($outcome->flags)->toContain('approved_holiday_work_missed')
+        ->and($outcome->flags)->toContain('needs_review');
+});
+
+it('still leaves an ordinary day off alone when no holiday work was approved', function () {
+    // ⛔ The counterweight, and it is the reason the rule above is narrow: if a
+    // plain holiday became provisional, ONE of them would block payroll for
+    // everybody. Only an approved-and-missed day is raised.
+    $outcome = engineRun([], ['is_holiday' => true]);
+
+    expect($outcome->status)->toBe(AttendanceStatus::Holiday)
+        ->and($outcome->flags)->not->toContain('approved_holiday_work_missed')
+        ->and($outcome->isProvisional)->toBeFalse();
+});
+
 it('counts holiday work once it is approved', function () {
     $outcome = engineRun(
         ['2026-08-03 09:00:00', '2026-08-03 18:00:00'],

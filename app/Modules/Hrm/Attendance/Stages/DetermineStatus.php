@@ -127,6 +127,27 @@ class DetermineStatus implements AttendanceStage
                     ->note('Clocked in on a non-working day but never clocked out, so the hours are unknown and nothing is counted. Approve holiday work, or correct the punches, to settle it (POL-09).');
             }
 
+            // ⭐⭐ APPROVED TO WORK, AND DID NOT COME (Joy, 9 September 2026).
+            // The mirror of counting unapproved off-day work: a non-working day
+            // somebody was approved to work and then did not is an absence, not
+            // an ordinary day off that nobody looks at again.
+            //
+            // ⚠ FLAGGED, NEVER SILENTLY DEDUCTED. "Salary may be deducted" is a
+            // decision a person makes; this stage's job is only to stop the day
+            // passing unnoticed.
+            //
+            // ⚠ DELIBERATELY NARROW - it fires only when holiday work was
+            // actually approved. A plain holiday with no punches must stay
+            // untouched, because making one provisional blocks payroll for
+            // everybody, and there is a test standing on exactly that.
+            if ($context->hasApprovedHolidayWork && ! $context->assumesPresence()) {
+                return $computation
+                    ->with(['status' => AttendanceStatus::Absent])
+                    ->flag('approved_holiday_work_missed')
+                    ->flag('needs_review')
+                    ->note('Holiday work was approved for this day and nobody clocked in, so it is recorded as an absence for a human to settle (POL-09).');
+            }
+
             return $computation;
         }
 
