@@ -14,6 +14,7 @@ use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Enums\PunchSource;
 use App\Modules\Hrm\Enums\ScheduleScope;
 use App\Modules\Hrm\Models\AttendancePolicy;
+use App\Modules\Hrm\Models\AttendancePunch;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
@@ -162,22 +163,66 @@ it('escalates the POL-03 ladder across a real month of punches', function () {
     ]);
 });
 
-it('resets the occurrence counter at the start of a new month', function () {
-    foreach (['2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06'] as $date) {
+/*
+ * ⚠⚠ THE LADDER RESETS ON THE PAYROLL CYCLE, NOT THE 1ST OF THE MONTH.
+ * PAY-01 records that this company's month runs the 24th to the 23rd and
+ * explicitly leaves "Calendar month" unticked. POL-03's ladders end in a SALARY
+ * DEDUCTION, so the month they count over has to be the month that gets paid.
+ * Counting on the calendar handed every employee the previous period's lates
+ * at the start of a new one, and then a free reset in the middle of it.
+ *
+ * ⚠ The test this replaced used 6 August and 1 September, which sit in
+ * different months under BOTH rules - so it asserted a reset it never actually
+ * measured. Each case below passes under exactly one of the two rules.
+ */
+it('resets the occurrence counter when a new payroll cycle begins, mid calendar month', function () {
+    // 20 Aug is in the cycle ending 23 Aug; 25 Aug opens the next one.
+    foreach (['2026-08-20', '2026-08-25'] as $date) {
         procPunch("{$date} 09:10:00");
         procPunch("{$date} 18:00:00");
     }
-    procPunch('2026-09-01 09:10:00');
-    procPunch('2026-09-01 18:00:00');
 
-    app(ProcessAttendance::class)->forRange($this->employee, '2026-08-01', '2026-09-01');
+    app(ProcessAttendance::class)->forRange($this->employee, '2026-08-20', '2026-08-25');
 
-    $august = DailyAttendance::where('employee_id', $this->employee->id)->onDate('2026-08-06')->sole();
-    $september = DailyAttendance::where('employee_id', $this->employee->id)->onDate('2026-09-01')->sole();
+    $before = DailyAttendance::where('employee_id', $this->employee->id)->onDate('2026-08-20')->sole();
+    $after = DailyAttendance::where('employee_id', $this->employee->id)->onDate('2026-08-25')->sole();
 
-    expect($august->occurrence_number)->toBe(4);
+    expect($before->occurrence_number)->toBe(1)
+        // Counting the calendar month would make this the 2nd, and further up
+        // a ladder that is the difference between excused and a deduction.
+        ->and($after->occurrence_number)->toBe(1);
+});
+
+it('keeps counting across the turn of the calendar month, inside one payroll cycle', function () {
+    // Both sit in the cycle 24 Aug - 23 Sep, either side of 1 September.
+    foreach (['2026-08-25', '2026-09-02'] as $date) {
+        procPunch("{$date} 09:10:00");
+        procPunch("{$date} 18:00:00");
+    }
+
+    app(ProcessAttendance::class)->forRange($this->employee, '2026-08-25', '2026-09-02');
+
+    $august = DailyAttendance::where('employee_id', $this->employee->id)->onDate('2026-08-25')->sole();
+    $september = DailyAttendance::where('employee_id', $this->employee->id)->onDate('2026-09-02')->sole();
+
+    expect($august->occurrence_number)->toBe(1)
+        // The old rule handed out a free reset in the middle of the pay period.
+        ->and($september->occurrence_number)->toBe(2);
+});
+
+it('still treats a plain calendar month as the cycle when the start day is 1', function () {
+    $this->business->update(['payroll_cycle_start_day' => 1]);
+
+    foreach (['2026-08-25', '2026-09-02'] as $date) {
+        procPunch("{$date} 09:10:00");
+        procPunch("{$date} 18:00:00");
+    }
+
+    app(ProcessAttendance::class)->forRange($this->employee, '2026-08-25', '2026-09-02');
+
+    $september = DailyAttendance::where('employee_id', $this->employee->id)->onDate('2026-09-02')->sole();
+
     expect($september->occurrence_number)->toBe(1);
-    expect($september->consequence)->toBe(AttendanceConsequence::None);
 });
 
 it('does not count the day being reprocessed towards its own occurrence number', function () {
@@ -249,7 +294,7 @@ it('recalculates without ever touching the raw punches', function () {
     $action = app(ProcessAttendance::class);
     $action->forDay($this->employee, '2026-08-03');
 
-    $snapshot = fn () => \App\Modules\Hrm\Models\AttendancePunch::orderBy('id')->get()
+    $snapshot = fn () => AttendancePunch::orderBy('id')->get()
         ->map(fn ($punch) => [
             'id' => $punch->id,
             'punched_at' => $punch->punched_at->format('Y-m-d H:i:s'),

@@ -21,6 +21,7 @@ use App\Modules\Hrm\Models\ShowCauseNotice;
 use App\Modules\Hrm\Notifications\LatenessReviewNotification;
 use App\Modules\Hrm\Notifications\ShowCauseIssuedNotification;
 use Illuminate\Support\Facades\Notification;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -189,6 +190,31 @@ it('rings the bell once per month no matter how often the days rebuild', functio
     Notification::assertSentToTimes($this->hr, LatenessReviewNotification::class, 1);
 });
 
+/*
+ * ⚠⚠ TWO CONSECUTIVE CYCLES MUST RING TWO BELLS, and before the ladder moved
+ * onto the payroll cycle this was the trap waiting to be introduced: a cycle
+ * runs 24 Aug - 23 Sep, so labelling the alert by the CALENDAR month would put
+ * this cycle's bell and the next one's both on "September", and the unique
+ * index would swallow the second one without a sound. The bell that never rings
+ * is worse than no bell, because HR believes it is being told.
+ */
+it('rings a separate bell in each payroll cycle even when both fall in one calendar month', function () {
+    Notification::fake();
+
+    // Cycle 24 Aug - 23 Sep: the third late is the last free one, bell rings.
+    ($this->lateDay)('2026-09-01');
+    ($this->lateDay)('2026-09-02');
+    ($this->lateDay)('2026-09-03');
+
+    // Cycle 24 Sep - 23 Oct: a fresh ladder, and its own third late.
+    ($this->lateDay)('2026-09-28');
+    ($this->lateDay)('2026-09-29');
+    ($this->lateDay)('2026-09-30');
+
+    expect(LatenessReviewAlert::count())->toBe(2);
+    Notification::assertSentToTimes($this->hr, LatenessReviewNotification::class, 2);
+});
+
 // --- Show cause notices -------------------------------------------------------
 
 it('issues a notice on record and rings the employee bell', function () {
@@ -247,13 +273,13 @@ it('shows an employee their own notices and nobody else theirs', function () {
 
     govStaff()->get(route('hrm.my-notices.index'))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/my-notices/index')
             ->has('notices', 1));
 
     govStaff()->get(route('hrm.my-notices.show', $notice))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/notices/show')
             ->where('notice.subject', 'Show cause'));
 

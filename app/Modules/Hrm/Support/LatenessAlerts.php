@@ -65,13 +65,22 @@ class LatenessAlerts
 
         $date = Carbon::parse($day->attendance_date);
 
+        // ⚠⚠ LABELLED BY THE PAYROLL CYCLE, BECAUSE THE LADDER IS.
+        // The unique index behind this row means "the bell rings once per
+        // month". Once the ladder resets on the 24th (see
+        // DailyAttendance::priorOccurrences) a cycle spans two calendar
+        // months, so a calendar label would let two consecutive cycles both
+        // land on "September" — and the second bell would be swallowed by the
+        // index in silence, which is the one failure this alert cannot have.
+        $cycle = PayrollCycle::containing($date);
+
         try {
             $alert = LatenessReviewAlert::create([
                 'business_id' => $day->business_id,
                 'employee_id' => $day->employee_id,
                 'grace_window_key' => $day->grace_window_key,
-                'year' => $date->year,
-                'month' => $date->month,
+                'year' => $cycle['year'],
+                'month' => $cycle['month'],
                 'occurrence_number' => $day->occurrence_number,
                 'alerted_at' => now(),
             ]);

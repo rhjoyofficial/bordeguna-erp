@@ -12,6 +12,7 @@ use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\LeaveLedgerEntry;
 use App\Modules\Hrm\Models\LeaveType;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -28,11 +29,19 @@ use Illuminate\Support\Facades\DB;
  * than an effective-dated one, so a confirmation date, when the record carries
  * one, is what says whether they were permanent back then.
  *
- * ⚠ The month is the CALENDAR month, not the 24-23 payroll cycle, because the
- * lateness ladders it reads reset per calendar month
- * (`DailyAttendance::priorOccurrences`). Counting a cycle against ladders that
- * reset mid-cycle would refuse a day on lates that belonged to two different
- * counters.
+ * ⚠⚠ The month is still the CALENDAR month, and that is now a DELIBERATE
+ * DIFFERENCE rather than an alignment. The reason written here originally was
+ * that the lateness ladders reset per calendar month too; since 9 Sep 2026
+ * they reset on the payroll cycle (`DailyAttendance::priorOccurrences`), so
+ * that reason is gone.
+ *
+ * It was left on the calendar month on purpose. This count is NOT coupled to
+ * the ladders: `lateCounts()` counts DAYS in a band over a date range and
+ * never reads `occurrence_number`, so it keeps measuring correctly either
+ * way. Moving it would change leave ENTITLEMENT, which is a liability and a
+ * business decision, not a consequence of fixing a payroll counter.
+ *
+ * ▶ Open for Joy: should the earned-leave month follow the 24-23 cycle too?
  *
  * ⚠ The thresholds and the rate are policy data on the company-default
  * attendance policy, so HR revises them on the same screen as the ladders and
@@ -148,9 +157,9 @@ class AccrueMonthlyEarnedLeave
      * was PERMANENT by then. A confirmation date after the month's end means
      * they were still on probation while it was being earned.
      *
-     * @return \Illuminate\Support\Collection<int, Employee>
+     * @return Collection<int, Employee>
      */
-    private function population(Carbon $monthEnd): \Illuminate\Support\Collection
+    private function population(Carbon $monthEnd): Collection
     {
         return Employee::query()
             ->whereHas('assignments', fn ($query) => $query

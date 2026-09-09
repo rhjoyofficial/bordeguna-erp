@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Hrm\Enums\AttendanceConsequence;
 use App\Modules\Hrm\Enums\AttendanceStatus;
+use App\Modules\Hrm\Support\PayrollCycle;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -165,9 +166,24 @@ class DailyAttendance extends Model
 
     /**
      * How many times this employee already hit a given lateness band earlier in
-     * the same month — the running counter POL-03's ladders escalate on.
-     * Counted strictly *before* the date being processed so reprocessing a day
-     * cannot count itself.
+     * the same PAYROLL CYCLE — the running counter POL-03's ladders
+     * escalate on. Counted strictly *before* the date being processed so
+     * reprocessing a day cannot count itself.
+     *
+     * ⚠⚠ THE CYCLE, NOT THE CALENDAR MONTH, AND IT IS A MONEY RULE.
+     * PAY-01 records this company's month as the 24th to the 23rd and leaves
+     * "Calendar month" explicitly unticked. These ladders end in a salary
+     * deduction, so the month they count over has to be the month that is
+     * actually paid.
+     *
+     * Resetting on the 1st did two wrong things at once, both measured on
+     * real data 9 Sep 2026: it carried the previous pay period's lates into
+     * the start of the new one (one employee opened a period on occurrence 9
+     * and was deducted four times for lateness already paid for), and then it
+     * handed out a free reset in the MIDDLE of the period, on the 1st.
+     *
+     * ⚠ A start day of 1 collapses this back to the plain calendar month, so
+     * a business configured that way behaves exactly as it did before.
      *
      * @return array<string, int>
      */
@@ -180,7 +196,7 @@ class DailyAttendance extends Model
             // date cast stored as "Y-m-d 00:00:00", so a plain string upper
             // bound of "Y-m-d" compares as less than the stored value and
             // silently drops that day — which would under-count the ladder.
-            ->whereDate('attendance_date', '>=', $date->copy()->startOfMonth()->toDateString())
+            ->whereDate('attendance_date', '>=', PayrollCycle::containing($date)['start']->toDateString())
             ->whereDate('attendance_date', '<', $date->toDateString())
             ->selectRaw('grace_window_key, count(*) as total')
             ->groupBy('grace_window_key')
