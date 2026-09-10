@@ -20,6 +20,16 @@ use Illuminate\Support\Facades\DB;
  * see and question. This is the one category flagged, and the accountant can
  * flag or unflag any of them from the categories screen.
  *
+ * ⛔⛔ AND IT PLANTS NOTHING THAT WOULD BE A DUPLICATE. Read off production on
+ * 10 Sep, before this ran: `Software / Subscription` is ACTIVE and already
+ * points at 6057, and EC-00009 - the Hostinger bill itself - is filed under it.
+ * Adding `ERP and Hosting` beside it would have put two live categories on one
+ * account and handed staff a choice with no right answer, which is precisely the
+ * duplication section 16 of the accountant's document tells us to merge away.
+ * So the test is the ACCOUNT, not the name: a category is planted only when no
+ * active category already points where it would. On a fresh install neither
+ * exists and both are planted.
+ *
  * Idempotent by name, and it plants nothing when the account is missing: a
  * category pointing at nothing would break the claim form for everybody.
  */
@@ -47,6 +57,20 @@ return new class extends Migration
                 $accountId = DB::table('accounts')->where('code', $code)->value('id');
 
                 if ($accountId === null) {
+                    continue;
+                }
+
+                // Somebody is already sending money to this head under another
+                // name. Leave theirs alone rather than offering staff two rows
+                // that do the same thing.
+                $taken = DB::table('expense_categories')
+                    ->where('business_id', $businessId)
+                    ->where('account_id', $accountId)
+                    ->where('is_active', true)
+                    ->where('name', '!=', $name)
+                    ->exists();
+
+                if ($taken) {
                     continue;
                 }
 

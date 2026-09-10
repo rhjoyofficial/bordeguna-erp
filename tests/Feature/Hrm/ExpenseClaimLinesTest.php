@@ -465,6 +465,26 @@ it('ships the hosting categories and lets the accountant add another', function 
         ->assertInertia(fn (Assert $page) => $page->where('categories', fn ($categories) => collect($categories)
             ->contains(fn ($category) => $category['name'] === 'ERP and Hosting')));
 
+    // ⛔⛔ AND IT REFUSES TO PLANT A DUPLICATE. Production already had an active
+    // `Software / Subscription` pointing at 6057 - the Hostinger bill was filed
+    // under it - so the migration must leave that alone rather than offer staff
+    // two live categories on one account with no right answer between them.
+    DB::table('expense_categories')->where('name', 'ERP and Hosting')->delete();
+    DB::table('expense_categories')->insert([
+        'business_id' => $this->business->id,
+        'name' => 'Software / Subscription',
+        'name_bn' => 'সফটওয়্যার',
+        'account_id' => Account::query()->where('code', '6057')->value('id'),
+        'is_exception' => false, 'is_active' => true, 'sort' => 99,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    (require base_path('app/Modules/Hrm/database/migrations/2026_09_10_100003_add_hosting_expense_categories.php'))->up();
+
+    expect(DB::table('expense_categories')->where('name', 'ERP and Hosting')->exists())->toBeFalse()
+        ->and(DB::table('expense_categories')->where('account_id', Account::query()->where('code', '6057')->value('id'))
+            ->where('is_active', true)->count())->toBe(1);
+
     ($this->asApprover)()->post(route('hrm.expense-categories.store'), [
         'name' => 'Legal and Notary',
         'name_bn' => 'আইন/নোটারি',
