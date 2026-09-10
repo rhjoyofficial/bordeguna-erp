@@ -37,10 +37,11 @@ use Spatie\Permission\PermissionRegistrar;
  *   3. Approve or reject was not enough. A claim with one wrong figure had to be
  *      rejected and typed again from nothing.
  *
- * ⚠⚠ THE ONE-PRESS CASE IS PART OF THE CONTRACT. Fixing the trip by making
- * everybody start a claim, add a spend and then submit would have taxed the
- * common case to help the rare one. `action=submit` still does the whole thing
- * in a single request, and ExpenseClaimTest holds that path.
+ * ⚠⚠ AND THE COMMON CASE STAYED THE POINT. Version 2 fixed the trip by asking
+ * for a claim TITLE and offering two competing buttons, which taxed the single
+ * courier that is most of the traffic; the owner rejected it on 10 Sep. Now one
+ * spend is the whole screen, it lands on the employee's ONE open claim, and
+ * sending is a separate quiet press.
  */
 beforeEach(function () {
     $this->business = Business::create(['name' => 'Trip Co', 'slug' => 'trip-co']);
@@ -115,12 +116,10 @@ function tripCategory(string $name): int
 function addSpend(array $overrides = []): \Illuminate\Testing\TestResponse
 {
     return (test()->asStaff)()->post(route('hrm.my-expenses.store'), array_merge([
-        'action' => 'add',
         'spent_on' => '2026-09-08',
         'amount' => '250',
         'expense_category_id' => tripCategory('Courier'),
         'description' => 'Courier to Savar',
-        'purpose' => 'Dhaka market trip',
         'receipt' => UploadedFile::fake()->image('courier.png', 600, 800),
     ], $overrides));
 }
@@ -135,18 +134,16 @@ it('builds one claim out of an afternoon of spends and sends it once', function 
     expect($claim->isDraft())->toBeTrue()
         ->and($claim->approvalRequest)->toBeNull();
 
-    // ⚠ The screen splits drafts from sent claims, and the NEWEST DRAFT IS
-    // FIRST. The form relies on that ordering to point the next spend at the
-    // claim just created; without it, pressing Add again would open a second
-    // claim and split the trip after all.
+    // ⚠⚠ ONE open claim, handed to the screen as a single object rather than a
+    // list. That is what removed the "which claim" picker: with only ever one,
+    // there is no question to ask, and the next spend cannot land on the wrong
+    // claim and split the trip.
     ($this->asStaff)()->get(route('hrm.my-expenses'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('drafts', fn ($drafts) => collect($drafts)->count() === 1
-                && collect($drafts)->first()['id'] === $claim->id)
+            ->where('draft.id', $claim->id)
             ->where('claims', fn ($claims) => collect($claims)->isEmpty()));
 
     addSpend([
-        'claim_id' => $claim->id,
         'amount' => '80',
         'expense_category_id' => tripCategory('Conveyance'),
         'description' => 'Rickshaw to the market',
@@ -154,7 +151,6 @@ it('builds one claim out of an afternoon of spends and sends it once', function 
     ])->assertSessionHasNoErrors();
 
     addSpend([
-        'claim_id' => $claim->id,
         'spent_on' => '2026-09-07',
         'amount' => '120',
         'expense_category_id' => tripCategory('Courier'),
@@ -179,13 +175,62 @@ it('builds one claim out of an afternoon of spends and sends it once', function 
         ->and($claim->approvalRequest?->status)->toBe(ApprovalStatus::Pending);
 });
 
+/**
+ * ⛔⛔ A SUBMITTED CLAIM IS CLOSED, AND THE NEXT SPEND STARTS A NEW ONE.
+ *
+ * Reopening a claim somebody is already approving asks questions nobody can
+ * answer cleanly: was the old total the one that was agreed, had the payable
+ * posted, was the voucher printed, was the employee already paid. A second claim
+ * costs nothing and avoids all of it.
+ */
+it('closes a claim when it is sent and starts a new one for the next spend', function () {
+    addSpend()->assertSessionHasNoErrors();
+    $first = ExpenseClaim::sole();
+    ($this->asStaff)()->post(route('hrm.my-expenses.submit', $first))->assertSessionHasNoErrors();
+
+    addSpend(['amount' => '90', 'description' => 'Rickshaw the next morning'])->assertSessionHasNoErrors();
+
+    $second = ExpenseClaim::query()->latest('id')->firstOrFail();
+
+    expect(ExpenseClaim::count())->toBe(2)
+        ->and($second->id)->not->toBe($first->id)
+        ->and($second->isDraft())->toBeTrue()
+        // ⚠ And the submitted one was not touched: same total, same one line.
+        ->and($first->fresh()->load('lines')->lines)->toHaveCount(1)
+        ->and((float) $first->fresh()->amount)->toBe(250.0);
+});
+
+/**
+ * ⚠⚠ NOBODY TYPES A CLAIM TITLE ANY MORE. Asking for one meant writing the same
+ * sentence twice for the single courier that is most of the traffic. The claim
+ * describes itself from what it holds; the NUMBER is the identity.
+ */
+it('names the claim from its own spends rather than asking for a title', function () {
+    addSpend(['description' => 'Courier to Savar'])->assertSessionHasNoErrors();
+
+    expect(ExpenseClaim::sole()->purpose)->toBe('Courier to Savar');
+
+    addSpend(['amount' => '80', 'description' => 'Rickshaw'])->assertSessionHasNoErrors();
+    addSpend(['amount' => '50', 'description' => 'Tea'])->assertSessionHasNoErrors();
+
+    expect(ExpenseClaim::sole()->fresh()->purpose)->toBe('Courier to Savar and 2 more');
+});
+
+it('refuses a spend with no amount or no category before it reaches the database', function () {
+    (test()->asStaff)()->post(route('hrm.my-expenses.store'), [
+        'spent_on' => '2026-09-08',
+        'receipt' => UploadedFile::fake()->image('x.png'),
+    ])->assertSessionHasErrors(['amount', 'expense_category_id']);
+
+    expect(ExpenseClaim::count())->toBe(0);
+});
+
 it('posts one journal for the whole claim, one debit per account', function () {
     addSpend()->assertSessionHasNoErrors();
     $claim = ExpenseClaim::sole();
 
-    addSpend(['claim_id' => $claim->id, 'amount' => '120', 'description' => 'Second courier']);
+    addSpend(['amount' => '120', 'description' => 'Second courier']);
     addSpend([
-        'claim_id' => $claim->id,
         'amount' => '80',
         'expense_category_id' => tripCategory('Conveyance'),
         'description' => 'Rickshaw',
@@ -218,7 +263,7 @@ it('posts one journal for the whole claim, one debit per account', function () {
 it('lets an approver refuse one spend and still pay the rest', function () {
     addSpend()->assertSessionHasNoErrors();
     $claim = ExpenseClaim::sole();
-    addSpend(['claim_id' => $claim->id, 'amount' => '120', 'description' => 'Second courier']);
+    addSpend(['amount' => '120', 'description' => 'Second courier']);
     ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
 
     $refused = $claim->fresh()->load('lines')->lines->last();
@@ -330,6 +375,9 @@ it('keeps a draft out of the finance screen and the approvals inbox', function (
     ($this->asApprover)()->get(route('hrm.expense-claims.index'))
         ->assertInertia(fn (Assert $page) => $page->where('claims', fn ($claims) => collect($claims)->isEmpty()));
 
+    ($this->asStaff)()->get(route('hrm.my-expenses'))
+        ->assertInertia(fn (Assert $page) => $page->where('draft.id', ExpenseClaim::sole()->id));
+
     // ⚠ Through the inbox itself, not its screen: the screen refuses an
     // approver with nothing to act on, so a 403 would look like a pass.
     expect(app(\App\Support\ApprovalInbox::class)->pendingActionableFor($this->approver))->toBeEmpty();
@@ -338,7 +386,7 @@ it('keeps a draft out of the finance screen and the approvals inbox', function (
 it('lets a spend be removed from a draft and refuses to touch a submitted one', function () {
     addSpend()->assertSessionHasNoErrors();
     $claim = ExpenseClaim::sole();
-    addSpend(['claim_id' => $claim->id, 'amount' => '120', 'description' => 'Second courier']);
+    addSpend(['amount' => '120', 'description' => 'Second courier']);
 
     $line = $claim->fresh()->load('lines')->lines->last();
 
@@ -397,7 +445,6 @@ it('accepts a spend with no receipt only in the category the accountant flagged'
     ])->assertSessionHasNoErrors();
 
     addSpend([
-        'claim_id' => ExpenseClaim::sole()->id,
         'expense_category_id' => tripCategory('Courier'),
         'receipt' => null,
     ])->assertSessionHasErrors('receipt');
@@ -431,7 +478,7 @@ it('will not send a claim with no spends on it', function () {
 it('prints every spend on the voucher and names the till the cash left', function () {
     addSpend()->assertSessionHasNoErrors();
     $claim = ExpenseClaim::sole();
-    addSpend(['claim_id' => $claim->id, 'amount' => '120', 'description' => 'Second courier']);
+    addSpend(['amount' => '120', 'description' => 'Second courier']);
     ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
     ($this->asApprover)()->post(route('hrm.expense-claims.approve', $claim))->assertSessionHasNoErrors();
 

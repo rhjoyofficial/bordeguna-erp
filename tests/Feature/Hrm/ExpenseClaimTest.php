@@ -154,6 +154,35 @@ function claimFor(int $employeeId, int $businessId, string $amount = '450.0000')
 }
 
 /**
+ * Add one spend through the screen and send the claim.
+ *
+ * ⚠⚠ TWO REQUESTS, DELIBERATELY (10 Sep 2026). Adding a spend and sending the
+ * claim became separate presses when the form stopped asking for a claim title
+ * and stopped offering two competing buttons. "Add expense" is the whole screen;
+ * sending is a quieter, separate act on the claim itself.
+ *
+ * @param  array<string, mixed>  $line
+ */
+function sendOneSpend(array $line = []): ExpenseClaim
+{
+    $staff = test()->staffUser;
+
+    test()->actingAs($staff)->post('/hrm/my-expenses', array_merge([
+        'expense_category_id' => plantedCategory(),
+        'spent_on' => '2026-08-26',
+        'amount' => '450',
+        'description' => 'Courier to Savar',
+        'receipt' => UploadedFile::fake()->image('receipt.jpg'),
+    ], $line))->assertSessionHasNoErrors();
+
+    $claim = ExpenseClaim::query()->latest('id')->firstOrFail();
+
+    test()->actingAs($staff)->post("/hrm/my-expenses/{$claim->id}/submit")->assertSessionHasNoErrors();
+
+    return $claim->fresh();
+}
+
+/**
  * The period's latest run, in whatever state the test needs it.
  *
  * ⚠ `version` matters: `latestRun()` orders by it, so a run written with the
@@ -172,17 +201,7 @@ function payrollRunFor(PayrollPeriod $period, PayrollStatus $status): PayrollRun
 }
 
 it('lets an employee raise a claim with a receipt, with no management permission', function () {
-    $this->actingAs($this->staffUser)
-        ->post('/hrm/my-expenses', [
-            'action' => 'submit',
-            'expense_category_id' => plantedCategory(),
-            'spent_on' => '2026-08-26',
-            'amount' => '450',
-            'purpose' => 'Courier to Savar',
-            'receipt' => UploadedFile::fake()->image('receipt.jpg'),
-        ])
-        ->assertRedirect()
-        ->assertSessionHasNoErrors();
+    sendOneSpend();
 
     $claim = ExpenseClaim::sole();
 
@@ -201,11 +220,10 @@ it('refuses a claim with no receipt', function () {
     // asked for later is proof that often never arrives.
     $this->actingAs($this->staffUser)
         ->post('/hrm/my-expenses', [
-            'action' => 'submit',
             'expense_category_id' => plantedCategory(),
             'spent_on' => '2026-08-26',
             'amount' => '450',
-            'purpose' => 'Courier to Savar',
+            'description' => 'Courier to Savar',
         ])
         ->assertSessionHasErrors('receipt');
 
@@ -215,10 +233,9 @@ it('refuses a claim with no receipt', function () {
 it('refuses a claim dated in the future', function () {
     $this->actingAs($this->staffUser)
         ->post('/hrm/my-expenses', [
-            'action' => 'submit',
             'spent_on' => now()->addDay()->toDateString(),
             'amount' => '450',
-            'purpose' => 'Courier',
+            'description' => 'Courier',
             'receipt' => UploadedFile::fake()->image('receipt.jpg'),
         ])
         ->assertSessionHasErrors('spent_on');
@@ -377,16 +394,7 @@ it('gives each claim its own number', function () {
  * approver's own inbox, press the URL the inbox itself gives, and only then pay.
  */
 it('carries a claim from the employee to the approver inbox to the money, with no shortcuts', function () {
-    $this->actingAs($this->staffUser)
-        ->post('/hrm/my-expenses', [
-            'action' => 'submit',
-            'expense_category_id' => plantedCategory(),
-            'spent_on' => '2026-08-26',
-            'amount' => '450',
-            'purpose' => 'Courier to Savar',
-            'receipt' => UploadedFile::fake()->image('receipt.jpg'),
-        ])
-        ->assertSessionHasNoErrors();
+    sendOneSpend();
 
     $claim = ExpenseClaim::sole();
 
@@ -590,16 +598,7 @@ it('never adds the same claim to a salary twice, even by two routes at once', fu
  * audiences recognise, and the account stays available for the office.
  */
 it('prints a settled claim with the category the employee chose, not the chart code', function () {
-    $this->actingAs($this->staffUser)
-        ->post('/hrm/my-expenses', [
-            'action' => 'submit',
-            'expense_category_id' => plantedCategory(),
-            'spent_on' => '2026-08-26',
-            'amount' => '450',
-            'purpose' => 'Courier to Savar',
-            'receipt' => UploadedFile::fake()->image('receipt.jpg'),
-        ])
-        ->assertSessionHasNoErrors();
+    sendOneSpend();
 
     $claim = ExpenseClaim::sole();
     $this->actingAs($this->finance)->post("/hrm/expense-claims/{$claim->id}/approve")->assertSessionHasNoErrors();

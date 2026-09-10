@@ -100,18 +100,22 @@ function submitClaim(string $category = 'Mobile'): ExpenseClaim
 {
     (test()->asStaff)()->get(route('hrm.my-expenses')); // plants default categories
 
+    // ⚠ Two requests since 10 Sep 2026: adding the spend and sending the claim
+    // became separate presses when the form dropped its title and its second
+    // button. "Add expense" is the whole screen; sending is its own quiet act.
     (test()->asStaff)()->post(route('hrm.my-expenses.store'), [
-        // ⚠ `submit` is the one-press path: create the claim, add the spend and
-        // send it, exactly as the old single-field form did.
-        'action' => 'submit',
         'spent_on' => '2026-09-03',
         'amount' => '547',
         'expense_category_id' => categoryId($category),
-        'purpose' => 'Laladia SIM - minute purchase',
+        'description' => 'Laladia SIM - minute purchase',
         'receipt' => UploadedFile::fake()->image('recharge.png', 600, 800),
     ])->assertSessionHasNoErrors();
 
-    return ExpenseClaim::query()->latest('id')->firstOrFail();
+    $claim = ExpenseClaim::query()->latest('id')->firstOrFail();
+
+    (test()->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
+
+    return $claim->fresh();
 }
 
 it('plants the default categories with their COA mapping, and requires one on a claim', function () {

@@ -132,7 +132,35 @@ class ExpenseClaim extends Model
             'spent_on' => $lines->min(fn (ExpenseClaimLine $line) => $line->spent_on?->toDateString()),
             'expense_category_id' => $categories->count() === 1 ? $categories->first() : null,
             'expense_account_id' => $accounts->count() === 1 ? $accounts->first() : null,
+            'purpose' => $this->summaryOf($lines),
         ])->save();
+    }
+
+    /**
+     * What the claim is for, WITHOUT anybody typing it.
+     *
+     * ⚠⚠ THE TITLE FIELD IS GONE (10 Sep 2026). Asking for a claim title and a
+     * spend note meant writing the same sentence twice for the single courier
+     * that is most of the traffic. The claim already knows what it holds, so it
+     * says so itself: the first spend's own words, and how many others joined
+     * it. The claim NUMBER is the identity; this is only ever a label.
+     *
+     * @param  Collection<int, ExpenseClaimLine>  $lines
+     */
+    private function summaryOf(Collection $lines): string
+    {
+        $first = $lines->first();
+        $said = trim((string) ($first?->description ?? ''));
+
+        if ($said === '') {
+            $said = $first?->category()['name'] ?? 'Expense';
+        }
+
+        $others = $lines->count() - 1;
+
+        return $others > 0
+            ? $said.' and '.$others.' more'
+            : $said;
     }
 
     /**

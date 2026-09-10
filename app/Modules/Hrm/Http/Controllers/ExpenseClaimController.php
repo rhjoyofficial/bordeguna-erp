@@ -40,9 +40,20 @@ use Inertia\Response;
  *
  * ⚠⚠ A CLAIM IS A HEADER WITH LINES (Joy, 9 Sep 2026). A market trip is goods,
  * a rickshaw, a courier and tea for the supplier - four spends, one afternoon,
- * one claim, one approval, one payment, one voucher. The employee builds it as a
- * DRAFT over the day and submits once. A single courier is still one press,
- * because the same form that adds a spend can also send the claim.
+ * one claim, one approval, one payment, one voucher.
+ *
+ * ⚠⚠ AND ONE SPEND IS THE WHOLE SCREEN (Joy, 10 Sep 2026: "it works, I did not
+ * like the process"). The first attempt at the above asked for a claim TITLE as
+ * well as a spend note, and offered two equally loud buttons - it solved the
+ * market trip by taxing the single courier that is most of the traffic. Now:
+ * five fields and one button, the spend lands on the employee's ONE open claim,
+ * and sending is a separate quieter press. Nothing asks for a title; the claim
+ * describes itself from what it holds.
+ *
+ * ⛔ A SUBMITTED CLAIM IS CLOSED TO THE EMPLOYEE. A spend remembered the next day
+ * becomes a NEW claim. Reopening one mid-approval asks questions nobody can
+ * answer: was the old total the one agreed, had the payable posted, was the
+ * voucher printed, was the money already paid.
  *
  * ⚠⚠ AND THERE IS A WAY BACK. A claim with one wrong figure used to have to be
  * rejected and typed again from nothing. It can now be SENT BACK with a note:
@@ -78,11 +89,11 @@ class ExpenseClaimController extends Controller
         ExpenseCategories::ensureDefaults(app(BusinessContext::class)->id());
 
         return Inertia::render('hrm/expense-claims/mine', [
-            // ⚠ Split rather than filtered in the browser: a draft is an
-            // editable thing with its own form, and a sent claim is a read-only
-            // row. One list rendered two ways is how a Remove button ends up on
-            // a claim somebody has already approved.
-            'drafts' => $claims->filter(fn (array $row) => $row['is_draft'])->values(),
+            // ⚠⚠ ONE OPEN CLAIM, NOT A LIST OF DRAFTS (10 Sep 2026). Allowing
+            // several at once is what forced a "which claim" picker onto the
+            // form, and a picker is a question most people never need to answer.
+            // A returned claim is the same single open claim, handed back.
+            'draft' => $claims->first(fn (array $row) => $row['is_draft']),
             'claims' => $claims->reject(fn (array $row) => $row['is_draft'])->values(),
             'categories' => ExpenseCategories::active(app(BusinessContext::class)->id()),
             'today' => now()->toDateString(),
@@ -90,14 +101,19 @@ class ExpenseClaimController extends Controller
     }
 
     /**
-     * Add a spend - and, if that is the whole claim, send it in the same press.
+     * Record one spend.
      *
-     * ⚠⚠ ONE FORM, TWO BUTTONS, AND THAT IS THE POINT. Requiring "start a
-     * claim" then "add a spend" then "submit" would turn today's single-courier
-     * claim from one press into three. `action=submit` does all of it at once;
-     * `action=add` leaves the claim open so the next rickshaw can join it.
+     * ⚠⚠ THIS IS THE WHOLE SCREEN NOW (Joy, 10 Sep 2026: "it works, I did not
+     * like the process"). Version 2 asked for a claim title, a spend note and a
+     * choice between two equally-loud buttons, which solved the market trip by
+     * taxing the courier that happens every day. An employee should be able to
+     * think "I spent 180 taka on a courier today" and be finished.
+     *
+     * So: five fields and one button. The spend lands on the employee's open
+     * claim, or starts one if they have none. Sending it is a separate, quieter
+     * press on the claim itself.
      */
-    public function store(Request $request, StoreAttachment $store, NotifyStageApprovers $notify): RedirectResponse
+    public function store(Request $request, StoreAttachment $store): RedirectResponse
     {
         $employee = Employee::forUser($request->user());
 
@@ -107,43 +123,33 @@ class ExpenseClaimController extends Controller
 
         $businessId = app(BusinessContext::class)->id();
 
-        $data = $request->validate([
-            'action' => ['required', Rule::in(['add', 'submit'])],
-            // Null starts a new claim; otherwise the spend joins a draft this
-            // employee already has open.
-            'claim_id' => ['nullable', 'integer'],
-            'purpose' => ['required_without:claim_id', 'nullable', 'string', 'max:1000'],
-        ] + $this->lineRules($request, $businessId), $this->lineMessages());
+        $data = $request->validate(
+            $this->lineRules($request, $businessId),
+            $this->lineMessages(),
+        );
 
-        // ⚠ `?? null`, not `[...]`: a nullable rule the request never sent
-        // leaves the key ABSENT rather than null, and reading it directly is an
-        // undefined-key error on the ordinary one-press path.
-        $claim = ($data['claim_id'] ?? null) === null
-            ? null
-            : $this->ownDraft((int) $data['claim_id'], $employee->id);
+        $claim = $this->openDraft($employee->id);
 
-        return DB::transaction(function () use ($claim, $data, $request, $store, $notify, $employee, $businessId) {
+        return DB::transaction(function () use ($claim, $data, $request, $store, $employee, $businessId) {
             if ($claim === null) {
                 $claim = ExpenseClaim::create([
                     'business_id' => $businessId,
                     'employee_id' => $employee->id,
                     'claim_number' => ExpenseClaim::nextNumber($businessId),
-                    // Derived from the lines the moment the first one lands;
-                    // written here only because the columns are not nullable.
+                    // ⚠ All three are DERIVED from the lines the moment the
+                    // first one lands. They are written here only because the
+                    // columns are not nullable, and `syncFromLines` immediately
+                    // overwrites them with the truth.
                     'spent_on' => $data['spent_on'],
                     'amount' => $data['amount'],
-                    'purpose' => $data['purpose'] ?? '',
+                    'purpose' => '',
                     'created_by' => $request->user()->id,
                 ]);
             }
 
             $this->addLine($claim, $data, $request, $store);
 
-            if ($data['action'] === 'add') {
-                return back()->with('success', "Added to {$claim->claim_number}. Add the next spend, or send it for approval.");
-            }
-
-            return $this->sendForApproval($claim->fresh(), $request, $notify);
+            return back()->with('success', "Added to {$claim->claim_number}. Add another spend, or send it for approval.");
         });
     }
 
@@ -159,46 +165,6 @@ class ExpenseClaimController extends Controller
         $claim = $this->ownDraft($claim->id, $employee->id);
 
         return $this->sendForApproval($claim, $request, $notify);
-    }
-
-    /**
-     * Correct a spend on a claim that has not been approved.
-     *
-     * ⚠ Only the figures. Replacing a receipt means removing the line and
-     * adding it again, deliberately: a screen that quietly swapped one piece of
-     * evidence for another is how the wrong receipt ends up filed against the
-     * right amount with nobody able to tell.
-     */
-    public function updateLine(Request $request, ExpenseClaim $claim, ExpenseClaimLine $line, StoreAttachment $store): RedirectResponse
-    {
-        $employee = Employee::forUser($request->user());
-        abort_if($employee === null, 403);
-
-        $claim = $this->ownDraft($claim->id, $employee->id);
-        abort_unless($line->expense_claim_id === $claim->id, 404);
-
-        $businessId = app(BusinessContext::class)->id();
-
-        $data = $request->validate(
-            $this->lineRules($request, $businessId, receiptRequired: $line->attachments()->count() === 0),
-            $this->lineMessages(),
-        );
-
-        $line->update([
-            'spent_on' => $data['spent_on'],
-            'expense_category_id' => $data['expense_category_id'],
-            'amount' => $data['amount'],
-            'description' => $data['description'] ?? null,
-        ]);
-
-        if ($request->hasFile('receipt')) {
-            $store->handle($line, $request->file('receipt'), ExpenseClaimLine::EVIDENCE_COLLECTION, $request->user());
-        }
-
-        $claim->load('lines');
-        $claim->syncFromLines();
-
-        return back()->with('success', 'Spend updated.');
     }
 
     public function destroyLine(Request $request, ExpenseClaim $claim, ExpenseClaimLine $line, DeleteAttachment $deleteAttachment): RedirectResponse
@@ -571,6 +537,28 @@ class ExpenseClaimController extends Controller
         abort_if($claim === null, 404);
 
         return $claim;
+    }
+
+    /**
+     * The one claim this employee currently has open, or null.
+     *
+     * ⚠⚠ EXACTLY ONE, BY DESIGN (10 Sep 2026). Several drafts at once is what
+     * forced a "which claim" picker onto the form, and answering that question
+     * is work most people never needed to do. A returned claim occupies the same
+     * single slot, which is right: it IS the thing they should be dealing with.
+     *
+     * ⚠ Ordered oldest first so a returned claim - which is older than anything
+     * started since - is the one they land on rather than a newer scratch.
+     */
+    private function openDraft(int $employeeId): ?ExpenseClaim
+    {
+        return ExpenseClaim::query()
+            ->with('lines.attachments')
+            ->where('employee_id', $employeeId)
+            ->whereNull('submitted_at')
+            ->whereNull('settled_at')
+            ->orderBy('id')
+            ->first();
     }
 
     private function sendForApproval(ExpenseClaim $claim, Request $request, NotifyStageApprovers $notify): RedirectResponse
