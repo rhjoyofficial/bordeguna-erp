@@ -167,16 +167,26 @@ export default function MyExpenseClaims({
                     </p>
                 )}
 
-                {/* ⚠⚠ TWO ROWS, Joy's own layout (3 Sep 2026): when / how much /
-                    category / receipt across the full width, then what it was for.
-                    ⚠ The four SHARE the row (flex-1 with a min-width each) rather
+                {/* ⚠⚠ ONE ROW, Joy's own layout (10 Sep 2026): what the claim is
+                    for / when / how much / category / receipt, all across, and the
+                    spend's own note underneath. He asked for the title to join the
+                    other four rather than sit on a line of its own above them.
+
+                    ⚠ The five SHARE the row (flex-1 with a min-width each) rather
                     than sitting in equal grid columns: a grid would hand the date
-                    the same quarter as the receipt, and the row would not reflow on
-                    a phone. Each min-width is what that control actually holds. */}
+                    the same fifth as the receipt, and the row would not reflow on a
+                    phone. Each min-width is what that control actually holds, and
+                    none is wider than a phone, so the row becomes a column at ~400px
+                    instead of scrolling sideways.
+
+                    ⚠ `Which claim` is a MODE SWITCH, not one of the five fields, so
+                    it stays on its own line and only when there is a draft to
+                    choose. Folding it into the row would make the row's meaning
+                    change shape depending on how many drafts happen to be open. */}
                 <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
                     {drafts.length > 0 && (
                         <FormRow>
-                            <Field label="Which claim" htmlFor="claim_id" className="min-w-64 flex-1" error={form.errors.claim_id}>
+                            <Field label="Which claim" htmlFor="claim_id" size="lg" error={form.errors.claim_id}>
                                 <SearchSelect
                                     id="claim_id"
                                     value={form.data.claim_id}
@@ -193,14 +203,15 @@ export default function MyExpenseClaims({
                         </FormRow>
                     )}
 
-                    {startingNew && (
-                        <FormRow>
+                    <FormRow>
+                        {/* ⚠ Only when starting one. Adding a spend to a draft that
+                            already has a title must not offer to retype it. */}
+                        {startingNew && (
                             <Field
                                 label="What is this claim for"
                                 htmlFor="purpose"
-                                size="grow"
+                                className="min-w-52 max-w-md flex-[2]"
                                 error={form.errors.purpose}
-                                hint="One line for the whole claim, like Dhaka market trip. Each spend gets its own note below."
                             >
                                 <Input
                                     id="purpose"
@@ -209,11 +220,9 @@ export default function MyExpenseClaims({
                                     onChange={(e) => form.setData('purpose', e.target.value)}
                                 />
                             </Field>
-                        </FormRow>
-                    )}
+                        )}
 
-                    <FormRow>
-                        <Field label="When you spent it" htmlFor="spent_on" className="min-w-40 flex-1" error={form.errors.spent_on}>
+                        <Field label="When you spent it" htmlFor="spent_on" className="min-w-36" error={form.errors.spent_on}>
                             <Input
                                 id="spent_on"
                                 type="date"
@@ -223,7 +232,7 @@ export default function MyExpenseClaims({
                             />
                         </Field>
 
-                        <Field label="How much (BDT)" htmlFor="amount" className="min-w-32 flex-1" error={form.errors.amount}>
+                        <Field label="How much (BDT)" htmlFor="amount" className="min-w-28 max-w-40 flex-[1]" error={form.errors.amount}>
                             <Input
                                 id="amount"
                                 type="number"
@@ -238,7 +247,7 @@ export default function MyExpenseClaims({
                         <Field
                             label="Expense category"
                             htmlFor="expense_category_id"
-                            className="min-w-52 flex-1"
+                            className="min-w-44 max-w-sm flex-[2]"
                             error={form.errors.expense_category_id}
                         >
                             <SearchSelect
@@ -256,11 +265,10 @@ export default function MyExpenseClaims({
                         </Field>
 
                         <Field
-                            label="Receipt"
+                            label={receiptNeeded ? 'Receipt' : 'Receipt (not needed)'}
                             htmlFor="receipt"
-                            className="min-w-56 flex-1"
+                            className="min-w-48 max-w-sm flex-[2]"
                             error={form.errors.receipt}
-                            hint={receiptNeeded ? undefined : 'This category does not need one.'}
                         >
                             <Input
                                 id="receipt"
