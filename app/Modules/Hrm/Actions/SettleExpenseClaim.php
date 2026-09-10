@@ -64,7 +64,7 @@ class SettleExpenseClaim
                 ->map(fn ($line) => [
                     'account' => $expenseAccount,
                     'amount' => (string) $line->amount,
-                    'description' => $line->description ?: $claim->purpose,
+                    'description' => $line->description ?: $claim->displayName(),
                 ])
                 ->all();
 
@@ -74,7 +74,7 @@ class SettleExpenseClaim
                 lines: $voucherLines === [] ? [[
                     'account' => $expenseAccount,
                     'amount' => (string) $claim->amount,
-                    'description' => $claim->purpose,
+                    'description' => $claim->displayName(),
                 ]] : $voucherLines,
                 createdBy: $actor,
                 // ⚠ The employee is named as the payee, not the shop they bought
@@ -164,7 +164,7 @@ class SettleExpenseClaim
                     ? PayrollAdjustmentType::ExpenseClaimSettlement
                     : PayrollAdjustmentType::Reimbursement,
                 'amount' => (string) $claim->amount,
-                'reason' => 'Expense claim '.$claim->claim_number.': '.$claim->purpose,
+                'reason' => 'Expense claim '.$claim->claim_number.': '.$claim->displayName(),
                 // ⚠⚠ The polymorphic origin is what stops the same claim being
                 // added to salary twice through two different screens: the
                 // adjustment knows exactly which claim produced it.

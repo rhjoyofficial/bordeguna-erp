@@ -142,7 +142,9 @@ class ExpenseClaimController extends Controller
                     // overwrites them with the truth.
                     'spent_on' => $data['spent_on'],
                     'amount' => $data['amount'],
-                    'purpose' => '',
+                    // ⚠ Unnamed on purpose. One spend describes itself; the
+                    // screen asks for a trip name only once a second joins.
+                    'purpose' => null,
                     'created_by' => $request->user()->id,
                 ]);
             }
@@ -165,6 +167,34 @@ class ExpenseClaimController extends Controller
         $claim = $this->ownDraft($claim->id, $employee->id);
 
         return $this->sendForApproval($claim, $request, $notify);
+    }
+
+    /**
+     * Name a claim that holds several spends.
+     *
+     * ⭐ Joy, 10 Sep 2026, giving a journey to Barisal only as ONE example -
+     * "not only trip, there may happen for many ways multi expense in single
+     * time". Grouping several spends under one approval was already solved; what
+     * the company could not see was WHAT they were. Saved as the employee types
+     * rather than carried on the send, so a name typed at noon survives an
+     * afternoon of adding more spends.
+     */
+    public function rename(Request $request, ExpenseClaim $claim): RedirectResponse
+    {
+        $employee = Employee::forUser($request->user());
+        abort_if($employee === null, 403);
+
+        $claim = $this->ownDraft($claim->id, $employee->id);
+
+        $data = $request->validate([
+            'purpose' => ['required', 'string', 'max:1000'],
+        ], [
+            'purpose.required' => 'Say what these spends were for, so the office can see where the money went.',
+        ]);
+
+        $claim->forceFill(['purpose' => trim($data['purpose'])])->save();
+
+        return back()->with('success', 'Saved.');
     }
 
     public function destroyLine(Request $request, ExpenseClaim $claim, ExpenseClaimLine $line, DeleteAttachment $deleteAttachment): RedirectResponse
@@ -585,6 +615,17 @@ class ExpenseClaimController extends Controller
             ]);
         }
 
+        // ⛔ SEVERAL SPENDS AT ONCE HAVE TO SAY WHAT THEY WERE. Grouping them
+        // under one approval is the whole point of the module, but four
+        // unrelated lines tell the company nothing about where the money went.
+        // One line of the employee's own words does. A single spend is never
+        // asked, because it already describes itself.
+        if ($claim->needsAName()) {
+            throw ValidationException::withMessages([
+                'claim' => 'This claim has more than one spend, so give it a name first - what was the trip or the job?',
+            ]);
+        }
+
         $claim->syncFromLines();
         $claim->forceFill(['submitted_at' => now()])->save();
 
@@ -646,7 +687,12 @@ class ExpenseClaimController extends Controller
             // and Dhaka is UTC+6, so midnight local renders a day early.
             'spent_on' => $claim->spent_on?->toDateString(),
             'amount' => (string) (float) $claim->amount,
-            'purpose' => $claim->purpose,
+            'purpose' => $claim->displayName(),
+            // The employee's own words, empty when they have not named it yet -
+            // kept apart from `purpose` so the input is not pre-filled with a
+            // label the system invented.
+            'trip_name' => $claim->purpose,
+            'needs_a_name' => $claim->needsAName(),
             'state' => $claim->state(),
             'is_draft' => $claim->isDraft(),
             'was_sent_back' => $claim->wasSentBack(),
@@ -738,7 +784,7 @@ class ExpenseClaimController extends Controller
                 'employee_code' => $claim->employee?->employee_code,
                 'spent_on' => $claim->spent_on?->toDateString(),
                 'settled_on' => $claim->settled_at?->toDateString(),
-                'purpose' => $claim->purpose,
+                'purpose' => $claim->displayName(),
                 // ⚠ THE CATEGORY, NOT THE ACCOUNT. Both of these read the
                 // account before, so a voucher handed to the person being paid
                 // said "6250 - Office Stationery" - a chart code, on the one

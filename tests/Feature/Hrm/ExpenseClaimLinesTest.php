@@ -124,6 +124,17 @@ function addSpend(array $overrides = []): \Illuminate\Testing\TestResponse
     ], $overrides));
 }
 
+/**
+ * ⛔ A claim holding several spends must say what they were before it can be
+ * sent - see the naming test below. Every multi-spend test therefore names its
+ * claim, exactly as the screen makes a real employee do.
+ */
+function nameIt(ExpenseClaim $claim, string $name = 'Barisal office visit'): void
+{
+    (test()->asStaff)()->patch(route('hrm.my-expenses.rename', $claim), ['purpose' => $name])
+        ->assertSessionHasNoErrors();
+}
+
 it('builds one claim out of an afternoon of spends and sends it once', function () {
     addSpend()->assertSessionHasNoErrors();
 
@@ -167,6 +178,7 @@ it('builds one claim out of an afternoon of spends and sends it once', function 
         ->and((float) $claim->amount)->toBe(450.0)
         ->and($claim->spent_on->toDateString())->toBe('2026-09-07');
 
+    nameIt($claim);
     ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
 
     $claim->refresh();
@@ -201,19 +213,81 @@ it('closes a claim when it is sent and starts a new one for the next spend', fun
 });
 
 /**
- * ⚠⚠ NOBODY TYPES A CLAIM TITLE ANY MORE. Asking for one meant writing the same
- * sentence twice for the single courier that is most of the traffic. The claim
- * describes itself from what it holds; the NUMBER is the identity.
+ * ⚠⚠ ONE SPEND IS NEVER ASKED FOR A NAME. Demanding a claim title and a spend
+ * note meant writing the same sentence twice for the single courier that is most
+ * of the traffic. A one-spend claim describes itself from the line it holds.
  */
-it('names the claim from its own spends rather than asking for a title', function () {
+it('names a single-spend claim from the spend itself', function () {
     addSpend(['description' => 'Courier to Savar'])->assertSessionHasNoErrors();
 
-    expect(ExpenseClaim::sole()->purpose)->toBe('Courier to Savar');
+    $claim = ExpenseClaim::sole()->load('lines');
 
-    addSpend(['amount' => '80', 'description' => 'Rickshaw'])->assertSessionHasNoErrors();
-    addSpend(['amount' => '50', 'description' => 'Tea'])->assertSessionHasNoErrors();
+    expect($claim->purpose)->toBeNull()
+        ->and($claim->displayName())->toBe('Courier to Savar')
+        ->and($claim->needsAName())->toBeFalse();
 
-    expect(ExpenseClaim::sole()->fresh()->purpose)->toBe('Courier to Savar and 2 more');
+    // ...and it sends without anybody naming anything.
+    ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
+
+    expect($claim->fresh()->isDraft())->toBeFalse();
+});
+
+/**
+ * ⛔⛔ SEVERAL SPENDS AT ONCE MUST SAY WHAT THEY WERE (Joy, 10 Sep 2026). He
+ * described a journey to Barisal - office purchase, mobile bill, cash to
+ * labourers, all from his own pocket - and was explicit that the journey was only
+ * an EXAMPLE: "not only trip, their may happend for many ways multi expense in
+ * single time". One approval for the lot was already solved. What the company
+ * could not see was WHAT the lot was, and four unrelated lines do not say.
+ */
+it('refuses to send several spends until they are named, then keeps that name', function () {
+    addSpend(['description' => 'Printer paper for the office'])->assertSessionHasNoErrors();
+    addSpend(['amount' => '600', 'expense_category_id' => tripCategory('Mobile'), 'description' => 'Mobile bill'])
+        ->assertSessionHasNoErrors();
+    addSpend(['amount' => '1500', 'expense_category_id' => tripCategory('Daily Labour'), 'receipt' => null, 'description' => 'Two labourers, one day'])
+        ->assertSessionHasNoErrors();
+
+    $claim = ExpenseClaim::sole()->load('lines');
+
+    expect($claim->lines)->toHaveCount(3)
+        ->and($claim->needsAName())->toBeTrue();
+
+    ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))
+        ->assertSessionHasErrors('claim');
+
+    expect($claim->fresh()->isDraft())->toBeTrue();
+
+    ($this->asStaff)()->patch(route('hrm.my-expenses.rename', $claim), ['purpose' => 'Barisal office visit'])
+        ->assertSessionHasNoErrors();
+
+    ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
+
+    $claim->refresh()->load('lines');
+
+    expect($claim->isDraft())->toBeFalse()
+        ->and($claim->purpose)->toBe('Barisal office visit')
+        ->and($claim->displayName())->toBe('Barisal office visit')
+        // ⚠ And the whole outing is ONE claim, ONE approval, one total.
+        ->and((float) $claim->amount)->toBe(2350.0)
+        ->and($claim->approvalRequest?->status)->toBe(ApprovalStatus::Pending);
+});
+
+/**
+ * ⛔ "Gave some money to labour" had nowhere to go. The accountant's chart holds
+ * 6095 Warehouse Labour and 6096 Loading and Unloading Labour, but not one of the
+ * employee-facing categories pointed at either, so it could only be filed as the
+ * catch-all his own document forbids as a default.
+ */
+it('gives day labour and loading a category of their own', function () {
+    ($this->asStaff)()->get(route('hrm.my-expenses'))
+        ->assertInertia(fn (Assert $page) => $page->where('categories', fn ($categories) => collect($categories)
+            ->pluck('name')->contains('Daily Labour')
+            && collect($categories)->pluck('name')->contains('Loading and Unloading')));
+
+    // ⚠ And neither demands a receipt: a day labourer signs a voucher, not a
+    // printed bill, and refusing the spend would push it off the books.
+    expect(DB::table('expense_categories')->where('name', 'Daily Labour')->value('receipt_required'))->toBe(0)
+        ->and(Account::find(DB::table('expense_categories')->where('name', 'Daily Labour')->value('account_id'))->code)->toBe('6095');
 });
 
 it('refuses a spend with no amount or no category before it reaches the database', function () {
@@ -237,6 +311,7 @@ it('posts one journal for the whole claim, one debit per account', function () {
         'receipt' => null,
     ]);
 
+    nameIt($claim);
     ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
     ($this->asApprover)()->post(route('hrm.expense-claims.approve', $claim))->assertSessionHasNoErrors();
 
@@ -264,6 +339,7 @@ it('lets an approver refuse one spend and still pay the rest', function () {
     addSpend()->assertSessionHasNoErrors();
     $claim = ExpenseClaim::sole();
     addSpend(['amount' => '120', 'description' => 'Second courier']);
+    nameIt($claim);
     ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
 
     $refused = $claim->fresh()->load('lines')->lines->last();
@@ -479,6 +555,7 @@ it('prints every spend on the voucher and names the till the cash left', functio
     addSpend()->assertSessionHasNoErrors();
     $claim = ExpenseClaim::sole();
     addSpend(['amount' => '120', 'description' => 'Second courier']);
+    nameIt($claim);
     ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
     ($this->asApprover)()->post(route('hrm.expense-claims.approve', $claim))->assertSessionHasNoErrors();
 

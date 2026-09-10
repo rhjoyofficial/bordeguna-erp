@@ -83,7 +83,7 @@ class PostExpenseClaimApproval
             $byAccount[$accountId] ??= ['amount' => Money::zero(), 'names' => [], 'purposes' => []];
             $byAccount[$accountId]['amount'] = $byAccount[$accountId]['amount']->plus(Money::ofTaka((string) $line->amount));
             $byAccount[$accountId]['names'][] = $category->name ?? 'Expense';
-            $byAccount[$accountId]['purposes'][] = $line->description ?: $claim->purpose;
+            $byAccount[$accountId]['purposes'][] = $line->description ?: $claim->displayName();
         }
 
         if ($byAccount === []) {

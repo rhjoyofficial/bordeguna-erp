@@ -70,6 +70,8 @@ class ExpenseCategories
         'Bank and MFS Charge' => ['ব্যাংক/এমএফএস চার্জ', '6471', false, true],
         'Licence and Testing' => ['লাইসেন্স/টেস্টিং', '6505', false, true],
         'Repair and Maintenance' => ['মেরামত/রক্ষণাবেক্ষণ', '6556', false, true],
+        'Daily Labour' => ['দিনমজুরের খরচ', '6095', false, false],
+        'Loading and Unloading' => ['লোড/আনলোড খরচ', '6096', false, false],
         'Software Subscription' => ['সফটওয়্যার সাবস্ক্রিপশন', '6056', false, true],
         'ERP and Hosting' => ['ইআরপি/হোস্টিং', '6057', false, true],
         'Other Approved Business Expense' => ['অন্যান্য অনুমোদিত খরচ', '6601', true, true],

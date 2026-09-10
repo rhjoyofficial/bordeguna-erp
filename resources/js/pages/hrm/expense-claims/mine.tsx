@@ -9,7 +9,7 @@ import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useEffect, useState } from 'react';
 
 type Category = { id: number; name: string; name_bn: string | null; receipt_required: boolean };
 
@@ -34,6 +34,8 @@ type Claim = {
     purpose: string;
     state: string;
     is_draft: boolean;
+    trip_name: string | null;
+    needs_a_name: boolean;
     was_sent_back: boolean;
     sent_back_note: string | null;
     is_settled: boolean;
@@ -140,7 +142,7 @@ export default function MyExpenseClaims({
 
                 <HeadingSmall
                     title="Money I spent for the office"
-                    description="Add what you paid out of your own pocket, attach the receipt, and send it to your manager. Spend twice on the same trip? Add it twice, then send once."
+                    description="Add what you paid out of your own pocket, attach the receipt, and send it to your manager. Several spends at once? Add each one, name them together, and send once for a single approval."
                 />
 
                 {outstanding > 0 && (
@@ -303,6 +305,14 @@ function Spends({ lines }: { lines: Line[] }) {
  * person to ask, which is the state this feature exists to end.
  */
 function OpenClaim({ draft }: { draft: Claim }) {
+    const [name, setName] = useState(draft.trip_name ?? '');
+
+    // ⚠ The server is the truth: a name saved on blur, or a claim replaced by a
+    // reload, must not be overwritten by stale local state.
+    useEffect(() => setName(draft.trip_name ?? ''), [draft.id, draft.trip_name]);
+
+    const unnamed = draft.lines.length > 1 && name.trim() === '';
+
     return (
         <div className="border-border space-y-3 rounded-md border p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -320,6 +330,33 @@ function OpenClaim({ draft }: { draft: Claim }) {
                     Total <span className="font-medium">BDT {money(draft.amount)}</span>
                 </p>
             </div>
+
+            {/* ⭐ Joy, 10 Sep 2026, and he was explicit that a journey was only
+                an example: "not only trip, their may happend for many ways multi
+                expense in single time". Grouping several spends under one
+                approval was already solved; what the company could not see was
+                WHAT they were. So the name is asked the moment a second spend
+                joins, and never before - one purchase describes itself. */}
+            {draft.lines.length > 1 && (
+                <Field
+                    label="What were these spends for"
+                    htmlFor="trip_name"
+                    size="grow"
+                    hint="One line covering all of them - a visit, a job, a repair, a day of errands. It shows on the approval and on the voucher."
+                >
+                    <Input
+                        id="trip_name"
+                        value={name}
+                        placeholder="Barisal office visit"  /* an example, not the only shape */
+                        onChange={(e) => setName(e.target.value)}
+                        onBlur={() => {
+                            if (name.trim() !== '' && name.trim() !== (draft.trip_name ?? '')) {
+                                router.patch(`/hrm/my-expenses/${draft.id}`, { purpose: name.trim() }, { preserveScroll: true });
+                            }
+                        }}
+                    />
+                </Field>
+            )}
 
             {draft.was_sent_back && draft.sent_back_note && (
                 <p className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800">What needs correcting: {draft.sent_back_note}</p>
@@ -373,7 +410,7 @@ function OpenClaim({ draft }: { draft: Claim }) {
             <div className="flex flex-wrap gap-2">
                 <BusyButton
                     busyLabel="Sending…"
-                    disabled={draft.lines.length === 0}
+                    disabled={draft.lines.length === 0 || unnamed}
                     onClick={() => router.post(`/hrm/my-expenses/${draft.id}/submit`, {}, { preserveScroll: true })}
                 >
                     Send for approval
@@ -390,7 +427,9 @@ function OpenClaim({ draft }: { draft: Claim }) {
             </div>
 
             <p className="text-muted-foreground text-xs">
-                Once you send it you cannot change it. If you remember another spend afterwards, add it and it becomes a new claim.
+                {unnamed
+                    ? 'Give this claim a name before you send it, so the office can see what these spends were for.'
+                    : 'Once you send it you cannot change it. If you remember another spend afterwards, add it and it becomes a new claim.'}
             </p>
         </div>
     );

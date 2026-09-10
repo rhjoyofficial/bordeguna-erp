@@ -132,23 +132,32 @@ class ExpenseClaim extends Model
             'spent_on' => $lines->min(fn (ExpenseClaimLine $line) => $line->spent_on?->toDateString()),
             'expense_category_id' => $categories->count() === 1 ? $categories->first() : null,
             'expense_account_id' => $accounts->count() === 1 ? $accounts->first() : null,
-            'purpose' => $this->summaryOf($lines),
         ])->save();
     }
 
     /**
-     * What the claim is for, WITHOUT anybody typing it.
+     * What to call this claim on a screen or a printed voucher.
      *
-     * ⚠⚠ THE TITLE FIELD IS GONE (10 Sep 2026). Asking for a claim title and a
-     * spend note meant writing the same sentence twice for the single courier
-     * that is most of the traffic. The claim already knows what it holds, so it
-     * says so itself: the first spend's own words, and how many others joined
-     * it. The claim NUMBER is the identity; this is only ever a label.
+     * ⚠⚠ THE NAME IS EARNED, NOT ALWAYS DEMANDED (Joy, 10 Sep 2026). One spend
+     * needs no name: asking for a claim title AND a spend note means writing the
+     * same sentence twice, which is what made the previous screen tiring. So a
+     * one-spend claim describes itself from the line it holds.
      *
-     * @param  Collection<int, ExpenseClaimLine>  $lines
+     * ⭐ A claim with SEVERAL spends is a different animal. Whatever put them
+     * together - a journey, a repair job, a delivery run, a day of errands - the
+     * company cannot read four unrelated lines and work out what they were, and
+     * one line of the employee's own words can. `needsAName()` is what makes the
+     * screen ask; this is only the fallback for anything raised before it did.
      */
-    private function summaryOf(Collection $lines): string
+    public function displayName(): string
     {
+        $typed = trim((string) $this->purpose);
+
+        if ($typed !== '') {
+            return $typed;
+        }
+
+        $lines = $this->lines;
         $first = $lines->first();
         $said = trim((string) ($first?->description ?? ''));
 
@@ -158,9 +167,19 @@ class ExpenseClaim extends Model
 
         $others = $lines->count() - 1;
 
-        return $others > 0
-            ? $said.' and '.$others.' more'
-            : $said;
+        return $others > 0 ? $said.' and '.$others.' more' : $said;
+    }
+
+    /**
+     * ⛔ SEVERAL SPENDS AT ONCE HAVE TO SAY WHAT THEY WERE. The moment a second
+     * spend joins, the claim stops being one purchase and starts being something
+     * the company has to account for as a whole - and four unrelated lines do
+     * not explain themselves. A single spend already describes itself and is
+     * never asked.
+     */
+    public function needsAName(): bool
+    {
+        return $this->lines->count() > 1 && trim((string) $this->purpose) === '';
     }
 
     /**

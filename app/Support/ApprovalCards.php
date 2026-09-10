@@ -357,7 +357,7 @@ class ApprovalCards
             return $this->card(
                 $approvalRequest,
                 type: 'Expense claim',
-                summary: "{$approvable->claim_number} — {$approvable->purpose} — ".$this->money($approvable->amount),
+                summary: "{$approvable->claim_number} — {$approvable->displayName()} — ".$this->money($approvable->amount),
                 details: array_filter([
                     ['label' => 'Employee', 'value' => $approvable->employee?->fullName()],
                     ['label' => 'Claim total', 'value' => $this->money($approvable->amount)
@@ -377,7 +377,7 @@ class ApprovalCards
                         ? 'every spend has one'
                         : "{$missing} of {$lines->count()} spends have NO receipt"],
                 ]),
-                reason: $approvable->purpose,
+                reason: $approvable->displayName(),
                 // ⚠⚠ THE LINES ARE THE DECISION. A market trip approved from a
                 // single total is a total nobody checked; the approver needs the
                 // rickshaw, the courier and the tea separately, because that is

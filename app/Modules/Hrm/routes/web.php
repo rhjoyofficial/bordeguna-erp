@@ -206,6 +206,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::get('my-expenses', [ExpenseClaimController::class, 'mine'])->name('my-expenses');
     Route::post('my-expenses', [ExpenseClaimController::class, 'store'])->name('my-expenses.store');
     Route::post('my-expenses/{claim}/submit', [ExpenseClaimController::class, 'submit'])->name('my-expenses.submit');
+    Route::patch('my-expenses/{claim}', [ExpenseClaimController::class, 'rename'])->name('my-expenses.rename');
     Route::delete('my-expenses/{claim}', [ExpenseClaimController::class, 'destroy'])->name('my-expenses.destroy');
     Route::delete('my-expenses/{claim}/lines/{line}', [ExpenseClaimController::class, 'destroyLine'])->name('my-expenses.lines.destroy');
 
