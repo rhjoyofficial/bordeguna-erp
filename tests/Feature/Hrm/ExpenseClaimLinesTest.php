@@ -135,6 +135,16 @@ it('builds one claim out of an afternoon of spends and sends it once', function 
     expect($claim->isDraft())->toBeTrue()
         ->and($claim->approvalRequest)->toBeNull();
 
+    // ⚠ The screen splits drafts from sent claims, and the NEWEST DRAFT IS
+    // FIRST. The form relies on that ordering to point the next spend at the
+    // claim just created; without it, pressing Add again would open a second
+    // claim and split the trip after all.
+    ($this->asStaff)()->get(route('hrm.my-expenses'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('drafts', fn ($drafts) => collect($drafts)->count() === 1
+                && collect($drafts)->first()['id'] === $claim->id)
+            ->where('claims', fn ($claims) => collect($claims)->isEmpty()));
+
     addSpend([
         'claim_id' => $claim->id,
         'amount' => '80',

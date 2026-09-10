@@ -120,8 +120,25 @@ export default function MyExpenseClaims({
         form.post('/hrm/my-expenses', {
             preserveScroll: true,
             forceFormData: true,
-            onSuccess: () =>
-                form.reset('amount', 'description', 'receipt', 'purpose', 'expense_category_id'),
+            onSuccess: (page) => {
+                // ⚠⚠ THE SECOND SPEND HAS TO LAND ON THE SAME CLAIM. Adding a
+                // spend to a NEW claim leaves this form still saying "start a
+                // new claim", so pressing Add again would quietly open a second
+                // one and the trip would be split after all. The newest draft
+                // is the claim just created, and the list comes back newest
+                // first.
+                const drafts = (page.props.drafts ?? []) as Claim[];
+
+                form.setData({
+                    ...form.data,
+                    claim_id: action === 'add' && drafts.length > 0 ? String(drafts[0].id) : '',
+                    purpose: '',
+                    amount: '',
+                    expense_category_id: '',
+                    description: '',
+                    receipt: null,
+                });
+            },
         });
     };
 
