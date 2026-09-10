@@ -116,12 +116,16 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
 
                 <div className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
-                        <Label htmlFor="journal_date">Date</Label>
+                        <Label htmlFor="journal_date" required>
+                            Date
+                        </Label>
                         <Input id="journal_date" type="date" value={data.journal_date} onChange={(e) => setData('journal_date', e.target.value)} />
                         <InputError message={errors.journal_date} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="journal_type">Kind</Label>
+                        <Label htmlFor="journal_type" required>
+                            Kind
+                        </Label>
                         <SearchSelect fit id="journal_type" value={data.journal_type} onChange={(e) => setData('journal_type', e.target.value)}>
                             {types.map((type) => (
                                 <option key={type.value} value={type.value}>

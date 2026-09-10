@@ -117,7 +117,9 @@ function ManualPunchDialog({
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="employee_id">Employee</Label>
+                        <Label htmlFor="employee_id" required>
+                            Employee
+                        </Label>
                         <SearchSelect id="employee_id" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
@@ -130,7 +132,9 @@ function ManualPunchDialog({
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="punched_at">Date &amp; time</Label>
+                            <Label htmlFor="punched_at" required>
+                                Date &amp; time
+                            </Label>
                             <Input id="punched_at" type="datetime-local" value={punchedAt} onChange={(e) => setPunchedAt(e.target.value)} />
                             {errors.punched_at && <p className="text-destructive text-xs">{errors.punched_at}</p>}
                         </div>
@@ -148,7 +152,9 @@ function ManualPunchDialog({
                         </div>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="note">Reason</Label>
+                        <Label htmlFor="note" required>
+                            Reason
+                        </Label>
                         <Input
                             id="note"
                             value={note}

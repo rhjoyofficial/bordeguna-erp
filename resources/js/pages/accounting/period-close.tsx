@@ -32,16 +32,7 @@ interface PeriodCloseProps {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Period close', href: '/accounting/period-close' }];
 
-export default function PeriodClose({
-    boundary,
-    closed_by,
-    note,
-    is_unlocked,
-    unlock_note,
-    unlocked_by,
-    can_close,
-    checklist,
-}: PeriodCloseProps) {
+export default function PeriodClose({ boundary, closed_by, note, is_unlocked, unlock_note, unlocked_by, can_close, checklist }: PeriodCloseProps) {
     const closeForm = useForm({ closed_through: boundary ?? '', note: '' });
     const unlockForm = useForm({ reason: '' });
 
@@ -110,7 +101,9 @@ export default function PeriodClose({
                         <form onSubmit={submitClose} className="border-border bg-card space-y-3 rounded-lg border p-4">
                             <h2 className="text-sm font-semibold">{is_unlocked ? 'Close again (relock)' : 'Close the books'}</h2>
                             <div className="grid gap-2">
-                                <Label htmlFor="closed_through">Closed through (inclusive)</Label>
+                                <Label htmlFor="closed_through" required>
+                                    Closed through (inclusive)
+                                </Label>
                                 <Input
                                     id="closed_through"
                                     type="date"
@@ -137,7 +130,9 @@ export default function PeriodClose({
                         <form onSubmit={submitUnlock} className="border-border bg-card space-y-3 rounded-lg border p-4">
                             <h2 className="text-sm font-semibold">Unlock for a correction</h2>
                             <div className="grid gap-2">
-                                <Label htmlFor="reason">Reason (required, kept on record)</Label>
+                                <Label htmlFor="reason" required>
+                                    Reason (required, kept on record)
+                                </Label>
                                 <Input
                                     id="reason"
                                     value={unlockForm.data.reason}
@@ -149,9 +144,7 @@ export default function PeriodClose({
                             <Button type="submit" variant="outline" disabled={unlockForm.processing || boundary === null}>
                                 Unlock
                             </Button>
-                            <p className="text-muted-foreground text-xs">
-                                Temporary by design. The unlock is logged with your name and reason.
-                            </p>
+                            <p className="text-muted-foreground text-xs">Temporary by design. The unlock is logged with your name and reason.</p>
                         </form>
                     </div>
                 )}

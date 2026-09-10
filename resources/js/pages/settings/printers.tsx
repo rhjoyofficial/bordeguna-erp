@@ -221,7 +221,9 @@ function ProfileForm({
                     <InputError message={errors.print_width_mm} />
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="dpi">Head resolution (dpi)</Label>
+                    <Label htmlFor="dpi" required>
+                        Head resolution (dpi)
+                    </Label>
                     <Input id="dpi" type="number" value={data.dpi} onChange={(e) => setData('dpi', Number(e.target.value))} />
                     <p className="text-muted-foreground text-xs">Almost always 203. This is what sizes the barcode.</p>
                     <InputError message={errors.dpi} />

@@ -83,7 +83,7 @@ export default function MoneyTransfersIndex({
                     {/* Two rows, each box as wide as its value (30 Aug 2026 audit):
                         the move on the first, what it cost and why on the second. */}
                     <FormRow>
-                        <Field label="Date" htmlFor="transferred_on" error={errors.transferred_on}>
+                        <Field label="Date" htmlFor="transferred_on" error={errors.transferred_on} required>
                             <Input
                                 id="transferred_on"
                                 type="date"
@@ -91,7 +91,7 @@ export default function MoneyTransfersIndex({
                                 onChange={(e) => setData('transferred_on', e.target.value)}
                             />
                         </Field>
-                        <Field label="From" htmlFor="from_money_account_id" error={errors.from_money_account_id}>
+                        <Field label="From" htmlFor="from_money_account_id" error={errors.from_money_account_id} required>
                             <SearchSelect
                                 id="from_money_account_id"
                                 value={data.from_money_account_id}
@@ -105,7 +105,7 @@ export default function MoneyTransfersIndex({
                                 ))}
                             </SearchSelect>
                         </Field>
-                        <Field label="To" htmlFor="to_money_account_id" error={errors.to_money_account_id}>
+                        <Field label="To" htmlFor="to_money_account_id" error={errors.to_money_account_id} required>
                             <SearchSelect
                                 id="to_money_account_id"
                                 value={data.to_money_account_id}
@@ -119,7 +119,7 @@ export default function MoneyTransfersIndex({
                                 ))}
                             </SearchSelect>
                         </Field>
-                        <Field label="Amount that arrives" htmlFor="amount" size="sm" error={errors.amount}>
+                        <Field label="Amount that arrives" htmlFor="amount" size="sm" error={errors.amount} required>
                             <Input id="amount" inputMode="decimal" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
                         </Field>
                     </FormRow>

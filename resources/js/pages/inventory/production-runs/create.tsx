@@ -181,7 +181,9 @@ export default function ProductionRunCreate({
                 <form onSubmit={submit} className="flex flex-col gap-4">
                     <div className="grid gap-4 md:grid-cols-3">
                         <div className="grid gap-2">
-                            <Label htmlFor="warehouse_id">Warehouse</Label>
+                            <Label htmlFor="warehouse_id" required>
+                                Warehouse
+                            </Label>
                             <SearchSelect id="warehouse_id" value={data.warehouse_id} onChange={(e) => setData('warehouse_id', e.target.value)}>
                                 {warehouses.map((w) => (
                                     <option key={w.id} value={w.id}>
@@ -195,7 +197,9 @@ export default function ProductionRunCreate({
                             <InputError message={errors.warehouse_id} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="occurred_at">Date of the work</Label>
+                            <Label htmlFor="occurred_at" required>
+                                Date of the work
+                            </Label>
                             <Input id="occurred_at" type="date" value={data.occurred_at} onChange={(e) => setData('occurred_at', e.target.value)} />
                             <InputError message={errors.occurred_at} />
                         </div>
@@ -310,7 +314,9 @@ export default function ProductionRunCreate({
                     <h2 className="mt-2 font-medium">Output produced</h2>
                     <div className="grid gap-4 md:grid-cols-5">
                         <div className="grid gap-2 md:col-span-2">
-                            <Label htmlFor="output_product_id">Product</Label>
+                            <Label htmlFor="output_product_id" required>
+                                Product
+                            </Label>
                             <SearchSelect
                                 id="output_product_id"
                                 value={data.output_product_id}
@@ -326,7 +332,7 @@ export default function ProductionRunCreate({
                             <InputError message={errors.output_product_id} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="output_quantity">
+                            <Label htmlFor="output_quantity" required>
                                 Quantity{data.output_product_id ? ` (${productById.get(data.output_product_id)?.unit ?? ''})` : ''}
                             </Label>
                             <Input id="output_quantity" value={data.output_quantity} onChange={(e) => setData('output_quantity', e.target.value)} />

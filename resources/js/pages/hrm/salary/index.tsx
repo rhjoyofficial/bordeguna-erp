@@ -107,7 +107,9 @@ function ComponentDialog({
                 <div className="grid gap-4">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="code">Code</Label>
+                            <Label htmlFor="code" required>
+                                Code
+                            </Label>
                             <Input
                                 id="code"
                                 value={code}
@@ -118,14 +120,18 @@ function ComponentDialog({
                             {errors.code && <p className="text-destructive text-xs">{errors.code}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="name">Name</Label>
+                            <Label htmlFor="name" required>
+                                Name
+                            </Label>
                             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
                             {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                         </div>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-3">
                         <div className="grid gap-2">
-                            <Label htmlFor="type">Type</Label>
+                            <Label htmlFor="type" required>
+                                Type
+                            </Label>
                             <SearchSelect
                                 id="type"
                                 value={type}
@@ -161,7 +167,9 @@ function ComponentDialog({
                             {errors.calculation_basis && <p className="text-destructive text-xs">{errors.calculation_basis}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="sequence">Order</Label>
+                            <Label htmlFor="sequence" required>
+                                Order
+                            </Label>
                             <Input id="sequence" type="number" value={sequence} onChange={(e) => setSequence(e.target.value)} />
                         </div>
                     </div>

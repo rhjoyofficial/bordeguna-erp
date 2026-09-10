@@ -100,12 +100,7 @@ function BinRow({ bin }: { bin: Bin }) {
                 )}
             </td>
             <td className="p-3">
-                <button
-                    type="button"
-                    onClick={toggle}
-                    title={bin.is_active ? 'Click to switch off' : 'Click to switch on'}
-                    className="rounded-full"
-                >
+                <button type="button" onClick={toggle} title={bin.is_active ? 'Click to switch off' : 'Click to switch on'} className="rounded-full">
                     <StatusBadge bin={bin} />
                 </button>
             </td>
@@ -148,7 +143,7 @@ export default function BinsIndex({ bins, warehouses }: { bins: Bin[]; warehouse
 
                 <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">
                     <FormRow className="gap-3">
-                        <Field label="Warehouse" htmlFor="warehouse_id" size="md" error={errors.warehouse_id}>
+                        <Field label="Warehouse" htmlFor="warehouse_id" size="md" error={errors.warehouse_id} required>
                             <SearchSelect id="warehouse_id" value={data.warehouse_id} onChange={(e) => setData('warehouse_id', e.target.value)}>
                                 <option value="">Choose a warehouse</option>
                                 {warehouses.map((warehouse) => (
@@ -158,7 +153,7 @@ export default function BinsIndex({ bins, warehouses }: { bins: Bin[]; warehouse
                                 ))}
                             </SearchSelect>
                         </Field>
-                        <Field label="Code" htmlFor="code" size="xs" error={errors.code}>
+                        <Field label="Code" htmlFor="code" size="xs" error={errors.code} required>
                             <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="e.g. A-1" />
                         </Field>
                         <Field label="Name (optional)" htmlFor="name" size="md" error={errors.name}>

@@ -203,7 +203,7 @@ export default function RecruitmentIndex({
                             {/* Sized fields (30 Aug 2026 audit): the role grows, the
                                 pickers fit, a count is a small box, dates size themselves. */}
                             <FormRow>
-                                <Field label="Role" htmlFor="title" size="grow" error={openingForm.errors.title}>
+                                <Field label="Role" htmlFor="title" size="grow" error={openingForm.errors.title} required>
                                     <Input id="title" value={openingForm.data.title} onChange={(e) => openingForm.setData('title', e.target.value)} />
                                 </Field>
                                 <Field label="Department" htmlFor="department_id">
@@ -236,7 +236,7 @@ export default function RecruitmentIndex({
                                 </Field>
                             </FormRow>
                             <FormRow>
-                                <Field label="How many" htmlFor="openings" size="xs" error={openingForm.errors.openings}>
+                                <Field label="How many" htmlFor="openings" size="xs" error={openingForm.errors.openings} required>
                                     <Input
                                         id="openings"
                                         type="number"
@@ -245,7 +245,7 @@ export default function RecruitmentIndex({
                                         onChange={(e) => openingForm.setData('openings', Number(e.target.value))}
                                     />
                                 </Field>
-                                <Field label="Status" htmlFor="status">
+                                <Field label="Status" htmlFor="status" required>
                                     <SearchSelect
                                         id="status"
                                         value={openingForm.data.status}
@@ -258,7 +258,7 @@ export default function RecruitmentIndex({
                                         ))}
                                     </SearchSelect>
                                 </Field>
-                                <Field label="Opened" htmlFor="opened_on" error={openingForm.errors.opened_on}>
+                                <Field label="Opened" htmlFor="opened_on" error={openingForm.errors.opened_on} required>
                                     <Input
                                         id="opened_on"
                                         type="date"
@@ -382,7 +382,7 @@ export default function RecruitmentIndex({
                     {can.manage && (
                         <form onSubmit={submitApplicant} className="flex flex-col gap-4 rounded-lg border p-4">
                             <FormRow>
-                                <Field label="For which role" htmlFor="job_opening_id" error={applicantForm.errors.job_opening_id}>
+                                <Field label="For which role" htmlFor="job_opening_id" error={applicantForm.errors.job_opening_id} required>
                                     <SearchSelect
                                         id="job_opening_id"
                                         value={applicantForm.data.job_opening_id}
@@ -436,7 +436,7 @@ export default function RecruitmentIndex({
                                         onChange={(e) => applicantForm.setData('expected_salary', e.target.value)}
                                     />
                                 </Field>
-                                <Field label="Applied on" htmlFor="applied_on" error={applicantForm.errors.applied_on}>
+                                <Field label="Applied on" htmlFor="applied_on" error={applicantForm.errors.applied_on} required>
                                     <Input
                                         id="applied_on"
                                         type="date"

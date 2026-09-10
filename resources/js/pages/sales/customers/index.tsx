@@ -144,13 +144,13 @@ export default function CustomersIndex({
                     Three rows now, each field as wide as what it holds. */}
                 <form onSubmit={submit} className="flex flex-col gap-5 rounded-lg border p-4">
                     <FormGroup title="Identity">
-                        <Field label="Name" htmlFor="name" size="grow" error={errors.name}>
+                        <Field label="Name" htmlFor="name" size="grow" error={errors.name} required>
                             <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
                         </Field>
                         <Field label="Code" htmlFor="code" size="sm" error={errors.code}>
                             <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="DIST-001" />
                         </Field>
-                        <Field label="Type" htmlFor="type" error={errors.type}>
+                        <Field label="Type" htmlFor="type" error={errors.type} required>
                             <SearchSelect id="type" value={data.type} onChange={(e) => setData('type', e.target.value)}>
                                 {types.map((t) => (
                                     <option key={t.value} value={t.value}>
@@ -281,10 +281,7 @@ export default function CustomersIndex({
                                     <td className="p-3">
                                         {/* C-360: the name opens the customer's own page -
                                             balance, open invoices, history in one place. */}
-                                        <Link
-                                            href={`/sales/customers/${customer.id}`}
-                                            className="font-medium underline-offset-4 hover:underline"
-                                        >
+                                        <Link href={`/sales/customers/${customer.id}`} className="font-medium underline-offset-4 hover:underline">
                                             {customer.name}
                                         </Link>
                                         <div className="text-muted-foreground text-xs">

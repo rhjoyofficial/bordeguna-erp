@@ -88,12 +88,16 @@ export default function RecordBill({ order }: { order: Order }) {
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div>
-                        <Label htmlFor="bill_number">Supplier's invoice number</Label>
+                        <Label htmlFor="bill_number" required>
+                            Supplier's invoice number
+                        </Label>
                         <Input id="bill_number" value={data.bill_number} onChange={(e) => setData('bill_number', e.target.value)} />
                         <InputError message={errors.bill_number} />
                     </div>
                     <div>
-                        <Label htmlFor="bill_date">Bill date</Label>
+                        <Label htmlFor="bill_date" required>
+                            Bill date
+                        </Label>
                         <Input id="bill_date" type="date" value={data.bill_date} onChange={(e) => setData('bill_date', e.target.value)} />
                         <InputError message={errors.bill_date} />
                     </div>

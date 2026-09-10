@@ -100,7 +100,9 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                     row beneath it. */}
                 <div className="border-sidebar-border/70 dark:border-sidebar-border grid items-end gap-3 rounded-xl border p-3 sm:grid-cols-[1.7fr_1fr_1fr_auto]">
                     <div className="grid gap-2">
-                        <Label htmlFor="file">Attendance file</Label>
+                        <Label htmlFor="file" required>
+                            Attendance file
+                        </Label>
                         <Input
                             id="file"
                             type="file"
@@ -113,7 +115,9 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                         {errors.file && <p className="text-destructive text-xs">{errors.file}</p>}
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="source">Source</Label>
+                        <Label htmlFor="source" required>
+                            Source
+                        </Label>
                         <SearchSelect id="source" value={source} onChange={(e) => setSource(e.target.value)}>
                             {sources.map((s) => (
                                 <option key={s.value} value={s.value}>

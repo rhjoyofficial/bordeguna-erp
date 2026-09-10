@@ -62,16 +62,21 @@ export default function ExpenseCategoriesPage({ categories, accounts }: Categori
                 <div>
                     <h1 className="text-xl font-semibold">Expense categories and their accounts</h1>
                     <p className="text-muted-foreground text-sm">
-                        Staff pick a category by name; this table decides which account it lands in at approval. Remapping changes future
-                        approvals only - posted journals are history.
+                        Staff pick a category by name; this table decides which account it lands in at approval. Remapping changes future approvals
+                        only - posted journals are history.
                     </p>
                 </div>
 
                 <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
                     <p className="text-sm font-medium">Add a category</p>
                     <FormRow>
-                        <Field label="Name staff will see" htmlFor="name" size="md" error={form.errors.name}>
-                            <Input id="name" value={form.data.name} placeholder="ERP and Hosting" onChange={(e) => form.setData('name', e.target.value)} />
+                        <Field label="Name staff will see" htmlFor="name" size="md" error={form.errors.name} required>
+                            <Input
+                                id="name"
+                                value={form.data.name}
+                                placeholder="ERP and Hosting"
+                                onChange={(e) => form.setData('name', e.target.value)}
+                            />
                         </Field>
 
                         <Field
@@ -127,7 +132,9 @@ export default function ExpenseCategoriesPage({ categories, accounts }: Categori
                                 <tr key={category.id} className="border-t">
                                     <td className="px-3 py-2 font-medium">
                                         {category.name}
-                                        {category.name_bn && <span className="text-muted-foreground block text-xs font-normal">{category.name_bn}</span>}
+                                        {category.name_bn && (
+                                            <span className="text-muted-foreground block text-xs font-normal">{category.name_bn}</span>
+                                        )}
                                     </td>
                                     <td className="px-3 py-2">
                                         <div className="w-72">
@@ -174,7 +181,11 @@ export default function ExpenseCategoriesPage({ categories, accounts }: Categori
                                             type="checkbox"
                                             checked={category.is_active}
                                             onChange={(e) =>
-                                                router.patch(`/hrm/expense-categories/${category.id}`, { is_active: e.target.checked }, { preserveScroll: true })
+                                                router.patch(
+                                                    `/hrm/expense-categories/${category.id}`,
+                                                    { is_active: e.target.checked },
+                                                    { preserveScroll: true },
+                                                )
                                             }
                                         />
                                     </td>
@@ -185,9 +196,9 @@ export default function ExpenseCategoriesPage({ categories, accounts }: Categori
                 </div>
 
                 <p className="text-muted-foreground text-xs">
-                    The exception badge marks catch-all categories (Other, Materials) - the approver should look twice before approving
-                    those. Unticking "receipt required" is for spends that genuinely have no paper, like rickshaw fare; every other
-                    category refuses a claim line without a file.
+                    The exception badge marks catch-all categories (Other, Materials) - the approver should look twice before approving those.
+                    Unticking "receipt required" is for spends that genuinely have no paper, like rickshaw fare; every other category refuses a claim
+                    line without a file.
                 </p>
             </div>
         </AppLayout>

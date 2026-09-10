@@ -138,7 +138,9 @@ export default function MoneyAccountsIndex({
                         className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
                     >
                         <div className="grid gap-2">
-                            <Label htmlFor="name">Name</Label>
+                            <Label htmlFor="name" required>
+                                Name
+                            </Label>
                             <Input
                                 id="name"
                                 value={data.name}
@@ -150,7 +152,9 @@ export default function MoneyAccountsIndex({
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="type">Kind</Label>
+                            <Label htmlFor="type" required>
+                                Kind
+                            </Label>
                             <SearchSelect fit id="type" value={data.type} onChange={(e) => setData('type', e.target.value)}>
                                 {types.map((type) => (
                                     <option key={type.value} value={type.value}>

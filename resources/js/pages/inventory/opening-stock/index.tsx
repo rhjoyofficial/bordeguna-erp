@@ -151,7 +151,9 @@ export default function OpeningStockIndex({
                     <form onSubmit={submit} className="flex flex-col gap-4">
                         <div className="grid gap-4 md:grid-cols-3">
                             <div className="grid gap-2">
-                                <Label htmlFor="warehouse_id">Warehouse</Label>
+                                <Label htmlFor="warehouse_id" required>
+                                    Warehouse
+                                </Label>
                                 <SearchSelect
                                     fit
                                     id="warehouse_id"
@@ -167,7 +169,9 @@ export default function OpeningStockIndex({
                                 <InputError message={errors.warehouse_id} />
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="as_at">As at</Label>
+                                <Label htmlFor="as_at" required>
+                                    As at
+                                </Label>
                                 <Input id="as_at" type="date" value={data.as_at} onChange={(e) => setData('as_at', e.target.value)} />
                                 <InputError message={errors.as_at} />
                             </div>

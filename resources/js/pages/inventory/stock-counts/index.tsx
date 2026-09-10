@@ -75,7 +75,7 @@ export default function StockCountsIndex({
                 {canWrite && (
                     <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">
                         <FormRow className="gap-3">
-                            <Field label="Warehouse" htmlFor="warehouse_id" size="md" error={errors.warehouse_id}>
+                            <Field label="Warehouse" htmlFor="warehouse_id" size="md" error={errors.warehouse_id} required>
                                 <SearchSelect id="warehouse_id" value={data.warehouse_id} onChange={(e) => setData('warehouse_id', e.target.value)}>
                                     <option value="">Choose a warehouse</option>
                                     {warehouses.map((warehouse) => (

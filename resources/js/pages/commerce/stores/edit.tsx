@@ -211,7 +211,9 @@ export default function StoreEdit({
                         <h2 className="font-medium">Settings</h2>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="name">Name</Label>
+                            <Label htmlFor="name" required>
+                                Name
+                            </Label>
                             <Input id="name" value={settings.data.name} onChange={(e) => settings.setData('name', e.target.value)} />
                             <InputError message={settings.errors.name} />
                         </div>
@@ -260,7 +262,9 @@ export default function StoreEdit({
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="availability_policy">Availability</Label>
+                            <Label htmlFor="availability_policy" required>
+                                Availability
+                            </Label>
                             <Select value={settings.data.availability_policy} onValueChange={(v) => settings.setData('availability_policy', v)}>
                                 <SelectTrigger id="availability_policy">
                                     <SelectValue />

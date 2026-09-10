@@ -171,7 +171,9 @@ export default function InvoiceShow({
                         <form onSubmit={submit} className="grid gap-3 rounded-lg border p-4">
                             <h2 className="font-medium">Record a receipt</h2>
                             <div className="grid gap-2">
-                                <Label htmlFor="money_account_id">Into</Label>
+                                <Label htmlFor="money_account_id" required>
+                                    Into
+                                </Label>
                                 <SearchSelect
                                     id="money_account_id"
                                     value={data.money_account_id}
@@ -186,12 +188,16 @@ export default function InvoiceShow({
                                 <InputError message={errors.money_account_id} />
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="amount">Amount</Label>
+                                <Label htmlFor="amount" required>
+                                    Amount
+                                </Label>
                                 <Input id="amount" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
                                 <InputError message={errors.amount} />
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="received_on">Received on</Label>
+                                <Label htmlFor="received_on" required>
+                                    Received on
+                                </Label>
                                 <Input
                                     id="received_on"
                                     type="date"

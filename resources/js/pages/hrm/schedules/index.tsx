@@ -174,7 +174,9 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                 <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="scope_type">Applies to</Label>
+                            <Label htmlFor="scope_type" required>
+                                Applies to
+                            </Label>
                             <SearchSelect
                                 id="scope_type"
                                 value={form.scope_type}
@@ -206,7 +208,9 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
 
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="schedule_type">Schedule type</Label>
+                            <Label htmlFor="schedule_type" required>
+                                Schedule type
+                            </Label>
                             <SearchSelect id="schedule_type" value={form.schedule_type} onChange={(e) => set('schedule_type', e.target.value)}>
                                 {options.schedule_types.map((t) => (
                                     <option key={t.value} value={t.value}>
@@ -231,7 +235,9 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="holiday_calendar_id">Holiday calendar</Label>
+                        <Label htmlFor="holiday_calendar_id" required>
+                            Holiday calendar
+                        </Label>
                         <SearchSelect
                             id="holiday_calendar_id"
                             value={form.holiday_calendar_id}
@@ -249,7 +255,9 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
 
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="effective_from">Effective from</Label>
+                            <Label htmlFor="effective_from" required>
+                                Effective from
+                            </Label>
                             <Input
                                 id="effective_from"
                                 type="date"

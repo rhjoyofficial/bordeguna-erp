@@ -170,10 +170,10 @@ export default function MessagingIndex({
                             audit); the subject and the message take the full width
                             because a sentence needs it. */}
                         <FormRow>
-                            <Field label="What this send is called" htmlFor="name" size="grow" error={form.errors.name}>
+                            <Field label="What this send is called" htmlFor="name" size="grow" error={form.errors.name} required>
                                 <Input id="name" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
                             </Field>
-                            <Field label="Who it goes to" htmlFor="audience_type">
+                            <Field label="Who it goes to" htmlFor="audience_type" required>
                                 <SearchSelect
                                     id="audience_type"
                                     value={form.data.audience_type}
@@ -208,7 +208,9 @@ export default function MessagingIndex({
                             </div>
                         )}
                         <div className="grid gap-2">
-                            <Label htmlFor="body">Message</Label>
+                            <Label htmlFor="body" required>
+                                Message
+                            </Label>
                             <textarea
                                 id="body"
                                 className="border-input bg-background min-h-28 rounded-md border p-2 text-sm"
@@ -240,7 +242,7 @@ export default function MessagingIndex({
                                     ))}
                                 </SearchSelect>
                             </Field>
-                            <Field label="Stop above" htmlFor="recipient_cap" size="xs" error={form.errors.recipient_cap}>
+                            <Field label="Stop above" htmlFor="recipient_cap" size="xs" error={form.errors.recipient_cap} required>
                                 <Input
                                     id="recipient_cap"
                                     type="number"

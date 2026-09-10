@@ -130,7 +130,9 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                         <Text field="first_name" label="First name" />
                         <Text field="last_name" label="Last name" />
                         <div className="grid gap-2">
-                            <Label htmlFor="employment_type">Employment type</Label>
+                            <Label htmlFor="employment_type" required>
+                                Employment type
+                            </Label>
                             <SearchSelect
                                 id="employment_type"
                                 value={data.employment_type ?? ''}

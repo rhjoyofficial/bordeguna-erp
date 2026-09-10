@@ -95,6 +95,7 @@ export default function Discounts() {
                         <Field
                             label="Discounted price"
                             htmlFor="unit_price"
+                            required
                             size="sm"
                             error={form.errors.unit_price}
                             hint={

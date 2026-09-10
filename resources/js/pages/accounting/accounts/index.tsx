@@ -125,7 +125,9 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                         className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
                     >
                         <div className="grid gap-2">
-                            <Label htmlFor="code">Code</Label>
+                            <Label htmlFor="code" required>
+                                Code
+                            </Label>
                             <Input
                                 id="code"
                                 value={data.code}
@@ -136,7 +138,9 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                             <InputError message={errors.code} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="name">Name</Label>
+                            <Label htmlFor="name" required>
+                                Name
+                            </Label>
                             <Input
                                 id="name"
                                 value={data.name}

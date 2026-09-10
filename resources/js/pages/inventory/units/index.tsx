@@ -36,12 +36,16 @@ export default function UnitsIndex({ units }: { units: Unit[] }) {
             <div className="flex flex-col gap-6 p-4">
                 <form onSubmit={submit} className="flex items-end gap-3">
                     <div className="grid gap-2">
-                        <Label htmlFor="name">Name</Label>
+                        <Label htmlFor="name" required>
+                            Name
+                        </Label>
                         <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. Kilogram" />
                         <InputError message={errors.name} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="abbreviation">Abbreviation</Label>
+                        <Label htmlFor="abbreviation" required>
+                            Abbreviation
+                        </Label>
                         <Input
                             id="abbreviation"
                             value={data.abbreviation}

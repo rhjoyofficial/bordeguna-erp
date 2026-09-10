@@ -71,7 +71,9 @@ export default function CreditNoteCreate({
             <form onSubmit={submit} className="flex max-w-3xl flex-col gap-6 p-4">
                 <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-2">
                     <div className="grid gap-2">
-                        <Label htmlFor="supplier_id">Supplier</Label>
+                        <Label htmlFor="supplier_id" required>
+                            Supplier
+                        </Label>
                         <SearchSelect id="supplier_id" value={data.supplier_id} onChange={(e) => changeSupplier(e.target.value)}>
                             <option value="">Choose a supplier</option>
                             {suppliers.map((s) => (
@@ -83,7 +85,9 @@ export default function CreditNoteCreate({
                         <InputError message={errors.supplier_id} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="purchase_return_id">Against return</Label>
+                        <Label htmlFor="purchase_return_id" required>
+                            Against return
+                        </Label>
                         {/* ⚠ Only returns with value left to credit are offered,
                             with the ceiling shown - the action refuses anything
                             beyond it. */}
@@ -102,7 +106,9 @@ export default function CreditNoteCreate({
                         <InputError message={errors.purchase_return_id} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="credit_note_number">Supplier's credit note number</Label>
+                        <Label htmlFor="credit_note_number" required>
+                            Supplier's credit note number
+                        </Label>
                         <Input
                             id="credit_note_number"
                             value={data.credit_note_number}
@@ -112,7 +118,9 @@ export default function CreditNoteCreate({
                         <InputError message={errors.credit_note_number} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="credit_date">Credit date</Label>
+                        <Label htmlFor="credit_date" required>
+                            Credit date
+                        </Label>
                         <Input id="credit_date" type="date" value={data.credit_date} onChange={(e) => setData('credit_date', e.target.value)} />
                         <InputError message={errors.credit_date} />
                     </div>

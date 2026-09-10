@@ -155,7 +155,7 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                     <form onSubmit={submit} className="space-y-6">
                         {/* Each box as wide as what it holds (30 Aug 2026 audit). */}
                         <FormRow>
-                            <Field label="Display name" htmlFor="name" size="lg" error={errors.name}>
+                            <Field label="Display name" htmlFor="name" size="lg" error={errors.name} required>
                                 <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
                             </Field>
                             <Field label="Legal name" htmlFor="legal_name" size="grow" error={errors.legal_name}>
@@ -246,7 +246,7 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                         </div>
 
                         <FormRow>
-                            <Field label="Currency" htmlFor="currency" error={errors.currency}>
+                            <Field label="Currency" htmlFor="currency" error={errors.currency} required>
                                 <SearchSelect id="currency" value={data.currency} onChange={(e) => setData('currency', e.target.value)}>
                                     {currencies.map((currency) => (
                                         <option key={currency} value={currency}>
@@ -255,7 +255,7 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                                     ))}
                                 </SearchSelect>
                             </Field>
-                            <Field label="Timezone" htmlFor="timezone" error={errors.timezone}>
+                            <Field label="Timezone" htmlFor="timezone" error={errors.timezone} required>
                                 <SearchSelect id="timezone" value={data.timezone} onChange={(e) => setData('timezone', e.target.value)}>
                                     {timezones.map((timezone) => (
                                         <option key={timezone} value={timezone}>
@@ -264,7 +264,7 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                                     ))}
                                 </SearchSelect>
                             </Field>
-                            <Field label="Fiscal year starts" htmlFor="fiscal_year_start_month" error={errors.fiscal_year_start_month}>
+                            <Field label="Fiscal year starts" htmlFor="fiscal_year_start_month" error={errors.fiscal_year_start_month} required>
                                 <SearchSelect
                                     id="fiscal_year_start_month"
                                     value={data.fiscal_year_start_month}
@@ -280,7 +280,9 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                         </FormRow>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="payroll_cycle_start_day">Payroll month starts on day</Label>
+                            <Label htmlFor="payroll_cycle_start_day" required>
+                                Payroll month starts on day
+                            </Label>
                             <SearchSelect
                                 fit
                                 id="payroll_cycle_start_day"
@@ -301,7 +303,9 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="wfh_monthly_cap">Work from home, days a month</Label>
+                            <Label htmlFor="wfh_monthly_cap" required>
+                                Work from home, days a month
+                            </Label>
                             <SearchSelect
                                 fit
                                 id="wfh_monthly_cap"

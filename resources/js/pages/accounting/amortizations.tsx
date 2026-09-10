@@ -86,7 +86,11 @@ export default function Amortizations({ schedules, accounts, can_act }: Amortiza
                     </div>
                     {can_act && (
                         <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => router.post('/accounting/amortizations/release', {}, { preserveScroll: true })}>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => router.post('/accounting/amortizations/release', {}, { preserveScroll: true })}
+                            >
                                 Release due months now
                             </Button>
                             <Button size="sm" onClick={() => setCreating((value) => !value)}>
@@ -99,7 +103,9 @@ export default function Amortizations({ schedules, accounts, can_act }: Amortiza
                 {creating && can_act && (
                     <form onSubmit={submit} className="border-border bg-card grid gap-3 rounded-lg border p-4 md:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="kind">Kind</Label>
+                            <Label htmlFor="kind" required>
+                                Kind
+                            </Label>
                             <select
                                 id="kind"
                                 className="border-input bg-background h-9 rounded-md border px-2 text-sm"
@@ -112,8 +118,15 @@ export default function Amortizations({ schedules, accounts, can_act }: Amortiza
                             </select>
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="name">Name</Label>
-                            <Input id="name" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} placeholder="e.g. Annual hosting paid in advance" />
+                            <Label htmlFor="name" required>
+                                Name
+                            </Label>
+                            <Input
+                                id="name"
+                                value={form.data.name}
+                                onChange={(e) => form.setData('name', e.target.value)}
+                                placeholder="e.g. Annual hosting paid in advance"
+                            />
                             <InputError message={form.errors.name} />
                         </div>
                         <div className="grid gap-2">
@@ -155,19 +168,42 @@ export default function Amortizations({ schedules, accounts, can_act }: Amortiza
                             <InputError message={form.errors.target_account_id} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="total_amount">Total amount (BDT)</Label>
-                            <Input id="total_amount" inputMode="decimal" value={form.data.total_amount} onChange={(e) => form.setData('total_amount', e.target.value)} />
+                            <Label htmlFor="total_amount" required>
+                                Total amount (BDT)
+                            </Label>
+                            <Input
+                                id="total_amount"
+                                inputMode="decimal"
+                                value={form.data.total_amount}
+                                onChange={(e) => form.setData('total_amount', e.target.value)}
+                            />
                             <InputError message={form.errors.total_amount} />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="grid gap-2">
-                                <Label htmlFor="start_month">First month</Label>
-                                <Input id="start_month" type="date" value={form.data.start_month} onChange={(e) => form.setData('start_month', e.target.value)} />
+                                <Label htmlFor="start_month" required>
+                                    First month
+                                </Label>
+                                <Input
+                                    id="start_month"
+                                    type="date"
+                                    value={form.data.start_month}
+                                    onChange={(e) => form.setData('start_month', e.target.value)}
+                                />
                                 <InputError message={form.errors.start_month} />
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="months">Months</Label>
-                                <Input id="months" type="number" min={1} max={120} value={form.data.months} onChange={(e) => form.setData('months', e.target.value)} />
+                                <Label htmlFor="months" required>
+                                    Months
+                                </Label>
+                                <Input
+                                    id="months"
+                                    type="number"
+                                    min={1}
+                                    max={120}
+                                    value={form.data.months}
+                                    onChange={(e) => form.setData('months', e.target.value)}
+                                />
                                 <InputError message={form.errors.months} />
                             </div>
                         </div>
@@ -218,7 +254,13 @@ export default function Amortizations({ schedules, accounts, can_act }: Amortiza
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
-                                                        onClick={() => router.post(`/accounting/amortizations/${schedule.id}/cancel`, {}, { preserveScroll: true })}
+                                                        onClick={() =>
+                                                            router.post(
+                                                                `/accounting/amortizations/${schedule.id}/cancel`,
+                                                                {},
+                                                                { preserveScroll: true },
+                                                            )
+                                                        }
                                                     >
                                                         Cancel future months
                                                     </Button>

@@ -150,7 +150,9 @@ function ReasonDialog({
                     <DialogDescription>{description}</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-2">
-                    <Label htmlFor="reason">Reason</Label>
+                    <Label htmlFor="reason" required>
+                        Reason
+                    </Label>
                     <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
                     {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     {errors.status && <p className="text-destructive text-xs">{errors.status}</p>}
@@ -292,13 +294,13 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
                     actions={
                         <div className="flex flex-wrap items-end gap-3">
                             <div className="grid gap-1">
-                                <Label htmlFor="year" className="text-muted-foreground text-xs">
+                                <Label htmlFor="year" className="text-muted-foreground text-xs" required>
                                     Year
                                 </Label>
                                 <Input id="year" type="number" className="w-24" value={y} onChange={(e) => setY(e.target.value)} />
                             </div>
                             <div className="grid gap-1">
-                                <Label htmlFor="month" className="text-muted-foreground text-xs">
+                                <Label htmlFor="month" className="text-muted-foreground text-xs" required>
                                     Month
                                 </Label>
                                 <MonthSelect id="month" value={m} onChange={setM} />

@@ -84,7 +84,9 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
 
                 <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
-                        <Label htmlFor="name">{editing ? `Editing ${editing.name}` : 'New category'}</Label>
+                        <Label htmlFor="name" required>
+                            {editing ? `Editing ${editing.name}` : 'New category'}
+                        </Label>
                         <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. Bulk Honey" />
                         <InputError message={errors.name} />
                     </div>

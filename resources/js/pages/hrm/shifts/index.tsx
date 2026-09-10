@@ -190,18 +190,24 @@ function ShiftDialog({
                 </DialogHeader>
                 <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-2">
-                        <Label htmlFor="name">Name</Label>
+                        <Label htmlFor="name" required>
+                            Name
+                        </Label>
                         <Input id="name" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. General, Morning, Night" />
                         {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="start_time">Start time</Label>
+                            <Label htmlFor="start_time" required>
+                                Start time
+                            </Label>
                             <Input id="start_time" type="time" value={form.start_time} onChange={(e) => set('start_time', e.target.value)} />
                             {errors.start_time && <p className="text-destructive text-xs">{errors.start_time}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="end_time">End time</Label>
+                            <Label htmlFor="end_time" required>
+                                End time
+                            </Label>
                             <Input id="end_time" type="time" value={form.end_time} onChange={(e) => set('end_time', e.target.value)} />
                             {errors.end_time && <p className="text-destructive text-xs">{errors.end_time}</p>}
                         </div>

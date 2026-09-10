@@ -44,6 +44,7 @@ export function Field({
     error,
     hint,
     className,
+    required = false,
     children,
 }: {
     label: ReactNode;
@@ -52,11 +53,20 @@ export function Field({
     error?: string;
     hint?: ReactNode;
     className?: string;
+    /**
+     * ⚠⚠ Draws the red star (Joy, 10 Sep 2026). It should say what the SERVER
+     * will refuse, not what the designer felt was important - a star on an
+     * optional box teaches people to ignore stars, and a missing one on a
+     * mandatory box is the error message they were going to get anyway.
+     */
+    required?: boolean;
     children: ReactNode;
 }) {
     return (
         <div className={cn('grid content-start gap-1.5', SIZES[size], className)}>
-            <Label htmlFor={htmlFor}>{label}</Label>
+            <Label htmlFor={htmlFor} required={required}>
+                {label}
+            </Label>
             {children}
             {hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}
             <InputError message={error} />

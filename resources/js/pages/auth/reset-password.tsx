@@ -60,7 +60,7 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="password" className="text-sm font-medium">
+                        <Label htmlFor="password" className="text-sm font-medium" required>
                             Password
                         </Label>
                         <Input

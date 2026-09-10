@@ -225,13 +225,17 @@ function RecordExpenseDialog({ expenseAccounts, moneyAccounts, suppliers, today,
                 <form onSubmit={submit} className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="spent_on">Date the money left</Label>
+                            <Label htmlFor="spent_on" required>
+                                Date the money left
+                            </Label>
                             <Input id="spent_on" type="date" value={data.spent_on} onChange={(e) => setData('spent_on', e.target.value)} />
                             <InputError message={errors.spent_on} />
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="money_account_id">Paid from</Label>
+                            <Label htmlFor="money_account_id" required>
+                                Paid from
+                            </Label>
                             {/*
                               ⚠⚠ Only accounts that already have a ledger account appear
                               here. An unmapped one is refused by the engine with an error

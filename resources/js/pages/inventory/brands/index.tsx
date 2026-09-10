@@ -82,7 +82,9 @@ export default function BrandsIndex({ brands }: { brands: Brand[] }) {
                     </div>
                     {!editing && (
                         <div className="grid gap-2">
-                            <Label htmlFor="code">SKU code</Label>
+                            <Label htmlFor="code" required>
+                                SKU code
+                            </Label>
                             <Input
                                 id="code"
                                 value={data.code}

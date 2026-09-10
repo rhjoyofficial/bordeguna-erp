@@ -154,7 +154,9 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
                 <div className="grid max-h-[60vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="effective_from">Effective from</Label>
+                            <Label htmlFor="effective_from" required>
+                                Effective from
+                            </Label>
                             <Input id="effective_from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
                             {errors.effective_from && <p className="text-destructive text-xs">{errors.effective_from}</p>}
                         </div>

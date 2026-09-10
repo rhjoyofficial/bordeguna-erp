@@ -125,7 +125,9 @@ export default function NotesIndex({
                 {can.manage && (
                     <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4">
                         <div className="grid gap-2">
-                            <Label htmlFor="title">Title</Label>
+                            <Label htmlFor="title" required>
+                                Title
+                            </Label>
                             <Input id="title" value={form.data.title} onChange={(e) => form.setData('title', e.target.value)} />
                             <InputError message={form.errors.title} />
                         </div>

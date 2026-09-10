@@ -91,7 +91,9 @@ export default function MediaIndex({ media, stores, filters }: { media: MediaRow
                     <>
                         <form onSubmit={submit} className="grid gap-4 rounded-md border p-4 md:grid-cols-4">
                             <div className="grid gap-2">
-                                <Label htmlFor="store_id">Store</Label>
+                                <Label htmlFor="store_id" required>
+                                    Store
+                                </Label>
                                 <Select value={upload.data.store_id} onValueChange={(value) => upload.setData('store_id', value)}>
                                     <SelectTrigger id="store_id">
                                         <SelectValue placeholder="Choose a store" />
@@ -108,7 +110,9 @@ export default function MediaIndex({ media, stores, filters }: { media: MediaRow
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="file">Image</Label>
+                                <Label htmlFor="file" required>
+                                    Image
+                                </Label>
                                 <Input
                                     id="file"
                                     type="file"

@@ -154,7 +154,9 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
 
                 <form onSubmit={submit} className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-2">
-                        <Label htmlFor="name">What is it</Label>
+                        <Label htmlFor="name" required>
+                            What is it
+                        </Label>
                         <Input
                             id="name"
                             value={data.name}
@@ -179,7 +181,9 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="expense_account_id">Charge to</Label>
+                            <Label htmlFor="expense_account_id" required>
+                                Charge to
+                            </Label>
                             <SearchSelect
                                 id="expense_account_id"
                                 value={data.expense_account_id}
@@ -213,7 +217,9 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="amount">Amount</Label>
+                            <Label htmlFor="amount" required>
+                                Amount
+                            </Label>
                             <Input
                                 id="amount"
                                 value={data.amount}
@@ -235,7 +241,9 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="frequency">How often</Label>
+                            <Label htmlFor="frequency" required>
+                                How often
+                            </Label>
                             <SearchSelect id="frequency" value={data.frequency} onChange={(e) => setData('frequency', e.target.value)}>
                                 {frequencies.map((f) => (
                                     <option key={f.value} value={f.value}>
@@ -247,7 +255,9 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="day_of_month">Due on day</Label>
+                            <Label htmlFor="day_of_month" required>
+                                Due on day
+                            </Label>
                             <Input
                                 id="day_of_month"
                                 type="number"
@@ -264,7 +274,9 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="start_date">First due from</Label>
+                            <Label htmlFor="start_date" required>
+                                First due from
+                            </Label>
                             <Input id="start_date" type="date" value={data.start_date} onChange={(e) => setData('start_date', e.target.value)} />
                             <InputError message={errors.start_date} />
                         </div>

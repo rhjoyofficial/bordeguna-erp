@@ -91,7 +91,9 @@ export default function UnitConversions({
 
                 <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="grid gap-2 lg:col-span-2">
-                        <Label htmlFor="product_id">Product</Label>
+                        <Label htmlFor="product_id" required>
+                            Product
+                        </Label>
                         <SearchSelect id="product_id" value={data.product_id} onChange={(e) => setData('product_id', e.target.value)}>
                             <option value="">Choose a product</option>
                             {products.map((p) => (
@@ -117,7 +119,9 @@ export default function UnitConversions({
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="from_unit_id">Bought in</Label>
+                        <Label htmlFor="from_unit_id" required>
+                            Bought in
+                        </Label>
                         <SearchSelect id="from_unit_id" value={data.from_unit_id} onChange={(e) => setData('from_unit_id', e.target.value)}>
                             <option value="">Choose a unit</option>
                             {units
@@ -132,7 +136,9 @@ export default function UnitConversions({
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="effective_from">Applies from</Label>
+                        <Label htmlFor="effective_from" required>
+                            Applies from
+                        </Label>
                         <Input
                             id="effective_from"
                             type="date"
@@ -169,7 +175,9 @@ export default function UnitConversions({
                     </div>
 
                     <div className="grid gap-2 lg:col-span-2">
-                        <Label htmlFor="source">Where this number comes from</Label>
+                        <Label htmlFor="source" required>
+                            Where this number comes from
+                        </Label>
                         <Input
                             id="source"
                             value={data.source}

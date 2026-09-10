@@ -172,7 +172,9 @@ function CorrectionDialog({
                 <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="employee_id">Employee</Label>
+                            <Label htmlFor="employee_id" required>
+                                Employee
+                            </Label>
                             <SearchSelect id="employee_id" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                                 <option value="">- Select -</option>
                                 {employees.map((e) => (
@@ -191,7 +193,9 @@ function CorrectionDialog({
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="type">What needs correcting</Label>
+                        <Label htmlFor="type" required>
+                            What needs correcting
+                        </Label>
                         <SearchSelect id="type" value={type} onChange={(e) => setType(e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
@@ -250,7 +254,9 @@ function CorrectionDialog({
                     )}
 
                     <div className="grid gap-2">
-                        <Label htmlFor="reason">Reason</Label>
+                        <Label htmlFor="reason" required>
+                            Reason
+                        </Label>
                         <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why this correction is needed" />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
@@ -314,12 +320,16 @@ function LockDialog() {
                 <div className="grid gap-4">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="period_start">From</Label>
+                            <Label htmlFor="period_start" required>
+                                From
+                            </Label>
                             <Input id="period_start" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
                             {errors.period_start && <p className="text-destructive text-xs">{errors.period_start}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="period_end">To</Label>
+                            <Label htmlFor="period_end" required>
+                                To
+                            </Label>
                             <Input id="period_end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
                             {errors.period_end && <p className="text-destructive text-xs">{errors.period_end}</p>}
                         </div>
@@ -375,7 +385,9 @@ function UnlockDialog({ lock }: { lock: Lock }) {
                     <DialogDescription>The lock is kept as history - reopening records who did it and why.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-2">
-                    <Label htmlFor="unlock_reason">Reason</Label>
+                    <Label htmlFor="unlock_reason" required>
+                        Reason
+                    </Label>
                     <Input id="unlock_reason" value={reason} onChange={(e) => setReason(e.target.value)} />
                 </div>
                 <DialogFooter>

@@ -172,7 +172,9 @@ export default function PageComposer({
 
                 <form onSubmit={saveDetails} className="grid gap-4 rounded-md border p-4 md:grid-cols-2">
                     <div className="grid gap-2">
-                        <Label htmlFor="title">Title</Label>
+                        <Label htmlFor="title" required>
+                            Title
+                        </Label>
                         <Input id="title" value={details.data.title} onChange={(e) => details.setData('title', e.target.value)} />
                         <InputError message={details.errors.title} />
                     </div>

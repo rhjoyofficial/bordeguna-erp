@@ -337,7 +337,7 @@ export default function AiProviders() {
 
                     <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
                         <FormRow>
-                            <Field label="Provider" htmlFor="provider">
+                            <Field label="Provider" htmlFor="provider" required>
                                 <SearchSelect id="provider" value={form.data.provider} onChange={(e) => form.setData('provider', e.target.value)}>
                                     {Object.entries(providers).map(([value, name]) => (
                                         <option key={value} value={value}>
@@ -392,7 +392,7 @@ export default function AiProviders() {
                                     onChange={(e) => form.setData('label', e.target.value)}
                                 />
                             </Field>
-                            <Field label="API key" htmlFor="secret" size="grow" error={form.errors.secret}>
+                            <Field label="API key" htmlFor="secret" size="grow" error={form.errors.secret} required>
                                 <Input
                                     id="secret"
                                     type="password"

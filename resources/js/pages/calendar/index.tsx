@@ -217,12 +217,16 @@ export default function CalendarIndex({
                     {can.manage && selectedDay && (
                         <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
                             <div className="grid gap-2 md:col-span-2">
-                                <Label htmlFor="title">What is happening</Label>
+                                <Label htmlFor="title" required>
+                                    What is happening
+                                </Label>
                                 <Input id="title" value={form.data.title} onChange={(e) => form.setData('title', e.target.value)} />
                                 <InputError message={form.errors.title} />
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="starts_at">Starts</Label>
+                                <Label htmlFor="starts_at" required>
+                                    Starts
+                                </Label>
                                 <Input
                                     id="starts_at"
                                     type="datetime-local"

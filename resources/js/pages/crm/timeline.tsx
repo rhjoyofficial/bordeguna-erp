@@ -167,7 +167,9 @@ export default function CrmTimeline({
                             <p className="text-sm font-medium">Record what happened</p>
                             <div className="flex flex-wrap items-end gap-3">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="type">Kind</Label>
+                                    <Label htmlFor="type" required>
+                                        Kind
+                                    </Label>
                                     <SearchSelect fit id="type" value={log.data.type} onChange={(e) => log.setData('type', e.target.value)}>
                                         {activityTypes.map((t) => (
                                             <option key={t.value} value={t.value}>
@@ -220,7 +222,9 @@ export default function CrmTimeline({
                                 </div>
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="summary">What happened</Label>
+                                <Label htmlFor="summary" required>
+                                    What happened
+                                </Label>
                                 <Input
                                     id="summary"
                                     value={log.data.summary}
@@ -250,7 +254,9 @@ export default function CrmTimeline({
                         >
                             <p className="text-sm font-medium">Add a follow-up</p>
                             <div className="grid gap-2">
-                                <Label htmlFor="title">What needs doing</Label>
+                                <Label htmlFor="title" required>
+                                    What needs doing
+                                </Label>
                                 <Input
                                     id="title"
                                     value={task.data.title}

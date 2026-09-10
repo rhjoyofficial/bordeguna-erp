@@ -120,12 +120,7 @@ function EvidenceCell({ voucher, canRecord }: { voucher: Voucher; canRecord: boo
  * come to read, and the form belongs behind the primary action in the heading
  * row rather than shouting from the top of the page.
  */
-function RecordDialog({
-    incomeAccounts,
-    moneyAccounts,
-    customers,
-    today,
-}: Pick<Props, 'incomeAccounts' | 'moneyAccounts' | 'customers' | 'today'>) {
+function RecordDialog({ incomeAccounts, moneyAccounts, customers, today }: Pick<Props, 'incomeAccounts' | 'moneyAccounts' | 'customers' | 'today'>) {
     const [open, setOpen] = useState(false);
 
     const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
@@ -182,7 +177,9 @@ function RecordDialog({
                 <form onSubmit={submit} className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="received_on">Date the money arrived</Label>
+                            <Label htmlFor="received_on" required>
+                                Date the money arrived
+                            </Label>
                             <Input
                                 id="received_on"
                                 type="date"
@@ -194,7 +191,9 @@ function RecordDialog({
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="money_account_id">Received into</Label>
+                            <Label htmlFor="money_account_id" required>
+                                Received into
+                            </Label>
                             {/*
                               ⚠⚠ Only accounts that already have a ledger account appear
                               here. An unmapped one is refused by the engine with an error
@@ -370,9 +369,7 @@ export default function OtherIncomeIndex({ vouchers, canRecord, incomeAccounts, 
                         title="Other income"
                         description="Money that came in and was not a sale: scrap, interest, rent received, refunds. Each one is received the moment it is recorded."
                     />
-                    {canRecord && (
-                        <RecordDialog incomeAccounts={incomeAccounts} moneyAccounts={moneyAccounts} customers={customers} today={today} />
-                    )}
+                    {canRecord && <RecordDialog incomeAccounts={incomeAccounts} moneyAccounts={moneyAccounts} customers={customers} today={today} />}
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border">

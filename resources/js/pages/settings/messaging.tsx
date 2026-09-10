@@ -314,10 +314,10 @@ export default function MessagingSettings({
                         {/* Every box as wide as what it holds (30 Aug 2026 audit): a
                             cost is a money box, a priority is a digit, a URL grows. */}
                         <FormRow>
-                            <Field label="Name" htmlFor="name" size="md" error={form.errors.name}>
+                            <Field label="Name" htmlFor="name" size="md" error={form.errors.name} required>
                                 <Input id="name" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
                             </Field>
-                            <Field label="Sends" htmlFor="channel">
+                            <Field label="Sends" htmlFor="channel" required>
                                 <SearchSelect
                                     id="channel"
                                     value={form.data.channel}
@@ -327,7 +327,7 @@ export default function MessagingSettings({
                                     <option value="email">Email</option>
                                 </SearchSelect>
                             </Field>
-                            <Field label="Through" htmlFor="driver" error={form.errors.driver}>
+                            <Field label="Through" htmlFor="driver" error={form.errors.driver} required>
                                 <SearchSelect id="driver" value={form.data.driver} onChange={(e) => form.setData('driver', e.target.value)}>
                                     <option value="">Choose</option>
                                     {forChannel.map((d) => (
@@ -340,7 +340,7 @@ export default function MessagingSettings({
                             <Field label={form.data.channel === 'sms' ? 'Sender ID (masking)' : 'From address'} htmlFor="sender_id" size="md">
                                 <Input id="sender_id" value={form.data.sender_id} onChange={(e) => form.setData('sender_id', e.target.value)} />
                             </Field>
-                            <Field label="Cost per part" htmlFor="cost_per_part" size="sm" error={form.errors.cost_per_part}>
+                            <Field label="Cost per part" htmlFor="cost_per_part" size="sm" error={form.errors.cost_per_part} required>
                                 <Input
                                     id="cost_per_part"
                                     inputMode="decimal"
@@ -348,7 +348,7 @@ export default function MessagingSettings({
                                     onChange={(e) => form.setData('cost_per_part', e.target.value)}
                                 />
                             </Field>
-                            <Field label="Priority" htmlFor="priority" size="xs">
+                            <Field label="Priority" htmlFor="priority" size="xs" required>
                                 <Input
                                     id="priority"
                                     type="number"

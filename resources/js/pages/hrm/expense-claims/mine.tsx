@@ -47,8 +47,7 @@ type Claim = {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'My expenses', href: '/hrm/my-expenses' }];
 
-const money = (value: string | number) =>
-    Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (value: string | number) => Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** The whole-claim refusal, which belongs to no single box on the form. */
 const claimError = (errors: Record<string, string>) => errors.claim;
@@ -157,7 +156,7 @@ export default function MyExpenseClaims({
                     to 360px: it becomes a column and never scrolls sideways. */}
                 <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
                     <FormRow>
-                        <Field label="How much (BDT)" htmlFor="amount" className="min-w-28 max-w-40 flex-[1]" error={form.errors.amount}>
+                        <Field label="How much (BDT)" htmlFor="amount" className="max-w-40 min-w-28 flex-[1]" error={form.errors.amount} required>
                             <Input
                                 id="amount"
                                 type="number"
@@ -172,8 +171,9 @@ export default function MyExpenseClaims({
                         <Field
                             label="What kind of expense"
                             htmlFor="expense_category_id"
-                            className="min-w-44 max-w-sm flex-[2]"
+                            className="max-w-sm min-w-44 flex-[2]"
                             error={form.errors.expense_category_id}
+                            required
                         >
                             <SearchSelect
                                 id="expense_category_id"
@@ -189,7 +189,7 @@ export default function MyExpenseClaims({
                             </SearchSelect>
                         </Field>
 
-                        <Field label="When" htmlFor="spent_on" className="min-w-36" error={form.errors.spent_on}>
+                        <Field label="When" htmlFor="spent_on" className="min-w-36" error={form.errors.spent_on} required>
                             <Input
                                 id="spent_on"
                                 type="date"
@@ -199,7 +199,7 @@ export default function MyExpenseClaims({
                             />
                         </Field>
 
-                        <Field label="What it was for" htmlFor="description" className="min-w-52 max-w-md flex-[2]" error={form.errors.description}>
+                        <Field label="What it was for" htmlFor="description" className="max-w-md min-w-52 flex-[2]" error={form.errors.description}>
                             <Input
                                 id="description"
                                 value={form.data.description}
@@ -211,7 +211,7 @@ export default function MyExpenseClaims({
                         <Field
                             label={receiptNeeded ? 'Receipt' : 'Receipt (not needed)'}
                             htmlFor="receipt"
-                            className="min-w-48 max-w-sm flex-[2]"
+                            className="max-w-sm min-w-48 flex-[2]"
                             error={form.errors.receipt}
                         >
                             <Input
@@ -319,8 +319,7 @@ function OpenClaim({ draft }: { draft: Claim }) {
                 <div>
                     <p className="font-medium">
                         {draft.claim_number}
-                        {draft.spent_on ? ` · ${draft.spent_on}` : ''} · {draft.lines.length}{' '}
-                        {draft.lines.length === 1 ? 'spend' : 'spends'}
+                        {draft.spent_on ? ` · ${draft.spent_on}` : ''} · {draft.lines.length} {draft.lines.length === 1 ? 'spend' : 'spends'}
                     </p>
                     <p className="text-muted-foreground text-xs">
                         {draft.was_sent_back ? 'Sent back for correction' : 'Not sent yet. Nobody else can see it.'}
@@ -347,7 +346,7 @@ function OpenClaim({ draft }: { draft: Claim }) {
                     <Input
                         id="trip_name"
                         value={name}
-                        placeholder="Barisal office visit"  /* an example, not the only shape */
+                        placeholder="Barisal office visit" /* an example, not the only shape */
                         onChange={(e) => setName(e.target.value)}
                         onBlur={() => {
                             if (name.trim() !== '' && name.trim() !== (draft.trip_name ?? '')) {

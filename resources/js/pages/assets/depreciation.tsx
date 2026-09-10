@@ -84,7 +84,9 @@ export default function Depreciation({
                         className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
                     >
                         <div className="grid gap-2">
-                            <Label htmlFor="month">Month</Label>
+                            <Label htmlFor="month" required>
+                                Month
+                            </Label>
                             <SearchSelect fit id="month" value={data.month} onChange={(e) => setData('month', e.target.value)}>
                                 {MONTHS.map((name, index) => (
                                     <option key={name} value={index + 1}>
@@ -96,7 +98,9 @@ export default function Depreciation({
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="year">Year</Label>
+                            <Label htmlFor="year" required>
+                                Year
+                            </Label>
                             <Input
                                 id="year"
                                 value={data.year}

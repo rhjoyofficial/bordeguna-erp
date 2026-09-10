@@ -266,6 +266,7 @@ export default function StockCountShow({
                                     <Field
                                         label="Found something the book does not list here?"
                                         htmlFor="product_id"
+                                        required
                                         size="lg"
                                         error={addForm.errors.product_id}
                                         hint="Adds a line with a book quantity of whatever the system holds (usually zero), so the find becomes a counted variance."
@@ -291,6 +292,7 @@ export default function StockCountShow({
                                 <Field
                                     label="Reason for the corrections"
                                     htmlFor="reason_id"
+                                    required
                                     size="md"
                                     error={completeForm.errors.reason_id}
                                     hint={

@@ -89,7 +89,9 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="leave_type_id">Leave type</Label>
+                        <Label htmlFor="leave_type_id" required>
+                            Leave type
+                        </Label>
                         <SearchSelect id="leave_type_id" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {types.map((t) => (
@@ -102,7 +104,9 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="start_date">From</Label>
+                            <Label htmlFor="start_date" required>
+                                From
+                            </Label>
                             <Input
                                 id="start_date"
                                 type="date"
@@ -115,13 +119,17 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                             {errors.start_date && <p className="text-destructive text-xs">{errors.start_date}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="end_date">To</Label>
+                            <Label htmlFor="end_date" required>
+                                To
+                            </Label>
                             <Input id="end_date" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
                             {errors.end_date && <p className="text-destructive text-xs">{errors.end_date}</p>}
                         </div>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="day_portion">Portion</Label>
+                        <Label htmlFor="day_portion" required>
+                            Portion
+                        </Label>
                         <SearchSelect id="day_portion" value={portion} onChange={(e) => setPortion(e.target.value)}>
                             {portions.map((p) => (
                                 <option key={p.value} value={p.value}>
@@ -132,7 +140,9 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                         {errors.day_portion && <p className="text-destructive text-xs">{errors.day_portion}</p>}
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="reason">Reason</Label>
+                        <Label htmlFor="reason" required>
+                            Reason
+                        </Label>
                         <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
@@ -217,7 +227,9 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
                     </div>
                     <div className="grid gap-4 sm:grid-cols-3">
                         <div className="grid gap-2">
-                            <Label htmlFor="movement_date">Date</Label>
+                            <Label htmlFor="movement_date" required>
+                                Date
+                            </Label>
                             <Input id="movement_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                             {errors.movement_date && <p className="text-destructive text-xs">{errors.movement_date}</p>}
                         </div>

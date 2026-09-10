@@ -147,10 +147,10 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
 
                 <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">
                     <FormRow className="gap-3">
-                        <Field label="Name" htmlFor="name" size="md" error={errors.name}>
+                        <Field label="Name" htmlFor="name" size="md" error={errors.name} required>
                             <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. Cold Storage" />
                         </Field>
-                        <Field label="Code" htmlFor="code" size="xs" error={errors.code}>
+                        <Field label="Code" htmlFor="code" size="xs" error={errors.code} required>
                             <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="e.g. COLD" />
                         </Field>
                         <Button disabled={processing} className="self-end">

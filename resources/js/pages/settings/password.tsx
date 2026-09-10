@@ -58,7 +58,9 @@ export default function Password() {
 
                     <form onSubmit={updatePassword} className="space-y-6">
                         <div className="grid gap-2">
-                            <Label htmlFor="current_password">Current password</Label>
+                            <Label htmlFor="current_password" required>
+                                Current password
+                            </Label>
 
                             <Input
                                 id="current_password"
@@ -75,7 +77,9 @@ export default function Password() {
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="password">New password</Label>
+                            <Label htmlFor="password" required>
+                                New password
+                            </Label>
 
                             <Input
                                 id="password"

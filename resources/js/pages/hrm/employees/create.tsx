@@ -49,12 +49,16 @@ export default function EmployeeCreate({ employment_types, offices, designations
             <form onSubmit={submit} className="flex max-w-2xl flex-col gap-6 p-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
-                        <Label htmlFor="first_name">First name</Label>
+                        <Label htmlFor="first_name" required>
+                            First name
+                        </Label>
                         <Input id="first_name" value={data.first_name} onChange={(e) => setData('first_name', e.target.value)} />
                         <InputError message={errors.first_name} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="last_name">Last name</Label>
+                        <Label htmlFor="last_name" required>
+                            Last name
+                        </Label>
                         <Input id="last_name" value={data.last_name} onChange={(e) => setData('last_name', e.target.value)} />
                         <InputError message={errors.last_name} />
                     </div>
@@ -62,7 +66,9 @@ export default function EmployeeCreate({ employment_types, offices, designations
 
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
-                        <Label htmlFor="employment_type">Employment type</Label>
+                        <Label htmlFor="employment_type" required>
+                            Employment type
+                        </Label>
                         <SearchSelect id="employment_type" value={data.employment_type} onChange={(e) => setData('employment_type', e.target.value)}>
                             {employment_types.map((type) => (
                                 <option key={type.value} value={type.value}>

@@ -117,7 +117,9 @@ export default function SuppliersIndex({
 
     const field = (name: keyof typeof EMPTY, label: string, extra?: { type?: string; placeholder?: string }) => (
         <div className="grid gap-2">
-            <Label htmlFor={name}>{label}</Label>
+            <Label htmlFor={name} required>
+                {label}
+            </Label>
             <Input id={name} type={extra?.type} placeholder={extra?.placeholder} value={data[name]} onChange={(e) => setData(name, e.target.value)} />
             <InputError message={errors[name]} />
         </div>

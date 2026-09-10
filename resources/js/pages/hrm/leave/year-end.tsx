@@ -65,7 +65,7 @@ export default function YearEnd({ year, plan, totals, runs }: Props) {
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
-                        <Label htmlFor="year" className="text-muted-foreground text-sm">
+                        <Label htmlFor="year" className="text-muted-foreground text-sm" required>
                             Closing year
                         </Label>
                         <Input

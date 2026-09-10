@@ -78,12 +78,16 @@ function AddMemberForm({ assignableRoles }: { assignableRoles: string[] }) {
             <h3 className="font-medium">Add a team member</h3>
             <div className="grid gap-4 sm:grid-cols-3">
                 <div className="grid gap-2">
-                    <Label htmlFor="name">Name</Label>
+                    <Label htmlFor="name" required>
+                        Name
+                    </Label>
                     <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="Full name" />
                     <InputError message={errors.name} />
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email" required>
+                        Email
+                    </Label>
                     <Input
                         id="email"
                         type="email"
@@ -94,7 +98,9 @@ function AddMemberForm({ assignableRoles }: { assignableRoles: string[] }) {
                     <InputError message={errors.email} />
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="password">Initial password</Label>
+                    <Label htmlFor="password" required>
+                        Initial password
+                    </Label>
                     <Input
                         id="password"
                         type="password"

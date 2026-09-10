@@ -85,7 +85,9 @@ export default function AssetsIndex({
                         className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
                     >
                         <div className="grid gap-2">
-                            <Label htmlFor="asset_code">Code</Label>
+                            <Label htmlFor="asset_code" required>
+                                Code
+                            </Label>
                             <Input
                                 id="asset_code"
                                 value={data.asset_code}
@@ -97,7 +99,9 @@ export default function AssetsIndex({
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="name">What it is</Label>
+                            <Label htmlFor="name" required>
+                                What it is
+                            </Label>
                             <Input
                                 id="name"
                                 value={data.name}
@@ -109,7 +113,9 @@ export default function AssetsIndex({
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="account_id">Reports under</Label>
+                            <Label htmlFor="account_id" required>
+                                Reports under
+                            </Label>
                             {/*
                               ⚠⚠ Only NON-CURRENT asset accounts, and never Accumulated
                               Depreciation. Every postable asset account would include
@@ -128,13 +134,17 @@ export default function AssetsIndex({
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="acquired_on">Acquired</Label>
+                            <Label htmlFor="acquired_on" required>
+                                Acquired
+                            </Label>
                             <Input id="acquired_on" type="date" value={data.acquired_on} onChange={(e) => setData('acquired_on', e.target.value)} />
                             <InputError message={errors.acquired_on} />
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="cost">Cost</Label>
+                            <Label htmlFor="cost" required>
+                                Cost
+                            </Label>
                             <Input
                                 id="cost"
                                 value={data.cost}
@@ -162,7 +172,9 @@ export default function AssetsIndex({
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="useful_life_months">Useful life (months)</Label>
+                            <Label htmlFor="useful_life_months" required>
+                                Useful life (months)
+                            </Label>
                             <Input
                                 id="useful_life_months"
                                 value={data.useful_life_months}

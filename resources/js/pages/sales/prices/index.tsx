@@ -63,7 +63,9 @@ export default function PricesIndex({
                     explained. */}
                 <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="product_id">Product</Label>
+                        <Label htmlFor="product_id" required>
+                            Product
+                        </Label>
                         <SearchSelect id="product_id" value={data.product_id} onChange={(e) => setData('product_id', e.target.value)}>
                             <option value="">Choose a product</option>
                             {products.map((p) => (
@@ -75,12 +77,16 @@ export default function PricesIndex({
                         <InputError message={errors.product_id} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="unit_price">Selling price</Label>
+                        <Label htmlFor="unit_price" required>
+                            Selling price
+                        </Label>
                         <Input id="unit_price" value={data.unit_price} onChange={(e) => setData('unit_price', e.target.value)} />
                         <InputError message={errors.unit_price} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="effective_from">In force from</Label>
+                        <Label htmlFor="effective_from" required>
+                            In force from
+                        </Label>
                         <Input
                             id="effective_from"
                             type="date"

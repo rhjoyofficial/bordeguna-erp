@@ -31,6 +31,8 @@ interface Product {
     content_quantity: string | null;
     content_unit_id: number | null;
     is_active: boolean;
+    availability_override: string | null;
+    lead_time_days: number | null;
     current_quantity: string | null;
     average_unit_cost: string | null;
     is_below_threshold: boolean;
@@ -51,6 +53,8 @@ const EMPTY = {
     low_stock_threshold: '',
     content_quantity: '',
     content_unit_id: '',
+    availability_override: '',
+    lead_time_days: '',
 };
 
 interface Option {
@@ -114,6 +118,8 @@ export default function ProductsIndex({
             low_stock_threshold: product.low_stock_threshold ?? '',
             content_quantity: product.content_quantity ?? '',
             content_unit_id: product.content_unit_id === null ? '' : String(product.content_unit_id),
+            availability_override: product.availability_override ?? '',
+            lead_time_days: product.lead_time_days === null ? '' : String(product.lead_time_days),
         });
     };
 
@@ -199,7 +205,9 @@ export default function ProductsIndex({
                 <form onSubmit={submit} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                     <div className="grid gap-2">
                         <div className="flex items-baseline justify-between gap-2">
-                            <Label htmlFor="sku">SKU</Label>
+                            <Label htmlFor="sku" required>
+                                SKU
+                            </Label>
                             <button
                                 type="button"
                                 onClick={proposeSku}
@@ -219,12 +227,16 @@ export default function ProductsIndex({
                         <InputError message={errors.barcode} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="name">Name</Label>
+                        <Label htmlFor="name" required>
+                            Name
+                        </Label>
                         <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
                         <InputError message={errors.name} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="type">Type</Label>
+                        <Label htmlFor="type" required>
+                            Type
+                        </Label>
                         <SearchSelect id="type" value={data.type} onChange={(e) => setData('type', e.target.value)}>
                             {PRODUCT_TYPES.map((t) => (
                                 <option key={t.value} value={t.value}>
@@ -262,7 +274,9 @@ export default function ProductsIndex({
                         )}
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="unit_of_measure_id">Unit</Label>
+                        <Label htmlFor="unit_of_measure_id" required>
+                            Unit
+                        </Label>
                         <SearchSelect
                             id="unit_of_measure_id"
                             value={data.unit_of_measure_id}
@@ -293,6 +307,36 @@ export default function ProductsIndex({
                         </SearchSelect>
                         <p className="text-muted-foreground text-xs">VAT is off. This is recorded for later and changes nothing now.</p>
                         <InputError message={errors.tax_class_id} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="availability_override">Sell when out of stock</Label>
+                        <SearchSelect
+                            id="availability_override"
+                            value={data.availability_override}
+                            onChange={(e) => setData('availability_override', e.target.value)}
+                        >
+                            {/* ⚠ The override only ever NARROWS. A website keeps
+                                selling at zero because the goods are made to
+                                order; this is for the product that genuinely
+                                cannot be - imported goods, seasonal fruit. */}
+                            <option value="">As the channel decides (websites keep selling, the counter does not)</option>
+                            <option value="strict">Never - refuse the sale at zero everywhere</option>
+                        </SearchSelect>
+                        <InputError message={errors.availability_override} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="lead_time_days">Made-to-order lead time (days)</Label>
+                        <Input
+                            id="lead_time_days"
+                            type="number"
+                            min={1}
+                            max={365}
+                            value={data.lead_time_days}
+                            onChange={(e) => setData('lead_time_days', e.target.value)}
+                            placeholder="blank = promise nothing"
+                        />
+                        <p className="text-muted-foreground text-xs">Shown on the website only when a sale is taken with no stock on hand.</p>
+                        <InputError message={errors.lead_time_days} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="low_stock_threshold">Low-stock threshold</Label>

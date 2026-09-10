@@ -93,9 +93,8 @@ export default function StoresIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div className="text-muted-foreground max-w-3xl text-sm">
                     <p>
-                        Every website the group runs is a store here: its catalogue, its prices, its content and its
-                        orders. A store starts as a draft and cannot go live until it has a theme and a primary domain,
-                        because there would be nothing to render.
+                        Every website the group runs is a store here: its catalogue, its prices, its content and its orders. A store starts as a draft
+                        and cannot go live until it has a theme and a primary domain, because there would be nothing to render.
                     </p>
                 </div>
 
@@ -104,19 +103,18 @@ export default function StoresIndex({
                         <h2 className="font-medium">Add a store</h2>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="name">Name</Label>
+                            <Label htmlFor="name" required>
+                                Name
+                            </Label>
                             <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
                             <InputError message={errors.name} />
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="key">Key</Label>
-                            <Input
-                                id="key"
-                                value={data.key}
-                                onChange={(e) => setData('key', e.target.value)}
-                                placeholder="bionic"
-                            />
+                            <Label htmlFor="key" required>
+                                Key
+                            </Label>
+                            <Input id="key" value={data.key} onChange={(e) => setData('key', e.target.value)} placeholder="bionic" />
                             <p className="text-muted-foreground text-xs">
                                 Permanent. This store's cookie and webhook header names are built from it.
                             </p>
@@ -124,7 +122,9 @@ export default function StoresIndex({
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="order_prefix">Order prefix</Label>
+                            <Label htmlFor="order_prefix" required>
+                                Order prefix
+                            </Label>
                             <Input
                                 id="order_prefix"
                                 value={data.order_prefix}
@@ -132,8 +132,8 @@ export default function StoresIndex({
                                 placeholder="BNC"
                             />
                             <p className="text-muted-foreground text-xs">
-                                Permanent, and unique across the whole group. The payment merchant is shared, so this is
-                                the only thing on a settlement line that says whose money it is.
+                                Permanent, and unique across the whole group. The payment merchant is shared, so this is the only thing on a
+                                settlement line that says whose money it is.
                             </p>
                             <InputError message={errors.order_prefix} />
                         </div>
@@ -185,11 +185,10 @@ export default function StoresIndex({
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="availability_policy">Availability</Label>
-                            <Select
-                                value={data.availability_policy}
-                                onValueChange={(v) => setData('availability_policy', v)}
-                            >
+                            <Label htmlFor="availability_policy" required>
+                                Availability
+                            </Label>
+                            <Select value={data.availability_policy} onValueChange={(v) => setData('availability_policy', v)}>
                                 <SelectTrigger id="availability_policy">
                                     <SelectValue />
                                 </SelectTrigger>
@@ -202,8 +201,8 @@ export default function StoresIndex({
                                 </SelectContent>
                             </Select>
                             <p className="text-muted-foreground text-xs">
-                                The goods are made to order, so a website normally keeps selling at zero stock and the
-                                order carries a promised lead time.
+                                The goods are made to order, so a website normally keeps selling at zero stock and the order carries a promised lead
+                                time.
                             </p>
                             <InputError message={errors.availability_policy} />
                         </div>
@@ -224,17 +223,12 @@ export default function StoresIndex({
                             <div key={store.id} className="border-sidebar-border/70 rounded-xl border p-4">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <div>
-                                        <Link
-                                            href={route('commerce.stores.edit', store.id)}
-                                            className="font-medium hover:underline"
-                                        >
+                                        <Link href={route('commerce.stores.edit', store.id)} className="font-medium hover:underline">
                                             {store.name}
                                         </Link>
                                         <span className="text-muted-foreground ml-2 text-sm">{store.order_prefix}</span>
                                     </div>
-                                    <Badge variant={store.status === 'live' ? 'default' : 'secondary'}>
-                                        {store.status_label}
-                                    </Badge>
+                                    <Badge variant={store.status === 'live' ? 'default' : 'secondary'}>{store.status_label}</Badge>
                                 </div>
 
                                 <dl className="text-muted-foreground mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
@@ -242,17 +236,14 @@ export default function StoresIndex({
                                         Brand: <span className="text-foreground">{store.brand_name ?? 'Multi-brand'}</span>
                                     </div>
                                     <div>
-                                        Theme:{' '}
-                                        <span className="text-foreground">{store.theme_key ?? 'Not chosen yet'}</span>
+                                        Theme: <span className="text-foreground">{store.theme_key ?? 'Not chosen yet'}</span>
                                     </div>
                                     <div className="sm:col-span-2">
                                         Domains:{' '}
                                         <span className="text-foreground">
                                             {store.domains.length === 0
                                                 ? 'None'
-                                                : store.domains
-                                                      .map((d) => (d.is_primary ? `${d.hostname} (primary)` : d.hostname))
-                                                      .join(', ')}
+                                                : store.domains.map((d) => (d.is_primary ? `${d.hostname} (primary)` : d.hostname)).join(', ')}
                                         </span>
                                     </div>
                                 </dl>

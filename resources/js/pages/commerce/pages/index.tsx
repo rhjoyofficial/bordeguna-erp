@@ -103,7 +103,9 @@ export default function PagesIndex({
                     <>
                         <form onSubmit={submit} className="grid gap-4 rounded-md border p-4 md:grid-cols-4">
                             <div className="grid gap-2">
-                                <Label htmlFor="store_id">Store</Label>
+                                <Label htmlFor="store_id" required>
+                                    Store
+                                </Label>
                                 <Select value={data.store_id} onValueChange={(value) => setData('store_id', value)}>
                                     <SelectTrigger id="store_id">
                                         <SelectValue placeholder="Choose a store" />
@@ -138,7 +140,9 @@ export default function PagesIndex({
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="title">Title</Label>
+                                <Label htmlFor="title" required>
+                                    Title
+                                </Label>
                                 <Input id="title" value={data.title} onChange={(e) => setData('title', e.target.value)} />
                                 <InputError message={errors.title} />
                             </div>

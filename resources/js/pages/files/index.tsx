@@ -186,7 +186,9 @@ export default function FilesIndex({
                 {can.manage && (
                     <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 md:grid-cols-3">
                         <div className="grid gap-2">
-                            <Label htmlFor="file">Document</Label>
+                            <Label htmlFor="file" required>
+                                Document
+                            </Label>
                             <Input id="file" type="file" onChange={(e) => upload.setData('file', e.target.files?.[0] ?? null)} />
                             <InputError message={upload.errors.file} />
                         </div>
@@ -307,7 +309,9 @@ export default function FilesIndex({
 
                 <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-5">
                     <div className="grid gap-1.5">
-                        <Label htmlFor="file-search">Search</Label>
+                        <Label htmlFor="file-search" required>
+                            Search
+                        </Label>
                         <Input
                             id="file-search"
                             placeholder="Title, reference or file name"
@@ -316,7 +320,9 @@ export default function FilesIndex({
                         />
                     </div>
                     <div className="grid gap-1.5">
-                        <Label htmlFor="file-category">Kind</Label>
+                        <Label htmlFor="file-category" required>
+                            Kind
+                        </Label>
                         <SearchSelect fit id="file-category" value={filters.category} onChange={(e) => setFilter('category', e.target.value)}>
                             <option value="">Any kind</option>
                             {categories.map((c) => (
@@ -327,7 +333,9 @@ export default function FilesIndex({
                         </SearchSelect>
                     </div>
                     <div className="grid gap-1.5">
-                        <Label htmlFor="file-type">Belongs to</Label>
+                        <Label htmlFor="file-type" required>
+                            Belongs to
+                        </Label>
                         <SearchSelect fit id="file-type" value={filters.type} onChange={(e) => setFilter('type', e.target.value)}>
                             <option value="">Anything</option>
                             {types.map((type) => (
@@ -338,11 +346,15 @@ export default function FilesIndex({
                         </SearchSelect>
                     </div>
                     <div className="grid gap-1.5">
-                        <Label htmlFor="file-from">From</Label>
+                        <Label htmlFor="file-from" required>
+                            From
+                        </Label>
                         <Input id="file-from" type="date" value={filters.from} onChange={(e) => setFilter('from', e.target.value)} />
                     </div>
                     <div className="grid gap-1.5">
-                        <Label htmlFor="file-to">To</Label>
+                        <Label htmlFor="file-to" required>
+                            To
+                        </Label>
                         <Input id="file-to" type="date" value={filters.to} onChange={(e) => setFilter('to', e.target.value)} />
                     </div>
                     <div className="flex flex-wrap items-center gap-3 md:col-span-5">

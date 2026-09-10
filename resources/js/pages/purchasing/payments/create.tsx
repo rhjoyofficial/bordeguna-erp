@@ -119,7 +119,9 @@ export default function PaymentCreate({
             <form onSubmit={submit} className="flex flex-col gap-6 p-4">
                 <div className="grid gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
-                        <Label htmlFor="supplier_id">Supplier</Label>
+                        <Label htmlFor="supplier_id" required>
+                            Supplier
+                        </Label>
                         <SearchSelect id="supplier_id" value={String(data.supplier_id)} onChange={(e) => chooseSupplier(e.target.value)}>
                             <option value="">Select a supplier</option>
                             {suppliers.map((supplier) => (
@@ -133,7 +135,9 @@ export default function PaymentCreate({
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="money_account_id">Paid from</Label>
+                        <Label htmlFor="money_account_id" required>
+                            Paid from
+                        </Label>
                         <SearchSelect
                             id="money_account_id"
                             value={String(data.money_account_id)}
@@ -150,7 +154,9 @@ export default function PaymentCreate({
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="paid_on">Payment date</Label>
+                        <Label htmlFor="paid_on" required>
+                            Payment date
+                        </Label>
                         <Input id="paid_on" type="date" value={data.paid_on} onChange={(e) => setData('paid_on', e.target.value)} />
                         {errors.paid_on && <p className="text-destructive text-sm">{errors.paid_on}</p>}
                     </div>

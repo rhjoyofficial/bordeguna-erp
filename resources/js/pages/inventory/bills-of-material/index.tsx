@@ -206,7 +206,9 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                             <InputError message={errors.output_product_id} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="output_quantity">Makes how many {outputUnit}</Label>
+                            <Label htmlFor="output_quantity" required>
+                                Makes how many {outputUnit}
+                            </Label>
                             <Input id="output_quantity" value={data.output_quantity} onChange={(e) => setData('output_quantity', e.target.value)} />
                             <p className="text-muted-foreground text-xs">Usually 1. Say 20 if the recipe was written over a 20 kg drum.</p>
                             <InputError message={errors.output_quantity} />

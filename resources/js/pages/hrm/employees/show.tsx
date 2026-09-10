@@ -1,5 +1,5 @@
-import { SearchSelect } from '@/components/search-select';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -289,7 +289,9 @@ function ConfirmDialog({ employeeId, name, probationDue }: { employeeId: number;
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-2">
-                    <Label htmlFor="confirmation_date">Confirmation date</Label>
+                    <Label htmlFor="confirmation_date" required>
+                        Confirmation date
+                    </Label>
                     <Input id="confirmation_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
                 <DialogFooter>
@@ -335,7 +337,9 @@ function SeparateDialog({ employeeId, separationTypes }: { employeeId: number; s
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="separation_type">Type</Label>
+                        <Label htmlFor="separation_type" required>
+                            Type
+                        </Label>
                         <SearchSelect id="separation_type" value={type} onChange={(e) => setType(e.target.value)}>
                             {separationTypes.map((option) => (
                                 <option key={option.value} value={option.value}>
@@ -345,7 +349,9 @@ function SeparateDialog({ employeeId, separationTypes }: { employeeId: number; s
                         </SearchSelect>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="separation_date">Last working date</Label>
+                        <Label htmlFor="separation_date" required>
+                            Last working date
+                        </Label>
                         <Input id="separation_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                     </div>
                     <div className="grid gap-2">
@@ -436,7 +442,9 @@ function TransferDialog({
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="effective_from">Effective from</Label>
+                        <Label htmlFor="effective_from" required>
+                            Effective from
+                        </Label>
                         <Input id="effective_from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -565,7 +573,9 @@ function UploadDocumentDialog({ employeeId, documentTypes }: { employeeId: numbe
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="category">Type</Label>
+                        <Label htmlFor="category" required>
+                            Type
+                        </Label>
                         <SearchSelect id="category" value={category} onChange={(e) => setCategory(e.target.value)}>
                             {documentTypes.map((option) => (
                                 <option key={option.value} value={option.value}>
@@ -575,7 +585,9 @@ function UploadDocumentDialog({ employeeId, documentTypes }: { employeeId: numbe
                         </SearchSelect>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="file">File</Label>
+                        <Label htmlFor="file" required>
+                            File
+                        </Label>
                         <Input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
                     </div>
                     <div className="grid gap-2">
