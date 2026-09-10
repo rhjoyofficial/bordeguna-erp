@@ -182,19 +182,24 @@ it('separates the two marketing groups, which is the whole reason the document s
 // ─── THE EMPLOYEE-FACING CATEGORIES ─────────────────────────────────────────
 
 /**
- * ⚠ TWENTY-ONE, NOT THE DOCUMENT'S NINETEEN. Software Subscription (6056) and
- * ERP and Hosting (6057) were added on 10 Sep 2026 because the hosting bill had
- * no category at all and could only be filed as "Other Approved Business
- * Expense" - the one category section 19 of that same document says must never
- * be the default. Both accounts were already in the accountant's chart.
+ * ⚠ TWENTY-THREE, NOT THE DOCUMENT'S NINETEEN, and every addition has the same
+ * shape: a real spend that could only be filed as "Other Approved Business
+ * Expense", which section 19 of that same document says must never be the
+ * default. Software Subscription (6056) and ERP and Hosting (6057) on 10 Sep for
+ * the hosting bill; Daily Labour (6095) and Loading and Unloading (6096) the
+ * same day, when Joy described paying labourers out of his own pocket. All four
+ * accounts were already in the accountant's chart - only the employee-facing row
+ * was missing.
  */
 it('plants the document s categories, each pointing at an account that exists', function () {
     ExpenseCategories::ensureDefaults($this->business->id);
 
     $categories = ExpenseCategories::active($this->business->id);
 
-    expect($categories)->toHaveCount(21)
-        ->and($categories->pluck('name'))->toContain('Software Subscription', 'ERP and Hosting');
+    expect($categories)->toHaveCount(23)
+        ->and($categories->pluck('name'))->toContain(
+            'Software Subscription', 'ERP and Hosting', 'Daily Labour', 'Loading and Unloading',
+        );
 
     foreach ($categories as $category) {
         $described = ExpenseCategories::describe($category['id']);
