@@ -181,12 +181,20 @@ it('separates the two marketing groups, which is the whole reason the document s
 
 // ─── THE EMPLOYEE-FACING CATEGORIES ─────────────────────────────────────────
 
-it('plants the document s nineteen categories, each pointing at an account that exists', function () {
+/**
+ * ⚠ TWENTY-ONE, NOT THE DOCUMENT'S NINETEEN. Software Subscription (6056) and
+ * ERP and Hosting (6057) were added on 10 Sep 2026 because the hosting bill had
+ * no category at all and could only be filed as "Other Approved Business
+ * Expense" - the one category section 19 of that same document says must never
+ * be the default. Both accounts were already in the accountant's chart.
+ */
+it('plants the document s categories, each pointing at an account that exists', function () {
     ExpenseCategories::ensureDefaults($this->business->id);
 
     $categories = ExpenseCategories::active($this->business->id);
 
-    expect($categories)->toHaveCount(19);
+    expect($categories)->toHaveCount(21)
+        ->and($categories->pluck('name'))->toContain('Software Subscription', 'ERP and Hosting');
 
     foreach ($categories as $category) {
         $described = ExpenseCategories::describe($category['id']);

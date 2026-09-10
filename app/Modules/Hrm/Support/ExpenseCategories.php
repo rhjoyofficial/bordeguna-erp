@@ -39,27 +39,40 @@ use Illuminate\Support\Facades\DB;
  */
 class ExpenseCategories
 {
-    /** English name => [Bangla name, account code, is_exception] */
+    /**
+     * English name => [Bangla name, account code, is_exception, receipt_required]
+     *
+     * ⚠ Conveyance is the one that asks for no receipt: a rickshaw gives you
+     * nothing to photograph, and demanding proof does not produce proof - it
+     * pushes the spend off the books, which is worse than an unreceipted line
+     * an approver can see and question.
+     *
+     * ⚠ Software Subscription and ERP and Hosting were added on 10 Sep 2026
+     * because the hosting bill had no category and could only be filed as the
+     * catch-all, which section 19 of the accountant's document forbids.
+     */
     private const DEFAULTS = [
-        'Conveyance' => ['যাতায়াতের খরচ', '6011', false],
-        'Travel and TA' => ['ভ্রমণের খরচ', '6019', false],
-        'Hotel and Accommodation' => ['হোটেল খরচ', '6014', false],
-        'Office Expense' => ['অফিসের খরচ', '6062', false],
-        'Mobile and Telephone' => ['মোবাইল/ফোনের খরচ', '6055', false],
-        'Internet' => ['ইন্টারনেটের খরচ', '6054', false],
-        'Product Inward Freight' => ['পণ্য আনার খরচ', '5300', false],
-        'Product Sourcing' => ['পণ্য সোর্সিং-এর খরচ', '6174', false],
-        'Packaging' => ['প্যাকেজিং-এর খরচ', '6206', false],
-        'Marketing' => ['মার্কেটিং-এর খরচ', '6289', false],
-        'Customer Gift' => ['কাস্টমার গিফট', '6331', false],
-        'Free Product' => ['ফ্রি পণ্য', '6332', false],
-        'Courier and Delivery' => ['কুরিয়ার/ডেলিভারি', '6371', false],
-        'Event and Guest Hospitality' => ['ইভেন্ট/অতিথি আপ্যায়ন', '6431', false],
-        'Employee Welfare' => ['কর্মচারী সংক্রান্ত খরচ', '6138', false],
-        'Bank and MFS Charge' => ['ব্যাংক/এমএফএস চার্জ', '6471', false],
-        'Licence and Testing' => ['লাইসেন্স/টেস্টিং', '6505', false],
-        'Repair and Maintenance' => ['মেরামত/রক্ষণাবেক্ষণ', '6556', false],
-        'Other Approved Business Expense' => ['অন্যান্য অনুমোদিত খরচ', '6601', true],
+        'Conveyance' => ['যাতায়াতের খরচ', '6011', false, false],
+        'Travel and TA' => ['ভ্রমণের খরচ', '6019', false, true],
+        'Hotel and Accommodation' => ['হোটেল খরচ', '6014', false, true],
+        'Office Expense' => ['অফিসের খরচ', '6062', false, true],
+        'Mobile and Telephone' => ['মোবাইল/ফোনের খরচ', '6055', false, true],
+        'Internet' => ['ইন্টারনেটের খরচ', '6054', false, true],
+        'Product Inward Freight' => ['পণ্য আনার খরচ', '5300', false, true],
+        'Product Sourcing' => ['পণ্য সোর্সিং-এর খরচ', '6174', false, true],
+        'Packaging' => ['প্যাকেজিং-এর খরচ', '6206', false, true],
+        'Marketing' => ['মার্কেটিং-এর খরচ', '6289', false, true],
+        'Customer Gift' => ['কাস্টমার গিফট', '6331', false, true],
+        'Free Product' => ['ফ্রি পণ্য', '6332', false, true],
+        'Courier and Delivery' => ['কুরিয়ার/ডেলিভারি', '6371', false, true],
+        'Event and Guest Hospitality' => ['ইভেন্ট/অতিথি আপ্যায়ন', '6431', false, true],
+        'Employee Welfare' => ['কর্মচারী সংক্রান্ত খরচ', '6138', false, true],
+        'Bank and MFS Charge' => ['ব্যাংক/এমএফএস চার্জ', '6471', false, true],
+        'Licence and Testing' => ['লাইসেন্স/টেস্টিং', '6505', false, true],
+        'Repair and Maintenance' => ['মেরামত/রক্ষণাবেক্ষণ', '6556', false, true],
+        'Software Subscription' => ['সফটওয়্যার সাবস্ক্রিপশন', '6056', false, true],
+        'ERP and Hosting' => ['ইআরপি/হোস্টিং', '6057', false, true],
+        'Other Approved Business Expense' => ['অন্যান্য অনুমোদিত খরচ', '6601', true, true],
     ];
 
     public static function ensureDefaults(int $businessId): void
@@ -70,7 +83,7 @@ class ExpenseCategories
 
         $sort = 0;
 
-        foreach (self::DEFAULTS as $name => [$nameBn, $code, $isException]) {
+        foreach (self::DEFAULTS as $name => [$nameBn, $code, $isException, $receiptRequired]) {
             $account = Account::query()->where('code', $code)->first();
 
             if ($account === null) {
@@ -83,6 +96,7 @@ class ExpenseCategories
                     'name_bn' => $nameBn,
                     'account_id' => $account->id,
                     'is_exception' => $isException,
+                    'receipt_required' => $receiptRequired,
                     'is_active' => true,
                     'sort' => $sort++,
                     'updated_at' => now(), 'created_at' => now(),
@@ -112,6 +126,10 @@ class ExpenseCategories
             'name' => $category->name,
             'name_bn' => $category->name_bn ?? null,
             'is_exception' => (bool) $category->is_exception,
+            // ⚠ Defaulted TRUE when the column is missing rather than false: a
+            // category nobody has decided about must keep refusing a line with
+            // no proof, which is what this module has always done.
+            'receipt_required' => (bool) ($category->receipt_required ?? true),
             'account_id' => (int) $category->account_id,
             'account' => Account::find($category->account_id)?->label(),
         ];
@@ -132,6 +150,10 @@ class ExpenseCategories
                 // indistinguishable from a deliberate English one.
                 'name_bn' => $category->name_bn ?? null,
                 'is_exception' => (bool) $category->is_exception,
+                // Rickshaw fare and tea come with no piece of paper. The
+                // accountant decides which categories those are; every other
+                // one still refuses a line without a file.
+                'receipt_required' => (bool) ($category->receipt_required ?? true),
             ]);
     }
 }

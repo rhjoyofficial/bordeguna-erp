@@ -55,14 +55,27 @@ class SettleExpenseClaim
         }
 
         return DB::transaction(function () use ($claim, $moneyAccount, $expenseAccount, $actor) {
+            // ⚠ ONE VOUCHER LINE PER SPEND, all on the head finance chose. A
+            // legacy claim has no category, so there is one head for the whole
+            // claim; the lines still go down separately, because a voucher that
+            // collapses a trip into a single figure loses the only breakdown
+            // the receipt stack can be checked against.
+            $voucherLines = $claim->payableLines()
+                ->map(fn ($line) => [
+                    'account' => $expenseAccount,
+                    'amount' => (string) $line->amount,
+                    'description' => $line->description ?: $claim->purpose,
+                ])
+                ->all();
+
             $voucher = $this->recordVoucher->handle(
                 moneyAccount: $moneyAccount,
                 spentOn: $claim->spent_on->toDateString(),
-                lines: [[
+                lines: $voucherLines === [] ? [[
                     'account' => $expenseAccount,
                     'amount' => (string) $claim->amount,
                     'description' => $claim->purpose,
-                ]],
+                ]] : $voucherLines,
                 createdBy: $actor,
                 // ⚠ The employee is named as the payee, not the shop they bought
                 // from. The money left the business to reach THEM; where they
@@ -109,7 +122,7 @@ class SettleExpenseClaim
         // Post it now, exactly as approval would have, and then settle it the
         // same way as any other. Without this the payroll line would debit a
         // payable nothing had ever credited.
-        if ($claim->approval_journal_id === null && $claim->expense_category_id !== null) {
+        if ($claim->approval_journal_id === null && $claim->hasPostableLines()) {
             app(PostExpenseClaimApproval::class)->handle($claim, $actor);
             $claim->refresh();
         }
@@ -188,7 +201,8 @@ class SettleExpenseClaim
      */
     private function copyEvidenceTo(ExpenseClaim $claim, ExpenseVoucher $voucher): void
     {
-        foreach ($claim->attachments as $file) {
+        // ⚠ The receipts hang off the LINES since 10 Sep 2026, one per spend.
+        foreach ($claim->receipts() as $file) {
             $copy = $file->replicate(['attachable_type', 'attachable_id']);
             $copy->attachable_type = $voucher->getMorphClass();
             $copy->attachable_id = $voucher->id;

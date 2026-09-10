@@ -29,6 +29,8 @@ interface ApprovalCard {
     requested_at: string;
     approve_url: string | null;
     reject_url: string | null;
+    /** Only on document types with a way home. See ApprovalCards::card(). */
+    send_back_url: string | null;
 }
 
 interface ApprovalsIndexProps {
@@ -54,6 +56,14 @@ function RequestCard({ card }: { card: ApprovalCard }) {
     const reject = (review_note: string) => {
         if (card.reject_url) {
             router.post(card.reject_url, { review_note }, { preserveScroll: true });
+        }
+    };
+
+    // ⚠ `note`, not `review_note`: sending back requires words, and the server
+    // validates the field by that name so a silent send-back is impossible.
+    const sendBack = (note: string) => {
+        if (card.send_back_url) {
+            router.post(card.send_back_url, { note }, { preserveScroll: true });
         }
     };
 
@@ -83,6 +93,23 @@ function RequestCard({ card }: { card: ApprovalCard }) {
                             description={card.summary}
                             confirmLabel="Approve"
                             onConfirm={() => approve()}
+                        />
+                    )}
+                    {card.send_back_url && (
+                        <ConfirmDialog
+                            trigger={
+                                <Button variant="outline" size="sm">
+                                    Send back
+                                </Button>
+                            }
+                            title={`Send the ${card.type.toLowerCase()} back for correction`}
+                            description={`${card.summary}. It returns to the person who raised it, keeps its number, and they can fix it and send it again.`}
+                            confirmLabel="Send back"
+                            withNote
+                            noteRequired
+                            noteLabel="What needs correcting"
+                            notePlaceholder="The rickshaw fare has no receipt, and the courier amount looks like 350 not 550…"
+                            onConfirm={(note) => sendBack(note)}
                         />
                     )}
                     {card.reject_url && (

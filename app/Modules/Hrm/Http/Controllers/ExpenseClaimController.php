@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
 use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Attachment;
@@ -16,11 +17,15 @@ use App\Modules\Hrm\Actions\PostExpenseClaimApproval;
 use App\Modules\Hrm\Actions\SettleExpenseClaim;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\ExpenseClaim;
+use App\Modules\Hrm\Models\ExpenseClaimLine;
 use App\Modules\Hrm\Models\PayrollPeriod;
+use App\Modules\Hrm\Notifications\ExpenseClaimReturnedNotification;
 use App\Modules\Hrm\Support\ExpenseCategories;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -32,11 +37,23 @@ use Inertia\Response;
  * view of everybody's, and it is the only place a claim can be paid. Mixing them
  * into one screen would mean every employee's list quietly carried a Pay button
  * that 403s.
+ *
+ * ⚠⚠ A CLAIM IS A HEADER WITH LINES (Joy, 9 Sep 2026). A market trip is goods,
+ * a rickshaw, a courier and tea for the supplier - four spends, one afternoon,
+ * one claim, one approval, one payment, one voucher. The employee builds it as a
+ * DRAFT over the day and submits once. A single courier is still one press,
+ * because the same form that adds a spend can also send the claim.
+ *
+ * ⚠⚠ AND THERE IS A WAY BACK. A claim with one wrong figure used to have to be
+ * rejected and typed again from nothing. It can now be SENT BACK with a note:
+ * the employee is told, fixes it, and resubmits the same claim under the same
+ * number, with every decision still on the record.
  */
 class ExpenseClaimController extends Controller
 {
     /**
-     * The employee's own claims.
+     * The employee's own claims: the ones they are still building at the top,
+     * everything they have already sent below.
      */
     public function mine(Request $request): Response|RedirectResponse
     {
@@ -48,7 +65,7 @@ class ExpenseClaimController extends Controller
         }
 
         $claims = ExpenseClaim::query()
-            ->with(['approvalRequest', 'attachments', 'settledBy:id,name'])
+            ->with(['approvalRequest.decisions.decidedBy:id,name', 'lines.attachments', 'settledBy:id,name'])
             ->where('employee_id', $employee->id)
             // Joy, 7 Sep: newest ADDED first, not newest spent. A claim for
             // last month's taxi entered this morning is the one waiting on
@@ -61,12 +78,25 @@ class ExpenseClaimController extends Controller
         ExpenseCategories::ensureDefaults(app(BusinessContext::class)->id());
 
         return Inertia::render('hrm/expense-claims/mine', [
-            'claims' => $claims,
+            // ⚠ Split rather than filtered in the browser: a draft is an
+            // editable thing with its own form, and a sent claim is a read-only
+            // row. One list rendered two ways is how a Remove button ends up on
+            // a claim somebody has already approved.
+            'drafts' => $claims->filter(fn (array $row) => $row['is_draft'])->values(),
+            'claims' => $claims->reject(fn (array $row) => $row['is_draft'])->values(),
             'categories' => ExpenseCategories::active(app(BusinessContext::class)->id()),
             'today' => now()->toDateString(),
         ]);
     }
 
+    /**
+     * Add a spend - and, if that is the whole claim, send it in the same press.
+     *
+     * ⚠⚠ ONE FORM, TWO BUTTONS, AND THAT IS THE POINT. Requiring "start a
+     * claim" then "add a spend" then "submit" would turn today's single-courier
+     * claim from one press into three. `action=submit` does all of it at once;
+     * `action=add` leaves the claim open so the next rickshaw can join it.
+     */
     public function store(Request $request, StoreAttachment $store, NotifyStageApprovers $notify): RedirectResponse
     {
         $employee = Employee::forUser($request->user());
@@ -75,45 +105,154 @@ class ExpenseClaimController extends Controller
             return back()->with('error', 'Your user account is not linked to an employee record yet.');
         }
 
+        $businessId = app(BusinessContext::class)->id();
+
         $data = $request->validate([
-            'spent_on' => ['required', 'date', 'before_or_equal:today'],
-            'amount' => ['required', 'numeric', 'min:0.01'],
-            'purpose' => ['required', 'string', 'max:1000'],
-            // The accountant's structure: a category from the dropdown, so
-            // the COA mapping is decided by data, never by the claimant.
-            'expense_category_id' => ['required', 'integer',
-                Rule::exists('expense_categories', 'id')
-                    ->where('business_id', app(BusinessContext::class)->id())
-                    ->where('is_active', true),
-            ],
-            // ⚠⚠ THE RECEIPT IS REQUIRED AT SUBMISSION, not optional. Joy's
-            // requirement was that the office keeps the proof, and proof asked
-            // for later is proof that often never arrives.
-            'receipt' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:5120'],
-        ], [
-            'receipt.required' => 'Attach a photo or scan of the receipt. A claim cannot be approved without it.',
-            'spent_on.before_or_equal' => 'You cannot claim for a date in the future.',
-        ]);
+            'action' => ['required', Rule::in(['add', 'submit'])],
+            // Null starts a new claim; otherwise the spend joins a draft this
+            // employee already has open.
+            'claim_id' => ['nullable', 'integer'],
+            'purpose' => ['required_without:claim_id', 'nullable', 'string', 'max:1000'],
+        ] + $this->lineRules($request, $businessId), $this->lineMessages());
+
+        // ⚠ `?? null`, not `[...]`: a nullable rule the request never sent
+        // leaves the key ABSENT rather than null, and reading it directly is an
+        // undefined-key error on the ordinary one-press path.
+        $claim = ($data['claim_id'] ?? null) === null
+            ? null
+            : $this->ownDraft((int) $data['claim_id'], $employee->id);
+
+        return DB::transaction(function () use ($claim, $data, $request, $store, $notify, $employee, $businessId) {
+            if ($claim === null) {
+                $claim = ExpenseClaim::create([
+                    'business_id' => $businessId,
+                    'employee_id' => $employee->id,
+                    'claim_number' => ExpenseClaim::nextNumber($businessId),
+                    // Derived from the lines the moment the first one lands;
+                    // written here only because the columns are not nullable.
+                    'spent_on' => $data['spent_on'],
+                    'amount' => $data['amount'],
+                    'purpose' => $data['purpose'] ?? '',
+                    'created_by' => $request->user()->id,
+                ]);
+            }
+
+            $this->addLine($claim, $data, $request, $store);
+
+            if ($data['action'] === 'add') {
+                return back()->with('success', "Added to {$claim->claim_number}. Add the next spend, or send it for approval.");
+            }
+
+            return $this->sendForApproval($claim->fresh(), $request, $notify);
+        });
+    }
+
+    /**
+     * Send a draft in that already has its spends on it - including one that
+     * came back for correction.
+     */
+    public function submit(Request $request, ExpenseClaim $claim, NotifyStageApprovers $notify): RedirectResponse
+    {
+        $employee = Employee::forUser($request->user());
+        abort_if($employee === null, 403);
+
+        $claim = $this->ownDraft($claim->id, $employee->id);
+
+        return $this->sendForApproval($claim, $request, $notify);
+    }
+
+    /**
+     * Correct a spend on a claim that has not been approved.
+     *
+     * ⚠ Only the figures. Replacing a receipt means removing the line and
+     * adding it again, deliberately: a screen that quietly swapped one piece of
+     * evidence for another is how the wrong receipt ends up filed against the
+     * right amount with nobody able to tell.
+     */
+    public function updateLine(Request $request, ExpenseClaim $claim, ExpenseClaimLine $line, StoreAttachment $store): RedirectResponse
+    {
+        $employee = Employee::forUser($request->user());
+        abort_if($employee === null, 403);
+
+        $claim = $this->ownDraft($claim->id, $employee->id);
+        abort_unless($line->expense_claim_id === $claim->id, 404);
 
         $businessId = app(BusinessContext::class)->id();
 
-        $claim = ExpenseClaim::create([
-            'business_id' => $businessId,
-            'employee_id' => $employee->id,
-            'claim_number' => ExpenseClaim::nextNumber($businessId),
+        $data = $request->validate(
+            $this->lineRules($request, $businessId, receiptRequired: $line->attachments()->count() === 0),
+            $this->lineMessages(),
+        );
+
+        $line->update([
             'spent_on' => $data['spent_on'],
-            'amount' => $data['amount'],
-            'purpose' => $data['purpose'],
             'expense_category_id' => $data['expense_category_id'],
-            'created_by' => $request->user()->id,
+            'amount' => $data['amount'],
+            'description' => $data['description'] ?? null,
         ]);
 
-        $store->handle($claim, $request->file('receipt'), ExpenseClaim::EVIDENCE_COLLECTION, $request->user());
+        if ($request->hasFile('receipt')) {
+            $store->handle($line, $request->file('receipt'), ExpenseClaimLine::EVIDENCE_COLLECTION, $request->user());
+        }
 
-        $approval = $claim->submitForApproval($request->user());
-        $notify->handle($approval, "Expense claim {$claim->claim_number} from {$employee->fullName()}");
+        $claim->load('lines');
+        $claim->syncFromLines();
 
-        return back()->with('success', "Claim {$claim->claim_number} sent for approval.");
+        return back()->with('success', 'Spend updated.');
+    }
+
+    public function destroyLine(Request $request, ExpenseClaim $claim, ExpenseClaimLine $line, DeleteAttachment $deleteAttachment): RedirectResponse
+    {
+        $employee = Employee::forUser($request->user());
+        abort_if($employee === null, 403);
+
+        $claim = $this->ownDraft($claim->id, $employee->id);
+        abort_unless($line->expense_claim_id === $claim->id, 404);
+
+        $this->discardLine($line, $deleteAttachment);
+
+        $claim->load('lines');
+        $claim->syncFromLines();
+
+        return back()->with('success', 'Spend removed from the claim.');
+    }
+
+    /**
+     * Throw away a draft nobody has seen.
+     *
+     * ⚠ A draft only. A submitted claim is a record that somebody asked, and
+     * deleting it would lose the only proof the request was ever made - the
+     * same reason a rejected claim is kept exactly as it was.
+     */
+    public function destroy(Request $request, ExpenseClaim $claim, DeleteAttachment $deleteAttachment): RedirectResponse
+    {
+        $employee = Employee::forUser($request->user());
+        abort_if($employee === null, 403);
+
+        $claim = $this->ownDraft($claim->id, $employee->id);
+        $number = $claim->claim_number;
+
+        // ⚠ The lines go with the claim through the foreign key, but their
+        // receipts do NOT: an attachment is polymorphic, so the row and the file
+        // on disk would both survive with nothing pointing at them.
+        $claim->lines->each(fn (ExpenseClaimLine $line) => $this->discardLine($line, $deleteAttachment));
+
+        $claim->delete();
+
+        return back()->with('success', "Draft {$number} discarded.");
+    }
+
+    /**
+     * ⚠ The file on disk goes with the row. This is only ever reached from a
+     * DRAFT, which is the one state where a receipt is not yet evidence of
+     * anything anybody has decided on; a submitted claim's proof is never
+     * deletable from a screen ([[FileVisibility::mayDelete]] says the same).
+     */
+    private function discardLine(ExpenseClaimLine $line, DeleteAttachment $deleteAttachment): void
+    {
+        $line->attachments->each(fn (Attachment $file) => $deleteAttachment->handle($file));
+
+        $line->delete();
     }
 
     /**
@@ -124,14 +263,30 @@ class ExpenseClaimController extends Controller
         $this->authorize('hrm.payroll.manage');
 
         $claims = ExpenseClaim::query()
-            ->with(['employee:id,employee_code,first_name,last_name', 'approvalRequest', 'attachments', 'expenseAccount:id,code,name', 'settledBy:id,name'])
+            ->with([
+                'employee:id,employee_code,first_name,last_name',
+                'approvalRequest.decisions.decidedBy:id,name',
+                'lines.attachments',
+                'expenseAccount:id,code,name',
+                'settledBy:id,name',
+            ])
             // Joy, 7 Sep: newest ADDED first, not newest spent. A claim for
             // last month's taxi entered this morning is the one waiting on
             // somebody, so it belongs at the top; sorting by `spent_on` buried
             // it under older entries that had already been dealt with.
             ->orderByDesc('id')
             ->get()
-            ->map(fn (ExpenseClaim $claim) => $this->row($claim, withEmployee: true));
+            // ⚠ A draft belongs to nobody but its author. It is unfinished, it
+            // has not been asked for, and showing it here would invite somebody
+            // to approve money the employee has not yet claimed.
+            ->reject(fn (ExpenseClaim $claim) => $claim->isDraft() && ! $claim->wasSentBack())
+            ->map(fn (ExpenseClaim $claim) => $this->row($claim, withEmployee: true) + [
+                // ⚠ The STAGE decides who may approve, not this screen's own
+                // permission. Drawing the decision block for somebody the
+                // workflow will refuse is how a button that 403s gets shipped.
+                'can_decide' => $claim->approvalRequest?->canBeActionedBy($request->user()) ?? false,
+            ])
+            ->values();
 
         return Inertia::render('hrm/expense-claims/index', [
             'claims' => $claims,
@@ -162,13 +317,18 @@ class ExpenseClaimController extends Controller
     }
 
     /**
-     * Say yes to a claim.
+     * Say yes to a claim, and optionally no to some of its lines.
      *
      * ⚠⚠ APPROVING IS NOT PAYING, and the two are deliberately separate calls.
      * Somebody with the payroll permission agrees the money is owed; paying it
      * is a second, explicit act that names the account or the salary month. A
      * screen that did both on one press would move money the moment somebody
      * agreed a receipt looked genuine.
+     *
+     * ⚠⚠ A DECLINED LINE IS REFUSED BEFORE THE JOURNAL IS WRITTEN, not after.
+     * The posting reads the payable lines, so the declines have to be recorded
+     * first or the ledger would carry money the approver just refused. Declining
+     * every line is refused outright - that is a rejection, and it should say so.
      *
      * ⚠ The stage decides who may act, not this method - `canBeActionedBy`
      * reads the workflow, so changing who approves is a seeder row and not a
@@ -180,7 +340,18 @@ class ExpenseClaimController extends Controller
         abort_if($approval === null, 404);
         abort_unless($approval->canBeActionedBy($request->user()), 403);
 
-        if (! $approval->approve($request->user(), $this->note($request))) {
+        $data = $request->validate([
+            'note' => ['nullable', 'string', 'max:500'],
+            'declines' => ['nullable', 'array'],
+            'declines.*.id' => ['required', 'integer'],
+            'declines.*.reason' => ['required', 'string', 'max:500'],
+        ], [
+            'declines.*.reason.required' => 'Say why the line is being declined. The employee has to know what to fix.',
+        ]);
+
+        $this->applyDeclines($claim, $data['declines'] ?? []);
+
+        if (! $approval->approve($request->user(), $data['note'] ?? null)) {
             $notify->handle($approval->fresh(), "Expense claim {$claim->claim_number}");
 
             return back()->with('success', 'Approved. Sent to the next stage.');
@@ -189,7 +360,7 @@ class ExpenseClaimController extends Controller
         // FINAL approval: the expense becomes real NOW - Dr the category's
         // account, Cr Employee Reimbursements Payable. Cash moves later.
         $journal = app(PostExpenseClaimApproval::class)
-            ->handle($claim->fresh(), $request->user());
+            ->handle($claim->fresh()->load('lines'), $request->user());
 
         // ⚠ The posting is skipped for a legacy claim with no category, and
         // when accounting is off. Saying "booked" either way would be a lie
@@ -197,6 +368,38 @@ class ExpenseClaimController extends Controller
         return back()->with('success', $journal === null
             ? "Claim {$claim->claim_number} approved. It can now be paid."
             : "Claim {$claim->claim_number} approved and booked to the expense. It can now be paid.");
+    }
+
+    /**
+     * Hand the claim back to the employee to fix.
+     *
+     * ⚠⚠ THE NOTE IS REQUIRED. This exists because rejecting a claim over one
+     * wrong figure made the employee retype everything; sending it back with no
+     * words would leave them exactly as stuck, and looking for somebody to ask.
+     */
+    public function sendBack(Request $request, ExpenseClaim $claim): RedirectResponse
+    {
+        $approval = $claim->approvalRequest;
+        abort_if($approval === null, 404);
+        abort_unless($approval->canBeActionedBy($request->user()), 403);
+
+        $data = $request->validate([
+            'note' => ['required', 'string', 'max:500'],
+        ], [
+            'note.required' => 'Say what needs correcting. The employee has to know what to change before they resubmit.',
+        ]);
+
+        $approval->sendBack($request->user(), $data['note']);
+
+        // Back to the employee's hands: a draft again, same number, same lines.
+        $claim->forceFill(['submitted_at' => null])->save();
+
+        $claim->employee?->user?->notify(new ExpenseClaimReturnedNotification(
+            "Claim {$claim->claim_number} was sent back: {$data['note']}",
+            route('hrm.my-expenses'),
+        ));
+
+        return back()->with('success', "Claim {$claim->claim_number} sent back to {$claim->employee?->fullName()} for correction.");
     }
 
     public function reject(Request $request, ExpenseClaim $claim): RedirectResponse
@@ -272,6 +475,177 @@ class ExpenseClaimController extends Controller
         );
     }
 
+    // ── The pieces the actions above share ──────────────────────────────────
+
+    /**
+     * The validation one spend has to pass, wherever it is being typed.
+     *
+     * ⚠⚠ THE RECEIPT IS REQUIRED UNLESS THE ACCOUNTANT SAID OTHERWISE. Joy's
+     * requirement was that the office keeps the proof, and proof asked for later
+     * is proof that often never arrives. The exception is a category the
+     * accountant has flagged - rickshaw fare and tea come with no piece of
+     * paper, and refusing them would push those spends off the books entirely.
+     *
+     * @return array<string, mixed>
+     */
+    private function lineRules(Request $request, int $businessId, bool $receiptRequired = true): array
+    {
+        return [
+            'spent_on' => ['required', 'date', 'before_or_equal:today'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            // The accountant's structure: a category from the list, so the COA
+            // mapping is decided by data, never by the claimant.
+            'expense_category_id' => ['required', 'integer',
+                Rule::exists('expense_categories', 'id')
+                    ->where('business_id', $businessId)
+                    ->where('is_active', true),
+            ],
+            'receipt' => [
+                Rule::requiredIf(fn () => $receiptRequired && $this->needsReceipt($request->input('expense_category_id'))),
+                'nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:5120',
+            ],
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function lineMessages(): array
+    {
+        return [
+            'receipt.required' => 'Attach a photo or scan of the receipt. A spend cannot be approved without it.',
+            'spent_on.before_or_equal' => 'You cannot claim for a date in the future.',
+        ];
+    }
+
+    private function needsReceipt(mixed $categoryId): bool
+    {
+        if (! is_numeric($categoryId)) {
+            // No category picked yet: the category rule refuses first, and
+            // demanding a file on top would print two errors for one mistake.
+            return false;
+        }
+
+        return ExpenseCategories::describe((int) $categoryId)['receipt_required'] ?? true;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function addLine(ExpenseClaim $claim, array $data, Request $request, StoreAttachment $store): ExpenseClaimLine
+    {
+        $line = $claim->lines()->create([
+            'business_id' => $claim->business_id,
+            'spent_on' => $data['spent_on'],
+            'expense_category_id' => $data['expense_category_id'],
+            'amount' => $data['amount'],
+            'description' => $data['description'] ?? null,
+            'sort' => (int) $claim->lines()->max('sort') + 1,
+        ]);
+
+        if ($request->hasFile('receipt')) {
+            $store->handle($line, $request->file('receipt'), ExpenseClaimLine::EVIDENCE_COLLECTION, $request->user());
+        }
+
+        $claim->load('lines');
+        $claim->syncFromLines();
+
+        return $line;
+    }
+
+    /**
+     * ⚠ A claim can only be sent by the person whose money it is, and only
+     * while it is theirs to send. Everything else - somebody else's draft, one
+     * already waiting on an approver, one already paid - is a 404 rather than a
+     * silent no-op, so a stale tab cannot resubmit last week's claim.
+     */
+    private function ownDraft(int $claimId, int $employeeId): ExpenseClaim
+    {
+        $claim = ExpenseClaim::query()
+            ->with('lines.attachments')
+            ->where('id', $claimId)
+            ->where('employee_id', $employeeId)
+            ->whereNull('submitted_at')
+            ->whereNull('settled_at')
+            ->first();
+
+        abort_if($claim === null, 404);
+
+        return $claim;
+    }
+
+    private function sendForApproval(ExpenseClaim $claim, Request $request, NotifyStageApprovers $notify): RedirectResponse
+    {
+        $claim->load('lines.attachments');
+
+        if ($claim->lines->isEmpty()) {
+            throw ValidationException::withMessages([
+                'claim' => 'Add at least one spend before sending the claim for approval.',
+            ]);
+        }
+
+        // ⚠⚠ CHECKED AGAIN AT SUBMISSION, not only when the line was typed. A
+        // line can be added while its category still allowed a missing receipt
+        // and then the accountant changes their mind; sending a claim an
+        // approver is obliged to refuse wastes both their time.
+        $missing = $claim->lines->filter(fn (ExpenseClaimLine $line) => $line->attachments->isEmpty()
+            && $this->needsReceipt($line->expense_category_id));
+
+        if ($missing->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'claim' => 'These spends still need a receipt: '
+                    .$missing->map(fn (ExpenseClaimLine $line) => $line->spent_on?->toDateString().' '.$line->amount)->implode(', '),
+            ]);
+        }
+
+        $claim->syncFromLines();
+        $claim->forceFill(['submitted_at' => now()])->save();
+
+        $approval = $claim->resubmitForApproval($request->user());
+        $notify->handle($approval, "Expense claim {$claim->claim_number} from {$claim->employee?->fullName()}");
+
+        return back()->with('success', "Claim {$claim->claim_number} sent for approval.");
+    }
+
+    /**
+     * @param  list<array{id: int, reason: string}>  $declines
+     */
+    private function applyDeclines(ExpenseClaim $claim, array $declines): void
+    {
+        if ($declines === []) {
+            return;
+        }
+
+        $claim->load('lines');
+        $byId = $claim->lines->keyBy('id');
+
+        // ⚠ Counted from the lines that actually EXIST on this claim, and
+        // de-duplicated. A repeated or foreign id must not be able to talk the
+        // guard below into thinking a line survived when none did.
+        $targets = collect($declines)
+            ->filter(fn (array $decline) => $byId->has($decline['id']))
+            ->keyBy(fn (array $decline) => $decline['id']);
+
+        if ($targets->isEmpty()) {
+            return;
+        }
+
+        if ($targets->count() >= $claim->lines->count()) {
+            throw ValidationException::withMessages([
+                'declines' => 'Declining every line is a rejection. Use Reject, or send the claim back for correction.',
+            ]);
+        }
+
+        foreach ($targets as $id => $decline) {
+            $byId->get($id)->forceFill([
+                'declined_at' => now(),
+                'declined_reason' => $decline['reason'],
+            ])->save();
+        }
+
+        $claim->load('lines');
+        $claim->syncFromLines();
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -286,6 +660,9 @@ class ExpenseClaimController extends Controller
             'amount' => (string) (float) $claim->amount,
             'purpose' => $claim->purpose,
             'state' => $claim->state(),
+            'is_draft' => $claim->isDraft(),
+            'was_sent_back' => $claim->wasSentBack(),
+            'sent_back_note' => $claim->wasSentBack() ? $claim->approvalRequest?->review_note : null,
             'is_settled' => $claim->isSettled(),
             'is_approved' => $claim->isApproved(),
             'settlement_method' => $claim->settlement_method,
@@ -301,7 +678,24 @@ class ExpenseClaimController extends Controller
             // salary moves it to wages, and neither expenses it a second time.
             'is_booked' => $claim->approval_journal_id !== null,
             'expense_account' => $claim->expenseAccount?->label(),
-            'receipts' => $claim->attachments->map(fn (Attachment $file) => [
+            'lines' => $claim->lines->map(fn (ExpenseClaimLine $line) => [
+                'id' => $line->id,
+                'spent_on' => $line->spent_on?->toDateString(),
+                'amount' => (string) (float) $line->amount,
+                'description' => $line->description,
+                'category' => $line->category()['name'] ?? null,
+                'category_id' => $line->expense_category_id,
+                'is_declined' => $line->isDeclined(),
+                'declined_reason' => $line->declined_reason,
+                'receipts' => $line->attachments->map(fn (Attachment $file) => [
+                    'id' => $file->id,
+                    'name' => $file->original_name ?? $file->file_name,
+                    'url' => route('attachments.show', $file->id),
+                ])->values()->all(),
+            ])->values()->all(),
+            // Kept flat as well: several screens only want to know whether
+            // there is proof at all, without walking the lines to find out.
+            'receipts' => $claim->receipts()->map(fn (Attachment $file) => [
                 'id' => $file->id,
                 'name' => $file->original_name ?? $file->file_name,
                 'url' => route('attachments.show', $file->id),
@@ -334,7 +728,7 @@ class ExpenseClaimController extends Controller
 
         abort_unless($claim->isSettled(), 404);
 
-        $claim->load(['employee', 'expenseAccount', 'settledBy', 'voucher', 'adjustment.period']);
+        $claim->load(['employee', 'expenseAccount', 'settledBy', 'voucher', 'adjustment.period', 'lines.expenseAccount']);
 
         $settlementJournal = Journal::where('source_type', $claim->getMorphClass())
             ->where('source_id', $claim->id)
@@ -347,6 +741,10 @@ class ExpenseClaimController extends Controller
             // letterhead cannot drift between one document and another.
             'issuer' => BusinessIdentity::forCurrent()->toArray(),
             'claim' => [
+                // ⚠ The screen's PDF button builds `/documents/expense-claim/{id}`
+                // from this. It was missing, so the button asked for
+                // `.../undefined/pdf` and the download simply failed.
+                'id' => $claim->id,
                 'claim_number' => $claim->claim_number,
                 'employee' => $claim->employee?->fullName() ?? '-',
                 'employee_code' => $claim->employee?->employee_code,
@@ -364,10 +762,25 @@ class ExpenseClaimController extends Controller
                 'category' => ExpenseCategories::describe($claim->expense_category_id)['name'] ?? null,
                 'charged_to' => $claim->expenseAccount?->label(),
                 'amount' => (string) $claim->amount,
+                // ⚠ Every spend on the voucher, so the person signing for the
+                // money can check it against the receipts they handed over.
+                'lines' => $claim->payableLines()->map(fn (ExpenseClaimLine $line) => [
+                    'spent_on' => $line->spent_on?->toDateString(),
+                    'category' => $line->category()['name'] ?? $line->expenseAccount?->label(),
+                    'description' => $line->description,
+                    'amount' => (string) $line->amount,
+                ])->values()->all(),
+                'declined' => $claim->lines->filter(fn (ExpenseClaimLine $line) => $line->isDeclined())
+                    ->map(fn (ExpenseClaimLine $line) => [
+                        'spent_on' => $line->spent_on?->toDateString(),
+                        'description' => $line->description,
+                        'amount' => (string) $line->amount,
+                        'reason' => $line->declined_reason,
+                    ])->values()->all(),
                 'method' => $claim->settlement_method === ExpenseClaim::SETTLE_PAYROLL
                     ? 'Added to salary'
                     : 'Paid directly',
-                'paid_from' => $claim->voucher?->moneyAccount?->name,
+                'paid_from' => $this->paidFrom($claim, $settlementJournal),
                 'salary_month' => $claim->adjustment?->period?->label(),
                 'settled_by' => $claim->settledBy?->name,
                 'approved_journal' => $claim->approval_journal_id
@@ -377,5 +790,32 @@ class ExpenseClaimController extends Controller
                 'voucher_number' => $claim->voucher?->voucher_number,
             ],
         ]);
+    }
+
+    /**
+     * Which till, bank or wallet the cash actually left.
+     *
+     * ⛔⛔ THE VOUCHER COULD NOT SAY, AND AN AUDITOR WOULD ASK. This read
+     * `$claim->voucher?->moneyAccount?->name`, which only exists on the legacy
+     * route: a BOOKED claim settled in cash clears the payable directly and
+     * writes no expense voucher, so the printed line read "Paid directly" and
+     * then nothing at all - while the purchasing payment voucher beside it named
+     * its account. `expense_claims` has no money account column, but the
+     * settlement journal's credit line carries a `money_account_id`, which is
+     * where this now reads it from.
+     */
+    private function paidFrom(ExpenseClaim $claim, ?Journal $settlementJournal): ?string
+    {
+        if ($claim->settlement_method !== ExpenseClaim::SETTLE_PAYMENT) {
+            return null;
+        }
+
+        if (($name = $claim->voucher?->moneyAccount?->name) !== null) {
+            return $name;
+        }
+
+        return $settlementJournal?->lines
+            ->first(fn ($line) => $line->money_account_id !== null)
+            ?->moneyAccount?->name;
     }
 }

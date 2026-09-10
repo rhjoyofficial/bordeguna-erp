@@ -8,6 +8,7 @@ use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\DisbursementBatch;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\ExpenseClaim;
+use App\Modules\Hrm\Models\ExpenseClaimLine;
 use App\Modules\Hrm\Models\JobApplicant;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Inventory\Models\InventoryAdjustment;
@@ -66,6 +67,12 @@ class FileVisibility
         PayrollAdjustment::class => 'hrm.payroll.manage',
         DisbursementBatch::class => 'hrm.payroll.manage',
         ExpenseClaim::class => 'hrm.payroll.manage',
+
+        // ⚠ The receipt moved from the claim to its LINE on 10 Sep 2026, when a
+        // claim became a header with several spends under it. Without this row
+        // the closed default would have hidden every expense receipt in the
+        // file manager from the very people who approve and pay them.
+        ExpenseClaimLine::class => 'hrm.payroll.manage',
 
         ExpenseVoucher::class => 'purchasing.expense.record',
         SupplierBill::class => 'purchasing.reports.view',

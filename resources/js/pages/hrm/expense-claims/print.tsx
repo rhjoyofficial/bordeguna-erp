@@ -5,9 +5,22 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
+interface VoucherLine {
+    spent_on: string | null;
+    category: string | null;
+    description: string | null;
+    amount: string;
+}
+
+interface DeclinedLine extends VoucherLine {
+    reason: string | null;
+}
+
 interface Claim {
     id: number;
     claim_number: string;
+    lines: VoucherLine[];
+    declined: DeclinedLine[];
     employee: string;
     employee_code: string | null;
     spent_on: string | null;
@@ -91,26 +104,70 @@ function ReimbursementCopy({ claim, issuer, copyLabel }: { claim: Claim; issuer:
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td className="border border-black/25 px-2 py-1 align-top">
-                            {claim.purpose}
-                            {/* ⚠ The CATEGORY, and only the account when there is
-                                none - a claim raised before categories existed.
-                                A chart code is the accountant's word for this
-                                line, and one copy of this voucher is handed to the
-                                person being paid. */}
-                            {(claim.category ?? claim.charged_to) && (
-                                <span className="block text-[10px] text-black/50">{claim.category ?? claim.charged_to}</span>
-                            )}
-                        </td>
-                        <td className="border border-black/25 px-2 py-1 text-right align-top">{money(claim.amount)}</td>
-                    </tr>
+                    {/* ⚠⚠ ONE ROW PER SPEND. A trip paid as a single figure gives
+                        the person signing nothing to check their receipts against;
+                        this is the breakdown they handed in, back on paper. A
+                        one-spend claim still reads as one row, exactly as before. */}
+                    {claim.lines.length === 0 ? (
+                        <tr>
+                            <td className="border border-black/25 px-2 py-1 align-top">
+                                {claim.purpose}
+                                {/* ⚠ The CATEGORY, and only the account when there is
+                                    none - a claim raised before categories existed.
+                                    A chart code is the accountant's word for this
+                                    line, and one copy of this voucher is handed to the
+                                    person being paid. */}
+                                {(claim.category ?? claim.charged_to) && (
+                                    <span className="block text-[10px] text-black/50">{claim.category ?? claim.charged_to}</span>
+                                )}
+                            </td>
+                            <td className="border border-black/25 px-2 py-1 text-right align-top">{money(claim.amount)}</td>
+                        </tr>
+                    ) : (
+                        claim.lines.map((line, index) => (
+                            <tr key={index}>
+                                <td className="border border-black/25 px-2 py-1 align-top">
+                                    {line.description ?? claim.purpose}
+                                    <span className="block text-[10px] text-black/50">
+                                        {[line.category, line.spent_on].filter(Boolean).join(' · ')}
+                                    </span>
+                                </td>
+                                <td className="border border-black/25 px-2 py-1 text-right align-top">{money(line.amount)}</td>
+                            </tr>
+                        ))
+                    )}
                     <tr>
                         <td className="border border-black/25 px-2 py-1 text-right font-semibold">Total</td>
                         <td className="border border-black/25 px-2 py-1 text-right font-semibold">BDT {money(claim.amount)}</td>
                     </tr>
                 </tbody>
             </table>
+
+            {/* ⚠⚠ WHAT WAS REFUSED IS PRINTED TOO, and it is deliberately below the
+                total rather than inside it. The employee asked for this money and
+                is not getting it; a voucher that simply omitted the line would
+                leave them to work out the difference for themselves. */}
+            {claim.declined.length > 0 && (
+                <table className="mt-2 w-full border-collapse text-[11px]">
+                    <thead>
+                        <tr className="bg-black/[0.03]">
+                            <th className="border border-black/25 px-2 py-1 text-left font-medium">Not approved</th>
+                            <th className="w-28 border border-black/25 px-2 py-1 text-right font-medium">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {claim.declined.map((line, index) => (
+                            <tr key={index}>
+                                <td className="border border-black/25 px-2 py-1 align-top">
+                                    {line.description ?? '-'}
+                                    {line.reason && <span className="block text-[10px] text-black/50">{line.reason}</span>}
+                                </td>
+                                <td className="border border-black/25 px-2 py-1 text-right align-top">{money(line.amount)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
 
             {/* ⭐ Signature labels centred in their own cells, and the space above
                 each one is the space somebody signs in. */}

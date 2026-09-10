@@ -63,7 +63,7 @@ class ApprovalInbox
                     BonusAward::class => ['employee:id,employee_code,first_name,last_name', 'event:id,name'],
                     PayrollAdjustment::class => ['employee:id,employee_code,first_name,last_name', 'period'],
                     SalaryRevision::class => ['employee:id,employee_code,first_name,last_name'],
-                    ExpenseClaim::class => ['employee:id,employee_code,first_name,last_name', 'attachments'],
+                    ExpenseClaim::class => ['employee:id,employee_code,first_name,last_name', 'lines.attachments'],
                 ]),
             ])
             ->latest()

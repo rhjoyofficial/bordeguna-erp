@@ -23,7 +23,22 @@ use Illuminate\Support\Facades\DB;
  * The expense exists the day the office said yes - the cash has not moved,
  * and the books say exactly that. Settlement later clears the payable.
  *
- * ⚠ Posts only for claims that carry a category (legacy claims keep the
+ * ⚠⚠ ONE JOURNAL FOR THE WHOLE CLAIM, ONE DEBIT PER ACCOUNT (10 Sep 2026, when
+ * a claim became a header with lines). A market trip with four spends across
+ * three heads posts ONE journal: three debits, one credit for the total. Lines
+ * sharing a head are ADDED TOGETHER rather than posted twice, because the ledger
+ * is a record of what was spent on what, not a transcript of the claim form.
+ *
+ * ⚠⚠ A DECLINED LINE DOES NOT POST. The approver refusing the taxi fare means
+ * the business never owes it, so it must not reach an expense account and must
+ * not swell the payable. It stays on the claim, with the reason, for the
+ * employee to read.
+ *
+ * ⚠ The credit is the SUM OF THE DEBITS in minor units, never a separately
+ * rounded total: adding paisa and then converting cannot disagree with itself,
+ * and a journal that does not balance is refused by PostJournal anyway.
+ *
+ * ⚠ Posts only for lines that carry a category (legacy claims keep the
  * old settle-time voucher), only once (approval_journal_id is the guard),
  * and only when accounting is on - the same anchor every payroll posting
  * checks.
@@ -34,7 +49,7 @@ class PostExpenseClaimApproval
 
     public function handle(ExpenseClaim $claim, User $approvedBy): ?Journal
     {
-        if ($claim->expense_category_id === null || $claim->approval_journal_id !== null) {
+        if ($claim->approval_journal_id !== null) {
             return null;
         }
 
@@ -44,30 +59,75 @@ class PostExpenseClaimApproval
             return null;
         }
 
-        $category = DB::table('expense_categories')->where('id', $claim->expense_category_id)->first();
         $payable = Account::bySlug('employee_reimbursements_payable');
 
-        if ($category === null || $payable === null) {
+        if ($payable === null) {
             return null;
         }
 
-        $amount = Money::ofTaka((string) $claim->amount);
+        $claim->loadMissing('lines');
         $employee = $claim->employee;
+
+        /** @var array<int, array{amount: Money, names: list<string>, purposes: list<string>}> $byAccount */
+        $byAccount = [];
+
+        foreach ($claim->payableLines() as $line) {
+            $accountId = $line->postingAccountId();
+
+            if ($accountId === null) {
+                continue;
+            }
+
+            $category = DB::table('expense_categories')->where('id', $line->expense_category_id)->first();
+
+            $byAccount[$accountId] ??= ['amount' => Money::zero(), 'names' => [], 'purposes' => []];
+            $byAccount[$accountId]['amount'] = $byAccount[$accountId]['amount']->plus(Money::ofTaka((string) $line->amount));
+            $byAccount[$accountId]['names'][] = $category->name ?? 'Expense';
+            $byAccount[$accountId]['purposes'][] = $line->description ?: $claim->purpose;
+        }
+
+        if ($byAccount === []) {
+            return null;
+        }
+
+        $lines = [];
+        $total = Money::zero();
+
+        foreach ($byAccount as $accountId => $bucket) {
+            $lines[] = JournalLineDraft::debit(
+                $accountId,
+                $bucket['amount'],
+                // The line's own words when there is one spend on this head,
+                // and the category when several were merged into it.
+                count($bucket['purposes']) === 1 ? $bucket['purposes'][0] : implode(', ', array_unique($bucket['names'])),
+                $employee,
+            );
+            $total = $total->plus($bucket['amount']);
+        }
+
+        $lines[] = JournalLineDraft::credit($payable->id, $total, 'Owed to '.$employee?->fullName(), $employee);
+
+        $heads = array_unique(array_merge(...array_column($byAccount, 'names')));
 
         $journal = $this->postJournal->handle(new JournalDraft(
             date: $on,
-            lines: [
-                JournalLineDraft::debit((int) $category->account_id, $amount, $claim->purpose, $employee),
-                JournalLineDraft::credit($payable->id, $amount, 'Owed to '.$employee?->fullName(), $employee),
-            ],
-            memo: "Expense claim {$claim->claim_number} approved - {$category->name}",
+            lines: $lines,
+            memo: "Expense claim {$claim->claim_number} approved - ".implode(', ', $heads),
             source: $claim,
         ), $approvedBy);
 
-        $claim->forceFill([
-            'approval_journal_id' => $journal->id,
-            'expense_account_id' => $category->account_id,
-        ])->save();
+        // ⚠ Each line remembers the account it actually posted to. Remapping a
+        // category next month must not rewrite where last month's money went,
+        // and the printed voucher reads these rather than the category table.
+        foreach ($claim->payableLines() as $line) {
+            if ($line->expense_account_id === null && ($accountId = $line->postingAccountId()) !== null) {
+                $line->forceFill(['expense_account_id' => $accountId])->save();
+            }
+        }
+
+        $claim->forceFill(['approval_journal_id' => $journal->id])->save();
+        $claim->load('lines');
+        $claim->syncFromLines();
 
         return $journal;
     }

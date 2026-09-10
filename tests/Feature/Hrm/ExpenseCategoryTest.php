@@ -101,6 +101,9 @@ function submitClaim(string $category = 'Mobile'): ExpenseClaim
     (test()->asStaff)()->get(route('hrm.my-expenses')); // plants default categories
 
     (test()->asStaff)()->post(route('hrm.my-expenses.store'), [
+        // ⚠ `submit` is the one-press path: create the claim, add the spend and
+        // send it, exactly as the old single-field form did.
+        'action' => 'submit',
         'spent_on' => '2026-09-03',
         'amount' => '547',
         'expense_category_id' => categoryId($category),
@@ -261,10 +264,20 @@ it('puts the category, the account it will hit and the exception warning on the 
 
     // Joy's 31 Aug rule: the card carries what saying yes will DO. Approval
     // now posts a journal, so the account it lands in belongs on the card.
-    expect($details->firstWhere('label', 'Category')['value'])->toStartWith('Other Approved Business Expense')
-        ->and($details->firstWhere('label', 'Books')['value'])->toContain('6601')
+    //
+    // ⚠ The category moved from a `Category` detail onto the LINES (10 Sep
+    // 2026): a claim can carry several categories now, and one label could only
+    // ever name one of them. The catch-all warning became its own detail so it
+    // is still impossible to miss.
+    expect($details->firstWhere('label', 'Books')['value'])->toContain('6601')
         ->and($details->firstWhere('label', 'Books')['value'])->toContain('Employee Reimbursements Payable')
-        ->and($details->firstWhere('label', 'Category')['value'])->toContain('look twice');
+        ->and($details->firstWhere('label', 'Look twice')['value'])->toStartWith('Other Approved Business Expense')
+        ->and($details->firstWhere('label', 'Look twice')['value'])->toContain('catch-all')
+        ->and(collect($card['lines'])->first()['description'])->toContain('Other Approved Business Expense');
+
+    // ⚠ And the way home is offered, because an expense claim is the one
+    // document type that has a screen to fix it on.
+    expect($card['send_back_url'])->toContain('/send-back');
 });
 
 it('carries the category onto the claim rows both audiences read', function () {

@@ -45,6 +45,28 @@ trait Approvable
     }
 
     /**
+     * Send it for approval again after it was handed back for correction.
+     *
+     * ⚠ A document that has never been submitted has no request yet - a draft
+     * expense claim is the case this exists for - so the first send falls
+     * through to the ordinary submission. Everything after that reuses the one
+     * request row, because `approvalRequest` is a morphOne and a second row
+     * would be invisible to every reader in the system.
+     */
+    public function resubmitForApproval(User $requestedBy): ApprovalRequest
+    {
+        $request = $this->approvalRequest;
+
+        if ($request === null) {
+            return $this->submitForApproval($requestedBy);
+        }
+
+        $request->resubmit();
+
+        return $request->refresh();
+    }
+
+    /**
      * The workflow definition key this model's approvals map to. Defaults to the
      * snake-cased class name (StockRequest → stock_request, PurchaseOrder →
      * purchase_order); override to point at a differently-named workflow.

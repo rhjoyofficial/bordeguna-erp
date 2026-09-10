@@ -1,11 +1,26 @@
 import { BusyButton } from '@/components/busy-button';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import HeadingSmall from '@/components/heading-small';
 import { SearchSelect } from '@/components/search-select';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
+
+type Line = {
+    id: number;
+    spent_on: string | null;
+    amount: string;
+    description: string | null;
+    category: string | null;
+    category_id: number | null;
+    is_declined: boolean;
+    declined_reason: string | null;
+    receipts: { id: number; name: string; url: string }[];
+};
 
 type Claim = {
     id: number;
@@ -15,20 +30,178 @@ type Claim = {
     category: string | null;
     purpose: string;
     state: string;
+    is_draft: boolean;
+    was_sent_back: boolean;
+    sent_back_note: string | null;
     is_settled: boolean;
     is_approved: boolean;
+    can_decide: boolean;
     settlement_method: string | null;
     settled_by: string | null;
     expense_account: string | null;
     is_booked: boolean;
     employee: string | null;
     employee_code: string | null;
+    lines: Line[];
     receipts: { id: number; name: string; url: string }[];
 };
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Expense claims', href: '/hrm/expense-claims' }];
 
-const money = (value: string) => Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (value: string | number) =>
+    Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * The spends on one claim, which is what the approver is actually deciding on.
+ *
+ * ⚠⚠ A TOTAL IS NOT A DECISION. A market trip approved from a single figure is
+ * a figure nobody checked; the rickshaw, the courier and the tea have to be
+ * visible separately, because that is what the receipts in the approver's hand
+ * look like.
+ */
+function Lines({ claim }: { claim: Claim }) {
+    if (claim.lines.length === 0) {
+        return <span className="text-muted-foreground text-xs">No spends on this claim.</span>;
+    }
+
+    return (
+        <ul className="space-y-1">
+            {claim.lines.map((line) => (
+                <li key={line.id} className={line.is_declined ? 'text-muted-foreground line-through' : ''}>
+                    <span className="tabular-nums">{money(line.amount)}</span> {line.category ?? 'Uncategorised'}
+                    {line.description ? `: ${line.description}` : ''}
+                    <span className="text-muted-foreground text-xs"> {line.spent_on}</span>
+                    {line.receipts.length === 0 ? (
+                        <span className="text-destructive ml-1 text-xs">no receipt</span>
+                    ) : (
+                        line.receipts.map((file) => (
+                            <a key={file.id} href={file.url} target="_blank" rel="noreferrer" className="ml-1 text-xs underline">
+                                receipt
+                            </a>
+                        ))
+                    )}
+                    {line.is_declined && (
+                        <span className="block text-xs text-amber-700 no-underline">Declined: {line.declined_reason}</span>
+                    )}
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+/**
+ * Approve, hand back, or refuse.
+ *
+ * ⚠⚠ THE THIRD OUTCOME IS THE NEW ONE (Joy, 9 Sep 2026). A claim with one wrong
+ * figure had to be rejected and typed again from nothing. Sending it back keeps
+ * the claim, its number and its decision history, and tells the employee what to
+ * change.
+ *
+ * ⚠ Declining a line is not the same as sending the claim back. Declining says
+ * "the rest is fine, this one is not" and lets the good lines post and be paid
+ * today; sending back says "I cannot judge this yet, fix it and ask again".
+ */
+function Decide({ claim }: { claim: Claim }) {
+    const [declined, setDeclined] = useState<Record<number, string>>({});
+
+    const toggle = (lineId: number, on: boolean) =>
+        setDeclined((current) => {
+            const next = { ...current };
+            if (on) {
+                next[lineId] = '';
+            } else {
+                delete next[lineId];
+            }
+            return next;
+        });
+
+    const entries = Object.entries(declined);
+    const allDeclined = entries.length > 0 && entries.length >= claim.lines.length;
+    const missingReason = entries.some(([, reason]) => reason.trim() === '');
+
+    const approve = () =>
+        router.post(
+            `/hrm/expense-claims/${claim.id}/approve`,
+            { declines: entries.map(([id, reason]) => ({ id: Number(id), reason })) },
+            { preserveScroll: true },
+        );
+
+    return (
+        <div className="space-y-2">
+            {claim.lines.length > 1 && (
+                <div className="space-y-1">
+                    <Label className="text-muted-foreground text-xs">Decline any spend you will not pay</Label>
+                    {claim.lines.map((line) => (
+                        <div key={line.id} className="space-y-1">
+                            <label className="flex items-center gap-2 text-xs">
+                                <input
+                                    type="checkbox"
+                                    checked={declined[line.id] !== undefined}
+                                    onChange={(e) => toggle(line.id, e.target.checked)}
+                                />
+                                <span className="tabular-nums">{money(line.amount)}</span>
+                                <span>{line.category ?? 'Uncategorised'}</span>
+                            </label>
+                            {declined[line.id] !== undefined && (
+                                <Input
+                                    className="w-full text-xs"
+                                    placeholder="Why this one is refused"
+                                    value={declined[line.id]}
+                                    onChange={(e) => setDeclined((current) => ({ ...current, [line.id]: e.target.value }))}
+                                />
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {allDeclined && (
+                <p className="text-destructive text-xs">
+                    Declining every spend is a rejection. Use Reject, or send the claim back for correction.
+                </p>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+                <BusyButton size="sm" busyLabel="Approving…" disabled={allDeclined || missingReason} onClick={approve}>
+                    Approve
+                </BusyButton>
+
+                <ConfirmDialog
+                    trigger={
+                        <Button size="sm" variant="outline">
+                            Send back
+                        </Button>
+                    }
+                    title={`Send ${claim.claim_number} back for correction`}
+                    description="It returns to the employee as a draft, keeps its number, and they can fix it and send it again."
+                    confirmLabel="Send back"
+                    withNote
+                    noteRequired
+                    noteLabel="What needs correcting"
+                    notePlaceholder="The courier amount looks like 350 rather than 550…"
+                    onConfirm={(note) =>
+                        router.post(`/hrm/expense-claims/${claim.id}/send-back`, { note }, { preserveScroll: true })
+                    }
+                />
+
+                <ConfirmDialog
+                    trigger={
+                        <Button size="sm" variant="ghost">
+                            Reject
+                        </Button>
+                    }
+                    title={`Reject ${claim.claim_number}`}
+                    description="Final. Nothing moves, and the employee cannot resubmit this claim."
+                    confirmLabel="Reject"
+                    destructive
+                    withNote
+                    noteLabel="Reason for rejecting (optional)"
+                    onConfirm={(note) => router.post(`/hrm/expense-claims/${claim.id}/reject`, { note }, { preserveScroll: true })}
+                />
+            </div>
+        </div>
+    );
+}
 
 /**
  * Paying employees back for what they spent on the company.
@@ -72,8 +245,17 @@ function SettleRow({
         );
     }
 
+    if (claim.is_draft) {
+        return (
+            <div className="space-y-1">
+                <span className="text-muted-foreground text-xs">Sent back. Waiting on the employee to correct it.</span>
+                {claim.sent_back_note && <p className="text-xs text-amber-700">{claim.sent_back_note}</p>}
+            </div>
+        );
+    }
+
     if (!claim.is_approved) {
-        return <span className="text-muted-foreground text-xs">Waiting for approval</span>;
+        return claim.can_decide ? <Decide claim={claim} /> : <span className="text-muted-foreground text-xs">Waiting for approval</span>;
     }
 
     const settle = (method: 'payment' | 'payroll') =>
@@ -225,7 +407,7 @@ export default function ExpenseClaims({
 
                 {owed > 0 && (
                     <p className="text-sm">
-                        Approved and not yet paid: <span className="font-medium tabular-nums">BDT {money(String(owed))}</span>
+                        Approved and not yet paid: <span className="font-medium tabular-nums">BDT {money(owed)}</span>
                     </p>
                 )}
 
@@ -236,43 +418,36 @@ export default function ExpenseClaims({
                                 <th className="p-3">Claim</th>
                                 <th className="p-3">Who</th>
                                 <th className="p-3">Date</th>
-                                <th className="p-3">Category</th>
                                 <th className="p-3">What for</th>
+                                <th className="p-3">Spends</th>
                                 <th className="p-3 text-right">Amount</th>
-                                <th className="p-3">Receipt</th>
-                                <th className="p-3">Settlement</th>
+                                <th className="p-3">What happens next</th>
                             </tr>
                         </thead>
                         <tbody>
                             {claims.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="text-muted-foreground p-3">
+                                    <td colSpan={7} className="text-muted-foreground p-3">
                                         Nobody has claimed anything yet.
                                     </td>
                                 </tr>
                             )}
                             {claims.map((claim) => (
                                 <tr key={claim.id} className="border-border border-t align-top">
-                                    <td className="p-3 font-medium">{claim.claim_number}</td>
+                                    <td className="p-3 font-medium">
+                                        {claim.claim_number}
+                                        <span className="text-muted-foreground block text-xs font-normal">{claim.state}</span>
+                                    </td>
                                     <td className="p-3">
                                         {claim.employee}
                                         <span className="text-muted-foreground block text-xs">{claim.employee_code}</span>
                                     </td>
                                     <td className="p-3">{claim.spent_on ?? '-'}</td>
-                                    <td className="p-3">{claim.category ?? '-'}</td>
                                     <td className="p-3">{claim.purpose}</td>
-                                    <td className="p-3 text-right tabular-nums">{money(claim.amount)}</td>
                                     <td className="p-3">
-                                        {claim.receipts.length === 0 ? (
-                                            <span className="text-destructive text-xs">None</span>
-                                        ) : (
-                                            claim.receipts.map((file) => (
-                                                <a key={file.id} href={file.url} target="_blank" rel="noreferrer" className="block text-xs underline">
-                                                    {file.name}
-                                                </a>
-                                            ))
-                                        )}
+                                        <Lines claim={claim} />
                                     </td>
+                                    <td className="p-3 text-right tabular-nums">{money(claim.amount)}</td>
                                     <td className="p-3">
                                         <SettleRow
                                             claim={claim}

@@ -95,25 +95,62 @@ beforeEach(function () {
     ]);
 });
 
+/**
+ * ⚠⚠ A CATEGORY THAT STILL DEMANDS A RECEIPT. Conveyance was flagged
+ * receipt-not-expected on 10 Sep 2026 (a rickshaw hands you nothing to
+ * photograph) and it happens to sort first, so `value('id')` would have quietly
+ * handed every test the one category that cannot prove the receipt rule.
+ */
 function plantedCategory(): int
 {
     \App\Modules\Hrm\Support\ExpenseCategories::ensureDefaults(
         app(\App\Modules\Foundation\Support\BusinessContext::class)->id(),
     );
 
-    return (int) DB::table('expense_categories')->value('id');
+    return (int) DB::table('expense_categories')->where('receipt_required', true)->orderBy('sort')->value('id');
 }
 
+/** The one the accountant marked as arriving with no paper. */
+function receiptFreeCategory(): int
+{
+    \App\Modules\Hrm\Support\ExpenseCategories::ensureDefaults(
+        app(\App\Modules\Foundation\Support\BusinessContext::class)->id(),
+    );
+
+    return (int) DB::table('expense_categories')->where('receipt_required', false)->orderBy('sort')->value('id');
+}
+
+/**
+ * A claim in the shape the two production rows from 2 September are in: one
+ * line, no category, submitted.
+ *
+ * ⚠⚠ NO CATEGORY ON PURPOSE. These are the LEGACY claims - raised before
+ * categories existed and backfilled into single lines on 10 Sep 2026 - and they
+ * are the ones that still take the old settle-time voucher route. A helper that
+ * quietly gave them a category would test the new path twice and the old one
+ * never, which is the path the live unpaid claims are actually on.
+ */
 function claimFor(int $employeeId, int $businessId, string $amount = '450.0000'): ExpenseClaim
 {
-    return ExpenseClaim::create([
+    $claim = ExpenseClaim::create([
         'business_id' => $businessId,
         'employee_id' => $employeeId,
         'claim_number' => ExpenseClaim::nextNumber($businessId),
+        'submitted_at' => now(),
         'spent_on' => '2026-08-26',
         'amount' => $amount,
         'purpose' => 'Courier to Savar',
     ]);
+
+    $claim->lines()->create([
+        'business_id' => $businessId,
+        'spent_on' => '2026-08-26',
+        'amount' => $amount,
+        'description' => 'Courier to Savar',
+        'sort' => 0,
+    ]);
+
+    return $claim->load('lines');
 }
 
 /**
@@ -137,6 +174,7 @@ function payrollRunFor(PayrollPeriod $period, PayrollStatus $status): PayrollRun
 it('lets an employee raise a claim with a receipt, with no management permission', function () {
     $this->actingAs($this->staffUser)
         ->post('/hrm/my-expenses', [
+            'action' => 'submit',
             'expense_category_id' => plantedCategory(),
             'spent_on' => '2026-08-26',
             'amount' => '450',
@@ -149,7 +187,10 @@ it('lets an employee raise a claim with a receipt, with no management permission
     $claim = ExpenseClaim::sole();
 
     expect($claim->employee_id)->toBe($this->employee->id)
-        ->and($claim->attachments)->toHaveCount(1)
+        // ⚠ The receipt hangs off the LINE now, one per spend, so the claim reads
+        // it through them: four spends on a market trip are four pieces of paper.
+        ->and($claim->receipts())->toHaveCount(1)
+        ->and($claim->lines)->toHaveCount(1)
         // ⚠ Raised, not paid. A claim is a request until somebody settles it.
         ->and($claim->isSettled())->toBeFalse()
         ->and($claim->approvalRequest)->not->toBeNull();
@@ -160,6 +201,7 @@ it('refuses a claim with no receipt', function () {
     // asked for later is proof that often never arrives.
     $this->actingAs($this->staffUser)
         ->post('/hrm/my-expenses', [
+            'action' => 'submit',
             'expense_category_id' => plantedCategory(),
             'spent_on' => '2026-08-26',
             'amount' => '450',
@@ -173,6 +215,7 @@ it('refuses a claim with no receipt', function () {
 it('refuses a claim dated in the future', function () {
     $this->actingAs($this->staffUser)
         ->post('/hrm/my-expenses', [
+            'action' => 'submit',
             'spent_on' => now()->addDay()->toDateString(),
             'amount' => '450',
             'purpose' => 'Courier',
@@ -224,10 +267,12 @@ it('pays an approved claim now, and the voucher carries the receipt', function (
     // every claim before 3 Sep 2026 exists in production. The voucher route
     // must keep working for them; category claims settle via the payable.
     $claim = claimFor($this->employee->id, $this->business->id, '450');
+    // ⚠ Onto the LINE, which is where a receipt has lived since 10 Sep 2026:
+    // four spends on one market trip are four separate pieces of paper.
     app(\App\Modules\Foundation\Actions\StoreAttachment::class)->handle(
-        $claim,
+        $claim->lines->first(),
         UploadedFile::fake()->image('receipt.jpg'),
-        ExpenseClaim::EVIDENCE_COLLECTION,
+        \App\Modules\Hrm\Models\ExpenseClaimLine::EVIDENCE_COLLECTION,
         $this->staffUser,
     );
     $claim->submitForApproval($this->staffUser);
@@ -334,6 +379,7 @@ it('gives each claim its own number', function () {
 it('carries a claim from the employee to the approver inbox to the money, with no shortcuts', function () {
     $this->actingAs($this->staffUser)
         ->post('/hrm/my-expenses', [
+            'action' => 'submit',
             'expense_category_id' => plantedCategory(),
             'spent_on' => '2026-08-26',
             'amount' => '450',
@@ -362,8 +408,9 @@ it('carries a claim from the employee to the approver inbox to the money, with n
         ->and($row['summary'])->toContain('Courier to Savar')
         // ⚠ The receipt count is on the CARD so nobody approves blind - it
         // moved from the summary string into the labelled details when the
-        // inbox became decision cards (31 Aug 2026).
-        ->and(collect($row['details'])->firstWhere('label', 'Receipts')['value'])->toContain('1 attached');
+        // inbox became decision cards (31 Aug 2026), and it counts SPENDS
+        // rather than files since a claim became a header with lines.
+        ->and(collect($row['details'])->firstWhere('label', 'Receipts')['value'])->toContain('every spend has one');
 
     // Press exactly what the inbox offered.
     $this->actingAs($this->finance)->post($row['approve_url'])->assertSessionHasNoErrors();
@@ -545,6 +592,7 @@ it('never adds the same claim to a salary twice, even by two routes at once', fu
 it('prints a settled claim with the category the employee chose, not the chart code', function () {
     $this->actingAs($this->staffUser)
         ->post('/hrm/my-expenses', [
+            'action' => 'submit',
             'expense_category_id' => plantedCategory(),
             'spent_on' => '2026-08-26',
             'amount' => '450',

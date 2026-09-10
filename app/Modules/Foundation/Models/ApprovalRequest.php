@@ -190,6 +190,62 @@ class ApprovalRequest extends Model
     }
 
     /**
+     * Hand the request back to whoever raised it, with a note saying why.
+     *
+     * ⚠⚠ THIS IS NOT A REJECTION AND MUST NEVER BECOME ONE. Rejecting a claim
+     * because one figure is wrong forces the employee to type the whole thing
+     * again from nothing, and the record of what they originally asked for is
+     * gone. Sending it back keeps the document, keeps its number, keeps every
+     * decision already recorded against it, and asks for a correction.
+     *
+     * ⚠ The note is REQUIRED by the caller, not by this method's signature -
+     * "sent back" with no words is a decision the employee cannot act on. The
+     * controller validates it; this records whatever it is given.
+     *
+     * ⚠ The stage goes back to 1. A three-stage claim returned by the second
+     * approver has to be looked at again by the first, because the first
+     * approved a document that no longer exists in that form.
+     */
+    public function sendBack(User $reviewedBy, ?string $note = null): void
+    {
+        $this->assertStillPending();
+
+        $this->recordDecision($reviewedBy, ApprovalStatus::Returned, $note);
+
+        $this->update([
+            'status' => ApprovalStatus::Returned,
+            'current_stage' => 1,
+            'reviewed_by' => $reviewedBy->id,
+            'reviewed_at' => now(),
+            'review_note' => $note,
+        ]);
+    }
+
+    /**
+     * The requester has fixed it and is asking again.
+     *
+     * ⚠⚠ THE SAME REQUEST ROW IS REUSED, DELIBERATELY. `approvalRequest` is a
+     * morphOne: a second row for the same document would be invisible to every
+     * reader in the system, which would silently strand the resubmission. The
+     * decision history hangs off this row, so reusing it is also what keeps
+     * "sent back on Tuesday, resubmitted on Wednesday" readable in one place.
+     */
+    public function resubmit(): void
+    {
+        if ($this->status !== ApprovalStatus::Returned) {
+            throw ApprovalAlreadyDecidedException::for($this);
+        }
+
+        $this->update([
+            'status' => ApprovalStatus::Pending,
+            'current_stage' => 1,
+            'reviewed_by' => null,
+            'reviewed_at' => null,
+            'review_note' => null,
+        ]);
+    }
+
+    /**
      * Refuse a second decision on a request somebody has already settled.
      *
      * ⚠⚠ THIS IS THE ONLY THING STANDING BETWEEN TWO APPROVERS AND CORRUPTED

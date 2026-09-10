@@ -8,7 +8,6 @@ use App\Modules\Foundation\Models\ChangeRequest;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\BonusAward;
 use App\Modules\Hrm\Models\ExpenseClaim;
-use App\Modules\Hrm\Support\ExpenseCategories;
 use App\Modules\Hrm\Models\LeaveRequest;
 use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\Movement;
@@ -345,34 +344,56 @@ class ApprovalCards
         }
 
         if ($approvable instanceof ExpenseClaim) {
+            $lines = $approvable->payableLines();
+            $heads = $lines
+                ->map(fn ($line) => $line->category()['account'] ?? null)
+                ->filter()->unique()->values();
+            $exceptions = $lines
+                ->filter(fn ($line) => ($line->category()['is_exception'] ?? false) === true)
+                ->map(fn ($line) => $line->category()['name'])
+                ->unique()->values();
+            $missing = $lines->filter(fn ($line) => $line->attachments->isEmpty())->count();
+
             return $this->card(
                 $approvalRequest,
                 type: 'Expense claim',
                 summary: "{$approvable->claim_number} — {$approvable->purpose} — ".$this->money($approvable->amount),
                 details: array_filter([
                     ['label' => 'Employee', 'value' => $approvable->employee?->fullName()],
-                    ['label' => 'Amount', 'value' => $this->money($approvable->amount)],
+                    ['label' => 'Claim total', 'value' => $this->money($approvable->amount)
+                        .($lines->count() > 1 ? " across {$lines->count()} spends" : '')],
                     ['label' => 'Spent on', 'value' => $approvable->spent_on?->toDateString()],
                     // ⚠ Approving is now a POSTING, not a promise: the last yes
-                    // writes the journal. An approver is therefore told the
-                    // category, the account it lands in, and when the category
-                    // is a catch-all that the accountant flagged for scrutiny.
-                    ...(($category = ExpenseCategories::describe($approvable->expense_category_id)) === null ? [] : [
-                        ['label' => 'Category', 'value' => $category['name']
-                            .($category['is_exception'] ? ' — a catch-all category: look twice at what this really was' : '')],
-                        ['label' => 'Books', 'value' => 'Approving posts Dr '.$category['account']
-                            .' / Cr Employee Reimbursements Payable. The cash moves later, when accounts pays it back.'],
-                    ]),
+                    // writes the journal. An approver is therefore told which
+                    // accounts it lands in, and when any line sits in a
+                    // catch-all category the accountant flagged for scrutiny.
+                    $heads->isEmpty() ? null : ['label' => 'Books', 'value' => 'Approving posts Dr '
+                        .$heads->implode(', ').' / Cr Employee Reimbursements Payable. The cash moves later, when accounts pays it back.'],
+                    $exceptions->isEmpty() ? null : ['label' => 'Look twice', 'value' => $exceptions->implode(', ')
+                        .' — a catch-all category: check what this really was'],
                     // An approver deciding on somebody's own money should not
                     // have to open the claim to learn whether it came with proof.
-                    ['label' => 'Receipts', 'value' => $approvable->attachments->count() === 0
-                        ? 'NONE attached'
-                        : $approvable->attachments->count().' attached'],
+                    ['label' => 'Receipts', 'value' => $missing === 0
+                        ? 'every spend has one'
+                        : "{$missing} of {$lines->count()} spends have NO receipt"],
                 ]),
                 reason: $approvable->purpose,
+                // ⚠⚠ THE LINES ARE THE DECISION. A market trip approved from a
+                // single total is a total nobody checked; the approver needs the
+                // rickshaw, the courier and the tea separately, because that is
+                // what the receipts in their hand look like.
+                lines: $lines->map(fn ($line) => [
+                    'description' => trim(($line->category()['name'] ?? 'Expense')
+                        .($line->description ? ' — '.$line->description : '')),
+                    'quantity' => $line->spent_on?->toDateString().($line->attachments->isEmpty() ? ' · NO receipt' : ''),
+                    'amount' => $this->money($line->amount),
+                ])->values()->all(),
                 viewUrl: route('hrm.expense-claims.index'),
                 approveUrl: route('hrm.expense-claims.approve', $approvable),
                 rejectUrl: route('hrm.expense-claims.reject', $approvable),
+                // ⚠ One wrong figure used to mean rejecting the claim and
+                // making the employee type it all again. This hands it back.
+                sendBackUrl: route('hrm.expense-claims.send-back', $approvable),
             );
         }
 
@@ -499,6 +520,12 @@ class ApprovalCards
         ?string $approveUrl,
         ?string $rejectUrl,
         array $lines = [],
+        // ⚠⚠ NULL FOR ALMOST EVERYTHING, AND THAT IS THE DESIGN. Sending a
+        // document back is only honest where the requester has a screen to fix
+        // it on and a way to resubmit; offering it on a document with no route
+        // home would strand the request in a status nobody can clear. Expense
+        // claims have that path, so they set it; nothing else does yet.
+        ?string $sendBackUrl = null,
     ): array {
         return [
             'id' => $approvalRequest->id,
@@ -512,6 +539,7 @@ class ApprovalCards
             'view_url' => $viewUrl,
             'approve_url' => $approveUrl,
             'reject_url' => $rejectUrl,
+            'send_back_url' => $sendBackUrl,
             'requested_by' => $approvalRequest->requestedBy?->name,
             'requested_at' => $approvalRequest->created_at->diffForHumans(),
             'stage' => $approvalRequest->totalStages() > 1 ? $approvalRequest->currentStage()?->name : null,

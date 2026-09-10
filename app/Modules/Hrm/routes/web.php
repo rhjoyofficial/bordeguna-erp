@@ -198,8 +198,17 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('staff-purchases/{id}/reject', [StaffPurchaseController::class, 'reject'])->name('staff-purchases.reject');
     Route::post('staff-purchases/{id}/fulfill', [StaffPurchaseController::class, 'fulfill'])->name('staff-purchases.fulfill');
 
+    // ⚠⚠ A claim is a DRAFT the employee builds and then sends (Joy, 9 Sep
+    // 2026). `store` adds one spend and, when asked, submits the whole claim in
+    // the same press - so a single courier claim is still one press while a
+    // market trip is one claim rather than four. Everything below it edits a
+    // draft, which is the only state an employee may change.
     Route::get('my-expenses', [ExpenseClaimController::class, 'mine'])->name('my-expenses');
     Route::post('my-expenses', [ExpenseClaimController::class, 'store'])->name('my-expenses.store');
+    Route::post('my-expenses/{claim}/submit', [ExpenseClaimController::class, 'submit'])->name('my-expenses.submit');
+    Route::delete('my-expenses/{claim}', [ExpenseClaimController::class, 'destroy'])->name('my-expenses.destroy');
+    Route::post('my-expenses/{claim}/lines/{line}', [ExpenseClaimController::class, 'updateLine'])->name('my-expenses.lines.update');
+    Route::delete('my-expenses/{claim}/lines/{line}', [ExpenseClaimController::class, 'destroyLine'])->name('my-expenses.lines.destroy');
 
     // ── Recruitment (Joy, 29 Aug 2026) ──────────────────────────────────────
     // ⚠⚠ NOTHING HERE CREATES AN EMPLOYEE. Marking somebody hired records the
@@ -236,6 +245,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
         Route::get('expense-claims', [ExpenseClaimController::class, 'index'])->name('expense-claims.index');
         // The COA mapping behind the categories - the accountant's table.
         Route::get('expense-categories', [ExpenseCategoryController::class, 'index'])->name('expense-categories');
+        Route::post('expense-categories', [ExpenseCategoryController::class, 'store'])->name('expense-categories.store');
         Route::patch('expense-categories/{category}', [ExpenseCategoryController::class, 'update'])->name('expense-categories.update');
         Route::post('expense-claims/{claim}/settle', [ExpenseClaimController::class, 'settle'])->name('expense-claims.settle');
         // The reimbursement voucher. Same permission as settling, because it is
@@ -249,6 +259,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // before the stage was ever consulted. Same shape as loans and leave.
     Route::post('expense-claims/{claim}/approve', [ExpenseClaimController::class, 'approve'])->name('expense-claims.approve');
     Route::post('expense-claims/{claim}/reject', [ExpenseClaimController::class, 'reject'])->name('expense-claims.reject');
+    // ⚠ Sending back is a decision on the same stage as approving, so it sits
+    // with them rather than behind the payroll permission: the workflow decides
+    // who may act, and an Owner the stage allows must not be refused first.
+    Route::post('expense-claims/{claim}/send-back', [ExpenseClaimController::class, 'sendBack'])->name('expense-claims.send-back');
 
     Route::get('holiday-work', [HolidayWorkController::class, 'index'])->name('holiday-work.index');
     Route::post('holiday-work', [HolidayWorkController::class, 'store'])->name('holiday-work.store');

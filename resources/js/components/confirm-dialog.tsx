@@ -22,6 +22,13 @@ type ConfirmDialogProps = {
     destructive?: boolean;
     /** Show an optional free-text note captured and passed to onConfirm. */
     withNote?: boolean;
+    /**
+     * ⚠ Make that note mandatory: the confirm button stays disabled until
+     * something is typed. Sending a claim back for correction with no words
+     * tells the employee only that somebody said no, which leaves them exactly
+     * as stuck as a rejection did.
+     */
+    noteRequired?: boolean;
     noteLabel?: string;
     notePlaceholder?: string;
     onConfirm: (note: string) => void;
@@ -38,6 +45,7 @@ export function ConfirmDialog({
     cancelLabel = 'Cancel',
     destructive = false,
     withNote = false,
+    noteRequired = false,
     noteLabel = 'Note',
     notePlaceholder,
     onConfirm,
@@ -75,7 +83,7 @@ export function ConfirmDialog({
                     <DialogClose asChild>
                         <Button variant="outline">{cancelLabel}</Button>
                     </DialogClose>
-                    <Button variant={destructive ? 'destructive' : 'default'} onClick={handleConfirm}>
+                    <Button variant={destructive ? 'destructive' : 'default'} disabled={noteRequired && note.trim() === ''} onClick={handleConfirm}>
                         {confirmLabel}
                     </Button>
                 </DialogFooter>

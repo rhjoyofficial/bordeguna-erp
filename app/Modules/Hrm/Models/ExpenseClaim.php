@@ -12,6 +12,8 @@ use App\Modules\Purchasing\Models\ExpenseVoucher;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -37,6 +39,7 @@ class ExpenseClaim extends Model
         'business_id',
         'employee_id',
         'claim_number',
+        'submitted_at',
         'spent_on',
         'amount',
         'purpose',
@@ -55,6 +58,7 @@ class ExpenseClaim extends Model
         return [
             'spent_on' => 'date',
             'amount' => 'decimal:4',
+            'submitted_at' => 'datetime',
             'settled_at' => 'datetime',
         ];
     }
@@ -69,6 +73,104 @@ class ExpenseClaim extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function lines(): HasMany
+    {
+        return $this->hasMany(ExpenseClaimLine::class)->orderBy('sort')->orderBy('id');
+    }
+
+    /**
+     * The lines that will actually cost the business money: everything the
+     * approver did not decline.
+     *
+     * @return Collection<int, ExpenseClaimLine>
+     */
+    public function payableLines(): Collection
+    {
+        return $this->lines->reject(fn (ExpenseClaimLine $line) => $line->isDeclined())->values();
+    }
+
+    /**
+     * ⚠⚠ THE ONE PLACE THE HEADER IS DERIVED FROM ITS LINES. `amount`,
+     * `spent_on`, `expense_category_id` and `expense_account_id` are kept on the
+     * header because a dozen readers - the settle screen, the payroll
+     * adjustment, the register, the printed voucher - ask the claim what it is
+     * worth without wanting to know it has lines at all. They are DERIVED, never
+     * typed, and this method is the only writer.
+     *
+     * ⚠ The total is the PAYABLE total, not the claimed one. A declined line is
+     * still on the claim and still visible to the employee, but it is not money
+     * the business owes, so it must not reach a journal or a payslip.
+     *
+     * ⚠ `spent_on` is the EARLIEST line. A claim titled "Dhaka market trip" is
+     * dated the day the trip started, which is what somebody looking for it in a
+     * list will remember. The date that decides accounting periods is the
+     * journal's, not this one.
+     *
+     * ⚠ The category is set only when every payable line agrees on one. A
+     * mixed claim has no single category and saying it does would put a wrong
+     * name on the printed voucher; the lines carry the truth.
+     */
+    public function syncFromLines(): void
+    {
+        $lines = $this->payableLines();
+
+        if ($lines->isEmpty()) {
+            // Nothing payable left: keep the header readable rather than
+            // blanking a date the screens sort on.
+            $this->forceFill(['amount' => '0'])->save();
+
+            return;
+        }
+
+        $categories = $lines->pluck('expense_category_id')->unique();
+        $accounts = $lines->pluck('expense_account_id')->filter()->unique();
+
+        $this->forceFill([
+            'amount' => (string) $lines->sum(fn (ExpenseClaimLine $line) => (float) $line->amount),
+            'spent_on' => $lines->min(fn (ExpenseClaimLine $line) => $line->spent_on?->toDateString()),
+            'expense_category_id' => $categories->count() === 1 ? $categories->first() : null,
+            'expense_account_id' => $accounts->count() === 1 ? $accounts->first() : null,
+        ])->save();
+    }
+
+    /**
+     * Whether anything on this claim can be posted to the ledger. A claim whose
+     * lines carry no category - the two raised before categories existed - can
+     * only be settled the old way, through an expense voucher typed by finance.
+     */
+    public function hasPostableLines(): bool
+    {
+        return $this->payableLines()->contains(fn (ExpenseClaimLine $line) => $line->postingAccountId() !== null);
+    }
+
+    /**
+     * Every receipt on the claim, whichever line it hangs off.
+     *
+     * ⚠ Receipts moved from the claim to its lines on 10 Sep 2026, so this
+     * reads the lines. Anything still asking the claim for `attachments`
+     * directly will find an empty set, which is the loud failure rather than
+     * the quiet one.
+     *
+     * @return Collection<int, \App\Modules\Foundation\Models\Attachment>
+     */
+    public function receipts(): Collection
+    {
+        return $this->lines->flatMap(fn (ExpenseClaimLine $line) => $line->attachments)->values();
+    }
+
+    /**
+     * A claim the employee is still building. Only a draft can be edited.
+     */
+    public function isDraft(): bool
+    {
+        return $this->submitted_at === null;
+    }
+
+    public function wasSentBack(): bool
+    {
+        return $this->approvalRequest?->status === ApprovalStatus::Returned;
     }
 
     public function expenseAccount(): BelongsTo
@@ -116,9 +218,18 @@ class ExpenseClaim extends Model
             return $this->settlement_method === self::SETTLE_PAYROLL ? 'Added to salary' : 'Paid';
         }
 
+        // ⚠ A returned claim reads as a draft again to the employee, because
+        // that is what it is: theirs to fix and send back. The difference is
+        // that somebody has already looked at it and said why, which the screen
+        // shows beside this word.
+        if ($this->isDraft()) {
+            return $this->wasSentBack() ? 'Sent back for correction' : 'Draft, not sent yet';
+        }
+
         return match ($this->approvalRequest?->status) {
             ApprovalStatus::Approved => 'Approved, awaiting payment',
             ApprovalStatus::Rejected => 'Rejected',
+            ApprovalStatus::Returned => 'Sent back for correction',
             default => 'Waiting for approval',
         };
     }
