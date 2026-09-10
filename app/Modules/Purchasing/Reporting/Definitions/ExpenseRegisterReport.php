@@ -11,7 +11,8 @@ use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportMeta;
 use App\Modules\Hrm\Reporting\ReportParameter;
 use App\Modules\Hrm\Reporting\ReportParameters;
-use App\Modules\Purchasing\Models\ExpenseVoucherLine;
+use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Purchasing\Support\ExpenseSource;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\LazyCollection;
 
@@ -26,15 +27,28 @@ use Illuminate\Support\LazyCollection;
  * the three signature blocks at the foot, because those live in the shared
  * writer rather than in any one report.
  *
- * ⚠ **One row per LINE, not per voucher.** A voucher can split across accounts
+ * ⚠ **One row per LINE, not per document.** A voucher can split across accounts
  * — a single payment covering hosting and a domain — and a register that showed
- * only the voucher total could not be reconciled against the ledger it posted
- * to. The voucher number repeats down the rows, which is what makes the split
- * visible rather than hidden.
+ * only the document total could not be reconciled against the ledger it posted
+ * to. The document number repeats down the rows, which makes the split visible
+ * rather than hidden.
  *
- * ⛔ **It reads vouchers, it does not re-derive them.** The amount here is the
- * line as recorded; the same figure the journal took. A report that recomputed
- * anything would have invented a second source of truth.
+ * ⛔⛔ **IT READS THE LEDGER, NOT ONE KIND OF DOCUMENT** (Joy, 10 Sep 2026: "when
+ * customer do some Expenses, they did for office, if it is, then why they not
+ * shows in the Purchasing > Expenses"). He was right, and the cause was that this
+ * read `expense_voucher_lines`. An employee claim booked at approval clears a
+ * payable when it is paid and writes NO voucher, so a courier Musa paid for out
+ * of his own pocket was invisible here while an identical courier paid from the
+ * till was not. Since the 1 September cutover that was most of the operating
+ * spend.
+ *
+ * So the register asks the honest question - **what hit an expense account?** -
+ * by reading the journal lines themselves. Every source appears: payment
+ * vouchers, employee claims, supplier bills, payroll, and anything built next
+ * year, automatically, on the day it first posts. Each row names the document
+ * that produced it, so a figure can still be walked back to its paper.
+ *
+ * ⛔ It re-derives nothing. `amount_minor` is the figure the ledger holds.
  */
 class ExpenseRegisterReport implements ReportDefinition
 {
@@ -52,7 +66,7 @@ class ExpenseRegisterReport implements ReportDefinition
 
     public function description(): string
     {
-        return 'Every expense paid in a period, one row per account line, with what it was for, who it went to and which account it left. This is the monthly file copy.';
+        return 'Every operating expense that hit the books in a period, whatever document produced it - a payment voucher, a staff expense claim, a supplier bill. One row per account line, naming the document it came from. This is the monthly file copy.';
     }
 
     public function group(): string
@@ -100,12 +114,12 @@ class ExpenseRegisterReport implements ReportDefinition
     {
         return [
             ReportColumn::date('spent_on', 'Date'),
-            ReportColumn::text('voucher_number', 'Voucher', 16),
-            ReportColumn::text('payee', 'Paid to', 26),
+            ReportColumn::text('source', 'Came from', 22),
+            ReportColumn::text('document', 'Document', 18),
+            ReportColumn::text('payee', 'Who', 24),
             ReportColumn::text('account', 'Charged to', 28),
             ReportColumn::text('description', 'What for', 34),
-            ReportColumn::text('reference', 'Reference', 18),
-            ReportColumn::text('paid_from', 'Paid from', 20),
+            ReportColumn::text('paid_from', 'Paid from', 18),
             ReportColumn::money('amount', 'Amount'),
         ];
     }
@@ -119,17 +133,19 @@ class ExpenseRegisterReport implements ReportDefinition
     {
         return LazyCollection::make(function () use ($parameters) {
             foreach ($this->query($parameters)->cursor() as $line) {
+                $source = ExpenseSource::describe($line->source_type, $line->source_id);
+
                 yield [
-                    'spent_on' => $line->spent_on,
-                    'voucher_number' => $line->voucher_number,
-                    // The payee as the voucher itself answers it: a supplier
-                    // where there is one, the typed name where there is not.
-                    'payee' => $line->supplier_name ?? $line->paid_to ?? 'Unnamed payee',
+                    'spent_on' => $line->journal_date,
+                    'source' => $source['label'],
+                    'document' => $source['number'] ?? $line->journal_number,
+                    'payee' => $source['party'] ?? '-',
                     'account' => $line->account_code.' - '.$line->account_name,
-                    'description' => $line->description,
-                    'reference' => $line->reference,
+                    'description' => $line->memo,
                     'paid_from' => $line->money_account_name,
-                    'amount' => round((float) $line->amount, 2),
+                    // ⚠ Paisa to taka. A debit is positive in the ledger and the
+                    // query refuses credits, so nothing here is negated.
+                    'amount' => round($line->amount_minor / 100, 2),
                 ];
             }
         });
@@ -161,42 +177,61 @@ class ExpenseRegisterReport implements ReportDefinition
 
     private function query(ReportParameters $parameters): Builder
     {
-        return ExpenseVoucherLine::query()
-            ->join('expense_vouchers', 'expense_vouchers.id', '=', 'expense_voucher_lines.expense_voucher_id')
-            ->join('accounts', 'accounts.id', '=', 'expense_voucher_lines.account_id')
-            ->leftJoin('suppliers', 'suppliers.id', '=', 'expense_vouchers.supplier_id')
-            ->leftJoin('money_accounts', 'money_accounts.id', '=', 'expense_vouchers.money_account_id')
+        return JournalLine::query()
+            ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
+            ->join('accounts', 'accounts.id', '=', 'journal_lines.account_id')
+            // ⚠⚠ EXPENSE ACCOUNTS ONLY, AND DEBITS ONLY. A credit to an expense
+            // account is a refund or a correction reversing a cost, not a cost.
+            // Including it would net the register against itself and it would
+            // stop agreeing with the profit and loss account line by line.
+            ->where('accounts.type', AccountType::Expense->value)
+            ->where('journal_lines.amount_minor', '>', 0)
             ->when(
                 $parameters->from('spent'),
-                fn (Builder $q, $from) => $q->whereDate('expense_vouchers.spent_on', '>=', $from->toDateString()),
+                fn (Builder $q, $from) => $q->whereDate('journals.journal_date', '>=', $from->toDateString()),
             )
             ->when(
                 $parameters->to('spent'),
-                fn (Builder $q, $to) => $q->whereDate('expense_vouchers.spent_on', '<=', $to->toDateString()),
+                fn (Builder $q, $to) => $q->whereDate('journals.journal_date', '<=', $to->toDateString()),
             )
             ->when(
                 $parameters->int('account_id'),
-                fn (Builder $q, int $id) => $q->where('expense_voucher_lines.account_id', $id),
+                fn (Builder $q, int $id) => $q->where('journal_lines.account_id', $id),
             )
             ->when(
                 $parameters->int('money_account_id'),
-                fn (Builder $q, int $id) => $q->where('expense_vouchers.money_account_id', $id),
+                fn (Builder $q, int $id) => $q->where('journal_lines.money_account_id', $id),
             )
-            ->orderBy('expense_vouchers.spent_on')
-            ->orderBy('expense_vouchers.id')
-            ->orderBy('expense_voucher_lines.id')
+            ->orderBy('journals.journal_date')
+            ->orderBy('journals.id')
+            ->orderBy('journal_lines.line_no')
             ->select([
-                'expense_voucher_lines.id',
-                'expense_voucher_lines.description',
-                'expense_voucher_lines.amount',
-                'expense_vouchers.spent_on',
-                'expense_vouchers.voucher_number',
-                'expense_vouchers.reference',
-                'expense_vouchers.paid_to',
+                'journal_lines.id',
+                'journal_lines.amount_minor',
+                'journal_lines.memo',
+                'journals.journal_date',
+                'journals.journal_number',
+                'journals.source_type',
+                'journals.source_id',
                 'accounts.code as account_code',
                 'accounts.name as account_name',
-                'suppliers.name as supplier_name',
-                'money_accounts.name as money_account_name',
-            ]);
+            ])
+            // ⚠⚠ THE MONEY ACCOUNT IS ON THE OTHER SIDE OF THE JOURNAL. An
+            // expense DEBIT never carries one; the cash or bank CREDIT does. The
+            // reimbursement voucher had the same defect on 7 Sep and printed
+            // "Paid directly" followed by nothing. So this reads across the
+            // journal rather than down the line.
+            //
+            // ⚠ Null is the RIGHT answer for a staff claim booked at approval:
+            // the cost was recognised that day and no cash moved, which is what
+            // an empty "Paid from" honestly says.
+            ->selectSub(
+                MoneyAccount::query()
+                    ->select('money_accounts.name')
+                    ->join('journal_lines as paying_line', 'paying_line.money_account_id', '=', 'money_accounts.id')
+                    ->whereColumn('paying_line.journal_id', 'journal_lines.journal_id')
+                    ->limit(1),
+                'money_account_name',
+            );
     }
 }
