@@ -39,8 +39,18 @@ class CrmPermissionsSeeder extends Seeder
         // spends money by itself, so the person who presses send must not also
         // be the person who agrees to the spend - the same preparer/approver
         // split payroll already uses.
-        'Owner' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage', 'crm.campaigns.send', 'crm.campaigns.approve'],
-        'Manager' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage', 'crm.campaigns.send'],
+        // ⚠⚠ `crm.leads.verify` is NOT given to Staff, and that is the entire
+        // point of choosing verification over approval-on-every-edit. A field
+        // officer creates a retailer, works it, corrects its phone and records
+        // visits immediately and unblocked - but cannot certify their own
+        // record, and cannot archive it out of sight. The same preparer/approver
+        // split as `crm.campaigns.send` above and payroll.
+        //
+        // ⚠ It also gates ARCHIVING, because there is no delete: taking a lead
+        // out of everybody's working list is the same class of decision as
+        // saying it is genuine.
+        'Owner' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.leads.verify', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage', 'crm.campaigns.send', 'crm.campaigns.approve'],
+        'Manager' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.leads.verify', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage', 'crm.campaigns.send'],
         'Staff' => ['crm.leads.view', 'crm.leads.manage', 'crm.contacts.view'],
     ];
 

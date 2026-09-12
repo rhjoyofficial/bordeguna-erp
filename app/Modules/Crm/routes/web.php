@@ -1,16 +1,16 @@
 <?php
 
+use App\Modules\Crm\Http\Controllers\CadenceController;
 use App\Modules\Crm\Http\Controllers\ContactController;
 use App\Modules\Crm\Http\Controllers\ContactGroupController;
 use App\Modules\Crm\Http\Controllers\ContactImportController;
 use App\Modules\Crm\Http\Controllers\CrmActivityController;
-use App\Modules\Crm\Http\Controllers\MessageProviderController;
-use App\Modules\Crm\Http\Controllers\MessagingController;
 use App\Modules\Crm\Http\Controllers\CrmReportController;
 use App\Modules\Crm\Http\Controllers\CrmSettingsController;
 use App\Modules\Crm\Http\Controllers\LeadController;
+use App\Modules\Crm\Http\Controllers\MessageProviderController;
+use App\Modules\Crm\Http\Controllers\MessagingController;
 use App\Modules\Crm\Http\Controllers\OpportunityController;
-use App\Modules\Crm\Http\Controllers\CadenceController;
 use App\Modules\Crm\Http\Controllers\TicketController;
 use Illuminate\Support\Facades\Route;
 
@@ -54,6 +54,18 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
     // deciding that a customer record exists is a manager's call (C-CRMB-14).
     Route::middleware('can:crm.leads.convert')->group(function () {
         Route::post('leads/{lead}/convert', [LeadController::class, 'convert'])->name('leads.convert');
+    });
+
+    // ⚠⚠ Verification and archiving are the ASM's, NOT the officer's, and that
+    // separation is the whole reason verification was chosen over approval on
+    // every edit. The officer who created a retailer keeps working it, corrects
+    // its phone and records visits with no permission beyond managing leads -
+    // but cannot certify their own record, and cannot make it disappear.
+    Route::middleware('can:crm.leads.verify')->group(function () {
+        Route::post('leads/{lead}/verify', [LeadController::class, 'verify'])->name('leads.verify');
+        Route::delete('leads/{lead}/verify', [LeadController::class, 'unverify'])->name('leads.unverify');
+        Route::post('leads/{lead}/archive', [LeadController::class, 'archive'])->name('leads.archive');
+        Route::delete('leads/{lead}/archive', [LeadController::class, 'restore'])->name('leads.restore');
     });
 
     // ⚠ Sources and campaigns are the REPORTING AXES. Staff capture leads;

@@ -4,6 +4,7 @@ namespace App\Modules\Crm\Models;
 
 use App\Models\User;
 use App\Modules\Crm\Enums\LeadStatus;
+use App\Modules\Crm\Enums\LeadType;
 use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
@@ -59,8 +60,21 @@ class Lead extends Model
      *
      * @var list<string>
      */
+    /**
+     * ⚠⚠ `verified_at`, `verified_by_user_id`, `archived_at` and
+     * `archived_by_user_id` are DELIBERATELY ABSENT, for the same reason
+     * conversion is: verification asserts that a named person checked this lead
+     * is real, and archiving takes it out of everybody's working list. Both are
+     * decisions somebody makes, and a mass assignment - a settings form, an
+     * importer, a future API - must not be able to claim either. `VerifyLead`
+     * and `ArchiveLead` are their only writers and use forceFill.
+     *
+     * ⚠ `shop_phone_key` is not fillable either, for the reason
+     * `phone_normalized` is not: it is derived in `booted()` and a caller
+     * supplying it could make the shop's identity disagree with its phone.
+     */
     protected $fillable = [
-        'business_id', 'name', 'phone', 'email', 'address',
+        'business_id', 'lead_type', 'name', 'phone', 'email', 'address',
         'brand_id', 'status', 'assigned_to_user_id', 'qualification_note',
         'lost_reason_id', 'lost_at', 'note',
     ];
@@ -71,15 +85,18 @@ class Lead extends Model
      * NULL status and a caller reading `$lead->status->value` would fatal on
      * null. Same convention as Customer, Account and MoneyAccount.
      */
-    protected $attributes = ['status' => 'new'];
+    protected $attributes = ['status' => 'new', 'lead_type' => 'customer'];
 
     protected function casts(): array
     {
         return [
             'status' => LeadStatus::class,
+            'lead_type' => LeadType::class,
             'lost_at' => 'datetime',
             'converted_at' => 'datetime',
             'merged_at' => 'datetime',
+            'verified_at' => 'datetime',
+            'archived_at' => 'datetime',
         ];
     }
 
@@ -115,7 +132,11 @@ class Lead extends Model
      */
     public function scopeWorkable(Builder $query): Builder
     {
-        return $query->whereNull('duplicate_of_lead_id');
+        // ⚠ Archived leads leave the working list for the same reason duplicates
+        // do: somebody decided nobody should act on this. They are still
+        // readable, still carry their history, and still count in the management
+        // numbers - they are simply not work any more.
+        return $query->whereNull('duplicate_of_lead_id')->whereNull('archived_at');
     }
 
     /**
@@ -128,13 +149,48 @@ class Lead extends Model
     {
         static::saving(function (self $lead): void {
             $lead->phone_normalized = PhoneIdentity::normalize($lead->phone);
+
+            // ⭐⭐ The shop's identity, derived in the SAME place and the same
+            // moment as the matching key, because it is the same fact seen
+            // twice. A shop carries its number here and is therefore unique in
+            // the database; a person carries NULL and a unique index ignores
+            // NULLs, so households sharing a number are untouched.
+            //
+            // ⚠ Recomputed on EVERY save rather than only when the phone
+            // changes, because changing the TYPE changes this too: a consumer
+            // lead corrected to a retailer must start colliding with other
+            // retailers from that moment, and a retailer corrected to a
+            // consumer must stop.
+            $lead->shop_phone_key = $lead->lead_type instanceof LeadType && $lead->lead_type->isShop()
+                ? $lead->phone_normalized
+                : null;
         });
+    }
+
+    public function isVerified(): bool
+    {
+        return $this->verified_at !== null;
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
+    public function verifiedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'verified_by_user_id');
+    }
+
+    public function archivedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'archived_by_user_id');
     }
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'phone', 'email', 'status', 'brand_id', 'assigned_to_user_id', 'lost_reason_id', 'converted_customer_id'])
+            ->logOnly(['name', 'phone', 'email', 'status', 'lead_type', 'brand_id', 'assigned_to_user_id', 'lost_reason_id', 'converted_customer_id', 'verified_at', 'archived_at'])
             ->logOnlyDirty()->dontSubmitEmptyLogs();
     }
 

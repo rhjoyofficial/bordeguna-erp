@@ -18,9 +18,25 @@ namespace App\Modules\Crm\Support;
  * disconnected rows. The contradiction is deliberate and was flagged to Joy
  * rather than quietly reversed.
  *
- * ⚠⚠ THE OUTPUT IS NOT UNIQUE AND MUST NEVER BE MADE UNIQUE. Households share a
- * number, a shop's landline is the owner's mobile, and a family buys under one
- * phone. Matching WARNS; it does not block. C-CRM-12, C-CRM-13.
+ * ⚠⚠ THE OUTPUT IS NOT UNIQUE AND MUST NEVER BE MADE UNIQUE FOR A PERSON.
+ * Households share a number, a shop's landline is the owner's mobile, and a
+ * family buys under one phone. For a person, matching WARNS; it does not block.
+ * C-CRM-12, C-CRM-13.
+ *
+ * ⚠⚠ NARROWED, NOT OVERTURNED, 12 Sep 2026 - read this before "restoring" the
+ * rule above. Joy's instruction of 10 Sep was that a lead's phone must be
+ * unique, because a Dokandar's shop number IS the shop, and two rows carrying it
+ * are two field officers each believing they own one relationship. That directly
+ * contradicted the paragraph above, which was written about consumers.
+ *
+ * Both are right about different things, so uniqueness is scoped BY LEAD TYPE
+ * and lives on a SEPARATE column, `leads.shop_phone_key`, which holds this
+ * output for a place of business and NULL for a person. `phone_normalized`
+ * itself is untouched and still carries no unique index anywhere, so everything
+ * the paragraph above protects is still protected. See LeadType::isShop().
+ *
+ * ⚠ `customers.phone_normalized` is also untouched: a customer is a person here
+ * and the original rule applies to it in full.
  *
  * Bangladeshi mobile numbers are 11 digits beginning `01`. The forms seen in
  * practice: `01711000000`, `+8801711000000`, `8801711000000`, and - the one that

@@ -4,13 +4,17 @@ namespace App\Modules\Crm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Crm\Actions\ArchiveLead;
 use App\Modules\Crm\Actions\ConvertLead;
 use App\Modules\Crm\Actions\LinkDuplicateLead;
+use App\Modules\Crm\Actions\VerifyLead;
 use App\Modules\Crm\Enums\LeadStatus;
+use App\Modules\Crm\Enums\LeadType;
 use App\Modules\Crm\Models\Campaign;
 use App\Modules\Crm\Models\CrmAttribution;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Crm\Models\LeadSource;
+use App\Modules\Crm\Support\ApplyLeadCadences;
 use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -182,7 +186,7 @@ class LeadController extends Controller
         $this->recordAttribution($lead, $data['attribution'], $request);
 
         // Standing rhythm: a fresh lead gets its first-call task at once.
-        app(\App\Modules\Crm\Support\ApplyLeadCadences::class)->handle($lead, $request->user());
+        app(ApplyLeadCadences::class)->handle($lead, $request->user());
 
         return back()->with('success', 'Lead captured.');
     }
@@ -237,6 +241,67 @@ class LeadController extends Controller
      *
      * @return array{lead: array<string, mixed>, attribution: array<string, mixed>}
      */
+    /**
+     * ⭐⭐ A SHOP'S PHONE NUMBER IS THE SHOP, so two leads may not carry it.
+     *
+     * Joy's instruction, 10 Sep 2026, and the fear behind it is specific: two
+     * field officers each believing they own the same Dokandar. It is scoped to
+     * shop-shaped types on his decision of 12 Sep, because a PERSON's number is
+     * not an identity in the same way - a household shares one, and refusing the
+     * second member of a family would be refusing a real customer. See
+     * LeadType::isShop().
+     *
+     * ⚠⚠ THE REFUSAL NAMES THE RECORD. "Already exists" tells an officer
+     * standing in a shop nothing they can act on; the name tells them whether
+     * they are looking at their own earlier visit or somebody else's
+     * relationship. It is the difference between a rule and an obstruction.
+     *
+     * ⚠ An ARCHIVED lead still holds the number, and the message says so. If
+     * archiving released it, the same officer could archive and re-create one
+     * shop endlessly and no duplicate would ever be detected.
+     *
+     * ⚠ The unique index is still the real guarantee - this runs first purely so
+     * a person gets a sentence instead of a database error.
+     *
+     * @param  array<string, mixed>  $validated
+     *
+     * @throws ValidationException
+     */
+    private function guardShopPhoneIsNotAlreadyTaken(array $validated, ?Lead $lead, int $businessId): void
+    {
+        $type = LeadType::tryFrom((string) ($validated['lead_type'] ?? '')) ?? $lead?->lead_type ?? LeadType::Customer;
+
+        if (! $type->isShop()) {
+            return;
+        }
+
+        $key = PhoneIdentity::normalize($validated['phone'] ?? null);
+
+        if ($key === null) {
+            return;
+        }
+
+        $existing = Lead::query()
+            ->where('business_id', $businessId)
+            ->where('shop_phone_key', $key)
+            ->when($lead !== null, fn ($query) => $query->whereKeyNot($lead->getKey()))
+            ->first();
+
+        if ($existing === null) {
+            return;
+        }
+
+        $who = filled($existing->name)
+            ? $existing->name
+            : 'another '.$existing->lead_type->label().' lead';
+
+        throw ValidationException::withMessages([
+            'phone' => $existing->isArchived()
+                ? "This number already belongs to {$who}, which has been archived. Restore it instead of creating a second one."
+                : "This number already belongs to {$who}.",
+        ]);
+    }
+
     private function validated(Request $request, ?Lead $lead = null): array
     {
         $businessId = $lead?->business_id ?? app(BusinessContext::class)->id();
@@ -248,6 +313,13 @@ class LeadController extends Controller
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string'],
+
+            // ⚠ Nullable rather than required, although every lead has a type.
+            // The column and the model both default to `customer`, so a capture
+            // path that does not yet offer the selector keeps working and keeps
+            // meaning exactly what it meant before. Required here would have
+            // broken every existing one the day this shipped.
+            'lead_type' => ['nullable', Rule::in(collect(LeadType::selectable())->map(fn ($t) => $t->value))],
 
             // ⚠⚠ C-CRM-9: `converted` is NOT in the accepted list. It asserts a
             // customer exists and belongs to the Phase 3 action alone.
@@ -306,8 +378,10 @@ class LeadController extends Controller
             unset($validated['assigned_to_user_id']);
         }
 
+        $this->guardShopPhoneIsNotAlreadyTaken($validated, $lead, $businessId);
+
         $leadFields = collect($validated)->only([
-            'name', 'phone', 'email', 'address', 'status', 'brand_id',
+            'name', 'phone', 'email', 'address', 'status', 'lead_type', 'brand_id',
             'assigned_to_user_id', 'qualification_note', 'lost_reason_id', 'note',
         ])->all();
 
@@ -360,6 +434,46 @@ class LeadController extends Controller
         );
 
         return back()->with('success', 'Marked as a duplicate. Nothing was deleted.');
+    }
+
+    /**
+     * ⭐ The ASM confirming a field-created lead is a real place.
+     *
+     * ⚠ Its own permission rather than `crm.leads.manage`, and that separation
+     * is the whole design: the officer who created the lead may keep working it,
+     * correct its phone and record a visit without waiting for anybody, but
+     * cannot be the person who says it is genuine. Same preparer/approver split
+     * the payroll and campaign-send paths already use.
+     */
+    public function verify(Request $request, Lead $lead, VerifyLead $action): RedirectResponse
+    {
+        $action->handle($lead, $request->user());
+
+        return back()->with('success', 'Lead verified.');
+    }
+
+    public function unverify(Request $request, Lead $lead, VerifyLead $action): RedirectResponse
+    {
+        $action->undo($lead);
+
+        return back()->with('success', 'Verification withdrawn.');
+    }
+
+    /**
+     * ⛔ Archiving, because there is no delete. See ArchiveLead.
+     */
+    public function archive(Request $request, Lead $lead, ArchiveLead $action): RedirectResponse
+    {
+        $action->handle($lead, $request->user());
+
+        return back()->with('success', 'Lead archived. Nothing was deleted.');
+    }
+
+    public function restore(Request $request, Lead $lead, ArchiveLead $action): RedirectResponse
+    {
+        $action->restore($lead);
+
+        return back()->with('success', 'Lead restored.');
     }
 
     /**
