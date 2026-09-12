@@ -2,10 +2,14 @@
 
 namespace App\Modules\Commerce\Providers;
 
+use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
 use App\Modules\Commerce\Sections\SectionCatalogue;
 use App\Modules\Commerce\Sections\SectionTypeRegistry;
+use App\Modules\Commerce\Support\CartPresenter;
+use App\Modules\Commerce\Support\CurrentCart;
 use App\Modules\Commerce\Themes\BionicClassicTheme;
 use App\Modules\Commerce\Themes\ThemeRegistry;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -53,5 +57,19 @@ class CommerceServiceProvider extends ServiceProvider
         // authenticated back office, the other is anonymous traffic
         // resolved by hostname.
         $this->loadRoutesFrom(__DIR__.'/../routes/storefront.php');
+
+        // Slice 2.1. ⚠ The basket count reaches every theme layout from ONE
+        // place rather than from each controller that renders a page. A theme
+        // that forgets to draw it draws nothing; a controller that forgot to
+        // pass it would crash the layout.
+        View::composer('themes.*', function ($view) {
+            $request = request();
+            $store = ResolveStorefront::current($request);
+
+            $view->with('basket', [
+                'count' => $store === null ? 0 : CartPresenter::count(CurrentCart::find($request, $store)),
+                'url' => '/cart',
+            ]);
+        });
     }
 }

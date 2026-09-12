@@ -71,11 +71,29 @@
         footer.shop { background: var(--green); color: var(--ivory); padding: 28px 0; margin-top: 40px; }
         .split { display: grid; gap: 28px; grid-template-columns: 1fr; }
         @media (min-width: 760px) { .split { grid-template-columns: 1fr 1fr; align-items: center; } }
+        header.shop .wrap { display: flex; justify-content: space-between; align-items: center; }
+        header.shop a.basket { font-size: 16px; font-weight: 400; }
+        .notice { color: var(--green); }
+        .error { color: #a33; }
+        form.add-to-basket { margin-top: 14px; display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+        form.inline { display: inline-flex; gap: 6px; align-items: center; }
+        input[type=number] { width: 64px; padding: 6px; }
+        button { background: var(--green); color: var(--ivory); border: 0; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+        table.basket { width: 100%; border-collapse: collapse; margin: 14px 0; }
+        table.basket th, table.basket td { text-align: left; padding: 10px 8px; border-bottom: 1px solid rgba(24,105,59,.14); vertical-align: top; }
+        table.basket tr.problem td { background: rgba(197,163,78,.10); }
     </style>
 </head>
 <body>
 <header class="shop">
-    <div class="wrap"><a href="/">{{ $store->name }}</a></div>
+    <div class="wrap">
+        <a href="/">{{ $store->name }}</a>
+        {{-- Slice 2.1. ⚠ `basket` arrives from the view composer on every
+             theme layout, so no controller has to remember to pass it. --}}
+        @isset ($basket)
+            <a class="basket" href="{{ $basket['url'] }}">Basket ({{ $basket['count'] }})</a>
+        @endisset
+    </div>
 </header>
 
 <main>

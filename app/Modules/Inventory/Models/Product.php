@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Models;
 
 use App\Modules\Accounting\Models\TaxClass;
+use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
@@ -40,6 +41,13 @@ class Product extends Model
         'content_quantity',
         'content_unit_id',
         'is_active',
+        // Website Phase 2, slice 2.1. ⭐ ON THE PRODUCT MASTER, NOT THE STORE:
+        // "this cannot be made to order" is true at the counter, on the phone
+        // and on the web alike. Null follows the channel's own policy.
+        'availability_override',
+        // The promised lead time for a made-to-order sale. ⚠ Null promises
+        // nothing, and a page with nothing to promise says nothing (Q7 open).
+        'lead_time_days',
     ];
 
     protected function casts(): array
@@ -49,6 +57,8 @@ class Product extends Model
             'low_stock_threshold' => 'decimal:4',
             'content_quantity' => 'decimal:4',
             'is_active' => 'boolean',
+            'availability_override' => AvailabilityPolicy::class,
+            'lead_time_days' => 'integer',
         ];
     }
 

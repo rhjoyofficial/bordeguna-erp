@@ -132,11 +132,16 @@ it('leaves the ERP alone on its own hostname', function () {
     $this->get('/')->assertRedirect('/login');
 });
 
-it('has no cart, no checkout and no account, because they do not exist', function () {
+it('has no checkout and no account, because they do not exist', function () {
     // ⛔ ABSENT, not disabled. A disabled feature is a URL somebody can still
     // find, and a half-built checkout on a real hostname takes an order this
     // system cannot fulfil.
-    foreach (['/cart', '/checkout', '/account', '/login-customer'] as $path) {
+    //
+    // ⚠ `/cart` USED TO BE ON THIS LIST and was removed deliberately when
+    // Phase 2 slice 2.1 built the basket. The rule did not change; the set of
+    // things that exist did. Checkout and accounts arrive in their own slices,
+    // complete, and until then they are still absent.
+    foreach (['/checkout', '/account', '/login-customer'] as $path) {
         shopGet($path)->assertNotFound();
     }
 });

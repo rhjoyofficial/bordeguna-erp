@@ -87,6 +87,12 @@ beforeEach(function () {
         // the third time the guard has done exactly its job.
         'content_quantity' => '0.5',
         'content_unit_id' => $this->purchaseUnit->id,
+        // ⚠ Added when the website's availability policy gained a per-product
+        // override (Phase 2, slice 2.1). The structural guard below caught the
+        // omission the moment the pair joined Product::$fillable - the fourth
+        // time it has done exactly its job.
+        'availability_override' => 'strict',
+        'lead_time_days' => 3,
     ];
 });
 

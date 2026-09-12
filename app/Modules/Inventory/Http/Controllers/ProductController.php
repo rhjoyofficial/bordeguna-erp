@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Http\Controllers;
 
+use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\TaxClass;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -76,6 +77,8 @@ class ProductController extends Controller
                 'content_quantity' => $product->content_quantity,
                 'content_unit_id' => $product->content_unit_id,
                 'is_active' => $product->is_active,
+                'availability_override' => $product->availability_override?->value,
+                'lead_time_days' => $product->lead_time_days,
                 'current_quantity' => $product->type->isStocked() ? $product->currentStockQuantity() : null,
                 'average_unit_cost' => $product->type->isStocked() ? $product->averageUnitCost() : null,
                 'is_below_threshold' => $product->isBelowLowStockThreshold(),
@@ -258,6 +261,13 @@ class ProductController extends Controller
                 'nullable', 'required_with:content_quantity',
                 Rule::exists('units_of_measure', 'id')->where('business_id', $businessId),
             ],
+            // Website Phase 2, slice 2.1. ⚠ Only `strict` may be stored: an
+            // override can NARROW what a channel sells, never widen it. A
+            // product cannot be made to sell at zero on the counter, where the
+            // customer is standing there, by editing the catalogue.
+            'availability_override' => ['nullable', Rule::in([AvailabilityPolicy::Strict->value])],
+            // ⚠ Null promises nothing. A zero would promise same-day.
+            'lead_time_days' => ['nullable', 'integer', 'min:1', 'max:365'],
         ]);
     }
 }

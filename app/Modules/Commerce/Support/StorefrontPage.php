@@ -149,6 +149,16 @@ final class StorefrontPage
             // ⚠ Formatted here, by the one formatter every document uses, so a
             // price never reaches a template as something it has to interpret.
             'price' => $price === null ? null : DocumentMoney::amount($price),
+            // Slice 2.1. ⚠ Decided ONCE, here, by the same class the cart asks,
+            // so the page and the add button cannot disagree about whether a
+            // thing can be sold. A product with no price is not sellable
+            // whatever the stock says: the cart refuses it, so the page must
+            // not offer it.
+            'availability' => $row->product === null
+                ? ['sellable' => false, 'message' => null, 'made_to_order' => false, 'lead_time_days' => null]
+                : ($price === null
+                    ? ['sellable' => false, 'message' => null, 'made_to_order' => false, 'lead_time_days' => null]
+                    : Availability::decide($store, $row->product)->toArray()),
         ];
     }
 }

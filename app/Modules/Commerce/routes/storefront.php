@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Commerce\Http\Controllers\CartController;
 use App\Modules\Commerce\Http\Controllers\StorefrontController;
 use App\Modules\Commerce\Http\Controllers\StorefrontSeoController;
 use Illuminate\Support\Facades\Route;
@@ -9,11 +10,12 @@ use Illuminate\Support\Facades\Route;
 | The public shop
 |--------------------------------------------------------------------------
 |
-| ⛔⛔ WHAT IS NOT HERE IS THE POINT OF PHASE 1. There is no cart, no checkout,
-| no account, no wishlist and no coupon route, because Phase 1 is read only.
-| They are ABSENT rather than disabled: a disabled feature is a URL somebody can
-| still find, and a half-built checkout on a real hostname is how a shop takes
-| an order it cannot fulfil.
+| ⛔⛔ WHAT IS NOT HERE IS STILL THE POINT. Phase 1 was read only; Phase 2
+| slice 2.1 adds the BASKET and nothing else. There is still no checkout, no
+| account, no wishlist and no coupon route. They are ABSENT rather than
+| disabled: a disabled feature is a URL somebody can still find, and a
+| half-built checkout on a real hostname is how a shop takes an order it
+| cannot fulfil. Each arrives in its own slice, complete.
 |
 | ⚠ Every route is named `storefront.*`, and that prefix is load bearing:
 | ResolveStorefront refuses anything else on a shop hostname by NAME rather than
@@ -35,6 +37,17 @@ Route::middleware('web')->group(function () {
     Route::get('/products/{slug}', [StorefrontController::class, 'product'])
         ->where('slug', '[a-z0-9-]+')
         ->name('storefront.product');
+
+    // The basket (Phase 2, slice 2.1). ⚠ Declared BEFORE the fallback, and
+    // every one carries the `storefront.` prefix ResolveStorefront keys on.
+    // ⚠ On the ERP's own hostname these answer 404 like every storefront
+    // route: the controller refuses when no store was resolved.
+    Route::get('/cart', [CartController::class, 'show'])->name('storefront.cart');
+    Route::post('/cart/lines', [CartController::class, 'add'])->name('storefront.cart.add');
+    Route::patch('/cart/lines/{line}', [CartController::class, 'update'])
+        ->whereNumber('line')->name('storefront.cart.update');
+    Route::delete('/cart/lines/{line}', [CartController::class, 'remove'])
+        ->whereNumber('line')->name('storefront.cart.remove');
 
     Route::fallback([StorefrontController::class, 'page'])->name('storefront.page');
 });
