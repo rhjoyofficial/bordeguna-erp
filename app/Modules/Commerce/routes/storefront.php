@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Commerce\Http\Controllers\CartController;
+use App\Modules\Commerce\Http\Controllers\GeoController;
 use App\Modules\Commerce\Http\Controllers\StorefrontController;
 use App\Modules\Commerce\Http\Controllers\StorefrontSeoController;
 use Illuminate\Support\Facades\Route;
@@ -48,6 +49,12 @@ Route::middleware('web')->group(function () {
         ->whereNumber('line')->name('storefront.cart.update');
     Route::delete('/cart/lines/{line}', [CartController::class, 'remove'])
         ->whereNumber('line')->name('storefront.cart.remove');
+
+    // Where the customer lives (Phase 2, slice 2.2). ⚠ Read only and cached: it
+    // answers questions about Bangladesh, not about this shop or this customer.
+    Route::get('/geo/districts', [GeoController::class, 'districts'])->name('storefront.geo.districts');
+    Route::get('/geo/thanas', [GeoController::class, 'thanas'])->name('storefront.geo.thanas');
+    Route::get('/geo/areas', [GeoController::class, 'areas'])->name('storefront.geo.areas');
 
     Route::fallback([StorefrontController::class, 'page'])->name('storefront.page');
 });
