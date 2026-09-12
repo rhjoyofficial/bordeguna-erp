@@ -109,11 +109,29 @@ there is no DNS step.
 docker compose exec app php artisan db:seed --force
 ```
 
+This is how a newly added permission reaches production: every module's
+permission seeder uses `givePermissionTo`, which is additive, so re-running it
+grants what is new without touching what a role already had.
+
 ⚠ `DatabaseSeeder` is idempotent and safe to re-run, **and the order matters**:
 `BorDeGunaOrganisationSeeder` must run directly after `FoundationSeeder`,
 because every module seeder iterates `Business::all()` and a business created
 after them gets no permissions, calendar, policy, leave types or salary
 components.
+
+⛔⛔ **"Safe to re-run" was not true until 12 September 2026, and it is worth
+knowing why.** `DatabaseSeeder` also calls `InventoryDemoDataSeeder`, which
+invents a catalogue and records real **stock-in movements** for it. It looks its
+businesses up with `firstOrFail`, and `laladia`, `bionic` and `azmion` all exist
+on production — so it would have succeeded rather than failed safe, writing demo
+products and opening movements into a live ERP whose stock ledger is
+deliberately empty while the real opening count is prepared.
+
+It never ran: production was measured at 153 real products, **0 demo SKUs and 0
+stock movements**. The seeder now refuses outright when `app()->isProduction()`,
+with a test either side of the guard, so this command is now as safe as this
+section always claimed. ⚠ Any future demo or sample-data seeder needs the same
+guard before it is wired into `DatabaseSeeder`.
 
 ---
 

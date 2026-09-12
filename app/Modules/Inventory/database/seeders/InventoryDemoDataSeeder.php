@@ -62,6 +62,27 @@ class InventoryDemoDataSeeder extends Seeder
 
     public function run(RecordStockIn $recordStockIn): void
     {
+        // ⛔⛔ NEVER IN PRODUCTION, AND THIS IS NOT THEORETICAL. This seeder
+        // invents a catalogue and then records real STOCK-IN MOVEMENTS for it.
+        // deploy/README.md tells an operator to run `db:seed --force` on the
+        // live box to pick up newly added permissions, and DatabaseSeeder calls
+        // this seeder - so that documented step would write demo products and
+        // their opening movements straight into production.
+        //
+        // ⚠ It would also SUCCEED rather than fail safe: this seeder looks up
+        // the businesses `laladia`, `bionic` and `azmion` with firstOrFail, and
+        // all three genuinely exist on production alongside `bor-de-guna`.
+        //
+        // Measured on production 12 Sep 2026, before this guard: 153 real
+        // products, 0 demo SKUs, 0 stock movements. The stock ledger is
+        // deliberately empty while the real opening count is prepared, and the
+        // first movement it ever takes must be a real one.
+        if (app()->isProduction()) {
+            $this->command?->warn('InventoryDemoDataSeeder skipped: demo data must never reach production.');
+
+            return;
+        }
+
         $registrar = app(PermissionRegistrar::class);
         $context = app(BusinessContext::class);
 
