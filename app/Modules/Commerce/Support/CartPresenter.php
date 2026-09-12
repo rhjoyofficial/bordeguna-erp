@@ -62,7 +62,14 @@ final class CartPresenter
             $product = $line->product;
             $row = $rows->get($line->product_id);
 
-            $price = $product === null ? null : CataloguePublishing::priceFor($store, $product);
+            // ⚠⚠ PRICED AT THE QUANTITY ACTUALLY IN THE BASKET, not at one. A
+            // shop that sets a 5+ rate means it, and asking for the single-unit
+            // price would quote a customer more than the sales order the
+            // checkout then writes - the shop showing one number and billing
+            // another on exactly the products it chose to discount.
+            $price = $product === null
+                ? null
+                : CataloguePublishing::priceFor($store, $product, null, (string) $line->quantity);
             $problem = $product === null ? 'This product no longer exists.' : CartRules::refusalFor($store, $product);
 
             $lineTotal = ($price === null || $problem !== null)

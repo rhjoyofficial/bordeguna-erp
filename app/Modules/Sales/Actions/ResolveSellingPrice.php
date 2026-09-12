@@ -9,6 +9,7 @@ use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Support\ResolvedPrice;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * What this product costs this customer, in this quantity, on this date.
@@ -38,9 +39,10 @@ class ResolveSellingPrice
         ?Customer $customer = null,
         string $quantity = '1',
         mixed $on = null,
+        ?int $priceGroupId = null,
     ): ResolvedPrice {
         $date = $this->asDate($on);
-        $resolved = $this->find($product, $customer, $quantity, $date);
+        $resolved = $this->find($product, $customer, $quantity, $date, $priceGroupId);
 
         if ($resolved === null) {
             throw NoSellingPriceException::for($product->id, $product->name, $date);
@@ -54,13 +56,14 @@ class ResolveSellingPrice
         ?Customer $customer = null,
         string $quantity = '1',
         mixed $on = null,
+        ?int $priceGroupId = null,
     ): ?ResolvedPrice {
         $candidates = ProductPrice::query()
             ->where('product_id', $product->id)
             ->inForceOn($this->asDate($on))
             ->get();
 
-        return $this->winnerAmong($candidates, $customer, $quantity);
+        return $this->winnerAmong($candidates, $customer, $quantity, $priceGroupId);
     }
 
     /**
@@ -72,11 +75,11 @@ class ResolveSellingPrice
      * picked by the same winnerAmong() every single-product resolve uses, so
      * the card and the cart cannot disagree by construction.
      *
-     * @param  \Illuminate\Support\Collection<int, Product>|\Illuminate\Database\Eloquent\Collection<int, Product>  $products
+     * @param  Collection<int, Product>|\Illuminate\Database\Eloquent\Collection<int, Product>  $products
      * @return array<int, ResolvedPrice> keyed by product id; a product with no
      *                                   price in force is simply absent
      */
-    public function findMany($products, ?Customer $customer = null, string $quantity = '1', mixed $on = null): array
+    public function findMany($products, ?Customer $customer = null, string $quantity = '1', mixed $on = null, ?int $priceGroupId = null): array
     {
         $rules = ProductPrice::query()
             ->whereIn('product_id', $products->pluck('id'))
@@ -86,19 +89,19 @@ class ResolveSellingPrice
 
         return $products
             ->mapWithKeys(fn (Product $product) => [
-                $product->id => $this->winnerAmong($rules->get($product->id, collect()), $customer, $quantity),
+                $product->id => $this->winnerAmong($rules->get($product->id, collect()), $customer, $quantity, $priceGroupId),
             ])
             ->filter()
             ->all();
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, ProductPrice>  $candidates
+     * @param  Collection<int, ProductPrice>  $candidates
      */
-    private function winnerAmong($candidates, ?Customer $customer, string $quantity): ?ResolvedPrice
+    private function winnerAmong($candidates, ?Customer $customer, string $quantity, ?int $priceGroupId = null): ?ResolvedPrice
     {
         $wanted = $this->scale($quantity);
-        $applicable = $candidates->filter(fn (ProductPrice $rule) => $this->applies($rule, $customer, $wanted));
+        $applicable = $candidates->filter(fn (ProductPrice $rule) => $this->applies($rule, $customer, $wanted, $priceGroupId));
 
         if ($applicable->isEmpty()) {
             return null;
@@ -140,7 +143,7 @@ class ResolveSellingPrice
      * only the default tier, which is the honest answer: their price is not
      * knowable until they are known.
      */
-    private function applies(ProductPrice $rule, ?Customer $customer, int $wantedQuantity): bool
+    private function applies(ProductPrice $rule, ?Customer $customer, int $wantedQuantity, ?int $priceGroupId = null): bool
     {
         if ($this->scale((string) $rule->min_quantity) > $wantedQuantity) {
             return false;
@@ -151,8 +154,21 @@ class ResolveSellingPrice
         }
 
         if ($rule->price_group_id !== null) {
-            return $customer !== null
-                && $this->groupIdFor($customer) === $rule->price_group_id;
+            // ⭐⭐ A WEBSITE IS A PRICE GROUP (ADR-005), and that is the whole
+            // reason this parameter exists. A shop browsing its catalogue has a
+            // price group but no customer yet, and without this it would fall
+            // through to the default tier and quote a price the sales order
+            // would then disagree with. It is NOT a new kind of pricing - it is
+            // the same group tier, named directly instead of through somebody.
+            //
+            // ⚠ A real customer always wins. The group is only read this way
+            // when nobody is known, so a signed-in customer is never priced as
+            // the website instead of as themselves.
+            if ($customer === null) {
+                return $priceGroupId !== null && $priceGroupId === $rule->price_group_id;
+            }
+
+            return $this->groupIdFor($customer) === $rule->price_group_id;
         }
 
         return true;

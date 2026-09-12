@@ -5,8 +5,8 @@ namespace App\Modules\Commerce\Support;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Commerce\Models\StoreProduct;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Models\PriceGroup;
-use App\Modules\Sales\Models\ProductPrice;
 use Illuminate\Support\Carbon;
 
 /**
@@ -66,38 +66,37 @@ final class CataloguePublishing
      * that disagreement is the worst one available: a gate that says a product
      * is fine to publish and a page that then shows no price.
      *
-     * ⚠ Most specific first: a price for THIS group beats the ungrouped default.
-     * `min_quantity` is ordered so the single-unit price wins, because a
-     * storefront quotes one of a thing.
+     * ⭐⭐ AND IT DELEGATES TO THE ONE PRICING ENGINE, and it did not always.
+     *
+     * It used to run its own query - group rules before default ones, ordered by
+     * `min_quantity` ASC, take the first - which reads like the same rule and is
+     * not. `ResolveSellingPrice` takes the HIGHEST quantity break a line
+     * qualifies for; this took the LOWEST, so it ignored quantity breaks
+     * entirely. Measured on production: 5 of 52 price rules carry one.
+     *
+     * ⚠⚠ THE CONSEQUENCE WAS REAL AND ABOUT TO BECOME A TRANSACTION. A basket of
+     * five would have quoted the single-unit price while the sales order the
+     * checkout creates records the engine's answer - the shop showing one number
+     * and billing another, on exactly the products a shop sets a break for. The
+     * docblock above this class already said a second opinion about money was
+     * unacceptable; the implementation had quietly become one.
+     *
+     * ⚠ Quantity defaults to 1, which is what the publish gate asks: "is there
+     * any price in force at all". Measured on production before changing this:
+     * every one of the 46 priced products has a rule applying at quantity 1, so
+     * no product's publishability changes.
      */
-    public static function priceFor(Store $store, Product $product, ?Carbon $on = null): ?string
+    public static function priceFor(Store $store, Product $product, ?Carbon $on = null, string $quantity = '1'): ?string
     {
-        $on ??= Carbon::now();
-
-        $price = self::inForce($store, $product, $on)
-            ->orderByRaw('price_group_id IS NULL')
-            ->orderBy('min_quantity')
-            ->first();
-
-        return $price?->unit_price === null ? null : (string) $price->unit_price;
-    }
-
-    private static function inForce(Store $store, Product $product, Carbon $on)
-    {
-        return ProductPrice::query()
-            ->where('product_id', $product->id)
-            ->whereNull('customer_id')
-            ->where(function ($query) use ($store) {
-                $query->whereNull('price_group_id');
-
-                if ($store->price_group_id !== null) {
-                    $query->orWhere('price_group_id', $store->price_group_id);
-                }
-            })
-            ->where('effective_from', '<=', $on->toDateString())
-            ->where(function ($query) use ($on) {
-                $query->whereNull('effective_to')->orWhere('effective_to', '>=', $on->toDateString());
-            });
+        return app(ResolveSellingPrice::class)->find(
+            product: $product,
+            customer: null,
+            quantity: $quantity,
+            on: $on ?? Carbon::now(),
+            // ⭐ A website IS a price group (ADR-005). With no customer known,
+            // the store's own group is what the engine prices against.
+            priceGroupId: $store->price_group_id,
+        )?->unitPrice;
     }
 
     /**
