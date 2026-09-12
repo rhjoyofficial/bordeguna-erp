@@ -26,12 +26,21 @@ use App\Modules\Foundation\Support\DocumentMoney;
 final class CartPresenter
 {
     /**
-     * @return array{lines: list<array<string,mixed>>, count: int, subtotal: ?string, problems: int}
+     * @return array{lines: list<array<string,mixed>>, count: int, subtotal: ?string, problems: int, delivery: array<string,mixed>, total: ?string}
      */
     public static function present(Store $store, ?Cart $cart): array
     {
         if ($cart === null) {
-            return ['lines' => [], 'count' => 0, 'subtotal' => null, 'problems' => 0];
+            // ⚠ The same SHAPE as a real basket, so a theme has one set of keys
+            // to draw rather than two. An empty basket is not a special case.
+            return [
+                'lines' => [], 'count' => 0, 'subtotal' => null, 'problems' => 0,
+                'delivery' => [
+                    'district' => null, 'zone' => null, 'charge' => null,
+                    'is_fallback' => false, 'cannot_quote' => false,
+                ],
+                'total' => null,
+            ];
         }
 
         $lines = $cart->lines()->with('product')->orderBy('id')->get();
@@ -82,11 +91,30 @@ final class CartPresenter
             ];
         }
 
+        $delivery = DeliveryQuote::for($store, $cart->delivery_district);
+
         return [
             'lines' => $presented,
             'count' => $count,
             'subtotal' => $presented === [] ? null : DocumentMoney::amount($subtotal),
             'problems' => $problems,
+            'delivery' => [
+                'district' => $delivery->district,
+                'zone' => $delivery->zoneName(),
+                'charge' => $delivery->charge() === null ? null : DocumentMoney::amount($delivery->charge()),
+                // ⚠ The theme needs to tell these apart: a rate set for this
+                // district reads differently from the catch-all, and a shop that
+                // cannot quote at all must say so rather than show nothing and
+                // let the customer assume delivery is free.
+                'is_fallback' => $delivery->isFallback,
+                'cannot_quote' => $delivery->cannotQuote(),
+            ],
+            // ⚠ The total includes delivery only when there IS a quote. Adding
+            // zero for an unquotable district would state a total the shop has
+            // not agreed to honour.
+            'total' => ($presented === [] || $delivery->charge() === null)
+                ? null
+                : DocumentMoney::amount(bcadd($subtotal, $delivery->charge(), 2)),
         ];
     }
 

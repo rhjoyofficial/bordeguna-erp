@@ -12,6 +12,7 @@ use App\Modules\Commerce\Support\StorefrontSeo;
 use App\Modules\Commerce\Themes\Theme;
 use App\Modules\Commerce\Themes\ThemeRegistry;
 use App\Modules\Inventory\Models\Product;
+use App\Support\BdGeo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -45,6 +46,11 @@ class CartController
             'store' => $store,
             'theme' => $this->theme($store),
             'cart' => CartPresenter::present($store, $cart),
+            // ⚠ Every district, not only the ones this shop has priced. A shop
+            // that has not got round to pricing Bagerhat still delivers there at
+            // its catch-all rate, and hiding the district would look like "we do
+            // not deliver to you" when the truth is "nobody set a rate yet".
+            'districts' => BdGeo::districts(),
             'seo' => [
                 'title' => StorefrontSeo::title($store, null, 'Your basket'),
                 'description' => null,
@@ -91,6 +97,38 @@ class CartController
         $line->save();
 
         return redirect('/cart')->with('cart_notice', 'Added to your basket.');
+    }
+
+    /**
+     * Where the basket should be delivered.
+     *
+     * ⭐⭐ A DISTRICT IS THE ONLY THING ACCEPTED. There is deliberately no zone,
+     * no band and no charge in this payload, which is why there is no
+     * disagreeing pair to refuse: the customer says where they live and the shop
+     * says what that costs. LaLaDia asked for both, compared them nowhere, and
+     * let somebody in Bagerhat pay the Dhaka rate.
+     *
+     * ⚠ Validated against the geography rather than against the rate table. A
+     * real district the shop has not priced is a gap in the SHOP's setup, not a
+     * bad answer from the customer, and it is covered by the catch-all.
+     */
+    public function deliverTo(Request $request): RedirectResponse
+    {
+        $store = $this->store($request);
+
+        $data = $request->validate(['district' => ['required', 'string', 'max:100']]);
+
+        $district = BdGeo::districtNamed($data['district']);
+
+        if ($district === null) {
+            $this->refuse('We do not recognise that district.', 'district');
+        }
+
+        // ⚠ Opened rather than found: choosing a delivery district before adding
+        // anything is a reasonable thing to do, and it should not be lost.
+        CurrentCart::open($request, $store)->update(['delivery_district' => $district]);
+
+        return redirect('/cart');
     }
 
     public function update(Request $request, int $line): RedirectResponse

@@ -50,6 +50,11 @@ Route::middleware('web')->group(function () {
     Route::delete('/cart/lines/{line}', [CartController::class, 'remove'])
         ->whereNumber('line')->name('storefront.cart.remove');
 
+    // Where it goes (Phase 2, slice 2.3). ⭐ A DISTRICT, and nothing else. No
+    // zone, no band and no charge is accepted anywhere, which is why there is no
+    // disagreeing pair to refuse - the shop prices what the customer states.
+    Route::post('/cart/delivery', [CartController::class, 'deliverTo'])->name('storefront.cart.delivery');
+
     // Where the customer lives (Phase 2, slice 2.2). ⚠ Read only and cached: it
     // answers questions about Bangladesh, not about this shop or this customer.
     Route::get('/geo/districts', [GeoController::class, 'districts'])->name('storefront.geo.districts');

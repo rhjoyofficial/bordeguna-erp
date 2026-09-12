@@ -30,6 +30,12 @@ class Cart extends Model
         'contact_name',
         'contact_phone',
         'contact_email',
+        // ⚠⚠ THE DISTRICT, NEVER THE CHARGE. There is deliberately no delivery
+        // charge column here, for the same reason there is no price on a line:
+        // a stored charge goes stale the moment a rate is edited, and a basket
+        // quoting a number the shop no longer charges is worse than no quote.
+        // `DeliveryQuote` prices this at read time, every time.
+        'delivery_district',
     ];
 
     protected function casts(): array

@@ -81,6 +81,20 @@
                             <th>BDT {{ $cart['subtotal'] }}</th>
                             <th></th>
                         </tr>
+                        @if ($cart['delivery']['charge'])
+                            <tr>
+                                <th colspan="3">Delivery to {{ $cart['delivery']['district'] }}</th>
+                                <th>BDT {{ $cart['delivery']['charge'] }}</th>
+                                <th></th>
+                            </tr>
+                        @endif
+                        @if ($cart['total'])
+                            <tr>
+                                <th colspan="3">Total</th>
+                                <th>BDT {{ $cart['total'] }}</th>
+                                <th></th>
+                            </tr>
+                        @endif
                     </tfoot>
                 </table>
 
@@ -90,9 +104,43 @@
                     </p>
                 @endif
 
-                {{-- ⚠ Delivery is priced in slice 2.3 and stated at checkout in 2.4.
-                     Nothing here guesses at it. --}}
-                <p class="muted">Delivery is worked out at checkout.</p>
+                {{-- Delivery, slice 2.3.
+
+                     ⭐⭐ THE CUSTOMER PICKS A PLACE, NEVER A PRICE BAND. There is
+                     no zone selector here and there never will be: LaLaDia asked
+                     for both, compared them nowhere, and let somebody in Bagerhat
+                     pay the Dhaka rate on every order for months.
+
+                     ⚠ A plain form with no script, like the rest of this page.
+                     A basket that needs JavaScript is one some customers on a
+                     poor connection cannot use. --}}
+                <form method="post" action="/cart/delivery" class="cart-delivery">
+                    @csrf
+                    <label for="delivery-district">Deliver to</label>
+                    <select id="delivery-district" name="district" required>
+                        <option value="">Choose your district</option>
+                        @foreach ($districts as $district)
+                            <option value="{{ $district['name'] }}" @selected($cart['delivery']['district'] === $district['name'])>
+                                {{ $district['name'] }}@if ($district['bn_name']) &mdash; {{ $district['bn_name'] }}@endif
+                            </option>
+                        @endforeach
+                    </select>
+                    <button type="submit">Work out delivery</button>
+                    @error('district')<span class="error">{{ $message }}</span>@enderror
+                </form>
+
+                @if ($cart['delivery']['cannot_quote'])
+                    {{-- ⛔ Said plainly rather than shown as free. A shop with no
+                         rate covering this district has not agreed to deliver
+                         there for nothing. --}}
+                    <p class="muted">We cannot work out delivery to {{ $cart['delivery']['district'] }} yet. Please contact us before ordering.</p>
+                @elseif ($cart['delivery']['charge'])
+                    <p class="muted">
+                        {{ $cart['delivery']['zone'] }} &mdash; BDT {{ $cart['delivery']['charge'] }}.
+                    </p>
+                @else
+                    <p class="muted">Choose your district to see what delivery costs.</p>
+                @endif
 
                 <p><a href="/">Keep shopping</a></p>
             @endif
