@@ -291,9 +291,15 @@ it('shows an add button on a product the shop can sell, and none on one it canno
         ->assertSee('Out of stock.', false);
 });
 
-it('has no checkout, no account and no coupon route, because they do not exist yet', function () {
-    // ⛔ Slice 2.1 adds the basket and nothing else. Absent, not disabled.
-    foreach (['/checkout', '/account', '/coupons'] as $path) {
+it('has no account and no coupon route, because they do not exist yet', function () {
+    // ⛔ Absent, not disabled. A disabled feature is a URL somebody can still
+    // find; each of these arrives in its own slice, complete.
+    //
+    // ⚠ NARROWED, NOT WEAKENED, when slice 2.4 shipped. `/checkout` was on this
+    // list and is now a real route, so asserting its absence would be asserting
+    // the past. Accounts (2.6) and coupons (2.5) are still genuinely absent and
+    // that is what this test is now for.
+    foreach (['/account', '/coupons'] as $path) {
         $this->get('http://shop.test'.$path)->assertNotFound();
     }
 });

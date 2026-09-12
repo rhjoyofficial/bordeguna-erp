@@ -25,6 +25,7 @@ use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Support\Carbon;
+use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -105,6 +106,46 @@ beforeEach(function () {
 });
 
 afterEach(fn () => Carbon::setTestNow());
+
+it('finds an order by the reference the customer holds, not only by ours', function () {
+    // ⚠⚠ A customer who ordered on the website quotes `BNC-...` and has never
+    // seen `SO-FY2026-0001`. Before slice 2.4 this search covered our own
+    // number and the customer's name only, so the one number the person on the
+    // telephone is reading out could not be looked up at all.
+    $order = ($this->ownerOrder)();
+    $order->forceFill(['shop_reference' => 'BNC-20260912-ABCD2345'])->save();
+
+    ($this->asRole)('Staff')->get('/sales/orders?search=ABCD2345')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('orders.data', 1)
+            ->where('orders.data.0.id', $order->id));
+});
+
+it('puts the phone number and the destination in front of whoever confirms a website order', function () {
+    // ⭐⭐ Slice 2.4 lands website orders in this screen's approval queue on
+    // purpose - nobody in the company has spoken to the buyer. So the screen
+    // has to carry what the confirmation call needs. Without it the gate is a
+    // queue nobody can act on, and goods cannot leave an unapproved order.
+    $order = ($this->ownerOrder)();
+    $order->forceFill(['channel' => 'website', 'shop_reference' => 'BNC-20260912-ABCD2345', 'delivery_charge' => '120'])->save();
+    $order->address()->create([
+        'business_id' => $this->business->id,
+        'recipient_name' => 'Karim Uddin',
+        'recipient_phone' => '01711000000',
+        'district' => 'Bagerhat',
+        'thana' => 'Fakirhat',
+        'address_line' => 'House 4, Road 2',
+    ]);
+
+    ($this->asRole)('Staff')->get('/sales/orders/'.$order->id)
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('order.channel', 'website')
+            ->where('order.address.recipient_phone', '01711000000')
+            ->where('order.address.district', 'Bagerhat')
+            ->where('order.address.thana', 'Fakirhat'));
+});
 
 it('shows the order book to anyone who may view sales', function () {
     ($this->asRole)('Staff')->get('/sales/orders')->assertOk();

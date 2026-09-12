@@ -12,6 +12,7 @@ use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\SalesOrderOrigin;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -53,6 +54,7 @@ class CreateSalesOrder
         mixed $orderedAt = null,
         ?string $expectedDate = null,
         ?string $note = null,
+        ?SalesOrderOrigin $origin = null,
     ): SalesOrder {
         // ⚠ Deliberately NOT EffectiveDate::resolve - that helper asserts the
         // accounting period is open, which guards events that post. An order
@@ -107,18 +109,41 @@ class CreateSalesOrder
             }
         }
 
-        $order = DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $expectedDate, $note) {
+        $order = DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $expectedDate, $note, $origin) {
             $order = SalesOrder::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
                 'warehouse_id' => $warehouse?->id,
+                // ⚠ The dimensions D17 asked for, and they are simply absent on
+                // an order somebody typed in - which is what null means in both
+                // columns. See SalesChannel and SalesOrderOrigin.
+                'store_id' => $origin?->storeId,
+                'channel' => $origin?->channel,
                 'order_number' => $this->nextNumber($customer->business_id, $date),
+                'shop_reference' => $origin?->shopReference,
                 'ordered_at' => $date->toDateString(),
                 'expected_date' => $expectedDate,
+                // ⚠⚠ FROZEN HERE, exactly like the unit price below and for the
+                // same reason: a basket asks the rate table what delivery costs
+                // every time it is read, but an order records what the customer
+                // agreed to pay. A rate corrected next week must not rewrite it.
+                'delivery_charge' => $origin?->deliveryCharge,
+                'payment_method' => $origin?->paymentMethod,
                 'status' => SalesOrderStatus::Open,
                 'note' => $note,
                 'created_by' => $createdBy->id,
             ]);
+
+            // ⚠ Written inside the same transaction as the order. An order with
+            // no destination is a parcel nobody can book, and the two rows are
+            // one fact - there is no moment at which having one without the
+            // other is correct.
+            if ($origin?->destination !== null) {
+                $order->address()->create([
+                    'business_id' => $order->business_id,
+                    ...$origin->destination->toRow(),
+                ]);
+            }
 
             foreach ($lines as $entry) {
                 // ⚠⚠ ONE pricing engine. An override is taken verbatim and
@@ -132,11 +157,23 @@ class CreateSalesOrder
                     $unitPrice = $override;
                     $priceNote = 'Manual override';
                 } else {
+                    // ⭐⭐ PRICED AS THE CHANNEL WHEN THE CHANNEL IS A PRICE
+                    // GROUP, which is the whole content of ADR-005. A website
+                    // basket is priced with no customer at the shop's group; if
+                    // this line then priced at the BUYER's group, a dealer
+                    // would be quoted retail on the page and billed dealer on
+                    // the document. The customer is still recorded as the buyer
+                    // - only their pricing identity is set aside, and only for
+                    // a channel that has decided to be B2C.
+                    //
+                    // ⚠ Still ONE engine, asked a different question. There is
+                    // no second query and no branch inside the resolver.
                     $resolved = $this->prices->resolve(
                         product: $entry['product'],
-                        customer: $customer,
+                        customer: ($origin?->pricesAsChannel ?? false) ? null : $customer,
                         quantity: $entry['quantity'],
                         on: $date,
+                        priceGroupId: $origin?->priceGroupId,
                     );
                     $unitPrice = $resolved->unitPrice;
                     $priceNote = $resolved->explain();

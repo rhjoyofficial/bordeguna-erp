@@ -3,6 +3,7 @@
 namespace App\Modules\Commerce\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -60,9 +61,29 @@ class Cart extends Model
         return $this->converted_at !== null;
     }
 
-    public function markConverted(): void
+    /**
+     * The order this basket became, or null while it is still open.
+     *
+     * ⚠ Written in the same commit as the column that makes it possible, and it
+     * is also the checkout's idempotency key: a second submit of the same
+     * basket finds this order rather than writing a twin.
+     */
+    public function order(): BelongsTo
     {
-        $this->forceFill(['converted_at' => now()])->save();
+        return $this->belongsTo(SalesOrder::class, 'sales_order_id');
+    }
+
+    /**
+     * ⚠ Takes the order rather than only stamping a time. "It converted" and
+     * "it converted into nothing identifiable" are different facts, and the
+     * second is what a recovery screen cannot act on.
+     */
+    public function markConverted(SalesOrder $order): void
+    {
+        $this->forceFill([
+            'converted_at' => now(),
+            'sales_order_id' => $order->getKey(),
+        ])->save();
     }
 
     /**

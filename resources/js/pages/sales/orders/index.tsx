@@ -32,6 +32,9 @@ interface OrderRow {
     customer: { name: string };
     warehouse: { name: string } | null;
     approval_request: { status: 'pending' | 'approved' | 'rejected' };
+    // Website Phase 2, slice 2.4. Null on every order typed into the ERP.
+    channel: 'internal' | 'website' | null;
+    shop_reference: string | null;
 }
 
 interface Exposure {
@@ -267,7 +270,7 @@ export default function SalesOrdersIndex({
                             id="filter-search"
                             value={filters.search}
                             onChange={(e) => setFilter('search', e.target.value)}
-                            placeholder="Order number or customer…"
+                            placeholder="Order number, website reference or customer…"
                         />
                     </FilterField>
                     <FilterField label="Status" htmlFor="filter-status">
@@ -301,6 +304,13 @@ export default function SalesOrdersIndex({
                                     <Link href={route('sales.orders.show', order.id)} className="underline">
                                         {order.order_number}
                                     </Link>
+                                    {/* ⚠ Marked, because an order nobody in this
+                                        company typed is the one that needs a
+                                        confirmation call - and the reference
+                                        shown is the one the CUSTOMER quotes. */}
+                                    {order.channel === 'website' && (
+                                        <p className="text-muted-foreground text-xs">Website {order.shop_reference ?? ''}</p>
+                                    )}
                                 </td>
                                 <td className="text-muted-foreground py-2">{order.customer.name}</td>
                                 <td className="py-2">{order.total_ordered}</td>

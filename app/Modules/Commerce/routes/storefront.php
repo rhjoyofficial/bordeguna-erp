@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Commerce\Http\Controllers\CartController;
+use App\Modules\Commerce\Http\Controllers\CheckoutController;
 use App\Modules\Commerce\Http\Controllers\GeoController;
 use App\Modules\Commerce\Http\Controllers\StorefrontController;
 use App\Modules\Commerce\Http\Controllers\StorefrontSeoController;
@@ -11,12 +12,12 @@ use Illuminate\Support\Facades\Route;
 | The public shop
 |--------------------------------------------------------------------------
 |
-| ⛔⛔ WHAT IS NOT HERE IS STILL THE POINT. Phase 1 was read only; Phase 2
-| slice 2.1 adds the BASKET and nothing else. There is still no checkout, no
-| account, no wishlist and no coupon route. They are ABSENT rather than
-| disabled: a disabled feature is a URL somebody can still find, and a
-| half-built checkout on a real hostname is how a shop takes an order it
-| cannot fulfil. Each arrives in its own slice, complete.
+| ⛔⛔ WHAT IS NOT HERE IS STILL THE POINT. Phase 1 was read only; Phase 2 adds
+| the basket (2.1), where it goes (2.2, 2.3) and now CHECKOUT (2.4). There is
+| still no account, no wishlist, no coupon and no online-payment route. They are
+| ABSENT rather than disabled: a disabled feature is a URL somebody can still
+| find, and a half-built checkout on a real hostname is how a shop takes an
+| order it cannot fulfil. Each arrives in its own slice, complete.
 |
 | ⚠ Every route is named `storefront.*`, and that prefix is load bearing:
 | ResolveStorefront refuses anything else on a shop hostname by NAME rather than
@@ -54,6 +55,20 @@ Route::middleware('web')->group(function () {
     // zone, no band and no charge is accepted anywhere, which is why there is no
     // disagreeing pair to refuse - the shop prices what the customer states.
     Route::post('/cart/delivery', [CartController::class, 'deliverTo'])->name('storefront.cart.delivery');
+
+    // Checkout, and the order it produces (Phase 2, slice 2.4).
+    //
+    // ⚠⚠ The POST writes a REAL ERP SALES ORDER through the same
+    // `CreateSalesOrder` the counter and the phone use. It moves no stock and
+    // posts no journal, and it takes no payment: this is cash on delivery.
+    //
+    // ⚠ `/orders/{reference}` is keyed on the SHOP's reference - a random tail
+    // rather than a count, so the page cannot be walked - and the controller
+    // scopes it to this store and to website orders only.
+    Route::get('/checkout', [CheckoutController::class, 'show'])->name('storefront.checkout');
+    Route::post('/checkout', [CheckoutController::class, 'place'])->name('storefront.checkout.place');
+    Route::get('/orders/{reference}', [CheckoutController::class, 'order'])
+        ->where('reference', '[A-Z0-9-]+')->name('storefront.order');
 
     // Where the customer lives (Phase 2, slice 2.2). ⚠ Read only and cached: it
     // answers questions about Bangladesh, not about this shop or this customer.

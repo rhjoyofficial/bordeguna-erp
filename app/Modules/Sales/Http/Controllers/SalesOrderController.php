@@ -50,8 +50,13 @@ class SalesOrderController extends Controller
             ->with(['customer:id,name', 'warehouse:id,name', 'approvalRequest'])
             ->withSum('lines as total_ordered', 'quantity_ordered')
             ->withSum('lines as total_delivered', 'quantity_delivered')
+            // ⚠ THE SHOP REFERENCE IS SEARCHABLE TOO, and it has to be: a
+            // customer ringing up quotes `BNC-20260912-X7JWX2YT` and has never
+            // seen `SO-FY2026-0001`. A number a customer holds that staff
+            // cannot search for is a number that costs a support call.
             ->when($filters['search'], fn ($query, $search) => $query->where(
                 fn ($q) => $q->where('order_number', 'like', "%{$search}%")
+                    ->orWhere('shop_reference', 'like', "%{$search}%")
                     ->orWhereHas('customer', fn ($c) => $c->where('name', 'like', "%{$search}%"))
             ))
             ->when($filters['status'], fn ($query, $status) => $query->where('status', $status))
@@ -186,6 +191,13 @@ class SalesOrderController extends Controller
         $order->load([
             'customer',
             'warehouse:id,name',
+            // ⚠ Website Phase 2, slice 2.4. A website order lands in this
+            // screen's approval queue, and the person confirming it needs the
+            // recipient's phone number and the destination - without them the
+            // confirmation call the design depends on cannot be made. Both are
+            // null on an order somebody typed in, and the page renders nothing.
+            'store:id,name',
+            'address',
             'createdBy:id,name',
             'approvalRequest.requestedBy:id,name',
             'approvalRequest.reviewedBy:id,name',

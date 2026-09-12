@@ -4,8 +4,11 @@
     ⚠ Every figure on this page was resolved from the price list a moment ago
     by CartPresenter. The template shows what it was handed; it never multiplies.
 
-    ⛔ THERE IS NO CHECKOUT BUTTON YET, and the absence is deliberate rather than
-    a button that goes nowhere. Slice 2.4 adds it, as a real ERP sales order.
+    ⚠ The checkout button appeared in slice 2.4 and is GATED: it is absent until
+    the shop can actually take this order - a district chosen, a delivery rate
+    that covers it, and nothing unsellable in the basket. A button that leads to
+    a refusal is worse than no button, because the customer fills in an address
+    first to find out.
 
     ⚠ A line the shop can no longer sell is listed with its reason and left out
     of the total. It is the customer's to remove; a basket that throws or that
@@ -140,6 +143,17 @@
                     </p>
                 @else
                     <p class="muted">Choose your district to see what delivery costs.</p>
+                @endif
+
+                {{-- Checkout, slice 2.4.
+
+                     ⚠⚠ GATED ON WHAT THE SERVER WILL ACTUALLY ACCEPT, and the
+                     three conditions are the same three `PlaceWebsiteOrder`
+                     refuses on. They are stated here as well so the reason is
+                     visible on the page that can fix it, rather than after an
+                     address has been typed. --}}
+                @if ($cart['problems'] === 0 && $cart['delivery']['district'] && ! $cart['delivery']['cannot_quote'])
+                    <p><a href="/checkout" class="button">Checkout</a></p>
                 @endif
 
                 <p><a href="/">Keep shopping</a></p>

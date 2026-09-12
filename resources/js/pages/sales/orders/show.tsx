@@ -38,6 +38,23 @@ interface Order {
     note: string | null;
     customer: { id: number; name: string; credit_limit: string | null; payment_terms: string | null };
     warehouse: { id: number; name: string } | null;
+    // Website Phase 2, slice 2.4. All nullable, because an order typed into the
+    // ERP has none of them - which is every order before the shops went live.
+    channel: 'internal' | 'website' | null;
+    shop_reference: string | null;
+    delivery_charge: string | null;
+    payment_method: string | null;
+    store: { id: number; name: string } | null;
+    address: {
+        recipient_name: string;
+        recipient_phone: string;
+        district: string;
+        thana: string;
+        area: string | null;
+        postcode: string | null;
+        address_line: string;
+        landmark: string | null;
+    } | null;
     created_by: { name: string };
     approval_request: {
         status: 'pending' | 'approved' | 'rejected';
@@ -228,6 +245,47 @@ export default function SalesOrderShow({
                         </Button>
                     </div>
                 </div>
+
+                {/* ⭐⭐ A WEBSITE ORDER, AND WHAT SOMEBODY NEEDS TO ACT ON IT.
+                    Slice 2.4 lands these in this approval queue deliberately -
+                    a customer placed it themselves and nobody has spoken to
+                    them - so the phone number and the destination have to be ON
+                    THIS SCREEN. Without them the confirmation call the whole
+                    design depends on cannot be made, and an order that cannot
+                    be confirmed cannot be dispatched. */}
+                {order.channel === 'website' && (
+                    <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
+                        <p className="font-medium">
+                            Placed by the customer on {order.store?.name ?? 'a shop'}
+                            {order.shop_reference ? ` - they will quote ${order.shop_reference}` : ''}
+                        </p>
+                        {order.address && (
+                            <p className="text-muted-foreground mt-1">
+                                {/* The recipient, who is not always the buyer: a
+                                    gift is an ordinary order on these shops. */}
+                                Call {order.address.recipient_name} on{' '}
+                                <a href={`tel:${order.address.recipient_phone}`} className="text-foreground font-medium underline">
+                                    {order.address.recipient_phone}
+                                </a>
+                                {' - '}
+                                {[
+                                    order.address.address_line,
+                                    order.address.landmark,
+                                    order.address.area,
+                                    order.address.thana,
+                                    order.address.district,
+                                    order.address.postcode,
+                                ]
+                                    .filter(Boolean)
+                                    .join(', ')}
+                            </p>
+                        )}
+                        <p className="text-muted-foreground mt-1">
+                            {order.payment_method === 'cod' ? 'Cash on delivery - nothing has been paid.' : 'Payment method not recorded.'}
+                            {order.delivery_charge !== null && ` Delivery agreed at ${order.delivery_charge}.`}
+                        </p>
+                    </div>
+                )}
 
                 {/* ⚠ C-SO-3: shown beside the limit, enforced by nobody. */}
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">

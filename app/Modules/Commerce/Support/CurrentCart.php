@@ -50,6 +50,36 @@ final class CurrentCart
     }
 
     /**
+     * The basket this cookie names that has ALREADY become an order.
+     *
+     * ⭐⭐ WHY THIS IS NOT THE SAME QUESTION AS `find()`. A converted basket is
+     * deliberately not the current one - it must never be reopened and added to
+     * - but it is also not nothing, and treating it as nothing is a real defect
+     * with a real cost. A customer who double-taps Place order, or presses back
+     * and submits again, would otherwise be shown an EMPTY BASKET seconds after
+     * ordering, which reads as "my order vanished" and produces a second order
+     * or a support call. Same family as LaLaDia's BUY NOW payload being deleted
+     * on read: the state was correct and the page lied about it.
+     *
+     * ⚠ Read only, and it never touches the cookie.
+     */
+    public static function findConverted(Request $request, Store $store): ?Cart
+    {
+        $token = $request->cookie(self::cookieName($store));
+
+        if (! is_string($token) || $token === '') {
+            return null;
+        }
+
+        return Cart::query()
+            ->where('store_id', $store->id)
+            ->where('token', $token)
+            ->whereNotNull('converted_at')
+            ->with('order')
+            ->first();
+    }
+
+    /**
      * The open basket, created if there is none, with the cookie queued on the
      * response so the next request finds it again.
      */

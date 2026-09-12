@@ -82,6 +82,19 @@
         table.basket { width: 100%; border-collapse: collapse; margin: 14px 0; }
         table.basket th, table.basket td { text-align: left; padding: 10px 8px; border-bottom: 1px solid rgba(24,105,59,.14); vertical-align: top; }
         table.basket tr.problem td { background: rgba(197,163,78,.10); }
+        /* Slice 2.4, checkout. ⚠ A link styled as a button, because the one on
+           the basket navigates rather than submitting - a form there would post
+           a basket nobody had finished filling in. */
+        a.button { display: inline-block; background: var(--green); color: var(--ivory); text-decoration: none; padding: 10px 20px; border-radius: 6px; }
+        /* A fact the shop states rather than a question it asks - the district
+           already chosen, and the one payment method available. */
+        .stated { font-weight: 700; }
+        form.checkout { max-width: 560px; }
+        form.checkout p { margin: 0 0 16px; }
+        form.checkout label { display: block; margin-bottom: 4px; }
+        form.checkout input[type=text], form.checkout input[type=tel], form.checkout input[type=email],
+        form.checkout select, form.checkout textarea { width: 100%; padding: 9px; border: 1px solid rgba(24,105,59,.25); border-radius: 6px; font: inherit; }
+        form.checkout .error { display: block; margin-top: 4px; }
     </style>
 </head>
 <body>
