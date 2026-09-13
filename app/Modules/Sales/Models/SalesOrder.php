@@ -401,12 +401,30 @@ class SalesOrder extends Model
     /**
      * Will nothing more be billed on this order, so that money it still holds is
      * owed back to the customer?
+     *
+     * ⚠ Cancelled or rejected, or: no more goods can leave against it (delivered
+     * or closed short) AND everything that did leave was either invoiced or came
+     * back. Not "fully invoiced" - found by a test: a prepaid parcel only partly
+     * delivered leaves the order reading "delivered" (C-SR-8), it can neither be
+     * closed short nor re-delivered, and under "fully invoiced" the money it did
+     * not use would have sat on the order with no screen ever saying it was owed.
+     * A parcel still with the courier keeps the order open until its answer.
      */
     public function isFinishedForBilling(): bool
     {
-        return in_array($this->status, [SalesOrderStatus::Cancelled, SalesOrderStatus::Closed], true)
-            || $this->approvalRequest?->status === ApprovalStatus::Rejected
-            || $this->isFullyInvoiced();
+        if ($this->status === SalesOrderStatus::Cancelled || $this->approvalRequest?->status === ApprovalStatus::Rejected) {
+            return true;
+        }
+
+        if (! in_array($this->status, [SalesOrderStatus::Delivered, SalesOrderStatus::Closed], true)) {
+            return false;
+        }
+
+        return $this->lines()->with('deliveryLines')->get()->every(
+            fn (SalesOrderLine $line) => $line->deliveryLines->every(
+                fn (DeliveryLine $deliveryLine) => (float) $deliveryLine->quantityUninvoiced() <= 0.00005,
+            ),
+        );
     }
 
     /**

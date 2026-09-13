@@ -17,6 +17,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\CancelSalesOrder;
+use App\Modules\Sales\Actions\CloseSalesOrder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Actions\RecordDelivery;
@@ -258,6 +259,61 @@ it('settles an open invoice of the order at once when the money arrives after it
         ->and($invoice->fresh()->outstanding()->minor)->toBe(82000)
         ->and($order->fresh()->advanceHeld()->minor)->toBe(0)
         ->and($order->fresh()->stillToPay()->minor)->toBe(82000);
+});
+
+it('owes back what a partly delivered prepaid parcel did not use, once the courier has answered', function () {
+    $order = ($this->order)();
+    ($this->pay)($order, '1820');
+    $delivery = ($this->deliver)($order);
+    ($this->book)($delivery, '0');
+
+    // With the courier, the whole parcel may yet be taken: nothing is owed back.
+    expect(($this->props)($order)['payments']['refund_owed'])->toBeNull();
+
+    $this->actingAs($this->staff)->post('/sales/consignments/'.Consignment::query()->sole()->id.'/outcome', [
+        'outcome' => 'partially_delivered',
+        'outcome_on' => '2026-09-14',
+        'collected_amount' => '0',
+        'lines' => [['delivery_line_id' => $delivery->lines()->first()->id, 'taken' => '1', 'written_off' => '0']],
+    ])->assertSessionHasNoErrors();
+
+    $invoice = SalesInvoice::query()->sole();
+
+    // One jar at 850 and the whole 120 delivery charge, paid out of the advance.
+    // The returned jar leaves the order reading "delivered" (C-SR-8), so nothing
+    // more leaves against it and the 850 it did not use is the customer's.
+    expect((float) $invoice->total)->toBe(970.0)
+        ->and($invoice->outstanding()->minor)->toBe(0)
+        ->and($order->fresh()->advanceHeld()->minor)->toBe(85000)
+        ->and(($this->props)($order)['payments']['refund_owed'])->toBe('850.00')
+        ->and(($this->props)($order)['payments']['still_to_pay'])->toBe('0.00')
+        ->and(($this->reconciles)())->toBe([]);
+
+    ($this->refund)($order, '850')->assertSessionHasNoErrors();
+
+    expect($order->fresh()->advanceHeld()->minor)->toBe(0)
+        ->and(($this->reconciles)())->toBe([]);
+});
+
+it('owes back what an order closed short still holds', function () {
+    // Two jars ordered, one delivered and invoiced by hand, the rest never sent.
+    $order = ($this->order)();
+    ($this->pay)($order, '1820');
+    $delivery = ($this->deliver)($order, '1');
+
+    app(RecordSalesInvoice::class)->handle(
+        customer: $this->customer,
+        lines: DeliveryBilling::lines($delivery->fresh(['lines.product', 'lines.orderLine', 'customer']), DeliveryBilling::everythingUninvoiced($delivery), app(ResolveSellingPrice::class), Carbon::today()),
+        createdBy: $this->owner,
+        invoiceDate: '2026-09-14',
+    );
+
+    expect(($this->props)($order)['payments']['refund_owed'])->toBeNull();
+
+    app(CloseSalesOrder::class)->handle($order->fresh(), $this->owner, 'Out of stock for the second jar');
+
+    expect(($this->props)($order)['payments']['refund_owed'])->toBe('850.00')
+        ->and(($this->props)($order)['payments']['still_to_pay'])->toBe('0.00');
 });
 
 it('refuses a payment above what the order still owes, into a courier account, or for a cancelled order', function () {
