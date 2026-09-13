@@ -319,13 +319,18 @@ class ChartOfAccountsSeeder extends Seeder
         ['6336', 'Promotional Merchandise', AccountType::Expense, '6330', true, null],
         ['6337', 'Other Promotional Items', AccountType::Expense, '6330', true, null],
         ['6370', 'Courier and Delivery', AccountType::Expense, '6000', false, null],
-        ['6371', 'Courier Charge', AccountType::Expense, '6370', true, null],
+        // ⚠ Slugged on 13 Sep 2026, when a courier's payout statement started
+        // posting to them: what the courier charges to deliver, to bring a
+        // refused parcel back, and its extra charges.
+        ['6371', 'Courier Charge', AccountType::Expense, '6370', true, 'courier_charge'],
         ['6372', 'Delivery Charge', AccountType::Expense, '6370', true, null],
         ['6373', 'Free Delivery', AccountType::Expense, '6370', true, null],
-        ['6374', 'Customer Return Delivery', AccountType::Expense, '6370', true, null],
+        ['6374', 'Customer Return Delivery', AccountType::Expense, '6370', true, 'customer_return_delivery'],
         ['6375', 'Product Return Transport', AccountType::Expense, '6370', true, null],
         ['6376', 'Special Delivery', AccountType::Expense, '6370', true, null],
-        ['6377', 'Courier Adjustment', AccountType::Expense, '6370', true, null],
+        ['6377', 'Courier Adjustment', AccountType::Expense, '6370', true, 'courier_adjustment'],
+        // Joy, 13 September: the courier's cash-on-delivery fee, its own line.
+        ['6378', 'COD Handling Charge', AccountType::Expense, '6370', true, 'cod_handling_charge'],
         ['6400', 'Customer Service and Sales Adjustment', AccountType::Expense, '6000', false, null],
         ['6401', 'Customer Compensation', AccountType::Expense, '6400', true, null],
         ['6402', 'Product Replacement', AccountType::Expense, '6400', true, null],

@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
+use App\Modules\Sales\Http\Controllers\CourierStatementController;
 use App\Modules\Sales\Http\Controllers\PosShiftController;
 use App\Modules\Sales\Http\Controllers\PromotionController;
 use App\Modules\Sales\Http\Controllers\QuotationController;
@@ -163,6 +164,21 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
 
     Route::middleware('can:sales.reports.view')->group(function () {
         Route::get('consignments', [ConsignmentController::class, 'index'])->name('consignments.index');
+        Route::get('courier-statements', [CourierStatementController::class, 'index'])->name('courier-statements.index');
+        Route::get('courier-statements/{courierStatement}', [CourierStatementController::class, 'show'])
+            ->whereNumber('courierStatement')->name('courier-statements.show');
+    });
+
+    // A courier's payout: money arriving and its fees, the trust level of
+    // recording a customer receipt.
+    Route::middleware('can:sales.receipt.record')->group(function () {
+        Route::post('courier-statements', [CourierStatementController::class, 'store'])->name('courier-statements.store');
+        Route::post('courier-statements/{courierStatement}/lines/{line}/resolution', [CourierStatementController::class, 'resolve'])
+            ->whereNumber(['courierStatement', 'line'])->name('courier-statements.resolve');
+        Route::post('courier-statements/{courierStatement}/post', [CourierStatementController::class, 'post'])
+            ->whereNumber('courierStatement')->name('courier-statements.post');
+        Route::delete('courier-statements/{courierStatement}', [CourierStatementController::class, 'destroy'])
+            ->whereNumber('courierStatement')->name('courier-statements.destroy');
     });
 
     // ⚠ Registered AFTER invoices/create so the literal segment wins.

@@ -4,6 +4,9 @@ namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
+use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Sales\Actions\BookConsignment;
@@ -36,9 +39,14 @@ class ConsignmentController extends Controller
             'status' => $request->string('status')->toString() ?: ConsignmentStatus::Booked->value,
         ];
 
+        // ⭐ Courier slice C3: answered by the courier, and not yet on a posted
+        // payout statement. What the courier still owes, parcel by parcel.
+        $awaitingPayout = fn ($query) => $query->where('status', '!=', ConsignmentStatus::Booked->value)->whereDoesntHave('statementLine');
+
         $consignments = Consignment::query()
-            ->with(['courier:id,name', 'delivery:id,delivery_number,delivered_at,customer_id', 'delivery.customer:id,name', 'delivery.lines.orderLine:id,sales_order_id', 'invoice:id,invoice_number'])
-            ->when($filters['status'] !== 'all', fn ($query) => $query->where('status', $filters['status']))
+            ->with(['courier:id,name', 'delivery:id,delivery_number,delivered_at,customer_id', 'delivery.customer:id,name', 'delivery.lines.orderLine:id,sales_order_id', 'invoice:id,invoice_number', 'statementLine.statement:id,statement_reference'])
+            ->when($filters['status'] === 'awaiting_payout', $awaitingPayout)
+            ->when(! in_array($filters['status'], ['all', 'awaiting_payout'], true), fn ($query) => $query->where('status', $filters['status']))
             ->when($filters['search'], fn ($query, $search) => $query->where(
                 fn ($q) => $q->where('consignment_number', 'like', "%{$search}%")
                     ->orWhereHas('delivery', fn ($d) => $d->where('delivery_number', 'like', "%{$search}%")
@@ -63,6 +71,10 @@ class ConsignmentController extends Controller
                 'outcome_on' => $consignment->outcome_on?->toDateString(),
                 'collected_amount' => $consignment->collectedAmount()?->toTaka(),
                 'invoice' => $consignment->invoice?->only(['id', 'invoice_number']),
+                'paid_out_on' => $consignment->statementLine?->statement?->only(['id', 'statement_reference']),
+                'waiting_days' => ! $consignment->isBooked() && $consignment->statementLine === null && $consignment->outcome_on !== null
+                    ? (int) $consignment->outcome_on->diffInDays(today())
+                    : null,
             ]);
 
         return Inertia::render('sales/consignments/index', [
@@ -72,6 +84,21 @@ class ConsignmentController extends Controller
                 'value' => $status->value,
                 'label' => $status->label(),
             ]),
+            // ⭐ What each courier holds for this business, two ways. The ledger
+            // is the books; the parcels are what the courier has not paid out
+            // yet. They differ only by fees a courier netted on a statement that
+            // paid nothing out, which the books then carry as owed to it.
+            'couriers' => MoneyAccount::query()->where('type', MoneyAccountType::Courier->value)->orderBy('name')->get()
+                ->map(fn (MoneyAccount $courier) => [
+                    'id' => $courier->id,
+                    'name' => $courier->name,
+                    'held_in_books' => Money::ofMinor((int) JournalLine::query()->where('money_account_id', $courier->id)->sum('amount_minor'))->toTaka(),
+                    'awaiting_payout' => Money::sum(
+                        $awaitingPayout(Consignment::query()->where('money_account_id', $courier->id))
+                            ->get(['collected_amount'])
+                            ->map(fn (Consignment $consignment) => $consignment->collectedAmount() ?? Money::zero())
+                    )->toTaka(),
+                ]),
         ]);
     }
 

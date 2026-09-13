@@ -258,6 +258,7 @@ export function AppSidebar() {
                           ...(canViewSales ? [{ title: 'Deliveries', url: '/sales/deliveries', icon: PackageCheck }] : []),
                           // Parcels out with couriers: where their answers are entered.
                           ...(canViewSales ? [{ title: 'Parcels', url: '/sales/consignments', icon: Truck }] : []),
+                          ...(canViewSales ? [{ title: 'Courier payouts', url: '/sales/courier-statements', icon: Wallet }] : []),
                           // Goods coming back - shipped WITH its screens in one
                           // commit, same reachability rule as the order book.
                           ...(canViewSales ? [{ title: 'Returns', url: '/sales/returns', icon: Undo2 }] : []),

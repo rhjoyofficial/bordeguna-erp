@@ -54,6 +54,13 @@ class SalesAccountMappingSeeder extends Seeder
         // ⭐ A website order's agreed delivery charge, billed once on the first
         // invoice for that order (Joy, 13 September). Its own income line.
         'sales.delivery_income' => 'delivery_income',
+
+        // What a courier's payout statement charges (13 September): delivery,
+        // bringing a refused parcel back, extra charges, and its COD fee.
+        'courier.delivery_fees' => 'courier_charge',
+        'courier.return_fees' => 'customer_return_delivery',
+        'courier.additional_charges' => 'courier_adjustment',
+        'courier.cod_fees' => 'cod_handling_charge',
     ];
 
     public function run(): void

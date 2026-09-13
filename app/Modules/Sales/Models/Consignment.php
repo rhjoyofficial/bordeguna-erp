@@ -9,6 +9,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -89,6 +90,15 @@ class Consignment extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * The payout statement line that settled this parcel. A line carries its
+     * consignment only once its statement is posted.
+     */
+    public function statementLine(): HasOne
+    {
+        return $this->hasOne(CourierStatementLine::class);
     }
 
     public function isBooked(): bool

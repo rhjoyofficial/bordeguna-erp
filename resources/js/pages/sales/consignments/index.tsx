@@ -23,6 +23,17 @@ interface Consignment {
     outcome_on: string | null;
     collected_amount: string | null;
     invoice: { id: number; invoice_number: string } | null;
+    // Courier slice C3: the payout statement that settled it, or how long the
+    // courier has owed it since answering.
+    paid_out_on: { id: number; statement_reference: string } | null;
+    waiting_days: number | null;
+}
+
+interface CourierHolding {
+    id: number;
+    name: string;
+    held_in_books: string;
+    awaiting_payout: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -39,10 +50,12 @@ export default function ConsignmentsIndex({
     consignments,
     filters: initialFilters,
     statuses,
+    couriers,
 }: {
     consignments: Paginated<Consignment>;
     filters: { search: string; status: string };
     statuses: { value: string; label: string }[];
+    couriers: CourierHolding[];
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/consignments', initialFilters);
 
@@ -51,6 +64,25 @@ export default function ConsignmentsIndex({
             <Head title="Parcels" />
             <div className="flex flex-col gap-6 p-4">
                 <ReportHeading title="Parcels with couriers" />
+                {couriers.length > 0 && (
+                    <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                        {couriers.map((courier) => (
+                            <div key={courier.id} className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3">
+                                <p className="font-medium">{courier.name}</p>
+                                <p className="tabular-nums">
+                                    Parcels not yet paid out: {courier.awaiting_payout}
+                                    <span className="text-muted-foreground"> · in the books: {courier.held_in_books}</span>
+                                </p>
+                                {courier.awaiting_payout !== courier.held_in_books && (
+                                    <p className="text-muted-foreground text-xs">
+                                        The difference is fees the courier took on a statement that paid nothing out, owed to it until its next
+                                        payout.
+                                    </p>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
                 <FilterBar showClear={hasActiveFilters} onClear={resetFilters}>
                     <Input
                         placeholder="Search consignment, challan or customer"
@@ -64,6 +96,7 @@ export default function ConsignmentsIndex({
                                 {status.label}
                             </option>
                         ))}
+                        <option value="awaiting_payout">Awaiting payout</option>
                         <option value="all">All</option>
                     </SearchSelect>
                 </FilterBar>
@@ -80,6 +113,7 @@ export default function ConsignmentsIndex({
                                 <th className="p-3"></th>
                                 <th className="p-3 text-right">Collected</th>
                                 <th className="p-3">Invoice</th>
+                                <th className="p-3">Paid out</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -130,11 +164,27 @@ export default function ConsignmentsIndex({
                                             '-'
                                         )}
                                     </td>
+                                    <td className="p-3">
+                                        {consignment.paid_out_on ? (
+                                            <Link
+                                                href={route('sales.courier-statements.show', consignment.paid_out_on.id)}
+                                                className="underline underline-offset-4"
+                                            >
+                                                {consignment.paid_out_on.statement_reference}
+                                            </Link>
+                                        ) : consignment.waiting_days !== null ? (
+                                            <span className="text-muted-foreground">
+                                                waiting {consignment.waiting_days} day{consignment.waiting_days === 1 ? '' : 's'}
+                                            </span>
+                                        ) : (
+                                            '-'
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                             {consignments.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="text-muted-foreground p-6 text-center">
+                                    <td colSpan={9} className="text-muted-foreground p-6 text-center">
                                         No parcels here. A challan is handed to a courier from its order.
                                     </td>
                                 </tr>
