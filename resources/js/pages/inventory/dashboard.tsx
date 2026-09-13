@@ -65,7 +65,6 @@ function Tile({ label, value, viewAll, tone }: { label: string; value: string | 
  * show says why in one quiet line rather than drawing invented numbers.
  */
 export default function InventoryDashboard({
-    total_skus,
     in_stock_products,
     stocked_products,
     total_stock_value,

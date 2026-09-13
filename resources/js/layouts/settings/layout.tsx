@@ -24,7 +24,6 @@ import { cn } from '@/lib/utils';
 export default function SettingsLayout({
     children,
     narrow = false,
-    wide: _wide = false,
 }: {
     children: React.ReactNode;
     narrow?: boolean;

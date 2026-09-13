@@ -3,15 +3,21 @@ name: linter
 on:
   push:
     branches:
+      - master
       - develop
       - main
   pull_request:
     branches:
+      - master
       - develop
       - main
 
 permissions:
   contents: write
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality:

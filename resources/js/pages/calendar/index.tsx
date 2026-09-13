@@ -56,7 +56,6 @@ const EMPTY = {
 };
 
 export default function CalendarIndex({
-    month,
     monthLabel,
     previous,
     next,

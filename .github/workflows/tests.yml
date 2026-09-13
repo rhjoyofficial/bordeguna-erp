@@ -1,14 +1,26 @@
 name: tests
 
+# ⚠⚠ `master` was missing from both lists until 13 Sep 2026, and master is the
+# branch this project actually lives on - so CI had never run a single time and
+# every deploy was gated only by a local run. Nothing looked red because nothing
+# ran at all.
+
 on:
   push:
     branches:
+      - master
       - develop
       - main
   pull_request:
     branches:
+      - master
       - develop
       - main
+
+# A newer push to the same branch makes the older run worthless; stop paying for it.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ci:
@@ -23,7 +35,7 @@ jobs:
         with:
           php-version: 8.4
           tools: composer:v2
-          coverage: xdebug
+          coverage: none
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -49,5 +61,7 @@ jobs:
       - name: Generate Application Key
         run: php artisan key:generate
 
+      # ⚠ Parallel, and without coverage: 3,478 tests run serially under xdebug
+      # would take most of an hour per push on a private repository's minutes.
       - name: Tests
-        run: ./vendor/bin/phpunit
+        run: php artisan test --parallel
