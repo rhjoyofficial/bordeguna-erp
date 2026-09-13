@@ -102,10 +102,14 @@ it('gives every image a uuid so an unlaunched library cannot be walked', functio
 
     $media = StoreMedia::sole();
 
+    // ⛔ The id must not be the public handle. Compared as the whole last path
+    // segment: "does not contain /media/1" failed whenever the random uuid
+    // happened to start with the id's digits, about one run in sixteen.
+    $handle = basename((string) parse_url($media->url(), PHP_URL_PATH));
+
     expect($media->uuid)->toBeString()->toHaveLength(36)
-        ->and($media->url())->toContain($media->uuid)
-        // ⛔ The id must not be the public handle.
-        ->and($media->url())->not->toContain("/media/{$media->id}");
+        ->and($handle)->toBe($media->uuid)
+        ->and($handle)->not->toBe((string) $media->id);
 });
 
 it('keeps a user with no commerce permission out of the library', function () {
