@@ -16,6 +16,9 @@ interface BillableLine {
     product_sku: string;
     quantity_uninvoiced: string;
     unit_price: string | null;
+    // The discount the sales order agreed for this whole uninvoiced quantity,
+    // or null when it agreed none (website slice 2.5a).
+    agreed_discount: string | null;
     price_source: string;
 }
 
@@ -64,7 +67,10 @@ export default function InvoiceCreate({
             delivery_line_id: line.delivery_line_id,
             quantity: line.quantity_uninvoiced,
             unit_price: line.unit_price ?? '',
-            discount: '0',
+            // ⚠ EMPTY where the order agreed a discount, so the SERVER decides
+            // it for the quantity actually billed. Prefilling the full figure
+            // would carry a whole line's discount onto a partial bill.
+            discount: line.agreed_discount !== null ? '' : '0',
         })),
     });
 
@@ -87,11 +93,26 @@ export default function InvoiceCreate({
     };
 
     const included = data.lines.filter((line) => parseFloat(line.quantity || '0') > 0);
+    const billableById = new Map(billable.map((line) => [line.delivery_line_id, line]));
+    // A PREVIEW of the agreed discount for the quantity typed. The figure billed
+    // is decided by the server, where the last portion of a line takes the
+    // remainder rather than another rounded share.
+    const discountOf = (line: LineDraft) => {
+        if (line.discount !== '') {
+            return parseFloat(line.discount || '0');
+        }
+        const source = billableById.get(line.delivery_line_id);
+        const whole = parseFloat(source?.quantity_uninvoiced || '0');
+        if (!source?.agreed_discount || whole <= 0) {
+            return 0;
+        }
+        return (parseFloat(source.agreed_discount) * parseFloat(line.quantity || '0')) / whole;
+    };
     // The subtotal is net of LINE discounts, because a line discount reduces the
     // line and revenue is credited net of it. The whole-invoice discount below
     // is a different animal: contra-revenue, posted to 4210 Discounts Allowed.
     const subtotal = included.reduce(
-        (sum, line) => sum + parseFloat(line.quantity || '0') * parseFloat(line.unit_price || '0') - parseFloat(line.discount || '0'),
+        (sum, line) => sum + parseFloat(line.quantity || '0') * parseFloat(line.unit_price || '0') - discountOf(line),
         0,
     );
     const total = subtotal - parseFloat(data.invoice_discount || '0');
@@ -165,9 +186,15 @@ export default function InvoiceCreate({
                                                 <td className="p-3">
                                                     <Input
                                                         className="max-w-28"
-                                                        value={draft?.discount ?? '0'}
+                                                        value={draft?.discount ?? ''}
+                                                        placeholder={line.agreed_discount !== null ? `Agreed ${line.agreed_discount}` : undefined}
                                                         onChange={(e) => updateLine(line.delivery_line_id, { discount: e.target.value })}
                                                     />
+                                                    {line.agreed_discount !== null && (
+                                                        <p className="text-muted-foreground mt-1 text-xs">
+                                                            Leave empty to bill the discount the order agreed.
+                                                        </p>
+                                                    )}
                                                     <InputError message={errors[`lines.${index}.discount` as keyof typeof errors]} />
                                                 </td>
                                                 <td className="text-muted-foreground p-3 text-xs">{line.price_source}</td>

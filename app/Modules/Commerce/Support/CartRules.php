@@ -3,6 +3,7 @@
 namespace App\Modules\Commerce\Support;
 
 use App\Modules\Commerce\Models\Store;
+use App\Modules\Commerce\Models\StoreCombo;
 use App\Modules\Commerce\Models\StoreProduct;
 use App\Modules\Inventory\Models\Product;
 
@@ -50,5 +51,24 @@ final class CartRules
         }
 
         return null;
+    }
+
+    /**
+     * What stops a bundle going into a basket, or null (slice 2.5a).
+     *
+     * ⚠ A bundle's parts do NOT have to be published on their own. D25 calls
+     * them finished, already-sellable products, which is a fact about the
+     * product master and the price list - and a shop may reasonably sell a
+     * gift pair without listing each jar. So the parts are asked the questions
+     * `ComboPricing` asks (active, priced, available), not whether they have a
+     * page.
+     */
+    public static function refusalForCombo(Store $store, StoreCombo $combo, int $quantity = 1): ?string
+    {
+        if ($combo->store_id !== $store->id || ! $combo->isPublished()) {
+            return 'This bundle is not available on this shop.';
+        }
+
+        return ComboPricing::quote($store, $combo, $quantity)->refusal;
     }
 }

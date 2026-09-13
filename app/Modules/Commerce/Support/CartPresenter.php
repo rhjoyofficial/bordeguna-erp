@@ -85,16 +85,67 @@ final class CartPresenter
             $count += $line->quantity;
 
             $presented[] = [
+                'kind' => 'product',
                 'id' => $line->id,
                 'product_id' => $line->product_id,
+                // ⚠ Where this line's own quantity and remove forms post. A
+                // bundle line posts somewhere else, so the template must not
+                // build the address itself.
+                'action' => '/cart/lines/'.$line->id,
                 'title' => $row?->displayTitle() ?? (string) $product?->name,
                 'url' => $row === null ? null : '/products/'.$row->slug,
                 'image' => $row?->image?->toReference(),
                 'quantity' => $line->quantity,
                 'unit_price' => $price === null ? null : DocumentMoney::amount($price),
                 'line_total' => $lineTotal === null ? null : DocumentMoney::amount($lineTotal),
+                'parts' => [],
+                'saving' => null,
                 'problem' => $problem,
                 'availability' => $product === null ? null : Availability::decide($store, $product)->toArray(),
+            ];
+        }
+
+        // ⭐ Bundles, slice 2.5a. Priced through `ComboPricing` at the quantity in
+        // the basket, which is what the checkout will price them at - never the
+        // single-bundle price multiplied, because a part's quantity break can
+        // make two bundles cost less than twice one.
+        $comboLines = $cart->comboLines()->with('combo.items.product', 'combo.image')->orderBy('id')->get();
+
+        foreach ($comboLines as $line) {
+            $combo = $line->combo;
+            $quote = $combo === null ? null : ComboPricing::quote($store, $combo, $line->quantity);
+            $problem = $combo === null
+                ? 'This bundle no longer exists.'
+                : CartRules::refusalForCombo($store, $combo, $line->quantity);
+
+            $total = ($problem === null && $quote !== null) ? $quote->total : null;
+
+            if ($total !== null) {
+                $subtotal = bcadd($subtotal, $total->toTaka(), 2);
+            } else {
+                $problems++;
+            }
+
+            $count += $line->quantity;
+            $presentedCombo = $combo === null ? null : ComboPresenter::present($store, $combo);
+
+            $presented[] = [
+                'kind' => 'combo',
+                'id' => $line->id,
+                'product_id' => null,
+                'action' => '/cart/combos/'.$line->id,
+                'title' => (string) $combo?->title,
+                'url' => $combo === null ? null : '/combos/'.$combo->slug,
+                'image' => $combo?->image?->toReference(),
+                'quantity' => $line->quantity,
+                'unit_price' => $total === null ? null : ComboPresenter::each($total, $line->quantity),
+                'line_total' => $total === null ? null : DocumentMoney::amount($total->toTaka()),
+                'parts' => $presentedCombo['parts'] ?? [],
+                'saving' => ($total !== null && ! $quote->saving()->isZero())
+                    ? DocumentMoney::amount($quote->saving()->toTaka())
+                    : null,
+                'problem' => $problem,
+                'availability' => $quote?->availability(),
             ];
         }
 
@@ -131,6 +182,6 @@ final class CartPresenter
      */
     public static function count(?Cart $cart): int
     {
-        return $cart === null ? 0 : (int) $cart->lines()->sum('quantity');
+        return $cart === null ? 0 : (int) $cart->lines()->sum('quantity') + (int) $cart->comboLines()->sum('quantity');
     }
 }

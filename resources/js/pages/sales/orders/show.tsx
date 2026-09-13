@@ -21,6 +21,10 @@ interface Line {
     quantity_ordered: string;
     quantity_delivered: string;
     unit_price: string;
+    // Website slice 2.5a: a discount agreed when the order was taken, and the
+    // bundle the line was sold in. Zero and null on everything typed in here.
+    line_discount: string;
+    bundle_label: string | null;
     price_note: string | null;
     delivery_lines: {
         id: number;
@@ -217,6 +221,8 @@ export default function SalesOrderShow({
     ];
 
     const overLimit = exposure.credit_limit !== null && parseFloat(exposure.total) > parseFloat(exposure.credit_limit);
+    // Only a column when some line carries one: an order typed into the ERP never does.
+    const hasDiscount = order.lines.some((line) => parseFloat(line.line_discount) > 0);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -338,6 +344,7 @@ export default function SalesOrderShow({
                             <th className="py-2">Delivered</th>
                             <th className="py-2">Remaining</th>
                             <th className="py-2">Agreed price</th>
+                            {hasDiscount && <th className="py-2">Agreed discount</th>}
                             <th className="py-2">Why this price</th>
                         </tr>
                     </thead>
@@ -346,11 +353,13 @@ export default function SalesOrderShow({
                             <tr key={line.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2">
                                     {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>
+                                    {line.bundle_label && <div className="text-muted-foreground text-xs">Sold in {line.bundle_label}</div>}
                                 </td>
                                 <td className="py-2">{line.quantity_ordered}</td>
                                 <td className="py-2">{line.quantity_delivered}</td>
                                 <td className="py-2">{remaining(line)}</td>
                                 <td className="py-2">{line.unit_price}</td>
+                                {hasDiscount && <td className="py-2">{parseFloat(line.line_discount) > 0 ? line.line_discount : ''}</td>}
                                 <td className="text-muted-foreground py-2">{line.price_note}</td>
                             </tr>
                         ))}

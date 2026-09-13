@@ -44,7 +44,18 @@ Route::middleware('web')->group(function () {
     // every one carries the `storefront.` prefix ResolveStorefront keys on.
     // ⚠ On the ERP's own hostname these answer 404 like every storefront
     // route: the controller refuses when no store was resolved.
+    // Bundles, slice 2.5a. The addresses LaLaDia already uses.
+    Route::get('/combos', [StorefrontController::class, 'combos'])->name('storefront.combos');
+    Route::get('/combos/{slug}', [StorefrontController::class, 'combo'])
+        ->where('slug', '[a-z0-9-]+')
+        ->name('storefront.combo');
+
     Route::get('/cart', [CartController::class, 'show'])->name('storefront.cart');
+    Route::post('/cart/combos', [CartController::class, 'addCombo'])->name('storefront.cart.combos.add');
+    Route::patch('/cart/combos/{line}', [CartController::class, 'updateCombo'])
+        ->whereNumber('line')->name('storefront.cart.combos.update');
+    Route::delete('/cart/combos/{line}', [CartController::class, 'removeCombo'])
+        ->whereNumber('line')->name('storefront.cart.combos.remove');
     Route::post('/cart/lines', [CartController::class, 'add'])->name('storefront.cart.add');
     Route::patch('/cart/lines/{line}', [CartController::class, 'update'])
         ->whereNumber('line')->name('storefront.cart.update');

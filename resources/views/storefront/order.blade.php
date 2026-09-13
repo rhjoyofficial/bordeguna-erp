@@ -42,9 +42,17 @@
                 <tbody>
                 @foreach ($order['lines'] as $line)
                     <tr>
-                        <td>{{ $line['title'] }}</td>
+                        <td>
+                            {{ $line['title'] }}
+                            @if ($line['bundle'])<p class="muted">In {{ $line['bundle'] }}</p>@endif
+                        </td>
                         <td>{{ $line['quantity'] }}</td>
-                        <td>BDT {{ $line['unit_price'] }}</td>
+                        <td>
+                            BDT {{ $line['unit_price'] }}
+                            {{-- ⚠ The agreed bundle saving, stated beside the price it
+                                 came off rather than hidden inside a lower one. --}}
+                            @if ($line['discount'])<p class="muted">less BDT {{ $line['discount'] }}</p>@endif
+                        </td>
                         <td>BDT {{ $line['line_total'] }}</td>
                     </tr>
                 @endforeach

@@ -3,8 +3,10 @@
 namespace App\Modules\Commerce\Http\Controllers;
 
 use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
+use App\Modules\Commerce\Models\CartComboLine;
 use App\Modules\Commerce\Models\CartLine;
 use App\Modules\Commerce\Models\Store;
+use App\Modules\Commerce\Models\StoreCombo;
 use App\Modules\Commerce\Support\CartPresenter;
 use App\Modules\Commerce\Support\CartRules;
 use App\Modules\Commerce\Support\CurrentCart;
@@ -100,6 +102,79 @@ class CartController
     }
 
     /**
+     * A bundle into the basket (slice 2.5a).
+     *
+     * ⚠ Asked the same question the basket re-asks on every read, at the
+     * quantity the basket will hold AFTER this add - a bundle priced above its
+     * parts, or with a part off sale, is refused here with its sentence rather
+     * than accepted and then shown as a problem.
+     */
+    public function addCombo(Request $request): RedirectResponse
+    {
+        $store = $this->store($request);
+
+        $data = $request->validate([
+            'combo' => ['required', 'integer'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:'.CartRules::MAX_QUANTITY],
+        ]);
+
+        // ⛔ Scoped to THIS store, not only to the tenant. Two shops in one
+        // business must not sell each other's bundles by id.
+        $combo = StoreCombo::query()->where('store_id', $store->id)->find($data['combo']);
+
+        if ($combo === null) {
+            $this->refuse('This bundle is not available on this shop.', 'combo');
+        }
+
+        $cart = CurrentCart::open($request, $store);
+
+        /** @var CartComboLine $line */
+        $line = $cart->comboLines()->firstOrNew(['store_combo_id' => $combo->id]);
+        $quantity = (int) $line->quantity + (int) $data['quantity'];
+
+        if ($quantity > CartRules::MAX_QUANTITY) {
+            $this->refuse(sprintf('You can have at most %d of one bundle in a basket.', CartRules::MAX_QUANTITY), 'quantity');
+        }
+
+        if ($refusal = CartRules::refusalForCombo($store, $combo, $quantity)) {
+            $this->refuse($refusal, 'combo');
+        }
+
+        $line->quantity = $quantity;
+        $line->save();
+
+        return redirect('/cart')->with('cart_notice', 'Added to your basket.');
+    }
+
+    public function updateCombo(Request $request, int $line): RedirectResponse
+    {
+        $store = $this->store($request);
+
+        $data = $request->validate([
+            'quantity' => ['required', 'integer', 'min:0', 'max:'.CartRules::MAX_QUANTITY],
+        ]);
+
+        $row = $this->ownComboLine($request, $store, $line);
+
+        if ((int) $data['quantity'] === 0) {
+            $row->delete();
+        } else {
+            $row->update(['quantity' => (int) $data['quantity']]);
+        }
+
+        return redirect('/cart');
+    }
+
+    public function removeCombo(Request $request, int $line): RedirectResponse
+    {
+        $store = $this->store($request);
+
+        $this->ownComboLine($request, $store, $line)->delete();
+
+        return redirect('/cart');
+    }
+
+    /**
      * Where the basket should be delivered.
      *
      * ⭐⭐ A DISTRICT IS THE ONLY THING ACCEPTED. There is deliberately no zone,
@@ -173,6 +248,21 @@ class CartController
 
         /** @var CartLine|null $row */
         $row = $cart->lines()->whereKey($lineId)->first();
+
+        abort_if($row === null, 404);
+
+        return $row;
+    }
+
+    /** ⛔ The same rule as `ownLine()`: an id alone is never enough. */
+    private function ownComboLine(Request $request, Store $store, int $lineId): CartComboLine
+    {
+        $cart = CurrentCart::find($request, $store);
+
+        abort_if($cart === null, 404);
+
+        /** @var CartComboLine|null $row */
+        $row = $cart->comboLines()->whereKey($lineId)->first();
 
         abort_if($row === null, 404);
 

@@ -111,6 +111,12 @@ class Store extends Model
         return $this->hasMany(StoreProduct::class);
     }
 
+    /** Bundles this store sells (D25). See `StoreCombo`. */
+    public function combos(): HasMany
+    {
+        return $this->hasMany(StoreCombo::class);
+    }
+
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);

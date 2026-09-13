@@ -5,8 +5,12 @@ namespace App\Modules\Commerce\Actions;
 use App\Modules\Commerce\Models\Cart;
 use App\Modules\Commerce\Models\CartLine;
 use App\Modules\Commerce\Models\Store;
+use App\Modules\Commerce\Models\StoreCombo;
 use App\Modules\Commerce\Support\Availability;
 use App\Modules\Commerce\Support\CartRules;
+use App\Modules\Commerce\Support\CataloguePublishing;
+use App\Modules\Commerce\Support\ComboPricing;
+use App\Modules\Commerce\Support\ComboQuote;
 use App\Modules\Commerce\Support\DeliveryQuote;
 use App\Modules\Commerce\Support\ShopOrderReference;
 use App\Modules\Crm\Support\PhoneIdentity;
@@ -72,8 +76,9 @@ class PlaceWebsiteOrder
         }
 
         $lines = $cart->lines()->with('product')->orderBy('id')->get();
+        $comboLines = $cart->comboLines()->with('combo.items.product')->orderBy('id')->get();
 
-        if ($lines->isEmpty()) {
+        if ($lines->isEmpty() && $comboLines->isEmpty()) {
             $this->refuse('lines', 'Your basket is empty.');
         }
 
@@ -92,6 +97,26 @@ class PlaceWebsiteOrder
             if ($refusal = CartRules::refusalFor($store, $product)) {
                 $this->refuse('lines', $product->name.': '.$refusal);
             }
+        }
+
+        // ⭐ Bundles, slice 2.5a: re-asked at the last moment for the same
+        // reason, at the quantity in the basket. A part taken off sale, or a
+        // price-list change that has pushed a bundle above its parts, is a
+        // sentence here rather than an order at a figure nobody agreed.
+        $bundles = [];
+
+        foreach ($comboLines as $line) {
+            $combo = $line->combo;
+
+            if ($combo === null) {
+                $this->refuse('lines', 'A bundle in your basket no longer exists. Please remove it and try again.');
+            }
+
+            if ($refusal = CartRules::refusalForCombo($store, $combo, $line->quantity)) {
+                $this->refuse('lines', $combo->title.': '.$refusal);
+            }
+
+            $bundles[] = [$combo, ComboPricing::quote($store, $combo, $line->quantity)];
         }
 
         $quote = DeliveryQuote::for($store, $cart->delivery_district);
@@ -116,21 +141,55 @@ class PlaceWebsiteOrder
 
         $payment = $this->paymentMethod($input);
         $email = $this->email($input);
-        $expected = $this->promisedDate($store, $lines);
+        $expected = $this->promisedDate($store, $lines, $bundles);
 
-        return DB::transaction(function () use ($store, $cart, $lines, $quote, $destination, $payment, $email, $expected) {
+        // ⭐⭐ WHAT THE BASKET SHOWED, computed by the classes the basket used:
+        // each product at the price list at its own quantity, each bundle through
+        // `ComboPricing`. The order is checked against it below.
+        $quoted = '0';
+
+        foreach ($lines as $line) {
+            $price = CataloguePublishing::priceFor($store, $line->product, null, (string) $line->quantity);
+            $quoted = bcadd($quoted, bcmul((string) $price, (string) $line->quantity, 2), 2);
+        }
+
+        foreach ($bundles as [, $bundle]) {
+            $quoted = bcadd($quoted, $bundle->total->toTaka(), 2);
+        }
+
+        $orderLines = $lines->map(fn ($line) => [
+            'product' => $line->product,
+            'quantity' => (string) $line->quantity,
+            // ⛔ NO OVERRIDE, EVER, from a public page. An override is taken
+            // verbatim and marked "Manual override", and a stranger's browser
+            // must never be able to write one.
+            'unit_price' => null,
+        ])->all();
+
+        // ⭐⭐ A BUNDLE EXPLODES INTO ITS PARTS (D25). Each part is a real line
+        // priced by the engine like any other, so stock leaves against the jar
+        // and cost attaches to the jar; the bundle's saving travels as that
+        // line's agreed discount (Joy, 13 September) and is billed from there.
+        // ⛔ Still no unit price override: the discount is checked against the
+        // engine's own price inside `CreateSalesOrder`.
+        foreach ($bundles as [$combo, $bundle]) {
+            foreach ($bundle->parts as $part) {
+                $orderLines[] = [
+                    'product' => $part->product,
+                    'quantity' => (string) $part->quantity,
+                    'unit_price' => null,
+                    'discount' => $part->discount->toTaka(),
+                    'bundle_label' => $combo->title,
+                ];
+            }
+        }
+
+        return DB::transaction(function () use ($store, $cart, $orderLines, $quoted, $quote, $destination, $payment, $email, $expected) {
             $customer = $this->identify($store, $destination);
 
             $order = $this->orders->handle(
                 customer: $customer,
-                lines: $lines->map(fn ($line) => [
-                    'product' => $line->product,
-                    'quantity' => (string) $line->quantity,
-                    // ⛔ NO OVERRIDE, EVER, from a public page. An override is
-                    // taken verbatim and marked "Manual override", and a
-                    // stranger's browser must never be able to write one.
-                    'unit_price' => null,
-                ])->all(),
+                lines: $orderLines,
                 // ⚠ The system actor, which cannot authenticate (is_active
                 // false, random discarded password, no role, no business). A
                 // website order was typed by nobody in this company, and
@@ -153,6 +212,17 @@ class PlaceWebsiteOrder
                     destination: $destination,
                 ),
             );
+
+            // ⛔⛔ THE ORDER MUST RECORD WHAT THE BASKET QUOTED, TO THE PAISA, or
+            // it is not written. The engine priced every line again inside
+            // `CreateSalesOrder`; if a price rule changed in the moment between
+            // the two (a rule starting at midnight, an edit in the ERP), the
+            // customer would be billed a figure they never saw. Refusing rolls
+            // the whole order back, customer record included, and sends them to
+            // a basket that now shows the new figure.
+            if ($order->goodsTotal() !== $quoted) {
+                $this->refuse('lines', 'A price changed while you were ordering. Please check your basket and place the order again.');
+            }
 
             // ⚠ The contact AS TYPED stays on the basket as well as becoming a
             // customer. The cart table exists so that a basket which never
@@ -189,12 +259,20 @@ class PlaceWebsiteOrder
      * open, and a shop that has not answered it must not have a date invented
      * for it.
      *
+     * ⚠ A bundle's parts count exactly as if they had been added one by one
+     * (slice 2.5a): a bundle with a made-to-order jar in it is not ready sooner.
+     *
      * @param  Collection<int, CartLine>  $lines
+     * @param  list<array{0: StoreCombo, 1: ComboQuote}>  $bundles
      */
-    private function promisedDate(Store $store, $lines): ?string
+    private function promisedDate(Store $store, $lines, array $bundles = []): ?string
     {
-        $days = $lines
+        // ⚠ toBase(): an EMPTY Eloquent collection stays Eloquent through map(),
+        // and Eloquent's merge() expects models - so a basket holding only a
+        // bundle threw here. Found by the first bundle-only checkout test.
+        $days = $lines->toBase()
             ->map(fn ($line) => Availability::decide($store, $line->product)->leadTimeDays)
+            ->merge(array_map(fn (array $bundle) => $bundle[1]->leadTimeDays(), $bundles))
             ->filter()
             ->max();
 

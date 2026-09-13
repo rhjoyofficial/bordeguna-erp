@@ -155,7 +155,7 @@ class SalesOrder extends Model
     }
 
     /**
-     * The goods at their agreed prices.
+     * The goods at their agreed prices, net of any discount agreed per line.
      *
      * ⚠ EACH LINE IS ROUNDED BEFORE THEY ARE ADDED, deliberately, because that
      * is what a customer can check with a pencil: the page shows a figure per
@@ -168,12 +168,12 @@ class SalesOrder extends Model
      */
     public function goodsTotal(): string
     {
+        // ⚠ Net of each line's agreed discount (slice 2.5a). A bundle sold for
+        // less than its parts states the saving on the lines, so a total that
+        // added the gross figures would be the price of the parts, not the
+        // price the customer agreed.
         return $this->lines->reduce(
-            fn (string $carry, SalesOrderLine $line) => bcadd(
-                $carry,
-                bcmul((string) $line->quantity_ordered, (string) $line->unit_price, 2),
-                2,
-            ),
+            fn (string $carry, SalesOrderLine $line) => bcadd($carry, $line->netTotal()->toTaka(), 2),
             '0',
         );
     }

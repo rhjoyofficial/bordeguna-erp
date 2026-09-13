@@ -56,6 +56,20 @@ class Cart extends Model
         return $this->hasMany(CartLine::class);
     }
 
+    /**
+     * Bundles in this basket (slice 2.5a). ⚠ Kept apart from `lines()` so a
+     * product line stays "a product and a whole number of it" for every reader.
+     */
+    public function comboLines(): HasMany
+    {
+        return $this->hasMany(CartComboLine::class);
+    }
+
+    public function isEmpty(): bool
+    {
+        return ! $this->lines()->exists() && ! $this->comboLines()->exists();
+    }
+
     public function isConverted(): bool
     {
         return $this->converted_at !== null;

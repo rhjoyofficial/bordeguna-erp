@@ -5,6 +5,7 @@ use App\Modules\Commerce\Http\Controllers\MediaServeController;
 use App\Modules\Commerce\Http\Controllers\PageController;
 use App\Modules\Commerce\Http\Controllers\PageSectionController;
 use App\Modules\Commerce\Http\Controllers\StoreCatalogueController;
+use App\Modules\Commerce\Http\Controllers\StoreComboController;
 use App\Modules\Commerce\Http\Controllers\StoreController;
 use Illuminate\Support\Facades\Route;
 
@@ -68,6 +69,30 @@ Route::middleware(['web', 'auth', 'business'])->prefix('commerce')->name('commer
             ->whereNumber('store')->whereNumber('storeProduct')->name('stores.catalogue.publish');
         Route::delete('stores/{store}/catalogue/{storeProduct}', [StoreCatalogueController::class, 'destroy'])
             ->whereNumber('store')->whereNumber('storeProduct')->name('stores.catalogue.destroy');
+    });
+
+    /* -------------------------------------------------------------------- */
+    /* Bundles (website slice 2.5a) */
+    /* -------------------------------------------------------------------- */
+
+    Route::middleware('can:commerce.stores.view')->group(function () {
+        Route::get('stores/{store}/combos', [StoreComboController::class, 'index'])
+            ->whereNumber('store')->name('stores.combos');
+    });
+
+    // ⚠ Composing is content work. The PRICE inside these same requests is
+    // additionally gated by `sales.prices.manage` in the controller.
+    Route::middleware('can:commerce.content.manage')->group(function () {
+        Route::post('stores/{store}/combos', [StoreComboController::class, 'store'])
+            ->whereNumber('store')->name('stores.combos.store');
+        Route::put('stores/{store}/combos/{combo}', [StoreComboController::class, 'update'])
+            ->whereNumber('store')->whereNumber('combo')->name('stores.combos.update');
+        Route::post('stores/{store}/combos/{combo}/publish', [StoreComboController::class, 'publish'])
+            ->whereNumber('store')->whereNumber('combo')->name('stores.combos.publish');
+        Route::post('stores/{store}/combos/{combo}/unpublish', [StoreComboController::class, 'unpublish'])
+            ->whereNumber('store')->whereNumber('combo')->name('stores.combos.unpublish');
+        Route::delete('stores/{store}/combos/{combo}', [StoreComboController::class, 'destroy'])
+            ->whereNumber('store')->whereNumber('combo')->name('stores.combos.destroy');
     });
 
     Route::middleware('can:commerce.stores.publish')->group(function () {

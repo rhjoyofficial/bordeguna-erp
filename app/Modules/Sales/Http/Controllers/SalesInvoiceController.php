@@ -97,9 +97,22 @@ class SalesInvoiceController extends Controller
                 ->get();
 
             $billable = $lines->map(function (DeliveryLine $line) use ($resolver, $customer) {
+                $agreedDiscount = null;
+
                 if ($line->orderLine !== null) {
                     $price = (string) $line->orderLine->unit_price;
                     $priceSource = "Agreed on {$line->orderLine->order->order_number}";
+
+                    // ⚠ Previewed for the whole uninvoiced quantity. The screen
+                    // sends the discount back EMPTY unless somebody types one,
+                    // and the server then decides it for the quantity actually
+                    // billed - so a partial bill cannot carry a full share.
+                    $discount = $line->orderLine->discountToBill($line->quantityUninvoiced());
+                    $agreedDiscount = $discount->isZero() ? null : $discount->toTaka();
+
+                    if ($line->orderLine->bundle_label) {
+                        $priceSource .= " (in {$line->orderLine->bundle_label})";
+                    }
                 } else {
                     $resolved = $resolver->find($line->product, $customer, $line->quantityUninvoiced());
                     $price = $resolved?->unitPrice;
@@ -114,6 +127,7 @@ class SalesInvoiceController extends Controller
                     'product_sku' => $line->product->sku,
                     'quantity_uninvoiced' => $line->quantityUninvoiced(),
                     'unit_price' => $price,
+                    'agreed_discount' => $agreedDiscount,
                     'price_source' => $priceSource,
                 ];
             })->values()->all();
@@ -190,7 +204,15 @@ class SalesInvoiceController extends Controller
                         'description' => $line['description'] ?? null,
                         'quantity' => (string) $line['quantity'],
                         'unitPrice' => $unitPrice,
-                        'discount' => isset($line['discount']) ? (string) $line['discount'] : '0',
+                        // ⭐⭐ The agreed discount, the discount's C-SO-4. When the
+                        // screen types nothing, a line that traces to a sales
+                        // order bills that order's agreed discount for THIS
+                        // quantity, with the last portion taking the remainder.
+                        // A typed figure, including 0, is an override - the same
+                        // seam the price has.
+                        'discount' => isset($line['discount'])
+                            ? (string) $line['discount']
+                            : ($deliveryLine?->orderLine?->discountToBill((string) $line['quantity'])->toTaka() ?? '0'),
                     ];
                 })
                 ->values()

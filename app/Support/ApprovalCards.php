@@ -398,7 +398,10 @@ class ApprovalCards
         }
 
         if ($approvable instanceof SalesOrder) {
-            $total = $approvable->lines->sum(fn ($line) => (float) $line->quantity_ordered * (float) $line->unit_price);
+            // ⚠ Net of each line's agreed discount (website slice 2.5a). The
+            // approver is deciding whether to commit to what the customer
+            // agreed, and a bundle's parts at full price is not that figure.
+            $total = $approvable->lines->sum(fn ($line) => (float) $line->netTotal()->toTaka());
 
             return $this->card(
                 $approvalRequest,
@@ -412,9 +415,11 @@ class ApprovalCards
                 ]),
                 reason: $approvable->note,
                 lines: $approvable->lines->map(fn ($line) => [
-                    'description' => ($line->product?->name ?? 'Product').($line->product?->sku ? " ({$line->product->sku})" : ''),
-                    'quantity' => $this->qty($line->quantity_ordered).' × '.$this->money($line->unit_price),
-                    'amount' => $this->money((float) $line->quantity_ordered * (float) $line->unit_price),
+                    'description' => ($line->product?->name ?? 'Product').($line->product?->sku ? " ({$line->product->sku})" : '')
+                        .($line->bundle_label ? " - in {$line->bundle_label}" : ''),
+                    'quantity' => $this->qty($line->quantity_ordered).' × '.$this->money($line->unit_price)
+                        .($line->discount()->isZero() ? '' : ' less '.$this->money($line->discount()->toTaka())),
+                    'amount' => $this->money((float) $line->netTotal()->toTaka()),
                 ])->values()->all(),
                 viewUrl: route('sales.orders.show', $approvable),
                 approveUrl: route('sales.orders.approve', $approvable),

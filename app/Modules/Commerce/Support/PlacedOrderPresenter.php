@@ -31,15 +31,19 @@ final class PlacedOrderPresenter
 
         foreach ($order->lines as $line) {
             /** @var SalesOrderLine $line */
-            $lineTotal = bcmul((string) $line->quantity_ordered, (string) $line->unit_price, 2);
-
             $lines[] = [
                 'title' => (string) $line->product?->name,
+                // ⚠ The bundle this line was sold in, if any, so the customer
+                // recognises the thing they chose rather than a list of jars.
+                'bundle' => $line->bundle_label,
                 // ⚠ Trimmed of its trailing zeroes for a customer's eyes only.
                 // The stored quantity keeps all four places; this is a label.
                 'quantity' => rtrim(rtrim((string) $line->quantity_ordered, '0'), '.'),
                 'unit_price' => DocumentMoney::amount((string) $line->unit_price),
-                'line_total' => DocumentMoney::amount($lineTotal),
+                'discount' => $line->discount()->isZero() ? null : DocumentMoney::amount($line->discount()->toTaka()),
+                // ⚠ NET, from the model, so this column and the goods total
+                // under it are added the same way and cannot disagree.
+                'line_total' => DocumentMoney::amount($line->netTotal()->toTaka()),
             ];
         }
 

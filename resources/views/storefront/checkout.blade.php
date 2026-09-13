@@ -49,6 +49,7 @@
                         <tr @if ($line['problem']) class="problem" @endif>
                             <td>
                                 {{ $line['title'] }}
+                                @if ($line['parts'] !== [])<p class="muted">@foreach ($line['parts'] as $part){{ $part['quantity'] }} &times; {{ $part['title'] }}@if (! $loop->last), @endif @endforeach</p>@endif
                                 @if ($line['problem'])<p class="muted">{{ $line['problem'] }}</p>@endif
                             </td>
                             <td>{{ $line['quantity'] }}</td>

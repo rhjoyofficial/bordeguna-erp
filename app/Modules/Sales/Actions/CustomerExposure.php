@@ -47,9 +47,13 @@ class CustomerExposure
             ->reduce(
                 fn (Money $carry, SalesOrder $order) => $carry->plus(
                     $order->lines->reduce(
-                        fn (Money $lineCarry, $line) => $lineCarry->plus(
-                            Money::ofProduct($line->quantityRemaining(), (string) $line->unit_price)
-                        ),
+                        // ⚠ Less that quantity's share of any agreed discount
+                        // (slice 2.5a): exposure is what the customer will owe,
+                        // and a bundle saving is part of what they agreed.
+                        fn (Money $lineCarry, $line) => $lineCarry->plus(Money::ofMinor(
+                            Money::ofProduct($line->quantityRemaining(), (string) $line->unit_price)->minor
+                                - $line->discountShare($line->quantityRemaining())->minor
+                        )),
                         Money::zero(),
                     )
                 ),

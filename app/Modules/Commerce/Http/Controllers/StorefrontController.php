@@ -6,7 +6,9 @@ use App\Modules\Commerce\Enums\PageType;
 use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
 use App\Modules\Commerce\Models\Page;
 use App\Modules\Commerce\Models\Store;
+use App\Modules\Commerce\Models\StoreCombo;
 use App\Modules\Commerce\Models\StoreProduct;
+use App\Modules\Commerce\Support\ComboPresenter;
 use App\Modules\Commerce\Support\StorefrontPage;
 use App\Modules\Commerce\Support\StorefrontSeo;
 use App\Modules\Commerce\Themes\Theme;
@@ -87,6 +89,80 @@ class StorefrontController
                     StorefrontSeo::organisation($store, $request),
                     [StorefrontSeo::product($store, $product, $request)],
                 ),
+            ],
+        ]);
+    }
+
+    /**
+     * One bundle (slice 2.5a). `/combos/{slug}` is the address LaLaDia's
+     * customers and search results already know, kept one for one.
+     *
+     * ⛔ An unpublished bundle is a 404, never a preview, the rule a page and a
+     * product follow. A published one that cannot be sold right now still
+     * renders and says why, so its address is not thrown away.
+     */
+    public function combo(Request $request, string $slug): View
+    {
+        $store = $this->store($request);
+
+        $combo = StoreCombo::query()
+            ->where('store_id', $store->id)
+            ->where('slug', $slug)
+            ->whereNotNull('published_at')
+            ->first();
+
+        abort_if($combo === null, 404);
+
+        $theme = $this->theme($store);
+        $presented = ComboPresenter::present($store, $combo);
+
+        return view('storefront.combo', [
+            'store' => $store,
+            'theme' => $theme,
+            'combo' => $presented,
+            'seo' => [
+                'title' => StorefrontSeo::title($store, null, $combo->title),
+                'description' => $combo->summary ?: StorefrontSeo::description($store, null),
+                'canonical' => StorefrontSeo::canonical($store, $request),
+                'robots' => StorefrontSeo::robots($store),
+                'schemas' => StorefrontSeo::organisation($store, $request),
+            ],
+        ]);
+    }
+
+    /**
+     * Every bundle this shop sells.
+     *
+     * ⚠ Only the ones that can be sold right now. A listing is where somebody
+     * chooses; a bundle that would refuse at the button does not belong in it,
+     * while its own page stays reachable and explains itself.
+     */
+    public function combos(Request $request): View
+    {
+        $store = $this->store($request);
+
+        $combos = StoreCombo::query()
+            ->with('items.product', 'image')
+            ->where('store_id', $store->id)
+            ->whereNotNull('published_at')
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (StoreCombo $combo) => ComboPresenter::present($store, $combo))
+            ->filter(fn (array $combo) => $combo['availability']['sellable'])
+            ->values()
+            ->all();
+
+        return view('storefront.combos', [
+            'store' => $store,
+            'theme' => $this->theme($store),
+            'combos' => $combos,
+            'seo' => [
+                'title' => StorefrontSeo::title($store, null, 'Bundles'),
+                'description' => StorefrontSeo::description($store, null),
+                'canonical' => StorefrontSeo::canonical($store, $request),
+                'robots' => StorefrontSeo::robots($store),
+                'schemas' => StorefrontSeo::organisation($store, $request),
             ],
         ]);
     }

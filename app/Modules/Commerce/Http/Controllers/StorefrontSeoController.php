@@ -5,6 +5,7 @@ namespace App\Modules\Commerce\Http\Controllers;
 use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
 use App\Modules\Commerce\Models\Page;
 use App\Modules\Commerce\Models\Store;
+use App\Modules\Commerce\Models\StoreCombo;
 use App\Modules\Commerce\Models\StoreProduct;
 use App\Modules\Commerce\Support\StorefrontSeo;
 use Illuminate\Http\Request;
@@ -79,6 +80,22 @@ class StorefrontSeoController
                 $urls[] = [
                     'loc' => $base.'/products/'.$row->slug,
                     'lastmod' => $row->updated_at?->toAtomString(),
+                ];
+            }
+
+            // ⚠ Bundles (slice 2.5a): every published one answers 200, even while
+            // it cannot be sold, because its page stays and explains itself. The
+            // listing is offered only when there is something on it.
+            $combos = StoreCombo::query()->where('store_id', $store->id)->whereNotNull('published_at')->get();
+
+            if ($combos->isNotEmpty()) {
+                $urls[] = ['loc' => $base.'/combos', 'lastmod' => null];
+            }
+
+            foreach ($combos as $combo) {
+                $urls[] = [
+                    'loc' => $base.'/combos/'.$combo->slug,
+                    'lastmod' => $combo->updated_at?->toAtomString(),
                 ];
             }
         }

@@ -52,6 +52,13 @@
                                 @else
                                     {{ $line['title'] }}
                                 @endif
+                                @if ($line['parts'] !== [])
+                                    {{-- A bundle lists what is in it, so the customer can see what they chose. --}}
+                                    <p class="muted">@foreach ($line['parts'] as $part){{ $part['quantity'] }} &times; {{ $part['title'] }}@if (! $loop->last), @endif @endforeach</p>
+                                @endif
+                                @if ($line['saving'])
+                                    <p class="muted">You save BDT {{ $line['saving'] }}</p>
+                                @endif
                                 @if ($line['problem'])
                                     <p class="muted">{{ $line['problem'] }}</p>
                                 @elseif ($line['availability']['message'] ?? null)
@@ -60,7 +67,7 @@
                             </td>
                             <td>@if ($line['unit_price'])BDT {{ $line['unit_price'] }}@else<span class="muted">&mdash;</span>@endif</td>
                             <td>
-                                <form method="post" action="/cart/lines/{{ $line['id'] }}" class="inline">
+                                <form method="post" action="{{ $line['action'] }}" class="inline">
                                     @csrf
                                     @method('PATCH')
                                     <input type="number" name="quantity" value="{{ $line['quantity'] }}" min="0" max="99" aria-label="Quantity">
@@ -69,7 +76,7 @@
                             </td>
                             <td>@if ($line['line_total'])BDT {{ $line['line_total'] }}@else<span class="muted">&mdash;</span>@endif</td>
                             <td>
-                                <form method="post" action="/cart/lines/{{ $line['id'] }}" class="inline">
+                                <form method="post" action="{{ $line['action'] }}" class="inline">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit">Remove</button>

@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Support\FiscalYear;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Actions\NotifyApprovers;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Inventory\Models\Product;
@@ -41,7 +42,7 @@ class CreateSalesOrder
     ) {}
 
     /**
-     * @param  array<int, array{product: Product, quantity: string, unit_price?: string|null}>  $lines
+     * @param  array<int, array{product: Product, quantity: string, unit_price?: string|null, discount?: string|null, bundle_label?: string|null}>  $lines
      *
      * @throws ValidationException
      * @throws NoSellingPriceException
@@ -145,7 +146,7 @@ class CreateSalesOrder
                 ]);
             }
 
-            foreach ($lines as $entry) {
+            foreach ($lines as $index => $entry) {
                 // ⚠⚠ ONE pricing engine. An override is taken verbatim and
                 // marked as such; anything else is the resolver's answer AT THE
                 // ORDER DATE, for THIS customer, in THIS quantity - and the
@@ -179,12 +180,34 @@ class CreateSalesOrder
                     $priceNote = $resolved->explain();
                 }
 
+                // ⚠ An agreed discount is checked against the price the ENGINE
+                // just resolved, not against a figure the caller computed. The
+                // same two refusals the invoice makes, for the same reasons: a
+                // negative discount is a surcharge wearing the wrong name, and
+                // one larger than the line is a refund, not a discount.
+                $discount = Money::ofTaka((string) ($entry['discount'] ?? '0'));
+                $gross = Money::ofProduct((string) $entry['quantity'], (string) $unitPrice);
+
+                if ($discount->minor < 0) {
+                    throw ValidationException::withMessages([
+                        "lines.{$index}.discount" => 'A discount cannot be negative.',
+                    ]);
+                }
+
+                if ($discount->minor > $gross->minor) {
+                    throw ValidationException::withMessages([
+                        "lines.{$index}.discount" => "The discount on {$entry['product']->name} is larger than the line itself.",
+                    ]);
+                }
+
                 $order->lines()->create([
                     'business_id' => $order->business_id,
                     'product_id' => $entry['product']->id,
                     'quantity_ordered' => $entry['quantity'],
                     'unit_price' => $unitPrice,
+                    'line_discount' => $discount->toTaka(),
                     'price_note' => $priceNote,
+                    'bundle_label' => $entry['bundle_label'] ?? null,
                 ]);
             }
 
