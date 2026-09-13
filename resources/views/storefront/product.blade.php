@@ -32,10 +32,11 @@
 
                 @if ($product['availability']['sellable'])
                     @if ($product['availability']['message'])
-                        {{-- ⚠ "Made to order" is a fact about stock, said plainly,
-                             and it NEVER invents a date the shop did not record. --}}
+                        {{-- ⚠ "Made to order" is a fact about stock, said plainly. --}}
                         <p class="muted">{{ $product['availability']['message'] }}</p>
                     @endif
+                    {{-- ⭐ D24: the shop's ONE delivery promise, counted from confirmation. --}}
+                    <p class="muted">{{ $store->deliveryPromise() }}</p>
                     <form method="post" action="/cart/lines" class="add-to-basket">
                         @csrf
                         <input type="hidden" name="product" value="{{ $product['id'] }}">

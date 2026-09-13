@@ -85,7 +85,6 @@ final class ComboPricing
                 unitPrice: $unitPrice,
                 gross: Money::ofProduct((string) $partQuantity, $unitPrice),
                 discount: Money::zero(),
-                leadTimeDays: $decision->leadTimeDays,
                 madeToOrder: $decision->madeToOrder,
             );
         }

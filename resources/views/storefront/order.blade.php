@@ -35,6 +35,16 @@
                 Nothing has been charged &mdash; you pay the rider when the parcel arrives.
             </p>
 
+            {{-- ⭐ D24: the window this order was PROMISED (frozen on the order), and the
+                 date it became once somebody confirmed it. Before confirmation there is
+                 no date to state, and the page does not invent one. --}}
+            @if ($order['promise'])
+                <p class="muted">
+                    {{ $order['promise'] }}
+                    @if ($order['expected_by'])Confirmed: expect it by {{ $order['expected_by'] }}.@endif
+                </p>
+            @endif
+
             <table class="basket">
                 <thead>
                     <tr><th>Item</th><th>Quantity</th><th>Price</th><th>Total</th></tr>

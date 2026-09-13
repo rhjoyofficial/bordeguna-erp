@@ -157,3 +157,24 @@ it('makes the first zone of a store with none its catch-all', function () {
 
     expect(DeliveryQuote::for($this->store, 'Sylhet')->charge())->toBe('100.00');
 });
+
+it('lets an Owner or Manager set the shop delivery promise, fastest first', function () {
+    // ⭐ D24: one window in hours after confirmation, 24 to 72 unless changed.
+    expect($this->store->fresh()->deliveryPromise())->toBe('Delivered within 24 to 72 hours after we confirm your order.');
+
+    ($this->asRole)('Manager')
+        ->put(route('commerce.stores.update', $this->store), [
+            'name' => 'Bionic Garden', 'availability_policy' => 'status_based',
+            'delivery_promise_min_hours' => 48, 'delivery_promise_max_hours' => 24,
+        ])
+        ->assertSessionHasErrors('delivery_promise_max_hours');
+
+    ($this->asRole)('Manager')
+        ->put(route('commerce.stores.update', $this->store), [
+            'name' => 'Bionic Garden', 'availability_policy' => 'status_based',
+            'delivery_promise_min_hours' => 24, 'delivery_promise_max_hours' => 48,
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($this->store->fresh()->deliveryPromise())->toBe('Delivered within 24 to 48 hours after we confirm your order.');
+});

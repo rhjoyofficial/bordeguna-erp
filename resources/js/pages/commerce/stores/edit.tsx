@@ -30,6 +30,8 @@ interface Store {
     seo_description: string | null;
     is_indexable: boolean;
     availability_policy: string;
+    delivery_promise_min_hours: number;
+    delivery_promise_max_hours: number;
     theme_key: string | null;
     theme_name: string | null;
     status: string;
@@ -120,6 +122,8 @@ export default function StoreEdit({
         seo_title: store.seo_title ?? '',
         seo_description: store.seo_description ?? '',
         availability_policy: store.availability_policy,
+        delivery_promise_min_hours: String(store.delivery_promise_min_hours),
+        delivery_promise_max_hours: String(store.delivery_promise_max_hours),
         theme_key: store.theme_key ?? '',
         referral_cookie_name: store.referral_cookie_name ?? '',
         webhook_signature_header: store.webhook_signature_header ?? '',
@@ -287,6 +291,37 @@ export default function StoreEdit({
                                 </SelectContent>
                             </Select>
                             <InputError message={settings.errors.availability_policy} />
+                        </div>
+
+                        {/* ⭐ D24: one shop-wide promise, counted from confirmation, with no
+                            product exceptions. Shown on the shop and written on each order. */}
+                        <div className="grid gap-2">
+                            <Label>Delivery promise (hours after confirmation)</Label>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    className="w-24"
+                                    type="number"
+                                    min={1}
+                                    max={720}
+                                    aria-label="Fastest"
+                                    value={settings.data.delivery_promise_min_hours}
+                                    onChange={(e) => settings.setData('delivery_promise_min_hours', e.target.value)}
+                                />
+                                <span className="text-muted-foreground text-sm">to</span>
+                                <Input
+                                    className="w-24"
+                                    type="number"
+                                    min={1}
+                                    max={720}
+                                    aria-label="Slowest"
+                                    value={settings.data.delivery_promise_max_hours}
+                                    onChange={(e) => settings.setData('delivery_promise_max_hours', e.target.value)}
+                                />
+                            </div>
+                            <p className="text-muted-foreground text-xs">
+                                A confirmed order is expected by confirmation time plus the slower figure.
+                            </p>
+                            <InputError message={settings.errors.delivery_promise_min_hours || settings.errors.delivery_promise_max_hours} />
                         </div>
 
                         <div className="grid gap-2">

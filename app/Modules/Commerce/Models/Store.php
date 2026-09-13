@@ -39,6 +39,9 @@ class Store extends Model
         'order_prefix',
         'price_group_id',
         'availability_policy',
+        // D24: one delivery window, in hours after confirmation.
+        'delivery_promise_min_hours',
+        'delivery_promise_max_hours',
         'theme_key',
         'seo_title',
         'seo_description',
@@ -58,6 +61,8 @@ class Store extends Model
             'status' => StoreStatus::class,
             'availability_policy' => AvailabilityPolicy::class,
             'features' => 'array',
+            'delivery_promise_min_hours' => 'integer',
+            'delivery_promise_max_hours' => 'integer',
             'is_indexable' => 'boolean',
         ];
     }
@@ -109,6 +114,25 @@ class Store extends Model
     public function products(): HasMany
     {
         return $this->hasMany(StoreProduct::class);
+    }
+
+    /**
+     * The delivery window this shop promises, as a customer reads it.
+     *
+     * ⭐ D24: one shop-wide promise, counted from CONFIRMATION, with no product
+     * exceptions. It is a promise about delivery, not about making the goods,
+     * so it is said the same way whether the jar is on the shelf or not.
+     */
+    public function deliveryPromise(): string
+    {
+        return self::promiseSentence((int) $this->delivery_promise_min_hours, (int) $this->delivery_promise_max_hours);
+    }
+
+    public static function promiseSentence(int $minHours, int $maxHours): string
+    {
+        $window = $minHours === $maxHours ? "{$maxHours} hours" : "{$minHours} to {$maxHours} hours";
+
+        return "Delivered within {$window} after we confirm your order.";
     }
 
     /** Delivery bands this store charges (slice 2.3). See `DeliveryQuote`. */

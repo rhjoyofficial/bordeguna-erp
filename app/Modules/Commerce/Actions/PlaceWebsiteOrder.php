@@ -4,15 +4,11 @@ namespace App\Modules\Commerce\Actions;
 
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Commerce\Models\Cart;
-use App\Modules\Commerce\Models\CartLine;
 use App\Modules\Commerce\Models\Store;
-use App\Modules\Commerce\Models\StoreCombo;
 use App\Modules\Commerce\Models\StoreCoupon;
-use App\Modules\Commerce\Support\Availability;
 use App\Modules\Commerce\Support\CartRules;
 use App\Modules\Commerce\Support\CataloguePublishing;
 use App\Modules\Commerce\Support\ComboPricing;
-use App\Modules\Commerce\Support\ComboQuote;
 use App\Modules\Commerce\Support\CouponPricing;
 use App\Modules\Commerce\Support\DeliveryQuote;
 use App\Modules\Commerce\Support\ShopOrderReference;
@@ -24,7 +20,6 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\SalesOrderDestination;
 use App\Modules\Sales\Support\SalesOrderOrigin;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -144,7 +139,6 @@ class PlaceWebsiteOrder
 
         $payment = $this->paymentMethod($input);
         $email = $this->email($input);
-        $expected = $this->promisedDate($store, $lines, $bundles);
 
         // ⭐⭐ WHAT THE BASKET SHOWED, computed by the classes the basket used:
         // each product at the price list at its own quantity, each bundle through
@@ -195,7 +189,7 @@ class PlaceWebsiteOrder
             }
         }
 
-        return DB::transaction(function () use ($store, $cart, $orderLines, $quoted, $quote, $destination, $payment, $email, $expected, $couponProducts, $couponCombos) {
+        return DB::transaction(function () use ($store, $cart, $orderLines, $quoted, $quote, $destination, $payment, $email, $couponProducts, $couponCombos) {
             $customer = $this->identify($store, $destination);
 
             // ⭐⭐ THE COUPON, slice 2.5b, decided HERE, inside the transaction,
@@ -259,9 +253,11 @@ class PlaceWebsiteOrder
                 // web order is decided when somebody picks the goods, and
                 // committing one here would be a guess made by a shopper.
                 warehouse: null,
-                // ⚠ What the SHOP PROMISED, recorded on the document that is
-                // the promise. See promisedDate().
-                expectedDate: $expected,
+                // ⚠ No date yet, deliberately. D24: the shop's promise counts
+                // from CONFIRMATION, so the date is written by ApproveSalesOrder
+                // when somebody confirms the order; the window itself is frozen
+                // on the order through the origin below.
+                expectedDate: null,
                 origin: SalesOrderOrigin::website(
                     store: $store,
                     shopReference: ShopOrderReference::mint($store),
@@ -297,46 +293,6 @@ class PlaceWebsiteOrder
 
             return $order;
         });
-    }
-
-    /**
-     * The date the shop has already told this customer to expect.
-     *
-     * ⭐⭐ IT IS NOT A NEW RULE, IT IS NOT LOSING ONE. The product page tells a
-     * buyer "made to order, ready in N days" from `products.lead_time_days`
-     * (slice 2.1), and until now nothing carried that sentence onto the order -
-     * so the one document that IS the promise left `expected_date` empty on
-     * exactly the orders that carry a promise, and nobody picking the goods knew
-     * what the customer had been told.
-     *
-     * ⚠ The LONGEST lead time across the basket wins, because this ships as one
-     * parcel: an order is ready when its slowest item is. Taking the shortest
-     * would promise a date the shop cannot meet.
-     *
-     * ⚠ Null when nothing in the basket is made to order, or when the products
-     * that are carry no lead time. A null promises nothing, which is the whole
-     * reason that column is nullable - Q7 (who maintains lead time) is still
-     * open, and a shop that has not answered it must not have a date invented
-     * for it.
-     *
-     * ⚠ A bundle's parts count exactly as if they had been added one by one
-     * (slice 2.5a): a bundle with a made-to-order jar in it is not ready sooner.
-     *
-     * @param  Collection<int, CartLine>  $lines
-     * @param  list<array{0: StoreCombo, 1: ComboQuote}>  $bundles
-     */
-    private function promisedDate(Store $store, $lines, array $bundles = []): ?string
-    {
-        // ⚠ toBase(): an EMPTY Eloquent collection stays Eloquent through map(),
-        // and Eloquent's merge() expects models - so a basket holding only a
-        // bundle threw here. Found by the first bundle-only checkout test.
-        $days = $lines->toBase()
-            ->map(fn ($line) => Availability::decide($store, $line->product)->leadTimeDays)
-            ->merge(array_map(fn (array $bundle) => $bundle[1]->leadTimeDays(), $bundles))
-            ->filter()
-            ->max();
-
-        return $days === null ? null : now()->addDays((int) $days)->toDateString();
     }
 
     /**

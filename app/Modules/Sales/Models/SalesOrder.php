@@ -55,6 +55,8 @@ class SalesOrder extends Model
         'delivery_charge',
         'order_discount',
         'coupon_code',
+        'delivery_promise_min_hours',
+        'delivery_promise_max_hours',
         'payment_method',
         'status',
         'note',
@@ -75,6 +77,8 @@ class SalesOrder extends Model
             // in every test that guards it.
             'delivery_charge' => 'decimal:2',
             'order_discount' => 'decimal:4',
+            'delivery_promise_min_hours' => 'integer',
+            'delivery_promise_max_hours' => 'integer',
         ];
     }
 
@@ -161,6 +165,19 @@ class SalesOrder extends Model
             (string) ($this->delivery_charge ?? '0'),
             2,
         );
+    }
+
+    /**
+     * The delivery window this order was promised, as a sentence, or null for an
+     * order that promised none (every order typed into the ERP).
+     */
+    public function deliveryPromise(): ?string
+    {
+        if ($this->delivery_promise_max_hours === null) {
+            return null;
+        }
+
+        return Store::promiseSentence((int) $this->delivery_promise_min_hours, (int) $this->delivery_promise_max_hours);
     }
 
     /**

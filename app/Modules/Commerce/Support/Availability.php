@@ -79,7 +79,10 @@ final class Availability
             // stock, not about the policy. A status_based shop that HAS the
             // goods should not tell a buyer to wait.
             madeToOrder: ! $hasStock,
-            leadTimeDays: $hasStock ? null : $product->lead_time_days,
+            // ⚠ No lead time here any more. D24 (confirmed 13 September): the shop
+            // makes ONE delivery promise, counted from confirmation, and states it
+            // itself - `Store::deliveryPromise()`. `products.lead_time_days` is
+            // kept, unused, for the day a product genuinely needs an exception.
         );
     }
 }

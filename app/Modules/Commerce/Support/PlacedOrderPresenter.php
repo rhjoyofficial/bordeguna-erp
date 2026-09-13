@@ -68,6 +68,10 @@ final class PlacedOrderPresenter
                 ? null
                 : DocumentMoney::amount($order->orderDiscount()->toTaka()),
             'coupon_code' => $order->coupon_code,
+            // D24: the promise this order was given, and the date it became at
+            // confirmation (null until somebody confirms it).
+            'promise' => $order->deliveryPromise(),
+            'expected_by' => $order->expected_date?->format('j F Y'),
             'delivery_charge' => $order->delivery_charge === null
                 ? null
                 : DocumentMoney::amount((string) $order->delivery_charge),

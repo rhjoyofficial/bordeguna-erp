@@ -205,6 +205,8 @@
                              a disabled radio button is a promise the shop cannot
                              keep today. --}}
                         <p class="stated">Cash on delivery &mdash; pay the rider when your parcel arrives.</p>
+                        {{-- ⭐ D24: said again on the page where somebody commits. --}}
+                        <p class="stated">{{ $store->deliveryPromise() }}</p>
                         <input type="hidden" name="payment_method" value="cod">
                         @error('payment_method')<span class="error">{{ $message }}</span>@enderror
 

@@ -162,9 +162,9 @@ final class StorefrontPage
             // whatever the stock says: the cart refuses it, so the page must
             // not offer it.
             'availability' => $row->product === null
-                ? ['sellable' => false, 'message' => null, 'made_to_order' => false, 'lead_time_days' => null]
+                ? ['sellable' => false, 'message' => null, 'made_to_order' => false]
                 : ($price === null
-                    ? ['sellable' => false, 'message' => null, 'made_to_order' => false, 'lead_time_days' => null]
+                    ? ['sellable' => false, 'message' => null, 'made_to_order' => false]
                     : Availability::decide($store, $row->product)->toArray()),
         ];
     }

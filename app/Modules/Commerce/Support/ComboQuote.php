@@ -35,17 +35,6 @@ final class ComboQuote
     }
 
     /**
-     * ⚠ The LONGEST lead time among the parts, because a bundle ships as one
-     * parcel - the rule `PlaceWebsiteOrder::promisedDate()` applies to a basket.
-     */
-    public function leadTimeDays(): ?int
-    {
-        $days = array_filter(array_map(fn (ComboPart $part) => $part->leadTimeDays, $this->parts));
-
-        return $days === [] ? null : max($days);
-    }
-
-    /**
      * Whether the bundle can be sold, and what to tell a buyer about waiting,
      * in the shape `AvailabilityDecision::toArray()` gives a product - so a
      * template draws a bundle and a product with the same keys.
@@ -58,7 +47,6 @@ final class ComboQuote
             sellable: $this->sellable(),
             reason: $this->refusal,
             madeToOrder: $madeToOrder,
-            leadTimeDays: $madeToOrder ? $this->leadTimeDays() : null,
         ))->toArray();
     }
 }

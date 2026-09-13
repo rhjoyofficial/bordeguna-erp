@@ -333,9 +333,14 @@ export default function ProductsIndex({
                             max={365}
                             value={data.lead_time_days}
                             onChange={(e) => setData('lead_time_days', e.target.value)}
-                            placeholder="blank = promise nothing"
+                            placeholder="not used by the shops"
                         />
-                        <p className="text-muted-foreground text-xs">Shown on the website only when a sale is taken with no stock on hand.</p>
+                        {/* ⚠ D24 (Joy, confirmed 13 September): each shop makes ONE delivery
+                            promise, set on the shop's own screen. This field is kept for the
+                            day a product genuinely needs an exception, and nothing reads it. */}
+                        <p className="text-muted-foreground text-xs">
+                            Not shown on the shops: each shop promises one delivery window, set on the shop screen.
+                        </p>
                         <InputError message={errors.lead_time_days} />
                     </div>
                     <div className="grid gap-2">

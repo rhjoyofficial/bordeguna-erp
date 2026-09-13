@@ -50,6 +50,9 @@ interface Order {
     // Website slice 2.5b: a coupon's discount on the whole order, and its code.
     order_discount: string;
     coupon_code: string | null;
+    // D24: the delivery window this order was promised, frozen on the order.
+    delivery_promise_min_hours: number | null;
+    delivery_promise_max_hours: number | null;
     payment_method: string | null;
     store: { id: number; name: string } | null;
     address: {
@@ -293,6 +296,15 @@ export default function SalesOrderShow({
                             {order.payment_method === 'cod' ? 'Cash on delivery - nothing has been paid.' : 'Payment method not recorded.'}
                             {order.delivery_charge !== null && ` Delivery agreed at ${order.delivery_charge}.`}
                         </p>
+                        {order.delivery_promise_max_hours !== null && (
+                            <p className="mt-1">
+                                Promised delivery within {order.delivery_promise_min_hours} to {order.delivery_promise_max_hours} hours after
+                                confirmation
+                                {order.expected_date
+                                    ? `: expected by ${order.expected_date}.`
+                                    : '. Approving this order confirms it and sets the date.'}
+                            </p>
+                        )}
                         {parseFloat(order.order_discount) > 0 && (
                             <p className="mt-1">
                                 Code {order.coupon_code}: {order.order_discount} off the whole order, billed on the invoice as a discount allowed.

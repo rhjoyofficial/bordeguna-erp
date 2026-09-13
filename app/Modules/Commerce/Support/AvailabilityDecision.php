@@ -16,16 +16,14 @@ final readonly class AvailabilityDecision
         public bool $sellable,
         public ?string $reason = null,
         public bool $madeToOrder = false,
-        public ?int $leadTimeDays = null,
     ) {}
 
     /**
      * The sentence a storefront shows. Null when there is nothing worth saying,
      * which is the ordinary case of a thing being in stock.
      *
-     * ⛔ It NEVER invents a date. A made-to-order product with no lead time
-     * recorded says it is made to order and stops there, because "ships in a
-     * few days" is a promise somebody would then have to keep.
+     * ⛔ It NEVER states a date. When the goods arrive is the shop's ONE promise
+     * (D24, `Store::deliveryPromise()`), said once by the page, not per product.
      */
     public function message(): ?string
     {
@@ -37,16 +35,14 @@ final readonly class AvailabilityDecision
             return null;
         }
 
-        return $this->leadTimeDays === null
-            ? 'Made to order.'
-            : sprintf('Made to order, ready in about %d day%s.', $this->leadTimeDays, $this->leadTimeDays === 1 ? '' : 's');
+        return 'Made to order.';
     }
 
     /**
-     * The shape a template receives. ⚠ Only these four facts: a theme decides
+     * The shape a template receives. ⚠ Only these three facts: a theme decides
      * how to say them and never re-derives them from stock.
      *
-     * @return array{sellable: bool, message: ?string, made_to_order: bool, lead_time_days: ?int}
+     * @return array{sellable: bool, message: ?string, made_to_order: bool}
      */
     public function toArray(): array
     {
@@ -54,7 +50,6 @@ final readonly class AvailabilityDecision
             'sellable' => $this->sellable,
             'message' => $this->message(),
             'made_to_order' => $this->madeToOrder,
-            'lead_time_days' => $this->leadTimeDays,
         ];
     }
 }

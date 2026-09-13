@@ -95,7 +95,7 @@ function basketOf(string $token): ?Cart
 }
 
 /* -------------------------------------------------------------------- */
-/* Availability: the policy, and what it lets a shop say                 */
+/* Availability: the policy, and what it lets a shop say */
 /* -------------------------------------------------------------------- */
 
 it('keeps selling at zero on a website, because the goods are made to order', function () {
@@ -134,14 +134,16 @@ it('never lets a product override widen what a channel will sell', function () {
     expect(Availability::decide($this->store->fresh(), $this->product->fresh())->sellable)->toBeFalse();
 });
 
-it('promises a date only when somebody recorded one', function () {
-    // ⛔ "Ships in a few days" is a promise somebody would then have to keep.
+it('says a product is made to order and never states a date of its own', function () {
+    // ⭐ D24 (Joy, confirmed 13 September): the SHOP makes one delivery promise,
+    // counted from confirmation. A product's own lead time is kept in the model
+    // for a future exception and no longer reaches the page - this used to say
+    // "ready in about 3 days", which contradicted the shop's promise.
     expect(Availability::decide($this->store, $this->product)->message())->toBe('Made to order.');
 
     $this->product->update(['lead_time_days' => 3]);
 
-    expect(Availability::decide($this->store, $this->product->fresh())->message())
-        ->toBe('Made to order, ready in about 3 days.');
+    expect(Availability::decide($this->store, $this->product->fresh())->message())->toBe('Made to order.');
 });
 
 it('keeps an out-of-season product URL alive instead of throwing it away', function () {
@@ -156,7 +158,7 @@ it('keeps an out-of-season product URL alive instead of throwing it away', funct
 });
 
 /* -------------------------------------------------------------------- */
-/* The basket                                                            */
+/* The basket */
 /* -------------------------------------------------------------------- */
 
 it('keeps a basket across a reload and a new tab on the same browser', function () {

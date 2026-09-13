@@ -191,31 +191,37 @@ it('records a destination a courier can actually route, with the postcode derive
     expect($address->postcode)->toBe(BdGeo::postcodeFor('Bagerhat', 'Fakirhat'));
 });
 
-it('records the delivery date the shop already promised the customer', function () {
-    // ⭐ The product page says "made to order, ready in N days" from
-    // `products.lead_time_days`. Until this test, nothing carried that sentence
-    // onto the order - so the one document that IS the promise left
-    // `expected_date` empty on exactly the orders that carry a promise, and
-    // whoever picks the goods had no idea what the buyer had been told.
+it('freezes the shop delivery promise on the order and writes no date before confirmation', function () {
+    // ⭐ D24: one shop-wide window, counted from CONFIRMATION. The order keeps the
+    // window it was given - a shop changing its promise next week must not
+    // rewrite this one - and the date waits for somebody to confirm the order.
+    $this->store->update(['delivery_promise_min_hours' => 24, 'delivery_promise_max_hours' => 72]);
+    // A product's own lead time is not the promise any more, and is ignored.
     $this->product->forceFill(['lead_time_days' => 7])->save();
 
     $token = readyBasket();
     checkoutSameBrowser($token)->post('http://shop.test/checkout', $this->address);
 
-    // ⚠ Made to order because the warehouse holds none of it, which is the
-    // ordinary state of this catalogue - the ERP has taken no stock in yet.
-    expect(SalesOrder::query()->sole()->expected_date?->toDateString())
-        ->toBe(now()->addDays(7)->toDateString());
+    $this->store->update(['delivery_promise_max_hours' => 120]);
+
+    $order = SalesOrder::query()->sole();
+
+    expect($order->delivery_promise_min_hours)->toBe(24)
+        ->and($order->delivery_promise_max_hours)->toBe(72)
+        ->and($order->expected_date)->toBeNull()
+        ->and($order->deliveryPromise())->toBe('Delivered within 24 to 72 hours after we confirm your order.');
 });
 
-it('promises nothing when the shop has set no lead time', function () {
-    // ⚠ Null promises nothing, which is why that column is nullable. Q7 - who
-    // maintains lead time - is still open, and a shop that has not answered it
-    // must not have a date invented on its behalf.
-    $token = readyBasket();
-    checkoutSameBrowser($token)->post('http://shop.test/checkout', $this->address);
+it('states the shop delivery promise on the product page and at checkout', function () {
+    $this->store->update(['delivery_promise_min_hours' => 24, 'delivery_promise_max_hours' => 48]);
 
-    expect(SalesOrder::query()->sole()->expected_date)->toBeNull();
+    $this->get('http://shop.test/products/sundarban-honey')
+        ->assertOk()
+        ->assertSee('Delivered within 24 to 48 hours after we confirm your order.');
+
+    checkoutSameBrowser(readyBasket())->get('http://shop.test/checkout')
+        ->assertOk()
+        ->assertSee('Delivered within 24 to 48 hours after we confirm your order.');
 });
 
 it('moves no stock and posts no journal, because an order is a promise', function () {

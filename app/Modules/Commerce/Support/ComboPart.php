@@ -16,7 +16,6 @@ final class ComboPart
         public readonly string $unitPrice,
         public readonly Money $gross,
         public readonly Money $discount,
-        public readonly ?int $leadTimeDays,
         public readonly bool $madeToOrder = false,
     ) {}
 
@@ -27,6 +26,6 @@ final class ComboPart
 
     public function withDiscount(Money $discount): self
     {
-        return new self($this->product, $this->quantity, $this->unitPrice, $this->gross, $discount, $this->leadTimeDays, $this->madeToOrder);
+        return new self($this->product, $this->quantity, $this->unitPrice, $this->gross, $discount, $this->madeToOrder);
     }
 }

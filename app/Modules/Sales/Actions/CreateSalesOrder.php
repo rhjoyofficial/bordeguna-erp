@@ -134,6 +134,10 @@ class CreateSalesOrder
                 // engine has priced them.
                 'order_discount' => Money::ofTaka($origin?->orderDiscount ?? '0')->toTaka(),
                 'coupon_code' => $origin?->couponCode,
+                // ⚠ The promise the shop made, frozen; the date is written at
+                // confirmation by ApproveSalesOrder, where the promise starts.
+                'delivery_promise_min_hours' => $origin?->promiseMinHours,
+                'delivery_promise_max_hours' => $origin?->promiseMaxHours,
                 'payment_method' => $origin?->paymentMethod,
                 'status' => SalesOrderStatus::Open,
                 'note' => $note,

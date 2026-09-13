@@ -129,6 +129,10 @@ class StoreController extends Controller
             // means RETAIL, decided in one place by the price resolver.
             'price_group_id' => ['nullable', 'integer', Rule::exists('price_groups', 'id')->where('business_id', $this->businessId())],
             'availability_policy' => ['required', Rule::enum(AvailabilityPolicy::class)],
+            // ⭐ D24: one delivery window, in hours after confirmation. A month
+            // is the ceiling: a promise longer than that is not a promise.
+            'delivery_promise_min_hours' => ['sometimes', 'required', 'integer', 'min:1', 'max:720'],
+            'delivery_promise_max_hours' => ['sometimes', 'required', 'integer', 'gte:delivery_promise_min_hours', 'max:720'],
             // Fallbacks a page uses when it sets none of its own. ⚠ NOT
             // indexability - see `indexing()`, which is a different decision
             // behind a different permission.
@@ -283,6 +287,8 @@ class StoreController extends Controller
             'price_group_id' => $store->price_group_id,
             'price_group_name' => $store->priceGroup?->name ?? 'Retail (default)',
             'availability_policy' => $store->availability_policy->value,
+            'delivery_promise_min_hours' => (int) $store->delivery_promise_min_hours,
+            'delivery_promise_max_hours' => (int) $store->delivery_promise_max_hours,
             'theme_key' => $store->theme_key,
             'theme_name' => $store->theme_key !== null && app(ThemeRegistry::class)->has($store->theme_key)
                 ? app(ThemeRegistry::class)->get($store->theme_key)->name()

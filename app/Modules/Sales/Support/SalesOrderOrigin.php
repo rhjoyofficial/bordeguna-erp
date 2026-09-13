@@ -56,6 +56,8 @@ final readonly class SalesOrderOrigin
         public bool $pricesAsChannel = false,
         public string $orderDiscount = '0',
         public ?string $couponCode = null,
+        public ?int $promiseMinHours = null,
+        public ?int $promiseMaxHours = null,
     ) {}
 
     /**
@@ -90,6 +92,9 @@ final readonly class SalesOrderOrigin
             // Slice 2.5b: a coupon's discount, agreed on the whole order.
             orderDiscount: $orderDiscount,
             couponCode: $couponCode,
+            // ⭐ D24: the shop's one delivery window, frozen on the order.
+            promiseMinHours: (int) $store->delivery_promise_min_hours,
+            promiseMaxHours: (int) $store->delivery_promise_max_hours,
         );
     }
 }

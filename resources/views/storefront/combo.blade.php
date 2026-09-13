@@ -43,6 +43,8 @@
                     @if ($combo['availability']['message'])
                         <p class="muted">{{ $combo['availability']['message'] }}</p>
                     @endif
+                    {{-- ⭐ D24: the shop's ONE delivery promise, counted from confirmation. --}}
+                    <p class="muted">{{ $store->deliveryPromise() }}</p>
                     <form method="post" action="/cart/combos" class="add-to-basket">
                         @csrf
                         <input type="hidden" name="combo" value="{{ $combo['id'] }}">
