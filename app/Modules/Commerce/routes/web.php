@@ -7,6 +7,7 @@ use App\Modules\Commerce\Http\Controllers\PageSectionController;
 use App\Modules\Commerce\Http\Controllers\StoreCatalogueController;
 use App\Modules\Commerce\Http\Controllers\StoreComboController;
 use App\Modules\Commerce\Http\Controllers\StoreController;
+use App\Modules\Commerce\Http\Controllers\StoreCouponController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -93,6 +94,28 @@ Route::middleware(['web', 'auth', 'business'])->prefix('commerce')->name('commer
             ->whereNumber('store')->whereNumber('combo')->name('stores.combos.unpublish');
         Route::delete('stores/{store}/combos/{combo}', [StoreComboController::class, 'destroy'])
             ->whereNumber('store')->whereNumber('combo')->name('stores.combos.destroy');
+    });
+
+    /* -------------------------------------------------------------------- */
+    /* Coupons (website slice 2.5b) */
+    /* -------------------------------------------------------------------- */
+
+    Route::middleware('can:commerce.stores.view')->group(function () {
+        Route::get('stores/{store}/coupons', [StoreCouponController::class, 'index'])
+            ->whereNumber('store')->name('stores.coupons');
+    });
+
+    // ⚠ A coupon is a price decision, so writing one needs the permission that
+    // guards the selling price list, not the content permission.
+    Route::middleware('can:sales.prices.manage')->group(function () {
+        Route::post('stores/{store}/coupons', [StoreCouponController::class, 'store'])
+            ->whereNumber('store')->name('stores.coupons.store');
+        Route::post('stores/{store}/coupons/bulk', [StoreCouponController::class, 'bulk'])
+            ->whereNumber('store')->name('stores.coupons.bulk');
+        Route::put('stores/{store}/coupons/{coupon}', [StoreCouponController::class, 'update'])
+            ->whereNumber('store')->whereNumber('coupon')->name('stores.coupons.update');
+        Route::delete('stores/{store}/coupons/{coupon}', [StoreCouponController::class, 'destroy'])
+            ->whereNumber('store')->whereNumber('coupon')->name('stores.coupons.destroy');
     });
 
     Route::middleware('can:commerce.stores.publish')->group(function () {

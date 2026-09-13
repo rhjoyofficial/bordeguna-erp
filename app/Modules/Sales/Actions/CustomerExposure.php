@@ -45,8 +45,8 @@ class CustomerExposure
             ->with('lines')
             ->get()
             ->reduce(
-                fn (Money $carry, SalesOrder $order) => $carry->plus(
-                    $order->lines->reduce(
+                function (Money $carry, SalesOrder $order) {
+                    $remaining = $order->lines->reduce(
                         // ⚠ Less that quantity's share of any agreed discount
                         // (slice 2.5a): exposure is what the customer will owe,
                         // and a bundle saving is part of what they agreed.
@@ -55,8 +55,15 @@ class CustomerExposure
                                 - $line->discountShare($line->quantityRemaining())->minor
                         )),
                         Money::zero(),
-                    )
-                ),
+                    );
+
+                    // ⚠ And less the undelivered goods' share of a coupon on the
+                    // whole order (slice 2.5b), in proportion to their value.
+                    $goods = Money::ofTaka($order->goodsTotal())->minor;
+                    $coupon = $goods <= 0 ? 0 : (int) round($order->orderDiscount()->minor * $remaining->minor / $goods);
+
+                    return $carry->plus(Money::ofMinor($remaining->minor - min($coupon, $remaining->minor)));
+                },
                 Money::zero(),
             );
 

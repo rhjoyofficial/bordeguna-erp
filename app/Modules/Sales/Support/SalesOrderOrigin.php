@@ -54,6 +54,8 @@ final readonly class SalesOrderOrigin
          * only which group, and null is a real answer.
          */
         public bool $pricesAsChannel = false,
+        public string $orderDiscount = '0',
+        public ?string $couponCode = null,
     ) {}
 
     /**
@@ -71,6 +73,8 @@ final readonly class SalesOrderOrigin
         ?string $deliveryCharge,
         string $paymentMethod,
         SalesOrderDestination $destination,
+        string $orderDiscount = '0',
+        ?string $couponCode = null,
     ): self {
         return new self(
             channel: SalesChannel::Website,
@@ -83,6 +87,9 @@ final readonly class SalesOrderOrigin
             // ⚠ Always, even when the store points at no price group. That is
             // what keeps the order priced the way the page was priced.
             pricesAsChannel: true,
+            // Slice 2.5b: a coupon's discount, agreed on the whole order.
+            orderDiscount: $orderDiscount,
+            couponCode: $couponCode,
         );
     }
 }

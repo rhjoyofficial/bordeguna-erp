@@ -111,6 +111,12 @@ class Store extends Model
         return $this->hasMany(StoreProduct::class);
     }
 
+    /** Coupons this store offers (slice 2.5b). See `StoreCoupon`. */
+    public function coupons(): HasMany
+    {
+        return $this->hasMany(StoreCoupon::class);
+    }
+
     /** Bundles this store sells (D25). See `StoreCombo`. */
     public function combos(): HasMany
     {

@@ -91,9 +91,16 @@
                             <th>BDT {{ $cart['subtotal'] }}</th>
                             <th></th>
                         </tr>
+                        @if ($cart['coupon'] && $cart['coupon']['discount'])
+                            <tr>
+                                <th colspan="3">Code {{ $cart['coupon']['code'] }}</th>
+                                <th>&minus; BDT {{ $cart['coupon']['discount'] }}</th>
+                                <th></th>
+                            </tr>
+                        @endif
                         @if ($cart['delivery']['charge'])
                             <tr>
-                                <th colspan="3">Delivery to {{ $cart['delivery']['district'] }}</th>
+                                <th colspan="3">Delivery to {{ $cart['delivery']['district'] }}@if ($cart['coupon']['free_delivery'] ?? false) (free with {{ $cart['coupon']['code'] }})@endif</th>
                                 <th>BDT {{ $cart['delivery']['charge'] }}</th>
                                 <th></th>
                             </tr>
@@ -107,6 +114,37 @@
                         @endif
                     </tfoot>
                 </table>
+
+                {{-- Coupon, slice 2.5b.
+
+                     ⚠ A code that stopped applying stays VISIBLE with its reason,
+                     so nobody reaches checkout surprised; the total already
+                     leaves its discount out. A gift that cannot be given is said
+                     out loud rather than dropped in silence. --}}
+                @if ($cart['coupon'])
+                    @if ($cart['coupon']['problem'])
+                        <p class="error">Code {{ $cart['coupon']['code'] }}: {{ $cart['coupon']['problem'] }}</p>
+                    @endif
+                    @if ($cart['coupon']['gift'])
+                        <p class="notice">Free with {{ $cart['coupon']['code'] }}: {{ $cart['coupon']['gift']['quantity'] }} &times; {{ $cart['coupon']['gift']['title'] }} (worth BDT {{ $cart['coupon']['gift']['worth'] }}).</p>
+                    @endif
+                    @if ($cart['coupon']['gift_problem'])
+                        <p class="muted">{{ $cart['coupon']['gift_problem'] }}</p>
+                    @endif
+                    <form method="post" action="/cart/coupon" class="inline">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit">Remove code {{ $cart['coupon']['code'] }}</button>
+                    </form>
+                @else
+                    <form method="post" action="/cart/coupon" class="cart-coupon">
+                        @csrf
+                        <label for="coupon-code">Have a code?</label>
+                        <input id="coupon-code" type="text" name="code" maxlength="40" value="{{ old('code') }}">
+                        <button type="submit">Apply</button>
+                        @error('code')<span class="error">{{ $message }}</span>@enderror
+                    </form>
+                @endif
 
                 @if ($cart['problems'] > 0)
                     <p class="muted">
@@ -159,7 +197,7 @@
                      refuses on. They are stated here as well so the reason is
                      visible on the page that can fix it, rather than after an
                      address has been typed. --}}
-                @if ($cart['problems'] === 0 && $cart['delivery']['district'] && ! $cart['delivery']['cannot_quote'])
+                @if ($cart['problems'] === 0 && $cart['delivery']['district'] && ! $cart['delivery']['cannot_quote'] && ! ($cart['coupon']['problem'] ?? null))
                     <p><a href="/checkout" class="button">Checkout</a></p>
                 @endif
 

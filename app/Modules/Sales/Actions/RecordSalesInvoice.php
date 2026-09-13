@@ -12,6 +12,9 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesInvoiceLine;
+use App\Modules\Sales\Models\SalesInvoiceOrderDiscount;
+use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Models\SalesReturnLine;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -95,6 +98,9 @@ class RecordSalesInvoice
 
             $subtotal = Money::zero();
 
+            // Net billed on this invoice per sales order, in paisa (slice 2.5b).
+            $netByOrder = [];
+
             foreach ($lines as $index => $entry) {
                 $quantity = $entry['quantity'];
                 $unitPrice = $entry['unitPrice'];
@@ -167,6 +173,11 @@ class RecordSalesInvoice
                             ((float) $deliveryLine->quantity_invoiced) + (float) $quantity, 4, '.', ''
                         ),
                     ])->save();
+
+                    if ($deliveryLine->sales_order_line_id !== null) {
+                        $orderId = (int) SalesOrderLine::query()->whereKey($deliveryLine->sales_order_line_id)->value('sales_order_id');
+                        $netByOrder[$orderId] = ($netByOrder[$orderId] ?? 0) + $net->minor;
+                    }
                 }
 
                 $invoice->lines()->create([
@@ -180,6 +191,41 @@ class RecordSalesInvoice
                     'line_net' => $net->toTaka(),
                     'cost_released' => $costReleased->toTaka(),
                 ]);
+            }
+
+            // ⭐⭐ THE DISCOUNT AN ORDER AGREED ON THE WHOLE ORDER - a coupon (slice
+            // 2.5b) - is billed here, on the invoice, where it posts to 4210
+            // Discounts Allowed exactly as a typed whole-invoice discount does
+            // (Joy, 13 September). It is ADDED to anything typed rather than
+            // replaced by it: the agreement with the customer is not the clerk's
+            // to withdraw, and an extra concession is.
+            //
+            // ⚠ Decided here, in the action, under a lock on the order, so two
+            // clerks invoicing parts of one order at once cannot both bill the
+            // same share. The invoice that finishes the order bills whatever is
+            // still unbilled; every other bills a share of what it covers.
+            foreach ($netByOrder as $orderId => $netMinor) {
+                /** @var SalesOrder|null $order */
+                $order = SalesOrder::query()->whereKey($orderId)->lockForUpdate()->with('lines.deliveryLines')->first();
+
+                if ($order === null || $order->orderDiscount()->isZero()) {
+                    continue;
+                }
+
+                $share = $order->orderDiscountToBill(Money::ofMinor($netMinor), $order->isFullyInvoiced());
+
+                if ($share->isZero()) {
+                    continue;
+                }
+
+                SalesInvoiceOrderDiscount::create([
+                    'business_id' => $invoice->business_id,
+                    'sales_invoice_id' => $invoice->id,
+                    'sales_order_id' => $order->id,
+                    'amount' => $share->toTaka(),
+                ]);
+
+                $discount = $discount->plus($share);
             }
 
             // ⚠ Discounting more than the bill would make the customer owe a

@@ -67,6 +67,12 @@ Route::middleware('web')->group(function () {
     // disagreeing pair to refuse - the shop prices what the customer states.
     Route::post('/cart/delivery', [CartController::class, 'deliverTo'])->name('storefront.cart.delivery');
 
+    // Coupons, slice 2.5b. ⚠ Throttled: a code box is a box somebody can run a
+    // list of guesses through.
+    Route::post('/cart/coupon', [CartController::class, 'applyCoupon'])
+        ->middleware('throttle:10,1')->name('storefront.cart.coupon');
+    Route::delete('/cart/coupon', [CartController::class, 'removeCoupon'])->name('storefront.cart.coupon.remove');
+
     // Checkout, and the order it produces (Phase 2, slice 2.4).
     //
     // ⚠⚠ The POST writes a REAL ERP SALES ORDER through the same

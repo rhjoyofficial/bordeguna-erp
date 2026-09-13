@@ -2,6 +2,7 @@
 
 namespace App\Modules\Commerce\Support;
 
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Commerce\Models\Cart;
 use App\Modules\Commerce\Models\CartLine;
 use App\Modules\Commerce\Models\Store;
@@ -34,7 +35,7 @@ final class CartPresenter
             // ⚠ The same SHAPE as a real basket, so a theme has one set of keys
             // to draw rather than two. An empty basket is not a special case.
             return [
-                'lines' => [], 'count' => 0, 'subtotal' => null, 'problems' => 0,
+                'lines' => [], 'count' => 0, 'subtotal' => null, 'problems' => 0, 'coupon' => null,
                 'delivery' => [
                     'district' => null, 'zone' => null, 'charge' => null,
                     'is_fallback' => false, 'cannot_quote' => false,
@@ -53,6 +54,8 @@ final class CartPresenter
             ->keyBy('product_id');
 
         $subtotal = '0';
+        $couponProducts = [];
+        $couponCombos = [];
         $count = 0;
         $problems = 0;
         $presented = [];
@@ -78,6 +81,7 @@ final class CartPresenter
 
             if ($lineTotal !== null) {
                 $subtotal = bcadd($subtotal, $lineTotal, 2);
+                $couponProducts[] = ['product_id' => (int) $line->product_id, 'total' => Money::ofTaka($lineTotal)];
             } else {
                 $problems++;
             }
@@ -122,6 +126,7 @@ final class CartPresenter
 
             if ($total !== null) {
                 $subtotal = bcadd($subtotal, $total->toTaka(), 2);
+                $couponCombos[] = ['combo_id' => (int) $combo->id, 'total' => $total];
             } else {
                 $problems++;
             }
@@ -151,15 +156,44 @@ final class CartPresenter
 
         $delivery = DeliveryQuote::for($store, $cart->delivery_district);
 
+        // ⭐ The coupon, slice 2.5b. The basket holds only its CODE; what it takes
+        // off is worked out here, on every read, by the class the checkout asks.
+        // A code that stopped applying is shown WITH ITS REASON rather than
+        // quietly dropped, so the customer is not surprised at checkout.
+        $coupon = ($cart->coupon_code === null || $presented === [])
+            ? null
+            : CouponPricing::quote($store, $cart->coupon_code, $couponProducts, $couponCombos);
+
+        $discount = $coupon?->applies() ? $coupon->discount : Money::zero();
+        $charge = $delivery->charge();
+
+        if ($charge !== null && $coupon?->applies() && $coupon->freeDelivery) {
+            $charge = '0.00';
+        }
+
         return [
             'lines' => $presented,
             'count' => $count,
             'subtotal' => $presented === [] ? null : DocumentMoney::amount($subtotal),
             'problems' => $problems,
+            'coupon' => $coupon === null ? null : [
+                'code' => $coupon->code,
+                'problem' => $coupon->refusal,
+                'discount' => $coupon->applies() && ! $coupon->discount->isZero()
+                    ? DocumentMoney::amount($coupon->discount->toTaka())
+                    : null,
+                'free_delivery' => $coupon->applies() && $coupon->freeDelivery,
+                'gift' => $coupon->gift === null ? null : [
+                    'title' => $coupon->gift['product']->name,
+                    'quantity' => $coupon->gift['quantity'],
+                    'worth' => DocumentMoney::amount($coupon->gift['gross']->toTaka()),
+                ],
+                'gift_problem' => $coupon->applies() ? $coupon->giftProblem : null,
+            ],
             'delivery' => [
                 'district' => $delivery->district,
                 'zone' => $delivery->zoneName(),
-                'charge' => $delivery->charge() === null ? null : DocumentMoney::amount($delivery->charge()),
+                'charge' => $charge === null ? null : DocumentMoney::amount($charge),
                 // ⚠ The theme needs to tell these apart: a rate set for this
                 // district reads differently from the catch-all, and a shop that
                 // cannot quote at all must say so rather than show nothing and
@@ -170,9 +204,9 @@ final class CartPresenter
             // ⚠ The total includes delivery only when there IS a quote. Adding
             // zero for an unquotable district would state a total the shop has
             // not agreed to honour.
-            'total' => ($presented === [] || $delivery->charge() === null)
+            'total' => ($presented === [] || $charge === null)
                 ? null
-                : DocumentMoney::amount(bcadd($subtotal, $delivery->charge(), 2)),
+                : DocumentMoney::amount(bcadd(bcsub($subtotal, $discount->toTaka(), 2), $charge, 2)),
         ];
     }
 

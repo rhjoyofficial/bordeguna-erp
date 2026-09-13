@@ -14,6 +14,7 @@
             'payload' => $section['payload'],
             'media' => $section['media'],
             'products' => $section['products'],
+            'coupon' => $section['coupon'],
         ])
     @endforeach
 @endsection

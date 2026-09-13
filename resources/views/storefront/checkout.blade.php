@@ -59,14 +59,28 @@
                     </tbody>
                     <tfoot>
                         <tr><th colspan="2">Subtotal</th><th>BDT {{ $cart['subtotal'] }}</th></tr>
+                        @if ($cart['coupon'] && $cart['coupon']['discount'])
+                            <tr><th colspan="2">Code {{ $cart['coupon']['code'] }}</th><th>&minus; BDT {{ $cart['coupon']['discount'] }}</th></tr>
+                        @endif
+                        @if ($cart['coupon']['gift'] ?? null)
+                            <tr><th colspan="2">Free with {{ $cart['coupon']['code'] }}: {{ $cart['coupon']['gift']['quantity'] }} &times; {{ $cart['coupon']['gift']['title'] }}</th><th>BDT 0.00</th></tr>
+                        @endif
                         @if ($cart['delivery']['charge'])
-                            <tr><th colspan="2">Delivery to {{ $cart['delivery']['district'] }}</th><th>BDT {{ $cart['delivery']['charge'] }}</th></tr>
+                            <tr><th colspan="2">Delivery to {{ $cart['delivery']['district'] }}@if ($cart['coupon']['free_delivery'] ?? false) (free with {{ $cart['coupon']['code'] }})@endif</th><th>BDT {{ $cart['delivery']['charge'] }}</th></tr>
                         @endif
                         @if ($cart['total'])
                             <tr><th colspan="2">Total</th><th>BDT {{ $cart['total'] }}</th></tr>
                         @endif
                     </tfoot>
                 </table>
+
+                {{-- ⛔ A code that no longer applies is refused at the button with its
+                     reason (slice 2.5b), and said here first so nobody types an
+                     address to find out. --}}
+                @error('code')<p class="error">{{ $message }}</p>@enderror
+                @if ($cart['coupon']['problem'] ?? null)
+                    <p class="error">Code {{ $cart['coupon']['code'] }}: {{ $cart['coupon']['problem'] }} Please <a href="/cart">remove it from your basket</a> to order without it.</p>
+                @endif
 
                 @if ($cart['problems'] > 0)
                     {{-- ⛔ Says so before the button rather than refusing after

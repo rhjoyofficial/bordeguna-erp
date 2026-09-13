@@ -2,15 +2,18 @@
 
 namespace App\Modules\Commerce\Actions;
 
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Commerce\Models\Cart;
 use App\Modules\Commerce\Models\CartLine;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Commerce\Models\StoreCombo;
+use App\Modules\Commerce\Models\StoreCoupon;
 use App\Modules\Commerce\Support\Availability;
 use App\Modules\Commerce\Support\CartRules;
 use App\Modules\Commerce\Support\CataloguePublishing;
 use App\Modules\Commerce\Support\ComboPricing;
 use App\Modules\Commerce\Support\ComboQuote;
+use App\Modules\Commerce\Support\CouponPricing;
 use App\Modules\Commerce\Support\DeliveryQuote;
 use App\Modules\Commerce\Support\ShopOrderReference;
 use App\Modules\Crm\Support\PhoneIdentity;
@@ -147,14 +150,19 @@ class PlaceWebsiteOrder
         // each product at the price list at its own quantity, each bundle through
         // `ComboPricing`. The order is checked against it below.
         $quoted = '0';
+        $couponProducts = [];
+        $couponCombos = [];
 
         foreach ($lines as $line) {
             $price = CataloguePublishing::priceFor($store, $line->product, null, (string) $line->quantity);
-            $quoted = bcadd($quoted, bcmul((string) $price, (string) $line->quantity, 2), 2);
+            $lineTotal = bcmul((string) $price, (string) $line->quantity, 2);
+            $quoted = bcadd($quoted, $lineTotal, 2);
+            $couponProducts[] = ['product_id' => (int) $line->product_id, 'total' => Money::ofTaka($lineTotal)];
         }
 
-        foreach ($bundles as [, $bundle]) {
+        foreach ($bundles as [$combo, $bundle]) {
             $quoted = bcadd($quoted, $bundle->total->toTaka(), 2);
+            $couponCombos[] = ['combo_id' => (int) $combo->id, 'total' => $bundle->total];
         }
 
         $orderLines = $lines->map(fn ($line) => [
@@ -179,13 +187,63 @@ class PlaceWebsiteOrder
                     'quantity' => (string) $part->quantity,
                     'unit_price' => null,
                     'discount' => $part->discount->toTaka(),
-                    'bundle_label' => $combo->title,
+                    // ⚠ A label that reads on its own, because every screen shows
+                    // it as written: a gift line's is "Free with CODE", and a
+                    // prefix added by the screen would turn that into nonsense.
+                    'bundle_label' => 'Part of '.$combo->title,
                 ];
             }
         }
 
-        return DB::transaction(function () use ($store, $cart, $orderLines, $quoted, $quote, $destination, $payment, $email, $expected) {
+        return DB::transaction(function () use ($store, $cart, $orderLines, $quoted, $quote, $destination, $payment, $email, $expected, $couponProducts, $couponCombos) {
             $customer = $this->identify($store, $destination);
+
+            // ⭐⭐ THE COUPON, slice 2.5b, decided HERE, inside the transaction,
+            // with the buyer known and the coupon row locked. Locked because a
+            // code with one use left must not be spent twice by two customers
+            // pressing the button in the same second; with the buyer known
+            // because a per-customer limit cannot be checked on a basket that
+            // has no phone number yet.
+            // ⛔ A code that no longer applies REFUSES the order with its reason.
+            // Quietly dropping it would charge the customer more than the basket
+            // they just read.
+            $deliveryCharge = $quote->charge();
+            $orderDiscount = '0';
+            $couponCode = null;
+
+            if ($cart->coupon_code !== null) {
+                StoreCoupon::query()
+                    ->where('store_id', $store->id)
+                    ->where('code', StoreCoupon::normaliseCode($cart->coupon_code))
+                    ->lockForUpdate()
+                    ->first();
+
+                $coupon = CouponPricing::quote($store, $cart->coupon_code, $couponProducts, $couponCombos, $customer);
+
+                if (! $coupon->applies()) {
+                    $this->refuse('code', "Your code {$coupon->code} cannot be used: {$coupon->refusal} Remove it from your basket to order without it.");
+                }
+
+                // ⭐ A gift is a real line, priced by the engine like any other so
+                // its stock and cost are real, and its value is part of the
+                // coupon's order discount (see `CouponPricing`).
+                if ($coupon->gift !== null) {
+                    $orderLines[] = [
+                        'product' => $coupon->gift['product'],
+                        'quantity' => (string) $coupon->gift['quantity'],
+                        'unit_price' => null,
+                        'bundle_label' => 'Free with '.$coupon->code,
+                    ];
+                    $quoted = bcadd($quoted, $coupon->gift['gross']->toTaka(), 2);
+                }
+
+                if ($coupon->freeDelivery && $deliveryCharge !== null) {
+                    $deliveryCharge = '0.00';
+                }
+
+                $orderDiscount = $coupon->orderDiscount()->toTaka();
+                $couponCode = $coupon->code;
+            }
 
             $order = $this->orders->handle(
                 customer: $customer,
@@ -207,9 +265,11 @@ class PlaceWebsiteOrder
                 origin: SalesOrderOrigin::website(
                     store: $store,
                     shopReference: ShopOrderReference::mint($store),
-                    deliveryCharge: $quote->charge(),
+                    deliveryCharge: $deliveryCharge,
                     paymentMethod: $payment,
                     destination: $destination,
+                    orderDiscount: $orderDiscount,
+                    couponCode: $couponCode,
                 ),
             );
 

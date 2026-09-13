@@ -165,7 +165,7 @@ it('explodes a bundle into its real lines, each carrying its share of the saving
         ->and((string) $lines[$this->beef->id]->unit_price)->toBe('1350.0000')
         ->and((string) $lines[$this->hilsa->id]->line_discount)->toBe('149.2800')
         ->and((string) $lines[$this->beef->id]->line_discount)->toBe('201.7200')
-        ->and($lines->pluck('bundle_label')->unique()->all())->toBe(['Pickle Duo'])
+        ->and($lines->pluck('bundle_label')->unique()->all())->toBe(['Part of Pickle Duo'])
         ->and($order->goodsTotal())->toBe('1998.00')
         ->and($order->agreedTotal())->toBe('2118.00')
         // ⛔ Still a promise: nothing moves, nothing posts.
@@ -254,7 +254,7 @@ it('tells the customer on the order page what the bundle saved', function () {
     // ⚠ The redirect already carries the host.
     comboBrowser($token)->get($response->headers->get('Location'))
         ->assertOk()
-        ->assertSee('In Pickle Duo')
+        ->assertSee('Part of Pickle Duo')
         ->assertSee('less BDT 149.28')
         ->assertSee('BDT 1,998.00');
 });

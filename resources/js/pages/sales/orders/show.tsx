@@ -47,6 +47,9 @@ interface Order {
     channel: 'internal' | 'website' | null;
     shop_reference: string | null;
     delivery_charge: string | null;
+    // Website slice 2.5b: a coupon's discount on the whole order, and its code.
+    order_discount: string;
+    coupon_code: string | null;
     payment_method: string | null;
     store: { id: number; name: string } | null;
     address: {
@@ -290,6 +293,11 @@ export default function SalesOrderShow({
                             {order.payment_method === 'cod' ? 'Cash on delivery - nothing has been paid.' : 'Payment method not recorded.'}
                             {order.delivery_charge !== null && ` Delivery agreed at ${order.delivery_charge}.`}
                         </p>
+                        {parseFloat(order.order_discount) > 0 && (
+                            <p className="mt-1">
+                                Code {order.coupon_code}: {order.order_discount} off the whole order, billed on the invoice as a discount allowed.
+                            </p>
+                        )}
                     </div>
                 )}
 
@@ -353,7 +361,7 @@ export default function SalesOrderShow({
                             <tr key={line.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2">
                                     {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>
-                                    {line.bundle_label && <div className="text-muted-foreground text-xs">Sold in {line.bundle_label}</div>}
+                                    {line.bundle_label && <div className="text-muted-foreground text-xs">{line.bundle_label}</div>}
                                 </td>
                                 <td className="py-2">{line.quantity_ordered}</td>
                                 <td className="py-2">{line.quantity_delivered}</td>

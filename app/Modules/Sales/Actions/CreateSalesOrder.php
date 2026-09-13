@@ -129,6 +129,11 @@ class CreateSalesOrder
                 // every time it is read, but an order records what the customer
                 // agreed to pay. A rate corrected next week must not rewrite it.
                 'delivery_charge' => $origin?->deliveryCharge,
+                // Slice 2.5b: a coupon's discount on the whole order, and the
+                // code as a word. Checked against the goods below, once the
+                // engine has priced them.
+                'order_discount' => Money::ofTaka($origin?->orderDiscount ?? '0')->toTaka(),
+                'coupon_code' => $origin?->couponCode,
                 'payment_method' => $origin?->paymentMethod,
                 'status' => SalesOrderStatus::Open,
                 'note' => $note,
@@ -208,6 +213,17 @@ class CreateSalesOrder
                     'line_discount' => $discount->toTaka(),
                     'price_note' => $priceNote,
                     'bundle_label' => $entry['bundle_label'] ?? null,
+                ]);
+            }
+
+            // ⚠ An order discount is checked against the goods the ENGINE priced,
+            // net of line discounts. Larger than the goods it is not a discount
+            // but money owed to the customer, which is a different document.
+            $order->load('lines');
+
+            if ($order->orderDiscount()->minor < 0 || $order->orderDiscount()->minor > Money::ofTaka($order->goodsTotal())->minor) {
+                throw ValidationException::withMessages([
+                    'order_discount' => 'The discount on the whole order cannot be negative or larger than the goods.',
                 ]);
             }
 

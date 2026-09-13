@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessIdentity;
@@ -20,6 +21,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\AmountInWords;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -111,7 +113,7 @@ class SalesInvoiceController extends Controller
                     $agreedDiscount = $discount->isZero() ? null : $discount->toTaka();
 
                     if ($line->orderLine->bundle_label) {
-                        $priceSource .= " (in {$line->orderLine->bundle_label})";
+                        $priceSource .= " ({$line->orderLine->bundle_label})";
                     }
                 } else {
                     $resolved = $resolver->find($line->product, $customer, $line->quantityUninvoiced());
@@ -131,12 +133,36 @@ class SalesInvoiceController extends Controller
                     'price_source' => $priceSource,
                 ];
             })->values()->all();
+
+            // ⭐ Slice 2.5b: the discount each order agreed on the WHOLE order (a
+            // coupon), previewed for billing everything shown. ⚠ Preview only -
+            // `RecordSalesInvoice` decides the figure for what is actually
+            // billed, under a lock, and bills it whatever the screen sends.
+            foreach ($lines->filter(fn (DeliveryLine $line) => $line->orderLine !== null)->groupBy(fn ($line) => $line->orderLine->sales_order_id) as $orderId => $orderLines) {
+                $order = SalesOrder::query()->with('lines')->find($orderId);
+
+                if ($order === null || $order->orderDiscount()->isZero()) {
+                    continue;
+                }
+
+                $netMinor = $orderLines->sum(fn (DeliveryLine $line) => Money::ofProduct($line->quantityUninvoiced(), (string) $line->orderLine->unit_price)->minor
+                    - $line->orderLine->discountToBill($line->quantityUninvoiced())->minor);
+
+                $finishes = $order->lines->every(fn ($orderLine) => (float) $orderLine->quantity_delivered + 0.00005 >= (float) $orderLine->quantity_ordered);
+
+                $agreedOrderDiscounts[] = [
+                    'order_number' => $order->order_number,
+                    'coupon_code' => $order->coupon_code,
+                    'amount' => $order->orderDiscountToBill(Money::ofMinor($netMinor), $finishes)->toTaka(),
+                ];
+            }
         }
 
         return Inertia::render('sales/invoices/create', [
             'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name']),
             'customerId' => $customerId,
             'billable' => $billable,
+            'agreed_order_discounts' => $agreedOrderDiscounts ?? [],
         ]);
     }
 

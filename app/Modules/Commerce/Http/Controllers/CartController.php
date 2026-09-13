@@ -7,6 +7,7 @@ use App\Modules\Commerce\Models\CartComboLine;
 use App\Modules\Commerce\Models\CartLine;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Commerce\Models\StoreCombo;
+use App\Modules\Commerce\Models\StoreCoupon;
 use App\Modules\Commerce\Support\CartPresenter;
 use App\Modules\Commerce\Support\CartRules;
 use App\Modules\Commerce\Support\CurrentCart;
@@ -170,6 +171,51 @@ class CartController
         $store = $this->store($request);
 
         $this->ownComboLine($request, $store, $line)->delete();
+
+        return redirect('/cart');
+    }
+
+    /**
+     * A coupon code onto the basket (slice 2.5b).
+     *
+     * ⚠ The code is tried THROUGH THE BASKET PRESENTER, the same path every later
+     * read takes, and kept only if it applies. A code that does not apply is not
+     * stored with an error beside it: it is refused, with the sentence, and the
+     * basket is left as it was.
+     *
+     * ⚠ The route is throttled. A box that answers "valid" or "not valid" is a
+     * box somebody can run a list of guesses through.
+     */
+    public function applyCoupon(Request $request): RedirectResponse
+    {
+        $store = $this->store($request);
+
+        $data = $request->validate(['code' => ['required', 'string', 'max:40']]);
+
+        $cart = CurrentCart::find($request, $store);
+
+        if ($cart === null || $cart->isEmpty()) {
+            $this->refuse('Add something to your basket before using a code.', 'code');
+        }
+
+        $previous = $cart->coupon_code;
+        $cart->update(['coupon_code' => StoreCoupon::normaliseCode($data['code'])]);
+
+        $problem = CartPresenter::present($store, $cart->fresh())['coupon']['problem'] ?? null;
+
+        if ($problem !== null) {
+            $cart->update(['coupon_code' => $previous]);
+            $this->refuse($problem, 'code');
+        }
+
+        return redirect('/cart')->with('cart_notice', 'Code applied.');
+    }
+
+    public function removeCoupon(Request $request): RedirectResponse
+    {
+        $store = $this->store($request);
+
+        CurrentCart::find($request, $store)?->update(['coupon_code' => null]);
 
         return redirect('/cart');
     }

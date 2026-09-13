@@ -3,6 +3,7 @@
 namespace App\Modules\Sales\Models;
 
 use App\Models\User;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
@@ -52,6 +53,8 @@ class SalesOrder extends Model
         'ordered_at',
         'expected_date',
         'delivery_charge',
+        'order_discount',
+        'coupon_code',
         'payment_method',
         'status',
         'note',
@@ -71,6 +74,7 @@ class SalesOrder extends Model
             // an uncast money comparison behaves differently in production than
             // in every test that guards it.
             'delivery_charge' => 'decimal:2',
+            'order_discount' => 'decimal:4',
         ];
     }
 
@@ -138,8 +142,9 @@ class SalesOrder extends Model
     }
 
     /**
-     * What the customer is quoted in total: goods at the agreed prices, plus
-     * the agreed delivery charge.
+     * What the customer is quoted in total: goods at the agreed prices, less any
+     * discount agreed on the whole order (a coupon, slice 2.5b), plus the agreed
+     * delivery charge.
      *
      * ⚠⚠ COMPOSED FROM THE STORED AGREEMENT, never re-resolved. Every figure
      * here was frozen when the order was taken, which is the whole reason those
@@ -151,7 +156,90 @@ class SalesOrder extends Model
      */
     public function agreedTotal(): string
     {
-        return bcadd($this->goodsTotal(), (string) ($this->delivery_charge ?? '0'), 2);
+        return bcadd(
+            bcsub($this->goodsTotal(), $this->orderDiscount()->toTaka(), 2),
+            (string) ($this->delivery_charge ?? '0'),
+            2,
+        );
+    }
+
+    /**
+     * A discount agreed on the whole order - a coupon (slice 2.5b). ⚠ Kept apart
+     * from the goods total because it is billed on the invoice as a whole-invoice
+     * discount and posts to 4210 Discounts Allowed (Joy, 13 September), while a
+     * line discount reduces the line.
+     */
+    public function orderDiscount(): Money
+    {
+        return Money::ofTaka((string) ($this->order_discount ?? '0'));
+    }
+
+    /**
+     * How much of each invoice's whole-invoice discount came from this order.
+     */
+    public function invoiceDiscountShares(): HasMany
+    {
+        return $this->hasMany(SalesInvoiceOrderDiscount::class, 'sales_order_id');
+    }
+
+    /**
+     * Has every line been invoiced in full?
+     *
+     * ⚠ Reads what the delivery lines record, so it is only true once goods
+     * have left AND been billed - an order closed short never finishes, and its
+     * unbilled discount is billed by nothing, which is correct: nothing is owed.
+     */
+    public function isFullyInvoiced(): bool
+    {
+        foreach ($this->lines as $line) {
+            $invoiced = (float) $line->deliveryLines->sum('quantity_invoiced');
+
+            if ($invoiced + 0.00005 < (float) $line->quantity_ordered) {
+                return false;
+            }
+        }
+
+        return $this->lines->isNotEmpty();
+    }
+
+    /**
+     * The share of this order's agreed order discount that an invoice billing
+     * $netBilled of its goods should carry.
+     *
+     * ⚠⚠ THE INVOICE THAT FINISHES THE ORDER BILLS THE REMAINDER, never another
+     * rounded share - the rule a line's discount and a delivery line's cost
+     * already follow, for the same reason. Every other invoice bills the order
+     * discount in proportion to the goods it covers, in integer paisa.
+     */
+    public function orderDiscountToBill(Money $netBilled, bool $finishesOrder): Money
+    {
+        $discount = $this->orderDiscount();
+
+        if ($discount->isZero()) {
+            return Money::zero();
+        }
+
+        $billed = Money::ofTaka((string) ($this->invoiceDiscountShares()->sum('amount') ?: '0'));
+        $unbilled = max(0, $discount->minor - $billed->minor);
+
+        if ($finishesOrder) {
+            return Money::ofMinor($unbilled);
+        }
+
+        $goods = Money::ofTaka($this->goodsTotal())->minor;
+
+        if ($goods <= 0) {
+            return Money::zero();
+        }
+
+        $product = $discount->minor * $netBilled->minor;
+        $share = intdiv($product, $goods);
+
+        if (($product % $goods) * 2 >= $goods) {
+            $share++;
+        }
+
+        return Money::ofMinor(min($share, $unbilled));
     }
 
     /**

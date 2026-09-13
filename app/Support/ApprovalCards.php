@@ -401,7 +401,9 @@ class ApprovalCards
             // ⚠ Net of each line's agreed discount (website slice 2.5a). The
             // approver is deciding whether to commit to what the customer
             // agreed, and a bundle's parts at full price is not that figure.
-            $total = $approvable->lines->sum(fn ($line) => (float) $line->netTotal()->toTaka());
+            // Slice 2.5b: and net of a coupon's discount on the whole order.
+            $total = $approvable->lines->sum(fn ($line) => (float) $line->netTotal()->toTaka())
+                - (float) $approvable->orderDiscount()->toTaka();
 
             return $this->card(
                 $approvalRequest,
@@ -410,13 +412,14 @@ class ApprovalCards
                 details: array_filter([
                     ['label' => 'Customer', 'value' => $approvable->customer?->name],
                     ['label' => 'Warehouse', 'value' => $approvable->warehouse?->name],
+                    $approvable->orderDiscount()->isZero() ? null : ['label' => 'Code '.$approvable->coupon_code, 'value' => '- '.$this->money($approvable->orderDiscount()->toTaka())],
                     ['label' => 'Order total', 'value' => $this->money($total)],
                     $approvable->expected_date ? ['label' => 'Expected', 'value' => (string) $approvable->expected_date] : null,
                 ]),
                 reason: $approvable->note,
                 lines: $approvable->lines->map(fn ($line) => [
                     'description' => ($line->product?->name ?? 'Product').($line->product?->sku ? " ({$line->product->sku})" : '')
-                        .($line->bundle_label ? " - in {$line->bundle_label}" : ''),
+                        .($line->bundle_label ? " - {$line->bundle_label}" : ''),
                     'quantity' => $this->qty($line->quantity_ordered).' × '.$this->money($line->unit_price)
                         .($line->discount()->isZero() ? '' : ' less '.$this->money($line->discount()->toTaka())),
                     'amount' => $this->money((float) $line->netTotal()->toTaka()),

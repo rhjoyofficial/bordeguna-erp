@@ -51,6 +51,13 @@ final class StorefrontPage
                 'payload' => $section->payload ?? [],
                 'media' => self::mediaFor($store, $section, $type),
                 'products' => self::productsFor($store, $section, $type),
+                // ⛔ Slice 2.5b makes the contract's promise true: a coupon named
+                // in a strip is asked of the ERP at render, and a code checkout
+                // would refuse on the code alone (off, expired, used up) is not
+                // shown. Until now the template printed whatever was typed.
+                'coupon' => $section->type_key === 'announcement.strip'
+                    ? CouponPricing::advertisable($store, $section->payload['coupon_code'] ?? null)?->code
+                    : null,
             ];
         }
 

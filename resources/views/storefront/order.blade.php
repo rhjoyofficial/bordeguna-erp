@@ -44,7 +44,7 @@
                     <tr>
                         <td>
                             {{ $line['title'] }}
-                            @if ($line['bundle'])<p class="muted">In {{ $line['bundle'] }}</p>@endif
+                            @if ($line['bundle'])<p class="muted">{{ $line['bundle'] }}</p>@endif
                         </td>
                         <td>{{ $line['quantity'] }}</td>
                         <td>
@@ -59,6 +59,9 @@
                 </tbody>
                 <tfoot>
                     <tr><th colspan="3">Goods</th><th>BDT {{ $order['goods_total'] }}</th></tr>
+                    @if ($order['order_discount'])
+                        <tr><th colspan="3">Code {{ $order['coupon_code'] }}</th><th>&minus; BDT {{ $order['order_discount'] }}</th></tr>
+                    @endif
                     @if ($order['delivery_charge'] !== null)
                         <tr><th colspan="3">Delivery</th><th>BDT {{ $order['delivery_charge'] }}</th></tr>
                     @endif

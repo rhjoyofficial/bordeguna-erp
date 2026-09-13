@@ -43,10 +43,14 @@ export default function InvoiceCreate({
     customers,
     customerId,
     billable,
+    agreed_order_discounts,
 }: {
     customers: { id: number; name: string }[];
     customerId: number | null;
     billable: BillableLine[];
+    // Website slice 2.5b: what each order agreed off the WHOLE order (a coupon),
+    // previewed for billing everything shown. The server bills it automatically.
+    agreed_order_discounts: { order_number: string; coupon_code: string | null; amount: string }[];
 }) {
     const { data, setData, post, errors, processing } = useForm<{
         customer_id: string;
@@ -115,7 +119,8 @@ export default function InvoiceCreate({
         (sum, line) => sum + parseFloat(line.quantity || '0') * parseFloat(line.unit_price || '0') - discountOf(line),
         0,
     );
-    const total = subtotal - parseFloat(data.invoice_discount || '0');
+    const agreedOrderDiscount = agreed_order_discounts.reduce((sum, row) => sum + parseFloat(row.amount), 0);
+    const total = subtotal - agreedOrderDiscount - parseFloat(data.invoice_discount || '0');
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -227,6 +232,14 @@ export default function InvoiceCreate({
                                 <p className="text-muted-foreground text-xs">
                                     Money off one product goes in that product's Discount box above. Use this one only for money off the whole bill.
                                 </p>
+                                {/* ⚠ Slice 2.5b. An order's agreed coupon discount is billed
+                                    whatever is typed here; anything typed is added to it. */}
+                                {agreed_order_discounts.map((row) => (
+                                    <p key={row.order_number} className="text-xs">
+                                        Also billed automatically: {row.amount} agreed on {row.order_number}
+                                        {row.coupon_code ? ` (code ${row.coupon_code})` : ''}, if everything above is billed.
+                                    </p>
+                                ))}
                             </div>
                             <div className="grid gap-2">
                                 <Label>Note (optional)</Label>

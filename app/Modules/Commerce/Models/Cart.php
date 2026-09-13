@@ -37,6 +37,9 @@ class Cart extends Model
         // quoting a number the shop no longer charges is worse than no quote.
         // `DeliveryQuote` prices this at read time, every time.
         'delivery_district',
+        // ⚠ THE CODE, NEVER THE DISCOUNT (slice 2.5b), for the reason there is
+        // no price on a line: `CouponPricing` works the figure out on every read.
+        'coupon_code',
     ];
 
     protected function casts(): array

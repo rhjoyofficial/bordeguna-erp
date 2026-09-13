@@ -62,6 +62,12 @@ final class PlacedOrderPresenter
             // disagree by a paisa. A presenter with its own arithmetic is a
             // second opinion about what the customer owes.
             'goods_total' => DocumentMoney::amount($order->goodsTotal()),
+            // Slice 2.5b: the coupon's discount on the whole order, if any, and
+            // its code. Includes the value of a gift given with the code.
+            'order_discount' => $order->orderDiscount()->isZero()
+                ? null
+                : DocumentMoney::amount($order->orderDiscount()->toTaka()),
+            'coupon_code' => $order->coupon_code,
             'delivery_charge' => $order->delivery_charge === null
                 ? null
                 : DocumentMoney::amount((string) $order->delivery_charge),
