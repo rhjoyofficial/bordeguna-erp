@@ -6,9 +6,11 @@ use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Sales\Enums\ConsignmentStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -66,6 +68,27 @@ class Delivery extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(DeliveryLine::class);
+    }
+
+    /**
+     * The parcel, when this challan went out with a courier.
+     */
+    public function consignment(): HasOne
+    {
+        return $this->hasOne(Consignment::class);
+    }
+
+    /**
+     * A booked consignment holds the challan's invoice and any return until the
+     * courier reports back. Null when the challan is free to bill by hand.
+     */
+    public function openConsignment(): ?Consignment
+    {
+        return Consignment::query()
+            ->where('delivery_id', $this->id)
+            ->where('status', ConsignmentStatus::Booked)
+            ->with('courier:id,name')
+            ->first();
     }
 
     /**

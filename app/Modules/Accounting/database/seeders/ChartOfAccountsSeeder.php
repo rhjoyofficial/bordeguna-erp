@@ -54,6 +54,10 @@ class ChartOfAccountsSeeder extends Seeder
         ['1120', 'Cash at Bank', AccountType::Asset, '1100', true, 'cash_at_bank'],
         ['1130', 'Mobile Financial Services', AccountType::Asset, '1100', true, 'mobile_financial_services'],
         ['1140', 'Accounts Receivable', AccountType::Asset, '1100', true, 'accounts_receivable'],
+        // Cash on delivery a courier has collected and not yet paid out (13 Sep
+        // 2026). A receivable, not cash: the courier owes it, net of its fees,
+        // on its own payout terms.
+        ['1145', 'Receivable from Couriers', AccountType::Asset, '1100', true, 'courier_receivable'],
         ['1150', 'Inventory - Stock on Hand', AccountType::Asset, '1100', true, 'stock_on_hand'],
         // ⚠⚠ The mirror of Goods Received Not Invoiced (2120), on the selling
         // side. Stock the business no longer holds but has not yet earned

@@ -47,7 +47,7 @@ class MoneyTransferController extends Controller
             // ⚠ Only accounts the action will accept. An account with no chart
             // mapping cannot be debited or credited, so offering it would be a
             // form that fails on submit for a reason nobody can see.
-            'accounts' => MoneyAccount::where('is_active', true)
+            'accounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->whereNotNull('account_id')
                 ->orderBy('name')
                 ->get(['id', 'name', 'type']),

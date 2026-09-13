@@ -75,6 +75,14 @@ class RecordSalesReturn
             ]);
         }
 
+        // ⚠ Goods on a parcel still with a courier come back through the
+        // courier's answer, which is also what decides the invoice.
+        if ($open = $delivery->openConsignment()) {
+            throw ValidationException::withMessages([
+                'lines' => "Challan {$delivery->delivery_number} is out with {$open->courier->name} (consignment {$open->consignment_number}). Record the courier's answer to bring it back.",
+            ]);
+        }
+
         return DB::transaction(function () use ($delivery, $lines, $createdBy, $date, $note) {
             $return = SalesReturn::create([
                 'business_id' => $delivery->business_id,

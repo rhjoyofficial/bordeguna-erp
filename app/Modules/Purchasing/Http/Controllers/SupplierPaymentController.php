@@ -94,7 +94,7 @@ class SupplierPaymentController extends Controller
             'suppliers' => $this->suppliersWithOutstanding(),
             'selectedSupplierId' => $supplier?->id,
             'bills' => $supplier === null ? [] : $this->openBillsFor($supplier),
-            'moneyAccounts' => MoneyAccount::query()
+            'moneyAccounts' => MoneyAccount::query()->handled()
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(['id', 'name', 'type']),

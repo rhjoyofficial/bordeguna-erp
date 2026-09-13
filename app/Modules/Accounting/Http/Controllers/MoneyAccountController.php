@@ -78,6 +78,7 @@ class MoneyAccountController extends Controller
                 ->sortBy('code')
                 ->values()
                 ->map(fn (Account $account) => ['id' => $account->id, 'label' => $account->label()]),
+            'courierLedgerAccountId' => Account::bySlug('courier_receivable')?->id,
         ]);
     }
 
@@ -100,6 +101,21 @@ class MoneyAccountController extends Controller
      */
     private function validated(Request $request): array
     {
+        // ⚠ A courier's account reports under 1145 Receivable from Couriers and
+        // nowhere else, and it must say so from the start: money a courier is
+        // holding filed under Cash at Bank would overstate the bank on every
+        // balance sheet until the payout arrived.
+        if ($request->input('type') === MoneyAccountType::Courier->value) {
+            $courierLedger = Account::bySlug('courier_receivable');
+
+            $request->validate([
+                'account_id' => ['required', Rule::in([$courierLedger?->id])],
+            ], [
+                'account_id.required' => 'A courier account reports under 1145 Receivable from Couriers.',
+                'account_id.in' => 'A courier account reports under 1145 Receivable from Couriers.',
+            ]);
+        }
+
         return $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::enum(MoneyAccountType::class)],

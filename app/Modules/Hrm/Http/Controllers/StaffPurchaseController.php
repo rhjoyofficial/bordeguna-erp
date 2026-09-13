@@ -156,7 +156,7 @@ class StaffPurchaseController extends Controller
                 ->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END")
                 ->orderByDesc('id')->limit(100)->get()
                 ->map(fn ($row) => $this->present($row)),
-            'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
+            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
         ]);
     }

@@ -33,7 +33,7 @@ class BankStatementController extends Controller
     {
         $this->authorize('accounting.view');
 
-        $accounts = MoneyAccount::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'type']);
+        $accounts = MoneyAccount::query()->handled()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'type']);
         $accountId = (int) $request->query('money_account_id', (string) ($accounts->first()?->id ?? 0));
 
         $statementLines = DB::table('bank_statement_lines')

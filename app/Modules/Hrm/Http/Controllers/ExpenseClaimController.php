@@ -286,7 +286,7 @@ class ExpenseClaimController extends Controller
 
         return Inertia::render('hrm/expense-claims/index', [
             'claims' => $claims,
-            'moneyAccounts' => MoneyAccount::query()
+            'moneyAccounts' => MoneyAccount::query()->handled()
                 ->where('is_active', true)
                 ->whereNotNull('account_id')
                 ->orderBy('name')

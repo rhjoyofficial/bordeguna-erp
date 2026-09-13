@@ -55,7 +55,7 @@ class CounterSaleController extends Controller
                 ->map(fn ($resolved) => (float) $resolved->unitPrice),
             'customers' => Customer::query()->active()->orderBy('name')
                 ->get(['id', 'name', 'code', 'is_system', 'price_group_id']),
-            'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
+            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
             'walkInId' => Customer::walkIn()?->id,
             // Held carts: bookmarks, not transactions. Newest first, with just

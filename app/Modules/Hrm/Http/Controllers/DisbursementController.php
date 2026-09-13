@@ -120,7 +120,7 @@ class DisbursementController extends Controller
             // batch route validated `money_account_id` as required and the
             // screen never sent it, and the per-payslip route posted to the
             // ledger without one and threw a blank 500.
-            'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
+            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name'])
                 ->map(fn (MoneyAccount $a) => ['id' => $a->id, 'name' => $a->name]),
             'formats' => $formats->options(),

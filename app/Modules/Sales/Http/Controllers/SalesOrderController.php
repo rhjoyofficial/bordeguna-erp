@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
@@ -18,11 +20,14 @@ use App\Modules\Sales\Actions\CloseSalesOrder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\CustomerExposure;
 use App\Modules\Sales\Actions\RecordDelivery;
+use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
+use App\Modules\Sales\Support\DeliveryBilling;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -186,7 +191,7 @@ class SalesOrderController extends Controller
         ]);
     }
 
-    public function show(Request $request, SalesOrder $order): Response
+    public function show(Request $request, SalesOrder $order, ResolveSellingPrice $resolver): Response
     {
         $order->load([
             'customer',
@@ -208,8 +213,56 @@ class SalesOrderController extends Controller
 
         $user = $request->user();
 
+        $deliveryIds = $order->lines->flatMap(fn ($line) => $line->deliveryLines->pluck('delivery_id'))->unique()->values();
+
+        // ⭐ Each challan with what a courier needs: its lines, its parcel, and
+        // the amount to collect if it were delivered today. Shaped here, dates
+        // as dates, never a model handed to the page.
+        $challans = Delivery::query()
+            ->whereIn('id', $deliveryIds)
+            ->with(['lines.product:id,name,sku', 'lines.orderLine', 'customer', 'consignment.courier:id,name', 'consignment.invoice:id,invoice_number', 'consignment.salesReturn:id,return_number'])
+            ->orderBy('delivered_at')
+            ->orderBy('id')
+            ->get()
+            ->map(function (Delivery $delivery) use ($resolver) {
+                $consignment = $delivery->consignment;
+                $untouched = $delivery->lines->every(fn ($line) => (float) $line->quantity_invoiced <= 0 && (float) $line->quantity_returned <= 0);
+
+                return [
+                    'id' => $delivery->id,
+                    'delivery_number' => $delivery->delivery_number,
+                    'delivered_at' => $delivery->delivered_at->toDateString(),
+                    'can_consign' => $consignment === null && $untouched,
+                    'cod_preview' => $consignment === null && $untouched
+                        ? DeliveryBilling::previewTotal($delivery, $resolver)?->toTaka()
+                        : null,
+                    'lines' => $delivery->lines->map(fn ($line) => [
+                        'id' => $line->id,
+                        'product' => $line->product?->name,
+                        'sku' => $line->product?->sku,
+                        'quantity' => $line->quantityUninvoiced(),
+                    ])->values(),
+                    'consignment' => $consignment === null ? null : [
+                        'id' => $consignment->id,
+                        'courier' => $consignment->courier?->name,
+                        'consignment_number' => $consignment->consignment_number,
+                        'cod_amount' => $consignment->codAmount()->toTaka(),
+                        'status' => $consignment->status->value,
+                        'status_label' => $consignment->status->label(),
+                        'outcome_on' => $consignment->outcome_on?->toDateString(),
+                        'collected_amount' => $consignment->collectedAmount()?->toTaka(),
+                        'invoice' => $consignment->invoice?->only(['id', 'invoice_number']),
+                        'sales_return' => $consignment->salesReturn?->only(['id', 'return_number']),
+                    ],
+                ];
+            });
+
         return Inertia::render('sales/orders/show', [
             'order' => $order,
+            'challans' => $challans,
+            'couriers' => MoneyAccount::query()->active()->where('type', MoneyAccountType::Courier->value)
+                ->orderBy('name')->get(['id', 'name']),
+            'can_record_outcome' => $user->can('sales.sell') && $user->can('sales.receipt.record') && $user->can('sales.returns.record'),
             // ⚠ C-SO-3: exposure SHOWN beside the credit limit, enforced by
             // nobody. The human decides.
             'exposure' => app(CustomerExposure::class)->handle($order->customer),

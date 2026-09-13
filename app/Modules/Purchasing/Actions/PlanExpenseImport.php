@@ -38,7 +38,7 @@ class PlanExpenseImport
             ->get()
             ->keyBy(fn (Account $a) => strtoupper(trim($a->code)));
 
-        $moneyAccounts = MoneyAccount::query()
+        $moneyAccounts = MoneyAccount::query()->handled()
             ->get()
             ->keyBy(fn (MoneyAccount $a) => strtoupper(trim($a->name)));
 

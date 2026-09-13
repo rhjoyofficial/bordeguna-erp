@@ -49,7 +49,9 @@ class CashFlow
 
     public static function between(Carbon $from, Carbon $to): self
     {
-        $cashIds = MoneyAccount::query()
+        // ⚠ Not a courier's account: cash on delivery a courier holds is a
+        // receivable (1145), and it becomes cash when the payout lands.
+        $cashIds = MoneyAccount::query()->handled()
             ->whereNotNull('account_id')
             ->pluck('account_id')
             ->map(fn ($id) => (int) $id)

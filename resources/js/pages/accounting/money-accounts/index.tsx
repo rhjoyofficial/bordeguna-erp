@@ -55,11 +55,13 @@ export default function MoneyAccountsIndex({
     types,
     ledgerAccounts,
     unmappedCount,
+    courierLedgerAccountId,
 }: {
     accounts: MoneyAccount[];
     types: Option[];
     ledgerAccounts: Option[];
     unmappedCount: number;
+    courierLedgerAccountId: number | null;
 }) {
     const { canManageChartOfAccounts } = usePage<SharedData>().props;
     const [editing, setEditing] = useState<MoneyAccount | null>(null);
@@ -101,6 +103,17 @@ export default function MoneyAccountsIndex({
 
     const isCash = data.type === 'cash';
     const isMfs = data.type === 'mfs';
+    const isCourier = data.type === 'courier';
+
+    // ⚠ A courier's account can only report under 1145 Receivable from Couriers,
+    // so choosing the kind chooses the ledger account too.
+    const chooseType = (type: string) => {
+        setData((current) => ({
+            ...current,
+            type,
+            account_id: type === 'courier' && courierLedgerAccountId !== null ? String(courierLedgerAccountId) : current.account_id,
+        }));
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -155,7 +168,7 @@ export default function MoneyAccountsIndex({
                             <Label htmlFor="type" required>
                                 Kind
                             </Label>
-                            <SearchSelect fit id="type" value={data.type} onChange={(e) => setData('type', e.target.value)}>
+                            <SearchSelect fit id="type" value={data.type} onChange={(e) => chooseType(e.target.value)}>
                                 {types.map((type) => (
                                     <option key={type.value} value={type.value}>
                                         {type.label}
@@ -166,7 +179,7 @@ export default function MoneyAccountsIndex({
 
                         {!isCash && (
                             <div className="grid gap-2">
-                                <Label htmlFor="account_number">{isMfs ? 'Wallet number' : 'Account number'}</Label>
+                                <Label htmlFor="account_number">{isMfs ? 'Wallet number' : isCourier ? 'Merchant account' : 'Account number'}</Label>
                                 <Input
                                     id="account_number"
                                     value={data.account_number}
@@ -177,15 +190,15 @@ export default function MoneyAccountsIndex({
                             </div>
                         )}
 
-                        {isMfs && (
+                        {(isMfs || isCourier) && (
                             <div className="grid gap-2">
-                                <Label htmlFor="provider">Provider</Label>
+                                <Label htmlFor="provider">{isCourier ? 'Courier' : 'Provider'}</Label>
                                 <Input
                                     id="provider"
                                     value={data.provider}
                                     onChange={(e) => setData('provider', e.target.value)}
                                     className="w-36"
-                                    placeholder="bKash"
+                                    placeholder={isCourier ? 'Pathao' : 'bKash'}
                                 />
                             </div>
                         )}
@@ -220,6 +233,13 @@ export default function MoneyAccountsIndex({
                             </SearchSelect>
                             <InputError message={errors.account_id} />
                         </div>
+
+                        {isCourier && (
+                            <p className="text-muted-foreground w-full text-xs">
+                                Cash on delivery a courier has collected and not yet paid out. It fills when a parcel is recorded as delivered on its
+                                order, and nothing can be paid from it by hand.
+                            </p>
+                        )}
 
                         {editing && (
                             <label className="flex h-10 items-center gap-2 text-sm">

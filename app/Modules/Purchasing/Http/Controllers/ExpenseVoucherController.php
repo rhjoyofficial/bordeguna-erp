@@ -135,7 +135,7 @@ class ExpenseVoucherController extends Controller
             // MappingNotFound out of the action, so listing it would be offering
             // a guaranteed failure. The bank & cash screen now warns about
             // exactly this rather than letting it be discovered here.
-            'moneyAccounts' => MoneyAccount::query()
+            'moneyAccounts' => MoneyAccount::query()->handled()
                 ->where('is_active', true)
                 ->whereNotNull('account_id')
                 ->orderBy('name')

@@ -67,7 +67,7 @@ class LoanController extends Controller
                 ->map(fn (LoanType $t) => ['value' => $t->value, 'label' => $t->label()]),
             // Approving disburses, so the screen has to be able to ask where the
             // money came from at the moment it asks whether to lend it.
-            'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
+            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name'])
                 ->map(fn (MoneyAccount $a) => ['id' => $a->id, 'name' => $a->name]),
             'recoverableFrom' => $this->earliestRecoverableMonth(),

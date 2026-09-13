@@ -119,7 +119,7 @@ class RecurringExpenseController extends Controller
                 ->orderBy('code')->get(['id', 'code', 'name'])
                 ->map(fn (Account $a) => ['id' => $a->id, 'label' => $a->label()]),
 
-            'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
+            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name'])
                 ->map(fn (MoneyAccount $a) => ['id' => $a->id, 'name' => $a->name]),
 

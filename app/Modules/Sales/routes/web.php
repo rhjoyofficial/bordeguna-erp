@@ -5,6 +5,7 @@ use App\Modules\Sales\Http\Controllers\PosShiftController;
 use App\Modules\Sales\Http\Controllers\PromotionController;
 use App\Modules\Sales\Http\Controllers\QuotationController;
 use App\Modules\Sales\Http\Controllers\SalesTargetController;
+use App\Modules\Sales\Http\Controllers\ConsignmentController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
 use App\Modules\Sales\Http\Controllers\CustomerImportController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
@@ -152,6 +153,16 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // actually be invoiced). GET before the {invoice} wildcard.
         Route::get('invoices/create', [SalesInvoiceController::class, 'create'])->name('invoices.create');
         Route::post('invoices', [SalesInvoiceController::class, 'store'])->name('invoices.store');
+        // A challan handed to a courier, and the courier's answer. Same trust as
+        // recording the challan and billing it, which is what these replace.
+        Route::post('deliveries/{delivery}/consignment', [ConsignmentController::class, 'store'])
+            ->whereNumber('delivery')->name('consignments.store');
+        Route::post('consignments/{consignment}/outcome', [ConsignmentController::class, 'outcome'])
+            ->whereNumber('consignment')->name('consignments.outcome');
+    });
+
+    Route::middleware('can:sales.reports.view')->group(function () {
+        Route::get('consignments', [ConsignmentController::class, 'index'])->name('consignments.index');
     });
 
     // ⚠ Registered AFTER invoices/create so the literal segment wins.

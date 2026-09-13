@@ -365,6 +365,26 @@ it('deactivates a money account rather than offering to delete it', function () 
         ->toThrow(Exception::class);
 });
 
+it('files a courier account under Receivable from Couriers and nowhere else', function () {
+    // ⚠ Cash a courier is holding filed under Cash at Bank would overstate the
+    // bank on every balance sheet until the payout arrived.
+    $this->actingAs($this->founder)
+        ->post(route('accounting.money-accounts.store'), [
+            'name' => 'Pathao', 'type' => MoneyAccountType::Courier->value,
+            'account_id' => $this->bank->id, 'is_active' => true,
+        ])
+        ->assertSessionHasErrors('account_id');
+
+    $this->actingAs($this->founder)
+        ->post(route('accounting.money-accounts.store'), [
+            'name' => 'Pathao', 'type' => MoneyAccountType::Courier->value,
+            'account_id' => Account::bySlug('courier_receivable')->id, 'is_active' => true,
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect(MoneyAccount::query()->sole()->account_id)->toBe(Account::bySlug('courier_receivable')->id);
+});
+
 it('refuses to let a reader change where the money is', function () {
     $this->actingAs($this->coordinator)
         ->post(route('accounting.money-accounts.store'), [

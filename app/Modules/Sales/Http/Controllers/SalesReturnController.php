@@ -128,7 +128,7 @@ class SalesReturnController extends Controller
             'lines' => $lines,
             'invoiceLookupError' => $invoiceLookupError,
             'can_refund' => $request->user()->can('sales.returns.refund'),
-            'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
+            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
         ]);
     }
@@ -229,7 +229,7 @@ class SalesReturnController extends Controller
             // this did to the books" is the trust-building question.
             'journal' => $journal,
             'can_refund' => $request->user()->can('sales.returns.refund'),
-            'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
+            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
         ]);
     }

@@ -82,6 +82,283 @@ interface Exposure {
     total: string;
 }
 
+// A challan served this order, with what a courier needs: its lines, its parcel,
+// and what an invoice for all of it would come to today.
+interface Challan {
+    id: number;
+    delivery_number: string;
+    delivered_at: string;
+    can_consign: boolean;
+    cod_preview: string | null;
+    lines: { id: number; product: string | null; sku: string | null; quantity: string }[];
+    consignment: {
+        id: number;
+        courier: string | null;
+        consignment_number: string;
+        cod_amount: string;
+        status: 'booked' | 'delivered' | 'partially_delivered' | 'returned';
+        status_label: string;
+        outcome_on: string | null;
+        collected_amount: string | null;
+        invoice: { id: number; invoice_number: string } | null;
+        sales_return: { id: number; return_number: string } | null;
+    } | null;
+}
+
+const today = () => new Date().toLocaleDateString('en-CA');
+
+function BookParcelForm({ challan, couriers }: { challan: Challan; couriers: { id: number; name: string }[] }) {
+    const { data, setData, post, errors, processing } = useForm({
+        money_account_id: couriers.length === 1 ? String(couriers[0].id) : '',
+        consignment_number: '',
+        cod_amount: challan.cod_preview ?? '',
+    });
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(route('sales.consignments.store', challan.id), { preserveScroll: true });
+    };
+
+    return (
+        <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3">
+            <div className="grid gap-1">
+                <Label>Courier</Label>
+                <SearchableSelect
+                    value={data.money_account_id}
+                    onChange={(v) => setData('money_account_id', v)}
+                    options={couriers.map((c) => ({ value: String(c.id), label: c.name }))}
+                    placeholder="Select courier"
+                    searchPlaceholder="Search couriers…"
+                />
+                <InputError message={errors.money_account_id} />
+            </div>
+            <div className="grid gap-1">
+                <Label>Consignment number</Label>
+                <Input className="w-48" value={data.consignment_number} onChange={(e) => setData('consignment_number', e.target.value)} />
+                <InputError message={errors.consignment_number} />
+            </div>
+            <div className="grid gap-1">
+                <Label>Amount to collect</Label>
+                <Input className="w-32" value={data.cod_amount} onChange={(e) => setData('cod_amount', e.target.value)} />
+                <InputError message={errors.cod_amount} />
+            </div>
+            <Button size="sm" disabled={processing}>
+                Hand to courier
+            </Button>
+            <p className="text-muted-foreground w-full text-xs">
+                {challan.cod_preview !== null
+                    ? `${challan.cod_preview} is what the invoice for this whole challan comes to today, delivery charge and any discount included. `
+                    : 'A line on this challan has no price to bill at, so the amount could not be worked out. '}
+                Enter 0 for a parcel already paid for. The invoice is raised when the courier confirms delivery.
+            </p>
+        </form>
+    );
+}
+
+function ParcelOutcomeForm({ challan }: { challan: Challan }) {
+    const consignment = challan.consignment!;
+    const { data, setData, post, errors, processing } = useForm<{
+        outcome: 'delivered' | 'partially_delivered' | 'returned';
+        outcome_on: string;
+        collected_amount: string;
+        note: string;
+        lines: { delivery_line_id: number; taken: string; written_off: string }[];
+    }>({
+        outcome: 'delivered',
+        outcome_on: today(),
+        collected_amount: consignment.cod_amount,
+        note: '',
+        lines: challan.lines.map((line) => ({ delivery_line_id: line.id, taken: line.quantity, written_off: '0' })),
+    });
+
+    const setOutcome = (outcome: typeof data.outcome) => {
+        setData((current) => ({
+            ...current,
+            outcome,
+            collected_amount: outcome === 'returned' ? '0' : consignment.cod_amount,
+            lines: challan.lines.map((line) => ({
+                delivery_line_id: line.id,
+                taken: outcome === 'returned' ? '0' : line.quantity,
+                written_off: '0',
+            })),
+        }));
+    };
+
+    const updateLine = (id: number, patch: { taken?: string; written_off?: string }) =>
+        setData(
+            'lines',
+            data.lines.map((line) => (line.delivery_line_id === id ? { ...line, ...patch } : line)),
+        );
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(route('sales.consignments.outcome', consignment.id), { preserveScroll: true });
+    };
+
+    const lineErrors = errors as Record<string, string | undefined>;
+
+    return (
+        <form onSubmit={submit} className="mt-3 flex flex-col gap-3">
+            <div className="flex flex-wrap items-end gap-3">
+                <div className="grid gap-1">
+                    <Label>What the courier reported</Label>
+                    <select
+                        className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+                        value={data.outcome}
+                        onChange={(e) => setOutcome(e.target.value as typeof data.outcome)}
+                    >
+                        <option value="delivered">Delivered</option>
+                        <option value="partially_delivered">Partly delivered</option>
+                        <option value="returned">Returned</option>
+                    </select>
+                    <InputError message={errors.outcome} />
+                </div>
+                <div className="grid gap-1">
+                    <Label>On</Label>
+                    <Input type="date" className="w-40" value={data.outcome_on} onChange={(e) => setData('outcome_on', e.target.value)} />
+                    <InputError message={errors.outcome_on} />
+                </div>
+                <div className="grid gap-1">
+                    <Label>Collected</Label>
+                    <Input
+                        className="w-32"
+                        value={data.collected_amount}
+                        disabled={data.outcome === 'returned'}
+                        onChange={(e) => setData('collected_amount', e.target.value)}
+                    />
+                </div>
+            </div>
+            <InputError message={errors.collected_amount} />
+
+            {data.outcome !== 'delivered' && (
+                <table className="w-full max-w-2xl text-sm">
+                    <thead>
+                        <tr className="text-muted-foreground text-left">
+                            <th className="py-1">Product</th>
+                            <th className="py-1">Sent</th>
+                            {data.outcome === 'partially_delivered' && <th className="py-1">Customer took</th>}
+                            <th className="py-1">Came back damaged</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {challan.lines.map((line) => {
+                            const draft = data.lines.find((entry) => entry.delivery_line_id === line.id)!;
+
+                            return (
+                                <tr key={line.id}>
+                                    <td className="py-1">
+                                        {line.product} <span className="text-muted-foreground">({line.sku})</span>
+                                    </td>
+                                    <td className="py-1 tabular-nums">{line.quantity}</td>
+                                    {data.outcome === 'partially_delivered' && (
+                                        <td className="py-1">
+                                            <Input
+                                                className="w-24"
+                                                value={draft.taken}
+                                                onChange={(e) => updateLine(line.id, { taken: e.target.value })}
+                                            />
+                                            <InputError message={lineErrors[`lines.${line.id}.taken`]} />
+                                        </td>
+                                    )}
+                                    <td className="py-1">
+                                        <Input
+                                            className="w-24"
+                                            value={draft.written_off}
+                                            onChange={(e) => updateLine(line.id, { written_off: e.target.value })}
+                                        />
+                                        <InputError message={lineErrors[`lines.${line.id}.written_off`]} />
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            )}
+            <InputError message={errors.lines} />
+
+            <p className="text-muted-foreground text-xs">
+                {data.outcome === 'delivered' &&
+                    'Raises the invoice for this challan and records what the courier collected as the customer’s payment, held by the courier until its payout.'}
+                {data.outcome === 'partially_delivered' &&
+                    'Invoices what the customer took. Everything else comes back to the warehouse, except what you mark as damaged, which is written off.'}
+                {data.outcome === 'returned' &&
+                    'No invoice. The goods come back to the warehouse, except what you mark as damaged, which is written off.'}
+            </p>
+            <div className="flex items-center gap-2">
+                <Input className="max-w-sm" placeholder="Note (optional)" value={data.note} onChange={(e) => setData('note', e.target.value)} />
+                <Button size="sm" disabled={processing}>
+                    Record
+                </Button>
+            </div>
+        </form>
+    );
+}
+
+function ChallanCard({
+    challan,
+    couriers,
+    canDeliver,
+    canRecordOutcome,
+}: {
+    challan: Challan;
+    couriers: { id: number; name: string }[];
+    canDeliver: boolean;
+    canRecordOutcome: boolean;
+}) {
+    const consignment = challan.consignment;
+
+    return (
+        <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+                <Link href={route('sales.deliveries.index', { search: challan.delivery_number })} className="underline">
+                    {challan.delivery_number}
+                </Link>
+                <span className="text-muted-foreground">- {challan.delivered_at}</span>
+                {consignment && (
+                    <Badge variant={consignment.status === 'booked' ? 'secondary' : consignment.status === 'returned' ? 'destructive' : 'default'}>
+                        {consignment.status_label}
+                    </Badge>
+                )}
+            </div>
+
+            {consignment && (
+                <p className="text-muted-foreground mt-1">
+                    {consignment.courier} consignment <span className="text-foreground font-medium">{consignment.consignment_number}</span>, to
+                    collect {consignment.cod_amount}
+                    {consignment.outcome_on && ` - reported ${consignment.outcome_on}`}
+                    {consignment.collected_amount !== null && consignment.status !== 'booked' && `, collected ${consignment.collected_amount}`}
+                    {consignment.invoice && (
+                        <>
+                            {', '}
+                            <Link href={route('sales.invoices.show', consignment.invoice.id)} className="text-foreground underline">
+                                {consignment.invoice.invoice_number}
+                            </Link>
+                        </>
+                    )}
+                    {consignment.sales_return && (
+                        <>
+                            {', '}
+                            <Link href={route('sales.returns.show', consignment.sales_return.id)} className="text-foreground underline">
+                                {consignment.sales_return.return_number}
+                            </Link>
+                        </>
+                    )}
+                </p>
+            )}
+
+            {consignment?.status === 'booked' && canRecordOutcome && <ParcelOutcomeForm challan={challan} />}
+
+            {challan.can_consign && canDeliver && couriers.length > 0 && <BookParcelForm challan={challan} couriers={couriers} />}
+
+            {challan.can_consign && canDeliver && couriers.length === 0 && (
+                <p className="text-muted-foreground mt-1 text-xs">
+                    To send this with a courier, add the courier under Accounting, Bank &amp; cash, as a Courier account.
+                </p>
+            )}
+        </div>
+    );
+}
+
 const statusVariant: Record<Order['status'], 'secondary' | 'default' | 'outline' | 'destructive'> = {
     open: 'secondary',
     partially_delivered: 'outline',
@@ -196,17 +473,23 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
 
 export default function SalesOrderShow({
     order,
+    challans,
+    couriers,
     exposure,
     can_approve,
     can_deliver,
     can_cancel,
+    can_record_outcome,
     warehouses,
 }: {
     order: Order;
+    challans: Challan[];
+    couriers: { id: number; name: string }[];
     exposure: Exposure;
     can_approve: boolean;
     can_deliver: boolean;
     can_cancel: boolean;
+    can_record_outcome: boolean;
     warehouses: { id: number; name: string; is_default?: boolean }[];
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
@@ -218,13 +501,6 @@ export default function SalesOrderShow({
     const reject = (review_note: string) => router.post(route('sales.orders.reject', order.id), { review_note });
     const cancel = () => router.post(route('sales.orders.cancel', order.id));
     const closeShort = (reason: string) => router.post(route('sales.orders.close', order.id), { reason });
-
-    // Every challan that served this order, deduplicated across lines.
-    const challans = [
-        ...new Map(
-            order.lines.flatMap((line) => line.delivery_lines).map((deliveryLine) => [deliveryLine.delivery.id, deliveryLine.delivery]),
-        ).values(),
-    ];
 
     const overLimit = exposure.credit_limit !== null && parseFloat(exposure.total) > parseFloat(exposure.credit_limit);
     // Only a column when some line carries one: an order typed into the ERP never does.
@@ -439,12 +715,13 @@ export default function SalesOrderShow({
                     <div className="flex flex-col gap-2">
                         <h3 className="font-medium">Challans against this order</h3>
                         {challans.map((challan) => (
-                            <div key={challan.id} className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
-                                <Link href={route('sales.deliveries.index', { search: challan.delivery_number })} className="underline">
-                                    {challan.delivery_number}
-                                </Link>{' '}
-                                <span className="text-muted-foreground">- {challan.delivered_at}</span>
-                            </div>
+                            <ChallanCard
+                                key={challan.id}
+                                challan={challan}
+                                couriers={couriers}
+                                canDeliver={can_deliver}
+                                canRecordOutcome={can_record_outcome}
+                            />
                         ))}
                     </div>
                 )}

@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\SalesInvoice;
@@ -41,6 +42,7 @@ class RecordCustomerReceipt
         User $createdBy,
         ?string $reference = null,
         ?string $note = null,
+        ?Consignment $consignment = null,
     ): CustomerReceipt {
         $date = Carbon::parse($receivedOn)->startOfDay();
 
@@ -49,6 +51,16 @@ class RecordCustomerReceipt
         if ($moneyAccount->business_id !== $customer->business_id) {
             throw ValidationException::withMessages([
                 'money_account_id' => 'That account belongs to a different business.',
+            ]);
+        }
+
+        // ⚠⚠ Cash a courier holds arrives in its account ONLY through a recorded
+        // parcel outcome. A receipt typed into it by hand would say a courier
+        // owes money for a parcel nobody can name, and its payout statement
+        // would never reconcile.
+        if ($moneyAccount->isCourier() && ($consignment === null || $consignment->money_account_id !== $moneyAccount->id)) {
+            throw ValidationException::withMessages([
+                'money_account_id' => "{$moneyAccount->name} is a courier's account. Money reaches it when a parcel's delivery is recorded, not as a receipt.",
             ]);
         }
 

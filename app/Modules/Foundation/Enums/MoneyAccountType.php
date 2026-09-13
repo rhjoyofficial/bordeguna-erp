@@ -15,12 +15,24 @@ enum MoneyAccountType: string
     case Cash = 'cash';
     case Mfs = 'mfs';
 
+    /**
+     * Cash on delivery a courier has collected and not yet paid out, reported
+     * under 1145 Receivable from Couriers. It reconciles to the courier's payout
+     * statement.
+     *
+     * ⚠ Nobody pays from it or receives into it by hand: a recorded parcel
+     * outcome puts money in, and the courier's statement takes it out. See
+     * MoneyAccount::scopeHandled.
+     */
+    case Courier = 'courier';
+
     public function label(): string
     {
         return [
             'bank' => 'Bank account',
             'cash' => 'Cash',
             'mfs' => 'Mobile financial service',
+            'courier' => 'Courier (cash on delivery)',
         ][$this->value] ?? $this->value;
     }
 }

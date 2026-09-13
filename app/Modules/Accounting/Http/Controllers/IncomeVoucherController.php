@@ -110,7 +110,7 @@ class IncomeVoucherController extends Controller
             // ⚠ Active accounts WITH a ledger mapping. An unmapped one throws
             // MappingNotFound out of the action, so listing it would be offering
             // a guaranteed failure.
-            'moneyAccounts' => MoneyAccount::query()
+            'moneyAccounts' => MoneyAccount::query()->handled()
                 ->where('is_active', true)
                 ->whereNotNull('account_id')
                 ->orderBy('name')

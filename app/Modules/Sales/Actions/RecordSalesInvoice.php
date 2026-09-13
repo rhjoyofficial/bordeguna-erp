@@ -151,6 +151,15 @@ class RecordSalesInvoice
                         ]);
                     }
 
+                    // ⚠⚠ A challan out with a courier is invoiced when the courier
+                    // confirms delivery (Joy, 13 September), never before: billing
+                    // it by hand would bill a parcel the customer may refuse.
+                    if ($open = $deliveryLine->delivery->openConsignment()) {
+                        throw ValidationException::withMessages([
+                            "lines.{$index}.deliveryLine" => "Challan {$deliveryLine->delivery->delivery_number} is out with {$open->courier->name} (consignment {$open->consignment_number}). It is invoiced when the courier's answer is recorded.",
+                        ]);
+                    }
+
                     $uninvoiced = $this->scale($deliveryLine->quantityUninvoiced());
                     $billing = $this->scale($quantity);
 

@@ -155,7 +155,7 @@ class ExpenseImportController extends Controller
                 ->where('type', AccountType::Expense)->where('is_postable', true)->where('is_active', true)
                 ->orderBy('code')->get(['id', 'code', 'name'])
                 ->map(fn (Account $a) => ['code' => $a->code, 'label' => $a->label()]),
-            'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
+            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name'])->pluck('name'),
             'limits' => [
                 'max_rows' => StagedImportFile::MAX_ROWS,

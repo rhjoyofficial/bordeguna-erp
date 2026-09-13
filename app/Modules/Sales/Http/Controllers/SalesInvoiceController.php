@@ -16,6 +16,7 @@ use App\Modules\Foundation\Support\ThermalProfile;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
+use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
@@ -93,7 +94,10 @@ class SalesInvoiceController extends Controller
 
         if ($customer !== null) {
             $lines = DeliveryLine::query()
-                ->whereHas('delivery', fn ($q) => $q->where('customer_id', $customer->id))
+                ->whereHas('delivery', fn ($q) => $q->where('customer_id', $customer->id)
+                    // ⚠ A parcel still with a courier is invoiced by the courier's
+                    // answer, so it is not offered here to be billed by hand.
+                    ->whereDoesntHave('consignment', fn ($c) => $c->where('status', ConsignmentStatus::Booked)))
                 ->whereColumn('quantity_invoiced', '<', 'quantity')
                 ->with(['delivery:id,delivery_number,delivered_at', 'product:id,name,sku', 'orderLine.order:id,order_number'])
                 ->get();
@@ -312,7 +316,7 @@ class SalesInvoiceController extends Controller
             // trust the system, and hiding it behind the ledger screen is how
             // people stop checking.
             'journal' => $journal,
-            'moneyAccounts' => MoneyAccount::query()->where('is_active', true)
+            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
         ]);
     }

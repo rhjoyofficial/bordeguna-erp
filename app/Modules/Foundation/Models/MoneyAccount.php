@@ -74,6 +74,22 @@ class MoneyAccount extends Model
     }
 
     /**
+     * Accounts a person pays from or receives into by hand: everything except a
+     * courier's. ⚠ Every screen that offers a money account for a payment or a
+     * receipt uses this, so cash a courier is holding can never be picked to pay
+     * a supplier or take a counter sale.
+     */
+    public function scopeHandled(Builder $query): Builder
+    {
+        return $query->where('type', '!=', MoneyAccountType::Courier->value);
+    }
+
+    public function isCourier(): bool
+    {
+        return $this->type === MoneyAccountType::Courier;
+    }
+
+    /**
      * ⚠⚠ THERE IS DELIBERATELY NO `account()` RELATION HERE, even though
      * `account_id` is a column on this table.
      *
