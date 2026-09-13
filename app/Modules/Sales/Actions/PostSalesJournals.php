@@ -156,7 +156,10 @@ class PostSalesJournals
 
         $invoice->loadMissing('lines', 'customer');
 
-        $subtotal = Money::ofTaka((string) $invoice->subtotal);
+        // ⭐ Goods credit sales revenue; a delivery charge credits 4300 Delivery
+        // Charges Income, its own line on the profit and loss (Joy, 13 Sep).
+        $subtotal = $invoice->goodsSubtotal();
+        $delivery = $invoice->deliveryChargeTotal();
         $discount = Money::ofTaka((string) $invoice->invoice_discount);
         $total = Money::ofTaka((string) $invoice->total);
         $cost = $invoice->costReleased();
@@ -184,6 +187,14 @@ class PostSalesJournals
 
         if (! $subtotal->isZero()) {
             $lines[] = JournalLineDraft::credit($revenue->id, $subtotal, $invoice->invoice_number);
+        }
+
+        // ⚠ Resolved only when there is a charge, so a business whose website
+        // was never configured still invoices counter sales; one that bills a
+        // charge with no mapping is refused with the mapping named.
+        if (! $delivery->isZero()) {
+            $deliveryIncome = AccountMapping::resolve('sales.delivery_income', $on);
+            $lines[] = JournalLineDraft::credit($deliveryIncome->id, $delivery, 'Delivery on '.$invoice->invoice_number);
         }
 
         if ($lines === []) {

@@ -15,6 +15,7 @@ class SalesInvoiceLine extends Model
         'business_id',
         'sales_invoice_id',
         'delivery_line_id',
+        'billed_delivery_for_order_id',
         'product_id',
         'description',
         'quantity',
@@ -59,5 +60,19 @@ class SalesInvoiceLine extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * The order whose agreed delivery charge this line bills. ⚠ Such a line
+     * credits 4300 Delivery Charges Income, never sales revenue.
+     */
+    public function deliveryChargeFor(): BelongsTo
+    {
+        return $this->belongsTo(SalesOrder::class, 'billed_delivery_for_order_id');
+    }
+
+    public function isDeliveryCharge(): bool
+    {
+        return $this->billed_delivery_for_order_id !== null;
     }
 }

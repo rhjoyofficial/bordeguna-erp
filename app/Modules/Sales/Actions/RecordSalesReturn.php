@@ -416,7 +416,9 @@ class RecordSalesReturn
             // net over the subtotal - the same proportion the posting debited
             // Discounts Allowed with, sliced per line.
             $invoice = $invoiceLine->invoice;
-            $subtotal = Money::ofTaka((string) $invoice->subtotal);
+            // ⚠ Over the GOODS subtotal: a delivery charge line carries no share
+            // of the discount, so it must not dilute the goods lines' shares.
+            $subtotal = $invoice->goodsSubtotal();
             $invoiceDiscount = Money::ofTaka((string) $invoice->invoice_discount);
             $lineDiscountShare = $subtotal->minor > 0
                 ? (int) round($invoiceDiscount->minor * $lineNet->minor / $subtotal->minor)

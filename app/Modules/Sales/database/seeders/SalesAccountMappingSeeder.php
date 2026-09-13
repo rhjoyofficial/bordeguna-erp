@@ -50,6 +50,10 @@ class SalesAccountMappingSeeder extends Seeder
         // ⚠ GROSS, never netted into 4100 (C-SR-5): the return rate is a real
         // operational signal for a food business, and netting hides it.
         'sales.sales_returns' => 'sales_returns',
+
+        // ⭐ A website order's agreed delivery charge, billed once on the first
+        // invoice for that order (Joy, 13 September). Its own income line.
+        'sales.delivery_income' => 'delivery_income',
     ];
 
     public function run(): void

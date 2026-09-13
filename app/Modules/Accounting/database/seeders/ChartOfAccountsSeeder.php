@@ -146,6 +146,11 @@ class ChartOfAccountsSeeder extends Seeder
         // discount from a return, which are different events that happened to
         // share a line in the default chart, and leaves 4200 to Phase 4.
         ['4210', 'Discounts Allowed', AccountType::Income, '4000', true, 'discounts_allowed'],
+        // ⭐ Joy, 13 September: what a customer pays for DELIVERY is income of its
+        // own, shown beside sales revenue rather than inside it. What the courier
+        // charges the shop stays an expense (6371), so the profit and loss shows
+        // both halves of delivery instead of a net figure nobody can explain.
+        ['4300', 'Delivery Charges Income', AccountType::Income, '4000', true, 'delivery_income'],
         // ⚠⚠ A HEADING, NOT A POSTABLE ACCOUNT, since the income voucher
         // landed (6 Sep 2026). It was postable and unreachable for a month:
         // nothing in the application could write to it, so scrap, interest and

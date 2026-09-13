@@ -155,8 +155,8 @@ class SalesOrder extends Model
      * columns exist - a price list corrected next week must not change what
      * this order says the customer owes.
      *
-     * ⛔ It is NOT an invoice total and must not be used as one. The delivery
-     * charge has no account mapping yet, so nothing in Accounting reads this.
+     * ⛔ It is NOT an invoice total and must not be used as one. Invoices bill
+     * the goods they cover; the delivery charge rides on the first of them.
      */
     public function agreedTotal(): string
     {
@@ -189,6 +189,22 @@ class SalesOrder extends Model
     public function orderDiscount(): Money
     {
         return Money::ofTaka((string) ($this->order_discount ?? '0'));
+    }
+
+    public function deliveryCharge(): Money
+    {
+        return Money::ofTaka((string) ($this->delivery_charge ?? '0'));
+    }
+
+    /**
+     * Has an invoice already billed this order's delivery charge?
+     *
+     * ⚠ Read under the caller's lock on the order when it decides billing; the
+     * unique index on `billed_delivery_for_order_id` is the backstop.
+     */
+    public function deliveryChargeBilled(): bool
+    {
+        return SalesInvoiceLine::query()->where('billed_delivery_for_order_id', $this->id)->exists();
     }
 
     /**

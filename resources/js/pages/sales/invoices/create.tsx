@@ -44,6 +44,7 @@ export default function InvoiceCreate({
     customerId,
     billable,
     agreed_order_discounts,
+    agreed_delivery_charges,
 }: {
     customers: { id: number; name: string }[];
     customerId: number | null;
@@ -51,6 +52,9 @@ export default function InvoiceCreate({
     // Website slice 2.5b: what each order agreed off the WHOLE order (a coupon),
     // previewed for billing everything shown. The server bills it automatically.
     agreed_order_discounts: { order_number: string; coupon_code: string | null; amount: string }[];
+    // The delivery charge each website order agreed, not yet billed. The server
+    // adds it as its own line on the first invoice billing that order's goods.
+    agreed_delivery_charges: { order_number: string; amount: string }[];
 }) {
     const { data, setData, post, errors, processing } = useForm<{
         customer_id: string;
@@ -120,7 +124,9 @@ export default function InvoiceCreate({
         0,
     );
     const agreedOrderDiscount = agreed_order_discounts.reduce((sum, row) => sum + parseFloat(row.amount), 0);
-    const total = subtotal - agreedOrderDiscount - parseFloat(data.invoice_discount || '0');
+    const deliveryCharges = agreed_delivery_charges.reduce((sum, row) => sum + parseFloat(row.amount), 0);
+    const total = subtotal + deliveryCharges - agreedOrderDiscount - parseFloat(data.invoice_discount || '0');
+    const showTotal = deliveryCharges > 0 || agreedOrderDiscount > 0 || parseFloat(data.invoice_discount || '0') > 0;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -247,13 +253,25 @@ export default function InvoiceCreate({
                             </div>
                         </div>
 
+                        {agreed_delivery_charges.length > 0 && (
+                            <div className="text-sm">
+                                {agreed_delivery_charges.map((row) => (
+                                    <p key={row.order_number}>
+                                        Delivery charge {row.amount} agreed on {row.order_number} is added as its own line, once, on the first invoice
+                                        that bills goods from that order.
+                                    </p>
+                                ))}
+                            </div>
+                        )}
+
                         <InputError message={errors.lines} />
 
                         <div className="flex items-center gap-4">
                             <Button disabled={processing || included.length === 0}>Raise invoice</Button>
                             <p className="text-muted-foreground text-sm tabular-nums">
-                                {included.length} line{included.length === 1 ? '' : 's'} - subtotal {subtotal.toFixed(2)}
-                                {parseFloat(data.invoice_discount || '0') > 0 && <> - total after discount {total.toFixed(2)}</>}
+                                {included.length} line{included.length === 1 ? '' : 's'} - goods {subtotal.toFixed(2)}
+                                {deliveryCharges > 0 && <> - delivery {deliveryCharges.toFixed(2)}</>}
+                                {showTotal && <> - total {total.toFixed(2)}</>}
                             </p>
                         </div>
                     </form>

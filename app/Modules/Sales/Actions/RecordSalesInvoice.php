@@ -100,6 +100,7 @@ class RecordSalesInvoice
 
             // Net billed on this invoice per sales order, in paisa (slice 2.5b).
             $netByOrder = [];
+            $deliveryBilled = Money::zero();
 
             foreach ($lines as $index => $entry) {
                 $quantity = $entry['quantity'];
@@ -208,7 +209,36 @@ class RecordSalesInvoice
                 /** @var SalesOrder|null $order */
                 $order = SalesOrder::query()->whereKey($orderId)->lockForUpdate()->with('lines.deliveryLines')->first();
 
-                if ($order === null || $order->orderDiscount()->isZero()) {
+                if ($order === null) {
+                    continue;
+                }
+
+                // ⭐⭐ THE DELIVERY CHARGE THE ORDER AGREED rides on the FIRST
+                // invoice that bills any of its goods, whole, as a line of its
+                // own crediting 4300 Delivery Charges Income (Joy, 13 September).
+                // Whole rather than shared, because a parcel is carried once
+                // however many invoices its goods are billed on.
+                // ⚠ Decided under the lock above; the unique index on
+                // `billed_delivery_for_order_id` refuses a second one regardless.
+                $deliveryCharge = $order->deliveryCharge();
+
+                if ($deliveryCharge->minor > 0 && ! $order->deliveryChargeBilled()) {
+                    $invoice->lines()->create([
+                        'business_id' => $invoice->business_id,
+                        'billed_delivery_for_order_id' => $order->id,
+                        'description' => "Delivery charge ({$order->order_number})",
+                        'quantity' => '1',
+                        'unit_price' => $deliveryCharge->toTaka(),
+                        'line_discount' => '0',
+                        'line_net' => $deliveryCharge->toTaka(),
+                        'cost_released' => '0',
+                    ]);
+
+                    $subtotal = $subtotal->plus($deliveryCharge);
+                    $deliveryBilled = $deliveryBilled->plus($deliveryCharge);
+                }
+
+                if ($order->orderDiscount()->isZero()) {
                     continue;
                 }
 
@@ -230,9 +260,11 @@ class RecordSalesInvoice
 
             // ⚠ Discounting more than the bill would make the customer owe a
             // negative amount, which is a credit note - a different document.
-            if ($discount->minor > $subtotal->minor) {
+            // ⚠ Measured against the GOODS: a discount is never taken off a
+            // delivery charge, which is billed exactly as the order agreed.
+            if ($discount->minor > $subtotal->minor - $deliveryBilled->minor) {
                 throw ValidationException::withMessages([
-                    'invoice_discount' => 'The discount cannot exceed the invoice subtotal.',
+                    'invoice_discount' => 'The discount cannot exceed the invoice subtotal for goods. A delivery charge is not discounted.',
                 ]);
             }
 

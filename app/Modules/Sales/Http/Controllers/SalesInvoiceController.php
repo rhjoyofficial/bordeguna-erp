@@ -141,7 +141,20 @@ class SalesInvoiceController extends Controller
             foreach ($lines->filter(fn (DeliveryLine $line) => $line->orderLine !== null)->groupBy(fn ($line) => $line->orderLine->sales_order_id) as $orderId => $orderLines) {
                 $order = SalesOrder::query()->with('lines')->find($orderId);
 
-                if ($order === null || $order->orderDiscount()->isZero()) {
+                if ($order === null) {
+                    continue;
+                }
+
+                // ⭐ The delivery charge rides on the first invoice billing any
+                // of the order's goods. Preview only, like the discount below.
+                if ($order->deliveryCharge()->minor > 0 && ! $order->deliveryChargeBilled()) {
+                    $agreedDeliveryCharges[] = [
+                        'order_number' => $order->order_number,
+                        'amount' => $order->deliveryCharge()->toTaka(),
+                    ];
+                }
+
+                if ($order->orderDiscount()->isZero()) {
                     continue;
                 }
 
@@ -163,6 +176,7 @@ class SalesInvoiceController extends Controller
             'customerId' => $customerId,
             'billable' => $billable,
             'agreed_order_discounts' => $agreedOrderDiscounts ?? [],
+            'agreed_delivery_charges' => $agreedDeliveryCharges ?? [],
         ]);
     }
 

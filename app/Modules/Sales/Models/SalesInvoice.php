@@ -128,6 +128,32 @@ class SalesInvoice extends Model
     }
 
     /**
+     * The delivery charges this invoice bills for the orders it covers, which
+     * credit 4300 Delivery Charges Income rather than sales revenue.
+     */
+    public function deliveryChargeTotal(): Money
+    {
+        return $this->lines->reduce(
+            fn (Money $carry, SalesInvoiceLine $line) => $line->isDeliveryCharge()
+                ? $carry->plus(Money::ofTaka((string) $line->line_net))
+                : $carry,
+            Money::zero(),
+        );
+    }
+
+    /**
+     * The subtotal less its delivery charges: what a whole-invoice discount is
+     * taken from, what revenue is credited with, and what a return pro-rates the
+     * discount over. ⚠ A coupon was agreed on goods, so none of it belongs to a
+     * delivery line, and attributing a share there would let a full return
+     * refund more than the customer paid for the goods.
+     */
+    public function goodsSubtotal(): Money
+    {
+        return Money::ofMinor(Money::ofTaka((string) $this->subtotal)->minor - $this->deliveryChargeTotal()->minor);
+    }
+
+    /**
      * The cost this invoice released from GDNI into Cost of Goods Sold.
      */
     public function costReleased(): Money
