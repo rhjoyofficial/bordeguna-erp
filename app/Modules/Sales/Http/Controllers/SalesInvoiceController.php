@@ -299,7 +299,18 @@ class SalesInvoiceController extends Controller
             ->first();
 
         return Inertia::render('sales/invoices/show', [
-            'invoice' => $invoice,
+            // ⚠ Dates as Dhaka dates, the print page's lesson: handed over inside
+            // the model they serialise as UTC timestamps, and the page sliced
+            // those, showing an invoice and its payments a day early.
+            'invoice' => array_merge($invoice->toArray(), [
+                'invoice_date' => $invoice->invoice_date?->toDateString(),
+                'due_date' => $invoice->due_date?->toDateString(),
+                'allocations' => $invoice->allocations->map(fn ($allocation) => array_merge($allocation->toArray(), [
+                    'receipt' => $allocation->receipt === null ? null : array_merge($allocation->receipt->toArray(), [
+                        'received_on' => $allocation->receipt->received_on?->toDateString(),
+                    ]),
+                ]))->all(),
+            ]),
             // The delivery a return against this invoice would come back on -
             // the invoice page is where a counter return naturally starts.
             'returnDeliveryId' => $invoice->lines

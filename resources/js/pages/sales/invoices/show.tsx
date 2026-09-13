@@ -75,7 +75,8 @@ export default function InvoiceShow({
     const { data, setData, post, errors, processing, reset } = useForm({
         money_account_id: String(moneyAccounts[0]?.id ?? ''),
         amount: outstanding,
-        received_on: new Date().toISOString().slice(0, 10),
+        // The local date: toISOString() is UTC, which before 6am in Dhaka is yesterday.
+        received_on: new Date().toLocaleDateString('en-CA'),
         reference: '',
     });
 

@@ -329,6 +329,21 @@ it('records a courier answer once', function () {
         ->and(SalesReturn::query()->count())->toBe(0);
 });
 
+it('shows the order and its invoice on their Dhaka dates, not a day early', function () {
+    $order = ($this->order)('1');
+    ($this->book)(($this->deliver)($order, '1'), '850');
+    ($this->report)(Consignment::query()->sole(), 'delivered', '850')->assertSessionHasNoErrors();
+
+    $orderProps = $this->actingAs($this->staff)->get('/sales/orders/'.$order->id)->original->getData()['page']['props'];
+    $invoiceProps = $this->actingAs($this->staff)->get('/sales/invoices/'.SalesInvoice::query()->sole()->id)->original->getData()['page']['props'];
+
+    // Dhaka midnight is 18:00 the day before in UTC, which the pages used to print.
+    expect($orderProps['order']['ordered_at'])->toBe('2026-09-14')
+        ->and($invoiceProps['invoice']['invoice_date'])->toBe('2026-09-14')
+        ->and($invoiceProps['invoice']['allocations'][0]['receipt']['received_on'])->toBe('2026-09-14')
+        ->and($invoiceProps['invoice']['allocations'][0]['receipt']['money_account']['name'])->toBe('Pathao');
+});
+
 it('opens the parcels list on what is still with the courier', function () {
     $order = ($this->order)('1');
     ($this->book)(($this->deliver)($order, '1'), '850');

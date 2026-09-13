@@ -258,7 +258,13 @@ class SalesOrderController extends Controller
             });
 
         return Inertia::render('sales/orders/show', [
-            'order' => $order,
+            // ⚠ The order's dates are Dhaka dates. Handed over inside the model
+            // they serialise as UTC timestamps, so the page printed
+            // "2026-09-12T18:00:00.000000Z" for an order placed on the 13th.
+            'order' => array_merge($order->toArray(), [
+                'ordered_at' => $order->ordered_at?->toDateString(),
+                'expected_date' => $order->expected_date?->toDateString(),
+            ]),
             'challans' => $challans,
             'couriers' => MoneyAccount::query()->active()->where('type', MoneyAccountType::Courier->value)
                 ->orderBy('name')->get(['id', 'name']),
