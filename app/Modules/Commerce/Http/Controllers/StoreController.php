@@ -7,6 +7,7 @@ use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Commerce\Enums\StoreStatus;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Commerce\Models\StoreDomain;
+use App\Modules\Commerce\Support\StandardDeliveryBands;
 use App\Modules\Commerce\Themes\Theme;
 use App\Modules\Commerce\Themes\ThemeCompatibility;
 use App\Modules\Commerce\Themes\ThemeRegistry;
@@ -80,9 +81,14 @@ class StoreController extends Controller
             'order_prefix.unique' => 'Another store already uses that prefix. Prefixes are shared across the whole group because the payment merchant is.',
         ]);
 
-        Store::create($data);
+        $store = Store::create($data);
 
-        return back()->with('success', 'Store created. It is a draft until it has a theme and a primary domain.');
+        // ⭐ Joy, 13 September: a shop starts with the group's standard delivery
+        // bands, changed on its Shipping screen. A store with no rates cannot
+        // quote delivery, and nobody could check out until somebody noticed.
+        StandardDeliveryBands::applyTo($store);
+
+        return back()->with('success', 'Store created with the standard delivery bands. It is a draft until it has a theme and a primary domain.');
     }
 
     public function edit(Store $store): Response

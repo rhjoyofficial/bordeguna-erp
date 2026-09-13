@@ -111,6 +111,18 @@ class Store extends Model
         return $this->hasMany(StoreProduct::class);
     }
 
+    /** Delivery bands this store charges (slice 2.3). See `DeliveryQuote`. */
+    public function shippingZones(): HasMany
+    {
+        return $this->hasMany(ShippingZone::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /** Which district pays which band. A district not listed pays the catch-all. */
+    public function districtShippingZones(): HasMany
+    {
+        return $this->hasMany(DistrictShippingZone::class);
+    }
+
     /** Coupons this store offers (slice 2.5b). See `StoreCoupon`. */
     public function coupons(): HasMany
     {

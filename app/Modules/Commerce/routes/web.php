@@ -8,6 +8,7 @@ use App\Modules\Commerce\Http\Controllers\StoreCatalogueController;
 use App\Modules\Commerce\Http\Controllers\StoreComboController;
 use App\Modules\Commerce\Http\Controllers\StoreController;
 use App\Modules\Commerce\Http\Controllers\StoreCouponController;
+use App\Modules\Commerce\Http\Controllers\StoreShippingController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -94,6 +95,32 @@ Route::middleware(['web', 'auth', 'business'])->prefix('commerce')->name('commer
             ->whereNumber('store')->whereNumber('combo')->name('stores.combos.unpublish');
         Route::delete('stores/{store}/combos/{combo}', [StoreComboController::class, 'destroy'])
             ->whereNumber('store')->whereNumber('combo')->name('stores.combos.destroy');
+    });
+
+    /* -------------------------------------------------------------------- */
+    /* Shipping and district pricing (13 September) */
+    /* -------------------------------------------------------------------- */
+
+    Route::middleware('can:commerce.stores.view')->group(function () {
+        Route::get('stores/{store}/shipping', [StoreShippingController::class, 'index'])
+            ->whereNumber('store')->name('stores.shipping');
+    });
+
+    // ⚠ Owner and Manager (Joy, 13 September): a delivery rate decides what a
+    // customer is charged, the same class of decision as the price group.
+    Route::middleware('can:commerce.stores.manage')->group(function () {
+        Route::post('stores/{store}/shipping/zones', [StoreShippingController::class, 'storeZone'])
+            ->whereNumber('store')->name('stores.shipping.zones.store');
+        Route::put('stores/{store}/shipping/zones/{zone}', [StoreShippingController::class, 'updateZone'])
+            ->whereNumber('store')->whereNumber('zone')->name('stores.shipping.zones.update');
+        Route::post('stores/{store}/shipping/zones/{zone}/default', [StoreShippingController::class, 'makeDefault'])
+            ->whereNumber('store')->whereNumber('zone')->name('stores.shipping.zones.default');
+        Route::delete('stores/{store}/shipping/zones/{zone}', [StoreShippingController::class, 'destroyZone'])
+            ->whereNumber('store')->whereNumber('zone')->name('stores.shipping.zones.destroy');
+        Route::put('stores/{store}/shipping/districts', [StoreShippingController::class, 'saveDistricts'])
+            ->whereNumber('store')->name('stores.shipping.districts');
+        Route::post('stores/{store}/shipping/standard', [StoreShippingController::class, 'applyStandard'])
+            ->whereNumber('store')->name('stores.shipping.standard');
     });
 
     /* -------------------------------------------------------------------- */

@@ -174,6 +174,9 @@ export default function StoreEdit({
                         <Button variant="outline" asChild>
                             <Link href={`/commerce/stores/${store.id}/coupons`}>Coupons</Link>
                         </Button>
+                        <Button variant="outline" asChild>
+                            <Link href={`/commerce/stores/${store.id}/shipping`}>Shipping</Link>
+                        </Button>
                         <Badge variant={store.status === 'live' ? 'default' : 'secondary'}>{store.status_label}</Badge>
                         {/* ⚠ Said out loud. A shop that is live but invisible to
                             search engines is a normal, deliberate state during a
