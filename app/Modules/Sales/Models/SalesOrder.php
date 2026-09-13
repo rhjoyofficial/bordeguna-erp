@@ -11,6 +11,7 @@ use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Enums\SalesChannel;
 use App\Modules\Sales\Enums\SalesOrderStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -297,6 +298,115 @@ class SalesOrder extends Model
             fn (string $carry, SalesOrderLine $line) => bcadd($carry, $line->netTotal()->toTaka(), 2),
             '0',
         );
+    }
+
+    /**
+     * Money the customer paid for this order, whether or not an invoice has
+     * taken it yet (SSLCommerz slice P1).
+     */
+    public function advanceReceipts(): HasMany
+    {
+        return $this->hasMany(CustomerReceipt::class, 'sales_order_id');
+    }
+
+    /**
+     * Money paid back out of what this order held.
+     */
+    public function advanceRefunds(): HasMany
+    {
+        return $this->hasMany(CustomerRefund::class, 'sales_order_id');
+    }
+
+    /**
+     * The customer's money this order is holding: paid for it, not yet taken by
+     * any invoice, and not paid back.
+     *
+     * ⚠ DERIVED, never stored, for the reason an invoice's outstanding is: a
+     * stored balance is a second answer to a question the documents already
+     * answer, and it drifts the first time one of them is corrected.
+     */
+    public function advanceHeld(): Money
+    {
+        $received = Money::ofTaka((string) ($this->advanceReceipts()->sum('amount') ?: '0'));
+
+        $allocated = Money::ofTaka((string) (CustomerReceiptAllocation::query()
+            ->whereIn('customer_receipt_id', $this->advanceReceipts()->select('id'))
+            ->sum('amount') ?: '0'));
+
+        $refunded = Money::ofTaka((string) ($this->advanceRefunds()->sum('amount') ?: '0'));
+
+        return Money::ofMinor($received->minor - $allocated->minor - $refunded->minor);
+    }
+
+    /**
+     * The invoices that bill this order: its goods, or its delivery charge.
+     *
+     * @return Builder<SalesInvoice>
+     */
+    public function invoicesQuery(): Builder
+    {
+        $orderLineIds = SalesOrderLine::query()->where('sales_order_id', $this->id)->select('id');
+        $deliveryLineIds = DeliveryLine::query()->whereIn('sales_order_line_id', $orderLineIds)->select('id');
+
+        return SalesInvoice::query()->whereIn('id', SalesInvoiceLine::query()
+            ->where(fn (Builder $query) => $query
+                ->whereIn('delivery_line_id', $deliveryLineIds)
+                ->orWhere('billed_delivery_for_order_id', $this->id))
+            ->select('sales_invoice_id'));
+    }
+
+    /**
+     * What the customer has paid towards this order: money paid for it, less
+     * what was paid back, plus money received against its invoices by any other
+     * route (cash a courier collected, a receipt typed against the invoice).
+     *
+     * ⚠ An invoice that bills several orders counts in full for each of them, so
+     * on such an order this over-states what was paid and a new payment is
+     * refused sooner rather than later. Only a typed distributor invoice does
+     * that; a shop's parcel bills one order.
+     */
+    public function paidTowards(): Money
+    {
+        $received = Money::ofTaka((string) ($this->advanceReceipts()->sum('amount') ?: '0'));
+        $refunded = Money::ofTaka((string) ($this->advanceRefunds()->sum('amount') ?: '0'));
+
+        $otherwise = Money::ofTaka((string) (CustomerReceiptAllocation::query()
+            ->whereIn('sales_invoice_id', $this->invoicesQuery()->select('id'))
+            ->whereNotIn('customer_receipt_id', $this->advanceReceipts()->select('id'))
+            ->sum('amount') ?: '0'));
+
+        return Money::ofMinor($received->minor - $refunded->minor + $otherwise->minor);
+    }
+
+    /**
+     * What is left for the customer to pay on this order, never below zero.
+     *
+     * ⚠ Once nothing more will be billed - cancelled, rejected, closed short or
+     * fully invoiced - it is what the order's INVOICES still owe, not the agreed
+     * total less payments. A cancelled order owes nothing, and one closed short
+     * owes only for what was delivered. Found on the walk: a cancelled order read
+     * "still to pay 1,820.00" the moment its payment was refunded.
+     */
+    public function stillToPay(): Money
+    {
+        if ($this->isFinishedForBilling()) {
+            return Money::ofMinor(max(0, $this->invoicesQuery()->get()->sum(
+                fn (SalesInvoice $invoice) => $invoice->outstanding()->minor,
+            )));
+        }
+
+        return Money::ofMinor(max(0, Money::ofTaka($this->agreedTotal())->minor - $this->paidTowards()->minor));
+    }
+
+    /**
+     * Will nothing more be billed on this order, so that money it still holds is
+     * owed back to the customer?
+     */
+    public function isFinishedForBilling(): bool
+    {
+        return in_array($this->status, [SalesOrderStatus::Cancelled, SalesOrderStatus::Closed], true)
+            || $this->approvalRequest?->status === ApprovalStatus::Rejected
+            || $this->isFullyInvoiced();
     }
 
     /**

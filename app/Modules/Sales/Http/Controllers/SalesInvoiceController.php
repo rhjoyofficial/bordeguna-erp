@@ -517,10 +517,29 @@ class SalesInvoiceController extends Controller
             'customer',
             'moneyAccount:id,name,type',
             'allocations.invoice:id,invoice_number,invoice_date,total',
+            'salesOrder:id,order_number',
         ]);
 
+        $payload = $receipt->toArray();
+
+        // ⚠ The invoice date as a Dhaka date. Inside the model it serialises as a
+        // UTC timestamp and the page's slice printed the day before.
+        foreach ($receipt->allocations as $index => $allocation) {
+            if ($allocation->invoice !== null) {
+                $payload['allocations'][$index]['invoice']['invoice_date'] = $allocation->invoice->invoice_date?->toDateString();
+            }
+        }
+
+        $held = $receipt->sales_order_id === null ? null : $receipt->unallocated();
+
         return Inertia::render('sales/receipts/print', [
-            'receipt' => $receipt,
+            'receipt' => $payload,
+            // ⭐ Money paid for an order that no invoice has taken yet (SSLCommerz
+            // slice P1). Without this line the paper would state an amount and
+            // settle nothing, which reads as money gone missing.
+            'heldFor' => $held !== null && $held->minor > 0
+                ? ['id' => $receipt->salesOrder?->id, 'order_number' => $receipt->salesOrder?->order_number, 'amount' => $held->toTaka()]
+                : null,
             // ⚠⚠ Formatted here, not sliced on the page. The page was taking the
             // first ten characters of what Inertia serialised, which is a UTC
             // ISO string - so a receipt taken after 6am Dhaka on the 1st printed
@@ -547,6 +566,7 @@ class SalesInvoiceController extends Controller
             'customer:id,name,phone',
             'moneyAccount:id,name,type',
             'allocations.invoice:id,invoice_number,invoice_date,total',
+            'salesOrder:id,order_number',
         ]);
 
         $profile = ThermalProfile::resolve(null);
@@ -575,7 +595,20 @@ class SalesInvoiceController extends Controller
                 'unit_price' => DocumentMoney::amount($allocation->amount),
                 'discount' => null,
                 'net' => DocumentMoney::amount($allocation->amount),
-            ])->values()->all(),
+            ])->values()->concat(
+                // ⭐ Money paid for an order no invoice has taken yet (SSLCommerz
+                // slice P1), so the lines still add up to what was received.
+                $receipt->sales_order_id !== null && $receipt->unallocated()->minor > 0
+                    ? [[
+                        'description' => 'Paid in advance for '.($receipt->salesOrder?->order_number ?? 'an order'),
+                        'detail' => null,
+                        'quantity' => '1',
+                        'unit_price' => DocumentMoney::amount($receipt->unallocated()->toTaka()),
+                        'discount' => null,
+                        'net' => DocumentMoney::amount($receipt->unallocated()->toTaka()),
+                    ]]
+                    : [],
+            )->all(),
             totals: [
                 ['label' => 'RECEIVED', 'value' => 'BDT '.DocumentMoney::amount($receipt->amount), 'emphasis' => true],
             ],

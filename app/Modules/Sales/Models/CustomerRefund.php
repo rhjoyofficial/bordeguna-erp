@@ -12,10 +12,15 @@ use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
- * Money physically going back to a customer (C-SR-6). Return-linked ONLY -
- * a refund without a return is a goodwill payment, a different event Joy kept
- * out of scope - and capped by the return's net credit less refunds already
- * made. Dr AR (party = customer) / Cr the money account.
+ * Money physically going back to a customer (C-SR-6). Dr AR (party = customer)
+ * / Cr the money account.
+ *
+ * ⚠ Linked to a return OR to an order, exactly one. A return-linked refund is
+ * capped by the return's net credit less refunds already made. An order-linked
+ * refund pays back money the customer paid for an order that will not be
+ * invoiced for all of it (SSLCommerz slice P1), capped by what the order still
+ * holds. A refund with neither is a goodwill payment, a different event Joy kept
+ * out of scope.
  */
 class CustomerRefund extends Model
 {
@@ -25,6 +30,7 @@ class CustomerRefund extends Model
         'business_id',
         'customer_id',
         'sales_return_id',
+        'sales_order_id',
         'money_account_id',
         'amount',
         'refunded_on',
@@ -44,7 +50,7 @@ class CustomerRefund extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['customer_id', 'sales_return_id', 'money_account_id', 'refunded_on', 'amount'])
+            ->logOnly(['customer_id', 'sales_return_id', 'sales_order_id', 'money_account_id', 'refunded_on', 'amount'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -57,6 +63,11 @@ class CustomerRefund extends Model
     public function salesReturn(): BelongsTo
     {
         return $this->belongsTo(SalesReturn::class);
+    }
+
+    public function salesOrder(): BelongsTo
+    {
+        return $this->belongsTo(SalesOrder::class);
     }
 
     public function moneyAccount(): BelongsTo

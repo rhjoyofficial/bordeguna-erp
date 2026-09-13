@@ -79,7 +79,35 @@ interface Exposure {
     credit_limit: string | null;
     open_invoices: string;
     undelivered_orders: string;
+    // SSLCommerz slice P1: money paid for orders that no invoice has taken yet.
+    paid_in_advance: string;
     total: string;
+}
+
+// SSLCommerz slice P1: money paid for this order, before or after its invoice,
+// and anything paid back.
+interface Payments {
+    agreed_total: string;
+    paid: string;
+    still_to_pay: string;
+    held: string;
+    refund_owed: string | null;
+    can_take_payment: boolean;
+    receipts: {
+        id: number;
+        received_on: string;
+        money_account: string | null;
+        reference: string | null;
+        amount: string;
+        invoices: { id: number; invoice_number: string | null; amount: string }[];
+    }[];
+    refunds: { id: number; refunded_on: string; money_account: string | null; reference: string | null; amount: string }[];
+}
+
+interface MoneyAccountOption {
+    id: number;
+    name: string;
+    type: string;
 }
 
 // A challan served this order, with what a courier needs: its lines, its parcel,
@@ -147,7 +175,7 @@ function BookParcelForm({ challan, couriers }: { challan: Challan; couriers: { i
             </Button>
             <p className="text-muted-foreground w-full text-xs">
                 {challan.cod_preview !== null
-                    ? `${challan.cod_preview} is what the invoice for this whole challan comes to today, delivery charge and any discount included. `
+                    ? `${challan.cod_preview} is what is still to collect for this whole challan: its invoice today, delivery charge and any discount included, less anything paid in advance. `
                     : 'A line on this challan has no price to bill at, so the amount could not be worked out. '}
                 Enter 0 for a parcel already paid for. The invoice is raised when the courier confirms delivery.
             </p>
@@ -373,6 +401,206 @@ const approvalVariant: Record<Order['approval_request']['status'], 'secondary' |
     rejected: 'destructive',
 };
 
+function accountOptions(accounts: MoneyAccountOption[]) {
+    return accounts.map((account) => ({ value: String(account.id), label: `${account.name} (${account.type})` }));
+}
+
+function RecordPaymentForm({ order, accounts, stillToPay }: { order: Order; accounts: MoneyAccountOption[]; stillToPay: string }) {
+    const { data, setData, post, errors, processing, reset } = useForm({
+        money_account_id: accounts.length === 1 ? String(accounts[0].id) : '',
+        amount: stillToPay,
+        received_on: today(),
+        reference: '',
+    });
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(route('sales.orders.payments.store', order.id), { preserveScroll: true, onSuccess: () => reset('reference') });
+    };
+
+    return (
+        <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3">
+            <div className="grid gap-1">
+                <Label>Received into</Label>
+                <SearchableSelect
+                    value={data.money_account_id}
+                    onChange={(v) => setData('money_account_id', v)}
+                    options={accountOptions(accounts)}
+                    placeholder="Select account"
+                    searchPlaceholder="Search accounts…"
+                />
+                <InputError message={errors.money_account_id} />
+            </div>
+            <div className="grid gap-1">
+                <Label>Amount</Label>
+                <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
+                <InputError message={errors.amount} />
+            </div>
+            <div className="grid gap-1">
+                <Label>Received on</Label>
+                <Input type="date" className="w-40" value={data.received_on} onChange={(e) => setData('received_on', e.target.value)} />
+                <InputError message={errors.received_on} />
+            </div>
+            <div className="grid gap-1">
+                <Label>Reference</Label>
+                <Input
+                    className="w-44"
+                    placeholder="bKash TrxID, bank ref…"
+                    value={data.reference}
+                    onChange={(e) => setData('reference', e.target.value)}
+                />
+                <InputError message={errors.reference} />
+            </div>
+            <Button size="sm" disabled={processing}>
+                Record payment
+            </Button>
+            <p className="text-muted-foreground w-full text-xs">
+                Settles any invoice of this order that is still open; the rest is held for the order and its next invoice takes it.
+            </p>
+        </form>
+    );
+}
+
+function RefundForm({ order, accounts, held }: { order: Order; accounts: MoneyAccountOption[]; held: string }) {
+    const { data, setData, post, errors, processing } = useForm({
+        money_account_id: accounts.length === 1 ? String(accounts[0].id) : '',
+        amount: held,
+        refunded_on: today(),
+        reference: '',
+    });
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(route('sales.orders.refunds.store', order.id), { preserveScroll: true });
+    };
+
+    return (
+        <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3">
+            <div className="grid gap-1">
+                <Label>Paid back from</Label>
+                <SearchableSelect
+                    value={data.money_account_id}
+                    onChange={(v) => setData('money_account_id', v)}
+                    options={accountOptions(accounts)}
+                    placeholder="Select account"
+                    searchPlaceholder="Search accounts…"
+                />
+                <InputError message={errors.money_account_id} />
+            </div>
+            <div className="grid gap-1">
+                <Label>Amount</Label>
+                <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
+                <InputError message={errors.amount} />
+            </div>
+            <div className="grid gap-1">
+                <Label>Refunded on</Label>
+                <Input type="date" className="w-40" value={data.refunded_on} onChange={(e) => setData('refunded_on', e.target.value)} />
+                <InputError message={errors.refunded_on} />
+            </div>
+            <div className="grid gap-1">
+                <Label>Reference</Label>
+                <Input className="w-44" value={data.reference} onChange={(e) => setData('reference', e.target.value)} />
+                <InputError message={errors.reference} />
+            </div>
+            <Button size="sm" variant="outline" disabled={processing}>
+                Record refund
+            </Button>
+        </form>
+    );
+}
+
+function PaymentsCard({
+    order,
+    payments,
+    accounts,
+    canRecordPayment,
+    canRefund,
+}: {
+    order: Order;
+    payments: Payments;
+    accounts: MoneyAccountOption[];
+    canRecordPayment: boolean;
+    canRefund: boolean;
+}) {
+    const held = parseFloat(payments.held);
+    const takesPayment = canRecordPayment && payments.can_take_payment && accounts.length > 0;
+    const hasHistory = payments.receipts.length > 0 || payments.refunds.length > 0;
+
+    if (!hasHistory && !takesPayment) {
+        return null;
+    }
+
+    return (
+        <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="font-medium">Payments</h3>
+                <p className="text-muted-foreground">
+                    Order total {payments.agreed_total}, paid {payments.paid}, still to pay{' '}
+                    <span className="text-foreground font-medium">{payments.still_to_pay}</span>
+                </p>
+            </div>
+
+            {hasHistory && (
+                <table className="mt-2 w-full">
+                    <tbody>
+                        {payments.receipts.map((receipt) => (
+                            <tr key={`r${receipt.id}`} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                <td className="py-1.5">{receipt.received_on}</td>
+                                <td className="py-1.5">
+                                    Received into {receipt.money_account}
+                                    {receipt.reference && <span className="text-muted-foreground"> ({receipt.reference})</span>}
+                                </td>
+                                <td className="text-muted-foreground py-1.5">
+                                    {/* ⚠ Not "held": a refund comes out of the order
+                                        as a whole, so a receipt no invoice took may
+                                        already have been paid back. The lines below
+                                        say what is held. */}
+                                    {receipt.invoices.length === 0
+                                        ? 'Paid for this order, no invoice yet'
+                                        : receipt.invoices.map((invoice) => `${invoice.amount} to ${invoice.invoice_number}`).join(', ')}
+                                </td>
+                                <td className="py-1.5 text-right font-medium">{receipt.amount}</td>
+                            </tr>
+                        ))}
+                        {payments.refunds.map((refund) => (
+                            <tr key={`f${refund.id}`} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                <td className="py-1.5">{refund.refunded_on}</td>
+                                <td className="py-1.5">
+                                    Paid back from {refund.money_account}
+                                    {refund.reference && <span className="text-muted-foreground"> ({refund.reference})</span>}
+                                </td>
+                                <td className="text-muted-foreground py-1.5">Refund</td>
+                                <td className="py-1.5 text-right font-medium">-{refund.amount}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
+
+            {held > 0 && !payments.refund_owed && (
+                <p className="text-muted-foreground mt-2">
+                    {payments.held} is held for this order. Its next invoice takes it, and the courier collects only the rest.
+                </p>
+            )}
+
+            {/* ⚠ Money held by an order nothing more will be billed on is the
+                customer's. Said here, where somebody can act on it. */}
+            {payments.refund_owed && (
+                <p className="text-destructive mt-2 font-medium">
+                    Refund owed: {payments.refund_owed}. Nothing more will be billed on this order, so this money is the customer&apos;s.
+                </p>
+            )}
+
+            {takesPayment && <RecordPaymentForm order={order} accounts={accounts} stillToPay={payments.still_to_pay} />}
+
+            {/* ⚠ Offered only once a refund is OWED. On an order still being
+                fulfilled the money is about to pay its invoice, and a refund
+                button beside it is an accident waiting to happen. */}
+            {canRefund && payments.refund_owed && accounts.length > 0 && <RefundForm order={order} accounts={accounts} held={payments.refund_owed} />}
+        </div>
+    );
+}
+
 function remaining(line: Line): number {
     return Math.max(0, parseFloat(line.quantity_ordered) - parseFloat(line.quantity_delivered));
 }
@@ -476,6 +704,10 @@ export default function SalesOrderShow({
     challans,
     couriers,
     exposure,
+    payments,
+    money_accounts,
+    can_record_payment,
+    can_refund,
     can_approve,
     can_deliver,
     can_cancel,
@@ -486,6 +718,10 @@ export default function SalesOrderShow({
     challans: Challan[];
     couriers: { id: number; name: string }[];
     exposure: Exposure;
+    payments: Payments;
+    money_accounts: MoneyAccountOption[];
+    can_record_payment: boolean;
+    can_refund: boolean;
     can_approve: boolean;
     can_deliver: boolean;
     can_cancel: boolean;
@@ -569,7 +805,10 @@ export default function SalesOrderShow({
                             </p>
                         )}
                         <p className="text-muted-foreground mt-1">
-                            {order.payment_method === 'cod' ? 'Cash on delivery - nothing has been paid.' : 'Payment method not recorded.'}
+                            {/* ⚠ Not "nothing has been paid": a COD customer can
+                                still send money ahead, and the Payments panel
+                                below is where that is told. */}
+                            {order.payment_method === 'cod' ? 'Chose cash on delivery.' : 'Payment method not recorded.'}
                             {order.delivery_charge !== null && ` Delivery agreed at ${order.delivery_charge}.`}
                         </p>
                         {order.delivery_promise_max_hours !== null && (
@@ -592,7 +831,8 @@ export default function SalesOrderShow({
                 {/* ⚠ C-SO-3: shown beside the limit, enforced by nobody. */}
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
                     <p className="text-muted-foreground">
-                        Customer exposure: open invoices {exposure.open_invoices} + undelivered orders {exposure.undelivered_orders} ={' '}
+                        Customer exposure: open invoices {exposure.open_invoices} + undelivered orders {exposure.undelivered_orders}
+                        {parseFloat(exposure.paid_in_advance) > 0 && <> - paid in advance {exposure.paid_in_advance}</>} ={' '}
                         <span className="text-foreground font-medium">{exposure.total}</span>
                         {exposure.credit_limit !== null && <> against a credit limit of {exposure.credit_limit}</>}
                     </p>
@@ -667,6 +907,14 @@ export default function SalesOrderShow({
                         Closed short - the remaining quantities above are the recorded shortfall and are no longer owed.
                     </p>
                 )}
+
+                <PaymentsCard
+                    order={order}
+                    payments={payments}
+                    accounts={money_accounts}
+                    canRecordPayment={can_record_payment}
+                    canRefund={can_refund}
+                />
 
                 {can_cancel && order.status === 'open' && (
                     <div className="flex flex-wrap gap-2">

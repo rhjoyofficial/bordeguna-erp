@@ -10,6 +10,7 @@ use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +25,13 @@ use Illuminate\Validation\ValidationException;
  * ⚠ The document is the point and the journal is a consequence. Somebody
  * received money on a date, into an account, with a reference, against these
  * invoices.
+ *
+ * ⭐ Or FOR AN ORDER whose invoice does not exist yet (SSLCommerz slice P1, Joy
+ * 13 September): `heldForOrder` is kept on the customer's account for that
+ * order, and the order's first invoice takes it. The journal is the same
+ * `Dr money account / Cr 1140` either way - the ageing tie-out assumes every
+ * receipt credits 1140, and money with no invoice behind it is already credit on
+ * account (C-GLA-11).
  */
 class RecordCustomerReceipt
 {
@@ -43,8 +51,31 @@ class RecordCustomerReceipt
         ?string $reference = null,
         ?string $note = null,
         ?Consignment $consignment = null,
+        ?SalesOrder $forOrder = null,
+        ?string $heldForOrder = null,
     ): CustomerReceipt {
         $date = Carbon::parse($receivedOn)->startOfDay();
+        $held = Money::ofTaka($heldForOrder ?? '0');
+
+        if ($held->minor < 0) {
+            throw ValidationException::withMessages([
+                'amount' => 'An amount held for an order cannot be negative.',
+            ]);
+        }
+
+        // ⚠ Money held on account belongs to an order or it is an advance nobody
+        // can name - which is exactly what the old refusal below guarded against.
+        if ($held->minor > 0 && $forOrder === null) {
+            throw ValidationException::withMessages([
+                'amount' => 'Money not taken by an invoice must be paid for a named order.',
+            ]);
+        }
+
+        if ($forOrder !== null && ($forOrder->customer_id !== $customer->id || $forOrder->business_id !== $customer->business_id)) {
+            throw ValidationException::withMessages([
+                'sales_order_id' => "Order {$forOrder->order_number} belongs to a different customer.",
+            ]);
+        }
 
         AccountingPeriod::assertOpenFor($date);
 
@@ -75,14 +106,14 @@ class RecordCustomerReceipt
             fn (array $entry) => Money::ofTaka($entry['amount'])->minor > 0,
         ));
 
-        if ($allocations === []) {
+        if ($allocations === [] && $held->isZero()) {
             throw ValidationException::withMessages([
                 'allocations' => 'Say which invoices this receipt settles, and how much of each.',
             ]);
         }
 
-        return DB::transaction(function () use ($customer, $moneyAccount, $date, $allocations, $createdBy, $reference, $note) {
-            $total = Money::zero();
+        return DB::transaction(function () use ($customer, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $forOrder, $held) {
+            $total = $held;
 
             foreach ($allocations as $index => $entry) {
                 // ⚠⚠ RE-READ UNDER A LOCK inside the transaction. Two clerks
@@ -102,10 +133,11 @@ class RecordCustomerReceipt
                 $amount = Money::ofTaka($entry['amount']);
                 $outstanding = $invoice->outstanding();
 
-                // ⚠ Receiving more than is owed is not a payment, it is an
-                // advance from the customer - a different event against 2150.
-                // Refused rather than absorbed, because absorbing it would make
-                // an invoice read as overpaid and the receivable go negative.
+                // ⚠ Receiving more than an invoice owes is not a payment against
+                // it. Refused rather than absorbed, because absorbing it would
+                // make an invoice read as overpaid. Money paid ahead of an
+                // invoice is `heldForOrder`, named against its order (P1, which
+                // reversed the old plan of a separate event against 2150).
                 if ($amount->minor > $outstanding->minor) {
                     throw ValidationException::withMessages([
                         "allocations.{$index}.amount" => "Invoice {$invoice->invoice_number} has only {$outstanding->format()} outstanding.",
@@ -118,6 +150,7 @@ class RecordCustomerReceipt
             $receipt = CustomerReceipt::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
+                'sales_order_id' => $forOrder?->id,
                 'money_account_id' => $moneyAccount->id,
                 'received_on' => $date,
                 'amount' => $total->toTaka(),

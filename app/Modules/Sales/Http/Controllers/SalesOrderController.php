@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Enums\MoneyAccountType;
@@ -19,11 +20,15 @@ use App\Modules\Sales\Actions\CancelSalesOrder;
 use App\Modules\Sales\Actions\CloseSalesOrder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\CustomerExposure;
+use App\Modules\Sales\Actions\RecordCustomerRefund;
 use App\Modules\Sales\Actions\RecordDelivery;
+use App\Modules\Sales\Actions\RecordOrderPayment;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerReceipt;
+use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
@@ -233,8 +238,10 @@ class SalesOrderController extends Controller
                     'delivery_number' => $delivery->delivery_number,
                     'delivered_at' => $delivery->delivered_at->toDateString(),
                     'can_consign' => $consignment === null && $untouched,
+                    // ⚠ Less money already paid for the order (SSLCommerz slice
+                    // P1): the courier collects what is still owed.
                     'cod_preview' => $consignment === null && $untouched
-                        ? DeliveryBilling::previewTotal($delivery, $resolver)?->toTaka()
+                        ? DeliveryBilling::previewDue($delivery, $resolver)?->toTaka()
                         : null,
                     'lines' => $delivery->lines->map(fn ($line) => [
                         'id' => $line->id,
@@ -272,12 +279,137 @@ class SalesOrderController extends Controller
             // ⚠ C-SO-3: exposure SHOWN beside the credit limit, enforced by
             // nobody. The human decides.
             'exposure' => app(CustomerExposure::class)->handle($order->customer),
+            'payments' => $this->payments($order),
+            // ⚠ Where money can be taken or paid back by hand: never a courier's
+            // account, which only a parcel outcome and a payout statement touch.
+            'money_accounts' => $user->can('sales.receipt.record') || $user->can('sales.returns.refund')
+                ? MoneyAccount::query()->active()->handled()->orderBy('name')->get(['id', 'name', 'type'])
+                    ->map(fn (MoneyAccount $account) => ['id' => $account->id, 'name' => $account->name, 'type' => $account->type->label()])
+                    ->values()
+                : [],
+            'can_record_payment' => $user->can('sales.receipt.record'),
+            'can_refund' => $user->can('sales.returns.refund'),
             'can_approve' => $user->can('sales.orders.approve'),
             'can_deliver' => $user->can('sales.sell'),
             'can_cancel' => $user->can('sales.orders.cancel'),
             'warehouses' => Warehouse::query()->where('is_active', true)
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
         ]);
+    }
+
+    /**
+     * Money for this order: what was paid for it, what its invoices took, what
+     * it still holds, and what went back (SSLCommerz slice P1). Shaped here,
+     * dates as dates.
+     *
+     * @return array<string, mixed>
+     */
+    private function payments(SalesOrder $order): array
+    {
+        $held = $order->advanceHeld();
+        $cancelled = $order->status === SalesOrderStatus::Cancelled
+            || $order->approvalRequest?->status === ApprovalStatus::Rejected;
+
+        return [
+            'agreed_total' => Money::ofTaka($order->agreedTotal())->toTaka(),
+            'paid' => $order->paidTowards()->toTaka(),
+            'still_to_pay' => $order->stillToPay()->toTaka(),
+            'held' => $held->toTaka(),
+            // ⚠ Money held by an order nothing more will be billed on is the
+            // customer's to have back. Said on the screen, not left to be found.
+            'refund_owed' => $held->minor > 0 && $order->isFinishedForBilling() ? $held->toTaka() : null,
+            'can_take_payment' => ! $cancelled && $order->stillToPay()->minor > 0,
+            'receipts' => $order->advanceReceipts()
+                ->with('moneyAccount:id,name', 'allocations.invoice:id,invoice_number')
+                ->orderBy('received_on')->orderBy('id')->get()
+                ->map(fn (CustomerReceipt $receipt) => [
+                    'id' => $receipt->id,
+                    'received_on' => $receipt->received_on->toDateString(),
+                    'money_account' => $receipt->moneyAccount?->name,
+                    'reference' => $receipt->reference,
+                    'amount' => $receipt->amountMoney()->toTaka(),
+                    'invoices' => $receipt->allocations->map(fn ($allocation) => [
+                        'id' => $allocation->sales_invoice_id,
+                        'invoice_number' => $allocation->invoice?->invoice_number,
+                        'amount' => Money::ofTaka((string) $allocation->amount)->toTaka(),
+                    ])->values(),
+                ])->values(),
+            'refunds' => $order->advanceRefunds()
+                ->with('moneyAccount:id,name')
+                ->orderBy('refunded_on')->orderBy('id')->get()
+                ->map(fn (CustomerRefund $refund) => [
+                    'id' => $refund->id,
+                    'refunded_on' => $refund->refunded_on->toDateString(),
+                    'money_account' => $refund->moneyAccount?->name,
+                    'reference' => $refund->reference,
+                    'amount' => $refund->amountMoney()->toTaka(),
+                ])->values(),
+        ];
+    }
+
+    /**
+     * Money a customer paid for this order by hand - a bKash transfer to the
+     * shop's number, cash at the office - before or after its invoice.
+     */
+    public function payment(Request $request, SalesOrder $order, RecordOrderPayment $action): RedirectResponse
+    {
+        $data = $request->validate([
+            'money_account_id' => ['required', 'integer', 'exists:money_accounts,id'],
+            'amount' => ['required', 'numeric', 'gt:0'],
+            'received_on' => ['required', 'date', 'before_or_equal:today'],
+            'reference' => ['nullable', 'string', 'max:255'],
+            'note' => ['nullable', 'string'],
+        ]);
+
+        try {
+            $action->handle(
+                order: $order,
+                moneyAccount: MoneyAccount::findOrFail($data['money_account_id']),
+                receivedOn: $data['received_on'],
+                amount: (string) $data['amount'],
+                createdBy: $request->user(),
+                reference: $data['reference'] ?? null,
+                note: $data['note'] ?? null,
+            );
+        } catch (PeriodClosedException $e) {
+            throw ValidationException::withMessages(['received_on' => $e->getMessage()]);
+        } catch (MappingNotFound $e) {
+            throw ValidationException::withMessages(['money_account_id' => $e->getMessage()]);
+        }
+
+        return back()->with('success', 'Payment recorded.');
+    }
+
+    /**
+     * Money paid back out of what this order holds.
+     */
+    public function refund(Request $request, SalesOrder $order, RecordCustomerRefund $action): RedirectResponse
+    {
+        $data = $request->validate([
+            'money_account_id' => ['required', 'integer', 'exists:money_accounts,id'],
+            'amount' => ['required', 'numeric', 'gt:0'],
+            'refunded_on' => ['required', 'date', 'before_or_equal:today'],
+            'reference' => ['nullable', 'string', 'max:255'],
+            'note' => ['nullable', 'string'],
+        ]);
+
+        try {
+            $action->forOrder(
+                order: $order,
+                moneyAccount: MoneyAccount::findOrFail($data['money_account_id']),
+                amount: (string) $data['amount'],
+                createdBy: $request->user(),
+                refundedOn: $data['refunded_on'],
+                reference: $data['reference'] ?? null,
+                note: $data['note'] ?? null,
+            );
+        } catch (PeriodClosedException $e) {
+            throw ValidationException::withMessages(['refunded_on' => $e->getMessage()]);
+        } catch (MappingNotFound $e) {
+            throw ValidationException::withMessages(['money_account_id' => $e->getMessage()]);
+        }
+
+        return back()->with('success', 'Refund recorded.');
     }
 
     public function store(Request $request, CreateSalesOrder $action): RedirectResponse

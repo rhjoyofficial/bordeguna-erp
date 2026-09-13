@@ -6,6 +6,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 
@@ -25,7 +26,7 @@ use App\Modules\Sales\Models\SalesOrder;
 class CustomerExposure
 {
     /**
-     * @return array{credit_limit: string|null, open_invoices: string, undelivered_orders: string, total: string}
+     * @return array{credit_limit: string|null, open_invoices: string, undelivered_orders: string, paid_in_advance: string, total: string}
      */
     public function handle(Customer $customer): array
     {
@@ -67,11 +68,29 @@ class CustomerExposure
                 Money::zero(),
             );
 
+        // ⭐ Less money the customer has already paid for orders that no invoice
+        // has taken yet (SSLCommerz slice P1). Without it a customer who paid for
+        // a parcel in full would read as owing its whole value until the courier
+        // delivered it.
+        $paidInAdvance = SalesOrder::query()
+            ->whereIn('id', CustomerReceipt::query()
+                ->where('customer_id', $customer->id)
+                ->whereNotNull('sales_order_id')
+                ->select('sales_order_id'))
+            ->get()
+            ->reduce(
+                fn (Money $carry, SalesOrder $order) => $carry->plus(Money::ofMinor(max(0, $order->advanceHeld()->minor))),
+                Money::zero(),
+            );
+
+        $total = Money::ofMinor(max(0, $openInvoices->plus($undelivered)->minor - $paidInAdvance->minor));
+
         return [
             'credit_limit' => $customer->credit_limit !== null ? (string) $customer->credit_limit : null,
             'open_invoices' => $openInvoices->toTaka(),
             'undelivered_orders' => $undelivered->toTaka(),
-            'total' => $openInvoices->plus($undelivered)->toTaka(),
+            'paid_in_advance' => $paidInAdvance->toTaka(),
+            'total' => $total->toTaka(),
         ];
     }
 }

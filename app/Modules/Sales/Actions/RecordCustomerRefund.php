@@ -7,6 +7,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Sales\Models\CustomerRefund;
+use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesReturn;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -15,11 +16,11 @@ use Illuminate\Validation\ValidationException;
 /**
  * Money physically going back to a customer (C-SR-6).
  *
- * ⚠⚠ RETURN-LINKED ONLY, capped by the return's net credit less refunds
- * already made - the same structural cap the supplier credit note carries,
- * for the same reason: an uncapped refund is how a receivable goes quietly
- * negative. A refund with no return behind it is a goodwill payment, a
- * different event Joy kept out of scope.
+ * ⚠⚠ LINKED TO A RETURN (handle) OR TO AN ORDER (forOrder), and capped by what
+ * that document still owes the customer - the same structural cap the supplier
+ * credit note carries, for the same reason: an uncapped refund is how a
+ * receivable goes quietly negative. A refund with neither behind it is a
+ * goodwill payment, a different event Joy kept out of scope.
  *
  * ⚠ The counter case - cash back in hand for a walk-in return - is this
  * document recorded in the same DB transaction as the return, permission
@@ -97,6 +98,92 @@ class RecordCustomerRefund
             $this->posting->forCustomerRefund($refund->fresh(['customer', 'moneyAccount']), $createdBy);
 
             return $refund->fresh(['customer', 'moneyAccount', 'salesReturn']);
+        });
+    }
+
+    /**
+     * Money paid back out of what an order holds (SSLCommerz slice P1): the
+     * customer paid for an order that will not be invoiced for all of it - it was
+     * cancelled, or the parcel came back.
+     *
+     * ⚠⚠ CAPPED BY WHAT THE ORDER STILL HOLDS, read under the order's lock. The
+     * same structural cap a return-linked refund carries, for the same reason: an
+     * uncapped refund is how a receivable goes quietly negative.
+     *
+     * ⚠ Refused into a courier's account. A courier holds money it collected; it
+     * does not pay a customer back on the business's behalf.
+     *
+     * @throws ValidationException
+     */
+    public function forOrder(
+        SalesOrder $order,
+        MoneyAccount $moneyAccount,
+        string $amount,
+        User $createdBy,
+        mixed $refundedOn = null,
+        ?string $reference = null,
+        ?string $note = null,
+    ): CustomerRefund {
+        $date = ($refundedOn === null ? Carbon::now() : Carbon::parse($refundedOn))->startOfDay();
+
+        AccountingPeriod::assertOpenFor($date);
+
+        if ($moneyAccount->business_id !== $order->business_id) {
+            throw ValidationException::withMessages([
+                'money_account_id' => 'That account belongs to a different business.',
+            ]);
+        }
+
+        if ($moneyAccount->isCourier()) {
+            throw ValidationException::withMessages([
+                'money_account_id' => "{$moneyAccount->name} is a courier's account. Pay the customer back from a bank, cash or mobile wallet account.",
+            ]);
+        }
+
+        if (! $moneyAccount->is_active) {
+            throw ValidationException::withMessages([
+                'money_account_id' => 'That account is no longer active.',
+            ]);
+        }
+
+        $refunding = Money::ofTaka($amount);
+
+        if ($refunding->minor <= 0) {
+            throw ValidationException::withMessages([
+                'amount' => 'A refund must be greater than zero.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($order, $moneyAccount, $refunding, $createdBy, $date, $reference, $note) {
+            /** @var SalesOrder $order */
+            $order = SalesOrder::query()->whereKey($order->id)->lockForUpdate()->with('customer')->firstOrFail();
+
+            $held = $order->advanceHeld();
+
+            if ($refunding->minor > $held->minor) {
+                throw ValidationException::withMessages([
+                    'amount' => $held->minor <= 0
+                        ? "Order {$order->order_number} holds none of the customer's money."
+                        : "Order {$order->order_number} holds only {$held->format()} of the customer's money.",
+                ]);
+            }
+
+            $refund = CustomerRefund::create([
+                'business_id' => $order->business_id,
+                'customer_id' => $order->customer_id,
+                'sales_return_id' => null,
+                'sales_order_id' => $order->id,
+                'money_account_id' => $moneyAccount->id,
+                'amount' => $refunding->toTaka(),
+                'refunded_on' => $date,
+                'reference' => $reference,
+                'note' => $note ?? "Refund for order {$order->order_number}",
+                'created_by' => $createdBy->id,
+            ]);
+
+            $this->posting->forCustomerRefund($refund->fresh(['customer', 'moneyAccount']), $createdBy);
+
+            return $refund->fresh(['customer', 'moneyAccount', 'salesOrder']);
         });
     }
 }

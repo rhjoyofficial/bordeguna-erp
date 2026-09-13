@@ -208,6 +208,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
 
     Route::middleware('can:sales.receipt.record')->group(function () {
         Route::post('invoices/{invoice}/receipts', [SalesInvoiceController::class, 'receipt'])->name('invoices.receipts.store');
+        // Money paid for an order, before or after its invoice (SSLCommerz
+        // slice P1). The same trust level as a receipt, because it is one.
+        Route::post('orders/{order}/payments', [SalesOrderController::class, 'payment'])
+            ->whereNumber('order')->name('orders.payments.store');
     });
 
     // ⚠ Goods coming back. Recording is Staff-level data entry (C-SR-9, Joy:
@@ -228,5 +232,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     // class as cancelling an order.
     Route::middleware('can:sales.returns.refund')->group(function () {
         Route::post('returns/{salesReturn}/refunds', [SalesReturnController::class, 'refund'])->name('returns.refunds.store');
+        // Money an order holds, paid back (SSLCommerz slice P1).
+        Route::post('orders/{order}/refunds', [SalesOrderController::class, 'refund'])
+            ->whereNumber('order')->name('orders.refunds.store');
     });
 });

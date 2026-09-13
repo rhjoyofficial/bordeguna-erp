@@ -126,4 +126,33 @@ final class DeliveryBilling
 
         return Money::ofMinor($total);
     }
+
+    /**
+     * What the courier should collect for this whole challan today: the invoice
+     * it would raise, less money the customer already paid for its orders
+     * (SSLCommerz slice P1), which that invoice would take as it was raised.
+     * Null when a line has no price to bill at.
+     */
+    public static function previewDue(Delivery $delivery, ResolveSellingPrice $resolver): ?Money
+    {
+        $total = self::previewTotal($delivery, $resolver);
+
+        if ($total === null) {
+            return null;
+        }
+
+        $delivery->loadMissing('lines.orderLine');
+
+        $held = $delivery->lines
+            ->pluck('orderLine.sales_order_id')
+            ->filter()
+            ->unique()
+            ->reduce(function (int $carry, int $orderId) {
+                $order = SalesOrder::query()->find($orderId);
+
+                return $carry + max(0, $order?->advanceHeld()->minor ?? 0);
+            }, 0);
+
+        return Money::ofMinor(max(0, $total->minor - $held));
+    }
 }

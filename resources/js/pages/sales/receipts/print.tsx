@@ -32,6 +32,7 @@ const money = (value: string | number) => Number(value).toLocaleString('en-BD', 
 export default function ReceiptPrint({
     receipt,
     receivedOn,
+    heldFor,
     issuer,
 }: {
     receipt: Receipt;
@@ -39,6 +40,8 @@ export default function ReceiptPrint({
        what Inertia serialises reads a UTC ISO string, which printed the
        previous day for a Dhaka business. */
     receivedOn: string | null;
+    // Money paid for an order that no invoice has taken yet.
+    heldFor: { id: number; order_number: string; amount: string } | null;
     issuer: Issuer;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
@@ -55,7 +58,11 @@ export default function ReceiptPrint({
             <div className="flex flex-col gap-4 p-4">
                 <div className="flex items-center justify-between print:hidden">
                     <Button variant="outline" size="sm" asChild>
-                        <Link href={firstInvoice ? `/sales/invoices/${firstInvoice.id}` : '/sales/invoices'}>Back</Link>
+                        <Link
+                            href={firstInvoice ? `/sales/invoices/${firstInvoice.id}` : heldFor ? `/sales/orders/${heldFor.id}` : '/sales/invoices'}
+                        >
+                            Back
+                        </Link>
                     </Button>
                     <div className="flex items-center gap-2">
                         {/* ⚠ A separate document, not a print stylesheet on this
@@ -130,6 +137,16 @@ export default function ReceiptPrint({
                                 </tbody>
                             </table>
                         </div>
+                    )}
+
+                    {heldFor && (
+                        <p className="mt-6 text-sm">
+                            {/* ⚠ Only what stays true. Found on the walk: "to be
+                                settled against its invoice" printed for an order
+                                that was cancelled and paid back - a refund is its
+                                own document and does not rewrite this one. */}
+                            BDT {money(heldFor.amount)} paid in advance for order {heldFor.order_number}, not applied to any invoice.
+                        </p>
                     )}
 
                     {receipt.note && <p className="mt-6 text-sm whitespace-pre-line text-black/70">{receipt.note}</p>}

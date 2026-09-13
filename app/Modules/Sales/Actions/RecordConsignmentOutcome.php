@@ -147,16 +147,23 @@ class RecordConsignmentOutcome
 
             $total = Money::ofTaka((string) $invoice->total);
 
-            // ⚠ A parcel paid for before it left collects nothing, and its
-            // invoice waits for that payment to be receipted in the usual way.
-            $expected = $consignment->codAmount()->isZero() ? Money::zero() : $total;
+            // ⭐ What the customer still owed at the door: the invoice, less
+            // money already paid for the order (SSLCommerz slice P1), which the
+            // invoice took as it was raised. A parcel booked as already paid for
+            // collects nothing, and anything its invoice still owes waits to be
+            // receipted in the usual way.
+            $due = $invoice->outstanding();
+            $paidAhead = Money::ofMinor($total->minor - $due->minor);
+            $expected = $consignment->codAmount()->isZero() ? Money::zero() : $due;
 
             if ($collected->minor !== $expected->minor) {
                 throw ValidationException::withMessages([
-                    'collected_amount' => $consignment->codAmount()->isZero()
-                        ? "This parcel was booked as already paid for, so the courier should have collected nothing, not {$collected->format()}."
-                        : "The invoice for what the customer took comes to {$total->format()}, but the courier collected {$collected->format()}. "
+                    'collected_amount' => match (true) {
+                        $consignment->codAmount()->isZero() => "This parcel was booked as already paid for, so the courier should have collected nothing, not {$collected->format()}.",
+                        $paidAhead->minor > 0 => "The invoice for what the customer took comes to {$total->format()} and {$paidAhead->format()} of it was paid in advance, so the courier should have collected {$due->format()}, not {$collected->format()}.",
+                        default => "The invoice for what the customer took comes to {$total->format()}, but the courier collected {$collected->format()}. "
                             .'If part of the parcel came back, record a partial delivery; a different price agreed at the door is not handled yet.',
+                    },
                 ]);
             }
 

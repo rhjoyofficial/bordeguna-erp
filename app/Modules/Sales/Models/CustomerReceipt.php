@@ -16,6 +16,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * Money in from a customer, against specific invoices.
  *
  * ⚠ The mirror of SupplierPayment, on purpose and in every detail.
+ *
+ * ⭐ Or money paid for an ORDER before its invoice exists (SSLCommerz slice P1):
+ * `sales_order_id` names the order, and whatever is not yet allocated to one of
+ * its invoices is held on the customer's account for it.
  */
 class CustomerReceipt extends Model
 {
@@ -24,6 +28,7 @@ class CustomerReceipt extends Model
     protected $fillable = [
         'business_id',
         'customer_id',
+        'sales_order_id',
         'money_account_id',
         'received_on',
         'amount',
@@ -58,6 +63,14 @@ class CustomerReceipt extends Model
         return $this->belongsTo(MoneyAccount::class);
     }
 
+    /**
+     * The order this money was paid for, or null for a receipt against invoices.
+     */
+    public function salesOrder(): BelongsTo
+    {
+        return $this->belongsTo(SalesOrder::class);
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
@@ -71,5 +84,16 @@ class CustomerReceipt extends Model
     public function amountMoney(): Money
     {
         return Money::ofTaka((string) $this->amount);
+    }
+
+    /**
+     * What of this receipt no invoice has taken yet. ⚠ Read live, never cached
+     * on the row: an allocation written a second ago must be seen.
+     */
+    public function unallocated(): Money
+    {
+        $allocated = Money::ofTaka((string) ($this->allocations()->sum('amount') ?: '0'));
+
+        return Money::ofMinor($this->amountMoney()->minor - $allocated->minor);
     }
 }

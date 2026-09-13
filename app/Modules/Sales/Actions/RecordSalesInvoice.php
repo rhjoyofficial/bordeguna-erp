@@ -16,6 +16,7 @@ use App\Modules\Sales\Models\SalesInvoiceOrderDiscount;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Models\SalesReturnLine;
+use App\Modules\Sales\Support\OrderAdvance;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -288,6 +289,19 @@ class RecordSalesInvoice
             ])->save();
 
             $this->posting->forInvoice($invoice->fresh(['lines', 'customer']), $createdBy);
+
+            // ⭐⭐ MONEY THE CUSTOMER ALREADY PAID FOR THESE ORDERS settles this
+            // invoice (SSLCommerz slice P1, Joy 13 September): an allocation, no
+            // journal, because the receipt and this invoice both already sit in
+            // 1140. Under the order lock, so two invoices for one order cannot
+            // both take the same money.
+            foreach (array_keys($netByOrder) as $orderId) {
+                $order = SalesOrder::query()->whereKey($orderId)->lockForUpdate()->first();
+
+                if ($order !== null) {
+                    OrderAdvance::applyTo($invoice, $order);
+                }
+            }
 
             return $invoice->fresh(['lines', 'customer']);
         });
