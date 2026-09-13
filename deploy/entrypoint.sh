@@ -140,7 +140,17 @@ log "rebuilding caches"
 php artisan config:clear >/dev/null 2>&1 || true
 php artisan config:cache
 php artisan route:cache
-php artisan view:cache
+
+# ⚠⚠ SERIALISED ACROSS CONTAINERS. The note below says three containers run this
+# script at once, and `storage/` is ONE volume shared by all three - so three
+# `view:cache` runs used to compile the same templates into the same directory
+# together. On the 13 September deploy two of them collided on a temp-file rename
+# and the scheduler logged "rename(...): No such file or directory". Harmless that
+# time (another container finished the file), but a deploy that logs an error is a
+# deploy somebody has to investigate. The lock lives on the shared volume, so it is
+# the same lock for all three; the second and third runs wait, then recompile
+# identical files.
+flock /var/www/html/storage/framework/views/.view-cache.lock php artisan view:cache
 
 # ⚠ NO `php artisan migrate` here. Three containers run this script and they
 # start concurrently — racing migrations against each other is how a schema gets
