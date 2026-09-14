@@ -23,6 +23,8 @@ use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Sales\Actions\ApproveSalesOrder;
+use App\Modules\Sales\Actions\RecordOrderPayment;
+use App\Modules\Sales\Actions\SendPaidOrderForApproval;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\CustomerReceipt;
@@ -341,6 +343,31 @@ it('books on the next run a payment the gateway proved that could not be booked 
 
     expect(GatewayPayment::query()->sole()->status)->toBe(GatewayPaymentStatus::Paid)
         ->and(CustomerReceipt::query()->count())->toBe(1);
+});
+
+it('never expires an online order the customer paid another way, recorded by hand', function () {
+    // Found on the walk: the customer pays by bKash transfer instead of the page,
+    // and somebody records it on the order - what the order screen's payment form
+    // does (the controller wiring is tested in OrderPaymentTest).
+    $order = ($this->placeOnlineThenFake)();
+
+    $bkash = MoneyAccount::create([
+        'business_id' => $this->business->id, 'name' => 'bKash merchant', 'type' => MoneyAccountType::Mfs,
+        'account_id' => Account::bySlug('cash_in_hand')->id, 'is_active' => true,
+    ]);
+
+    app(RecordOrderPayment::class)->handle($order, $bkash, '2026-09-14', '970', SystemActor::user(), 'TRXHAND1');
+    app(SendPaidOrderForApproval::class)->handle($order->fresh(), SystemActor::user());
+
+    expect($order->fresh('approvalRequest')->approvalRequest?->status)->toBe(ApprovalStatus::Pending);
+
+    // Even an order that somehow missed the queue is not expired while it holds the customer's money.
+    $order->fresh('approvalRequest')->approvalRequest->delete();
+
+    Carbon::setTestNow('2026-09-16 10:00:00');
+    $this->artisan('commerce:online-payments')->assertSuccessful();
+
+    expect($order->fresh()->status)->toBe(SalesOrderStatus::Open);
 });
 
 it('runs the online payment housekeeping every ten minutes', function () {

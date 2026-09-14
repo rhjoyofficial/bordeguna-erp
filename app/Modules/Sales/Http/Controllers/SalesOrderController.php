@@ -25,6 +25,7 @@ use App\Modules\Sales\Actions\RecordCustomerRefund;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\RecordOrderPayment;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
+use App\Modules\Sales\Actions\SendPaidOrderForApproval;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
@@ -397,6 +398,10 @@ class SalesOrderController extends Controller
         } catch (MappingNotFound $e) {
             throw ValidationException::withMessages(['money_account_id' => $e->getMessage()]);
         }
+
+        // ⚠ An online order the customer paid by hand instead (a bKash transfer):
+        // now it has money, it goes to be confirmed like one the gateway paid.
+        app(SendPaidOrderForApproval::class)->handle($order->fresh(), $request->user());
 
         return back()->with('success', 'Payment recorded.');
     }

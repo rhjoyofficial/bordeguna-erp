@@ -598,7 +598,9 @@ function PaymentsCard({
 
             {payments.online.length > 0 && (
                 <div className="mt-3 grid gap-1">
-                    <p className="font-medium">Paid online through SSLCommerz</p>
+                    {/* ⚠ Not "Paid online": most attempts listed here are not paid.
+                        Found on the walk, above a failed attempt. */}
+                    <p className="font-medium">Online payment attempts (SSLCommerz)</p>
                     {payments.online.map((attempt) => (
                         <div key={attempt.id} className="grid gap-0.5">
                             <p>

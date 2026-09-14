@@ -82,6 +82,9 @@ class SettleOnlinePayments extends Command
                 ->whereNotIn('id', GatewayPayment::query()
                     ->whereIn('status', [GatewayPaymentStatus::Proven->value, GatewayPaymentStatus::Paid->value])
                     ->select('sales_order_id'))
+                // ⛔ Nor one the customer paid another way, recorded by hand (found
+                // on the walk): an order holding the customer's money is not unpaid.
+                ->whereDoesntHave('advanceReceipts')
                 ->get();
 
             $cancelled = 0;

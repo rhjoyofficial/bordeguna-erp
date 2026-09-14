@@ -9,11 +9,10 @@ use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Commerce\Enums\GatewayPaymentStatus;
 use App\Modules\Commerce\Models\GatewayPayment;
-use App\Modules\Foundation\Actions\NotifyApprovers;
 use App\Modules\Foundation\Support\SystemActor;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Sales\Actions\RecordOrderPayment;
-use App\Modules\Sales\Enums\SalesOrderStatus;
+use App\Modules\Sales\Actions\SendPaidOrderForApproval;
 use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -122,30 +121,8 @@ final class BookGatewayPayment
             return $payment->fresh();
         }
 
-        $this->queueForApproval($payment->fresh('salesOrder.customer')->salesOrder);
+        app(SendPaidOrderForApproval::class)->handle($payment->fresh('salesOrder')->salesOrder, SystemActor::user());
 
         return $payment->fresh();
-    }
-
-    /**
-     * An order that waited for its payment goes to the people who confirm
-     * orders, now that it is paid. An order already in the queue, or cancelled,
-     * is left alone.
-     */
-    private function queueForApproval(SalesOrder $order): void
-    {
-        $order->loadMissing('approvalRequest');
-
-        if ($order->approvalRequest !== null || $order->status === SalesOrderStatus::Cancelled) {
-            return;
-        }
-
-        $order->submitForApproval(SystemActor::user());
-
-        app(NotifyApprovers::class)->handle(
-            businessId: $order->business_id,
-            permission: 'sales.orders.approve',
-            summary: "Sales order {$order->order_number} for {$order->customer?->name}, paid online",
-        );
     }
 }

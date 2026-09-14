@@ -6,6 +6,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Support\Ageing;
 use App\Modules\Accounting\Support\SubledgerReconciliation;
+use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -480,6 +481,17 @@ it('refuses money typed into a payment gateway account by hand, and a refund pai
     expect(CustomerReceipt::query()->count())->toBe(1)
         ->and(CustomerRefund::query()->count())->toBe(0)
         ->and(collect(($this->props)($order)['money_accounts'])->pluck('name')->all())->toBe(['bKash merchant']);
+});
+
+it('sends an order that was waiting for its payment for approval once a payment is recorded on it', function () {
+    // An online order the customer paid by bKash transfer instead (SSLCommerz slice
+    // P2c): it was never sent for approval, and recording the money sends it.
+    $order = ($this->order)();
+    $order->approvalRequest->delete();
+
+    ($this->pay)($order, '1820')->assertRedirect()->assertSessionHasNoErrors();
+
+    expect($order->fresh('approvalRequest')->approvalRequest?->status)->toBe(ApprovalStatus::Pending);
 });
 
 it('refuses money held on account that names no order', function () {
