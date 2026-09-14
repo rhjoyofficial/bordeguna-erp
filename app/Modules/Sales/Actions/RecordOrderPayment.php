@@ -36,6 +36,8 @@ class RecordOrderPayment
      *                                   was cancelled, or more than the order.
      *                                   Refusing it then would not return the
      *                                   money, it would only lose the record.
+     * @param  bool  $provenByGateway  true only from BookGatewayPayment: the one
+     *                                 way money reaches a gateway's account.
      *
      * @throws ValidationException
      */
@@ -48,6 +50,7 @@ class RecordOrderPayment
         ?string $reference = null,
         ?string $note = null,
         bool $moneyAlreadyTaken = false,
+        bool $provenByGateway = false,
     ): CustomerReceipt {
         $paying = Money::ofTaka($amount);
 
@@ -57,7 +60,7 @@ class RecordOrderPayment
             ]);
         }
 
-        return DB::transaction(function () use ($order, $moneyAccount, $receivedOn, $paying, $createdBy, $reference, $note, $moneyAlreadyTaken) {
+        return DB::transaction(function () use ($order, $moneyAccount, $receivedOn, $paying, $createdBy, $reference, $note, $moneyAlreadyTaken, $provenByGateway) {
             // ⚠⚠ RE-READ UNDER A LOCK. Two people recording the same bKash
             // transfer at once is how an order reads as paid twice, and the
             // re-read is what makes the cap below hold on MySQL.
@@ -116,6 +119,7 @@ class RecordOrderPayment
                 note: $note ?? "Paid for order {$order->order_number}",
                 forOrder: $order,
                 heldForOrder: Money::ofMinor($remaining)->toTaka(),
+                provenByGateway: $provenByGateway,
             );
         });
     }
