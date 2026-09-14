@@ -20,9 +20,11 @@ use App\Modules\Sales\Actions\CancelSalesOrder;
 use App\Modules\Sales\Actions\CloseSalesOrder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
+use App\Modules\Sales\Actions\RecordCustomerRefund;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\RecordOrderPayment;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
+use App\Modules\Sales\Actions\RecordSalesReturn;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
@@ -292,6 +294,34 @@ it('owes back what a partly delivered prepaid parcel did not use, once the couri
     ($this->refund)($order, '850')->assertSessionHasNoErrors();
 
     expect($order->fresh()->advanceHeld()->minor)->toBe(0)
+        ->and(($this->reconciles)())->toBe([]);
+});
+
+it('refunds goods returned from a prepaid invoice through the return, not the order', function () {
+    $order = ($this->order)();
+    ($this->pay)($order, '1820');
+    $delivery = ($this->deliver)($order);
+    ($this->book)($delivery, '0');
+    ($this->report)(Consignment::query()->sole(), 'delivered', '0')->assertSessionHasNoErrors();
+
+    // A week later one jar comes back. The invoice was already paid from the
+    // advance, so the return's credit has nothing to settle and becomes credit
+    // on the customer's account - the existing return path, untouched by P1.
+    $return = app(RecordSalesReturn::class)->handle(
+        delivery: $delivery->fresh('lines'),
+        lines: [['deliveryLine' => $delivery->fresh('lines')->lines->first(), 'quantityToStock' => '1', 'quantityWrittenOff' => '0']],
+        createdBy: $this->owner,
+    );
+
+    expect($return->refundable()->minor)->toBe(85000)
+        ->and($order->fresh()->advanceHeld()->minor)->toBe(0)
+        ->and(($this->props)($order)['payments']['refund_owed'])->toBeNull()
+        ->and(Ageing::receivables(Carbon::today())->rows->first()->onAccount->minor)->toBe(-85000)
+        ->and(($this->reconciles)())->toBe([]);
+
+    app(RecordCustomerRefund::class)->handle($return, $this->bkash, '850', $this->owner, '2026-09-14');
+
+    expect(Ageing::receivables(Carbon::today())->total()->minor)->toBe(0)
         ->and(($this->reconciles)())->toBe([]);
 });
 
