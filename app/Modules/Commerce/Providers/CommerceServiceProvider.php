@@ -2,6 +2,7 @@
 
 namespace App\Modules\Commerce\Providers;
 
+use App\Modules\Commerce\Console\Commands\SettleOnlinePayments;
 use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
 use App\Modules\Commerce\Sections\SectionCatalogue;
 use App\Modules\Commerce\Sections\SectionTypeRegistry;
@@ -52,6 +53,12 @@ class CommerceServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+
+        if ($this->app->runningInConsole()) {
+            // SSLCommerz slice P2c: book proven payments, expire unpaid orders.
+            $this->commands([SettleOnlinePayments::class]);
+        }
+
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         // The public shop. Separate file on purpose: one is an
         // authenticated back office, the other is anonymous traffic

@@ -16,7 +16,9 @@ class RejectApprovable
 {
     public function handle(Model $approvable, User $reviewedBy, ?string $reviewNote = null): Model
     {
-        if (! $approvable->approvalRequest->isPending()) {
+        // ⚠ A document never sent for approval has nothing to reject (an online
+        // order still waiting for its payment, for one).
+        if ($approvable->approvalRequest === null || ! $approvable->approvalRequest->isPending()) {
             throw new RuntimeException(class_basename($approvable)." #{$approvable->id} has already been reviewed.");
         }
 

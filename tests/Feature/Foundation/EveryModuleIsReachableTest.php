@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -53,7 +54,12 @@ function returnsJson($route): bool
 
     return str_contains($type, 'JsonResponse')
         || str_contains($type, 'StreamedResponse')
-        || str_contains($type, 'BinaryFileResponse');
+        || str_contains($type, 'BinaryFileResponse')
+        // ⚠ A GET whose ONLY possible answer is a redirect is not a page either -
+        // a payment gateway's return address, for one (SSLCommerz slice P2c).
+        // EXACT type only: a page that sometimes redirects (`View|RedirectResponse`)
+        // is still a page and still has to be reachable.
+        || $type === RedirectResponse::class;
 }
 
 it('offers a way into every module that has user-facing pages', function (string $landingPage) {

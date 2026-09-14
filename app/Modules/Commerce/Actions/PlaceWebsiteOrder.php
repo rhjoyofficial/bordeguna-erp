@@ -49,6 +49,11 @@ use Illuminate\Validation\ValidationException;
  */
 class PlaceWebsiteOrder
 {
+    public const CASH_ON_DELIVERY = 'cod';
+
+    /** Paying online through the shop's gateway (SSLCommerz slice P2c). */
+    public const ONLINE = 'sslcommerz';
+
     public function __construct(
         private readonly CreateSalesOrder $orders,
     ) {}
@@ -137,7 +142,7 @@ class PlaceWebsiteOrder
         // belongs to the form rather than to a rolled-back write.
         $destination = SalesOrderDestination::fromInput($input);
 
-        $payment = $this->paymentMethod($input);
+        $payment = $this->paymentMethod($store, $input);
         $email = $this->email($input);
 
         // ⭐⭐ WHAT THE BASKET SHOWED, computed by the classes the basket used:
@@ -266,6 +271,9 @@ class PlaceWebsiteOrder
                     destination: $destination,
                     orderDiscount: $orderDiscount,
                     couponCode: $couponCode,
+                    // ⭐ SSLCommerz slice P2c: an order to be paid online waits
+                    // for its payment before anybody is asked to confirm it.
+                    awaitingPayment: $payment === self::ONLINE,
                 ),
             );
 
@@ -355,23 +363,33 @@ class PlaceWebsiteOrder
     }
 
     /**
-     * ⚠ COD is the only method this slice accepts, and it is checked rather
-     * than assumed: a form that can post `payment_method` must not be able to
-     * post `online` and have the shop record an order as paid-by-gateway that
-     * no gateway ever saw. SSLCommerz arrives behind this same order, with its
-     * own step and its own proof.
+     * Cash on delivery, or online through SSLCommerz when this shop can take it
+     * right now (Joy, 13 September: those two, nothing else).
+     *
+     * ⚠ Checked rather than assumed: a form that can post `payment_method` must
+     * not be able to choose a method the shop is not offering. Choosing online
+     * records only the CHOICE; nothing is paid until the gateway proves it
+     * (ConfirmGatewayPayment), and the order waits for that proof.
      *
      * @param  array<string, mixed>  $input
      */
-    private function paymentMethod(array $input): string
+    private function paymentMethod(Store $store, array $input): string
     {
-        $method = $input['payment_method'] ?? 'cod';
+        $method = $input['payment_method'] ?? self::CASH_ON_DELIVERY;
 
-        if ($method !== 'cod') {
-            $this->refuse('payment_method', 'Cash on delivery is the only payment method available right now.');
+        if ($method === self::ONLINE) {
+            if (! $store->takesOnlinePayment()) {
+                $this->refuse('payment_method', 'Paying online is not available right now. Choose cash on delivery.');
+            }
+
+            return self::ONLINE;
         }
 
-        return 'cod';
+        if ($method !== self::CASH_ON_DELIVERY) {
+            $this->refuse('payment_method', 'Choose cash on delivery or paying online.');
+        }
+
+        return self::CASH_ON_DELIVERY;
     }
 
     /** @param array<string, mixed> $input */

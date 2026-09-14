@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Commerce\Console\Commands\SettleOnlinePayments;
 use App\Modules\Crm\Console\Commands\NotifyFollowUpsDue;
 use App\Modules\Hrm\Console\Commands\AccrueEarnedLeave;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
@@ -114,3 +115,14 @@ Schedule::command(RollAndRemindRecurringExpenses::class)
     ->dailyAt('08:30')
     ->withoutOverlapping()
     ->runInBackground();
+
+// Online payments (SSLCommerz slice P2c, 14 September 2026). Books any payment
+// the gateway proved that could not be booked at the time, and cancels online
+// orders still unpaid 24 hours after they were placed (Joy, 13 September).
+//
+// ⚠ Every ten minutes, because the first half is money a customer has already
+// paid that is not yet in the books; an hour is too long for that to wait.
+Schedule::command(SettleOnlinePayments::class)
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();

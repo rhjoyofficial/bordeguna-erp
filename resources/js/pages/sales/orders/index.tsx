@@ -31,7 +31,9 @@ interface OrderRow {
     total_delivered: string;
     customer: { name: string };
     warehouse: { name: string } | null;
-    approval_request: { status: 'pending' | 'approved' | 'rejected' };
+    // ⚠ Null for an online order still waiting for its payment: it is not sent
+    // for approval until the gateway's payment is booked (SSLCommerz slice P2c).
+    approval_request: { status: 'pending' | 'approved' | 'rejected' } | null;
     // Website Phase 2, slice 2.4. Null on every order typed into the ERP.
     channel: 'internal' | 'website' | null;
     shop_reference: string | null;
@@ -63,7 +65,7 @@ const statusVariant: Record<OrderRow['status'], 'secondary' | 'default' | 'outli
     cancelled: 'destructive',
 };
 
-const approvalVariant: Record<OrderRow['approval_request']['status'], 'secondary' | 'default' | 'destructive'> = {
+const approvalVariant: Record<'pending' | 'approved' | 'rejected', 'secondary' | 'default' | 'destructive'> = {
     pending: 'secondary',
     approved: 'default',
     rejected: 'destructive',
@@ -317,9 +319,13 @@ export default function SalesOrdersIndex({
                                 <td className="py-2">{order.total_delivered}</td>
                                 <td className="text-muted-foreground py-2">{order.expected_date ?? '-'}</td>
                                 <td className="py-2">
-                                    <Badge variant={approvalVariant[order.approval_request.status]} className="capitalize">
-                                        {order.approval_request.status}
-                                    </Badge>
+                                    {order.approval_request ? (
+                                        <Badge variant={approvalVariant[order.approval_request.status]} className="capitalize">
+                                            {order.approval_request.status}
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline">Awaiting payment</Badge>
+                                    )}
                                 </td>
                                 <td className="py-2">
                                     <Badge variant={statusVariant[order.status]} className="capitalize">

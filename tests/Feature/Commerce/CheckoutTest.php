@@ -519,13 +519,16 @@ it('refuses an order with no street address', function () {
     expect(SalesOrder::query()->count())->toBe(0);
 });
 
-it('refuses any payment method other than cash on delivery', function () {
+it('refuses a payment method the shop is not offering', function () {
     $token = readyBasket();
 
-    // ⛔ A form that can post this must not be able to record an order as
-    // paid-by-gateway that no gateway ever saw.
+    // ⛔ A form that can post this must not be able to choose a method the shop
+    // does not offer: this shop has no online payment set up (SSLCommerz P2c).
     checkoutSameBrowser($token)->post('http://shop.test/checkout', [...$this->address, 'payment_method' => 'online'])
-        ->assertSessionHasErrors('payment_method');
+        ->assertSessionHasErrors(['payment_method' => 'Choose cash on delivery or paying online.']);
+
+    checkoutSameBrowser($token)->post('http://shop.test/checkout', [...$this->address, 'payment_method' => 'sslcommerz'])
+        ->assertSessionHasErrors(['payment_method' => 'Paying online is not available right now. Choose cash on delivery.']);
 
     expect(SalesOrder::query()->count())->toBe(0);
 });

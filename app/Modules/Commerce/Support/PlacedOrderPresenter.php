@@ -2,7 +2,12 @@
 
 namespace App\Modules\Commerce\Support;
 
+use App\Modules\Accounting\Support\Money;
+use App\Modules\Commerce\Actions\PlaceWebsiteOrder;
+use App\Modules\Commerce\Enums\GatewayPaymentStatus;
+use App\Modules\Commerce\Models\GatewayPayment;
 use App\Modules\Foundation\Support\DocumentMoney;
+use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 
@@ -15,13 +20,61 @@ use App\Modules\Sales\Models\SalesOrderLine;
  * a confirmation page that re-priced itself would show a customer a different
  * total next week than the one they accepted.
  *
- * ⚠ It reports no payment state, because there is none to report. Cash on
- * delivery means the money arrives with the parcel; a page that showed "paid"
- * or even "payment pending" would be describing a gateway this order never
- * touched.
+ * ⚠ For cash on delivery it reports no payment state, because there is none:
+ * the money arrives with the parcel. For an order paid online (SSLCommerz slice
+ * P2c) it reports exactly what the GATEWAY has proven and nothing more - never
+ * "paid" on the strength of the customer's browser coming back, which is how
+ * LaLaDia fired a full-value Purchase for an order nobody had paid for.
  */
 final class PlacedOrderPresenter
 {
+    /**
+     * How long an online order waits for its payment before it is cancelled
+     * (Joy, 13 September).
+     */
+    public const PAYMENT_WINDOW_HOURS = 24;
+
+    /**
+     * Where an online payment stands, from the gateway's proven attempts only.
+     *
+     * @return array{state: string, amount_paid: ?string, can_pay: bool, pay_by: ?string, last_attempt: ?string}|null
+     */
+    private static function payment(SalesOrder $order): ?array
+    {
+        if ($order->payment_method !== PlaceWebsiteOrder::ONLINE) {
+            return null;
+        }
+
+        $attempts = GatewayPayment::query()->where('sales_order_id', $order->id)->orderByDesc('id')->get();
+        $took = $attempts->filter(fn (GatewayPayment $attempt) => $attempt->status->tookMoney());
+        $cancelled = $order->status === SalesOrderStatus::Cancelled;
+
+        $state = match (true) {
+            // ⚠ Paid, then cancelled: the money is the customer's to have back.
+            $cancelled && $took->isNotEmpty() => 'refund_due',
+            $took->contains(fn (GatewayPayment $attempt) => $attempt->status === GatewayPaymentStatus::Paid) => 'paid',
+            $took->isNotEmpty() => 'confirming',
+            $cancelled => 'cancelled',
+            default => 'awaiting',
+        };
+
+        $paid = $took->reduce(fn (Money $carry, GatewayPayment $attempt) => $carry->plus($attempt->amountPaidMoney() ?? Money::zero()), Money::zero());
+        $latest = $attempts->first();
+
+        return [
+            'state' => $state,
+            'amount_paid' => $paid->isZero() ? null : DocumentMoney::amount($paid->toTaka()),
+            'can_pay' => $state === 'awaiting' && $order->store?->takesOnlinePayment() === true,
+            'pay_by' => $state === 'awaiting'
+                ? $order->created_at?->copy()->addHours(self::PAYMENT_WINDOW_HOURS)->timezone(config('app.timezone'))->format('j F Y, g:i a')
+                : null,
+            // What happened last time, in words, when it did not go through.
+            'last_attempt' => $state === 'awaiting' && $latest !== null && in_array($latest->status, [GatewayPaymentStatus::Failed, GatewayPaymentStatus::Cancelled], true)
+                ? $latest->status->label()
+                : null,
+        ];
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -80,6 +133,7 @@ final class PlacedOrderPresenter
             // second opinion about what the customer owes.
             'total' => DocumentMoney::amount($order->agreedTotal()),
             'payment_method' => $order->payment_method,
+            'payment' => self::payment($order),
             'recipient' => $address === null ? null : [
                 'name' => $address->recipient_name,
                 'phone' => $address->recipient_phone,

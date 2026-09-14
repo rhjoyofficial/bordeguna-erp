@@ -231,10 +231,16 @@ class CreateSalesOrder
                 ]);
             }
 
-            $order->submitForApproval($createdBy);
+            // ⭐ An order waiting for its online payment is not sent for approval
+            // yet (SSLCommerz slice P2c): BookGatewayPayment sends it once the
+            // money is booked, and an abandoned payment page never reaches the
+            // queue at all.
+            if ($origin?->awaitingPayment !== true) {
+                $order->submitForApproval($createdBy);
 
-            if ($createdBy->can('sales.orders.approve')) {
-                $order->approvalRequest->approve($createdBy);
+                if ($createdBy->can('sales.orders.approve')) {
+                    $order->approvalRequest->approve($createdBy);
+                }
             }
 
             return $order->fresh(['lines', 'approvalRequest', 'customer']);
@@ -242,7 +248,7 @@ class CreateSalesOrder
 
         // Only notify when it actually needs review - a self-approved order
         // does not. Outside the transaction, same as CreatePurchaseOrder.
-        if ($order->approvalRequest->isPending()) {
+        if ($order->approvalRequest?->isPending()) {
             app(NotifyApprovers::class)->handle(
                 businessId: $order->business_id,
                 permission: 'sales.orders.approve',

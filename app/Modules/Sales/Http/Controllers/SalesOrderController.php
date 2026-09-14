@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Commerce\Models\GatewayPayment;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Enums\MoneyAccountType;
@@ -333,6 +334,26 @@ class SalesOrderController extends Controller
                         'invoice_number' => $allocation->invoice?->invoice_number,
                         'amount' => Money::ofTaka((string) $allocation->amount)->toTaka(),
                     ])->values(),
+                ])->values(),
+            // ⭐ Every attempt to pay online (SSLCommerz slice P2c), so whoever
+            // confirms the order sees a payment the gateway flagged as risky, or
+            // one proven but not yet booked, before the parcel leaves.
+            'online' => GatewayPayment::query()->where('sales_order_id', $order->id)->orderBy('id')->get()
+                ->map(fn (GatewayPayment $attempt) => [
+                    'id' => $attempt->id,
+                    'tran_id' => $attempt->tran_id,
+                    'status' => $attempt->status->value,
+                    'status_label' => $attempt->status->label(),
+                    'is_live' => $attempt->is_live,
+                    'amount' => $attempt->amountMoney()->toTaka(),
+                    'amount_paid' => $attempt->amountPaidMoney()?->toTaka(),
+                    'fee' => $attempt->status->tookMoney() ? $attempt->fee()->toTaka() : null,
+                    'bank_tran_id' => $attempt->bank_tran_id,
+                    'card_type' => $attempt->card_type,
+                    'risky' => $attempt->isRisky(),
+                    'risk_title' => $attempt->risk_title,
+                    'problem' => $attempt->problem,
+                    'started_at' => $attempt->created_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
                 ])->values(),
             'refunds' => $order->advanceRefunds()
                 ->with('moneyAccount:id,name')

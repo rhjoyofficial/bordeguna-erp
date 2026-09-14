@@ -66,12 +66,14 @@ interface Order {
         landmark: string | null;
     } | null;
     created_by: { name: string };
+    // ⚠ Null for an online order still waiting for its payment (SSLCommerz slice
+    // P2c): it is sent for approval once the gateway's payment is booked.
     approval_request: {
         status: 'pending' | 'approved' | 'rejected';
         requested_by: { name: string };
         reviewed_by: { name: string } | null;
         review_note: string | null;
-    };
+    } | null;
     lines: Line[];
 }
 
@@ -102,6 +104,23 @@ interface Payments {
         invoices: { id: number; invoice_number: string | null; amount: string }[];
     }[];
     refunds: { id: number; refunded_on: string; money_account: string | null; reference: string | null; amount: string }[];
+    // SSLCommerz slice P2c: every attempt to pay online.
+    online: {
+        id: number;
+        tran_id: string;
+        status: 'initiated' | 'proven' | 'paid' | 'failed' | 'cancelled' | 'expired';
+        status_label: string;
+        is_live: boolean;
+        amount: string;
+        amount_paid: string | null;
+        fee: string | null;
+        bank_tran_id: string | null;
+        card_type: string | null;
+        risky: boolean;
+        risk_title: string | null;
+        problem: string | null;
+        started_at: string | null;
+    }[];
 }
 
 interface MoneyAccountOption {
@@ -395,7 +414,7 @@ const statusVariant: Record<Order['status'], 'secondary' | 'default' | 'outline'
     cancelled: 'destructive',
 };
 
-const approvalVariant: Record<Order['approval_request']['status'], 'secondary' | 'default' | 'destructive'> = {
+const approvalVariant: Record<'pending' | 'approved' | 'rejected', 'secondary' | 'default' | 'destructive'> = {
     pending: 'secondary',
     approved: 'default',
     rejected: 'destructive',
@@ -524,7 +543,7 @@ function PaymentsCard({
 }) {
     const held = parseFloat(payments.held);
     const takesPayment = canRecordPayment && payments.can_take_payment && accounts.length > 0;
-    const hasHistory = payments.receipts.length > 0 || payments.refunds.length > 0;
+    const hasHistory = payments.receipts.length > 0 || payments.refunds.length > 0 || payments.online.length > 0;
 
     if (!hasHistory && !takesPayment) {
         return null;
@@ -575,6 +594,40 @@ function PaymentsCard({
                         ))}
                     </tbody>
                 </table>
+            )}
+
+            {payments.online.length > 0 && (
+                <div className="mt-3 grid gap-1">
+                    <p className="font-medium">Paid online through SSLCommerz</p>
+                    {payments.online.map((attempt) => (
+                        <div key={attempt.id} className="grid gap-0.5">
+                            <p>
+                                {attempt.started_at} - {attempt.tran_id}
+                                {!attempt.is_live && <span className="text-muted-foreground"> (sandbox)</span>}
+                                {' - '}
+                                <span className={attempt.status === 'paid' ? 'font-medium' : 'text-muted-foreground'}>{attempt.status_label}</span>
+                                {attempt.amount_paid && ` - ${attempt.amount_paid}`}
+                                {attempt.fee && parseFloat(attempt.fee) > 0 && (
+                                    <span className="text-muted-foreground"> (gateway fee {attempt.fee})</span>
+                                )}
+                                {attempt.card_type && <span className="text-muted-foreground"> by {attempt.card_type}</span>}
+                            </p>
+                            {/* ⚠ Said where the order is confirmed, before the parcel
+                                leaves: the gateway itself doubted this payment. */}
+                            {attempt.risky && (
+                                <p className="text-destructive font-medium">
+                                    SSLCommerz flagged this payment as risky{attempt.risk_title ? `: ${attempt.risk_title}` : ''}. Check it before
+                                    dispatch.
+                                </p>
+                            )}
+                            {attempt.status === 'proven' && attempt.problem && (
+                                <p className="text-amber-600 dark:text-amber-500">
+                                    The customer has paid, and it is not in the books yet: {attempt.problem} It is retried every ten minutes.
+                                </p>
+                            )}
+                        </div>
+                    ))}
+                </div>
             )}
 
             {held > 0 && !payments.refund_owed && (
@@ -756,9 +809,13 @@ export default function SalesOrderShow({
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Badge variant={approvalVariant[order.approval_request.status]} className="capitalize">
-                            {order.approval_request.status}
-                        </Badge>
+                        {order.approval_request ? (
+                            <Badge variant={approvalVariant[order.approval_request.status]} className="capitalize">
+                                {order.approval_request.status}
+                            </Badge>
+                        ) : (
+                            <Badge variant="outline">Awaiting online payment</Badge>
+                        )}
                         <Badge variant={statusVariant[order.status]} className="capitalize">
                             {order.status.replace('_', ' ')}
                         </Badge>
@@ -808,7 +865,11 @@ export default function SalesOrderShow({
                             {/* ⚠ Not "nothing has been paid": a COD customer can
                                 still send money ahead, and the Payments panel
                                 below is where that is told. */}
-                            {order.payment_method === 'cod' ? 'Chose cash on delivery.' : 'Payment method not recorded.'}
+                            {order.payment_method === 'cod'
+                                ? 'Chose cash on delivery.'
+                                : order.payment_method === 'sslcommerz'
+                                  ? 'Chose to pay online through SSLCommerz - see Payments below.'
+                                  : 'Payment method not recorded.'}
                             {order.delivery_charge !== null && ` Delivery agreed at ${order.delivery_charge}.`}
                         </p>
                         {order.delivery_promise_max_hours !== null && (
@@ -841,7 +902,7 @@ export default function SalesOrderShow({
                     )}
                 </div>
 
-                {order.approval_request.status === 'pending' && can_approve && (
+                {order.approval_request?.status === 'pending' && can_approve && (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border flex gap-2 rounded-xl border p-4">
                         <Button size="sm" onClick={approve}>
                             Approve
@@ -864,11 +925,11 @@ export default function SalesOrderShow({
                     </div>
                 )}
 
-                {order.approval_request.status === 'pending' && !can_approve && (
+                {order.approval_request?.status === 'pending' && !can_approve && (
                     <p className="text-muted-foreground text-sm">Waiting for a manager to approve - goods cannot leave against a pending order.</p>
                 )}
 
-                {order.approval_request.status === 'rejected' && order.approval_request.review_note && (
+                {order.approval_request?.status === 'rejected' && order.approval_request.review_note && (
                     <p className="text-destructive text-sm">Rejected: {order.approval_request.review_note}</p>
                 )}
 
@@ -955,7 +1016,7 @@ export default function SalesOrderShow({
                     </div>
                 )}
 
-                {can_deliver && order.approval_request.status === 'approved' && ['open', 'partially_delivered'].includes(order.status) && (
+                {can_deliver && order.approval_request?.status === 'approved' && ['open', 'partially_delivered'].includes(order.status) && (
                     <DeliverForm order={order} warehouses={warehouses} />
                 )}
 

@@ -58,6 +58,14 @@ final readonly class SalesOrderOrigin
         public ?string $couponCode = null,
         public ?int $promiseMinHours = null,
         public ?int $promiseMaxHours = null,
+        /**
+         * ⭐ An order the customer is about to pay online (SSLCommerz slice P2c,
+         * Joy 13 September): it is NOT sent for approval, and nobody is notified,
+         * until the gateway's payment is booked. An abandoned payment page must
+         * never put an order in front of the people who confirm orders. It is
+         * cancelled if still unpaid after 24 hours.
+         */
+        public bool $awaitingPayment = false,
     ) {}
 
     /**
@@ -77,6 +85,7 @@ final readonly class SalesOrderOrigin
         SalesOrderDestination $destination,
         string $orderDiscount = '0',
         ?string $couponCode = null,
+        bool $awaitingPayment = false,
     ): self {
         return new self(
             channel: SalesChannel::Website,
@@ -95,6 +104,7 @@ final readonly class SalesOrderOrigin
             // ⭐ D24: the shop's one delivery window, frozen on the order.
             promiseMinHours: (int) $store->delivery_promise_min_hours,
             promiseMaxHours: (int) $store->delivery_promise_max_hours,
+            awaitingPayment: $awaitingPayment,
         );
     }
 }

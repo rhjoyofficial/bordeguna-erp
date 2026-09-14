@@ -3,6 +3,8 @@
 namespace App\Modules\Commerce\Http\Controllers;
 
 use App\Modules\Commerce\Actions\PlaceWebsiteOrder;
+use App\Modules\Commerce\Actions\StartGatewayPayment;
+use App\Modules\Commerce\Exceptions\GatewayUnavailable;
 use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Commerce\Support\CartPresenter;
@@ -68,6 +70,9 @@ class CheckoutController
             // is a real answer for a thana the dataset has no areas for.
             'thana' => old('thana'),
             'areas' => BdGeo::areas($district, old('thana')),
+            // ⭐ SSLCommerz slice P2c: offered only while the shop can actually
+            // record an online payment, decided afresh on every view.
+            'online_payment' => $store->takesOnlinePayment(),
             'seo' => [
                 'title' => StorefrontSeo::title($store, null, 'Checkout'),
                 'description' => null,
@@ -86,7 +91,7 @@ class CheckoutController
      * basket the shop cannot sell is a refusal, never a 500 - LaLaDia answered
      * a server error for exactly that and it read as a broken shop.
      */
-    public function place(Request $request, PlaceWebsiteOrder $orders): RedirectResponse
+    public function place(Request $request, PlaceWebsiteOrder $orders, StartGatewayPayment $payments): RedirectResponse
     {
         $store = $this->store($request);
 
@@ -124,6 +129,19 @@ class CheckoutController
 
         $order = $orders->handle($store, $cart, $input);
 
+        // ⭐ SSLCommerz slice P2c: straight to the payment page. The order is
+        // already saved, unpaid and out of the approval queue, so a customer who
+        // walks away from the payment page leaves nothing for anybody to confirm.
+        // ⚠ If the page cannot be opened the order stays, and its page says so
+        // and offers to try again.
+        if ($order->payment_method === PlaceWebsiteOrder::ONLINE) {
+            try {
+                return redirect()->away($payments->handle($order, $store, OnlinePaymentController::callbackUrls($request))['url']);
+            } catch (GatewayUnavailable $e) {
+                return redirect('/orders/'.$order->shop_reference)->with('payment_problem', $e->getMessage());
+            }
+        }
+
         return redirect('/orders/'.$order->shop_reference);
     }
 
@@ -136,10 +154,10 @@ class CheckoutController
      * readable from a public page by guessing, and one shop must never render
      * another's order even within the same group.
      *
-     * ⚠ It states what has happened and no more. There is no payment status to
-     * report because nothing has been paid - this is cash on delivery - and a
-     * page that implied otherwise is how LaLaDia came to fire a full-value
-     * Purchase for an order nobody had paid for.
+     * ⚠ It states what has happened and no more. For cash on delivery there is
+     * no payment to report; for an order paid online, only what the gateway has
+     * PROVEN (SSLCommerz slice P2c). A page that implied payment on less is how
+     * LaLaDia came to fire a full-value Purchase for an order nobody had paid for.
      */
     public function order(Request $request, string $reference): View
     {

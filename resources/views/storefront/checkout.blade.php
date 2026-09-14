@@ -200,21 +200,45 @@
 
                         <h2>How you will pay</h2>
 
-                        {{-- ⚠ One method, stated rather than offered as a choice
-                             of one. Online payment arrives in its own step, and
-                             a disabled radio button is a promise the shop cannot
-                             keep today. --}}
-                        <p class="stated">Cash on delivery &mdash; pay the rider when your parcel arrives.</p>
+                        @if ($online_payment)
+                            {{-- ⭐ SSLCommerz slice P2c: a real choice, because the
+                                 shop can record either right now. Cash on delivery
+                                 stays the default. --}}
+                            <p>
+                                <label class="choice">
+                                    <input type="radio" name="payment_method" value="cod" @checked(old('payment_method', 'cod') === 'cod')>
+                                    Cash on delivery &mdash; pay the rider when your parcel arrives.
+                                </label>
+                            </p>
+                            <p>
+                                <label class="choice">
+                                    <input type="radio" name="payment_method" value="sslcommerz" @checked(old('payment_method') === 'sslcommerz')>
+                                    Pay now online &mdash; card, bKash, Nagad or internet banking, through SSLCommerz.
+                                </label>
+                            </p>
+                        @else
+                            {{-- ⚠ One method, stated rather than offered as a choice
+                                 of one. A disabled radio button is a promise the
+                                 shop cannot keep today. --}}
+                            <p class="stated">Cash on delivery &mdash; pay the rider when your parcel arrives.</p>
+                            <input type="hidden" name="payment_method" value="cod">
+                        @endif
                         {{-- ⭐ D24: said again on the page where somebody commits. --}}
                         <p class="stated">{{ $store->deliveryPromise() }}</p>
-                        <input type="hidden" name="payment_method" value="cod">
                         @error('payment_method')<span class="error">{{ $message }}</span>@enderror
 
                         <p>
                             <button type="submit" @disabled($cart['problems'] > 0)>Place order</button>
                         </p>
 
-                        <p class="muted">Nothing is charged now. We will confirm your order before it is dispatched.</p>
+                        <p class="muted">
+                            @if ($online_payment)
+                                Paying online takes you to SSLCommerz to pay. With cash on delivery nothing is charged now.
+                            @else
+                                Nothing is charged now.
+                            @endif
+                            We will confirm your order before it is dispatched.
+                        </p>
                     </form>
 
                     {{-- ⚠ PROGRESSIVE, and it is the only script on this page.

@@ -3,6 +3,7 @@
 use App\Modules\Commerce\Http\Controllers\CartController;
 use App\Modules\Commerce\Http\Controllers\CheckoutController;
 use App\Modules\Commerce\Http\Controllers\GeoController;
+use App\Modules\Commerce\Http\Controllers\OnlinePaymentController;
 use App\Modules\Commerce\Http\Controllers\StorefrontController;
 use App\Modules\Commerce\Http\Controllers\StorefrontSeoController;
 use Illuminate\Support\Facades\Route;
@@ -86,6 +87,26 @@ Route::middleware('web')->group(function () {
     Route::post('/checkout', [CheckoutController::class, 'place'])->name('storefront.checkout.place');
     Route::get('/orders/{reference}', [CheckoutController::class, 'order'])
         ->where('reference', '[A-Z0-9-]+')->name('storefront.order');
+
+    // Paying online (SSLCommerz slice P2c). ⚠ Trying again is a POST from the
+    // order page, never a GET: opening a payment page creates an attempt, and a
+    // link something prefetches must not.
+    Route::post('/orders/{reference}/pay', [OnlinePaymentController::class, 'pay'])
+        ->where('reference', '[A-Z0-9-]+')->middleware('throttle:10,1')->name('storefront.order.pay');
+
+    // ⚠⚠ SSLCommerz coming back, cross-site: no CSRF token (exempted in
+    // bootstrap/app.php), no session cookie. Nothing these routes receive is
+    // believed until the gateway's signature and Validation API agree. The
+    // customer-facing ones accept GET too, so a redirect cannot strand a
+    // customer who has paid on a 405.
+    Route::match(['get', 'post'], '/payments/sslcommerz/success', [OnlinePaymentController::class, 'success'])
+        ->middleware('throttle:30,1')->name('storefront.payments.sslcommerz.success');
+    Route::match(['get', 'post'], '/payments/sslcommerz/fail', [OnlinePaymentController::class, 'fail'])
+        ->middleware('throttle:30,1')->name('storefront.payments.sslcommerz.fail');
+    Route::match(['get', 'post'], '/payments/sslcommerz/cancel', [OnlinePaymentController::class, 'cancel'])
+        ->middleware('throttle:30,1')->name('storefront.payments.sslcommerz.cancel');
+    Route::post('/payments/sslcommerz/ipn', [OnlinePaymentController::class, 'ipn'])
+        ->middleware('throttle:120,1')->name('storefront.payments.sslcommerz.ipn');
 
     // Where the customer lives (Phase 2, slice 2.2). ⚠ Read only and cached: it
     // answers questions about Bangladesh, not about this shop or this customer.

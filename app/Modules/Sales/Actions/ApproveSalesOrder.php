@@ -19,6 +19,12 @@ class ApproveSalesOrder
 {
     public function handle(SalesOrder $order, User $reviewedBy): SalesOrder
     {
+        // ⚠ An online order waiting for its payment has not been sent for
+        // approval at all (SSLCommerz slice P2c). There is nothing to confirm yet.
+        if ($order->approvalRequest === null) {
+            throw new RuntimeException("Sales order {$order->order_number} is waiting for its online payment and is not ready to confirm.");
+        }
+
         if (! $order->approvalRequest->isPending()) {
             throw new RuntimeException("Sales order {$order->order_number} has already been reviewed.");
         }

@@ -61,6 +61,17 @@ return Application::configure(basePath: dirname(__DIR__))
                 | Request::HEADER_X_FORWARDED_PROTO,
         );
 
+        // ⚠⚠ THE PAYMENT GATEWAY POSTS BACK FROM ITS OWN PAGES, WITH NO CSRF TOKEN
+        // AND NO SESSION COOKIE (SSLCommerz slice P2c). Without this every
+        // callback is a 419 and a customer who has paid lands on an error page.
+        // ⚠ And no test can see it: the framework skips CSRF checks while
+        // running tests, which is why GatewayCallbackTest asserts this list
+        // directly. Safe because nothing on these routes is believed until the
+        // gateway's signature and Validation API agree.
+        $middleware->validateCsrfTokens(except: [
+            'payments/sslcommerz/*',
+        ]);
+
         $middleware->web(append: [
             // ⚠⚠ FIRST IN THIS LIST AND THAT IS LOAD BEARING. It runs after the
             // session has started, because it puts the business there for
