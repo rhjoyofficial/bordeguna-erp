@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -167,6 +168,22 @@ class Store extends Model
     public function domains(): HasMany
     {
         return $this->hasMany(StoreDomain::class);
+    }
+
+    /**
+     * How this shop takes payment online, if at all (SSLCommerz slice P2a).
+     */
+    public function paymentGateway(): HasOne
+    {
+        return $this->hasOne(StorePaymentGateway::class)->where('provider', StorePaymentGateway::SSLCOMMERZ);
+    }
+
+    /**
+     * Does checkout offer paying online right now? ⚠ Re-checked on every read.
+     */
+    public function takesOnlinePayment(): bool
+    {
+        return $this->paymentGateway?->isUsable() ?? false;
     }
 
     public function primaryDomain(): HasMany

@@ -8,6 +8,7 @@ use App\Modules\Commerce\Http\Controllers\StoreCatalogueController;
 use App\Modules\Commerce\Http\Controllers\StoreComboController;
 use App\Modules\Commerce\Http\Controllers\StoreController;
 use App\Modules\Commerce\Http\Controllers\StoreCouponController;
+use App\Modules\Commerce\Http\Controllers\StorePaymentController;
 use App\Modules\Commerce\Http\Controllers\StoreShippingController;
 use Illuminate\Support\Facades\Route;
 
@@ -121,6 +122,23 @@ Route::middleware(['web', 'auth', 'business'])->prefix('commerce')->name('commer
             ->whereNumber('store')->name('stores.shipping.districts');
         Route::post('stores/{store}/shipping/standard', [StoreShippingController::class, 'applyStandard'])
             ->whereNumber('store')->name('stores.shipping.standard');
+    });
+
+    /* -------------------------------------------------------------------- */
+    /* Online payment (SSLCommerz slice P2a) */
+    /* -------------------------------------------------------------------- */
+
+    Route::middleware('can:commerce.stores.view')->group(function () {
+        Route::get('stores/{store}/payments', [StorePaymentController::class, 'index'])
+            ->whereNumber('store')->name('stores.payments');
+    });
+
+    // ⚠ The Owner's permission: taking money online is the same class of decision
+    // as going live, and the merchant password is the most sensitive thing a
+    // store holds.
+    Route::middleware('can:commerce.stores.publish')->group(function () {
+        Route::put('stores/{store}/payments', [StorePaymentController::class, 'update'])
+            ->whereNumber('store')->name('stores.payments.update');
     });
 
     /* -------------------------------------------------------------------- */

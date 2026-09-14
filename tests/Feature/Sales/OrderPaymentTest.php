@@ -457,6 +457,31 @@ it('prints what a receipt holds for an order, and the invoice date as a Dhaka da
         ->and($print['receipt']['allocations'][0]['invoice']['invoice_date'])->toBe('2026-09-14');
 });
 
+it('refuses money typed into a payment gateway account by hand, and a refund paid out of one', function () {
+    // SSLCommerz slice P2a: a gateway's account fills only from a payment the
+    // gateway proved, the courier rule.
+    $gateway = MoneyAccount::create([
+        'business_id' => $this->business->id, 'name' => 'SSLCommerz', 'type' => MoneyAccountType::Gateway,
+        'account_id' => Account::bySlug('gateway_receivable')->id, 'is_active' => true,
+    ]);
+
+    $order = ($this->order)();
+
+    ($this->pay)($order, '500', into: $gateway)
+        ->assertSessionHasErrors(['money_account_id' => "SSLCommerz is a payment gateway's account. Money reaches it when the gateway confirms a payment, not as a receipt."]);
+
+    ($this->pay)($order, '1820');
+    app(CancelSalesOrder::class)->handle($order->fresh());
+
+    $this->actingAs($this->owner)->post("/sales/orders/{$order->id}/refunds", [
+        'money_account_id' => $gateway->id, 'amount' => '100', 'refunded_on' => '2026-09-14',
+    ])->assertSessionHasErrors(['money_account_id' => 'SSLCommerz holds money for somebody else. Pay the customer back from a bank, cash or mobile wallet account.']);
+
+    expect(CustomerReceipt::query()->count())->toBe(1)
+        ->and(CustomerRefund::query()->count())->toBe(0)
+        ->and(collect(($this->props)($order)['money_accounts'])->pluck('name')->all())->toBe(['bKash merchant']);
+});
+
 it('refuses money held on account that names no order', function () {
     app(RecordCustomerReceipt::class)->handle(
         customer: $this->customer,

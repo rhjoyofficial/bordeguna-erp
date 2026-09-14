@@ -385,6 +385,30 @@ it('files a courier account under Receivable from Couriers and nowhere else', fu
     expect(MoneyAccount::query()->sole()->account_id)->toBe(Account::bySlug('courier_receivable')->id);
 });
 
+it('files a payment gateway account under Receivable from Payment Gateways and keeps it out of every picker', function () {
+    // SSLCommerz slice P2a: money a gateway took and has not yet settled is owed
+    // by the gateway, never cash at bank.
+    $this->actingAs($this->founder)
+        ->post(route('accounting.money-accounts.store'), [
+            'name' => 'SSLCommerz', 'type' => MoneyAccountType::Gateway->value,
+            'account_id' => $this->bank->id, 'is_active' => true,
+        ])
+        ->assertSessionHasErrors(['account_id' => 'A payment gateway account reports under 1146 Receivable from Payment Gateways.']);
+
+    $this->actingAs($this->founder)
+        ->post(route('accounting.money-accounts.store'), [
+            'name' => 'SSLCommerz', 'type' => MoneyAccountType::Gateway->value,
+            'account_id' => Account::bySlug('gateway_receivable')->id, 'is_active' => true,
+        ])
+        ->assertSessionHasNoErrors();
+
+    $gateway = MoneyAccount::query()->sole();
+
+    expect($gateway->account_id)->toBe(Account::bySlug('gateway_receivable')->id)
+        ->and($gateway->isGateway())->toBeTrue()
+        ->and(MoneyAccount::query()->handled()->count())->toBe(0);
+});
+
 it('refuses to let a reader change where the money is', function () {
     $this->actingAs($this->coordinator)
         ->post(route('accounting.money-accounts.store'), [

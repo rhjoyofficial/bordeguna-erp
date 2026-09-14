@@ -79,6 +79,7 @@ class MoneyAccountController extends Controller
                 ->values()
                 ->map(fn (Account $account) => ['id' => $account->id, 'label' => $account->label()]),
             'courierLedgerAccountId' => Account::bySlug('courier_receivable')?->id,
+            'gatewayLedgerAccountId' => Account::bySlug('gateway_receivable')?->id,
         ]);
     }
 
@@ -113,6 +114,19 @@ class MoneyAccountController extends Controller
             ], [
                 'account_id.required' => 'A courier account reports under 1145 Receivable from Couriers.',
                 'account_id.in' => 'A courier account reports under 1145 Receivable from Couriers.',
+            ]);
+        }
+
+        // ⚠ The same rule for an online payment gateway (SSLCommerz slice P2):
+        // money it has taken and not yet settled is owed by the gateway, 1146.
+        if ($request->input('type') === MoneyAccountType::Gateway->value) {
+            $gatewayLedger = Account::bySlug('gateway_receivable');
+
+            $request->validate([
+                'account_id' => ['required', Rule::in([$gatewayLedger?->id])],
+            ], [
+                'account_id.required' => 'A payment gateway account reports under 1146 Receivable from Payment Gateways.',
+                'account_id.in' => 'A payment gateway account reports under 1146 Receivable from Payment Gateways.',
             ]);
         }
 

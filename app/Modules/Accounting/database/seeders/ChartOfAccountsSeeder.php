@@ -58,6 +58,9 @@ class ChartOfAccountsSeeder extends Seeder
         // 2026). A receivable, not cash: the courier owes it, net of its fees,
         // on its own payout terms.
         ['1145', 'Receivable from Couriers', AccountType::Asset, '1100', true, 'courier_receivable'],
+        // Money an online payment gateway has taken from customers and not yet
+        // settled to the bank (14 Sep 2026). Owed by the gateway, net of its fee.
+        ['1146', 'Receivable from Payment Gateways', AccountType::Asset, '1100', true, 'gateway_receivable'],
         ['1150', 'Inventory - Stock on Hand', AccountType::Asset, '1100', true, 'stock_on_hand'],
         // ⚠⚠ The mirror of Goods Received Not Invoiced (2120), on the selling
         // side. Stock the business no longer holds but has not yet earned
@@ -354,7 +357,7 @@ class ChartOfAccountsSeeder extends Seeder
         ['6472', 'bKash Charge', AccountType::Expense, '6470', true, null],
         ['6473', 'Nagad Charge', AccountType::Expense, '6470', true, null],
         ['6474', 'Rocket Charge', AccountType::Expense, '6470', true, null],
-        ['6475', 'Payment Gateway Charge', AccountType::Expense, '6470', true, null],
+        ['6475', 'Payment Gateway Charge', AccountType::Expense, '6470', true, 'payment_gateway_charge'],
         ['6476', 'Transaction Charge', AccountType::Expense, '6470', true, null],
         ['6477', 'Other Financial Charges', AccountType::Expense, '6470', true, null],
         ['6500', 'Licence, Testing and Professional', AccountType::Expense, '6000', false, null],

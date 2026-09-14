@@ -56,12 +56,14 @@ export default function MoneyAccountsIndex({
     ledgerAccounts,
     unmappedCount,
     courierLedgerAccountId,
+    gatewayLedgerAccountId,
 }: {
     accounts: MoneyAccount[];
     types: Option[];
     ledgerAccounts: Option[];
     unmappedCount: number;
     courierLedgerAccountId: number | null;
+    gatewayLedgerAccountId: number | null;
 }) {
     const { canManageChartOfAccounts } = usePage<SharedData>().props;
     const [editing, setEditing] = useState<MoneyAccount | null>(null);
@@ -104,14 +106,18 @@ export default function MoneyAccountsIndex({
     const isCash = data.type === 'cash';
     const isMfs = data.type === 'mfs';
     const isCourier = data.type === 'courier';
+    const isGateway = data.type === 'gateway';
 
     // ⚠ A courier's account can only report under 1145 Receivable from Couriers,
-    // so choosing the kind chooses the ledger account too.
+    // and a payment gateway's under 1146, so choosing the kind chooses the ledger
+    // account too.
     const chooseType = (type: string) => {
+        const forced = type === 'courier' ? courierLedgerAccountId : type === 'gateway' ? gatewayLedgerAccountId : null;
+
         setData((current) => ({
             ...current,
             type,
-            account_id: type === 'courier' && courierLedgerAccountId !== null ? String(courierLedgerAccountId) : current.account_id,
+            account_id: forced !== null ? String(forced) : current.account_id,
         }));
     };
 
@@ -179,7 +185,9 @@ export default function MoneyAccountsIndex({
 
                         {!isCash && (
                             <div className="grid gap-2">
-                                <Label htmlFor="account_number">{isMfs ? 'Wallet number' : isCourier ? 'Merchant account' : 'Account number'}</Label>
+                                <Label htmlFor="account_number">
+                                    {isMfs ? 'Wallet number' : isCourier || isGateway ? 'Merchant account' : 'Account number'}
+                                </Label>
                                 <Input
                                     id="account_number"
                                     value={data.account_number}
@@ -190,15 +198,15 @@ export default function MoneyAccountsIndex({
                             </div>
                         )}
 
-                        {(isMfs || isCourier) && (
+                        {(isMfs || isCourier || isGateway) && (
                             <div className="grid gap-2">
-                                <Label htmlFor="provider">{isCourier ? 'Courier' : 'Provider'}</Label>
+                                <Label htmlFor="provider">{isCourier ? 'Courier' : isGateway ? 'Gateway' : 'Provider'}</Label>
                                 <Input
                                     id="provider"
                                     value={data.provider}
                                     onChange={(e) => setData('provider', e.target.value)}
                                     className="w-36"
-                                    placeholder={isCourier ? 'Pathao' : 'bKash'}
+                                    placeholder={isCourier ? 'Pathao' : isGateway ? 'SSLCommerz' : 'bKash'}
                                 />
                             </div>
                         )}
@@ -238,6 +246,13 @@ export default function MoneyAccountsIndex({
                             <p className="text-muted-foreground w-full text-xs">
                                 Cash on delivery a courier has collected and not yet paid out. It fills when a parcel is recorded as delivered on its
                                 order, and nothing can be paid from it by hand.
+                            </p>
+                        )}
+
+                        {isGateway && (
+                            <p className="text-muted-foreground w-full text-xs">
+                                Money customers paid online that the gateway has not yet settled to the bank. It fills when the gateway confirms a
+                                payment, its fee comes off as it does, and nothing can be paid from it by hand.
                             </p>
                         )}
 

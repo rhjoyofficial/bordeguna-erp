@@ -76,7 +76,7 @@ class PostCourierStatement
             $depositArrived = $review->fileTotal->minor > 0;
 
             if ($depositArrived) {
-                if ($receivedInto === null || $receivedInto->isCourier() || ! $receivedInto->is_active || $receivedInto->business_id !== $statement->business_id) {
+                if ($receivedInto === null || $receivedInto->isCourier() || $receivedInto->isGateway() || ! $receivedInto->is_active || $receivedInto->business_id !== $statement->business_id) {
                     throw ValidationException::withMessages(['received_money_account_id' => 'Choose the bank or wallet account the payout arrived in.']);
                 }
 

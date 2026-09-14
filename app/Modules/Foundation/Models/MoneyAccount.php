@@ -75,18 +75,24 @@ class MoneyAccount extends Model
 
     /**
      * Accounts a person pays from or receives into by hand: everything except a
-     * courier's. ⚠ Every screen that offers a money account for a payment or a
-     * receipt uses this, so cash a courier is holding can never be picked to pay
-     * a supplier or take a counter sale.
+     * courier's or a payment gateway's. ⚠ Every screen that offers a money
+     * account for a payment or a receipt uses this, so money a courier or a
+     * gateway is holding can never be picked to pay a supplier or take a counter
+     * sale.
      */
     public function scopeHandled(Builder $query): Builder
     {
-        return $query->where('type', '!=', MoneyAccountType::Courier->value);
+        return $query->whereNotIn('type', [MoneyAccountType::Courier->value, MoneyAccountType::Gateway->value]);
     }
 
     public function isCourier(): bool
     {
         return $this->type === MoneyAccountType::Courier;
+    }
+
+    public function isGateway(): bool
+    {
+        return $this->type === MoneyAccountType::Gateway;
     }
 
     /**

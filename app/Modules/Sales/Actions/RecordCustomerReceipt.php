@@ -53,6 +53,7 @@ class RecordCustomerReceipt
         ?Consignment $consignment = null,
         ?SalesOrder $forOrder = null,
         ?string $heldForOrder = null,
+        bool $provenByGateway = false,
     ): CustomerReceipt {
         $date = Carbon::parse($receivedOn)->startOfDay();
         $held = Money::ofTaka($heldForOrder ?? '0');
@@ -92,6 +93,16 @@ class RecordCustomerReceipt
         if ($moneyAccount->isCourier() && ($consignment === null || $consignment->money_account_id !== $moneyAccount->id)) {
             throw ValidationException::withMessages([
                 'money_account_id' => "{$moneyAccount->name} is a courier's account. Money reaches it when a parcel's delivery is recorded, not as a receipt.",
+            ]);
+        }
+
+        // ⚠⚠ The courier rule, for an online payment gateway (SSLCommerz slice P2):
+        // money reaches its account only through a payment the gateway itself
+        // proved. Typed in by hand it would say the gateway owes money for a
+        // payment nobody can find in its settlement report.
+        if ($moneyAccount->isGateway() && ! $provenByGateway) {
+            throw ValidationException::withMessages([
+                'money_account_id' => "{$moneyAccount->name} is a payment gateway's account. Money reaches it when the gateway confirms a payment, not as a receipt.",
             ]);
         }
 

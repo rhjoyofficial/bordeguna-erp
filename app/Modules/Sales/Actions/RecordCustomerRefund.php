@@ -53,6 +53,13 @@ class RecordCustomerRefund
             ]);
         }
 
+        // A courier's or a gateway's account pays nobody back by hand.
+        if ($moneyAccount->isCourier() || $moneyAccount->isGateway()) {
+            throw ValidationException::withMessages([
+                'money_account_id' => "{$moneyAccount->name} holds money for somebody else. Pay the customer back from a bank, cash or mobile wallet account.",
+            ]);
+        }
+
         if (! $moneyAccount->is_active) {
             throw ValidationException::withMessages([
                 'money_account_id' => 'That account is no longer active.',
@@ -110,8 +117,9 @@ class RecordCustomerRefund
      * same structural cap a return-linked refund carries, for the same reason: an
      * uncapped refund is how a receivable goes quietly negative.
      *
-     * ⚠ Refused into a courier's account. A courier holds money it collected; it
-     * does not pay a customer back on the business's behalf.
+     * ⚠ Refused from a courier's or a gateway's account: each holds money for the
+     * business, and neither pays a customer back by hand. A refund through the
+     * gateway itself is slice P4.
      *
      * @throws ValidationException
      */
@@ -134,9 +142,9 @@ class RecordCustomerRefund
             ]);
         }
 
-        if ($moneyAccount->isCourier()) {
+        if ($moneyAccount->isCourier() || $moneyAccount->isGateway()) {
             throw ValidationException::withMessages([
-                'money_account_id' => "{$moneyAccount->name} is a courier's account. Pay the customer back from a bank, cash or mobile wallet account.",
+                'money_account_id' => "{$moneyAccount->name} holds money for somebody else. Pay the customer back from a bank, cash or mobile wallet account.",
             ]);
         }
 

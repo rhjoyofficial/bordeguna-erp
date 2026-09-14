@@ -26,6 +26,16 @@ enum MoneyAccountType: string
      */
     case Courier = 'courier';
 
+    /**
+     * Money an online payment gateway (SSLCommerz) has taken from customers and
+     * not yet settled to the bank, reported under 1146 Receivable from Payment
+     * Gateways. It reconciles to the gateway's settlement report.
+     *
+     * ⚠ Nobody pays from it or receives into it by hand, the courier rule: a
+     * proven gateway payment puts money in, and a settlement takes it out.
+     */
+    case Gateway = 'gateway';
+
     public function label(): string
     {
         return [
@@ -33,6 +43,7 @@ enum MoneyAccountType: string
             'cash' => 'Cash',
             'mfs' => 'Mobile financial service',
             'courier' => 'Courier (cash on delivery)',
+            'gateway' => 'Payment gateway (online payments)',
         ][$this->value] ?? $this->value;
     }
 }
