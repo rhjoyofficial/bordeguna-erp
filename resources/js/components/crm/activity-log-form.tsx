@@ -252,7 +252,7 @@ export function ActivityLogForm({
                             type="file"
                             accept="image/jpeg,image/png,image/webp"
                             multiple
-                            className="text-sm"
+                            className="w-full min-w-0 text-sm"
                             onChange={(e) => log.setData('photos', Array.from(e.target.files ?? []))}
                         />
                         <InputError message={photoError} />
