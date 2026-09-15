@@ -3,6 +3,8 @@
 namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
+use App\Modules\Crm\Models\DistributorInspection;
+use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\DisbursementBatch;
@@ -14,7 +16,6 @@ use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use App\Modules\Purchasing\Models\SupplierBill;
-use App\Modules\Crm\Models\Lead;
 
 /**
  * Which stored files a person may see, and what they are allowed to do to them.
@@ -50,6 +51,9 @@ class FileVisibility
         Business::class => 'files.view',
 
         Lead::class => 'crm.leads.view',
+        // ⚠ Photos from a distributor inspection (CRM slice 2c): the lead's files by
+        // another route, so the lead's permission AND its row scope.
+        DistributorInspection::class => 'crm.leads.view',
 
         // ⚠ People's documents. Photographs, national id, contracts.
         Employee::class => 'hrm.employees.manage',
@@ -91,6 +95,7 @@ class FileVisibility
      */
     private const ROW_SCOPED = [
         Lead::class,
+        DistributorInspection::class,
     ];
 
     /** The collection standalone files live in, on the Business itself. */

@@ -9,12 +9,16 @@ use App\Modules\Crm\Actions\RecordProductInterest;
 use App\Modules\Crm\Enums\ActivityDirection;
 use App\Modules\Crm\Enums\ActivityType;
 use App\Modules\Crm\Enums\InterestStatus;
+use App\Modules\Crm\Enums\SampleResult;
 use App\Modules\Crm\Enums\TaskStatus;
 use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\CrmProductInterest;
 use App\Modules\Crm\Models\CrmTask;
+use App\Modules\Crm\Models\DistributorInspection;
 use App\Modules\Crm\Models\Lead;
+use App\Modules\Crm\Models\SupplierLeadSample;
 use App\Modules\Crm\Support\LeadVisibility;
+use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
@@ -125,7 +129,18 @@ class CrmActivityController extends Controller
                 // A converted lead links to the customer it became, so the whole
                 // story stays reachable without copying any history.
                 'converted_customer_id' => $type === 'lead' ? $subject->converted_customer_id : null,
+                'lead_type' => $type === 'lead' ? $subject->lead_type->value : null,
             ],
+            // ⭐ CRM slice 2c. Sent for every lead, not only for the matching type:
+            // a lead whose type was corrected keeps what was recorded under the
+            // old one, and hiding it would look like it was lost. The screen
+            // offers a NEW record only on the matching type.
+            'inspections' => $subject instanceof Lead ? $this->inspections($subject) : [],
+            'samples' => $subject instanceof Lead ? $this->samples($subject) : [],
+            'sampleResults' => collect(SampleResult::cases())
+                ->map(fn (SampleResult $r) => ['value' => $r->value, 'label' => $r->label()])->all(),
+            'canInspect' => $request->user()?->can('crm.leads.verify') ?? false,
+            'canJudgeSample' => $request->user()?->can('crm.samples.judge') ?? false,
             'activities' => $activities,
             'tasks' => $tasks,
             'activityTypes' => collect(ActivityType::selectable())
@@ -317,6 +332,54 @@ class CrmActivityController extends Controller
      * updateOrCreate; that would have destroyed the first statement every time
      * somebody made a second one.
      */
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function inspections(Lead $lead): array
+    {
+        return DistributorInspection::query()
+            ->where('lead_id', $lead->id)
+            ->with(['recordedBy:id,name', 'attachments'])
+            ->orderByDesc('inspected_on')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (DistributorInspection $i) => [
+                'id' => $i->id,
+                'inspected_on' => $i->inspected_on?->toDateString(),
+                'notes' => $i->notes,
+                'by' => $i->recordedBy?->name,
+                'photos' => $i->attachments
+                    ->where('collection', DistributorInspection::PHOTOS)
+                    ->map(fn (Attachment $a) => ['id' => $a->id, 'name' => $a->original_name, 'url' => $a->url()])
+                    ->values()->all(),
+            ])->all();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function samples(Lead $lead): array
+    {
+        return SupplierLeadSample::query()
+            ->where('lead_id', $lead->id)
+            ->with(['recordedBy:id,name', 'judgedBy:id,name'])
+            ->orderByDesc('received_on')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (SupplierLeadSample $s) => [
+                'id' => $s->id,
+                'received_on' => $s->received_on?->toDateString(),
+                'item' => $s->item,
+                'note' => $s->note,
+                'by' => $s->recordedBy?->name,
+                'result' => $s->result?->value,
+                'result_label' => $s->result?->label(),
+                'result_note' => $s->result_note,
+                'judged_by' => $s->judgedBy?->name,
+                'judged_at' => $s->judged_at?->toDateTimeString(),
+            ])->all();
+    }
+
     public function storeInterest(Request $request, string $type, int $id, RecordProductInterest $action): RedirectResponse
     {
         $subject = $this->resolveSubject($type, $id);

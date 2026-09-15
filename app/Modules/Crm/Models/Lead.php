@@ -250,6 +250,18 @@ class Lead extends Model implements ControlsAttachmentAccess
         return $this->hasMany(LeadCoverageArea::class);
     }
 
+    /** What the ASM saw at a distributor (answer 17). Append-only. */
+    public function inspections(): HasMany
+    {
+        return $this->hasMany(DistributorInspection::class);
+    }
+
+    /** Samples a supplier sent, and the Owner's verdicts (answer 15). Append-only. */
+    public function samples(): HasMany
+    {
+        return $this->hasMany(SupplierLeadSample::class);
+    }
+
     public function isVerified(): bool
     {
         return $this->verified_at !== null;

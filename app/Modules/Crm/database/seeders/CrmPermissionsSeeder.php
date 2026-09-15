@@ -64,7 +64,11 @@ class CrmPermissionsSeeder extends Seeder
         // and their team's - see LeadVisibility. Manager deliberately does not
         // get it; measured on production 15 Sep, nobody in Bor de Guna holds
         // Manager, so nobody lost access on the day this shipped.
-        'Owner' => ['crm.leads.view', 'crm.leads.view.all', 'crm.leads.manage', 'crm.leads.assign', 'crm.leads.verify', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage', 'crm.campaigns.send', 'crm.campaigns.approve'],
+        //
+        // ⭐⭐ `crm.samples.judge` is the OWNER'S ALONE too (Joy, answer 15:
+        // "the Owner decides"). Anyone who works a supplier lead logs a sample
+        // that arrived; only the Owner says whether it passed.
+        'Owner' => ['crm.leads.view', 'crm.leads.view.all', 'crm.leads.manage', 'crm.leads.assign', 'crm.leads.verify', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage', 'crm.campaigns.send', 'crm.campaigns.approve', 'crm.samples.judge'],
         'Manager' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.leads.verify', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage', 'crm.campaigns.send'],
         'Staff' => ['crm.leads.view', 'crm.leads.manage', 'crm.contacts.view'],
 

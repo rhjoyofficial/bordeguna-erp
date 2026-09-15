@@ -8,6 +8,7 @@ use App\Modules\Crm\Http\Controllers\CrmActivityController;
 use App\Modules\Crm\Http\Controllers\CrmReportController;
 use App\Modules\Crm\Http\Controllers\CrmSettingsController;
 use App\Modules\Crm\Http\Controllers\LeadController;
+use App\Modules\Crm\Http\Controllers\LeadEvidenceController;
 use App\Modules\Crm\Http\Controllers\MessageProviderController;
 use App\Modules\Crm\Http\Controllers\MessagingController;
 use App\Modules\Crm\Http\Controllers\OpportunityController;
@@ -67,6 +68,19 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         // working list exactly as archiving does, and Joy reserved merging for
         // the ASM. See LeadController::linkDuplicate().
         Route::post('leads/{lead}/duplicate-of', [LeadController::class, 'linkDuplicate'])->name('leads.duplicate-of');
+        // ⭐ Joy's answer 17: before appointing a distributor the ASM MAY record
+        // what he saw. Evidence, so there is no edit or delete route.
+        Route::post('leads/{lead}/inspections', [LeadEvidenceController::class, 'storeInspection'])->name('leads.inspections.store');
+    });
+
+    // ⭐ Joy's answer 15 (plan D13): whoever works a supplier lead logs a sample
+    // that arrived; only the Owner records whether it passed, once. No edit or
+    // delete route for either - a re-test is a new sample.
+    Route::middleware('can:crm.leads.manage')->group(function () {
+        Route::post('leads/{lead}/samples', [LeadEvidenceController::class, 'storeSample'])->name('leads.samples.store');
+    });
+    Route::middleware('can:crm.samples.judge')->group(function () {
+        Route::post('samples/{sample}/result', [LeadEvidenceController::class, 'judgeSample'])->name('samples.result');
     });
 
     // ⚠ Sources and campaigns are the REPORTING AXES. Staff capture leads;

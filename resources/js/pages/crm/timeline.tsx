@@ -1,3 +1,5 @@
+import { type Inspection, LeadInspections } from '@/components/crm/lead-inspections';
+import { LeadSamples, type Sample } from '@/components/crm/lead-samples';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
@@ -75,8 +77,21 @@ export default function CrmTimeline({
     units,
     canRecord,
     canAssign,
+    inspections,
+    samples,
+    sampleResults,
+    canInspect,
+    canJudgeSample,
+    now,
 }: {
-    subject: { kind: string; id: number; name: string | null; phone: string | null; converted_customer_id: number | null };
+    subject: {
+        kind: string;
+        id: number;
+        name: string | null;
+        phone: string | null;
+        converted_customer_id: number | null;
+        lead_type: string | null;
+    };
     activities: Activity[];
     tasks: Task[];
     interests: Interest[];
@@ -90,7 +105,16 @@ export default function CrmTimeline({
     units: { id: number; name: string; abbreviation: string }[];
     canRecord: boolean;
     canAssign: boolean;
+    inspections: Inspection[];
+    samples: Sample[];
+    sampleResults: { value: string; label: string }[];
+    canInspect: boolean;
+    canJudgeSample: boolean;
+    now: string;
 }) {
+    // The app runs on Dhaka time, so the server's date is the shop's date.
+    const today = now.slice(0, 10);
+
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'CRM', href: '/crm/leads' },
         { title: subject.name ?? `${subject.kind} #${subject.id}`, href: `/crm/${subject.kind}/${subject.id}/timeline` },
@@ -392,6 +416,29 @@ export default function CrmTimeline({
                         </div>
                         <Button disabled={interest.processing}>Record what they want</Button>
                     </form>
+                )}
+
+                {/* ⭐ CRM slice 2c: evidence for a distributor or a supplier. Each
+                    renders nothing for a lead of another type with no history. */}
+                {subject.kind === 'lead' && (
+                    <>
+                        <LeadInspections
+                            leadId={subject.id}
+                            leadType={subject.lead_type}
+                            inspections={inspections}
+                            canInspect={canInspect}
+                            today={today}
+                        />
+                        <LeadSamples
+                            leadId={subject.id}
+                            leadType={subject.lead_type}
+                            samples={samples}
+                            sampleResults={sampleResults}
+                            canRecord={canRecord}
+                            canJudge={canJudgeSample}
+                            today={today}
+                        />
+                    </>
                 )}
 
                 <div>
