@@ -8,9 +8,11 @@ use App\Modules\Crm\Enums\LeadType;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\IdentityDocuments;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -48,6 +50,7 @@ class ConvertLead
 
     /**
      * @param  array<string, mixed>  $newCustomer  Used only when $existing is null.
+     * @param  array<string, list<UploadedFile>>  $documents  trade licence and NID scans (plan D11), stored on the customer that results
      *
      * @throws ValidationException
      */
@@ -56,6 +59,7 @@ class ConvertLead
         User $convertedBy,
         ?Customer $existing = null,
         array $newCustomer = [],
+        array $documents = [],
     ): Customer {
         $businessId = app(BusinessContext::class)->id();
 
@@ -91,10 +95,14 @@ class ConvertLead
             ]);
         }
 
-        return DB::transaction(function () use ($lead, $existing, $newCustomer, $businessId) {
+        return DB::transaction(function () use ($lead, $existing, $newCustomer, $businessId, $documents, $convertedBy) {
             $customer = $existing !== null
                 ? $this->useExisting($existing, $businessId)
                 : $this->create($newCustomer, $lead, $businessId);
+
+            // ⭐ Plan D11: the papers arrive with the conversion, on whichever
+            // customer results. Optional, always.
+            IdentityDocuments::store($customer, $documents, $convertedBy);
 
             // ⚠⚠ forceFill, because both columns are unfillable by design. This
             // is the single writer, and it is deliberate that it reads oddly -

@@ -4,15 +4,29 @@ namespace App\Modules\Purchasing\Models;
 
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\HoldsIdentityDocuments;
+use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
+use App\Modules\Foundation\Contracts\OpensAttachmentCollections;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
-class Supplier extends Model
+class Supplier extends Model implements ControlsAttachmentAccess, OpensAttachmentCollections
 {
-    use BelongsToBusiness, HasFactory, LogsActivity;
+    use BelongsToBusiness, HasFactory, HoldsIdentityDocuments, LogsActivity;
+
+    /** ⭐ Plan D11: the Owner opens a supplier's NID scan; see HoldsIdentityDocuments. */
+    public function identityPermission(): string
+    {
+        return 'purchasing.suppliers.identity.view';
+    }
+
+    public function documentManagePermission(): string
+    {
+        return 'purchasing.suppliers.manage';
+    }
 
     protected $fillable = [
         'business_id',

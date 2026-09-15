@@ -28,6 +28,7 @@ use App\Modules\Crm\Support\MapLink;
 use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\IdentityDocuments;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
@@ -858,6 +859,8 @@ class LeadController extends Controller
             'credit_limit' => ['nullable', 'numeric', 'min:0'],
             'price_group_id' => ['nullable', 'integer',
                 Rule::exists('price_groups', 'id')->where('business_id', $businessId)],
+            // ⭐ Plan D11: trade licence and NID scans, optional.
+            ...IdentityDocuments::rules(),
         ]);
 
         $customer = $action->handle(
@@ -865,6 +868,7 @@ class LeadController extends Controller
             convertedBy: $request->user(),
             existing: empty($data['customer_id']) ? null : Customer::findOrFail($data['customer_id']),
             newCustomer: $data,
+            documents: $request->file('documents', []),
         );
 
         return back()->with('success', "Converted to customer {$customer->code}.");

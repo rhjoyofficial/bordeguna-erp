@@ -67,7 +67,14 @@ export function LeadConvertForm({
         credit_limit: '',
         payment_terms: '',
         note: '',
+        trade_licence: [] as File[],
+        nid: [] as File[],
     });
+
+    // ⭐ Plan D11: the scans travel as documents[kind][], the shape the customer
+    // screen uses, and only as form data when there is a file to send.
+    const hasFiles = form.data.trade_licence.length > 0 || form.data.nid.length > 0;
+    form.transform(({ trade_licence, nid, ...rest }) => (hasFiles ? { ...rest, documents: { trade_licence, nid } } : rest));
 
     const takesCredit = creditTypes.includes(form.data.type);
 
@@ -98,9 +105,12 @@ export function LeadConvertForm({
         }));
     };
 
+    const documentError = (kind: string) =>
+        Object.entries(form.errors as Record<string, string | undefined>).find(([key]) => key.startsWith(`documents.${kind}`))?.[1];
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        form.post(route('crm.leads.convert', lead.id), { preserveScroll: true, onSuccess: () => onDone() });
+        form.post(route('crm.leads.convert', lead.id), { preserveScroll: true, forceFormData: hasFiles, onSuccess: () => onDone() });
     };
 
     return (
@@ -257,6 +267,33 @@ export function LeadConvertForm({
                     )}
                 </>
             )}
+
+            {/* ⭐ Plan D11: papers arrive with the conversion, all optional. */}
+            <div className="grid gap-2 sm:col-span-2">
+                <Label htmlFor="convert_trade_licence">Trade licence scan (optional)</Label>
+                <input
+                    id="convert_trade_licence"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    multiple
+                    className="w-full min-w-0 text-sm"
+                    onChange={(e) => form.setData('trade_licence', Array.from(e.target.files ?? []))}
+                />
+                <InputError message={documentError('trade_licence')} />
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+                <Label htmlFor="convert_nid">NID scan (optional)</Label>
+                <input
+                    id="convert_nid"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    multiple
+                    className="w-full min-w-0 text-sm"
+                    onChange={(e) => form.setData('nid', Array.from(e.target.files ?? []))}
+                />
+                <InputError message={documentError('nid')} />
+                <p className="text-muted-foreground text-xs">Once saved, only the Owner can open an NID scan. No NID number is recorded.</p>
+            </div>
 
             {/* The action reports "already converted", "marked lost" and
                 "supplier lead" against the lead itself, not a field. */}

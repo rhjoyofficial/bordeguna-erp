@@ -7,6 +7,7 @@ use App\Modules\Purchasing\Http\Controllers\RecurringExpenseController;
 use App\Modules\Purchasing\Http\Controllers\SupplierBillController;
 use App\Modules\Purchasing\Http\Controllers\SupplierController;
 use App\Modules\Purchasing\Http\Controllers\SupplierCreditNoteController;
+use App\Modules\Purchasing\Http\Controllers\SupplierDocumentController;
 use App\Modules\Purchasing\Http\Controllers\SupplierImportController;
 use App\Modules\Purchasing\Http\Controllers\SupplierPaymentController;
 use Illuminate\Support\Facades\Route;
@@ -40,6 +41,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         Route::post('suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
         Route::put('suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
         Route::delete('suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
+        // ⭐ Plan D11: trade licence and NID scans. Adding needs the same trust as
+        // editing the supplier; opening or removing an NID also needs
+        // purchasing.suppliers.identity.view (IdentityDocuments and the stream).
+        Route::post('suppliers/{supplier}/documents', [SupplierDocumentController::class, 'store'])
+            ->whereNumber('supplier')->name('suppliers.documents.store');
+        Route::delete('suppliers/{supplier}/documents/{attachment}', [SupplierDocumentController::class, 'destroy'])
+            ->whereNumber('supplier')->whereNumber('attachment')->name('suppliers.documents.destroy');
     });
 
     // Purchase orders — index/show open to any business member; store/approve/

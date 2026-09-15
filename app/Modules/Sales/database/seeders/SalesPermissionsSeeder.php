@@ -28,6 +28,9 @@ class SalesPermissionsSeeder extends Seeder
     private const ROLE_PERMISSIONS = [
         'Owner' => [
             'sales.customers.manage',
+            // ⭐⭐ Plan D11 (Joy's answer 19): an NID scan opens for the Owner
+            // and nobody else by default. See HoldsIdentityDocuments.
+            'sales.customers.identity.view',
             'sales.prices.manage',
             // C-IMP-4. Loading a whole price list is a manager's act.
             'sales.prices.import',

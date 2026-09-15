@@ -1,5 +1,6 @@
-import { ReportHeading } from '@/components/report/report-shell';
+import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
+import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -41,6 +42,7 @@ interface SupplierInfo {
  */
 export default function SupplierShow({
     timeline,
+    documents,
     supplier,
     payable,
     totals,
@@ -48,6 +50,7 @@ export default function SupplierShow({
     recent,
 }: {
     timeline?: TimelineEntry[];
+    documents: IdentityDocuments;
     supplier: SupplierInfo;
     payable: { amount: string; is_credit: boolean };
     totals: { billed: string; paid: string; credited: string; open_pos: number };
@@ -103,21 +106,29 @@ export default function SupplierShow({
                 </div>
 
                 <div className="grid gap-6 lg:grid-cols-3">
-                    <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
-                        <h2 className="text-sm font-medium">Details</h2>
-                        <dl className="mt-3 space-y-2 text-sm">
-                            {facts.map(([label, value]) =>
-                                value ? (
-                                    <div key={label}>
-                                        <dt className="text-muted-foreground text-xs">{label}</dt>
-                                        <dd className="whitespace-pre-line">{value}</dd>
-                                    </div>
-                                ) : null,
-                            )}
-                        </dl>
-                        <p className="text-muted-foreground mt-3 border-t pt-3 text-xs">
-                            Credited to date: {totals.credited}. Bank details live on the supplier list for those who manage suppliers.
-                        </p>
+                    <div className="flex min-w-0 flex-col gap-6">
+                        <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
+                            <h2 className="text-sm font-medium">Details</h2>
+                            <dl className="mt-3 space-y-2 text-sm">
+                                {facts.map(([label, value]) =>
+                                    value ? (
+                                        <div key={label}>
+                                            <dt className="text-muted-foreground text-xs">{label}</dt>
+                                            <dd className="whitespace-pre-line">{value}</dd>
+                                        </div>
+                                    ) : null,
+                                )}
+                            </dl>
+                            <p className="text-muted-foreground mt-3 border-t pt-3 text-xs">
+                                Credited to date: {totals.credited}. Bank details live on the supplier list for those who manage suppliers.
+                            </p>
+                        </div>
+                        {/* ⭐ Plan D11: trade licence and NID scans. */}
+                        <IdentityDocumentsPanel
+                            documents={documents}
+                            uploadUrl={`/purchasing/suppliers/${supplier.id}/documents`}
+                            removeUrl={(id) => `/purchasing/suppliers/${supplier.id}/documents/${id}`}
+                        />
                     </div>
 
                     <div className="flex flex-col gap-6 lg:col-span-2">
@@ -138,7 +149,9 @@ export default function SupplierShow({
                                             <td className="p-3">
                                                 {bill.due_date && <span className="text-muted-foreground">due {bill.due_date}</span>}
                                                 {bill.days_overdue > 0 && (
-                                                    <span className="ml-2 text-xs font-medium text-red-600 dark:text-red-500">{bill.days_overdue} day(s) overdue</span>
+                                                    <span className="ml-2 text-xs font-medium text-red-600 dark:text-red-500">
+                                                        {bill.days_overdue} day(s) overdue
+                                                    </span>
                                                 )}
                                             </td>
                                             <td className="text-muted-foreground p-3 text-right">of {bill.total}</td>

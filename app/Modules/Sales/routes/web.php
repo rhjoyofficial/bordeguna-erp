@@ -1,21 +1,22 @@
 <?php
 
+use App\Modules\Sales\Http\Controllers\ConsignmentController;
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\CourierStatementController;
-use App\Modules\Sales\Http\Controllers\PosShiftController;
-use App\Modules\Sales\Http\Controllers\PromotionController;
-use App\Modules\Sales\Http\Controllers\QuotationController;
-use App\Modules\Sales\Http\Controllers\SalesTargetController;
-use App\Modules\Sales\Http\Controllers\ConsignmentController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
+use App\Modules\Sales\Http\Controllers\CustomerDocumentController;
 use App\Modules\Sales\Http\Controllers\CustomerImportController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
 use App\Modules\Sales\Http\Controllers\DiscountController;
+use App\Modules\Sales\Http\Controllers\PosShiftController;
 use App\Modules\Sales\Http\Controllers\PriceImportController;
 use App\Modules\Sales\Http\Controllers\ProductPriceController;
+use App\Modules\Sales\Http\Controllers\PromotionController;
+use App\Modules\Sales\Http\Controllers\QuotationController;
 use App\Modules\Sales\Http\Controllers\SalesInvoiceController;
 use App\Modules\Sales\Http\Controllers\SalesOrderController;
 use App\Modules\Sales\Http\Controllers\SalesReturnController;
+use App\Modules\Sales\Http\Controllers\SalesTargetController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')->group(function () {
@@ -76,6 +77,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::post('customers', [CustomerController::class, 'store'])->name('customers.store');
         Route::put('customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
         Route::delete('customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
+        // ⭐ Plan D11: trade licence and NID scans. Adding needs the same trust as
+        // editing the customer; opening or removing an NID also needs
+        // sales.customers.identity.view (checked in IdentityDocuments and on the stream).
+        Route::post('customers/{customer}/documents', [CustomerDocumentController::class, 'store'])
+            ->whereNumber('customer')->name('customers.documents.store');
+        Route::delete('customers/{customer}/documents/{attachment}', [CustomerDocumentController::class, 'destroy'])
+            ->whereNumber('customer')->whereNumber('attachment')->name('customers.documents.destroy');
 
         // The list in and out of a spreadsheet. Same permission as editing one
         // by hand: a file that sets price groups and credit limits is the same

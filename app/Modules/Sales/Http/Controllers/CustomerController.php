@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\CustomerStatement;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\IdentityDocuments;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Support\RecordTimeline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -17,7 +19,6 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
-use App\Support\RecordTimeline;
 
 class CustomerController extends Controller
 {
@@ -102,6 +103,9 @@ class CustomerController extends Controller
             'statement_url' => '/accounting/customer-statement?customer='.$customer->id,
             // The record's own story (Module 1, Slice 4).
             'timeline' => RecordTimeline::for($customer),
+            // ⭐ Plan D11: trade licence and NID scans, NID as a count unless the
+            // reader may open it.
+            'documents' => IdentityDocuments::props($customer, request()->user()),
         ]);
     }
 

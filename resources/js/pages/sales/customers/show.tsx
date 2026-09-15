@@ -1,5 +1,6 @@
-import { ReportHeading } from '@/components/report/report-shell';
+import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
+import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -46,6 +47,7 @@ interface CustomerInfo {
  */
 export default function CustomerShow({
     timeline,
+    documents,
     customer,
     balance,
     totals,
@@ -55,6 +57,7 @@ export default function CustomerShow({
     statement_url,
 }: {
     timeline?: TimelineEntry[];
+    documents: IdentityDocuments;
     customer: CustomerInfo;
     balance: { amount: string; is_credit: boolean; ledger_agrees: boolean | null };
     totals: { invoiced: string; settled: string };
@@ -84,7 +87,10 @@ export default function CustomerShow({
             <Head title={customer.name} />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                    <ReportHeading title={customer.name} description="Everything this customer's documents say, in one place. The numbers derive from the same invoices, receipts, returns and refunds the statement reads." />
+                    <ReportHeading
+                        title={customer.name}
+                        description="Everything this customer's documents say, in one place. The numbers derive from the same invoices, receipts, returns and refunds the statement reads."
+                    />
                     <div className="flex items-center gap-2">
                         {!customer.is_active && <Badge variant="secondary">Inactive</Badge>}
                         <Button variant="outline" size="sm" asChild>
@@ -101,7 +107,9 @@ export default function CustomerShow({
                             {balance.is_credit && <span className="text-muted-foreground ml-1 text-sm">(in credit)</span>}
                         </p>
                         {balance.ledger_agrees === false && (
-                            <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-500">Ledger disagrees - investigate on the statement</p>
+                            <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-500">
+                                Ledger disagrees - investigate on the statement
+                            </p>
                         )}
                     </div>
                     <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
@@ -120,19 +128,27 @@ export default function CustomerShow({
                 </div>
 
                 <div className="grid gap-6 lg:grid-cols-3">
-                    <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
-                        <h2 className="text-sm font-medium">Details</h2>
-                        <dl className="mt-3 space-y-2 text-sm">
-                            {facts.map(([label, value]) =>
-                                value ? (
-                                    <div key={label}>
-                                        <dt className="text-muted-foreground text-xs">{label}</dt>
-                                        <dd className="whitespace-pre-line">{value}</dd>
-                                    </div>
-                                ) : null,
-                            )}
-                        </dl>
-                        {customer.note && <p className="text-muted-foreground mt-3 border-t pt-3 text-sm whitespace-pre-line">{customer.note}</p>}
+                    <div className="flex min-w-0 flex-col gap-6">
+                        <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
+                            <h2 className="text-sm font-medium">Details</h2>
+                            <dl className="mt-3 space-y-2 text-sm">
+                                {facts.map(([label, value]) =>
+                                    value ? (
+                                        <div key={label}>
+                                            <dt className="text-muted-foreground text-xs">{label}</dt>
+                                            <dd className="whitespace-pre-line">{value}</dd>
+                                        </div>
+                                    ) : null,
+                                )}
+                            </dl>
+                            {customer.note && <p className="text-muted-foreground mt-3 border-t pt-3 text-sm whitespace-pre-line">{customer.note}</p>}
+                        </div>
+                        {/* ⭐ Plan D11: trade licence and NID scans. */}
+                        <IdentityDocumentsPanel
+                            documents={documents}
+                            uploadUrl={`/sales/customers/${customer.id}/documents`}
+                            removeUrl={(id) => `/sales/customers/${customer.id}/documents/${id}`}
+                        />
                     </div>
 
                     <div className="flex flex-col gap-6 lg:col-span-2">
@@ -153,7 +169,9 @@ export default function CustomerShow({
                                             <td className="p-3">
                                                 {invoice.due_date && <span className="text-muted-foreground">due {invoice.due_date}</span>}
                                                 {invoice.days_overdue > 0 && (
-                                                    <span className="ml-2 text-xs font-medium text-red-600 dark:text-red-500">{invoice.days_overdue} day(s) overdue</span>
+                                                    <span className="ml-2 text-xs font-medium text-red-600 dark:text-red-500">
+                                                        {invoice.days_overdue} day(s) overdue
+                                                    </span>
                                                 )}
                                             </td>
                                             <td className="text-muted-foreground p-3 text-right">of {invoice.total}</td>
@@ -186,7 +204,9 @@ export default function CustomerShow({
                                             <td className="text-muted-foreground p-3 whitespace-nowrap">{movement.date}</td>
                                             <td className="p-3">
                                                 {movement.label}
-                                                {movement.reference && <span className="text-muted-foreground ml-1 text-xs">({movement.reference})</span>}
+                                                {movement.reference && (
+                                                    <span className="text-muted-foreground ml-1 text-xs">({movement.reference})</span>
+                                                )}
                                             </td>
                                             <td className="p-3 text-right whitespace-nowrap">{movement.amount}</td>
                                             <td className="text-muted-foreground p-3 text-right whitespace-nowrap">bal {movement.balance}</td>

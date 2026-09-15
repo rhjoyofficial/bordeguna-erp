@@ -6,6 +6,9 @@ use App\Modules\Crm\Models\CrmAttribution;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\HoldsIdentityDocuments;
+use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
+use App\Modules\Foundation\Contracts\OpensAttachmentCollections;
 use App\Modules\Sales\Enums\CustomerType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -22,9 +25,20 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * report has to special-case it, and it makes a counter sale indistinguishable
  * from a data-entry mistake where somebody forgot to pick the customer.
  */
-class Customer extends Model
+class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmentCollections
 {
-    use BelongsToBusiness, LogsActivity;
+    use BelongsToBusiness, HoldsIdentityDocuments, LogsActivity;
+
+    /** ⭐ Plan D11: the Owner opens a customer's NID scan; see HoldsIdentityDocuments. */
+    public function identityPermission(): string
+    {
+        return 'sales.customers.identity.view';
+    }
+
+    public function documentManagePermission(): string
+    {
+        return 'sales.customers.manage';
+    }
 
     /** The code of the per-business walk-in row planted by WalkInCustomerSeeder. */
     public const WALK_IN_CODE = 'WALK-IN';

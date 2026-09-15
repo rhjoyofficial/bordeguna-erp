@@ -33,6 +33,9 @@ class PurchasingPermissionsSeeder extends Seeder
     private const ROLE_PERMISSIONS = [
         'Owner' => [
             'purchasing.suppliers.manage',
+            // ⭐⭐ Plan D11 (Joy's answer 19): an NID scan opens for the Owner
+            // and nobody else by default. See HoldsIdentityDocuments.
+            'purchasing.suppliers.identity.view',
             'purchasing.po.create',
             'purchasing.po.approve',
             'purchasing.receipt.record',

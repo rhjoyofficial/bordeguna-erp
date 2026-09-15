@@ -5,19 +5,20 @@ namespace App\Modules\Purchasing\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\IdentityDocuments;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Support\RecordTimeline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
-use App\Support\RecordTimeline;
 
 class SupplierController extends Controller
 {
@@ -139,6 +140,9 @@ class SupplierController extends Controller
             'recent' => $recent,
             // The record's own story (Module 1, Slice 4).
             'timeline' => RecordTimeline::for($supplier),
+            // ⭐ Plan D11: trade licence and NID scans, NID as a count unless the
+            // reader may open it.
+            'documents' => IdentityDocuments::props($supplier, request()->user()),
         ]);
     }
 
