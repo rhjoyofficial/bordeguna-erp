@@ -82,10 +82,34 @@ class AttachmentController extends Controller
             $response = response()->file($local, $headers);
             $response->setContentDisposition($disposition, $attachment->original_name);
 
-            return $response;
+            return $this->neverKept($response);
         }
 
-        return $disk->response($attachment->path, $attachment->original_name, $headers, $disposition);
+        return $this->neverKept($disk->response($attachment->path, $attachment->original_name, $headers, $disposition));
+    }
+
+    /**
+     * ⚠⚠ NO COPY MAY OUTLIVE THE CHECK ABOVE (found 15 Sep 2026, CRM slice 2d
+     * walk). Symfony's BinaryFileResponse is PUBLIC by default, and with its
+     * Last-Modified date a browser may answer a later request for the same URL
+     * from its own copy without asking this controller at all. An officer opened
+     * a visit photo; a colleague outside his team, signed in on the same browser,
+     * then got it too, while this code would have said 404. The older the file,
+     * the longer a browser trusts its copy: last month's NID scan, for days.
+     *
+     * `private` keeps it out of every shared proxy; `no-store` keeps it out of
+     * the browser's cache, so every view is a request this controller answers.
+     * Range requests are unaffected, so video still seeks.
+     *
+     * Set AFTER the response is built: BinaryFileResponse calls setPublic() in
+     * its constructor, which would strip a `private` passed in with the headers.
+     */
+    private function neverKept(StreamedResponse|BinaryFileResponse $response): StreamedResponse|BinaryFileResponse
+    {
+        $response->setPrivate();
+        $response->headers->addCacheControlDirective('no-store');
+
+        return $response;
     }
 
     /**
