@@ -25,6 +25,8 @@ export interface Lead {
     profile: LeadProfile;
     /** The first visit with a location, as a Google Maps link (plan D14). */
     map_url: string | null;
+    /** The place as one line, carried into a customer's address (CRM slice 2e). */
+    full_address: string | null;
     status: string;
     status_label: string;
     brand_id: number | null;
@@ -87,6 +89,12 @@ export interface LeadTypeOption {
     value: string;
     label: string;
     is_shop: boolean;
+}
+
+export interface PriceGroupOption {
+    id: number;
+    code: string;
+    name: string;
 }
 
 export interface ValueLabel {

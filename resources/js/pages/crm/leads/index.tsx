@@ -1,7 +1,15 @@
 import { LeadConvertForm } from '@/components/crm/lead-convert-form';
 import { LeadForm } from '@/components/crm/lead-form';
 import { LeadList } from '@/components/crm/lead-list';
-import { type CustomerOption, type Lead, type LeadTypeOption, type Lookups, type Option, type ValueLabel } from '@/components/crm/lead-types';
+import {
+    type CustomerOption,
+    type Lead,
+    type LeadTypeOption,
+    type Lookups,
+    type Option,
+    type PriceGroupOption,
+    type ValueLabel,
+} from '@/components/crm/lead-types';
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { SearchSelect } from '@/components/search-select';
@@ -43,6 +51,8 @@ export default function LeadsIndex({
     can_verify,
     customers,
     customer_types,
+    price_groups,
+    credit_types,
     lookups,
     potentials,
     importances,
@@ -73,6 +83,8 @@ export default function LeadsIndex({
     can_verify: boolean;
     customers: CustomerOption[];
     customer_types: ValueLabel[];
+    price_groups: PriceGroupOption[];
+    credit_types: string[];
     lookups: Lookups;
     potentials: ValueLabel[];
     importances: ValueLabel[];
@@ -106,6 +118,8 @@ export default function LeadsIndex({
                         existingCustomerId={converting.customerId}
                         customers={customers}
                         customerTypes={customer_types}
+                        priceGroups={price_groups}
+                        creditTypes={credit_types}
                         onDone={() => setConverting(null)}
                     />
                 ) : (

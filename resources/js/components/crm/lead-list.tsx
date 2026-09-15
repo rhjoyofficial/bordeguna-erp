@@ -238,11 +238,17 @@ function LeadActions({
             )}
             {/* ⚠ Not for a LOST lead (reopen it first, or the funnel forgets it
                 was ever lost), nor for a duplicate (it is not the one to work). */}
-            {canConvert && !converted && lead.status !== 'lost' && !lead.duplicate_of_lead_id && !lead.is_archived && (
-                <Button variant="ghost" size="sm" onClick={() => onConvert(lead)}>
-                    Convert
-                </Button>
-            )}
+            {/* ⚠ A supplier lead becomes a supplier, never a customer (CRM slice 2e). */}
+            {canConvert &&
+                !converted &&
+                lead.lead_type !== 'supplier' &&
+                lead.status !== 'lost' &&
+                !lead.duplicate_of_lead_id &&
+                !lead.is_archived && (
+                    <Button variant="ghost" size="sm" onClick={() => onConvert(lead)}>
+                        Convert
+                    </Button>
+                )}
             {canVerify && !lead.is_archived && !lead.is_verified && (
                 <Button variant="ghost" size="sm" onClick={() => send('post', route('crm.leads.verify', lead.id))}>
                     Verify

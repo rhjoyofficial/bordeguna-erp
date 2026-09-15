@@ -31,6 +31,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroup;
 use App\Support\BdGeo;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
@@ -141,6 +142,8 @@ class LeadController extends Controller
                 'potential' => $lead->potential?->value,
                 'importance' => $lead->importance?->value,
                 'profile' => $this->profileRow($lead),
+                // The place as one line, carried into the customer's address.
+                'full_address' => $lead->fullAddress(),
                 'map_url' => $lead->pin_latitude !== null && $lead->pin_longitude !== null
                     ? MapLink::to($lead->pin_latitude, $lead->pin_longitude)
                     : null,
@@ -216,6 +219,12 @@ class LeadController extends Controller
             'customer_types' => collect(CustomerType::cases())
                 ->map(fn (CustomerType $type) => ['value' => $type->value, 'label' => $type->label()])
                 ->values(),
+            // ⭐ Plan D6: the conversion form preselects the group whose code
+            // matches the type (DISTRIBUTOR for a distributor lead). Active only:
+            // a retired group is not a choice for a new customer.
+            'price_groups' => PriceGroup::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']),
+            // Plan D7: which customer types may carry credit, from the one list.
+            'credit_types' => collect(ConvertLead::CREDIT_TYPES)->map(fn (CustomerType $type) => $type->value)->values(),
         ]);
     }
 
@@ -839,6 +848,16 @@ class LeadController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
+            // ⭐ CRM slice 2e: the customer follows the lead's type. Same shapes
+            // as the customer screen (CustomerController::validated), so a
+            // customer made by conversion can hold nothing a typed one cannot.
+            'contact_name' => ['nullable', 'string', 'max:255'],
+            'bin' => ['nullable', 'string', 'max:50'],
+            'tin' => ['nullable', 'string', 'max:50'],
+            'payment_terms' => ['nullable', 'string', 'max:255'],
+            'credit_limit' => ['nullable', 'numeric', 'min:0'],
+            'price_group_id' => ['nullable', 'integer',
+                Rule::exists('price_groups', 'id')->where('business_id', $businessId)],
         ]);
 
         $customer = $action->handle(

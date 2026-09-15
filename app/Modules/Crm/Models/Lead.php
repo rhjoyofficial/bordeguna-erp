@@ -272,6 +272,28 @@ class Lead extends Model implements ControlsAttachmentAccess
         return $this->archived_at !== null;
     }
 
+    /**
+     * The lead's place as one address line: what was typed, then market, area,
+     * thana and district. Used to carry the place across at conversion (CRM
+     * slice 2e), because a customer and a supplier hold one address field.
+     *
+     * ⚠ A part already written into the typed address is not repeated.
+     */
+    public function fullAddress(): ?string
+    {
+        $parts = [];
+
+        foreach ([$this->address, $this->market, $this->area, $this->thana, $this->district] as $part) {
+            $part = trim((string) $part);
+
+            if ($part !== '' && ! collect($parts)->contains(fn (string $kept) => str_contains(mb_strtolower($kept), mb_strtolower($part)))) {
+                $parts[] = $part;
+            }
+        }
+
+        return $parts === [] ? null : implode(', ', $parts);
+    }
+
     public function verifiedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'verified_by_user_id');

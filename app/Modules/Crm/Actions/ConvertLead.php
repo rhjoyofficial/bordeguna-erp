@@ -4,10 +4,13 @@ namespace App\Modules\Crm\Actions;
 
 use App\Models\User;
 use App\Modules\Crm\Enums\LeadStatus;
+use App\Modules\Crm\Enums\LeadType;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroup;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -28,9 +31,21 @@ use Illuminate\Validation\ValidationException;
  * attributions stay exactly where they are. The customer's story is read through
  * `leads.converted_customer_id`, which keeps "when did we first speak" and
  * "which campaign produced this" answerable exactly once.
+ *
+ * ⭐ CRM slice 2e (build plan 15 Sep 2026): the customer follows the lead's type.
+ * A supplier lead is refused here (it becomes a supplier, never a customer); the
+ * proprietor and the place carry across; a dealer or distributor gets no credit
+ * limit or terms (plan D7: distributors pay in advance, answer 11).
  */
 class ConvertLead
 {
+    /**
+     * Customer types that may carry a credit limit and payment terms (plan D7).
+     *
+     * @var list<CustomerType>
+     */
+    public const CREDIT_TYPES = [CustomerType::Retail, CustomerType::Corporate];
+
     /**
      * @param  array<string, mixed>  $newCustomer  Used only when $existing is null.
      *
@@ -47,6 +62,14 @@ class ConvertLead
         if ($lead->business_id !== $businessId) {
             throw ValidationException::withMessages([
                 'lead' => 'That lead belongs to a different business.',
+            ]);
+        }
+
+        // ⚠⚠ Plan 2e: a supplier sells TO us. Making it a customer would put a
+        // mustard trader in the dunning list and the sales ledger.
+        if ($lead->lead_type === LeadType::Supplier) {
+            throw ValidationException::withMessages([
+                'lead' => 'A supplier lead becomes a supplier, not a customer.',
             ]);
         }
 
@@ -158,6 +181,16 @@ class ConvertLead
             }
         }
 
+        // ⚠ Scoped lookup: the tenant scope hides another business's group, so
+        // a foreign id comes back null and is refused rather than stored.
+        $priceGroupId = $attributes['price_group_id'] ?? null;
+
+        if (filled($priceGroupId) && PriceGroup::whereKey($priceGroupId)->doesntExist()) {
+            throw ValidationException::withMessages([
+                'price_group_id' => 'Pick a price group of this business.',
+            ]);
+        }
+
         // ⚠⚠ `type` is OMITTED when not supplied, never passed as null. The
         // Customer model carries `retail` as an $attributes default, and an
         // explicit null OVERRIDES that default and hits a NOT NULL constraint -
@@ -168,18 +201,30 @@ class ConvertLead
             'business_id' => $businessId,
             'code' => $code,
             'name' => $name,
+            // ⭐ Plan 2e: the proprietor and the place carry across.
+            'contact_name' => $attributes['contact_name'] ?? $lead->contact_name,
             'phone' => $attributes['phone'] ?? $lead->phone,
             'email' => $attributes['email'] ?? $lead->email,
-            'address' => $attributes['address'] ?? $lead->address,
+            'address' => $attributes['address'] ?? $lead->fullAddress(),
             // ⛔ NEVER a system customer. Only the seeder creates WALK-IN.
             'is_system' => false,
             'is_active' => true,
         ];
 
-        foreach (['type', 'note'] as $optional) {
-            if (! empty($attributes[$optional])) {
+        foreach (['type', 'note', 'bin', 'tin', 'price_group_id', 'payment_terms', 'credit_limit'] as $optional) {
+            if (filled($attributes[$optional] ?? null)) {
                 $customer[$optional] = $attributes[$optional];
             }
+        }
+
+        // ⭐ Plan D7 (answer 11): distributors pay in advance, and a dealer is a
+        // distributor tier (answer 10). A limit or terms typed for either is
+        // dropped, like a direction on a note, so no stale form value can put
+        // credit on an account that is not meant to have any.
+        $type = CustomerType::tryFrom((string) ($customer['type'] ?? CustomerType::Retail->value));
+
+        if (! in_array($type, self::CREDIT_TYPES, true)) {
+            unset($customer['credit_limit'], $customer['payment_terms']);
         }
 
         return Customer::create($customer);
