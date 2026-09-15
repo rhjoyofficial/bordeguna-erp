@@ -90,6 +90,12 @@ class Supplier extends Model implements ControlsAttachmentAccess, OpensAttachmen
         return $this->hasMany(SupplierPayment::class);
     }
 
+    /** ⭐ Joy's answer 18: certifications, only when relevant. */
+    public function certifications(): HasMany
+    {
+        return $this->hasMany(SupplierCertification::class);
+    }
+
     /**
      * What this supplier is owed, right now.
      *

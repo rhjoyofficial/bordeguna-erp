@@ -5,6 +5,7 @@ use App\Modules\Purchasing\Http\Controllers\ExpenseVoucherController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\RecurringExpenseController;
 use App\Modules\Purchasing\Http\Controllers\SupplierBillController;
+use App\Modules\Purchasing\Http\Controllers\SupplierCertificationController;
 use App\Modules\Purchasing\Http\Controllers\SupplierController;
 use App\Modules\Purchasing\Http\Controllers\SupplierCreditNoteController;
 use App\Modules\Purchasing\Http\Controllers\SupplierDocumentController;
@@ -48,6 +49,19 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
             ->whereNumber('supplier')->name('suppliers.documents.store');
         Route::delete('suppliers/{supplier}/documents/{attachment}', [SupplierDocumentController::class, 'destroy'])
             ->whereNumber('supplier')->whereNumber('attachment')->name('suppliers.documents.destroy');
+
+        // ⭐ Joy's answer 18: certifications, editable from the supplier screen.
+        // ⚠ scopeBindings: a certification is found only UNDER its own supplier.
+        Route::post('suppliers/{supplier}/certifications', [SupplierCertificationController::class, 'store'])
+            ->whereNumber('supplier')->name('suppliers.certifications.store');
+        Route::scopeBindings()->group(function () {
+            Route::post('suppliers/{supplier}/certifications/{certification}', [SupplierCertificationController::class, 'update'])
+                ->whereNumber(['supplier', 'certification'])->name('suppliers.certifications.update');
+            Route::delete('suppliers/{supplier}/certifications/{certification}', [SupplierCertificationController::class, 'destroy'])
+                ->whereNumber(['supplier', 'certification'])->name('suppliers.certifications.destroy');
+            Route::delete('suppliers/{supplier}/certifications/{certification}/scans/{attachment}', [SupplierCertificationController::class, 'destroyScan'])
+                ->whereNumber(['supplier', 'certification', 'attachment'])->name('suppliers.certifications.scans.destroy');
+        });
     });
 
     // Purchase orders — index/show open to any business member; store/approve/

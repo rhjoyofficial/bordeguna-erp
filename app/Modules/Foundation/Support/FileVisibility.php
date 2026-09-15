@@ -17,6 +17,7 @@ use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierCertification;
 
 /**
  * Which stored files a person may see, and what they are allowed to do to them.
@@ -84,6 +85,10 @@ class FileVisibility
 
         ExpenseVoucher::class => 'purchasing.expense.record',
         SupplierBill::class => 'purchasing.reports.view',
+        // A supplier's certificate scans (answer 18) are shown to buyers on
+        // purpose. The supplier's own NID scans are NOT mapped: see
+        // HoldsIdentityDocuments.
+        SupplierCertification::class => 'purchasing.reports.view',
         InventoryAdjustment::class => 'inventory.reports.view',
     ];
 

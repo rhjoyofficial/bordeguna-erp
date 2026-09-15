@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\IdentityDocuments;
+use App\Modules\Purchasing\Enums\CertificationType;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierCertification;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Support\RecordTimeline;
@@ -143,6 +145,24 @@ class SupplierController extends Controller
             // ⭐ Plan D11: trade licence and NID scans, NID as a count unless the
             // reader may open it.
             'documents' => IdentityDocuments::props($supplier, request()->user()),
+            // ⭐ Joy's answer 18: certifications, only when relevant.
+            'certifications' => $supplier->certifications()->with('attachments')
+                ->orderBy('expires_on')->orderBy('id')->get()
+                ->map(fn (SupplierCertification $c) => [
+                    'id' => $c->id,
+                    'type' => $c->type->value,
+                    'label' => $c->label(),
+                    'name' => $c->name,
+                    'number' => $c->number,
+                    'expires_on' => $c->expires_on?->toDateString(),
+                    'is_expired' => $c->isExpired(),
+                    'scans' => $c->attachments->where('collection', SupplierCertification::SCAN)
+                        ->map(fn ($file) => ['id' => $file->id, 'name' => $file->original_name, 'url' => $file->url()])
+                        ->values()->all(),
+                ])->all(),
+            'certification_types' => collect(CertificationType::cases())
+                ->map(fn (CertificationType $t) => ['value' => $t->value, 'label' => $t->label()])->all(),
+            'can_manage_certifications' => request()->user()?->can('purchasing.suppliers.manage') ?? false,
         ]);
     }
 

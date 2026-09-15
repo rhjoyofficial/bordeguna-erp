@@ -1,6 +1,7 @@
 import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { ReportHeading } from '@/components/report/report-shell';
+import { type SupplierCertification, SupplierCertificationsPanel } from '@/components/supplier-certifications-panel';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -43,6 +44,9 @@ interface SupplierInfo {
 export default function SupplierShow({
     timeline,
     documents,
+    certifications,
+    certification_types,
+    can_manage_certifications,
     supplier,
     payable,
     totals,
@@ -51,6 +55,9 @@ export default function SupplierShow({
 }: {
     timeline?: TimelineEntry[];
     documents: IdentityDocuments;
+    certifications: SupplierCertification[];
+    certification_types: { value: string; label: string }[];
+    can_manage_certifications: boolean;
     supplier: SupplierInfo;
     payable: { amount: string; is_credit: boolean };
     totals: { billed: string; paid: string; credited: string; open_pos: number };
@@ -128,6 +135,13 @@ export default function SupplierShow({
                             documents={documents}
                             uploadUrl={`/purchasing/suppliers/${supplier.id}/documents`}
                             removeUrl={(id) => `/purchasing/suppliers/${supplier.id}/documents/${id}`}
+                        />
+                        {/* ⭐ Joy's answer 18: certifications, only when relevant. */}
+                        <SupplierCertificationsPanel
+                            supplierId={supplier.id}
+                            certifications={certifications}
+                            types={certification_types}
+                            canManage={can_manage_certifications}
                         />
                     </div>
 
