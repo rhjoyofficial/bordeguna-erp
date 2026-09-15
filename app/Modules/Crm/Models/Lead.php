@@ -15,6 +15,7 @@ use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Models\Brand;
+use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -307,7 +308,7 @@ class Lead extends Model implements ControlsAttachmentAccess
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'contact_name', 'phone', 'secondary_phone', 'email', 'district', 'thana', 'area', 'market', 'status', 'lead_type', 'brand_id', 'assigned_to_user_id', 'lost_reason_id', 'converted_customer_id', 'verified_at', 'archived_at'])
+            ->logOnly(['name', 'contact_name', 'phone', 'secondary_phone', 'email', 'district', 'thana', 'area', 'market', 'status', 'lead_type', 'brand_id', 'assigned_to_user_id', 'lost_reason_id', 'converted_customer_id', 'converted_supplier_id', 'verified_at', 'archived_at'])
             ->logOnlyDirty()->dontSubmitEmptyLogs();
     }
 
@@ -342,6 +343,16 @@ class Lead extends Model implements ControlsAttachmentAccess
     public function convertedCustomer(): BelongsTo
     {
         return $this->belongsTo(Customer::class, 'converted_customer_id');
+    }
+
+    /**
+     * ⭐ CRM slice 2e (plan D12): the supplier a supplier lead became. The same
+     * one-way link as the customer's, written only by ConvertLeadToSupplier, and
+     * like it deliberately absent from $fillable.
+     */
+    public function convertedSupplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class, 'converted_supplier_id');
     }
 
     public function attributions(): MorphMany

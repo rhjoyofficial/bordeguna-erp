@@ -21,12 +21,14 @@ import { MapPin } from 'lucide-react';
 export function LeadList({
     leads,
     canConvert,
+    canConvertSupplier,
     canVerify,
     onEdit,
     onConvert,
 }: {
     leads: Lead[];
     canConvert: boolean;
+    canConvertSupplier: boolean;
     canVerify: boolean;
     onEdit: (lead: Lead) => void;
     onConvert: (lead: Lead) => void;
@@ -50,7 +52,14 @@ export function LeadList({
                             {lead.created_at && <span>Added {lead.created_at}</span>}
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1">
-                            <LeadActions lead={lead} canConvert={canConvert} canVerify={canVerify} onEdit={onEdit} onConvert={onConvert} />
+                            <LeadActions
+                                lead={lead}
+                                canConvert={canConvert}
+                                canConvertSupplier={canConvertSupplier}
+                                canVerify={canVerify}
+                                onEdit={onEdit}
+                                onConvert={onConvert}
+                            />
                         </div>
                     </div>
                 ))}
@@ -99,6 +108,7 @@ export function LeadList({
                                         <LeadActions
                                             lead={lead}
                                             canConvert={canConvert}
+                                            canConvertSupplier={canConvertSupplier}
                                             canVerify={canVerify}
                                             onEdit={onEdit}
                                             onConvert={onConvert}
@@ -206,6 +216,11 @@ function LeadStateNotes({ lead }: { lead: Lead }) {
                 </div>
             )}
             {lead.converted_customer && <div className="text-muted-foreground mt-1 text-xs">→ {lead.converted_customer}</div>}
+            {lead.converted_supplier && lead.converted_supplier_id && (
+                <Link href={`/purchasing/suppliers/${lead.converted_supplier_id}`} className="text-muted-foreground mt-1 block text-xs underline">
+                    → supplier {lead.converted_supplier}
+                </Link>
+            )}
             {/* Nothing was deleted; this one points at the lead to work instead. */}
             {lead.duplicate_of && <div className="text-muted-foreground mt-1 text-xs">duplicate of {lead.duplicate_of}</div>}
         </>
@@ -215,12 +230,14 @@ function LeadStateNotes({ lead }: { lead: Lead }) {
 function LeadActions({
     lead,
     canConvert,
+    canConvertSupplier,
     canVerify,
     onEdit,
     onConvert,
 }: {
     lead: Lead;
     canConvert: boolean;
+    canConvertSupplier: boolean;
     canVerify: boolean;
     onEdit: (lead: Lead) => void;
     onConvert: (lead: Lead) => void;
@@ -238,10 +255,10 @@ function LeadActions({
             )}
             {/* ⚠ Not for a LOST lead (reopen it first, or the funnel forgets it
                 was ever lost), nor for a duplicate (it is not the one to work). */}
-            {/* ⚠ A supplier lead becomes a supplier, never a customer (CRM slice 2e). */}
-            {canConvert &&
+            {/* ⭐ A supplier lead becomes a supplier, never a customer, and only for
+                somebody who may also manage suppliers (plan D12). */}
+            {(lead.lead_type === 'supplier' ? canConvertSupplier : canConvert) &&
                 !converted &&
-                lead.lead_type !== 'supplier' &&
                 lead.status !== 'lost' &&
                 !lead.duplicate_of_lead_id &&
                 !lead.is_archived && (

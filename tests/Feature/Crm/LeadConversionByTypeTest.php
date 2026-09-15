@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Crm\Actions\ConvertLead;
 use App\Modules\Crm\database\seeders\CrmPermissionsSeeder;
 use App\Modules\Crm\Enums\LeadStatus;
 use App\Modules\Crm\Models\Lead;
@@ -11,6 +12,7 @@ use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -65,10 +67,15 @@ it('never turns a supplier lead into a customer, new or existing', function () {
     $supplier = ($this->lead)('supplier', ['name' => 'Sirajganj Mustard Traders']);
     $existing = Customer::create(['business_id' => $this->business->id, 'code' => 'OLD-1', 'name' => 'Old Customer']);
 
-    ($this->convert)($supplier, ['code' => 'SMT', 'name' => 'Sirajganj Mustard Traders'])
-        ->assertSessionHasErrors(['lead' => 'A supplier lead becomes a supplier, not a customer.']);
-    ($this->convert)($supplier, ['customer_id' => $existing->id])
-        ->assertSessionHasErrors(['lead' => 'A supplier lead becomes a supplier, not a customer.']);
+    // ⚠ Since part 3 the endpoint sends a supplier lead down the SUPPLIER branch
+    // (this Owner may not manage suppliers, so it refuses), and ConvertLead
+    // refuses one for any caller that reaches it directly.
+    ($this->convert)($supplier, ['code' => 'SMT', 'name' => 'Sirajganj Mustard Traders', 'customer_id' => $existing->id])->assertForbidden();
+
+    foreach ([['existing' => $existing], ['newCustomer' => ['code' => 'SMT', 'name' => 'Sirajganj Mustard Traders']]] as $how) {
+        expect(fn () => app(ConvertLead::class)->handle($supplier, $this->owner, ...$how))
+            ->toThrow(ValidationException::class, 'A supplier lead becomes a supplier, not a customer.');
+    }
 
     expect(Customer::where('code', 'SMT')->exists())->toBeFalse()
         ->and($supplier->fresh()->converted_customer_id)->toBeNull()

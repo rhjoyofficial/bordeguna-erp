@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Crm\Actions\ArchiveLead;
 use App\Modules\Crm\Actions\ConvertLead;
+use App\Modules\Crm\Actions\ConvertLeadToSupplier;
 use App\Modules\Crm\Actions\LinkDuplicateLead;
 use App\Modules\Crm\Actions\SaveLeadProfile;
 use App\Modules\Crm\Actions\VerifyLead;
@@ -30,6 +31,7 @@ use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\IdentityDocuments;
 use App\Modules\Inventory\Models\Brand;
+use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
@@ -65,7 +67,7 @@ class LeadController extends Controller
 
         $leads = Lead::query()
             ->with([
-                'brand:id,name,code', 'assignedTo:id,name', 'convertedCustomer:id,name,code', 'duplicateOf:id,name',
+                'brand:id,name,code', 'assignedTo:id,name', 'convertedCustomer:id,name,code', 'convertedSupplier:id,name,code', 'duplicateOf:id,name',
                 'verifiedBy:id,name', 'createdBy:id,name',
                 'retailerProfile.shopType:id,name', 'distributorProfile', 'supplierProfile.supplierType:id,name',
                 'competitorBrands:crm_lookups.id,crm_lookups.name', 'coverageAreas:id,lead_id,district,thana',
@@ -160,6 +162,9 @@ class LeadController extends Controller
                 // ⚠ Shown so a converted lead is obviously not editable back into
                 // the pipeline, and so the link is visible rather than implied.
                 'converted_customer' => $lead->convertedCustomer?->name,
+                // ⭐ Plan D12: the supplier a supplier lead became.
+                'converted_supplier' => $lead->convertedSupplier?->name,
+                'converted_supplier_id' => $lead->converted_supplier_id,
                 // ⚠ Shown for the same reason as the conversion above: a lead
                 // that points at another is not the one to work, and saying so
                 // on the row is cheaper than someone chasing the wrong person.
@@ -204,6 +209,14 @@ class LeadController extends Controller
             // system could become a customer. `ConvertLead` is the only writer of
             // `converted_customer_id`, so the funnel simply had no exit.
             'can_convert' => $request->user()->can('crm.leads.convert'),
+            // ⭐ Plan D12: a supplier is a Purchasing record with bank details, so
+            // converting into one also needs purchasing.suppliers.manage.
+            'can_convert_supplier' => $this->mayConvertSuppliers($request->user()),
+            // ⚠ Only to someone who may convert suppliers: the supplier list is
+            // not an officer's business.
+            'suppliers' => $this->mayConvertSuppliers($request->user())
+                ? Supplier::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name', 'phone'])
+                : [],
             // ⚠ Duplicate linking needs it since 15 Sep 2026; without the prop
             // an officer would see a button the route refuses.
             'can_verify' => $request->user()->can('crm.leads.verify'),
@@ -332,7 +345,7 @@ class LeadController extends Controller
         // exactly the retrospective rewrite this design forbids.
         if ($lead->status === LeadStatus::Converted) {
             throw ValidationException::withMessages([
-                'status' => 'This lead has been converted to a customer and can no longer be edited.',
+                'status' => 'This lead has been converted and can no longer be edited.',
             ]);
         }
 
@@ -829,8 +842,15 @@ class LeadController extends Controller
      * `converted_customer_id` and a second set of rules here would be a second
      * conversion path that disagrees with the first.
      */
-    public function convert(Request $request, Lead $lead, ConvertLead $action): RedirectResponse
+    public function convert(Request $request, Lead $lead, ConvertLead $action, ConvertLeadToSupplier $toSupplier): RedirectResponse
     {
+        // ⭐ Plan 2e: conversion follows the lead's type. A supplier lead becomes
+        // a supplier; every other type becomes a customer, and ConvertLead
+        // refuses a supplier lead even if something called it directly.
+        if ($lead->lead_type === LeadType::Supplier) {
+            return $this->convertToSupplier($request, $lead, $toSupplier);
+        }
+
         $businessId = app(BusinessContext::class)->id();
 
         $data = $request->validate([
@@ -872,5 +892,51 @@ class LeadController extends Controller
         );
 
         return back()->with('success', "Converted to customer {$customer->code}.");
+    }
+
+    /**
+     * ⭐ Plan D12: a supplier lead becomes a supplier, or is linked to one we
+     * already buy from. Every rule lives in ConvertLeadToSupplier.
+     *
+     * ⚠⚠ The permission is checked BEFORE the request is read. An officer or an
+     * ASM without purchasing.suppliers.manage must get a refusal, not a list of
+     * validation errors that tells him what a supplier record holds.
+     */
+    private function convertToSupplier(Request $request, Lead $lead, ConvertLeadToSupplier $action): RedirectResponse
+    {
+        abort_unless($this->mayConvertSuppliers($request->user()), 403);
+
+        $businessId = app(BusinessContext::class)->id();
+
+        // Same shapes as SupplierController::validated for these fields.
+        $data = $request->validate([
+            'supplier_id' => ['nullable', 'integer', Rule::exists('suppliers', 'id')->where('business_id', $businessId)],
+            'code' => ['nullable', 'string', 'max:50'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'contact_name' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'address' => ['nullable', 'string'],
+            'payment_terms' => ['nullable', 'string', 'max:255'],
+            'bin' => ['nullable', 'string', 'max:255'],
+            'tin' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string'],
+            ...IdentityDocuments::rules(),
+        ]);
+
+        $supplier = $action->handle(
+            lead: $lead,
+            convertedBy: $request->user(),
+            existing: empty($data['supplier_id']) ? null : Supplier::findOrFail($data['supplier_id']),
+            newSupplier: $data,
+            documents: $request->file('documents', []),
+        );
+
+        return back()->with('success', "Converted to supplier {$supplier->code}.");
+    }
+
+    private function mayConvertSuppliers(?User $user): bool
+    {
+        return $user !== null && $user->can('crm.leads.convert') && $user->can('purchasing.suppliers.manage');
     }
 }

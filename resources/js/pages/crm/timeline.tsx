@@ -95,6 +95,7 @@ export default function CrmTimeline({
         name: string | null;
         phone: string | null;
         converted_customer_id: number | null;
+        converted_supplier_id: number | null;
         lead_type: string | null;
         pinned: (Located & { visited_at: string | null; by: string | null }) | null;
     };
@@ -165,6 +166,7 @@ export default function CrmTimeline({
                     <p className="text-muted-foreground text-sm">
                         {subject.phone ?? 'No phone'} · {subject.kind}
                         {subject.converted_customer_id && ' · converted to a customer'}
+                        {subject.converted_supplier_id && ' · converted to a supplier'}
                     </p>
                     {/* ⭐ Plan D14: the first visit that carried GPS pins the place. */}
                     {subject.pinned && (

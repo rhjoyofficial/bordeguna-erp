@@ -37,6 +37,9 @@ export interface Lead {
     lost_reason_id: number | null;
     note: string | null;
     converted_customer: string | null;
+    /** Plan D12: the supplier a supplier lead became. */
+    converted_supplier: string | null;
+    converted_supplier_id: number | null;
     duplicate_of_lead_id: number | null;
     duplicate_of: string | null;
     created_at: string | null;
@@ -89,6 +92,13 @@ export interface LeadTypeOption {
     value: string;
     label: string;
     is_shop: boolean;
+}
+
+export interface SupplierOption {
+    id: number;
+    code: string | null;
+    name: string;
+    phone: string | null;
 }
 
 export interface PriceGroupOption {

@@ -1,4 +1,5 @@
 import { LeadConvertForm } from '@/components/crm/lead-convert-form';
+import { LeadConvertSupplierForm } from '@/components/crm/lead-convert-supplier-form';
 import { LeadForm } from '@/components/crm/lead-form';
 import { LeadList } from '@/components/crm/lead-list';
 import {
@@ -8,6 +9,7 @@ import {
     type Lookups,
     type Option,
     type PriceGroupOption,
+    type SupplierOption,
     type ValueLabel,
 } from '@/components/crm/lead-types';
 import { FilterBar } from '@/components/data-table/filter-bar';
@@ -48,6 +50,8 @@ export default function LeadsIndex({
     agents,
     can_assign,
     can_convert,
+    can_convert_supplier,
+    suppliers,
     can_verify,
     customers,
     customer_types,
@@ -80,6 +84,8 @@ export default function LeadsIndex({
     agents: Option[];
     can_assign: boolean;
     can_convert: boolean;
+    can_convert_supplier: boolean;
+    suppliers: SupplierOption[];
     can_verify: boolean;
     customers: CustomerOption[];
     customer_types: ValueLabel[];
@@ -111,6 +117,14 @@ export default function LeadsIndex({
                     <Button type="button" className="self-start" onClick={() => setAdding(true)}>
                         Add a lead
                     </Button>
+                ) : converting && converting.lead.lead_type === 'supplier' ? (
+                    // ⭐ Plan D12: a supplier lead becomes a supplier, never a customer.
+                    <LeadConvertSupplierForm
+                        key={`supplier-${converting.lead.id}`}
+                        lead={converting.lead}
+                        suppliers={suppliers}
+                        onDone={() => setConverting(null)}
+                    />
                 ) : converting ? (
                     <LeadConvertForm
                         key={`${converting.lead.id}-${converting.customerId ?? 'new'}`}
@@ -217,6 +231,7 @@ export default function LeadsIndex({
                 <LeadList
                     leads={leads.data}
                     canConvert={can_convert}
+                    canConvertSupplier={can_convert_supplier}
                     canVerify={can_verify}
                     onEdit={(lead) => {
                         setConverting(null);

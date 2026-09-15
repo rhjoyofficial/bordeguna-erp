@@ -139,6 +139,7 @@ class CrmActivityController extends Controller
                 // A converted lead links to the customer it became, so the whole
                 // story stays reachable without copying any history.
                 'converted_customer_id' => $type === 'lead' ? $subject->converted_customer_id : null,
+                'converted_supplier_id' => $type === 'lead' ? $subject->converted_supplier_id : null,
                 'lead_type' => $type === 'lead' ? $subject->lead_type->value : null,
                 'pinned' => $pinned === null ? null : $this->locationRow($pinned) + [
                     'visited_at' => $pinned->occurred_at?->toDateTimeString(),
