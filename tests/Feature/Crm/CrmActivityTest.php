@@ -275,6 +275,9 @@ it('counts a task overdue only while it is open', function () {
 
 it('lets Staff create a follow-up for themselves but not assign it to somebody else', function () {
     $staff = ($this->asRole)('Staff');
+    // ⚠ Their own lead. Since 15 Sep 2026 somebody without view-all sees only
+    // leads assigned to them or their team, and an unassigned lead 404s.
+    $this->lead->update(['assigned_to_user_id' => $staff->id]);
 
     $this->actingAs($staff)->post("/crm/lead/{$this->lead->id}/tasks", [
         'title' => 'My own follow-up', 'due_at' => '2026-08-12 10:00:00',

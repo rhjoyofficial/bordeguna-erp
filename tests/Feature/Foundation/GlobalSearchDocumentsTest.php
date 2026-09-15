@@ -21,13 +21,15 @@ beforeEach(function () {
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
 
     foreach ([
-        'purchasing.reports.view', 'sales.reports.view', 'accounting.view', 'crm.leads.view',
+        'purchasing.reports.view', 'sales.reports.view', 'accounting.view', 'crm.leads.view', 'crm.leads.view.all',
     ] as $name) {
         Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
     }
 
     Role::firstOrCreate(['name' => 'DocOwner', 'business_id' => $this->business->id, 'guard_name' => 'web'])
-        ->givePermissionTo(['purchasing.reports.view', 'sales.reports.view', 'accounting.view', 'crm.leads.view']);
+        // ⚠ view.all since 15 Sep 2026: these leads are unassigned, and only an
+        // Owner-like reader sees those. LeadVisibilityTest owns who sees what.
+        ->givePermissionTo(['purchasing.reports.view', 'sales.reports.view', 'accounting.view', 'crm.leads.view', 'crm.leads.view.all']);
     Role::firstOrCreate(['name' => 'DocNobody', 'business_id' => $this->business->id, 'guard_name' => 'web']);
 
     $this->owner = User::factory()->create();

@@ -30,6 +30,18 @@ class AttachmentController extends Controller
     public function show(Request $request, Attachment $attachment): StreamedResponse|BinaryFileResponse
     {
         $owner = $attachment->attachable;
+
+        // ⚠⚠ AN OWNER THAT GUARDS ITS FILES BUT CANNOT BE LOADED IS NOT OPEN.
+        // Loading the owner runs its global scopes, and a lead hidden from this
+        // reader by its visibility scope comes back NULL - which, before this
+        // line, skipped the check below entirely and streamed the file. The
+        // stricter the owner's own rule, the more completely it was bypassed.
+        // Owners that impose no rule of their own keep the old behaviour.
+        $guardedType = $attachment->attachable_type !== null
+            && class_exists($attachment->attachable_type)
+            && is_subclass_of($attachment->attachable_type, ControlsAttachmentAccess::class);
+        abort_if($owner === null && $guardedType, 404);
+
         $open = $owner instanceof OpensAttachmentCollections
             && in_array($attachment->collection, $owner->openAttachmentCollections(), true);
         if ($owner instanceof ControlsAttachmentAccess && ! $open) {

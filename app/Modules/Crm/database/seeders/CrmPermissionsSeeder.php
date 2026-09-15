@@ -10,10 +10,19 @@ use Spatie\Permission\Models\Role;
 /**
  * Who may work leads.
  *
- * ⚠ Joy's D2: NO new role. Call-centre agents use the existing Staff role with
- * dedicated CRM permissions, which keeps the role model at Owner/Manager/Staff
- * while letting CRM access be granted separately.
+ * ⚠ Joy's D2 (August): NO new role. Call-centre agents use the existing Staff
+ * role with dedicated CRM permissions.
  *
+ * ⭐⭐ SUPERSEDED FOR FIELD SALES by his answer of 14 Sep 2026: two NEW CRM-only
+ * roles, 'Sales Officer' and 'Sales Lead'. Measured on production that day,
+ * Shoykod (ASM) and his two officers held only the empty Self-service role, and
+ * the existing roles were the wrong shape for them - Staff also opens Sales,
+ * Inventory and Purchasing, Manager also opens HRM and Recruitment. The new
+ * roles carry CRM permissions and nothing else, and are added NEXT TO
+ * Self-service, never instead of it. Staff keeps its D2 meaning for a call
+ * centre.
+ *
+
  * ⚠ The same split every other module uses: Staff does the operational work -
  * capturing and working leads - while the things that shape REPORTING AXES
  * (sources, campaigns) or WORKLOAD (assignment) stay with Owner and Manager.
@@ -49,10 +58,33 @@ class CrmPermissionsSeeder extends Seeder
         // ⚠ It also gates ARCHIVING, because there is no delete: taking a lead
         // out of everybody's working list is the same class of decision as
         // saying it is genuine.
-        'Owner' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.leads.verify', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage', 'crm.campaigns.send', 'crm.campaigns.approve'],
+        //
+        // ⭐⭐ `crm.leads.view.all` is the OWNER'S ALONE (Joy, 14 Sep 2026:
+        // "only the Owner sees every lead"). Everybody else sees their own leads
+        // and their team's - see LeadVisibility. Manager deliberately does not
+        // get it; measured on production 15 Sep, nobody in Bor de Guna holds
+        // Manager, so nobody lost access on the day this shipped.
+        'Owner' => ['crm.leads.view', 'crm.leads.view.all', 'crm.leads.manage', 'crm.leads.assign', 'crm.leads.verify', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage', 'crm.campaigns.send', 'crm.campaigns.approve'],
         'Manager' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.leads.verify', 'crm.settings.manage', 'crm.tasks.view.all', 'crm.leads.convert', 'crm.contacts.view', 'crm.contacts.manage', 'crm.campaigns.send'],
         'Staff' => ['crm.leads.view', 'crm.leads.manage', 'crm.contacts.view'],
+
+        // ⭐ Field sales (14 Sep 2026). The officer captures shops, visits them,
+        // records notes and follow-ups, and corrects what he got wrong.
+        'Sales Officer' => ['crm.leads.view', 'crm.leads.manage'],
+        // ⭐ The ASM adds everything Joy reserved for him: verify, reassign,
+        // merge (duplicate linking rides on verify), convert and archive. He
+        // sees his team's leads through the org chart, not through a permission.
+        'Sales Lead' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.leads.verify', 'crm.leads.convert'],
     ];
+
+    /**
+     * Roles this seeder CREATES when a business does not have them yet.
+     *
+     * ⚠ Only the field-sales pair. Owner, Manager and Staff belong to the
+     * Foundation seeder, and a module seeder quietly creating those would hide a
+     * business that was set up wrong.
+     */
+    private const CREATES_ROLES = ['Sales Officer', 'Sales Lead'];
 
     public function run(): void
     {
@@ -63,6 +95,10 @@ class CrmPermissionsSeeder extends Seeder
         }
 
         foreach (Business::all() as $business) {
+            foreach (self::CREATES_ROLES as $roleName) {
+                Role::firstOrCreate(['name' => $roleName, 'business_id' => $business->id, 'guard_name' => 'web']);
+            }
+
             foreach (self::ROLE_PERMISSIONS as $roleName => $permissions) {
                 $role = Role::where('business_id', $business->id)->where('name', $roleName)->first();
 

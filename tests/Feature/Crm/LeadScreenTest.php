@@ -57,6 +57,11 @@ beforeEach(function () {
     $this->agent = User::factory()->create(['name' => 'Call Centre Agent']);
     $this->agent->businesses()->attach($this->business->id);
 
+    // ⚠ These tests act as the OWNER, and until 15 Sep 2026 they acted as
+    // Manager. Since CRM lead slice 2 only the Owner sees every lead (Joy,
+    // 14 Sep); a Manager assigning a lead to the call-centre agent would no
+    // longer see it afterwards. What this file proves is the screen, not who
+    // sees what - LeadVisibilityTest owns that.
     $this->asRole = function (string $role) {
         $user = User::factory()->create();
         $user->businesses()->attach($this->business->id);
@@ -96,7 +101,7 @@ beforeEach(function () {
  * the screen, and this fails by name.
  */
 it('lets the screen set every field the model can hold', function () {
-    ($this->asRole)('Manager')->post('/crm/leads', $this->full);
+    ($this->asRole)('Owner')->post('/crm/leads', $this->full);
 
     $lead = Lead::where('email', 'rahima@example.com')->firstOrFail();
 
@@ -121,7 +126,7 @@ it('lets the screen set every field the model can hold', function () {
 // ── Capture and attribution ─────────────────────────────────────────────────
 
 it('captures a lead and its acquisition history in one action', function () {
-    ($this->asRole)('Manager')->post('/crm/leads', $this->full)->assertRedirect();
+    ($this->asRole)('Owner')->post('/crm/leads', $this->full)->assertRedirect();
 
     $lead = Lead::where('email', 'rahima@example.com')->sole();
 
@@ -146,7 +151,7 @@ it('captures a lead and its acquisition history in one action', function () {
 });
 
 it('appends a second touch instead of overwriting the first', function () {
-    ($this->asRole)('Manager')->post('/crm/leads', $this->full);
+    ($this->asRole)('Owner')->post('/crm/leads', $this->full);
     $lead = Lead::sole();
 
     $second = Campaign::create([
@@ -156,7 +161,7 @@ it('appends a second touch instead of overwriting the first', function () {
         'name' => 'Winter Ghee 2026',
     ]);
 
-    ($this->asRole)('Manager')->put("/crm/leads/{$lead->id}", array_merge($this->full, [
+    ($this->asRole)('Owner')->put("/crm/leads/{$lead->id}", array_merge($this->full, [
         'status' => 'contacted',
         'campaign_id' => $second->id,
         'ad_set' => 'Dhaka Winter',
@@ -174,7 +179,7 @@ it('refuses a campaign that does not belong to the chosen source', function () {
         'business_id' => $this->business->id, 'code' => 'EVENT', 'name' => 'Event',
     ]);
 
-    ($this->asRole)('Manager')
+    ($this->asRole)('Owner')
         ->post('/crm/leads', array_merge($this->full, ['lead_source_id' => $otherSource->id]))
         ->assertSessionHasErrors('campaign_id');
 
@@ -188,7 +193,7 @@ it('refuses to set converted through the form', function () {
     // with a null customer link is a lie every report would repeat for ever, so
     // only the Phase 3 conversion action may set it - and that action does not
     // exist yet, so NO path sets it at all.
-    ($this->asRole)('Manager')
+    ($this->asRole)('Owner')
         ->post('/crm/leads', array_merge($this->full, ['status' => 'converted']))
         ->assertSessionHasErrors('status');
 
@@ -196,7 +201,7 @@ it('refuses to set converted through the form', function () {
 });
 
 it('refuses to edit a lead that has already been converted', function () {
-    ($this->asRole)('Manager')->post('/crm/leads', $this->full);
+    ($this->asRole)('Owner')->post('/crm/leads', $this->full);
     $lead = Lead::sole();
 
     // Simulate what Phase 3 will do, directly - there is no route that does it.
@@ -207,7 +212,7 @@ it('refuses to edit a lead that has already been converted', function () {
         'converted_at' => now(),
     ])->save();
 
-    ($this->asRole)('Manager')
+    ($this->asRole)('Owner')
         ->put("/crm/leads/{$lead->id}", array_merge($this->full, ['name' => 'Changed']))
         ->assertSessionHasErrors('status');
 
@@ -217,7 +222,7 @@ it('refuses to edit a lead that has already been converted', function () {
 // ── C-CRM-7: append-only attribution ────────────────────────────────────────
 
 it('refuses to update an attribution', function () {
-    ($this->asRole)('Manager')->post('/crm/leads', $this->full);
+    ($this->asRole)('Owner')->post('/crm/leads', $this->full);
     $attribution = CrmAttribution::sole();
 
     expect(fn () => $attribution->update(['ad_set' => 'Rewritten']))
@@ -227,7 +232,7 @@ it('refuses to update an attribution', function () {
 });
 
 it('refuses to delete an attribution', function () {
-    ($this->asRole)('Manager')->post('/crm/leads', $this->full);
+    ($this->asRole)('Owner')->post('/crm/leads', $this->full);
     $attribution = CrmAttribution::sole();
 
     expect(fn () => $attribution->delete())->toThrow(RuntimeException::class, 'append-only');
@@ -238,7 +243,7 @@ it('refuses to delete an attribution', function () {
 // ── C-CRM-13: duplicate detection ───────────────────────────────────────────
 
 it('warns across BOTH leads and customers on a matching phone', function () {
-    ($this->asRole)('Manager')->post('/crm/leads', $this->full);
+    ($this->asRole)('Owner')->post('/crm/leads', $this->full);
 
     Customer::create([
         'business_id' => $this->business->id,
@@ -249,7 +254,7 @@ it('warns across BOTH leads and customers on a matching phone', function () {
         'phone' => '01711-000000',
     ]);
 
-    $response = ($this->asRole)('Manager')->getJson('/crm/leads/duplicates?phone=8801711000000');
+    $response = ($this->asRole)('Owner')->getJson('/crm/leads/duplicates?phone=8801711000000');
 
     $response->assertOk();
 
@@ -259,11 +264,11 @@ it('warns across BOTH leads and customers on a matching phone', function () {
 });
 
 it('allows the duplicate to be created anyway, because households share numbers', function () {
-    ($this->asRole)('Manager')->post('/crm/leads', $this->full);
+    ($this->asRole)('Owner')->post('/crm/leads', $this->full);
 
     // ⚠⚠ WARN AND ALLOW, never block. A hard block would only make staff invent
     // fake numbers, which destroys the identity data this exists to protect.
-    ($this->asRole)('Manager')
+    ($this->asRole)('Owner')
         ->post('/crm/leads', array_merge($this->full, ['name' => 'Karim, same household', 'email' => 'karim@example.com']))
         ->assertRedirect()
         ->assertSessionHasNoErrors();
@@ -272,14 +277,14 @@ it('allows the duplicate to be created anyway, because households share numbers'
 });
 
 it('never matches a duplicate from another business', function () {
-    ($this->asRole)('Manager')->post('/crm/leads', $this->full);
+    ($this->asRole)('Owner')->post('/crm/leads', $this->full);
 
     $other = Business::create(['name' => 'Other Co', 'slug' => 'other-lead-co']);
     app(BusinessContext::class)->set($other->id);
     Lead::create(['business_id' => $other->id, 'name' => 'Someone Else', 'phone' => '01711000000']);
     app(BusinessContext::class)->set($this->business->id);
 
-    $response = ($this->asRole)('Manager')->getJson('/crm/leads/duplicates?phone=01711000000');
+    $response = ($this->asRole)('Owner')->getJson('/crm/leads/duplicates?phone=01711000000');
 
     // ⚠ Only our own lead. The global scope is what makes this true, and this
     // asserts it rather than trusting it.
@@ -308,7 +313,7 @@ it('refuses a brand, source, campaign or lost reason from another business', fun
 
     // ⚠⚠ A bare `exists:` would accept every one of these. This project shipped
     // that defect twice - products.category_id/unit_of_measure_id, and ACL-02.
-    ($this->asRole)('Manager')
+    ($this->asRole)('Owner')
         ->post('/crm/leads', array_merge($this->full, [$field => $foreign]))
         ->assertSessionHasErrors($field);
 
@@ -322,7 +327,7 @@ it('refuses a reason whose context is not lead_lost', function () {
         'business_id' => $this->business->id, 'context' => 'stock_adjustment', 'name' => 'Damaged',
     ]);
 
-    ($this->asRole)('Manager')
+    ($this->asRole)('Owner')
         ->post('/crm/leads', array_merge($this->full, ['lost_reason_id' => $wrongContext->id]))
         ->assertSessionHasErrors('lost_reason_id');
 });
@@ -330,7 +335,7 @@ it('refuses a reason whose context is not lead_lost', function () {
 // ── C-CRM-2: assignment through the pivot ───────────────────────────────────
 
 it('accepts an assignee who belongs to this business through the pivot', function () {
-    ($this->asRole)('Manager')
+    ($this->asRole)('Owner')
         ->post('/crm/leads', $this->full)
         ->assertSessionHasNoErrors();
 
@@ -343,7 +348,7 @@ it('refuses an assignee who is not a member of this business', function () {
     // valid agent; validating against the pivot is what makes this work at all.
     $outsider = User::factory()->create();
 
-    ($this->asRole)('Manager')
+    ($this->asRole)('Owner')
         ->post('/crm/leads', array_merge($this->full, ['assigned_to_user_id' => $outsider->id]))
         ->assertSessionHasErrors('assigned_to_user_id');
 
@@ -358,20 +363,24 @@ it('lets Staff capture and work leads', function () {
     expect(Lead::count())->toBe(1);
 });
 
-it('silently ignores an assignment from Staff, who may not assign', function () {
+it('ignores an assignment from Staff, who may not assign, and gives the lead to its creator', function () {
     ($this->asRole)('Staff')
         ->post('/crm/leads', $this->full)
         ->assertRedirect();
 
     // ⚠ The lead is captured - Staff's job - but the workload decision is a
-    // manager's, so the field is dropped rather than the capture refused.
-    expect(Lead::sole()->assigned_to_user_id)->toBeNull();
+    // manager's, so the chosen agent is dropped rather than the capture refused.
+    // ⭐ Since 15 Sep 2026 (build plan D1) the lead is the CREATOR's, not
+    // nobody's: an unassigned lead is visible only to those who hand leads out,
+    // so it would have vanished from the officer's own list on save.
+    expect(Lead::sole()->assigned_to_user_id)->toBe($this->currentUser->id)
+        ->and(Lead::sole()->created_by_user_id)->toBe($this->currentUser->id);
 });
 
 // ── C-CRM-15: no implicit customer, no ledger ───────────────────────────────
 
 it('creates no customer and writes no journal', function () {
-    ($this->asRole)('Manager')->post('/crm/leads', $this->full);
+    ($this->asRole)('Owner')->post('/crm/leads', $this->full);
 
     // ⚠⚠ A lead is not a customer and never becomes one by accident. Conversion
     // is a deliberate Phase 3 action.
@@ -385,13 +394,13 @@ it('lets a manager create a source and a campaign through the screen', function 
     // ⚠⚠ Without these routes the two tables would exist, validate, and never
     // hold a row - the `products.barcode` failure, which has happened four times
     // on this project.
-    ($this->asRole)('Manager')->post('/crm/settings/sources', [
+    ($this->asRole)('Owner')->post('/crm/settings/sources', [
         'code' => 'FAIR', 'name' => 'Trade Fair', 'is_active' => true,
     ])->assertRedirect();
 
     $source = LeadSource::where('code', 'FAIR')->sole();
 
-    ($this->asRole)('Manager')->post('/crm/settings/campaigns', [
+    ($this->asRole)('Owner')->post('/crm/settings/campaigns', [
         'lead_source_id' => $source->id,
         'brand_id' => $this->brand->id,
         'code' => 'DHAKA-FAIR-2026',
@@ -408,7 +417,7 @@ it('lets a manager create a source and a campaign through the screen', function 
 });
 
 it('refuses a duplicate source code within the business', function () {
-    ($this->asRole)('Manager')
+    ($this->asRole)('Owner')
         ->post('/crm/settings/sources', ['code' => 'META', 'name' => 'Meta again', 'is_active' => true])
         ->assertSessionHasErrors('code');
 
@@ -431,7 +440,7 @@ it('refuses a campaign whose source belongs to another business', function () {
     $foreignSource = LeadSource::create(['business_id' => $other->id, 'code' => 'X', 'name' => 'Theirs']);
     app(BusinessContext::class)->set($this->business->id);
 
-    ($this->asRole)('Manager')
+    ($this->asRole)('Owner')
         ->post('/crm/settings/campaigns', [
             'lead_source_id' => $foreignSource->id,
             'code' => 'LEAK', 'name' => 'Leak', 'is_active' => true,
@@ -449,9 +458,9 @@ it('refuses a campaign whose source belongs to another business', function () {
  * sees.
  */
 it('renders the lead list with a lead on it', function () {
-    ($this->asRole)('Manager')->post('/crm/leads', $this->full);
+    ($this->asRole)('Owner')->post('/crm/leads', $this->full);
 
-    ($this->asRole)('Manager')->get('/crm/leads')
+    ($this->asRole)('Owner')->get('/crm/leads')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('crm/leads/index')
@@ -470,17 +479,17 @@ it('renders the lead list when a lead has no name, brand or assignee', function 
     // ⚠ Every personal field is nullable for C-CRM-16 anonymisation, so the list
     // must survive a row where they are all null - which is exactly what an
     // anonymised lead will look like one day.
-    ($this->asRole)('Manager')->post('/crm/leads', [
+    ($this->asRole)('Owner')->post('/crm/leads', [
         'name' => null, 'phone' => null, 'email' => null, 'status' => 'new',
     ])->assertRedirect();
 
-    ($this->asRole)('Manager')->get('/crm/leads')
+    ($this->asRole)('Owner')->get('/crm/leads')
         ->assertOk()
         ->assertInertia(fn ($page) => $page->has('leads.data', 1)->where('leads.data.0.name', null));
 });
 
 it('renders the sources and campaigns screen', function () {
-    ($this->asRole)('Manager')->get('/crm/settings')
+    ($this->asRole)('Owner')->get('/crm/settings')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('crm/settings/index')
@@ -494,9 +503,9 @@ it('renders the sources and campaigns screen', function () {
 });
 
 it('filters the lead list without error', function () {
-    ($this->asRole)('Manager')->post('/crm/leads', $this->full);
+    ($this->asRole)('Owner')->post('/crm/leads', $this->full);
 
-    ($this->asRole)('Manager')->get('/crm/leads?search=8801711000000&status=new')
+    ($this->asRole)('Owner')->get('/crm/leads?search=8801711000000&status=new')
         ->assertOk()
         // ⚠ Searching an international spelling must find a lead captured any
         // other way, or duplicate detection on the list is theatre.
@@ -524,7 +533,7 @@ it('gives the lead screen what it needs to offer conversion', function () {
         'status' => LeadStatus::New,
     ]);
 
-    ($this->asRole)('Manager')->get('/crm/leads')
+    ($this->asRole)('Owner')->get('/crm/leads')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('crm/leads/index')
@@ -564,7 +573,7 @@ it('offers only customers that conversion will actually accept', function () {
         'name' => 'Closed Shop', 'is_system' => false, 'is_active' => false,
     ]);
 
-    ($this->asRole)('Manager')->get('/crm/leads')
+    ($this->asRole)('Owner')->get('/crm/leads')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->has('customers', 1)
@@ -593,7 +602,7 @@ it('marks the lead in the url as the duplicate, not the survivor', function () {
         'phone' => '+8801711000000', 'status' => LeadStatus::New,
     ]);
 
-    ($this->asRole)('Manager')
+    ($this->asRole)('Owner')
         ->post("/crm/leads/{$copy->id}/duplicate-of", ['survivor_id' => $survivor->id])
         ->assertRedirect()
         ->assertSessionHasNoErrors();
@@ -619,7 +628,7 @@ it('tells the screen which lead a duplicate points at', function () {
 
     app(\App\Modules\Crm\Actions\LinkDuplicateLead::class)->handle($copy, $survivor, $this->agent);
 
-    ($this->asRole)('Manager')->get('/crm/leads')
+    ($this->asRole)('Owner')->get('/crm/leads')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('leads.data.0.duplicate_of', 'Rahima Begum')

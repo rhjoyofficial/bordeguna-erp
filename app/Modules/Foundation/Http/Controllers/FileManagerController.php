@@ -64,10 +64,23 @@ class FileManagerController extends Controller
         // ⚠ A reader entitled to nothing gets an empty list rather than an
         // unfiltered one. Without the guard, `whereIn('attachable_type', [])`
         // combined with the unmapped branch could widen instead of narrow.
+        // ⚠⚠ For a type whose records are narrowed per reader (a lead: its owner
+        // and team only), holding the permission is not enough - the file's own
+        // record must be one this reader can see. The subquery goes through the
+        // model, so its visibility scope decides, not a copy of the rule here.
+        $rowScoped = array_values(array_intersect($allowedTypes, $visibility->rowScopedTypes()));
+        $plainTypes = array_values(array_diff($allowedTypes, $rowScoped));
+
         $files = Attachment::query()
             ->with(['uploadedBy:id,name', 'category:id,name'])
-            ->where(function (Builder $q) use ($allowedTypes, $mapped, $seesUnmapped) {
-                $q->whereIn('attachable_type', $allowedTypes);
+            ->where(function (Builder $q) use ($plainTypes, $rowScoped, $mapped, $seesUnmapped) {
+                $q->whereIn('attachable_type', $plainTypes);
+
+                foreach ($rowScoped as $type) {
+                    $q->orWhere(fn (Builder $one) => $one
+                        ->where('attachable_type', $type)
+                        ->whereIn('attachable_id', $type::query()->select((new $type)->getQualifiedKeyName())));
+                }
 
                 if ($seesUnmapped) {
                     $q->orWhereNotIn('attachable_type', $mapped);

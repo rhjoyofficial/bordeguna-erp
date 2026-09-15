@@ -5,6 +5,7 @@ namespace App\Modules\Foundation\Support;
 use App\Models\User;
 use App\Modules\Crm\Enums\TaskStatus;
 use App\Modules\Crm\Models\CrmTask;
+use App\Modules\Crm\Support\LeadVisibility;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\CalendarEvent;
 use App\Modules\Foundation\Models\Note;
@@ -234,7 +235,11 @@ class CalendarFeed
             return [];
         }
 
+        // ⚠⚠ Whose follow-ups, not just whether follow-ups. Until 15 Sep 2026 this
+        // showed every open follow-up in the business to anybody who could open
+        // Leads - the disclosure the CRM queue's own rule exists to prevent.
         return CrmTask::query()
+            ->tap(fn ($q) => app(LeadVisibility::class)->restrictTasks($q, $user))
             ->where('status', TaskStatus::Open)
             ->whereBetween('due_at', [$from.' 00:00:00', $to.' 23:59:59'])
             ->orderBy('due_at')

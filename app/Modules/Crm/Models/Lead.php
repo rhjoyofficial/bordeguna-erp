@@ -5,8 +5,11 @@ namespace App\Modules\Crm\Models;
 use App\Models\User;
 use App\Modules\Crm\Enums\LeadStatus;
 use App\Modules\Crm\Enums\LeadType;
+use App\Modules\Crm\Scopes\LeadVisibilityScope;
+use App\Modules\Crm\Support\LeadVisibility;
 use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Models\Brand;
@@ -32,7 +35,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * status, its campaign and its attributions survive, so historical campaign
  * counts stay true (C-CRM-16).
  */
-class Lead extends Model
+class Lead extends Model implements ControlsAttachmentAccess
 {
     use BelongsToBusiness, HasAttachments, LogsActivity;
 
@@ -147,6 +150,11 @@ class Lead extends Model
      */
     protected static function booted(): void
     {
+        // ⭐⭐ Whose leads a person may see: the Owner all of them, everybody
+        // else their own and their team's. See LeadVisibilityScope for why this
+        // is a scope on the model rather than a filter in each screen.
+        static::addGlobalScope(new LeadVisibilityScope);
+
         static::saving(function (self $lead): void {
             $lead->phone_normalized = PhoneIdentity::normalize($lead->phone);
 
@@ -165,6 +173,25 @@ class Lead extends Model
                 ? $lead->phone_normalized
                 : null;
         });
+    }
+
+    /**
+     * ⚠⚠ The files on a lead follow the lead. Without this the attachment route
+     * would stream a photo of a shop to anybody in the business who guessed its
+     * id, whatever the list screen hid from them.
+     */
+    public function canAccessAttachments(User $user): bool
+    {
+        return app(LeadVisibility::class)->canSee($user, $this);
+    }
+
+    /**
+     * Who captured this lead. ⚠ Not fillable: LeadController sets it once, from
+     * the signed-in user, so a form cannot claim somebody else created it.
+     */
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
     public function isVerified(): bool

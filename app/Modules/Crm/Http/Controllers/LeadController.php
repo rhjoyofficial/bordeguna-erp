@@ -14,7 +14,9 @@ use App\Modules\Crm\Models\Campaign;
 use App\Modules\Crm\Models\CrmAttribution;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Crm\Models\LeadSource;
+use App\Modules\Crm\Scopes\LeadVisibilityScope;
 use App\Modules\Crm\Support\ApplyLeadCadences;
+use App\Modules\Crm\Support\LeadVisibility;
 use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -114,6 +116,9 @@ class LeadController extends Controller
             // system could become a customer. `ConvertLead` is the only writer of
             // `converted_customer_id`, so the funnel simply had no exit.
             'can_convert' => $request->user()->can('crm.leads.convert'),
+            // ⚠ Duplicate linking needs it since 15 Sep 2026; without the prop
+            // an officer would see a button the route refuses.
+            'can_verify' => $request->user()->can('crm.leads.verify'),
             // ⚠ System and inactive customers are excluded because `ConvertLead`
             // REFUSES both - offering a choice the action will reject would be a
             // form that fails on submit for reasons the user cannot see.
@@ -163,6 +168,23 @@ class LeadController extends Controller
                 'status' => $lead->status->value,
             ]);
 
+        // ⭐ Build plan D4 (15 Sep 2026). A lead with this number that the reader
+        // may NOT see is still reported, by the name of whoever holds it and
+        // nothing else. Silence would send an officer off to create a second
+        // record of a shop his colleague already works; showing the lead would
+        // hand him exactly what the visibility rule hides.
+        $visibility = app(LeadVisibility::class);
+
+        $heldElsewhere = Lead::withoutGlobalScope(LeadVisibilityScope::class)
+            ->where('phone_normalized', $normalized)
+            ->when($request->integer('ignore_lead_id'), fn ($q, $id) => $q->whereKeyNot($id))
+            ->with('assignedTo:id,name')
+            ->limit(10)
+            ->get()
+            ->reject(fn (Lead $lead) => $visibility->canSee($request->user(), $lead))
+            ->map(fn (Lead $lead) => ['held_by' => $lead->assignedTo?->name])
+            ->values();
+
         $customers = Customer::where('phone_normalized', $normalized)
             ->limit(10)
             ->get(['id', 'name', 'code', 'phone', 'type'])
@@ -174,14 +196,23 @@ class LeadController extends Controller
                 'type' => $customer->type->value,
             ]);
 
-        return response()->json(['leads' => $leads, 'customers' => $customers]);
+        return response()->json(['leads' => $leads, 'held_elsewhere' => $heldElsewhere, 'customers' => $customers]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validated($request);
 
-        $lead = Lead::create($data['lead']);
+        // ⭐ Build plan D1 (15 Sep 2026). Somebody who may not assign leads owns
+        // the lead they capture. Left unassigned, an officer's new shop would
+        // vanish from his own list the moment he saved it, because an unassigned
+        // lead is visible only to the people who hand leads out.
+        if (! $request->user()->can('crm.leads.assign')) {
+            $data['lead']['assigned_to_user_id'] = $request->user()->id;
+        }
+
+        $lead = new Lead($data['lead']);
+        $lead->forceFill(['created_by_user_id' => $request->user()->id])->save();
 
         $this->recordAttribution($lead, $data['attribution'], $request);
 
@@ -267,7 +298,7 @@ class LeadController extends Controller
      *
      * @throws ValidationException
      */
-    private function guardShopPhoneIsNotAlreadyTaken(array $validated, ?Lead $lead, int $businessId): void
+    private function guardShopPhoneIsNotAlreadyTaken(array $validated, ?Lead $lead, int $businessId, User $reader): void
     {
         $type = LeadType::tryFrom((string) ($validated['lead_type'] ?? '')) ?? $lead?->lead_type ?? LeadType::Customer;
 
@@ -281,7 +312,11 @@ class LeadController extends Controller
             return;
         }
 
-        $existing = Lead::query()
+        // ⚠⚠ WITHOUT the visibility scope. The number is unique across the whole
+        // business, not across what this officer may see: scoped, a shop held by
+        // a colleague would pass this check and hit the unique index as a raw
+        // database error instead of a sentence.
+        $existing = Lead::withoutGlobalScope(LeadVisibilityScope::class)
             ->where('business_id', $businessId)
             ->where('shop_phone_key', $key)
             ->when($lead !== null, fn ($query) => $query->whereKeyNot($lead->getKey()))
@@ -289,6 +324,17 @@ class LeadController extends Controller
 
         if ($existing === null) {
             return;
+        }
+
+        // ⭐ Build plan D4: a lead this person may not see is named by its
+        // holder only. Which shop it is, and whether it was archived, belong to
+        // the people who can see it.
+        if (! app(LeadVisibility::class)->canSee($reader, $existing)) {
+            $holder = $existing->assignedTo?->name ?? 'nobody yet';
+
+            throw ValidationException::withMessages([
+                'phone' => "This number already belongs to a lead held by {$holder}.",
+            ]);
         }
 
         $who = filled($existing->name)
@@ -378,7 +424,7 @@ class LeadController extends Controller
             unset($validated['assigned_to_user_id']);
         }
 
-        $this->guardShopPhoneIsNotAlreadyTaken($validated, $lead, $businessId);
+        $this->guardShopPhoneIsNotAlreadyTaken($validated, $lead, $businessId, $request->user());
 
         $leadFields = collect($validated)->only([
             'name', 'phone', 'email', 'address', 'status', 'lead_type', 'brand_id',
@@ -415,8 +461,11 @@ class LeadController extends Controller
     /**
      * Two leads are one person.
      *
-     * ⚠ A working-list correction, not master data: it creates nothing outside
-     * CRM, so `crm.leads.manage` is the right gate rather than a new permission.
+     * ⚠ Gated by `crm.leads.verify` since 15 Sep 2026, not `crm.leads.manage`.
+     * It creates nothing outside CRM, but it takes a lead out of the working
+     * list, and Joy reserved merging for the ASM (redesign decision 1). Left on
+     * the officer's permission, an officer could hide a colleague's shop behind
+     * his own by calling it a duplicate.
      */
     public function linkDuplicate(Request $request, Lead $lead, LinkDuplicateLead $action): RedirectResponse
     {

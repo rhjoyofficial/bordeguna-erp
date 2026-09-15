@@ -4,9 +4,11 @@ namespace App\Modules\Crm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Crm\Models\Lead;
+use App\Modules\Crm\Support\LeadVisibility;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Models\Customer;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,9 +41,14 @@ class OpportunityController extends Controller
             );
         }
 
+        // ⚠⚠ Deals follow the same rule as leads (15 Sep 2026): the Owner sees
+        // every deal, everybody else their own and their team's. A board that
+        // hid the lead's name but still showed a colleague's deal, its value
+        // and its next step would leak the very thing the lead list now hides.
         $open = DB::table('crm_opportunities')
             ->where('business_id', $businessId)
             ->where('status', 'open')
+            ->tap(fn ($q) => $this->visibleDeals($q))
             ->orderByDesc('value')
             ->get();
 
@@ -79,6 +86,7 @@ class OpportunityController extends Controller
         $recentlyClosed = DB::table('crm_opportunities')
             ->where('business_id', $businessId)
             ->whereIn('status', ['won', 'lost'])
+            ->tap(fn ($q) => $this->visibleDeals($q))
             ->orderByDesc('updated_at')
             ->limit(15)
             ->get()
@@ -124,6 +132,12 @@ class OpportunityController extends Controller
             'next_action' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string'],
         ]);
+
+        // ⚠ Build plan D1, as for leads: somebody who may not assign owns the deal
+        // they put on the board, or it would vanish from their own view on save.
+        if (! $request->user()->can('crm.leads.assign')) {
+            $data['assigned_to_user_id'] = $request->user()->id;
+        }
 
         DB::table('crm_opportunities')->insert($data + [
             'business_id' => $businessId,
@@ -187,9 +201,18 @@ class OpportunityController extends Controller
             ->where('business_id', $businessId)
             ->where('id', $id)
             ->where('status', 'open')
+            ->tap(fn ($q) => $this->visibleDeals($q))
             ->first();
         abort_if($row === null, 404);
 
         return $row;
+    }
+
+    /**
+     * ⚠ The lead rule applied to the deal's own assignee. See LeadVisibility.
+     */
+    private function visibleDeals(Builder $query): void
+    {
+        app(LeadVisibility::class)->restrict($query, request()->user(), 'crm_opportunities.assigned_to_user_id');
     }
 }

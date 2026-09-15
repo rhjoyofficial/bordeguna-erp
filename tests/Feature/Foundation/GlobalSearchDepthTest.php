@@ -34,12 +34,14 @@ beforeEach(function () {
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
 
-    foreach (['sales.reports.view', 'purchasing.reports.view', 'crm.leads.view', 'sales.orders.record'] as $name) {
+    foreach (['sales.reports.view', 'purchasing.reports.view', 'crm.leads.view', 'crm.leads.view.all', 'sales.orders.record'] as $name) {
         Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
     }
 
     Role::firstOrCreate(['name' => 'DepthOwner', 'business_id' => $this->business->id, 'guard_name' => 'web'])
-        ->givePermissionTo(['sales.reports.view', 'purchasing.reports.view', 'crm.leads.view', 'sales.orders.record']);
+        // ⚠ view.all since 15 Sep 2026: these deals are unassigned, and only an
+        // Owner-like reader sees those. LeadVisibilityTest owns who sees what.
+        ->givePermissionTo(['sales.reports.view', 'purchasing.reports.view', 'crm.leads.view', 'crm.leads.view.all', 'sales.orders.record']);
     Role::firstOrCreate(['name' => 'DepthNobody', 'business_id' => $this->business->id, 'guard_name' => 'web']);
 
     $this->owner = User::factory()->create();

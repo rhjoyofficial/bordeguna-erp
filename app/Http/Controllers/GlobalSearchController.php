@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Crm\Models\Lead;
+use App\Modules\Crm\Support\LeadVisibility;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Product;
@@ -276,9 +277,12 @@ class GlobalSearchController extends Controller
                 '/crm/leads?search='.urlencode($this->q),
             );
 
+            // ⚠ Leads above are narrowed by their model's scope; deals are plain
+            // rows, so the same rule is applied by hand (15 Sep 2026).
             $opportunities = DB::table('crm_opportunities')
                 ->where('business_id', $businessId)
-                ->where('name', 'like', $like);
+                ->where('name', 'like', $like)
+                ->tap(fn ($q) => app(LeadVisibility::class)->restrict($q, $user, 'crm_opportunities.assigned_to_user_id'));
 
             $this->add(
                 'Opportunities',

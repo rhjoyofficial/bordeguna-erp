@@ -247,6 +247,10 @@ it('adds no LeadStatus case', function () {
 it('refuses somebody without permission to manage leads', function () {
     $outsider = User::factory()->create();
     $outsider->businesses()->attach($this->business->id);
+    // ⚠ Given the lead, so the PERMISSION is what refuses. Since 15 Sep 2026 a
+    // lead the reader cannot see 404s at route binding before any permission is
+    // asked, which would pass this test for the wrong reason.
+    $this->duplicate->update(['assigned_to_user_id' => $outsider->id]);
 
     $this->actingAs($outsider)
         ->post("/crm/leads/{$this->duplicate->id}/duplicate-of", ['survivor_id' => $this->survivor->id])

@@ -14,6 +14,7 @@ use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\CrmProductInterest;
 use App\Modules\Crm\Models\CrmTask;
 use App\Modules\Crm\Models\Lead;
+use App\Modules\Crm\Support\LeadVisibility;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
@@ -52,6 +53,20 @@ class CrmActivityController extends Controller
         abort_if($model === null, 404);
 
         return $model;
+    }
+
+    /**
+     * ⚠⚠ A task or an interest is reached by ITS OWN id, not the lead's, so the
+     * lead's visibility scope never runs on that route. Resolving the subject
+     * here puts it back: a follow-up on a lead this person may not see 404s
+     * exactly as the lead's timeline does, instead of being completable by
+     * anybody who guesses a number.
+     */
+    private function guardSubjectIsVisible(string $subjectType, int $subjectId): void
+    {
+        if ($subjectType === (new Lead)->getMorphClass()) {
+            abort_if(Lead::query()->whereKey($subjectId)->doesntExist(), 404);
+        }
     }
 
     public function show(Request $request, string $type, int $id): Response
@@ -246,6 +261,8 @@ class CrmActivityController extends Controller
 
     public function updateTask(Request $request, CrmTask $task): RedirectResponse
     {
+        $this->guardSubjectIsVisible($task->subject_type, (int) $task->subject_id);
+
         $businessId = app(BusinessContext::class)->id();
 
         $data = $request->validate([
@@ -345,6 +362,8 @@ class CrmActivityController extends Controller
      */
     public function closeInterest(Request $request, CrmProductInterest $interest): RedirectResponse
     {
+        $this->guardSubjectIsVisible($interest->subject_type, (int) $interest->subject_id);
+
         $data = $request->validate([
             'status' => ['required', Rule::in(
                 collect(InterestStatus::closable())->map(fn (InterestStatus $s) => $s->value)->all()
@@ -370,12 +389,13 @@ class CrmActivityController extends Controller
         $user = $request->user();
 
         // ⚠⚠ C-CRMB-10. Without `crm.tasks.view.all` a person sees their OWN
-        // queue. Otherwise every agent reads every other agent's follow-ups,
-        // which is both noise and a quiet disclosure.
+        // queue - and since 15 Sep 2026 their team's too, so the ASM can see an
+        // officer's follow-ups going overdue. Otherwise every agent reads every
+        // other agent's follow-ups, which is both noise and a quiet disclosure.
         $seesEverybody = $user?->can('crm.tasks.view.all') ?? false;
 
         $tasks = CrmTask::query()
-            ->when(! $seesEverybody, fn ($q) => $q->where('assigned_to_user_id', $user->id))
+            ->tap(fn ($q) => app(LeadVisibility::class)->restrictTasks($q, $user))
             ->when($request->string('status')->toString() !== 'all',
                 fn ($q) => $q->open())
             ->with(['assignedTo:id,name', 'subject'])

@@ -9,6 +9,7 @@ use App\Modules\Crm\Enums\TaskStatus;
 use App\Modules\Crm\Models\CrmProductInterest;
 use App\Modules\Crm\Models\CrmTask;
 use App\Modules\Crm\Models\Lead;
+use App\Modules\Crm\Support\LeadVisibility;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -168,11 +169,8 @@ class CrmReportController extends Controller
      */
     private function followUpLoad(Request $request): array
     {
-        $user = $request->user();
-        $seesEverybody = $user?->can('crm.tasks.view.all') ?? false;
-
         return CrmTask::query()
-            ->when(! $seesEverybody, fn ($q) => $q->where('assigned_to_user_id', $user->id))
+            ->tap(fn ($q) => app(LeadVisibility::class)->restrictTasks($q, $request->user()))
             ->where('status', TaskStatus::Open)
             ->with('assignedTo:id,name')
             ->get()

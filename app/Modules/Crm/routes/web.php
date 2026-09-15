@@ -32,10 +32,6 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
     Route::middleware('can:crm.leads.manage')->group(function () {
         Route::post('leads', [LeadController::class, 'store'])->name('leads.store');
         Route::put('leads/{lead}', [LeadController::class, 'update'])->name('leads.update');
-        // ⚠ Linking a duplicate deletes nothing and moves nothing; it records
-        // which of two leads should be worked. A working-list correction, so it
-        // needs no permission beyond managing leads.
-        Route::post('leads/{lead}/duplicate-of', [LeadController::class, 'linkDuplicate'])->name('leads.duplicate-of');
 
         // Deals move with the same trust that works the leads they grew from.
         Route::post('opportunities', [OpportunityController::class, 'store'])->name('opportunities.store');
@@ -66,6 +62,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         Route::delete('leads/{lead}/verify', [LeadController::class, 'unverify'])->name('leads.unverify');
         Route::post('leads/{lead}/archive', [LeadController::class, 'archive'])->name('leads.archive');
         Route::delete('leads/{lead}/archive', [LeadController::class, 'restore'])->name('leads.restore');
+        // ⚠ Moved here from the manage group on 15 Sep 2026. Linking a duplicate
+        // deletes nothing and moves nothing, but it takes a lead out of the
+        // working list exactly as archiving does, and Joy reserved merging for
+        // the ASM. See LeadController::linkDuplicate().
+        Route::post('leads/{lead}/duplicate-of', [LeadController::class, 'linkDuplicate'])->name('leads.duplicate-of');
     });
 
     // ⚠ Sources and campaigns are the REPORTING AXES. Staff capture leads;

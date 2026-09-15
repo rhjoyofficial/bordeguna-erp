@@ -49,6 +49,9 @@ interface CustomerOption {
 
 interface DuplicateMatch {
     leads: { id: number; name: string | null; phone: string | null; status: string }[];
+    // ⚠ Leads with this number that the reader may not see: the holder's name
+    // and nothing else (build plan D4).
+    held_elsewhere: { held_by: string | null }[];
     customers: { id: number; name: string; code: string | null; phone: string | null; type: string }[];
 }
 
@@ -94,6 +97,7 @@ export default function LeadsIndex({
     agents,
     can_assign,
     can_convert,
+    can_verify,
     customers,
     customer_types,
 }: {
@@ -108,6 +112,7 @@ export default function LeadsIndex({
     agents: Option[];
     can_assign: boolean;
     can_convert: boolean;
+    can_verify: boolean;
     customers: CustomerOption[];
     customer_types: { value: string; label: string }[];
 }) {
@@ -291,7 +296,8 @@ export default function LeadsIndex({
     // Only campaigns belonging to the chosen source, so the two axes cannot disagree.
     const campaignsForSource = campaigns.filter((c) => !data.lead_source_id || String(c.lead_source_id) === data.lead_source_id);
 
-    const hasMatches = matches !== null && (matches.leads.length > 0 || matches.customers.length > 0);
+    const hasMatches =
+        matches !== null && (matches.leads.length > 0 || (matches.held_elsewhere ?? []).length > 0 || matches.customers.length > 0);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -530,8 +536,10 @@ export default function LeadsIndex({
                                             <span className="font-medium">Lead:</span> {l.name ?? '(no name)'} - {l.phone} - {l.status}
                                         </span>
                                         {/* ⚠ The lead being EDITED becomes the duplicate; the
-                                            one named here survives. The label says so. */}
-                                        {editing && (
+                                            one named here survives. The label says so.
+                                            ⚠ Only for whoever may merge (the ASM), since
+                                            15 Sep 2026 - the route refuses everybody else. */}
+                                        {editing && can_verify && (
                                             <Button
                                                 type="button"
                                                 size="sm"
@@ -542,6 +550,12 @@ export default function LeadsIndex({
                                                 This lead is a duplicate of that one
                                             </Button>
                                         )}
+                                    </li>
+                                ))}
+                                {matches?.held_elsewhere?.map((h, i) => (
+                                    <li key={`h-${i}`}>
+                                        <span className="font-medium">Lead:</span> held by {h.held_by ?? 'nobody yet'}. Ask them, or your sales
+                                        lead, before adding it again.
                                     </li>
                                 ))}
                             </ul>

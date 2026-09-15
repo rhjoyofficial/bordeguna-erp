@@ -25,12 +25,16 @@ beforeEach(function () {
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
 
-    foreach (['crm.contacts.view', 'crm.contacts.manage'] as $name) {
+    foreach (['crm.contacts.view', 'crm.contacts.manage', 'crm.leads.view.all'] as $name) {
         Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
     }
 
+    // ⚠ `crm.leads.view.all` since 15 Sep 2026. Pulling leads into the book
+    // pulls only the leads the puller may see - otherwise the phone book, which
+    // Staff can read, would be a back door around lead visibility. This file
+    // proves the book; LeadVisibilityTest proves that door is shut.
     Role::firstOrCreate(['name' => 'Manager', 'business_id' => $this->business->id, 'guard_name' => 'web'])
-        ->givePermissionTo(['crm.contacts.view', 'crm.contacts.manage']);
+        ->givePermissionTo(['crm.contacts.view', 'crm.contacts.manage', 'crm.leads.view.all']);
     Role::firstOrCreate(['name' => 'Staff', 'business_id' => $this->business->id, 'guard_name' => 'web'])
         ->givePermissionTo(['crm.contacts.view']);
 

@@ -299,6 +299,9 @@ it('refuses Staff, who may qualify a lead but not create master data', function 
     // ⚠ C-CRMB-14. A customer code is permanent. Staff qualify; deciding a
     // customer record exists is a manager's call.
     $staff = ($this->asRole)('Staff');
+    // ⚠ Their own lead, so the PERMISSION refuses rather than visibility (a lead
+    // the reader cannot see 404s at route binding since 15 Sep 2026).
+    $this->lead->update(['assigned_to_user_id' => $staff->id]);
 
     $this->actingAs($staff)
         ->post("/crm/leads/{$this->lead->id}/convert", ['code' => 'RAHIM'])

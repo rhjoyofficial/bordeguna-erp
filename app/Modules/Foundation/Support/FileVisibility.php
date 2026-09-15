@@ -79,6 +79,20 @@ class FileVisibility
         InventoryAdjustment::class => 'inventory.reports.view',
     ];
 
+    /**
+     * ⚠⚠ Types where the permission above is NECESSARY BUT NOT SUFFICIENT,
+     * because the records themselves are narrowed per reader by a global scope.
+     * Since 15 Sep 2026 a lead is visible only to its owner, their team and the
+     * Owner role; `crm.leads.view` alone would otherwise list every lead's files.
+     * A type added here has its files listed only where its own model query can
+     * still find the record.
+     *
+     * @var list<class-string>
+     */
+    private const ROW_SCOPED = [
+        Lead::class,
+    ];
+
     /** The collection standalone files live in, on the Business itself. */
     public const LIBRARY = 'library';
 
@@ -108,6 +122,14 @@ class FileVisibility
     public function maySeeUnmappedTypes(User $user): bool
     {
         return $user->can('foundation.organization.manage');
+    }
+
+    /**
+     * @return list<class-string>
+     */
+    public function rowScopedTypes(): array
+    {
+        return self::ROW_SCOPED;
     }
 
     /**
