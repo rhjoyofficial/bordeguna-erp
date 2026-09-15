@@ -3,6 +3,7 @@
 use App\Http\Controllers\ApprovalInboxController;
 use App\Http\Controllers\AssistantController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GeoLookupController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\MyWorkController;
 use App\Http\Controllers\NotificationController;
@@ -68,6 +69,15 @@ Route::middleware(['auth', 'business'])->group(function () {
     // The header search. A GET on purpose (the hand-written-fetch trap: a GET
     // needs no CSRF ceremony), JSON in and out, permission-filtered inside.
     Route::get('search', GlobalSearchController::class)->name('search');
+
+    // Bangladesh's thanas and areas, for any ERP form that places something on
+    // the map. Public administrative fact; no permission beyond signing in.
+    // ⚠⚠ NOT `/geo/...`: the storefront already registers `/geo/thanas` and
+    // `/geo/areas` on the same path with no domain, and a second route on an
+    // identical method and URI silently REPLACES the first - one of the two
+    // screens would have lost its list with nothing failing.
+    Route::get('places/thanas', [GeoLookupController::class, 'thanas'])->name('places.thanas');
+    Route::get('places/areas', [GeoLookupController::class, 'areas'])->name('places.areas');
 
     // The bell's notifications, and the inbox behind it. The inbox exists
     // because the bell shows five and production was holding ninety-nine

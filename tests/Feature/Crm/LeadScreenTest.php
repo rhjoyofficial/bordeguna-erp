@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Crm\Actions\LinkDuplicateLead;
 use App\Modules\Crm\database\seeders\CrmPermissionsSeeder;
 use App\Modules\Crm\Enums\LeadStatus;
 use App\Modules\Crm\Models\Campaign;
@@ -74,9 +75,16 @@ beforeEach(function () {
 
     $this->full = [
         'name' => 'Rahima Begum',
+        'contact_name' => 'Rahima herself',
         'phone' => '+8801711000000',
+        'secondary_phone' => '01819000000',
         'email' => 'rahima@example.com',
-        'address' => 'Mirpur, Dhaka',
+        'address' => 'House 12, Road 3',
+        'district' => 'Dhaka',
+        'thana' => 'Mirpur',
+        'area' => 'Mirpur TSO',
+        'market' => 'Mirpur 1 kitchen market',
+        'landmark' => 'Beside the mosque',
         'status' => 'new',
         'brand_id' => $this->brand->id,
         'assigned_to_user_id' => $this->agent->id,
@@ -626,9 +634,11 @@ it('tells the screen which lead a duplicate points at', function () {
         'phone' => '+8801711000000', 'status' => LeadStatus::New,
     ]);
 
-    app(\App\Modules\Crm\Actions\LinkDuplicateLead::class)->handle($copy, $survivor, $this->agent);
+    app(LinkDuplicateLead::class)->handle($copy, $survivor, $this->agent);
 
-    ($this->asRole)('Owner')->get('/crm/leads')
+    // ⚠ `show=all`: since 15 Sep 2026 the default list is the WORKING list, and a
+    // duplicate is not work. The duplicates-only view is tested beside this.
+    ($this->asRole)('Owner')->get('/crm/leads?show=all')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('leads.data.0.duplicate_of', 'Rahima Begum')

@@ -53,8 +53,11 @@ beforeEach(function () {
     $this->asOfficer = fn () => $this->actingAs($this->officer)
         ->withHeader('X-Business-Id', (string) $this->business->id);
 
+    // ⚠ A place on every capture since 15 Sep 2026: a shop-shaped lead needs a
+    // district and thana (slice 2b, build plan D8). Harmless for a consumer.
     $this->capture = fn (array $data) => ($this->asOfficer)()->post(route('crm.leads.store'), array_merge([
         'status' => LeadStatus::New->value,
+        'district' => 'Dhaka', 'thana' => 'Mirpur',
     ], $data));
 });
 
@@ -166,6 +169,7 @@ it('lets a field officer create and work a lead with nobody approving anything',
     ($this->asOfficer)()->put(route('crm.leads.update', $lead), [
         'name' => 'Rahim Store', 'phone' => '01711000001',
         'lead_type' => 'retailer', 'status' => LeadStatus::Contacted->value,
+        'district' => 'Dhaka', 'thana' => 'Mirpur',
     ])->assertSessionHasNoErrors();
 
     expect($lead->fresh()->phone)->toBe('01711000001');

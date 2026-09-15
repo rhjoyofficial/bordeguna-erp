@@ -187,7 +187,7 @@ it('follows the org chart the day it changes, with nothing to sync', function ()
 
 it('gives an officer the lead he captures, and records that he captured it', function () {
     ($this->as)($this->rakib)->post('/crm/leads', [
-        'name' => 'New Shop', 'phone' => '01711000009', 'lead_type' => 'retailer', 'status' => 'new',
+        'name' => 'New Shop', 'phone' => '01711000009', 'lead_type' => 'retailer', 'status' => 'new', 'district' => 'Dhaka', 'thana' => 'Mirpur',
     ])->assertSessionHasNoErrors();
 
     $lead = Lead::withoutGlobalScopes()->where('name', 'New Shop')->sole();
@@ -373,7 +373,7 @@ it('warns about a colleague\'s lead by its holder only', function () {
 
 it('refuses a second shop on a colleague\'s number without naming the shop', function () {
     ($this->as)($this->rakib)->post('/crm/leads', [
-        'name' => 'Copy Store', 'phone' => '01711000002', 'lead_type' => 'retailer', 'status' => 'new',
+        'name' => 'Copy Store', 'phone' => '01711000002', 'lead_type' => 'retailer', 'status' => 'new', 'district' => 'Dhaka', 'thana' => 'Mirpur',
     ])->assertSessionHasErrors(['phone' => 'This number already belongs to a lead held by Nazmul.']);
 
     expect(Lead::withoutGlobalScopes()->where('name', 'Copy Store')->exists())->toBeFalse();

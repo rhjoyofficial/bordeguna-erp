@@ -23,6 +23,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
+use App\Support\BdGeo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -43,10 +44,15 @@ class LeadController extends Controller
             'status' => $request->string('status')->toString(),
             'brand_id' => $request->string('brand_id')->toString(),
             'assigned_to_user_id' => $request->string('assigned_to_user_id')->toString(),
+            'lead_type' => $request->string('lead_type')->toString(),
+            'verification' => $request->string('verification')->toString(),
+            'district' => $request->string('district')->toString(),
+            // '' = the working list, 'duplicates', 'archived' or 'all'.
+            'show' => $request->string('show')->toString(),
         ];
 
         $leads = Lead::query()
-            ->with(['brand:id,name,code', 'assignedTo:id,name', 'convertedCustomer:id,name,code', 'duplicateOf:id,name'])
+            ->with(['brand:id,name,code', 'assignedTo:id,name', 'convertedCustomer:id,name,code', 'duplicateOf:id,name', 'verifiedBy:id,name', 'createdBy:id,name'])
             // ⚠ Searching the NORMALISED phone as well as the raw one. A user who
             // types `01711000000` must find a lead captured as `+8801711000000`,
             // or duplicate detection is theatre.
@@ -55,10 +61,26 @@ class LeadController extends Controller
 
                 $query->where(fn ($q) => $q
                     ->where('name', 'like', "%{$search}%")
+                    ->orWhere('contact_name', 'like', "%{$search}%")
+                    ->orWhere('market', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhere('secondary_phone', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
-                    ->when($normalized, fn ($inner) => $inner->orWhere('phone_normalized', 'like', "%{$normalized}%")));
+                    ->when($normalized, fn ($inner) => $inner
+                        ->orWhere('phone_normalized', 'like', "%{$normalized}%")
+                        ->orWhere('secondary_phone_normalized', 'like', "%{$normalized}%")));
             })
+            // ⭐ The WORKING list by default (15 Sep 2026). An archived lead and a
+            // duplicate are both "somebody decided nobody should act on this",
+            // and an officer scrolling past them on a phone in a bazaar is an
+            // officer who calls the wrong record. Both stay one filter away.
+            ->when($filters['show'] === '', fn ($query) => $query->workable())
+            ->when($filters['show'] === 'duplicates', fn ($query) => $query->whereNotNull('duplicate_of_lead_id'))
+            ->when($filters['show'] === 'archived', fn ($query) => $query->whereNotNull('archived_at'))
+            ->when($filters['lead_type'], fn ($query, $type) => $query->where('lead_type', $type))
+            ->when($filters['verification'] === 'verified', fn ($query) => $query->whereNotNull('verified_at'))
+            ->when($filters['verification'] === 'unverified', fn ($query) => $query->whereNull('verified_at'))
+            ->when($filters['district'], fn ($query, $district) => $query->where('district', $district))
             ->when($filters['status'], fn ($query, $status) => $query->where('status', $status))
             ->when($filters['brand_id'], fn ($query, $brandId) => $brandId === 'none'
                 ? $query->whereNull('brand_id')
@@ -71,10 +93,30 @@ class LeadController extends Controller
             ->withQueryString()
             ->through(fn (Lead $lead) => [
                 'id' => $lead->id,
+                'lead_type' => $lead->lead_type->value,
+                'lead_type_label' => $lead->lead_type->label(),
                 'name' => $lead->name,
+                'contact_name' => $lead->contact_name,
                 'phone' => $lead->phone,
+                'secondary_phone' => $lead->secondary_phone,
                 'email' => $lead->email,
                 'address' => $lead->address,
+                'district' => $lead->district,
+                'thana' => $lead->thana,
+                'area' => $lead->area,
+                'market' => $lead->market,
+                'landmark' => $lead->landmark,
+                // ⭐ Slice 1's lifecycle, finally on the screen. Unverified is
+                // a normal, working state (Joy's decision 1), so it is shown as
+                // a fact about the lead, never as an error.
+                'is_verified' => $lead->isVerified(),
+                'verified_by' => $lead->verifiedBy?->name,
+                // ⚠ A date string built on the server, in the app's own Asia/Dhaka
+                // clock (C12). A timestamp sliced in the browser printed dates a
+                // day early on 13 Sep.
+                'verified_on' => $lead->verified_at?->toDateString(),
+                'is_archived' => $lead->isArchived(),
+                'created_by' => $lead->createdBy?->name,
                 'status' => $lead->status->value,
                 'status_label' => $lead->status->label(),
                 'brand_id' => $lead->brand_id,
@@ -108,8 +150,14 @@ class LeadController extends Controller
             'sources' => LeadSource::active()->orderBy('name')->get(['id', 'name', 'code']),
             'campaigns' => Campaign::active()->orderBy('name')->get(['id', 'name', 'code', 'lead_source_id']),
             'lost_reasons' => Reason::forContext('lead_lost')->active()->orderBy('name')->get(['id', 'name']),
-            'agents' => $this->businessUsers($businessId),
+            'agents' => $this->businessUsers($businessId, $request->user()),
             'can_assign' => $request->user()->can('crm.leads.assign'),
+            'lead_types' => collect(LeadType::selectable())
+                ->map(fn (LeadType $type) => ['value' => $type->value, 'label' => $type->label(), 'is_shop' => $type->isShop()])
+                ->values(),
+            // ⚠ The dataset's own spellings, so the filter and the form agree
+            // with what validation will accept.
+            'districts' => collect(BdGeo::districts())->pluck('name')->values(),
             // ⚠⚠ Without this prop the convert endpoint had NO caller. The route,
             // the action, the permission and seventeen tests all shipped on
             // 9 August; the screen was never brought forward, so no lead in this
@@ -157,7 +205,9 @@ class LeadController extends Controller
 
         // ⚠ Both queries run inside BusinessScope, so a match can never come from
         // another tenant. That is asserted by a test, not assumed.
-        $leads = Lead::where('phone_normalized', $normalized)
+        // ⚠ On either phone of the existing lead (slice 2b): a shop's second
+        // number typed as somebody's first is the same shop.
+        $leads = Lead::query()->reachableOn($normalized)
             ->when($request->integer('ignore_lead_id'), fn ($q, $id) => $q->whereKeyNot($id))
             ->limit(10)
             ->get(['id', 'name', 'phone', 'status'])
@@ -176,7 +226,7 @@ class LeadController extends Controller
         $visibility = app(LeadVisibility::class);
 
         $heldElsewhere = Lead::withoutGlobalScope(LeadVisibilityScope::class)
-            ->where('phone_normalized', $normalized)
+            ->reachableOn($normalized)
             ->when($request->integer('ignore_lead_id'), fn ($q, $id) => $q->whereKeyNot($id))
             ->with('assignedTo:id,name')
             ->limit(10)
@@ -352,13 +402,28 @@ class LeadController extends Controller
     {
         $businessId = $lead?->business_id ?? app(BusinessContext::class)->id();
 
+        // The type decides whether a location is required, so it is read before
+        // the rules are built. An edit that does not send one keeps the lead's.
+        $type = LeadType::tryFrom((string) $request->input('lead_type')) ?? $lead?->lead_type ?? LeadType::Customer;
+
         $validated = $request->validate([
             // ⚠ Nullable: C-CRM-16 keeps every personal field blankable so a
             // future privacy rule can anonymise without destroying history.
             'name' => ['nullable', 'string', 'max:255'],
+            'contact_name' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
+            'secondary_phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string'],
+
+            // ⭐ Build plan D8 (15 Sep 2026): a shop, a distributor and a supplier
+            // are PLACES, and a place with no district and thana is one nobody
+            // can visit or count. A consumer's location stays optional.
+            'district' => [Rule::requiredIf($type->isShop()), 'nullable', 'string', 'max:60'],
+            'thana' => [Rule::requiredIf($type->isShop()), 'nullable', 'string', 'max:80'],
+            'area' => ['nullable', 'string', 'max:120'],
+            'market' => ['nullable', 'string', 'max:160'],
+            'landmark' => ['nullable', 'string', 'max:255'],
 
             // ⚠ Nullable rather than required, although every lead has a type.
             // The column and the model both default to `customer`, so a capture
@@ -424,10 +489,16 @@ class LeadController extends Controller
             unset($validated['assigned_to_user_id']);
         }
 
+        $this->guardAssigneeIsWithinReach($validated, $request->user());
+
+        $validated = $this->placeOnTheMap($validated);
+
         $this->guardShopPhoneIsNotAlreadyTaken($validated, $lead, $businessId, $request->user());
 
         $leadFields = collect($validated)->only([
-            'name', 'phone', 'email', 'address', 'status', 'lead_type', 'brand_id',
+            'name', 'contact_name', 'phone', 'secondary_phone', 'email', 'address',
+            'district', 'thana', 'area', 'market', 'landmark',
+            'status', 'lead_type', 'brand_id',
             'assigned_to_user_id', 'qualification_note', 'lost_reason_id', 'note',
         ])->all();
 
@@ -446,13 +517,97 @@ class LeadController extends Controller
     }
 
     /**
-     * Users who belong to this business, through the pivot.
+     * ⚠ The assign list on the screen is narrowed to the reader's own team, and
+     * a list is a suggestion: the POST is what has to refuse. Without this an
+     * ASM could hand a lead to anybody in the business by editing the request,
+     * and it would disappear from his own list the moment he saved.
+     *
+     * @param  array<string, mixed>  $validated
+     *
+     * @throws ValidationException
+     */
+    private function guardAssigneeIsWithinReach(array $validated, User $reader): void
+    {
+        $assignee = $validated['assigned_to_user_id'] ?? null;
+        $visibility = app(LeadVisibility::class);
+
+        if ($assignee === null || $visibility->seesEverything($reader)) {
+            return;
+        }
+
+        if (! in_array((int) $assignee, $visibility->userIdsFor($reader), true)) {
+            throw ValidationException::withMessages([
+                'assigned_to_user_id' => 'You can hand a lead only to yourself or somebody in your team.',
+            ]);
+        }
+    }
+
+    /**
+     * District, thana and area in the dataset's own spelling, or a refusal.
+     *
+     * ⭐ Stored as BdGeo spells them, so "Chittagong" typed by one officer and
+     * "Chattogram" picked by another are one place in every filter and count.
+     * Each level is checked INSIDE the one above it: a thana that exists, but
+     * in another district, is refused rather than quietly describing nowhere.
+     *
+     * ⚠ With no dataset loaded (config `geo.dataset` empty) geography has no
+     * opinion, and what was typed is kept as typed - the same "ask, never
+     * guess" fallback every other BdGeo caller uses.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     *
+     * @throws ValidationException
+     */
+    private function placeOnTheMap(array $validated): array
+    {
+        if (BdGeo::districts() === []) {
+            return $validated;
+        }
+
+        $district = $validated['district'] ?? null;
+        $thana = $validated['thana'] ?? null;
+        $area = $validated['area'] ?? null;
+
+        if (filled($district)) {
+            $validated['district'] = BdGeo::districtNamed($district)
+                ?? throw ValidationException::withMessages(['district' => 'Pick the district from the list.']);
+        } elseif (filled($thana) || filled($area)) {
+            throw ValidationException::withMessages(['district' => 'Pick the district first.']);
+        }
+
+        if (filled($thana)) {
+            $validated['thana'] = BdGeo::thanaNamed($validated['district'], $thana)
+                ?? throw ValidationException::withMessages(['thana' => 'Pick a thana of '.$validated['district'].' from the list.']);
+        } elseif (filled($area)) {
+            throw ValidationException::withMessages(['thana' => 'Pick the thana first.']);
+        }
+
+        if (filled($area)) {
+            $validated['area'] = BdGeo::areaNamed($validated['district'], $validated['thana'], $area)
+                ?? throw ValidationException::withMessages(['area' => 'Pick an area of '.$validated['thana'].' from the list, or leave it empty.']);
+        }
+
+        return $validated;
+    }
+
+    /**
+     * The people this reader may hand a lead to, or filter the list by.
+     *
+     * ⭐ Everybody in the business for somebody who sees every lead; otherwise
+     * themself and their team (15 Sep 2026). Two reasons, one rule: an ASM who
+     * hands a lead to somebody outside his team would watch it vanish from his
+     * own list, and an officer's filter listing every login in the business is a
+     * staff directory he has no use for.
      *
      * @return Collection<int, array{id:int, name:string}>
      */
-    private function businessUsers(int $businessId): Collection
+    private function businessUsers(int $businessId, User $reader): Collection
     {
+        $visibility = app(LeadVisibility::class);
+
         return User::whereHas('businesses', fn ($q) => $q->where('businesses.id', $businessId))
+            ->when(! $visibility->seesEverything($reader), fn ($q) => $q->whereIn('users.id', $visibility->userIdsFor($reader)))
             ->orderBy('name')
             ->get(['users.id', 'users.name'])
             ->map(fn ($user) => ['id' => $user->id, 'name' => $user->name]);
@@ -545,7 +700,10 @@ class LeadController extends Controller
                 Rule::exists('customers', 'id')->where('business_id', $businessId)],
             'code' => ['nullable', 'string', 'max:64'],
             'name' => ['nullable', 'string', 'max:255'],
-            'type' => ['nullable', 'string', 'max:30'],
+            // ⚠ Against the enum since 15 Sep 2026. A free string reached the
+            // customer's enum cast and failed as a 500 on save instead of a
+            // sentence under the field.
+            'type' => ['nullable', Rule::enum(CustomerType::class)],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string'],

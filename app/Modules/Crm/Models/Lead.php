@@ -9,8 +9,8 @@ use App\Modules\Crm\Scopes\LeadVisibilityScope;
 use App\Modules\Crm\Support\LeadVisibility;
 use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
-use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Sales\Models\Customer;
@@ -77,7 +77,8 @@ class Lead extends Model implements ControlsAttachmentAccess
      * supplying it could make the shop's identity disagree with its phone.
      */
     protected $fillable = [
-        'business_id', 'lead_type', 'name', 'phone', 'email', 'address',
+        'business_id', 'lead_type', 'name', 'contact_name', 'phone', 'secondary_phone', 'email', 'address',
+        'district', 'thana', 'area', 'market', 'landmark',
         'brand_id', 'status', 'assigned_to_user_id', 'qualification_note',
         'lost_reason_id', 'lost_at', 'note',
     ];
@@ -143,6 +144,20 @@ class Lead extends Model implements ControlsAttachmentAccess
     }
 
     /**
+     * Leads reachable on a normalised number, on EITHER of their phones.
+     *
+     * ⚠ Both directions in one place: a new lead's main number matching an old
+     * lead's second number is the same shop as the reverse, and a duplicate
+     * check that looked only at `phone_normalized` would miss half of them.
+     */
+    public function scopeReachableOn(Builder $query, string $normalized): Builder
+    {
+        return $query->where(fn (Builder $inner) => $inner
+            ->where($this->qualifyColumn('phone_normalized'), $normalized)
+            ->orWhere($this->qualifyColumn('secondary_phone_normalized'), $normalized));
+    }
+
+    /**
      * ⚠⚠ THE MATCHING KEY IS DERIVED HERE, IN ONE PLACE, so it cannot drift from
      * `phone`. Saving is the only moment both are known, and a controller that
      * remembered to set one but not the other would produce a lead nobody can
@@ -157,6 +172,9 @@ class Lead extends Model implements ControlsAttachmentAccess
 
         static::saving(function (self $lead): void {
             $lead->phone_normalized = PhoneIdentity::normalize($lead->phone);
+            // ⚠ Derived beside the first, for the same reason. Never unique:
+            // see the migration that added it.
+            $lead->secondary_phone_normalized = PhoneIdentity::normalize($lead->secondary_phone);
 
             // ⭐⭐ The shop's identity, derived in the SAME place and the same
             // moment as the matching key, because it is the same fact seen
@@ -217,7 +235,7 @@ class Lead extends Model implements ControlsAttachmentAccess
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'phone', 'email', 'status', 'lead_type', 'brand_id', 'assigned_to_user_id', 'lost_reason_id', 'converted_customer_id', 'verified_at', 'archived_at'])
+            ->logOnly(['name', 'contact_name', 'phone', 'secondary_phone', 'email', 'district', 'thana', 'area', 'market', 'status', 'lead_type', 'brand_id', 'assigned_to_user_id', 'lost_reason_id', 'converted_customer_id', 'verified_at', 'archived_at'])
             ->logOnlyDirty()->dontSubmitEmptyLogs();
     }
 
