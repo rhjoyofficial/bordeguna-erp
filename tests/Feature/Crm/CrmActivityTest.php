@@ -373,6 +373,8 @@ it('keeps both screens away from somebody with no CRM permission', function () {
 it('lets the screen set every field the activity model can hold', function () {
     // ⚠⚠ The products.barcode failure class, applied here. A fillable field the
     // screen cannot set is a field that is dead in production.
+    // ⚠ Two posts since 15 Sep 2026: only a call has a duration and only a visit
+    // has a location (CRM slice 2d), so no single activity can hold every field.
     $this->actingAs($this->owner)->post("/crm/lead/{$this->lead->id}/activities", [
         'type' => 'call', 'direction' => 'inbound',
         'occurred_at' => '2026-08-09 09:00:00',
@@ -380,12 +382,19 @@ it('lets the screen set every field the activity model can hold', function () {
         'outcome' => 'connected', 'duration_seconds' => 240,
     ])->assertRedirect();
 
-    $activity = CrmActivity::sole();
+    $this->actingAs($this->owner)->post("/crm/lead/{$this->lead->id}/activities", [
+        'type' => 'visit', 'direction' => 'outbound',
+        'occurred_at' => '2026-08-09 10:00:00',
+        'summary' => 'At the shop', 'body' => 'Detail here', 'outcome' => 'met',
+        'latitude' => '23.8103000', 'longitude' => '90.4125000', 'gps_accuracy_meters' => '12.5',
+    ])->assertSessionHasNoErrors();
+
+    $activities = CrmActivity::all();
 
     $expected = collect((new CrmActivity)->getFillable())
         ->reject(fn ($f) => in_array($f, ['business_id', 'subject_type', 'subject_id'], true));
 
-    $unsettable = $expected->reject(fn ($f) => filled($activity->{$f}))->values()->all();
+    $unsettable = $expected->reject(fn ($f) => $activities->contains(fn (CrmActivity $a) => filled($a->{$f})))->values()->all();
 
     expect($unsettable)->toBe([], 'these cannot be set from the screen: '.implode(', ', $unsettable));
 });

@@ -9,6 +9,7 @@ use App\Modules\Crm\Actions\ConvertLead;
 use App\Modules\Crm\Actions\LinkDuplicateLead;
 use App\Modules\Crm\Actions\SaveLeadProfile;
 use App\Modules\Crm\Actions\VerifyLead;
+use App\Modules\Crm\Enums\ActivityType;
 use App\Modules\Crm\Enums\CrmLookupList;
 use App\Modules\Crm\Enums\LeadImportance;
 use App\Modules\Crm\Enums\LeadPotential;
@@ -23,6 +24,7 @@ use App\Modules\Crm\Models\LeadSource;
 use App\Modules\Crm\Scopes\LeadVisibilityScope;
 use App\Modules\Crm\Support\ApplyLeadCadences;
 use App\Modules\Crm\Support\LeadVisibility;
+use App\Modules\Crm\Support\MapLink;
 use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -30,6 +32,7 @@ use App\Modules\Inventory\Models\Brand;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Support\BdGeo;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -64,6 +67,12 @@ class LeadController extends Controller
                 'verifiedBy:id,name', 'createdBy:id,name',
                 'retailerProfile.shopType:id,name', 'distributorProfile', 'supplierProfile.supplierType:id,name',
                 'competitorBrands:crm_lookups.id,crm_lookups.name', 'coverageAreas:id,lead_id,district,thana',
+            ])
+            // ⭐ Plan D14: the pinned location, read from the first visit that
+            // carried GPS, so an officer can open the way to a shop from the list.
+            ->addSelect([
+                'pin_latitude' => $this->firstLocatedVisit('latitude'),
+                'pin_longitude' => $this->firstLocatedVisit('longitude'),
             ])
             // ⚠ Searching the NORMALISED phone as well as the raw one. A user who
             // types `01711000000` must find a lead captured as `+8801711000000`,
@@ -132,6 +141,9 @@ class LeadController extends Controller
                 'potential' => $lead->potential?->value,
                 'importance' => $lead->importance?->value,
                 'profile' => $this->profileRow($lead),
+                'map_url' => $lead->pin_latitude !== null && $lead->pin_longitude !== null
+                    ? MapLink::to($lead->pin_latitude, $lead->pin_longitude)
+                    : null,
                 'status' => $lead->status->value,
                 'status_label' => $lead->status->label(),
                 'brand_id' => $lead->brand_id,
@@ -567,6 +579,29 @@ class LeadController extends Controller
                 'utm_campaign', 'utm_content', 'utm_term', 'external_lead_id', 'occurred_at',
             ])->all(),
         ];
+    }
+
+    /**
+     * One coordinate of a lead's first visit that carried GPS (plan D14), as a
+     * correlated subquery so the page of twenty leads stays one query.
+     *
+     * ⚠ Mirrors CrmActivity::scopeLocatedVisitsOf: a visit, both coordinates,
+     * earliest by when it HAPPENED. Unscoped on purpose: it is tied to a lead
+     * this reader can already see, so the activity's own visibility scope would
+     * only add a second copy of the same condition.
+     */
+    private function firstLocatedVisit(string $column): QueryBuilder
+    {
+        return DB::table('crm_activities')
+            ->select($column)
+            ->whereColumn('crm_activities.subject_id', 'leads.id')
+            ->where('crm_activities.subject_type', (new Lead)->getMorphClass())
+            ->where('crm_activities.type', ActivityType::Visit->value)
+            ->whereNotNull('crm_activities.latitude')
+            ->whereNotNull('crm_activities.longitude')
+            ->orderBy('crm_activities.occurred_at')
+            ->orderBy('crm_activities.id')
+            ->limit(1);
     }
 
     /**

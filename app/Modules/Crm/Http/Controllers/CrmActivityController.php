@@ -18,6 +18,7 @@ use App\Modules\Crm\Models\DistributorInspection;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Crm\Models\SupplierLeadSample;
 use App\Modules\Crm\Support\LeadVisibility;
+use App\Modules\Crm\Support\MapLink;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Brand;
@@ -80,7 +81,7 @@ class CrmActivityController extends Controller
         $activities = CrmActivity::query()
             ->where('subject_type', $subject->getMorphClass())
             ->where('subject_id', $subject->getKey())
-            ->with('recordedBy:id,name')
+            ->with(['recordedBy:id,name', 'attachments'])
             ->orderByDesc('occurred_at')
             ->orderByDesc('id')
             ->get()
@@ -97,7 +98,16 @@ class CrmActivityController extends Controller
                 'outcome' => $a->outcome,
                 'duration_seconds' => $a->duration_seconds,
                 'by' => $a->recordedBy?->name,
+                // ⭐ CRM slice 2d: a visit's optional proof.
+                'location' => $this->locationRow($a),
+                'photos' => $a->attachments
+                    ->where('collection', CrmActivity::PHOTOS)
+                    ->map(fn (Attachment $file) => ['id' => $file->id, 'name' => $file->original_name, 'url' => $file->url()])
+                    ->values()->all(),
             ]);
+
+        // ⭐ Plan D14: the pinned location is the FIRST visit that carried GPS.
+        $pinned = CrmActivity::query()->locatedVisitsOf($subject)->with('recordedBy:id,name')->first();
 
         $tasks = CrmTask::query()
             ->where('subject_type', $subject->getMorphClass())
@@ -130,6 +140,10 @@ class CrmActivityController extends Controller
                 // story stays reachable without copying any history.
                 'converted_customer_id' => $type === 'lead' ? $subject->converted_customer_id : null,
                 'lead_type' => $type === 'lead' ? $subject->lead_type->value : null,
+                'pinned' => $pinned === null ? null : $this->locationRow($pinned) + [
+                    'visited_at' => $pinned->occurred_at?->toDateTimeString(),
+                    'by' => $pinned->recordedBy?->name,
+                ],
             ],
             // ⭐ CRM slice 2c. Sent for every lead, not only for the matching type:
             // a lead whose type was corrected keeps what was recorded under the
@@ -215,6 +229,18 @@ class CrmActivityController extends Controller
             'body' => ['nullable', 'string'],
             'outcome' => ['nullable', 'string', 'max:30'],
             'duration_seconds' => ['nullable', 'integer', 'min:0'],
+            // ⭐ CRM slice 2d: a visit's optional proof (Joy's answer 2). The
+            // rules about WHEN they are allowed live in LogCrmActivity; these are
+            // only the shapes.
+            'latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:longitude,gps_accuracy_meters'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:latitude,gps_accuracy_meters'],
+            'gps_accuracy_meters' => ['nullable', 'numeric', 'min:0', 'required_with:latitude,longitude'],
+            'photos' => ['nullable', 'array', 'max:'.LogCrmActivity::MAX_PHOTOS],
+            'photos.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
+        ], [
+            'latitude.required_with' => 'The location came through incomplete. Add it again, or record the visit without it.',
+            'longitude.required_with' => 'The location came through incomplete. Add it again, or record the visit without it.',
+            'gps_accuracy_meters.required_with' => 'The location came through incomplete. Add it again, or record the visit without it.',
         ]);
 
         $action->handle(
@@ -227,6 +253,12 @@ class CrmActivityController extends Controller
             body: $data['body'] ?? null,
             outcome: $data['outcome'] ?? null,
             durationSeconds: $data['duration_seconds'] ?? null,
+            location: isset($data['latitude']) ? [
+                'latitude' => $data['latitude'],
+                'longitude' => $data['longitude'],
+                'accuracy' => $data['gps_accuracy_meters'],
+            ] : null,
+            photos: $request->file('photos', []),
         );
 
         return back()->with('success', 'Recorded.');
@@ -332,6 +364,24 @@ class CrmActivityController extends Controller
      * updateOrCreate; that would have destroyed the first statement every time
      * somebody made a second one.
      */
+    /**
+     * @return array{latitude: string, longitude: string, accuracy_meters: int|null, map_url: string}|null
+     */
+    private function locationRow(CrmActivity $activity): ?array
+    {
+        if (! $activity->hasLocation()) {
+            return null;
+        }
+
+        return [
+            'latitude' => $activity->latitude,
+            'longitude' => $activity->longitude,
+            // Whole metres: "within 12 m" is what anybody reads.
+            'accuracy_meters' => $activity->gps_accuracy_meters === null ? null : (int) round((float) $activity->gps_accuracy_meters),
+            'map_url' => MapLink::to($activity->latitude, $activity->longitude),
+        ];
+    }
+
     /**
      * @return list<array<string, mixed>>
      */

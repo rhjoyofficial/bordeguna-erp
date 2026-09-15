@@ -1,0 +1,269 @@
+import InputError from '@/components/input-error';
+import { SearchSelect } from '@/components/search-select';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useForm } from '@inertiajs/react';
+import { MapPin } from 'lucide-react';
+import { FormEventHandler, useRef, useState } from 'react';
+
+export interface ActivityTypeOption {
+    value: string;
+    label: string;
+    has_direction: boolean;
+    has_duration: boolean;
+}
+
+type Located = { latitude: number; longitude: number; accuracy: number };
+
+type ActivityForm = {
+    type: string;
+    direction: string;
+    occurred_at: string;
+    summary: string;
+    body: string;
+    outcome: string;
+    duration_seconds: string;
+    latitude: number | null;
+    longitude: number | null;
+    gps_accuracy_meters: number | null;
+    photos: File[];
+};
+
+const EMPTY: ActivityForm = {
+    type: 'call',
+    direction: 'outbound',
+    occurred_at: '',
+    summary: '',
+    body: '',
+    outcome: '',
+    duration_seconds: '',
+    latitude: null,
+    longitude: null,
+    gps_accuracy_meters: null,
+    photos: [],
+};
+
+/**
+ * Record what happened with a lead or a customer. Append-only once saved.
+ *
+ * ⭐ CRM slice 2d (Joy's answer 2): a VISIT may carry a location from the phone
+ * and photos, both optional. Nothing waits for either, and no other kind of
+ * activity offers them.
+ *
+ * ⚠ The location is taken only when the officer presses the button, the same
+ * way the attendance clock asks, so the ERP never reads a position nobody chose
+ * to share.
+ */
+export function ActivityLogForm({
+    subject,
+    activityTypes,
+    directions,
+}: {
+    subject: { kind: string; id: number };
+    activityTypes: ActivityTypeOption[];
+    directions: { value: string; label: string }[];
+}) {
+    const photoInput = useRef<HTMLInputElement>(null);
+    const [locating, setLocating] = useState(false);
+    const [locationError, setLocationError] = useState<string | null>(null);
+    const log = useForm<ActivityForm>(EMPTY);
+
+    const chosen = activityTypes.find((t) => t.value === log.data.type);
+    const isVisit = log.data.type === 'visit';
+    const located: Located | null =
+        log.data.latitude !== null && log.data.longitude !== null && log.data.gps_accuracy_meters !== null
+            ? { latitude: log.data.latitude, longitude: log.data.longitude, accuracy: log.data.gps_accuracy_meters }
+            : null;
+
+    // ⚠ Proof leaves the browser only with a visit. A location taken for a visit
+    // and then left in the form when the kind changes to a call is dropped here,
+    // and dropped again on the server.
+    log.transform((d) => (d.type === 'visit' ? d : { ...d, latitude: null, longitude: null, gps_accuracy_meters: null, photos: [] }));
+
+    const clearProof = () => {
+        log.setData((d) => ({ ...d, latitude: null, longitude: null, gps_accuracy_meters: null, photos: [] }));
+        if (photoInput.current) photoInput.current.value = '';
+        setLocationError(null);
+    };
+
+    const addLocation = () => {
+        setLocationError(null);
+
+        if (!navigator.geolocation) {
+            setLocationError('This browser cannot share a location. Record the visit without it.');
+            return;
+        }
+
+        setLocating(true);
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setLocating(false);
+                log.setData((d) => ({
+                    ...d,
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    gps_accuracy_meters: Math.round(position.coords.accuracy * 100) / 100,
+                }));
+            },
+            (error) => {
+                setLocating(false);
+                setLocationError(
+                    error.code === error.PERMISSION_DENIED
+                        ? 'Location is blocked for this site. Allow it in the browser, or record the visit without it.'
+                        : 'The phone could not find its location. Try again outside, or record the visit without it.',
+                );
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+        );
+    };
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        log.post(`/crm/${subject.kind}/${subject.id}/activities`, {
+            preserveScroll: true,
+            forceFormData: isVisit && log.data.photos.length > 0,
+            onSuccess: () => {
+                log.reset();
+                clearProof();
+            },
+        });
+    };
+
+    const errors = log.errors as Record<string, string | undefined>;
+    const photoError = Object.entries(errors).find(([key]) => key.startsWith('photos'))?.[1];
+
+    return (
+        <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-md border p-4">
+            <p className="text-sm font-medium">Record what happened</p>
+            <div className="flex flex-wrap items-end gap-3">
+                <div className="grid gap-2">
+                    <Label htmlFor="type" required>
+                        Kind
+                    </Label>
+                    <SearchSelect fit id="type" value={log.data.type} onChange={(e) => log.setData('type', e.target.value)}>
+                        {activityTypes.map((t) => (
+                            <option key={t.value} value={t.value}>
+                                {t.label}
+                            </option>
+                        ))}
+                    </SearchSelect>
+                </div>
+                {/* ⚠ A note has no direction and only a call has a
+                    duration. Hidden rather than stored and ignored. */}
+                {chosen?.has_direction && (
+                    <div className="grid gap-2">
+                        <Label htmlFor="direction">Direction</Label>
+                        <SearchSelect fit id="direction" value={log.data.direction} onChange={(e) => log.setData('direction', e.target.value)}>
+                            {directions.map((d) => (
+                                <option key={d.value} value={d.value}>
+                                    {d.label}
+                                </option>
+                            ))}
+                        </SearchSelect>
+                    </div>
+                )}
+                {chosen?.has_duration && (
+                    <div className="grid gap-2">
+                        <Label htmlFor="duration_seconds">Seconds</Label>
+                        <Input
+                            id="duration_seconds"
+                            className="w-24"
+                            inputMode="numeric"
+                            value={log.data.duration_seconds}
+                            onChange={(e) => log.setData('duration_seconds', e.target.value)}
+                        />
+                    </div>
+                )}
+                <div className="grid gap-2">
+                    {/* ⚠⚠ When it HAPPENED, not when it was typed. */}
+                    <Label htmlFor="occurred_at">When (blank = now)</Label>
+                    <Input
+                        id="occurred_at"
+                        type="datetime-local"
+                        value={log.data.occurred_at}
+                        onChange={(e) => log.setData('occurred_at', e.target.value)}
+                    />
+                    <InputError message={log.errors.occurred_at} />
+                </div>
+            </div>
+            <div className="grid gap-2">
+                <Label htmlFor="summary" required>
+                    What happened
+                </Label>
+                <Input
+                    id="summary"
+                    value={log.data.summary}
+                    onChange={(e) => log.setData('summary', e.target.value)}
+                    placeholder="Wants 5kg, will confirm Thursday"
+                />
+                <InputError message={log.errors.summary} />
+            </div>
+            <div className="grid gap-2">
+                <Label htmlFor="body">Detail (optional)</Label>
+                <textarea
+                    id="body"
+                    className="border-input bg-background min-h-20 rounded-md border p-2 text-sm"
+                    value={log.data.body}
+                    onChange={(e) => log.setData('body', e.target.value)}
+                />
+            </div>
+
+            {isVisit && (
+                <div className="flex flex-col gap-3 rounded-md border border-dashed p-3">
+                    <p className="text-muted-foreground text-xs">Proof of the visit, both optional.</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                        {located ? (
+                            <>
+                                <span className="flex items-center gap-1 text-sm">
+                                    <MapPin className="size-4" />
+                                    Location added, within {Math.round(located.accuracy)} m
+                                </span>
+                                <a
+                                    className="text-sm underline"
+                                    href={`https://www.google.com/maps/search/?api=1&query=${located.latitude},${located.longitude}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                >
+                                    Check on the map
+                                </a>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => log.setData((d) => ({ ...d, latitude: null, longitude: null, gps_accuracy_meters: null }))}
+                                >
+                                    Remove
+                                </Button>
+                            </>
+                        ) : (
+                            <Button type="button" variant="outline" onClick={addLocation} disabled={locating}>
+                                <MapPin className="size-4" />
+                                {locating ? 'Finding your location…' : 'Add my location'}
+                            </Button>
+                        )}
+                    </div>
+                    <InputError message={locationError ?? errors.latitude ?? errors.longitude ?? errors.gps_accuracy_meters} />
+                    <div className="grid gap-2">
+                        <Label htmlFor="visit_photos">Photos (up to 6)</Label>
+                        <input
+                            ref={photoInput}
+                            id="visit_photos"
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            multiple
+                            className="text-sm"
+                            onChange={(e) => log.setData('photos', Array.from(e.target.files ?? []))}
+                        />
+                        <InputError message={photoError} />
+                    </div>
+                </div>
+            )}
+
+            <div>
+                <Button disabled={log.processing}>Record</Button>
+                <span className="text-muted-foreground ml-3 text-xs">This cannot be edited afterwards.</span>
+            </div>
+        </form>
+    );
+}

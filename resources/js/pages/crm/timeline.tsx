@@ -1,3 +1,4 @@
+import { ActivityLogForm, type ActivityTypeOption } from '@/components/crm/activity-log-form';
 import { type Inspection, LeadInspections } from '@/components/crm/lead-inspections';
 import { LeadSamples, type Sample } from '@/components/crm/lead-samples';
 import InputError from '@/components/input-error';
@@ -9,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
+import { MapPin } from 'lucide-react';
 import { FormEventHandler, useState } from 'react';
 
 interface Activity {
@@ -22,6 +24,16 @@ interface Activity {
     outcome: string | null;
     duration_seconds: number | null;
     by: string | null;
+    location: Located | null;
+    photos: { id: number; name: string; url: string }[];
+}
+
+/** Where a visit's phone said it was (CRM slice 2d). */
+interface Located {
+    latitude: string;
+    longitude: string;
+    accuracy_meters: number | null;
+    map_url: string;
 }
 
 interface Task {
@@ -37,13 +49,6 @@ interface Task {
     assigned_to_user_id: number | null;
     completed_at: string | null;
     completed_by: string | null;
-}
-
-interface ActivityTypeOption {
-    value: string;
-    label: string;
-    has_direction: boolean;
-    has_duration: boolean;
 }
 
 interface Interest {
@@ -91,6 +96,7 @@ export default function CrmTimeline({
         phone: string | null;
         converted_customer_id: number | null;
         lead_type: string | null;
+        pinned: (Located & { visited_at: string | null; by: string | null }) | null;
     };
     activities: Activity[];
     tasks: Task[];
@@ -120,16 +126,6 @@ export default function CrmTimeline({
         { title: subject.name ?? `${subject.kind} #${subject.id}`, href: `/crm/${subject.kind}/${subject.id}/timeline` },
     ];
 
-    const log = useForm({
-        type: 'call',
-        direction: 'outbound',
-        occurred_at: '',
-        summary: '',
-        body: '',
-        outcome: '',
-        duration_seconds: '',
-    });
-
     const task = useForm({ title: '', note: '', due_at: '', assigned_to_user_id: '' });
 
     const [interestKind, setInterestKind] = useState('product');
@@ -141,16 +137,6 @@ export default function CrmTimeline({
         requested_unit_id: '',
         note: '',
     });
-
-    const chosen = activityTypes.find((t) => t.value === log.data.type);
-
-    const submitLog: FormEventHandler = (e) => {
-        e.preventDefault();
-        log.post(`/crm/${subject.kind}/${subject.id}/activities`, {
-            preserveScroll: true,
-            onSuccess: () => log.reset(),
-        });
-    };
 
     const submitTask: FormEventHandler = (e) => {
         e.preventDefault();
@@ -180,97 +166,25 @@ export default function CrmTimeline({
                         {subject.phone ?? 'No phone'} · {subject.kind}
                         {subject.converted_customer_id && ' · converted to a customer'}
                     </p>
+                    {/* ⭐ Plan D14: the first visit that carried GPS pins the place. */}
+                    {subject.pinned && (
+                        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm">
+                            <MapPin className="size-4" />
+                            <a className="underline" href={subject.pinned.map_url} target="_blank" rel="noreferrer">
+                                Open in Maps
+                            </a>
+                            <span className="text-muted-foreground text-xs">
+                                pinned by the first visit with a location, {subject.pinned.visited_at}
+                                {subject.pinned.by && ` · ${subject.pinned.by}`}
+                                {subject.pinned.accuracy_meters !== null && ` · within ${subject.pinned.accuracy_meters} m`}
+                            </span>
+                        </p>
+                    )}
                 </div>
 
                 {canRecord && (
                     <div className="grid gap-4 lg:grid-cols-2">
-                        <form
-                            onSubmit={submitLog}
-                            className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-md border p-4"
-                        >
-                            <p className="text-sm font-medium">Record what happened</p>
-                            <div className="flex flex-wrap items-end gap-3">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="type" required>
-                                        Kind
-                                    </Label>
-                                    <SearchSelect fit id="type" value={log.data.type} onChange={(e) => log.setData('type', e.target.value)}>
-                                        {activityTypes.map((t) => (
-                                            <option key={t.value} value={t.value}>
-                                                {t.label}
-                                            </option>
-                                        ))}
-                                    </SearchSelect>
-                                </div>
-                                {/* ⚠ A note has no direction and only a call has a
-                                    duration. Hidden rather than stored and ignored. */}
-                                {chosen?.has_direction && (
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="direction">Direction</Label>
-                                        <SearchSelect
-                                            fit
-                                            id="direction"
-                                            value={log.data.direction}
-                                            onChange={(e) => log.setData('direction', e.target.value)}
-                                        >
-                                            {directions.map((d) => (
-                                                <option key={d.value} value={d.value}>
-                                                    {d.label}
-                                                </option>
-                                            ))}
-                                        </SearchSelect>
-                                    </div>
-                                )}
-                                {chosen?.has_duration && (
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="duration_seconds">Seconds</Label>
-                                        <Input
-                                            id="duration_seconds"
-                                            className="w-24"
-                                            inputMode="numeric"
-                                            value={log.data.duration_seconds}
-                                            onChange={(e) => log.setData('duration_seconds', e.target.value)}
-                                        />
-                                    </div>
-                                )}
-                                <div className="grid gap-2">
-                                    {/* ⚠⚠ When it HAPPENED, not when it was typed. */}
-                                    <Label htmlFor="occurred_at">When (blank = now)</Label>
-                                    <Input
-                                        id="occurred_at"
-                                        type="datetime-local"
-                                        value={log.data.occurred_at}
-                                        onChange={(e) => log.setData('occurred_at', e.target.value)}
-                                    />
-                                    <InputError message={log.errors.occurred_at} />
-                                </div>
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="summary" required>
-                                    What happened
-                                </Label>
-                                <Input
-                                    id="summary"
-                                    value={log.data.summary}
-                                    onChange={(e) => log.setData('summary', e.target.value)}
-                                    placeholder="Wants 5kg, will confirm Thursday"
-                                />
-                                <InputError message={log.errors.summary} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="body">Detail (optional)</Label>
-                                <textarea
-                                    id="body"
-                                    className="border-input bg-background min-h-20 rounded-md border p-2 text-sm"
-                                    value={log.data.body}
-                                    onChange={(e) => log.setData('body', e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <Button disabled={log.processing}>Record</Button>
-                                <span className="text-muted-foreground ml-3 text-xs">This cannot be edited afterwards.</span>
-                            </div>
-                        </form>
+                        <ActivityLogForm subject={subject} activityTypes={activityTypes} directions={directions} />
 
                         <form
                             onSubmit={submitTask}
@@ -549,6 +463,27 @@ export default function CrmTimeline({
                                         {a.by && ` · ${a.by}`}
                                     </p>
                                     {a.body && <p className="mt-1 whitespace-pre-wrap">{a.body}</p>}
+                                    {a.location && (
+                                        <a
+                                            className="mt-1 flex w-fit items-center gap-1 text-xs underline"
+                                            href={a.location.map_url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                        >
+                                            <MapPin className="size-3" />
+                                            Location
+                                            {a.location.accuracy_meters !== null && `, within ${a.location.accuracy_meters} m`}
+                                        </a>
+                                    )}
+                                    {a.photos.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                            {a.photos.map((p) => (
+                                                <a key={p.id} href={p.url} target="_blank" rel="noreferrer" title={p.name}>
+                                                    <img src={p.url} alt={p.name} loading="lazy" className="h-20 w-20 rounded border object-cover" />
+                                                </a>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                             {activities.length === 0 && <p className="text-muted-foreground text-sm">Nothing recorded yet.</p>}

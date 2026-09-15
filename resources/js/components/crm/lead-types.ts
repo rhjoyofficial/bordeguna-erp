@@ -23,6 +23,8 @@ export interface Lead {
     potential: string | null;
     importance: string | null;
     profile: LeadProfile;
+    /** The first visit with a location, as a Google Maps link (plan D14). */
+    map_url: string | null;
     status: string;
     status_label: string;
     brand_id: number | null;

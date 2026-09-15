@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
+use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\DistributorInspection;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Models\Business;
@@ -54,6 +55,9 @@ class FileVisibility
         // ⚠ Photos from a distributor inspection (CRM slice 2c): the lead's files by
         // another route, so the lead's permission AND its row scope.
         DistributorInspection::class => 'crm.leads.view',
+        // ⚠ Photos from a visit (CRM slice 2d). Row-scoped below: a visit on a
+        // lead is found only where the lead is.
+        CrmActivity::class => 'crm.leads.view',
 
         // ⚠ People's documents. Photographs, national id, contracts.
         Employee::class => 'hrm.employees.manage',
@@ -96,6 +100,7 @@ class FileVisibility
     private const ROW_SCOPED = [
         Lead::class,
         DistributorInspection::class,
+        CrmActivity::class,
     ];
 
     /** The collection standalone files live in, on the Business itself. */

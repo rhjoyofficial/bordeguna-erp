@@ -3,6 +3,7 @@ import { type Lead, placeLine } from '@/components/crm/lead-types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link, router } from '@inertiajs/react';
+import { MapPin } from 'lucide-react';
 
 /**
  * The leads, as a table on a desk and as cards on a phone.
@@ -79,6 +80,7 @@ export function LeadList({
                                 <td className="p-3">
                                     {placeLine(lead) || <span className="text-muted-foreground">-</span>}
                                     {lead.brand && <div className="text-muted-foreground text-xs">{lead.brand}</div>}
+                                    <MapLink lead={lead} />
                                     <div>
                                         <ProfileLine lead={lead} />
                                     </div>
@@ -145,6 +147,20 @@ function LeadName({ lead }: { lead: Lead }) {
     );
 }
 
+/** ⭐ Plan D14: the way to the shop, pinned by its first visit with a location. */
+function MapLink({ lead }: { lead: Lead }) {
+    if (!lead.map_url) {
+        return null;
+    }
+
+    return (
+        <a href={lead.map_url} target="_blank" rel="noreferrer" className="flex w-fit items-center gap-1 text-xs underline underline-offset-4">
+            <MapPin className="size-3" />
+            Map
+        </a>
+    );
+}
+
 function LeadFacts({ lead }: { lead: Lead }) {
     const place = placeLine(lead);
 
@@ -161,6 +177,7 @@ function LeadFacts({ lead }: { lead: Lead }) {
             </span>
             {place && <span className="text-muted-foreground">{place}</span>}
             {lead.landmark && <span className="text-muted-foreground text-xs">Near {lead.landmark}</span>}
+            <MapLink lead={lead} />
             <ProfileLine lead={lead} />
             <LeadStateNotes lead={lead} />
         </div>
