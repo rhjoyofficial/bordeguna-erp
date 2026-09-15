@@ -37,9 +37,9 @@ final class SmsText
      * count suggests.
      */
     private const GSM_BASIC = "@£\$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
-        ."¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+        .'¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà';
 
-    private const GSM_EXTENDED = "^{}\\[~]|€";
+    private const GSM_EXTENDED = '^{}\\[~]|€';
 
     /**
      * @return array{alphabet:string, characters:int, parts:int, per_part:int}

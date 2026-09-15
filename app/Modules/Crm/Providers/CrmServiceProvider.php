@@ -3,6 +3,7 @@
 namespace App\Modules\Crm\Providers;
 
 use App\Modules\Crm\Console\Commands\NotifyFollowUpsDue;
+use App\Modules\Crm\Console\Commands\SweepDormantCustomersCommand;
 use App\Modules\Crm\Support\LeadVisibility;
 use Illuminate\Support\ServiceProvider;
 
@@ -26,7 +27,7 @@ class CrmServiceProvider extends ServiceProvider
         // nowhere else - including the test suite, which then proves nothing
         // about it.
         if ($this->app->runningInConsole()) {
-            $this->commands([NotifyFollowUpsDue::class, \App\Modules\Crm\Console\Commands\SweepDormantCustomersCommand::class]);
+            $this->commands([NotifyFollowUpsDue::class, SweepDormantCustomersCommand::class]);
         }
     }
 }

@@ -121,7 +121,7 @@ class SendCampaign
             $result->accepted ? $sent++ : $failed++;
         }
 
-        DB::transaction(function () use ($campaign, $plan, $parts, $costPerPart, $sent) {
+        DB::transaction(function () use ($campaign, $parts, $costPerPart, $sent) {
             $campaign->update([
                 'status' => CampaignStatus::Sent,
                 'sent_at' => now(),

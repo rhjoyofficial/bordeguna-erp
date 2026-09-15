@@ -8,6 +8,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 
 /**
@@ -87,7 +88,7 @@ class LeadVisibility
      * may see. Used by the lead scope and by the deals on the pipeline board,
      * which are plain query-builder rows with the same meaning of "assigned".
      *
-     * @param  EloquentBuilder<\Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
+     * @param  EloquentBuilder<Model>|QueryBuilder  $query
      */
     public function restrict(EloquentBuilder|QueryBuilder $query, User $user, string $assigneeColumn): void
     {
@@ -121,7 +122,7 @@ class LeadVisibility
      * view-all saw only their own, which would have left the ASM unable to see
      * that an officer's follow-ups are rotting.
      *
-     * @param  EloquentBuilder<\Illuminate\Database\Eloquent\Model>  $query
+     * @param  EloquentBuilder<Model>  $query
      */
     public function restrictTasks(EloquentBuilder $query, User $user): void
     {
