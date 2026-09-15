@@ -1,7 +1,7 @@
 import { LeadConvertForm } from '@/components/crm/lead-convert-form';
 import { LeadForm } from '@/components/crm/lead-form';
 import { LeadList } from '@/components/crm/lead-list';
-import { type CustomerOption, type Lead, type LeadTypeOption, type Option, type ValueLabel } from '@/components/crm/lead-types';
+import { type CustomerOption, type Lead, type LeadTypeOption, type Lookups, type Option, type ValueLabel } from '@/components/crm/lead-types';
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { SearchSelect } from '@/components/search-select';
@@ -43,6 +43,10 @@ export default function LeadsIndex({
     can_verify,
     customers,
     customer_types,
+    lookups,
+    potentials,
+    importances,
+    warehouse_ownerships,
 }: {
     leads: Paginated<Lead>;
     filters: {
@@ -69,6 +73,10 @@ export default function LeadsIndex({
     can_verify: boolean;
     customers: CustomerOption[];
     customer_types: ValueLabel[];
+    lookups: Lookups;
+    potentials: ValueLabel[];
+    importances: ValueLabel[];
+    warehouse_ownerships: ValueLabel[];
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/crm/leads', initialFilters);
 
@@ -119,6 +127,10 @@ export default function LeadsIndex({
                         canAssign={can_assign}
                         canConvert={can_convert}
                         canVerify={can_verify}
+                        lookups={lookups}
+                        potentials={potentials}
+                        importances={importances}
+                        warehouseOwnerships={warehouse_ownerships}
                     />
                 )}
 

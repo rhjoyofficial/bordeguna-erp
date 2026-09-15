@@ -82,6 +82,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         Route::put('settings/sources/{leadSource}', [CrmSettingsController::class, 'updateSource'])->name('settings.sources.update');
         Route::post('settings/campaigns', [CrmSettingsController::class, 'storeCampaign'])->name('settings.campaigns.store');
         Route::put('settings/campaigns/{campaign}', [CrmSettingsController::class, 'updateCampaign'])->name('settings.campaigns.update');
+        // The lists a lead picks from, and the lost reasons (CRM slice 2c).
+        // ⚠ No DELETE: an entry is retired, never removed.
+        Route::post('settings/lists/{list}', [CrmSettingsController::class, 'storeListEntry'])
+            ->whereIn('list', ['shop_type', 'supplier_type', 'competitor_brand', 'lead_lost'])->name('settings.lists.store');
+        Route::put('settings/lists/{list}/{entry}', [CrmSettingsController::class, 'updateListEntry'])
+            ->whereIn('list', ['shop_type', 'supplier_type', 'competitor_brand', 'lead_lost'])->whereNumber('entry')->name('settings.lists.update');
     });
 
     // ── Phase B: timeline and work queue ────────────────────────────────────

@@ -8,6 +8,7 @@ use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Assets\database\seeders\AssetAccountMappingSeeder;
 use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
 use App\Modules\Commerce\database\seeders\CommercePermissionsSeeder;
+use App\Modules\Crm\database\seeders\CrmLookupSeeder;
 use App\Modules\Crm\database\seeders\CrmPermissionsSeeder;
 use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
 use App\Modules\Foundation\database\seeders\FoundationSeeder;
@@ -94,6 +95,8 @@ class DatabaseSeeder extends Seeder
         // some other route; the Sales Officer and Sales Lead roles would not have
         // got there at all, and nothing would have failed.
         $this->call(CrmPermissionsSeeder::class);
+        // Joy's shop and supplier types, only into a list that is still empty.
+        $this->call(CrmLookupSeeder::class);
         $this->call(ApprovalWorkflowSeeder::class);
         $this->call(HrmChangeRequestWorkflowSeeder::class);
         $this->call(BangladeshHolidayCalendarSeeder::class);

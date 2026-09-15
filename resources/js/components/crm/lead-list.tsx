@@ -79,6 +79,9 @@ export function LeadList({
                                 <td className="p-3">
                                     {placeLine(lead) || <span className="text-muted-foreground">-</span>}
                                     {lead.brand && <div className="text-muted-foreground text-xs">{lead.brand}</div>}
+                                    <div>
+                                        <ProfileLine lead={lead} />
+                                    </div>
                                 </td>
                                 <td className="p-3">
                                     <Badge variant="secondary">{lead.status_label}</Badge>
@@ -119,6 +122,12 @@ function LeadName({ lead }: { lead: Lead }) {
             </Link>
             <div className="mt-1 flex flex-wrap items-center gap-1">
                 <Badge variant="outline">{lead.lead_type_label}</Badge>
+                {/* The officer's A/B/C (answer 6); nothing at all while Unrated. */}
+                {lead.importance && (
+                    <Badge variant="secondary" title="Importance">
+                        {lead.importance}
+                    </Badge>
+                )}
                 {/* ⭐ Unverified is a normal working state (Joy's decision 1):
                     shown as a fact about the lead, in amber, never as an error. */}
                 {lead.is_verified ? (
@@ -152,9 +161,22 @@ function LeadFacts({ lead }: { lead: Lead }) {
             </span>
             {place && <span className="text-muted-foreground">{place}</span>}
             {lead.landmark && <span className="text-muted-foreground text-xs">Near {lead.landmark}</span>}
+            <ProfileLine lead={lead} />
             <LeadStateNotes lead={lead} />
         </div>
     );
+}
+
+/** One line of what the type profile says: the kind of shop or supplier, and its potential. */
+function ProfileLine({ lead }: { lead: Lead }) {
+    const bits = [
+        lead.profile?.shop_type,
+        lead.profile?.supplier_type,
+        lead.potential ? `${lead.potential[0].toUpperCase()}${lead.potential.slice(1)} potential` : null,
+        lead.profile?.wants_credit === 'yes' ? 'wants credit' : null,
+    ].filter(Boolean);
+
+    return bits.length > 0 ? <span className="text-muted-foreground text-xs">{bits.join(' · ')}</span> : null;
 }
 
 function LeadStateNotes({ lead }: { lead: Lead }) {

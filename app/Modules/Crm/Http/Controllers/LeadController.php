@@ -7,11 +7,17 @@ use App\Models\User;
 use App\Modules\Crm\Actions\ArchiveLead;
 use App\Modules\Crm\Actions\ConvertLead;
 use App\Modules\Crm\Actions\LinkDuplicateLead;
+use App\Modules\Crm\Actions\SaveLeadProfile;
 use App\Modules\Crm\Actions\VerifyLead;
+use App\Modules\Crm\Enums\CrmLookupList;
+use App\Modules\Crm\Enums\LeadImportance;
+use App\Modules\Crm\Enums\LeadPotential;
 use App\Modules\Crm\Enums\LeadStatus;
 use App\Modules\Crm\Enums\LeadType;
+use App\Modules\Crm\Enums\WarehouseOwnership;
 use App\Modules\Crm\Models\Campaign;
 use App\Modules\Crm\Models\CrmAttribution;
+use App\Modules\Crm\Models\CrmLookup;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Crm\Models\LeadSource;
 use App\Modules\Crm\Scopes\LeadVisibilityScope;
@@ -28,6 +34,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -52,7 +59,12 @@ class LeadController extends Controller
         ];
 
         $leads = Lead::query()
-            ->with(['brand:id,name,code', 'assignedTo:id,name', 'convertedCustomer:id,name,code', 'duplicateOf:id,name', 'verifiedBy:id,name', 'createdBy:id,name'])
+            ->with([
+                'brand:id,name,code', 'assignedTo:id,name', 'convertedCustomer:id,name,code', 'duplicateOf:id,name',
+                'verifiedBy:id,name', 'createdBy:id,name',
+                'retailerProfile.shopType:id,name', 'distributorProfile', 'supplierProfile.supplierType:id,name',
+                'competitorBrands:crm_lookups.id,crm_lookups.name', 'coverageAreas:id,lead_id,district,thana',
+            ])
             // ⚠ Searching the NORMALISED phone as well as the raw one. A user who
             // types `01711000000` must find a lead captured as `+8801711000000`,
             // or duplicate detection is theatre.
@@ -117,6 +129,9 @@ class LeadController extends Controller
                 'verified_on' => $lead->verified_at?->toDateString(),
                 'is_archived' => $lead->isArchived(),
                 'created_by' => $lead->createdBy?->name,
+                'potential' => $lead->potential?->value,
+                'importance' => $lead->importance?->value,
+                'profile' => $this->profileRow($lead),
                 'status' => $lead->status->value,
                 'status_label' => $lead->status->label(),
                 'brand_id' => $lead->brand_id,
@@ -158,6 +173,15 @@ class LeadController extends Controller
             // ⚠ The dataset's own spellings, so the filter and the form agree
             // with what validation will accept.
             'districts' => collect(BdGeo::districts())->pluck('name')->values(),
+            'potentials' => collect(LeadPotential::cases())->map(fn (LeadPotential $p) => ['value' => $p->value, 'label' => $p->label()])->values(),
+            'importances' => collect(LeadImportance::cases())->map(fn (LeadImportance $i) => ['value' => $i->value, 'label' => $i->label()])->values(),
+            'warehouse_ownerships' => collect(WarehouseOwnership::cases())->map(fn (WarehouseOwnership $w) => ['value' => $w->value, 'label' => $w->label()])->values(),
+            // ⚠ Retired entries are sent too, flagged, so a lead that still holds
+            // one shows it on edit instead of an empty picker; the form offers
+            // only active ones for a new choice.
+            'lookups' => collect(CrmLookupList::cases())->mapWithKeys(fn (CrmLookupList $list) => [
+                $list->value => CrmLookup::query()->ofList($list)->ordered()->get(['id', 'name', 'is_active']),
+            ]),
             // ⚠⚠ Without this prop the convert endpoint had NO caller. The route,
             // the action, the permission and seventeen tests all shipped on
             // 9 August; the screen was never brought forward, so no lead in this
@@ -261,13 +285,20 @@ class LeadController extends Controller
             $data['lead']['assigned_to_user_id'] = $request->user()->id;
         }
 
-        $lead = new Lead($data['lead']);
-        $lead->forceFill(['created_by_user_id' => $request->user()->id])->save();
+        // ⚠ One transaction: a profile refused after the lead was written (a
+        // coverage thana outside its district) must not leave a lead with no
+        // profile behind a validation error.
+        DB::transaction(function () use ($data, $request) {
+            $lead = new Lead($data['lead']);
+            $lead->forceFill(['created_by_user_id' => $request->user()->id])->save();
 
-        $this->recordAttribution($lead, $data['attribution'], $request);
+            app(SaveLeadProfile::class)->handle($lead, $data['profile']);
 
-        // Standing rhythm: a fresh lead gets its first-call task at once.
-        app(ApplyLeadCadences::class)->handle($lead, $request->user());
+            $this->recordAttribution($lead, $data['attribution'], $request);
+
+            // Standing rhythm: a fresh lead gets its first-call task at once.
+            app(ApplyLeadCadences::class)->handle($lead, $request->user());
+        });
 
         return back()->with('success', 'Lead captured.');
     }
@@ -285,14 +316,18 @@ class LeadController extends Controller
 
         $data = $this->validated($request, $lead);
 
-        $lead->update($data['lead']);
+        DB::transaction(function () use ($data, $lead, $request) {
+            $lead->update($data['lead']);
 
-        // ⚠ An attribution is appended only when a source is supplied on the
-        // edit - "this person came back through another campaign". Nothing is
-        // ever overwritten (C-CRM-7).
-        if (($data['attribution']['lead_source_id'] ?? null) !== null) {
-            $this->recordAttribution($lead, $data['attribution'], $request);
-        }
+            app(SaveLeadProfile::class)->handle($lead, $data['profile']);
+
+            // ⚠ An attribution is appended only when a source is supplied on the
+            // edit - "this person came back through another campaign". Nothing is
+            // ever overwritten (C-CRM-7).
+            if (($data['attribution']['lead_source_id'] ?? null) !== null) {
+                $this->recordAttribution($lead, $data['attribution'], $request);
+            }
+        });
 
         return back()->with('success', 'Lead updated.');
     }
@@ -425,6 +460,14 @@ class LeadController extends Controller
             'market' => ['nullable', 'string', 'max:160'],
             'landmark' => ['nullable', 'string', 'max:255'],
 
+            // ⭐ Joy's answers 5 and 6: the officer's estimate and an A/B/C
+            // importance, for retailers and distributors (nulled for the rest
+            // below, so a consumer can never be rated by a stale form value).
+            'potential' => ['nullable', Rule::enum(LeadPotential::class)],
+            'importance' => ['nullable', Rule::enum(LeadImportance::class)],
+
+            ...SaveLeadProfile::rules($businessId),
+
             // ⚠ Nullable rather than required, although every lead has a type.
             // The column and the model both default to `customer`, so a capture
             // path that does not yet offer the selector keeps working and keeps
@@ -497,10 +540,15 @@ class LeadController extends Controller
 
         $leadFields = collect($validated)->only([
             'name', 'contact_name', 'phone', 'secondary_phone', 'email', 'address',
-            'district', 'thana', 'area', 'market', 'landmark',
+            'district', 'thana', 'area', 'market', 'landmark', 'potential', 'importance',
             'status', 'lead_type', 'brand_id',
             'assigned_to_user_id', 'qualification_note', 'lost_reason_id', 'note',
         ])->all();
+
+        if (! in_array($type, [LeadType::Retailer, LeadType::Distributor], true)) {
+            $leadFields['potential'] = null;
+            $leadFields['importance'] = null;
+        }
 
         // ⚠ A lead marked lost is timestamped once, when it is lost.
         if (($leadFields['status'] ?? null) === LeadStatus::Lost->value && $lead?->lost_at === null) {
@@ -509,11 +557,59 @@ class LeadController extends Controller
 
         return [
             'lead' => $leadFields,
+            'profile' => collect($validated)->only([
+                ...SaveLeadProfile::RETAILER_FIELDS,
+                ...SaveLeadProfile::DISTRIBUTOR_FIELDS,
+                ...SaveLeadProfile::SUPPLIER_FIELDS,
+            ])->all(),
             'attribution' => collect($validated)->only([
                 'lead_source_id', 'campaign_id', 'ad_set', 'ad_name', 'utm_source', 'utm_medium',
                 'utm_campaign', 'utm_content', 'utm_term', 'external_lead_id', 'occurred_at',
             ])->all(),
         ];
+    }
+
+    /**
+     * The profile of the lead's CURRENT type, flat, in the shape the form posts.
+     *
+     * ⚠ Only the current type's: a retailer corrected to a distributor keeps its
+     * shop details in the database, but the edit form must not post them back
+     * under the distributor's name.
+     *
+     * @return array<string, mixed>
+     */
+    private function profileRow(Lead $lead): array
+    {
+        return match ($lead->lead_type) {
+            LeadType::Retailer => [
+                'shop_type_id' => $lead->retailerProfile?->shop_type_id,
+                'shop_type' => $lead->retailerProfile?->shopType?->name,
+                'current_supplier' => $lead->retailerProfile?->current_supplier,
+                'wants_credit' => match ($lead->retailerProfile?->wants_credit) {
+                    true => 'yes',
+                    false => 'no',
+                    default => null,
+                },
+                'competitor_brand_ids' => $lead->competitorBrands->pluck('id')->values()->all(),
+                'competitor_brands' => $lead->competitorBrands->pluck('name')->values()->all(),
+            ],
+            LeadType::Distributor => [
+                'business_nature' => $lead->distributorProfile?->business_nature,
+                'other_companies' => $lead->distributorProfile?->other_companies,
+                'warehouse_count' => $lead->distributorProfile?->warehouse_count,
+                'warehouse_ownership' => $lead->distributorProfile?->warehouse_ownership?->value,
+                'vehicle_count' => $lead->distributorProfile?->vehicle_count,
+                'sales_staff_count' => $lead->distributorProfile?->sales_staff_count,
+                'coverage' => $lead->coverageAreas->map(fn ($a) => ['district' => $a->district, 'thana' => $a->thana])->values()->all(),
+            ],
+            LeadType::Supplier => [
+                'supplier_type_id' => $lead->supplierProfile?->supplier_type_id,
+                'supplier_type' => $lead->supplierProfile?->supplierType?->name,
+                'supply_categories' => $lead->supplierProfile?->supply_categories,
+                'origin_district' => $lead->supplierProfile?->origin_district,
+            ],
+            LeadType::Customer => [],
+        };
     }
 
     /**

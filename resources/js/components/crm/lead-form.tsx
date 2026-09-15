@@ -1,7 +1,9 @@
+import { EMPTY_PROFILE, LeadProfileFields, profileFromLead, profilePayload } from '@/components/crm/lead-profile-fields';
 import {
     type DuplicateMatch,
     type Lead,
     type LeadTypeOption,
+    type Lookups,
     type Option,
     type ValueLabel,
     contactLabelFor,
@@ -47,6 +49,7 @@ const EMPTY = {
     utm_term: '',
     external_lead_id: '',
     occurred_at: '',
+    ...EMPTY_PROFILE,
 };
 
 // ⚠ Remembered per browser, never per business record: an officer who adds ten
@@ -90,6 +93,10 @@ export function LeadForm({
     canAssign,
     canConvert,
     canVerify,
+    lookups,
+    potentials,
+    importances,
+    warehouseOwnerships,
 }: {
     editing: Lead | null;
     onDone: () => void;
@@ -105,9 +112,19 @@ export function LeadForm({
     canAssign: boolean;
     canConvert: boolean;
     canVerify: boolean;
+    lookups: Lookups;
+    potentials: ValueLabel[];
+    importances: ValueLabel[];
+    warehouseOwnerships: ValueLabel[];
 }) {
     const [matches, setMatches] = useState<DuplicateMatch | null>(null);
-    const { data, setData, post, put, errors, processing, reset, clearErrors } = useForm({ ...EMPTY, lead_type: rememberedType(leadTypes) });
+    const { data, setData, post, put, errors, processing, reset, clearErrors, transform } = useForm({
+        ...EMPTY,
+        lead_type: rememberedType(leadTypes),
+    });
+
+    // Only the current type's profile fields leave the browser. See profilePayload.
+    transform((d) => profilePayload(d.lead_type, d));
 
     // Loading a lead into the form, or emptying it when editing ends.
     useEffect(() => {
@@ -140,6 +157,7 @@ export function LeadForm({
             qualification_note: editing.qualification_note ?? '',
             lost_reason_id: editing.lost_reason_id ? String(editing.lost_reason_id) : '',
             note: editing.note ?? '',
+            ...profileFromLead(editing),
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editing]);
@@ -366,6 +384,18 @@ export function LeadForm({
                 <Input id="address" value={data.address} onChange={(e) => setData('address', e.target.value)} />
                 <InputError message={errors.address} />
             </div>
+
+            <LeadProfileFields
+                leadType={data.lead_type}
+                data={data}
+                set={(field, value) => setData(field, value as never)}
+                errors={errors as Record<string, string | undefined>}
+                lookups={lookups}
+                potentials={potentials}
+                importances={importances}
+                warehouseOwnerships={warehouseOwnerships}
+                districts={districts}
+            />
 
             {/* ── Working the lead ────────────────────────────────────────── */}
             <div className="grid gap-2">

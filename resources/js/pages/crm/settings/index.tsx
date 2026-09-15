@@ -1,3 +1,4 @@
+import { CrmListSettings, type CrmList } from '@/components/crm/crm-list-settings';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
@@ -40,7 +41,7 @@ interface Brand {
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'CRM', href: '/crm/leads' },
-    { title: 'Sources & campaigns', href: '/crm/settings' },
+    { title: 'CRM settings', href: '/crm/settings' },
 ];
 
 const EMPTY_SOURCE = { code: '', name: '', is_active: true as boolean, note: '' };
@@ -56,7 +57,17 @@ const EMPTY_CAMPAIGN = {
     note: '',
 };
 
-export default function CrmSettingsIndex({ sources, campaigns, brands }: { sources: Source[]; campaigns: Campaign[]; brands: Brand[] }) {
+export default function CrmSettingsIndex({
+    sources,
+    campaigns,
+    brands,
+    lists,
+}: {
+    sources: Source[];
+    campaigns: Campaign[];
+    brands: Brand[];
+    lists: CrmList[];
+}) {
     const [editingSource, setEditingSource] = useState<Source | null>(null);
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
 
@@ -123,7 +134,7 @@ export default function CrmSettingsIndex({ sources, campaigns, brands }: { sourc
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="CRM sources & campaigns" />
+            <Head title="CRM settings" />
             <div className="flex flex-col gap-8 p-4">
                 <section className="flex flex-col gap-4">
                     <div>
@@ -378,6 +389,8 @@ export default function CrmSettingsIndex({ sources, campaigns, brands }: { sourc
                         </table>
                     </div>
                 </section>
+
+                <CrmListSettings lists={lists} />
             </div>
         </AppLayout>
     );

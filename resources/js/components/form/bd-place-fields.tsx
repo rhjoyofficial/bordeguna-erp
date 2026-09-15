@@ -34,6 +34,7 @@ export function BdPlaceFields({
     required = false,
     errors = {},
     idPrefix = 'place',
+    withArea = true,
 }: {
     value: Place;
     onChange: (next: Place) => void;
@@ -41,6 +42,8 @@ export function BdPlaceFields({
     required?: boolean;
     errors?: Partial<Record<keyof Place, string>>;
     idPrefix?: string;
+    /** Off where a thana is the finest grain that means anything, such as a distributor's coverage. */
+    withArea?: boolean;
 }) {
     const [thanas, setThanas] = useState<string[]>([]);
     const [areas, setAreas] = useState<string[]>([]);
@@ -64,7 +67,7 @@ export function BdPlaceFields({
     useEffect(() => {
         let live = true;
 
-        if (!value.district || !value.thana) {
+        if (!withArea || !value.district || !value.thana) {
             setAreas([]);
 
             return;
@@ -77,7 +80,7 @@ export function BdPlaceFields({
         return () => {
             live = false;
         };
-    }, [value.district, value.thana]);
+    }, [value.district, value.thana, withArea]);
 
     const asOptions = (list: string[]) => list.map((name) => ({ value: name, label: name }));
 
@@ -110,20 +113,22 @@ export function BdPlaceFields({
                 />
                 <InputError message={errors.thana} />
             </div>
-            <div className="grid gap-2">
-                <Label htmlFor={`${idPrefix}_area`}>Area (optional)</Label>
-                <SearchableSelect
-                    id={`${idPrefix}_area`}
-                    value={value.area}
-                    options={asOptions(areas)}
-                    placeholder={areas.length > 0 ? 'Choose an area' : 'No area to choose'}
-                    disabled={areas.length === 0}
-                    clearable
-                    invalid={Boolean(errors.area)}
-                    onChange={(area) => onChange({ ...value, area })}
-                />
-                <InputError message={errors.area} />
-            </div>
+            {withArea && (
+                <div className="grid gap-2">
+                    <Label htmlFor={`${idPrefix}_area`}>Area (optional)</Label>
+                    <SearchableSelect
+                        id={`${idPrefix}_area`}
+                        value={value.area}
+                        options={asOptions(areas)}
+                        placeholder={areas.length > 0 ? 'Choose an area' : 'No area to choose'}
+                        disabled={areas.length === 0}
+                        clearable
+                        invalid={Boolean(errors.area)}
+                        onChange={(area) => onChange({ ...value, area })}
+                    />
+                    <InputError message={errors.area} />
+                </div>
+            )}
         </>
     );
 }

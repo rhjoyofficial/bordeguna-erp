@@ -3,6 +3,8 @@
 namespace App\Modules\Crm\Models;
 
 use App\Models\User;
+use App\Modules\Crm\Enums\LeadImportance;
+use App\Modules\Crm\Enums\LeadPotential;
 use App\Modules\Crm\Enums\LeadStatus;
 use App\Modules\Crm\Enums\LeadType;
 use App\Modules\Crm\Scopes\LeadVisibilityScope;
@@ -17,7 +19,9 @@ use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -78,7 +82,7 @@ class Lead extends Model implements ControlsAttachmentAccess
      */
     protected $fillable = [
         'business_id', 'lead_type', 'name', 'contact_name', 'phone', 'secondary_phone', 'email', 'address',
-        'district', 'thana', 'area', 'market', 'landmark',
+        'district', 'thana', 'area', 'market', 'landmark', 'potential', 'importance',
         'brand_id', 'status', 'assigned_to_user_id', 'qualification_note',
         'lost_reason_id', 'lost_at', 'note',
     ];
@@ -96,6 +100,8 @@ class Lead extends Model implements ControlsAttachmentAccess
         return [
             'status' => LeadStatus::class,
             'lead_type' => LeadType::class,
+            'potential' => LeadPotential::class,
+            'importance' => LeadImportance::class,
             'lost_at' => 'datetime',
             'converted_at' => 'datetime',
             'merged_at' => 'datetime',
@@ -210,6 +216,38 @@ class Lead extends Model implements ControlsAttachmentAccess
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /* ── The type profiles (CRM slice 2c) ─────────────────────────────────────
+     * ⚠ One row per type, kept when the type changes: a lead corrected from
+     * retailer to distributor keeps what was learned about it as a shop. The
+     * screen reads only the profile of the lead's CURRENT type. */
+
+    public function retailerProfile(): HasOne
+    {
+        return $this->hasOne(RetailerLeadProfile::class);
+    }
+
+    public function distributorProfile(): HasOne
+    {
+        return $this->hasOne(DistributorLeadProfile::class);
+    }
+
+    public function supplierProfile(): HasOne
+    {
+        return $this->hasOne(SupplierLeadProfile::class);
+    }
+
+    /** Competitor brands the shop stocks, from the company's own list (answer 7). */
+    public function competitorBrands(): BelongsToMany
+    {
+        return $this->belongsToMany(CrmLookup::class, 'lead_competitor_brands')->withPivot('business_id')->withTimestamps();
+    }
+
+    /** The thanas a distributor says it covers (answer 12: a claim). */
+    public function coverageAreas(): HasMany
+    {
+        return $this->hasMany(LeadCoverageArea::class);
     }
 
     public function isVerified(): bool

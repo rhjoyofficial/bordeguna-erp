@@ -3,8 +3,11 @@
 namespace App\Modules\Crm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Crm\Enums\CrmLookupList;
 use App\Modules\Crm\Models\Campaign;
+use App\Modules\Crm\Models\CrmLookup;
 use App\Modules\Crm\Models\LeadSource;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Brand;
 use Illuminate\Http\RedirectResponse;
@@ -49,7 +52,88 @@ class CrmSettingsController extends Controller
                     'note' => $campaign->note,
                 ]),
             'brands' => Brand::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
+            'lists' => $this->lists(),
         ]);
+    }
+
+    /**
+     * The editable lists a lead picks from (CRM lead slice 2c, plan D15), plus
+     * the lost reasons, which had no screen at all until now: `ReasonController`
+     * offers inventory contexts only, so `leads.lost_reason_id` could hold
+     * nothing anybody had been able to create.
+     *
+     * @return list<array{key:string, label:string, entries:mixed}>
+     */
+    private function lists(): array
+    {
+        $lists = collect(CrmLookupList::cases())->map(fn (CrmLookupList $list) => [
+            'key' => $list->value,
+            'label' => $list->label(),
+            'entries' => CrmLookup::query()->ofList($list)->ordered()->get(['id', 'name', 'is_active']),
+        ])->all();
+
+        $lists[] = [
+            'key' => self::LOST_REASONS,
+            'label' => 'Reasons a lead is lost',
+            'entries' => Reason::forContext(self::LOST_REASONS)->orderBy('name')->get(['id', 'name', 'is_active']),
+        ];
+
+        return $lists;
+    }
+
+    /** The `reasons.context` a lead's lost reason must carry (C-CRM-10). */
+    private const LOST_REASONS = 'lead_lost';
+
+    public function storeListEntry(Request $request, string $list): RedirectResponse
+    {
+        $name = $this->validatedEntryName($request, $list);
+
+        if ($list === self::LOST_REASONS) {
+            Reason::create(['context' => self::LOST_REASONS, 'name' => $name, 'is_active' => true]);
+        } else {
+            CrmLookup::create([
+                'list' => $list,
+                'name' => $name,
+                'sort_order' => (int) CrmLookup::query()->ofList(CrmLookupList::from($list))->max('sort_order') + 1,
+            ]);
+        }
+
+        return back()->with('success', "Added {$name}.");
+    }
+
+    /**
+     * Rename an entry, or retire it from the pickers.
+     *
+     * ⚠ Retired, never deleted: a shop recorded under an entry must still read
+     * it after the entry leaves the picker. There is no DELETE route.
+     */
+    public function updateListEntry(Request $request, string $list, int $entry): RedirectResponse
+    {
+        $row = $list === self::LOST_REASONS
+            ? Reason::forContext(self::LOST_REASONS)->findOrFail($entry)
+            : CrmLookup::query()->ofList(CrmLookupList::from($list))->findOrFail($entry);
+
+        $name = $this->validatedEntryName($request, $list, $row->id);
+        $active = $request->validate(['is_active' => ['required', 'boolean']])['is_active'];
+
+        $row->update(['name' => $name, 'is_active' => $active]);
+
+        return back()->with('success', "Saved {$name}.");
+    }
+
+    private function validatedEntryName(Request $request, string $list, ?int $ignore = null): string
+    {
+        $businessId = app(BusinessContext::class)->id();
+
+        // ⚠ Unique inside its own list and business, so "Wholesale / arot" can be
+        // both a shop type and a supplier type without either blocking the other.
+        $unique = $list === self::LOST_REASONS
+            ? Rule::unique('reasons', 'name')->where('business_id', $businessId)->where('context', self::LOST_REASONS)
+            : Rule::unique('crm_lookups', 'name')->where('business_id', $businessId)->where('list', $list);
+
+        return trim($request->validate([
+            'name' => ['required', 'string', 'max:120', $unique->ignore($ignore)],
+        ])['name']);
     }
 
     public function storeSource(Request $request): RedirectResponse

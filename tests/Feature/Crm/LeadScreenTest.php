@@ -109,7 +109,12 @@ beforeEach(function () {
  * the screen, and this fails by name.
  */
 it('lets the screen set every field the model can hold', function () {
-    ($this->asRole)('Owner')->post('/crm/leads', $this->full);
+    // ⚠ As a RETAILER since 15 Sep 2026: potential and importance belong to
+    // shop-shaped leads only (Joy's answers 5 and 6), so a consumer lead could
+    // never prove them settable.
+    ($this->asRole)('Owner')->post('/crm/leads', array_merge($this->full, [
+        'lead_type' => 'retailer', 'potential' => 'high', 'importance' => 'A',
+    ]))->assertSessionHasNoErrors();
 
     $lead = Lead::where('email', 'rahima@example.com')->firstOrFail();
 

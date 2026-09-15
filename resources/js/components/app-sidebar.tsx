@@ -1,14 +1,16 @@
 import { NavGroups, type NavGroup } from '@/components/nav-groups';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { useSidebarScrollMemory } from '@/hooks/use-sidebar-scroll-memory';
 import { settingsNavItems } from '@/lib/settings-nav';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
+    Activity,
     ArrowLeftRight,
     BadgeDollarSign,
-    BellRing,
     Banknote,
+    BellRing,
     BookOpen,
     BookOpenText,
     Boxes,
@@ -24,22 +26,25 @@ import {
     Contact,
     Factory,
     FileBarChart,
-    Activity,
     FileText,
-    LifeBuoy,
     FileUp,
     FileWarning,
     Fingerprint,
     FolderOpen,
+    Globe,
     Grid3x3,
     HandCoins,
     Landmark,
     LayoutDashboard,
     LayoutGrid,
+    LifeBuoy,
+    ListChecks,
     ListTree,
+    LockKeyhole,
     Mail,
     Megaphone,
     MessageSquare,
+    Network,
     NotebookPen,
     PackageCheck,
     PackageSearch,
@@ -57,6 +62,7 @@ import {
     Store,
     Tag,
     Tags,
+    Target,
     Timer,
     TrendingDown,
     TrendingUp,
@@ -70,13 +76,7 @@ import {
     Wallet,
     Warehouse,
     Waves,
-    Network,
-    ListChecks,
-    LockKeyhole,
-    Target,
-    Globe,
 } from 'lucide-react';
-import { useSidebarScrollMemory } from '@/hooks/use-sidebar-scroll-memory';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
@@ -329,7 +329,7 @@ export function AppSidebar() {
                                     { title: 'CRM reports', url: '/crm/reports', icon: FileBarChart },
                                 ]
                               : []),
-                          ...(canManageCrmSettings ? [{ title: 'Sources & campaigns', url: '/crm/settings', icon: Megaphone }] : []),
+                          ...(canManageCrmSettings ? [{ title: 'CRM settings', url: '/crm/settings', icon: Megaphone }] : []),
                           ...(canManageCrmSettings ? [{ title: 'Cadences', url: '/crm/cadences', icon: Repeat }] : []),
                           // ⚠ Linked in the same slice as the route and the
                           // screen. Seven modules in this project have shipped

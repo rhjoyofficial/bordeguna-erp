@@ -20,6 +20,9 @@ export interface Lead {
     verified_on: string | null;
     is_archived: boolean;
     created_by: string | null;
+    potential: string | null;
+    importance: string | null;
+    profile: LeadProfile;
     status: string;
     status_label: string;
     brand_id: number | null;
@@ -34,6 +37,35 @@ export interface Lead {
     duplicate_of: string | null;
     created_at: string | null;
 }
+
+/** The profile of the lead's current type, as LeadController::profileRow() sends it. */
+export interface LeadProfile {
+    shop_type_id?: number | null;
+    shop_type?: string | null;
+    current_supplier?: string | null;
+    wants_credit?: 'yes' | 'no' | null;
+    competitor_brand_ids?: number[];
+    competitor_brands?: string[];
+    business_nature?: string | null;
+    other_companies?: string | null;
+    warehouse_count?: number | null;
+    warehouse_ownership?: string | null;
+    vehicle_count?: number | null;
+    sales_staff_count?: number | null;
+    coverage?: { district: string; thana: string }[];
+    supplier_type_id?: number | null;
+    supplier_type?: string | null;
+    supply_categories?: string | null;
+    origin_district?: string | null;
+}
+
+export interface LookupEntry {
+    id: number;
+    name: string;
+    is_active: boolean;
+}
+
+export type Lookups = Record<'shop_type' | 'supplier_type' | 'competitor_brand', LookupEntry[]>;
 
 export interface Option {
     id: number;
