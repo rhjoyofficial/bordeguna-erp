@@ -14,11 +14,13 @@ use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\ExpenseClaim;
 use App\Modules\Hrm\Notifications\ExpenseClaimReturnedNotification;
+use App\Support\ApprovalInbox;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -113,7 +115,7 @@ function tripCategory(string $name): int
  *
  * @param  array<string, mixed>  $overrides
  */
-function addSpend(array $overrides = []): \Illuminate\Testing\TestResponse
+function addSpend(array $overrides = []): TestResponse
 {
     return (test()->asStaff)()->post(route('hrm.my-expenses.store'), array_merge([
         'spent_on' => '2026-09-08',
@@ -418,7 +420,7 @@ it('hands a claim back for correction and takes the same claim again', function 
     // ⚠ It has left every approver's queue. Read from ApprovalInbox rather than
     // the screen: the screen 403s an approver with nothing to do, so an empty
     // page and a refused page would be indistinguishable.
-    expect(app(\App\Support\ApprovalInbox::class)->pendingActionableFor($this->approver))->toBeEmpty();
+    expect(app(ApprovalInbox::class)->pendingActionableFor($this->approver))->toBeEmpty();
 
     // The employee fixes it and sends the SAME claim again.
     ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
@@ -456,7 +458,7 @@ it('keeps a draft out of the finance screen and the approvals inbox', function (
 
     // ⚠ Through the inbox itself, not its screen: the screen refuses an
     // approver with nothing to act on, so a 403 would look like a pass.
-    expect(app(\App\Support\ApprovalInbox::class)->pendingActionableFor($this->approver))->toBeEmpty();
+    expect(app(ApprovalInbox::class)->pendingActionableFor($this->approver))->toBeEmpty();
 });
 
 it('lets a spend be removed from a draft and refuses to touch a submitted one', function () {
@@ -624,4 +626,178 @@ it('ships the hosting categories and lets the accountant add another', function 
         'name' => 'Whatever I Like',
         'account_id' => Account::query()->where('code', '6371')->value('id'),
     ])->assertForbidden();
+});
+
+/*
+ | -------------------------------------------------------------------------
+ | ⭐⭐ JOY, 15 SEP 2026: "the expense send back can be editable and can be
+ | resend and admin will check"; approved and rejected stay final; and, asked
+ | the same day, a claim an approver has seen cannot be discarded.
+ |
+ | Found on production: two claims sent back on 14 Sep for "Dollar rate
+ | 125.25" could not have a figure corrected, so they were discarded, which
+ | left their approval history pointing at nothing and let the next claims
+ | take the same numbers.
+ | ---------------------------------------------------------------------- */
+
+function sendBackClaim(ExpenseClaim $claim, string $note = 'Dollar rate 125.25'): void
+{
+    (test()->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
+    (test()->asApprover)()->post(route('hrm.expense-claims.send-back', $claim), ['note' => $note])->assertSessionHasNoErrors();
+}
+
+it('lets the employee correct a spend on a claim sent back and send the same claim again', function () {
+    addSpend(['amount' => '14247.50', 'spent_on' => '2026-09-08', 'description' => 'Hosting, dollar rate 124'])->assertSessionHasNoErrors();
+    $claim = ExpenseClaim::sole();
+    sendBackClaim($claim);
+
+    $line = $claim->fresh()->load('lines')->lines->sole();
+
+    ($this->asStaff)()->post(route('hrm.my-expenses.lines.update', [$claim, $line]), [
+        'spent_on' => '2026-09-08',
+        'amount' => '14403.75',
+        'expense_category_id' => $line->expense_category_id,
+        'description' => 'Hosting, dollar rate 125.25',
+    ])->assertSessionHasNoErrors();
+
+    $claim->refresh()->load('lines.attachments');
+
+    expect((float) $claim->amount)->toBe(14403.75)
+        ->and($claim->lines->sole()->description)->toBe('Hosting, dollar rate 125.25')
+        // The receipt the approver saw is still there: nobody had to find it again.
+        ->and($claim->lines->sole()->attachments)->toHaveCount(1);
+
+    ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
+
+    $claim->refresh();
+
+    expect($claim->approvalRequest->status)->toBe(ApprovalStatus::Pending)
+        ->and($claim->approvalRequest->current_stage)->toBe(1)
+        ->and($claim->isDraft())->toBeFalse()
+        ->and(app(ApprovalInbox::class)->pendingActionableFor($this->approver))->not->toBeEmpty();
+});
+
+it('replaces the receipt on a corrected spend only when a new one is chosen', function () {
+    addSpend()->assertSessionHasNoErrors();
+    $claim = ExpenseClaim::sole();
+    sendBackClaim($claim, 'The courier slip is unreadable. Photograph it again.');
+
+    $line = $claim->fresh()->load('lines.attachments')->lines->sole();
+    $old = $line->attachments->sole();
+
+    ($this->asStaff)()->post(route('hrm.my-expenses.lines.update', [$claim, $line]), [
+        'spent_on' => '2026-09-08', 'amount' => '250', 'expense_category_id' => $line->expense_category_id,
+        'receipt' => UploadedFile::fake()->image('courier-clear.png', 600, 800),
+    ])->assertSessionHasNoErrors();
+
+    $files = $line->fresh()->attachments;
+
+    expect($files)->toHaveCount(1)
+        ->and($files->sole()->original_name)->toBe('courier-clear.png');
+    Storage::disk('local')->assertMissing($old->path);
+});
+
+it('keeps a claim waiting on an approver, approved or rejected out of the hands of the employee', function () {
+    addSpend()->assertSessionHasNoErrors();
+    $claim = ExpenseClaim::sole();
+    ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
+    $line = $claim->fresh()->load('lines')->lines->sole();
+
+    $correct = fn () => ($this->asStaff)()->post(route('hrm.my-expenses.lines.update', [$claim, $line]), [
+        'spent_on' => '2026-09-08', 'amount' => '999', 'expense_category_id' => $line->expense_category_id,
+    ]);
+
+    $correct()->assertNotFound();
+
+    ($this->asApprover)()->post(route('hrm.expense-claims.approve', $claim))->assertSessionHasNoErrors();
+    $correct()->assertNotFound();
+    ($this->asStaff)()->delete(route('hrm.my-expenses.destroy', $claim))->assertNotFound();
+
+    expect((float) $line->fresh()->amount)->toBe(250.0);
+
+    addSpend(['amount' => '80'])->assertSessionHasNoErrors();
+    $rejected = ExpenseClaim::query()->whereKeyNot($claim->id)->sole();
+    ($this->asStaff)()->post(route('hrm.my-expenses.submit', $rejected))->assertSessionHasNoErrors();
+    ($this->asApprover)()->post(route('hrm.expense-claims.reject', $rejected), ['note' => 'Not a company expense'])->assertSessionHasNoErrors();
+
+    $rejectedLine = $rejected->fresh()->load('lines')->lines->sole();
+    ($this->asStaff)()->post(route('hrm.my-expenses.lines.update', [$rejected, $rejectedLine]), [
+        'spent_on' => '2026-09-08', 'amount' => '999', 'expense_category_id' => $rejectedLine->expense_category_id,
+    ])->assertNotFound();
+
+    expect((float) $rejectedLine->fresh()->amount)->toBe(80.0)
+        ->and($rejected->fresh()->approvalRequest->status)->toBe(ApprovalStatus::Rejected);
+});
+
+it('will not discard a claim an approver sent back, and still discards a draft nobody saw', function () {
+    addSpend()->assertSessionHasNoErrors();
+    $claim = ExpenseClaim::sole();
+    sendBackClaim($claim);
+
+    ($this->asStaff)()->delete(route('hrm.my-expenses.destroy', $claim))
+        ->assertSessionHasErrors(['claim' => "{$claim->claim_number} was sent back by an approver, so it cannot be discarded. Correct the spends and send it again."]);
+
+    expect(ExpenseClaim::find($claim->id))->not->toBeNull()
+        ->and($claim->fresh()->approvalRequest->status)->toBe(ApprovalStatus::Returned);
+
+    ($this->asStaff)()->get(route('hrm.my-expenses'))
+        ->assertInertia(fn (Assert $page) => $page->where('draft.id', $claim->id)->where('draft.can_discard', false));
+
+    // Sent again, so a new spend starts a new draft nobody has seen.
+    ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
+    addSpend(['amount' => '60'])->assertSessionHasNoErrors();
+    $fresh = ExpenseClaim::query()->whereKeyNot($claim->id)->sole();
+
+    ($this->asStaff)()->get(route('hrm.my-expenses'))
+        ->assertInertia(fn (Assert $page) => $page->where('draft.id', $fresh->id)->where('draft.can_discard', true));
+
+    ($this->asStaff)()->delete(route('hrm.my-expenses.destroy', $fresh))->assertSessionHasNoErrors();
+
+    expect(ExpenseClaim::find($fresh->id))->toBeNull();
+});
+
+it('checks a corrected spend like a new one, and only for the employee whose claim it is', function () {
+    addSpend()->assertSessionHasNoErrors();
+    $claim = ExpenseClaim::sole();
+    sendBackClaim($claim);
+    $line = $claim->fresh()->load('lines')->lines->sole();
+
+    ($this->asStaff)()->post(route('hrm.my-expenses.lines.update', [$claim, $line]), [
+        'spent_on' => '2026-09-11', 'amount' => '0', 'expense_category_id' => $line->expense_category_id,
+    ])->assertSessionHasErrors(['amount', 'spent_on']);
+
+    $intruderUser = User::factory()->create();
+    $intruderUser->businesses()->attach($this->business->id);
+    Employee::create([
+        'business_id' => $this->business->id, 'user_id' => $intruderUser->id, 'employee_code' => 'BDG-000023',
+        'first_name' => 'Nazmul', 'last_name' => 'Haque',
+        'joining_date' => '2026-07-01', 'status' => 'active', 'employment_type' => 'permanent',
+    ]);
+
+    $this->actingAs($intruderUser)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('hrm.my-expenses.lines.update', [$claim, $line]), [
+            'spent_on' => '2026-09-08', 'amount' => '1', 'expense_category_id' => $line->expense_category_id,
+        ])->assertNotFound();
+
+    expect((float) $line->fresh()->amount)->toBe(250.0);
+});
+
+it('will not reach a spend on an approved claim through the address of the open one', function () {
+    addSpend(['amount' => '500'])->assertSessionHasNoErrors();
+    $approved = ExpenseClaim::sole();
+    ($this->asStaff)()->post(route('hrm.my-expenses.submit', $approved))->assertSessionHasNoErrors();
+    ($this->asApprover)()->post(route('hrm.expense-claims.approve', $approved))->assertSessionHasNoErrors();
+    $approvedLine = $approved->fresh()->load('lines')->lines->sole();
+
+    addSpend(['amount' => '90'])->assertSessionHasNoErrors();
+    $open = ExpenseClaim::query()->whereKeyNot($approved->id)->sole();
+    sendBackClaim($open);
+
+    // ⚠ The open claim's address, the approved claim's spend.
+    ($this->asStaff)()->post(route('hrm.my-expenses.lines.update', [$open, $approvedLine]), [
+        'spent_on' => '2026-09-08', 'amount' => '5000', 'expense_category_id' => $approvedLine->expense_category_id,
+    ])->assertNotFound();
+
+    expect((float) $approvedLine->fresh()->amount)->toBe(500.0)
+        ->and((float) $approved->fresh()->amount)->toBe(500.0);
 });

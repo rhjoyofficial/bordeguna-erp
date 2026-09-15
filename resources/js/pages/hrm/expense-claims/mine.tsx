@@ -38,6 +38,8 @@ type Claim = {
     needs_a_name: boolean;
     was_sent_back: boolean;
     sent_back_note: string | null;
+    /** Joy, 15 Sep 2026: only a claim no approver has seen may be thrown away. */
+    can_discard: boolean;
     is_settled: boolean;
     settlement_method: string | null;
     settled_by: string | null;
@@ -228,7 +230,7 @@ export default function MyExpenseClaims({
                     <Button disabled={form.processing || missing}>Add expense</Button>
                 </form>
 
-                {draft && <OpenClaim draft={draft} />}
+                {draft && <OpenClaim draft={draft} categories={categories} label={label} today={today} />}
 
                 <div className="border-border overflow-x-auto rounded-md border">
                     <table className="w-full min-w-[44rem] text-sm">
@@ -304,8 +306,21 @@ function Spends({ lines }: { lines: Line[] }) {
  * "sent back" without being told what to change leaves somebody hunting for a
  * person to ask, which is the state this feature exists to end.
  */
-function OpenClaim({ draft }: { draft: Claim }) {
+function OpenClaim({
+    draft,
+    categories,
+    label,
+    today,
+}: {
+    draft: Claim;
+    categories: Category[];
+    label: (category: Category) => string;
+    today: string;
+}) {
     const [name, setName] = useState(draft.trip_name ?? '');
+    // Joy, 15 Sep 2026: a spend is corrected in place, above all on a claim sent
+    // back for one wrong figure. One spend is edited at a time.
+    const [editingLine, setEditingLine] = useState<number | null>(null);
 
     // ⚠ The server is the truth: a name saved on blur, or a claim replaced by a
     // reload, must not be overwritten by stale local state.
@@ -374,34 +389,52 @@ function OpenClaim({ draft }: { draft: Claim }) {
                         </tr>
                     </thead>
                     <tbody>
-                        {draft.lines.map((line) => (
-                            <tr key={line.id} className="border-border border-t">
-                                <td className="p-2">{line.spent_on ?? '-'}</td>
-                                <td className="p-2">{line.category ?? '-'}</td>
-                                <td className="p-2">{line.description ?? '-'}</td>
-                                <td className="p-2 text-right tabular-nums">{money(line.amount)}</td>
-                                <td className="p-2">
-                                    {line.receipts.length === 0 ? (
-                                        <span className="text-muted-foreground text-xs">none</span>
-                                    ) : (
-                                        line.receipts.map((file) => (
-                                            <a key={file.id} href={file.url} target="_blank" rel="noreferrer" className="block text-xs underline">
-                                                {file.name}
-                                            </a>
-                                        ))
-                                    )}
-                                </td>
-                                <td className="p-2 text-right">
-                                    <button
-                                        type="button"
-                                        className="text-destructive text-xs underline"
-                                        onClick={() => router.delete(`/hrm/my-expenses/${draft.id}/lines/${line.id}`, { preserveScroll: true })}
-                                    >
-                                        Remove
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
+                        {draft.lines.map((line) =>
+                            editingLine === line.id ? (
+                                <tr key={line.id} className="border-border border-t">
+                                    <td colSpan={6} className="p-2">
+                                        <EditSpend
+                                            claimId={draft.id}
+                                            line={line}
+                                            categories={categories}
+                                            label={label}
+                                            today={today}
+                                            onDone={() => setEditingLine(null)}
+                                        />
+                                    </td>
+                                </tr>
+                            ) : (
+                                <tr key={line.id} className="border-border border-t">
+                                    <td className="p-2">{line.spent_on ?? '-'}</td>
+                                    <td className="p-2">{line.category ?? '-'}</td>
+                                    <td className="p-2">{line.description ?? '-'}</td>
+                                    <td className="p-2 text-right tabular-nums">{money(line.amount)}</td>
+                                    <td className="p-2">
+                                        {line.receipts.length === 0 ? (
+                                            <span className="text-muted-foreground text-xs">none</span>
+                                        ) : (
+                                            line.receipts.map((file) => (
+                                                <a key={file.id} href={file.url} target="_blank" rel="noreferrer" className="block text-xs underline">
+                                                    {file.name}
+                                                </a>
+                                            ))
+                                        )}
+                                    </td>
+                                    <td className="p-2 text-right whitespace-nowrap">
+                                        <button type="button" className="mr-3 text-xs underline" onClick={() => setEditingLine(line.id)}>
+                                            Edit
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="text-destructive text-xs underline"
+                                            onClick={() => router.delete(`/hrm/my-expenses/${draft.id}/lines/${line.id}`, { preserveScroll: true })}
+                                        >
+                                            Remove
+                                        </button>
+                                    </td>
+                                </tr>
+                            ),
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -412,24 +445,155 @@ function OpenClaim({ draft }: { draft: Claim }) {
                     disabled={draft.lines.length === 0 || unnamed}
                     onClick={() => router.post(`/hrm/my-expenses/${draft.id}/submit`, {}, { preserveScroll: true })}
                 >
-                    Send for approval
+                    {draft.was_sent_back ? 'Send again for approval' : 'Send for approval'}
                 </BusyButton>
-                <BusyButton
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    busyLabel="Discarding…"
-                    onClick={() => router.delete(`/hrm/my-expenses/${draft.id}`, { preserveScroll: true })}
-                >
-                    Discard
-                </BusyButton>
+                {/* Joy, 15 Sep 2026: a claim an approver has seen is corrected and
+                    sent again, never thrown away (the server refuses it too). */}
+                {draft.can_discard && (
+                    <BusyButton
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        busyLabel="Discarding…"
+                        onClick={() => router.delete(`/hrm/my-expenses/${draft.id}`, { preserveScroll: true })}
+                    >
+                        Discard
+                    </BusyButton>
+                )}
             </div>
 
             <p className="text-muted-foreground text-xs">
                 {unnamed
                     ? 'Give this claim a name before you send it, so the office can see what these spends were for.'
-                    : 'Once you send it you cannot change it. If you remember another spend afterwards, add it and it becomes a new claim.'}
+                    : draft.was_sent_back
+                      ? 'Press Edit on a spend to correct it, then send it again. The approver checks it again from the start. Once approved or rejected it cannot be changed.'
+                      : 'Once you send it you cannot change it. If you remember another spend afterwards, add it and it becomes a new claim.'}
             </p>
         </div>
+    );
+}
+
+/**
+ * Correct one spend on the open claim (Joy, 15 Sep 2026).
+ *
+ * ⚠ The receipt already on the spend stays unless a new file is chosen, so a
+ * corrected exchange rate never means finding the slip again. The server checks
+ * every rule the Add form does.
+ */
+function EditSpend({
+    claimId,
+    line,
+    categories,
+    label,
+    today,
+    onDone,
+}: {
+    claimId: number;
+    line: Line;
+    categories: Category[];
+    label: (category: Category) => string;
+    today: string;
+    onDone: () => void;
+}) {
+    const form = useForm<{ spent_on: string; amount: string; expense_category_id: string; description: string; receipt: File | null }>({
+        spent_on: line.spent_on ?? today,
+        amount: String(Number(line.amount)),
+        expense_category_id: line.category_id ? String(line.category_id) : '',
+        description: line.description ?? '',
+        receipt: null,
+    });
+
+    const chosen = categories.find((category) => String(category.id) === form.data.expense_category_id);
+    const receiptNeeded = (chosen ? chosen.receipt_required : true) && line.receipts.length === 0;
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        form.post(`/hrm/my-expenses/${claimId}/lines/${line.id}`, { preserveScroll: true, forceFormData: true, onSuccess: () => onDone() });
+    };
+
+    return (
+        <form onSubmit={submit} className="bg-muted/40 space-y-3 rounded-md p-3">
+            <FormRow>
+                <Field
+                    label="How much (BDT)"
+                    htmlFor={`edit_amount_${line.id}`}
+                    className="max-w-40 min-w-28 flex-[1]"
+                    error={form.errors.amount}
+                    required
+                >
+                    <Input
+                        id={`edit_amount_${line.id}`}
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        className="w-full text-right tabular-nums"
+                        value={form.data.amount}
+                        onChange={(e) => form.setData('amount', e.target.value)}
+                    />
+                </Field>
+                <Field
+                    label="What kind of expense"
+                    htmlFor={`edit_category_${line.id}`}
+                    className="max-w-sm min-w-44 flex-[2]"
+                    error={form.errors.expense_category_id}
+                    required
+                >
+                    <SearchSelect
+                        id={`edit_category_${line.id}`}
+                        value={form.data.expense_category_id}
+                        onChange={(e) => form.setData('expense_category_id', e.target.value)}
+                    >
+                        <option value="">Choose…</option>
+                        {categories.map((category) => (
+                            <option key={category.id} value={String(category.id)}>
+                                {label(category)}
+                            </option>
+                        ))}
+                    </SearchSelect>
+                </Field>
+                <Field label="When" htmlFor={`edit_spent_on_${line.id}`} className="min-w-36" error={form.errors.spent_on} required>
+                    <Input
+                        id={`edit_spent_on_${line.id}`}
+                        type="date"
+                        max={today}
+                        value={form.data.spent_on}
+                        onChange={(e) => form.setData('spent_on', e.target.value)}
+                    />
+                </Field>
+                <Field
+                    label="What it was for"
+                    htmlFor={`edit_description_${line.id}`}
+                    className="max-w-md min-w-52 flex-[2]"
+                    error={form.errors.description}
+                >
+                    <Input
+                        id={`edit_description_${line.id}`}
+                        value={form.data.description}
+                        onChange={(e) => form.setData('description', e.target.value)}
+                    />
+                </Field>
+                <Field
+                    label={line.receipts.length > 0 ? 'Replace receipt (optional)' : receiptNeeded ? 'Receipt' : 'Receipt (not needed)'}
+                    htmlFor={`edit_receipt_${line.id}`}
+                    className="max-w-sm min-w-48 flex-[2]"
+                    error={form.errors.receipt}
+                >
+                    <Input
+                        id={`edit_receipt_${line.id}`}
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp"
+                        onChange={(e) => form.setData('receipt', e.target.files?.[0] ?? null)}
+                    />
+                </Field>
+            </FormRow>
+            <div className="flex flex-wrap gap-2">
+                <Button size="sm" disabled={form.processing}>
+                    Save correction
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={onDone}>
+                    Cancel
+                </Button>
+            </div>
+        </form>
     );
 }

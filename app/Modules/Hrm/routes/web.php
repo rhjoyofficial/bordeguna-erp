@@ -7,38 +7,38 @@ use App\Modules\Hrm\Http\Controllers\AttendancePolicyController;
 use App\Modules\Hrm\Http\Controllers\AttendancePunchController;
 use App\Modules\Hrm\Http\Controllers\AttendanceSummaryController;
 use App\Modules\Hrm\Http\Controllers\AttendanceWaiverController;
+use App\Modules\Hrm\Http\Controllers\ChecklistController;
 use App\Modules\Hrm\Http\Controllers\DailyAttendanceController;
 use App\Modules\Hrm\Http\Controllers\DisbursementController;
 use App\Modules\Hrm\Http\Controllers\EmployeeAttendanceController;
 use App\Modules\Hrm\Http\Controllers\EmployeeController;
-use App\Modules\Hrm\Http\Controllers\OrgChartController;
+use App\Modules\Hrm\Http\Controllers\ExpenseCategoryController;
 use App\Modules\Hrm\Http\Controllers\ExpenseClaimController;
-use App\Modules\Hrm\Http\Controllers\RecruitmentController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\HolidayWorkController;
+use App\Modules\Hrm\Http\Controllers\HrLetterController;
 use App\Modules\Hrm\Http\Controllers\HrmDashboardController;
 use App\Modules\Hrm\Http\Controllers\LeaveController;
 use App\Modules\Hrm\Http\Controllers\LeaveTypeController;
 use App\Modules\Hrm\Http\Controllers\LoanController;
+use App\Modules\Hrm\Http\Controllers\MyTeamController;
+use App\Modules\Hrm\Http\Controllers\OrgChartController;
 use App\Modules\Hrm\Http\Controllers\PayrollController;
 use App\Modules\Hrm\Http\Controllers\PayrollHistoryController;
 use App\Modules\Hrm\Http\Controllers\PayrollInputController;
 use App\Modules\Hrm\Http\Controllers\PayslipController;
+use App\Modules\Hrm\Http\Controllers\PerformanceController;
+use App\Modules\Hrm\Http\Controllers\RecruitmentController;
 use App\Modules\Hrm\Http\Controllers\ReportController;
 use App\Modules\Hrm\Http\Controllers\SalaryController;
 use App\Modules\Hrm\Http\Controllers\SalaryRevisionController;
 use App\Modules\Hrm\Http\Controllers\ScheduleController;
 use App\Modules\Hrm\Http\Controllers\SelfLeaveController;
-use App\Modules\Hrm\Http\Controllers\MyTeamController;
-use App\Modules\Hrm\Http\Controllers\HrLetterController;
-use App\Modules\Hrm\Http\Controllers\ChecklistController;
-use App\Modules\Hrm\Http\Controllers\PerformanceController;
-use App\Modules\Hrm\Http\Controllers\StaffPurchaseController;
-use App\Modules\Hrm\Http\Controllers\ExpenseCategoryController;
 use App\Modules\Hrm\Http\Controllers\SelfServiceController;
 use App\Modules\Hrm\Http\Controllers\SettlementController;
 use App\Modules\Hrm\Http\Controllers\ShiftController;
 use App\Modules\Hrm\Http\Controllers\ShowCauseNoticeController;
+use App\Modules\Hrm\Http\Controllers\StaffPurchaseController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->group(function () {
@@ -209,6 +209,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::patch('my-expenses/{claim}', [ExpenseClaimController::class, 'rename'])->name('my-expenses.rename');
     Route::delete('my-expenses/{claim}', [ExpenseClaimController::class, 'destroy'])->name('my-expenses.destroy');
     Route::delete('my-expenses/{claim}/lines/{line}', [ExpenseClaimController::class, 'destroyLine'])->name('my-expenses.lines.destroy');
+    // ⭐ Joy, 15 Sep 2026: a spend on the open claim - including one sent back -
+    // is corrected in place. POST, because a replacement receipt travels as a file.
+    Route::post('my-expenses/{claim}/lines/{line}', [ExpenseClaimController::class, 'updateLine'])->name('my-expenses.lines.update');
 
     // ── Recruitment (Joy, 29 Aug 2026) ──────────────────────────────────────
     // ⚠⚠ NOTHING HERE CREATES AN EMPLOYEE. Marking somebody hired records the

@@ -214,6 +214,60 @@ class ExpenseClaimController extends Controller
     }
 
     /**
+     * Correct one spend on the employee's open claim.
+     *
+     * ⭐⭐ JOY, 15 SEP 2026: "the expense send back can be editable and can be
+     * resend and admin will check". A claim sent back for "Dollar rate 125.25"
+     * could only be fixed by removing the spend and typing it again with its
+     * receipt, so on 14 Sep both returned claims were discarded instead, their
+     * approval history left pointing at nothing and their numbers reused next
+     * morning. This is the correction that was missing.
+     *
+     * ⚠ Only while the claim is the employee's own OPEN claim: never sent, or
+     * sent back. `ownDraft` 404s a claim waiting on an approver, an approved or a
+     * rejected one, so what an approver decided on cannot be changed underneath
+     * the decision.
+     *
+     * ⚠ The receipt already on the spend counts. A new file replaces it; leaving
+     * the file box empty keeps it, so correcting a figure never means finding the
+     * slip again.
+     */
+    public function updateLine(Request $request, ExpenseClaim $claim, ExpenseClaimLine $line, StoreAttachment $store, DeleteAttachment $deleteAttachment): RedirectResponse
+    {
+        $employee = Employee::forUser($request->user());
+        abort_if($employee === null, 403);
+
+        $claim = $this->ownDraft($claim->id, $employee->id);
+        abort_unless($line->expense_claim_id === $claim->id, 404);
+
+        $line->load('attachments');
+
+        $data = $request->validate(
+            $this->lineRules($request, app(BusinessContext::class)->id(), receiptRequired: $line->attachments->isEmpty()),
+            $this->lineMessages(),
+        );
+
+        DB::transaction(function () use ($claim, $line, $data, $request, $store, $deleteAttachment) {
+            $line->update([
+                'spent_on' => $data['spent_on'],
+                'expense_category_id' => $data['expense_category_id'],
+                'amount' => $data['amount'],
+                'description' => $data['description'] ?? null,
+            ]);
+
+            if ($request->hasFile('receipt')) {
+                $line->attachments->each(fn (Attachment $file) => $deleteAttachment->handle($file));
+                $store->handle($line, $request->file('receipt'), ExpenseClaimLine::EVIDENCE_COLLECTION, $request->user());
+            }
+
+            $claim->load('lines');
+            $claim->syncFromLines();
+        });
+
+        return back()->with('success', "Spend corrected on {$claim->claim_number}.");
+    }
+
+    /**
      * Throw away a draft nobody has seen.
      *
      * ⚠ A draft only. A submitted claim is a record that somebody asked, and
@@ -227,6 +281,17 @@ class ExpenseClaimController extends Controller
 
         $claim = $this->ownDraft($claim->id, $employee->id);
         $number = $claim->claim_number;
+
+        // ⛔⛔ JOY, 15 SEP 2026: a claim an approver has looked at is NOT
+        // discarded; it is corrected and sent again. On 14 Sep two sent-back
+        // claims were discarded, which left their approval history pointing at
+        // nothing and let the next claims take the same numbers. A claim with an
+        // approval request has been seen, whatever state it is in now.
+        if ($claim->approvalRequest()->exists()) {
+            throw ValidationException::withMessages([
+                'claim' => "{$number} was sent back by an approver, so it cannot be discarded. Correct the spends and send it again.",
+            ]);
+        }
 
         // ⚠ The lines go with the claim through the foreign key, but their
         // receipts do NOT: an attachment is polymorphic, so the row and the file
@@ -697,6 +762,9 @@ class ExpenseClaimController extends Controller
             'is_draft' => $claim->isDraft(),
             'was_sent_back' => $claim->wasSentBack(),
             'sent_back_note' => $claim->wasSentBack() ? $claim->approvalRequest?->review_note : null,
+            // ⚠ Joy, 15 Sep 2026: only a claim nobody has reviewed may be thrown
+            // away. The screen hides Discard for the rest; destroy() refuses them.
+            'can_discard' => $claim->isDraft() && $claim->approvalRequest === null,
             'is_settled' => $claim->isSettled(),
             'is_approved' => $claim->isApproved(),
             'settlement_method' => $claim->settlement_method,
