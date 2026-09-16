@@ -5,6 +5,7 @@ namespace App\Modules\Commerce\Support;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Commerce\Exceptions\GatewayUnavailable;
 use App\Modules\Commerce\Models\GatewayPayment;
+use App\Modules\Commerce\Models\GatewayRefund;
 use App\Modules\Commerce\Models\StorePaymentGateway;
 use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Http\Client\ConnectionException;
@@ -12,8 +13,9 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * The three things the ERP asks of SSLCommerz (slice P2b): open a payment page,
- * check a callback's signature, and ask the Validation API what really happened.
+ * What the ERP asks of SSLCommerz: open a payment page, check a callback's
+ * signature, ask the Validation API what really happened (slice P2b), and send
+ * money back and follow it (slice P4).
  *
  * ⭐ Built against SSLCommerz's own PHP library (sslcommerz/SSLCommerz-PHP,
  * SslCommerzNotification), not against LaLaDia, whose integration has never taken
@@ -161,6 +163,65 @@ final class SslCommerzClient
                 'store_id' => $this->gateway->merchant_id,
                 'store_passwd' => $this->gateway->secret(),
                 'v' => 1,
+                'format' => 'json',
+            ]);
+        } catch (ConnectionException) {
+            return null;
+        }
+
+        $body = $response->json();
+
+        return $response->successful() && is_array($body) ? $body : null;
+    }
+
+    /**
+     * Ask SSLCommerz to send money back to the card or wallet a payment came
+     * from (slice P4). Null when it cannot be reached or its answer cannot be
+     * read, which proves nothing either way.
+     *
+     * ⭐ SSLCommerz's refund API (developer.sslcommerz.com/doc/v4, read 16
+     * September 2026): `refund_trans_id` has been MANDATORY since 24 February
+     * 2025 and identifies this refund among the payment's refunds, which is what
+     * makes asking again under the same id safe.
+     *
+     * ⛔ On the live gateway this answers only a public IP registered with
+     * SSLCommerz.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function initiateRefund(GatewayRefund $refund, GatewayPayment $payment): ?array
+    {
+        return $this->askRefundApi([
+            'bank_tran_id' => $payment->bank_tran_id,
+            'refund_trans_id' => $refund->refund_trans_id,
+            'refund_amount' => $refund->amountMoney()->toTaka(),
+            'refund_remarks' => $refund->remarks,
+            'refe_id' => $refund->refund_trans_id,
+        ]);
+    }
+
+    /**
+     * Ask SSLCommerz where a refund it accepted stands.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function refundStatus(string $refundRefId): ?array
+    {
+        return $this->askRefundApi(['refund_ref_id' => $refundRefId]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $query
+     * @return array<string, mixed>|null
+     */
+    private function askRefundApi(array $query): ?array
+    {
+        try {
+            // ⚠ Exactly the documented parameters: unlike the Validation API,
+            // the refund API lists no `v`.
+            $response = Http::timeout(30)->get($this->baseUrl().'/validator/api/merchantTransIDvalidationAPI.php', $query + [
+                'store_id' => $this->gateway->merchant_id,
+                'store_passwd' => $this->gateway->secret(),
                 'format' => 'json',
             ]);
         } catch (ConnectionException) {

@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Commerce\Http\Controllers\GatewayRefundController;
 use App\Modules\Sales\Http\Controllers\ConsignmentController;
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\CourierStatementController;
@@ -243,5 +244,14 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // Money an order holds, paid back (SSLCommerz slice P1).
         Route::post('orders/{order}/refunds', [SalesOrderController::class, 'refund'])
             ->whereNumber('order')->name('orders.refunds.store');
+    });
+
+    // ⚠⚠ Money sent back THROUGH SSLCommerz (slice P4): the Owner only (Joy, 16
+    // September), because here the ERP itself moves the money.
+    Route::middleware('can:sales.gateway.refund')->group(function () {
+        Route::post('orders/{order}/gateway-refunds', [GatewayRefundController::class, 'store'])
+            ->whereNumber('order')->name('orders.gateway-refunds.store');
+        Route::post('orders/{order}/gateway-refunds/{refund}/check', [GatewayRefundController::class, 'check'])
+            ->whereNumber(['order', 'refund'])->name('orders.gateway-refunds.check');
     });
 });

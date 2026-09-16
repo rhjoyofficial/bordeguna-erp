@@ -4,6 +4,8 @@ namespace App\Modules\Sales\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Commerce\Enums\GatewayRefundStatus;
+use App\Modules\Commerce\Models\GatewayRefund;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Sales\Models\CustomerRefund;
@@ -118,8 +120,9 @@ class RecordCustomerRefund
      * uncapped refund is how a receivable goes quietly negative.
      *
      * ⚠ Refused from a courier's or a gateway's account: each holds money for the
-     * business, and neither pays a customer back by hand. A refund through the
-     * gateway itself is slice P4.
+     * business, and neither pays a customer back by hand. The one exception is
+     * slice P4: booking a refund SSLCommerz itself has CONFIRMED, named by
+     * `$throughGateway`, out of the gateway account the payment was booked into.
      *
      * @throws ValidationException
      */
@@ -131,6 +134,7 @@ class RecordCustomerRefund
         mixed $refundedOn = null,
         ?string $reference = null,
         ?string $note = null,
+        ?GatewayRefund $throughGateway = null,
     ): CustomerRefund {
         $date = ($refundedOn === null ? Carbon::now() : Carbon::parse($refundedOn))->startOfDay();
 
@@ -142,7 +146,12 @@ class RecordCustomerRefund
             ]);
         }
 
-        if ($moneyAccount->isCourier() || $moneyAccount->isGateway()) {
+        $bookingGatewayRefund = $throughGateway !== null
+            && $moneyAccount->isGateway()
+            && $throughGateway->status === GatewayRefundStatus::Confirmed
+            && $throughGateway->sales_order_id === $order->id;
+
+        if ($moneyAccount->isCourier() || ($moneyAccount->isGateway() && ! $bookingGatewayRefund)) {
             throw ValidationException::withMessages([
                 'money_account_id' => "{$moneyAccount->name} holds money for somebody else. Pay the customer back from a bank, cash or mobile wallet account.",
             ]);
@@ -162,11 +171,24 @@ class RecordCustomerRefund
             ]);
         }
 
-        return DB::transaction(function () use ($order, $moneyAccount, $refunding, $createdBy, $date, $reference, $note) {
+        return DB::transaction(function () use ($order, $moneyAccount, $refunding, $createdBy, $date, $reference, $note, $throughGateway, $bookingGatewayRefund) {
             /** @var SalesOrder $order */
             $order = SalesOrder::query()->whereKey($order->id)->lockForUpdate()->with('customer')->firstOrFail();
 
             $held = $order->advanceHeld();
+
+            // ⚠ The confirmed gateway refund being booked is itself reserved in
+            // advanceHeld(), so it is added back for its own booking, and only
+            // its own amount: it cannot book more than was asked of SSLCommerz.
+            if ($bookingGatewayRefund) {
+                if ($refunding->minor !== $throughGateway->amountMoney()->minor) {
+                    throw ValidationException::withMessages([
+                        'amount' => 'A refund through SSLCommerz is booked for exactly what SSLCommerz was asked to send back.',
+                    ]);
+                }
+
+                $held = $held->plus($throughGateway->amountMoney());
+            }
 
             if ($refunding->minor > $held->minor) {
                 throw ValidationException::withMessages([

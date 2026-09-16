@@ -5,7 +5,9 @@ namespace App\Modules\Sales\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Commerce\Enums\GatewayPaymentStatus;
 use App\Modules\Commerce\Models\GatewayPayment;
+use App\Modules\Commerce\Models\GatewayRefund;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Enums\MoneyAccountType;
@@ -291,6 +293,7 @@ class SalesOrderController extends Controller
                 : [],
             'can_record_payment' => $user->can('sales.receipt.record'),
             'can_refund' => $user->can('sales.returns.refund'),
+            'can_gateway_refund' => $user->can('sales.gateway.refund'),
             'can_approve' => $user->can('sales.orders.approve'),
             'can_deliver' => $user->can('sales.sell'),
             'can_cancel' => $user->can('sales.orders.cancel'),
@@ -355,7 +358,34 @@ class SalesOrderController extends Controller
                     'risk_title' => $attempt->risk_title,
                     'problem' => $attempt->problem,
                     'started_at' => $attempt->created_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                    // Slice P4: what this payment can still give back through
+                    // SSLCommerz. Null for an attempt that took no booked money.
+                    'refundable' => $attempt->status === GatewayPaymentStatus::Paid && filled($attempt->bank_tran_id)
+                        ? Money::ofMinor(max(0, ($attempt->amountPaidMoney()?->minor ?? 0) - GatewayRefund::takenFrom($attempt)->minor))->toTaka()
+                        : null,
                 ])->values(),
+            // ⭐ Every refund sent through SSLCommerz (slice P4), finished or not,
+            // so a refund still on its way is never mistaken for money still owed.
+            'gateway_refunds' => GatewayRefund::query()->where('sales_order_id', $order->id)
+                ->with('payment:id,tran_id', 'requestedBy:id,name')
+                ->orderBy('id')->get()
+                ->map(fn (GatewayRefund $refund) => [
+                    'id' => $refund->id,
+                    'refund_trans_id' => $refund->refund_trans_id,
+                    'tran_id' => $refund->payment?->tran_id,
+                    'amount' => $refund->amountMoney()->toTaka(),
+                    'remarks' => $refund->remarks,
+                    'status' => $refund->status->value,
+                    'status_label' => $refund->status->label(),
+                    'in_flight' => $refund->status->isInFlight(),
+                    'refund_ref_id' => $refund->refund_ref_id,
+                    'problem' => $refund->problem,
+                    'requested_by' => $refund->requestedBy?->name,
+                    'requested_at' => $refund->created_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                    'refunded_at' => $refund->refunded_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                    'last_checked_at' => $refund->last_checked_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                ])->values(),
+            'refunding' => GatewayRefund::inFlightFor($order)->toTaka(),
             'refunds' => $order->advanceRefunds()
                 ->with('moneyAccount:id,name')
                 ->orderBy('refunded_on')->orderBy('id')->get()

@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Models;
 
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Commerce\Models\GatewayRefund;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
@@ -319,11 +320,18 @@ class SalesOrder extends Model
 
     /**
      * The customer's money this order is holding: paid for it, not yet taken by
-     * any invoice, and not paid back.
+     * any invoice, not paid back, and not on its way back through SSLCommerz.
      *
      * ⚠ DERIVED, never stored, for the reason an invoice's outstanding is: a
      * stored balance is a second answer to a question the documents already
      * answer, and it drifts the first time one of them is corrected.
+     *
+     * ⚠⚠ A refund SSLCommerz has been asked for is RESERVED here from the moment
+     * it is requested until it is booked or refused (slice P4). Every reader
+     * takes it: the by-hand refund cap, the gateway refund cap, and the invoice
+     * that would otherwise apply money already leaving. Until it is booked the
+     * ledger still shows it in 1140, which is why this differs from the ledger
+     * for that time, deliberately.
      */
     public function advanceHeld(): Money
     {
@@ -335,7 +343,9 @@ class SalesOrder extends Model
 
         $refunded = Money::ofTaka((string) ($this->advanceRefunds()->sum('amount') ?: '0'));
 
-        return Money::ofMinor($received->minor - $allocated->minor - $refunded->minor);
+        $leaving = GatewayRefund::inFlightFor($this);
+
+        return Money::ofMinor($received->minor - $allocated->minor - $refunded->minor - $leaving->minor);
     }
 
     /**
@@ -368,7 +378,10 @@ class SalesOrder extends Model
     public function paidTowards(): Money
     {
         $received = Money::ofTaka((string) ($this->advanceReceipts()->sum('amount') ?: '0'));
-        $refunded = Money::ofTaka((string) ($this->advanceRefunds()->sum('amount') ?: '0'));
+        // ⚠ Money on its way back through SSLCommerz is not paid towards the
+        // order either, the same reservation advanceHeld() makes.
+        $refunded = Money::ofTaka((string) ($this->advanceRefunds()->sum('amount') ?: '0'))
+            ->plus(GatewayRefund::inFlightFor($this));
 
         $otherwise = Money::ofTaka((string) (CustomerReceiptAllocation::query()
             ->whereIn('sales_invoice_id', $this->invoicesQuery()->select('id'))

@@ -42,6 +42,10 @@ class SalesPermissionsSeeder extends Seeder
             'sales.orders.cancel',
             'sales.returns.record',
             'sales.returns.refund',
+            // ⚠⚠ SSLCommerz slice P4, Joy 16 September: the OWNER only. By bank
+            // or bKash a person sends the money and the ERP records it; through
+            // SSLCommerz the ERP itself moves the money.
+            'sales.gateway.refund',
         ],
         'Manager' => [
             'sales.customers.manage',

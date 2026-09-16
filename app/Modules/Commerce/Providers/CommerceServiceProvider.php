@@ -2,6 +2,7 @@
 
 namespace App\Modules\Commerce\Providers;
 
+use App\Modules\Commerce\Console\Commands\FollowGatewayRefunds;
 use App\Modules\Commerce\Console\Commands\SettleOnlinePayments;
 use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
 use App\Modules\Commerce\Sections\SectionCatalogue;
@@ -56,7 +57,8 @@ class CommerceServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             // SSLCommerz slice P2c: book proven payments, expire unpaid orders.
-            $this->commands([SettleOnlinePayments::class]);
+            // Slice P4: follow refunds sent through SSLCommerz to the end.
+            $this->commands([SettleOnlinePayments::class, FollowGatewayRefunds::class]);
         }
 
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');

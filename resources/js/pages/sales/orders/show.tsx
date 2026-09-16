@@ -120,7 +120,30 @@ interface Payments {
         risk_title: string | null;
         problem: string | null;
         started_at: string | null;
+        // Slice P4: what it can still give back through SSLCommerz.
+        refundable: string | null;
     }[];
+    // SSLCommerz slice P4: every refund sent through SSLCommerz, and what is on
+    // its way back now (already taken out of `held`).
+    gateway_refunds: GatewayRefundRow[];
+    refunding: string;
+}
+
+interface GatewayRefundRow {
+    id: number;
+    refund_trans_id: string;
+    tran_id: string | null;
+    amount: string;
+    remarks: string;
+    status: 'requested' | 'processing' | 'confirmed' | 'refunded' | 'failed' | 'cancelled';
+    status_label: string;
+    in_flight: boolean;
+    refund_ref_id: string | null;
+    problem: string | null;
+    requested_by: string | null;
+    requested_at: string | null;
+    refunded_at: string | null;
+    last_checked_at: string | null;
 }
 
 interface MoneyAccountOption {
@@ -480,7 +503,7 @@ function RecordPaymentForm({ order, accounts, stillToPay }: { order: Order; acco
     );
 }
 
-function RefundForm({ order, accounts, held }: { order: Order; accounts: MoneyAccountOption[]; held: string }) {
+function RefundForm({ order, accounts, held, titled = false }: { order: Order; accounts: MoneyAccountOption[]; held: string; titled?: boolean }) {
     const { data, setData, post, errors, processing } = useForm({
         money_account_id: accounts.length === 1 ? String(accounts[0].id) : '',
         amount: held,
@@ -495,6 +518,7 @@ function RefundForm({ order, accounts, held }: { order: Order; accounts: MoneyAc
 
     return (
         <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3">
+            {titled && <p className="w-full font-medium">Or record money you sent back by bank, cash or bKash</p>}
             <div className="grid gap-1">
                 <Label>Paid back from</Label>
                 <SearchableSelect
@@ -528,22 +552,144 @@ function RefundForm({ order, accounts, held }: { order: Order; accounts: MoneyAc
     );
 }
 
+function lesser(a: string, b: string): string {
+    return parseFloat(a) <= parseFloat(b) ? a : b;
+}
+
+// SSLCommerz slice P4: send the money back through SSLCommerz itself. The Owner
+// only; the books move when SSLCommerz says the money is back.
+function GatewayRefundForm({ order, owed, payments }: { order: Order; owed: string; payments: Payments['online'] }) {
+    const refundable = payments.filter((attempt) => attempt.refundable !== null && parseFloat(attempt.refundable) > 0);
+    const first = refundable[0];
+    const { data, setData, post, errors, processing } = useForm({
+        gateway_payment_id: first ? String(first.id) : '',
+        amount: first?.refundable ? lesser(owed, first.refundable) : owed,
+        remarks: '',
+    });
+
+    const choose = (id: string) => {
+        const attempt = refundable.find((candidate) => String(candidate.id) === id);
+        setData((current) => ({ ...current, gateway_payment_id: id, amount: attempt?.refundable ? lesser(owed, attempt.refundable) : owed }));
+    };
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(route('sales.orders.gateway-refunds.store', order.id), { preserveScroll: true });
+    };
+
+    return (
+        <form onSubmit={submit} className="mt-3 grid gap-3 rounded-md border border-dashed p-3">
+            <p className="font-medium">Refund through SSLCommerz</p>
+            <div className="flex flex-wrap items-end gap-3">
+                {refundable.length > 1 && (
+                    <div className="grid gap-1">
+                        <Label>Payment</Label>
+                        <SearchableSelect
+                            value={data.gateway_payment_id}
+                            onChange={choose}
+                            options={refundable.map((attempt) => ({
+                                value: String(attempt.id),
+                                label: `${attempt.tran_id} (${attempt.refundable} left)`,
+                            }))}
+                            placeholder="Select payment"
+                            searchPlaceholder="Search payments…"
+                        />
+                    </div>
+                )}
+                <div className="grid gap-1">
+                    <Label>Amount</Label>
+                    <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
+                    <InputError message={errors.amount} />
+                </div>
+                {/* ⚠ Its own full row on a phone: beside the amount it pushed the
+                    button over the field (found on the 390px walk). */}
+                <div className="grid w-full gap-1 sm:w-auto sm:min-w-64 sm:flex-1">
+                    <Label>Reason</Label>
+                    <Input
+                        className="w-full"
+                        maxLength={255}
+                        placeholder="Order cancelled, parcel returned…"
+                        value={data.remarks}
+                        onChange={(e) => setData('remarks', e.target.value)}
+                    />
+                    <InputError message={errors.remarks} />
+                </div>
+                <Button size="sm" variant="outline" disabled={processing}>
+                    Send refund
+                </Button>
+            </div>
+            <InputError message={errors.gateway_payment_id} />
+            <p className="text-muted-foreground text-xs">
+                SSLCommerz sends the money back to the card or wallet it came from, usually within a few working days. The amount is set aside on this
+                order at once, and booked when SSLCommerz says it is back with the customer.
+            </p>
+        </form>
+    );
+}
+
+function GatewayRefundList({ order, refunds, canCheck }: { order: Order; refunds: GatewayRefundRow[]; canCheck: boolean }) {
+    return (
+        <div className="mt-3 grid gap-1">
+            <p className="font-medium">Refunds through SSLCommerz</p>
+            {refunds.map((refund) => (
+                <div key={refund.id} className="grid gap-0.5">
+                    <p className="flex flex-wrap items-center gap-x-2">
+                        <span>
+                            {refund.requested_at} - {refund.refund_trans_id} - {refund.amount} -{' '}
+                            <span className={refund.status === 'refunded' ? 'font-medium' : 'text-muted-foreground'}>{refund.status_label}</span>
+                            {refund.refunded_at && refund.status === 'refunded' && (
+                                <span className="text-muted-foreground"> on {refund.refunded_at}</span>
+                            )}
+                        </span>
+                        {canCheck && refund.in_flight && (
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2"
+                                onClick={() =>
+                                    router.post(route('sales.orders.gateway-refunds.check', [order.id, refund.id]), {}, { preserveScroll: true })
+                                }
+                            >
+                                Check now
+                            </Button>
+                        )}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                        {refund.remarks}
+                        {refund.requested_by && ` - asked by ${refund.requested_by}`}
+                        {refund.refund_ref_id && ` - SSLCommerz ref ${refund.refund_ref_id}`}
+                        {refund.in_flight && refund.last_checked_at && ` - last asked ${refund.last_checked_at}`}
+                    </p>
+                    {refund.problem && (
+                        <p className={refund.in_flight ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground'}>{refund.problem}</p>
+                    )}
+                </div>
+            ))}
+        </div>
+    );
+}
+
 function PaymentsCard({
     order,
     payments,
     accounts,
     canRecordPayment,
     canRefund,
+    canGatewayRefund,
 }: {
     order: Order;
     payments: Payments;
     accounts: MoneyAccountOption[];
     canRecordPayment: boolean;
     canRefund: boolean;
+    canGatewayRefund: boolean;
 }) {
     const held = parseFloat(payments.held);
+    const refunding = parseFloat(payments.refunding);
     const takesPayment = canRecordPayment && payments.can_take_payment && accounts.length > 0;
-    const hasHistory = payments.receipts.length > 0 || payments.refunds.length > 0 || payments.online.length > 0;
+    const hasHistory =
+        payments.receipts.length > 0 || payments.refunds.length > 0 || payments.online.length > 0 || payments.gateway_refunds.length > 0;
+    const gatewayRefundable = payments.online.some((attempt) => attempt.refundable !== null && parseFloat(attempt.refundable) > 0);
 
     if (!hasHistory && !takesPayment) {
         return null;
@@ -632,9 +778,21 @@ function PaymentsCard({
                 </div>
             )}
 
+            {payments.gateway_refunds.length > 0 && (
+                <GatewayRefundList order={order} refunds={payments.gateway_refunds} canCheck={canGatewayRefund} />
+            )}
+
             {held > 0 && !payments.refund_owed && (
                 <p className="text-muted-foreground mt-2">
                     {payments.held} is held for this order. Its next invoice takes it, and the courier collects only the rest.
+                </p>
+            )}
+
+            {/* ⚠ Said beside the refund owed, so money already on its way back is
+                never paid back a second time by hand. */}
+            {refunding > 0 && (
+                <p className="mt-2 font-medium text-amber-600 dark:text-amber-500">
+                    {payments.refunding} is on its way back through SSLCommerz and is set aside until SSLCommerz finishes.
                 </p>
             )}
 
@@ -651,7 +809,12 @@ function PaymentsCard({
             {/* ⚠ Offered only once a refund is OWED. On an order still being
                 fulfilled the money is about to pay its invoice, and a refund
                 button beside it is an accident waiting to happen. */}
-            {canRefund && payments.refund_owed && accounts.length > 0 && <RefundForm order={order} accounts={accounts} held={payments.refund_owed} />}
+            {canGatewayRefund && payments.refund_owed && gatewayRefundable && (
+                <GatewayRefundForm order={order} owed={payments.refund_owed} payments={payments.online} />
+            )}
+            {canRefund && payments.refund_owed && accounts.length > 0 && (
+                <RefundForm order={order} accounts={accounts} held={payments.refund_owed} titled={canGatewayRefund && gatewayRefundable} />
+            )}
         </div>
     );
 }
@@ -763,6 +926,7 @@ export default function SalesOrderShow({
     money_accounts,
     can_record_payment,
     can_refund,
+    can_gateway_refund,
     can_approve,
     can_deliver,
     can_cancel,
@@ -777,6 +941,7 @@ export default function SalesOrderShow({
     money_accounts: MoneyAccountOption[];
     can_record_payment: boolean;
     can_refund: boolean;
+    can_gateway_refund: boolean;
     can_approve: boolean;
     can_deliver: boolean;
     can_cancel: boolean;
@@ -977,6 +1142,7 @@ export default function SalesOrderShow({
                     accounts={money_accounts}
                     canRecordPayment={can_record_payment}
                     canRefund={can_refund}
+                    canGatewayRefund={can_gateway_refund}
                 />
 
                 {can_cancel && order.status === 'open' && (

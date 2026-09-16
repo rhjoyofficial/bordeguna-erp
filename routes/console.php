@@ -1,7 +1,11 @@
 <?php
 
+use App\Modules\Accounting\Console\Commands\ReleaseDueAmortizations;
+use App\Modules\Commerce\Console\Commands\FollowGatewayRefunds;
 use App\Modules\Commerce\Console\Commands\SettleOnlinePayments;
 use App\Modules\Crm\Console\Commands\NotifyFollowUpsDue;
+use App\Modules\Crm\Console\Commands\SweepDormantCustomersCommand;
+use App\Modules\Foundation\Console\Commands\SendMorningBriefing;
 use App\Modules\Hrm\Console\Commands\AccrueEarnedLeave;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
 use App\Modules\Inventory\Actions\ProposeExpiredStockWriteOffs;
@@ -62,7 +66,7 @@ Schedule::command(ProcessAttendanceDaily::class)
 // Prepaids, accruals and deferred income release their month (Module 2,
 // Slice 4). Idempotent by the released_through pointer; each schedule posts
 // as its own creator.
-Schedule::command(\App\Modules\Accounting\Console\Commands\ReleaseDueAmortizations::class)
+Schedule::command(ReleaseDueAmortizations::class)
     ->monthlyOn(1, '02:00')
     ->withoutOverlapping()
     ->runInBackground();
@@ -78,11 +82,11 @@ Schedule::command(AccrueEarnedLeave::class)
 // One nudge per sleeping customer, per active cadence - never a second
 // while the first stays open.
 // The morning briefing to everyone who reads money.
-Schedule::command(\App\Modules\Foundation\Console\Commands\SendMorningBriefing::class)
+Schedule::command(SendMorningBriefing::class)
     ->dailyAt('07:00')
     ->onOneServer();
 
-Schedule::command(\App\Modules\Crm\Console\Commands\SweepDormantCustomersCommand::class)
+Schedule::command(SweepDormantCustomersCommand::class)
     ->dailyAt('07:30')
     ->onOneServer();
 
@@ -124,5 +128,15 @@ Schedule::command(RollAndRemindRecurringExpenses::class)
 // paid that is not yet in the books; an hour is too long for that to wait.
 Schedule::command(SettleOnlinePayments::class)
     ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// Refunds sent through SSLCommerz (slice P4, 16 September 2026): asked about
+// until SSLCommerz says they are finished, then booked.
+//
+// ⚠ Every thirty minutes: a refund takes SSLCommerz days, and the money is
+// already reserved on its order, so nothing waits on this but the books.
+Schedule::command(FollowGatewayRefunds::class)
+    ->everyThirtyMinutes()
     ->withoutOverlapping()
     ->onOneServer();
