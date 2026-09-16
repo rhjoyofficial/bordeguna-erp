@@ -26,6 +26,7 @@ interface MyWorkProps {
     my_requests: Section<{ type: string; since: string | null }>;
     attendance?: { needs_review: number; holds_payroll: number };
     recurring?: Section<{ label: string; due_on: string; amount: string }>;
+    assets?: { in_transit: number; unacknowledged: number };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'My work', href: '/work' }];
@@ -50,9 +51,7 @@ function Card({
             <div className="mb-2 flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold">
                     {title}
-                    {count > 0 && (
-                        <span className="bg-primary/10 text-primary ml-2 rounded-full px-2 py-0.5 text-xs font-bold">{count}</span>
-                    )}
+                    {count > 0 && <span className="bg-primary/10 text-primary ml-2 rounded-full px-2 py-0.5 text-xs font-bold">{count}</span>}
                 </h2>
                 <Link href={href} className="text-muted-foreground text-xs underline-offset-2 hover:underline">
                     {linkLabel}
@@ -63,7 +62,7 @@ function Card({
     );
 }
 
-export default function MyWork({ approvals, followups, todos, my_requests, attendance, recurring }: MyWorkProps) {
+export default function MyWork({ approvals, followups, todos, my_requests, attendance, recurring, assets }: MyWorkProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="My work" />
@@ -73,11 +72,17 @@ export default function MyWork({ approvals, followups, todos, my_requests, atten
                     <p className="text-muted-foreground text-sm">Everything waiting on you, gathered from every module.</p>
                 </div>
 
+                {assets && (assets.in_transit > 0 || assets.unacknowledged > 0) && (
+                    <Link href="/assets/movements?open=1" className="block rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+                        <span className="font-semibold">Asset hand-overs waiting:</span>
+                        {assets.in_transit > 0 && ` ${assets.in_transit} on the way and not yet received`}
+                        {assets.in_transit > 0 && assets.unacknowledged > 0 && ','}
+                        {assets.unacknowledged > 0 && ` ${assets.unacknowledged} handed over and not acknowledged for 3 days`}
+                    </Link>
+                )}
+
                 {attendance && (attendance.needs_review > 0 || attendance.holds_payroll > 0) && (
-                    <Link
-                        href="/hrm/daily-attendance"
-                        className="border-destructive/40 bg-destructive/5 block rounded-lg border p-3 text-sm"
-                    >
+                    <Link href="/hrm/daily-attendance" className="border-destructive/40 bg-destructive/5 block rounded-lg border p-3 text-sm">
                         <span className="font-semibold">Attendance needs review:</span> {attendance.needs_review}{' '}
                         {attendance.needs_review === 1 ? 'day' : 'days'} flagged
                         {attendance.holds_payroll > 0 && (
@@ -90,7 +95,13 @@ export default function MyWork({ approvals, followups, todos, my_requests, atten
                 )}
 
                 <div className="grid gap-4 md:grid-cols-2">
-                    <Card title="Approvals waiting for me" count={approvals.count} href="/approvals" linkLabel="Open approvals" empty="Nothing waits on your signature.">
+                    <Card
+                        title="Approvals waiting for me"
+                        count={approvals.count}
+                        href="/approvals"
+                        linkLabel="Open approvals"
+                        empty="Nothing waits on your signature."
+                    >
                         {approvals.items.map((item, index) => (
                             <li key={index} className="text-sm">
                                 <span className="font-medium">{item.type}</span>
@@ -102,7 +113,13 @@ export default function MyWork({ approvals, followups, todos, my_requests, atten
                         ))}
                     </Card>
 
-                    <Card title="Follow-ups due" count={followups.count} href="/crm/follow-ups" linkLabel="Open follow-ups" empty="No follow-up is due or overdue.">
+                    <Card
+                        title="Follow-ups due"
+                        count={followups.count}
+                        href="/crm/follow-ups"
+                        linkLabel="Open follow-ups"
+                        empty="No follow-up is due or overdue."
+                    >
                         {followups.items.map((item, index) => (
                             <li key={index} className="text-sm">
                                 <span className="font-medium">{item.title}</span>

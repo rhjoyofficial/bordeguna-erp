@@ -19,6 +19,8 @@ interface ChecklistProps {
     employee: { id: number; employee_code: string; name: string; is_separated: boolean };
     onboarding: ChecklistItem[];
     offboarding: ChecklistItem[];
+    still_holds: { id: number; tag: string; name: string; quantity: number }[];
+    can_move_assets: boolean;
 }
 
 function ItemList({ items, employeeId }: { items: ChecklistItem[]; employeeId: number }) {
@@ -46,7 +48,7 @@ function ItemList({ items, employeeId }: { items: ChecklistItem[]; employeeId: n
     );
 }
 
-export default function Checklist({ employee, onboarding, offboarding }: ChecklistProps) {
+export default function Checklist({ employee, onboarding, offboarding, still_holds, can_move_assets }: ChecklistProps) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employees', href: '/hrm/employees' },
         { title: employee.name, href: `/hrm/employees/${employee.id}` },
@@ -64,8 +66,8 @@ export default function Checklist({ employee, onboarding, offboarding }: Checkli
                         Checklist: {employee.name} ({employee.employee_code})
                     </h1>
                     <p className="text-muted-foreground text-sm">
-                        What must actually happen for a joiner and a leaver. Every tick records who and when; untick a mis-click and it is
-                        as if it never was.
+                        What must actually happen for a joiner and a leaver. Every tick records who and when; untick a mis-click and it is as if it
+                        never was.
                     </p>
                 </div>
 
@@ -80,7 +82,11 @@ export default function Checklist({ employee, onboarding, offboarding }: Checkli
                         <ItemList items={onboarding} employeeId={employee.id} />
                     </div>
 
-                    <div className={'rounded-lg border p-4 ' + (employee.is_separated ? 'border-amber-500/40 bg-amber-500/5' : 'border-border bg-card')}>
+                    <div
+                        className={
+                            'rounded-lg border p-4 ' + (employee.is_separated ? 'border-amber-500/40 bg-amber-500/5' : 'border-border bg-card')
+                        }
+                    >
                         <h2 className="mb-3 font-semibold">
                             Offboarding{' '}
                             <span className="text-muted-foreground text-sm font-normal">
@@ -91,6 +97,38 @@ export default function Checklist({ employee, onboarding, offboarding }: Checkli
                             <p className="mb-2 text-sm font-medium text-amber-700">This person has left - finish the list.</p>
                         )}
                         <ItemList items={offboarding} employeeId={employee.id} />
+
+                        {/* ⚠ Current custody from the asset register (slice A2): a
+                            person who has left and still holds a laptop is the one
+                            line an offboarding list must never miss. */}
+                        <div className="mt-4 border-t pt-3 text-sm">
+                            <p className="font-medium">
+                                Still holds from the asset register <span className="text-muted-foreground font-normal">({still_holds.length})</span>
+                            </p>
+                            {still_holds.length === 0 ? (
+                                <p className="text-muted-foreground mt-1">Nothing.</p>
+                            ) : (
+                                <ul className="mt-1 grid gap-1">
+                                    {still_holds.map((thing) => (
+                                        <li key={`${thing.id}-${thing.tag}`}>
+                                            <a href={`/assets/items/${thing.id}`} className="underline underline-offset-2">
+                                                {thing.tag}
+                                            </a>{' '}
+                                            {thing.name}
+                                            {thing.quantity > 1 && ` x ${thing.quantity}`}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            {can_move_assets && still_holds.length > 0 && (
+                                <a
+                                    href={`/assets/movements/create?kind=return&${still_holds.map((t) => `items[]=${t.id}`).join('&')}`}
+                                    className="mt-2 inline-block underline underline-offset-2"
+                                >
+                                    Record the return
+                                </a>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

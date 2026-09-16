@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Support\ApprovalCards;
 use App\Support\ApprovalInbox;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -52,6 +54,10 @@ class MyWorkController extends Controller
             $sections['recurring'] = $this->recurring();
         }
 
+        if ($user->can('assets.items.manage')) {
+            $sections['assets'] = $this->assets();
+        }
+
         return Inertia::render('my-work', $sections);
     }
 
@@ -93,7 +99,7 @@ class MyWorkController extends Controller
                 ->get(['id', 'title', 'due_at'])
                 ->map(fn ($task) => [
                     'title' => $task->title,
-                    'due' => \Illuminate\Support\Carbon::parse($task->due_at)->diffForHumans(),
+                    'due' => Carbon::parse($task->due_at)->diffForHumans(),
                 ])
                 ->all(),
         ];
@@ -149,6 +155,24 @@ class MyWorkController extends Controller
                 ->where('attendance_date', '>=', $window)
                 ->where('holds_payroll', 1)
                 ->count(),
+        ];
+    }
+
+    /**
+     * Asset hand-overs waiting on somebody (slice A2): transfers not yet
+     * received, and things issued three days ago that nobody has acknowledged.
+     *
+     * @return array{in_transit: int, unacknowledged: int}
+     */
+    private function assets(): array
+    {
+        $businessId = app(BusinessContext::class)->id();
+
+        return [
+            'in_transit' => DB::table('asset_movements')->where('business_id', $businessId)->where('status', 'dispatched')->count(),
+            'unacknowledged' => DB::table('asset_items')->where('business_id', $businessId)
+                ->whereNotNull('custodian_employee_id')->whereNull('acknowledged_at')
+                ->where('custody_since', '<=', now()->subDays(3)->toDateString())->count(),
         ];
     }
 

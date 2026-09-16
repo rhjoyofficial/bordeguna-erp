@@ -365,8 +365,10 @@ export function AppSidebar() {
                           ...(canViewAssetItems
                               ? [
                                     { title: 'Things we keep', url: '/assets/items', icon: PackageSearch },
+                                    { title: 'Hand-overs', url: '/assets/movements', icon: ArrowLeftRight },
                                     { title: 'Asset tags', url: '/assets/items/labels', icon: ScanBarcode },
                                     { title: 'Asset categories', url: '/assets/categories', icon: Tags },
+                                    { title: 'Outside parties', url: '/assets/parties', icon: Contact },
                                 ]
                               : []),
                           ...(canViewAssets

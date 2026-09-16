@@ -19,6 +19,8 @@ const TABS: { key: TranslationKey; url: string }[] = [
     // Show cause notices issued to this employee (Joy, 24 Aug 2026) - the
     // employee's own printable copies of what HR put on record.
     { key: 'tabs.my_notices', url: '/hrm/my-notices' },
+    // What the employee holds from the asset register (slice A2, 16 Sep 2026).
+    { key: 'tabs.my_assets', url: '/hrm/my-assets' },
 ];
 
 export default function SelfServiceTabs({ active }: { active: string }) {

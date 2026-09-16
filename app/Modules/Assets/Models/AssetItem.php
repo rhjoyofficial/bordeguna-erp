@@ -10,6 +10,7 @@ use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Models\Office;
+use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Models\Supplier;
 use Illuminate\Database\Eloquent\Model;
@@ -60,6 +61,12 @@ class AssetItem extends Model implements ControlsAttachmentAccess
         'warranty_ends_on',
         'note',
         'created_by',
+        // Custody (slice A2): written only by MoveAssets and the acknowledgement.
+        'custodian_employee_id',
+        'custodian_party_id',
+        'custody_since',
+        'acknowledged_at',
+        'transit_movement_id',
     ];
 
     protected $attributes = [
@@ -80,6 +87,8 @@ class AssetItem extends Model implements ControlsAttachmentAccess
             'acquired_on' => 'date',
             'warranty_ends_on' => 'date',
             'purchase_price' => 'decimal:4',
+            'custody_since' => 'date',
+            'acknowledged_at' => 'datetime',
         ];
     }
 
@@ -88,7 +97,7 @@ class AssetItem extends Model implements ControlsAttachmentAccess
         // ⚠ Price deliberately left out: the history of an item is read by people
         // who may not see what it cost.
         return LogOptions::defaults()
-            ->logOnly(['name', 'quantity', 'brand', 'model', 'serial_number', 'office_id', 'warehouse_id', 'area', 'status', 'condition', 'parent_id', 'warranty_ends_on'])
+            ->logOnly(['name', 'quantity', 'brand', 'model', 'serial_number', 'office_id', 'warehouse_id', 'area', 'status', 'condition', 'parent_id', 'warranty_ends_on', 'custodian_employee_id', 'custodian_party_id'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -129,6 +138,56 @@ class AssetItem extends Model implements ControlsAttachmentAccess
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function custodianEmployee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'custodian_employee_id');
+    }
+
+    public function custodianParty(): BelongsTo
+    {
+        return $this->belongsTo(AssetParty::class, 'custodian_party_id');
+    }
+
+    public function transitMovement(): BelongsTo
+    {
+        return $this->belongsTo(AssetMovement::class, 'transit_movement_id');
+    }
+
+    public function holdings(): HasMany
+    {
+        return $this->hasMany(AssetHolding::class, 'asset_item_id');
+    }
+
+    public function movementLines(): HasMany
+    {
+        return $this->hasMany(AssetMovementLine::class, 'asset_item_id');
+    }
+
+    /**
+     * Who has it, as words. A counted group answers from its holdings.
+     */
+    public function custodyLabel(): string
+    {
+        if ($this->transit_movement_id !== null) {
+            return 'On its way';
+        }
+
+        if ($this->custodianEmployee) {
+            return $this->custodianEmployee->fullName();
+        }
+
+        if ($this->custodianParty) {
+            return $this->custodianParty->label();
+        }
+
+        return 'Nobody, in store';
+    }
+
+    public function isInTransit(): bool
+    {
+        return $this->transit_movement_id !== null;
     }
 
     public function createdBy(): BelongsTo

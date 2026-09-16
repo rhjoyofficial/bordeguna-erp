@@ -11,12 +11,15 @@ use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Enums\AssetTracking;
 use App\Modules\Assets\Models\AssetCategory;
 use App\Modules\Assets\Models\AssetItem;
+use App\Modules\Assets\Models\AssetMovementLine;
+use App\Modules\Assets\Models\AssetParty;
 use App\Modules\Assets\Support\AssetQrCode;
 use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
+use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Models\Supplier;
 use Illuminate\Database\Eloquent\Builder;
@@ -43,10 +46,11 @@ class AssetItemController extends Controller
             'place' => ['nullable', 'string', 'regex:/^(office|warehouse):\d+$/'],
             'status' => ['nullable', Rule::enum(AssetStatus::class)],
             'condition' => ['nullable', Rule::enum(AssetCondition::class)],
+            'idle' => ['nullable', 'boolean'],
         ]);
 
         $items = AssetItem::query()
-            ->with(['category:id,name', 'office:id,name', 'warehouse:id,name', 'parent:id,tag'])
+            ->with(['category:id,name', 'office:id,name', 'warehouse:id,name', 'parent:id,tag', 'custodianEmployee:id,first_name,last_name', 'custodianParty:id,name,organisation'])
             ->when($filters['q'] ?? null, function (Builder $query, string $q) {
                 $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $q).'%';
                 $query->where(fn (Builder $inner) => $inner
@@ -63,6 +67,7 @@ class AssetItemController extends Controller
             // ⚠ Disposed things leave the working list unless asked for.
             ->when(! ($filters['status'] ?? null), fn (Builder $query) => $query->where('status', '!=', AssetStatus::Disposed->value))
             ->when($filters['condition'] ?? null, fn (Builder $query, $condition) => $query->where('condition', $condition))
+            ->when($filters['idle'] ?? null, fn (Builder $query) => $query->whereNull('custodian_employee_id')->whereNull('custodian_party_id')->whereNull('transit_movement_id'))
             ->orderBy('tag')
             ->paginate(30)
             ->withQueryString();
@@ -81,6 +86,7 @@ class AssetItemController extends Controller
             'condition' => $item->condition->value,
             'condition_label' => $item->condition->label(),
             'part_of' => $item->parent?->tag,
+            'with' => $item->custodyLabel(),
         ]);
 
         return Inertia::render('assets/items/index', [
@@ -128,7 +134,8 @@ class AssetItemController extends Controller
 
     public function show(Request $request, AssetItem $item): Response
     {
-        $item->load(['category:id,name,code', 'office:id,name', 'warehouse:id,name', 'parent:id,tag,name', 'parts:id,parent_id,tag,name,status', 'supplier:id,name', 'createdBy:id,name', 'attachments']);
+        $item->load(['category:id,name,code', 'office:id,name', 'warehouse:id,name', 'parent:id,tag,name', 'parts:id,parent_id,tag,name,status', 'supplier:id,name', 'createdBy:id,name', 'attachments',
+            'custodianEmployee:id,first_name,last_name,employee_code', 'custodianParty:id,name,organisation', 'transitMovement:id,number', 'holdings.employee:id,first_name,last_name', 'holdings.party:id,name,organisation', 'holdings.office:id,name', 'holdings.warehouse:id,name']);
         $seesPrice = $request->user()->can('assets.view');
 
         $history = Activity::query()
@@ -183,7 +190,30 @@ class AssetItemController extends Controller
                 'registered_at' => $item->created_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
                 'tag_url' => $item->tagUrl(),
                 'qr_svg' => AssetQrCode::svg($item->tagUrl()),
+                // Custody (slice A2).
+                'custody' => $item->custodyLabel(),
+                'custody_since' => $item->custody_since?->toDateString(),
+                'acknowledged_at' => $item->acknowledged_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                'in_transit' => $item->transitMovement ? ['id' => $item->transitMovement->id, 'number' => $item->transitMovement->number] : null,
+                'holdings' => $item->isIndividual() ? [] : $item->holdings->map(fn ($holding) => ['holder' => $holding->holderLabel(), 'quantity' => $holding->quantity])->values(),
+                'can_issue' => ! $item->isInTransit() && ! in_array($item->status, [AssetStatus::Disposed, AssetStatus::Missing], true) && $item->custodian_employee_id === null && $item->custodian_party_id === null,
+                'can_return' => $item->custodian_employee_id !== null,
+                'can_receive_back' => $item->custodian_party_id !== null,
             ],
+            'movements' => AssetMovementLine::query()->where('asset_item_id', $item->id)
+                ->with(['movement.fromOffice', 'movement.fromWarehouse', 'movement.fromEmployee', 'movement.fromParty', 'movement.toOffice', 'movement.toWarehouse', 'movement.toEmployee', 'movement.toParty', 'movement.createdBy:id,name'])
+                ->get()->sortByDesc('asset_movement_id')->values()
+                ->map(fn (AssetMovementLine $line) => [
+                    'id' => $line->movement->id,
+                    'number' => $line->movement->number,
+                    'kind_label' => $line->movement->kind->label(),
+                    'status_label' => $line->movement->status->label(),
+                    'from' => $line->movement->fromLabel(),
+                    'to' => $line->movement->toLabel(),
+                    'quantity' => $line->quantity,
+                    'moved_on' => $line->movement->moved_on->toDateString(),
+                    'by' => $line->movement->createdBy?->name,
+                ]),
             'photos' => collect(AssetPhotoKind::cases())->map(fn (AssetPhotoKind $kind) => [
                 'kind' => $kind->value,
                 'label' => $kind->label(),
@@ -390,6 +420,8 @@ class AssetItemController extends Controller
             'office_id' => Office::query()->whereKey($value)->value('name') ?? "office #{$value}",
             'warehouse_id' => Warehouse::query()->whereKey($value)->value('name') ?? "warehouse #{$value}",
             'parent_id' => AssetItem::query()->whereKey($value)->value('tag') ?? "item #{$value}",
+            'custodian_employee_id' => Employee::query()->withoutGlobalScopes()->whereKey($value)->first()?->fullName() ?? "employee #{$value}",
+            'custodian_party_id' => AssetParty::query()->withoutGlobalScopes()->whereKey($value)->first()?->label() ?? "party #{$value}",
             'status' => AssetStatus::tryFrom((string) $value)?->label() ?? (string) $value,
             'condition' => AssetCondition::tryFrom((string) $value)?->label() ?? (string) $value,
             'warranty_ends_on' => substr((string) $value, 0, 10),
@@ -410,5 +442,7 @@ class AssetItemController extends Controller
         'condition' => 'Condition',
         'parent_id' => 'Part of',
         'warranty_ends_on' => 'Warranty ends',
+        'custodian_employee_id' => 'Held by',
+        'custodian_party_id' => 'With outside party',
     ];
 }

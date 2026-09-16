@@ -22,6 +22,7 @@ interface Item {
     condition: string;
     condition_label: string;
     part_of: string | null;
+    with: string;
 }
 
 interface Option {
@@ -35,6 +36,7 @@ interface Filters {
     place?: string;
     status?: string;
     condition?: string;
+    idle?: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Things we keep', href: '/assets/items' }];
@@ -146,6 +148,9 @@ export default function AssetItemsIndex({
                         options={[{ value: '', label: 'Every status except disposed' }, ...statuses]}
                         placeholder="Every status"
                     />
+                    <Button variant={filters.idle ? 'default' : 'outline'} size="sm" onClick={() => apply({ idle: filters.idle ? '' : '1' })}>
+                        Idle only
+                    </Button>
                     <SearchableSelect
                         fit
                         value={filters.condition ?? ''}
@@ -174,6 +179,7 @@ export default function AssetItemsIndex({
                                     <p className="text-muted-foreground mt-1">
                                         {item.location}
                                         {item.is_group && ` - ${item.quantity} pieces`}
+                                        {!item.is_group && ` - ${item.with}`}
                                     </p>
                                     <div className="mt-2 flex flex-wrap items-center gap-2">
                                         <ConditionBadge item={item} />
@@ -191,6 +197,7 @@ export default function AssetItemsIndex({
                                         <th className="p-3">Thing</th>
                                         <th className="p-3">Category</th>
                                         <th className="p-3">Where</th>
+                                        <th className="p-3">Who has it</th>
                                         <th className="p-3">Status</th>
                                         <th className="p-3">Condition</th>
                                     </tr>
@@ -213,6 +220,7 @@ export default function AssetItemsIndex({
                                             </td>
                                             <td className="text-muted-foreground p-3">{item.category}</td>
                                             <td className="p-3">{item.location}</td>
+                                            <td className="p-3">{item.with}</td>
                                             <td className="p-3">{item.status_label}</td>
                                             <td className="p-3">
                                                 <ConditionBadge item={item} />

@@ -36,6 +36,26 @@ interface Item {
     registered_at: string | null;
     tag_url: string;
     qr_svg: string;
+    custody: string;
+    custody_since: string | null;
+    acknowledged_at: string | null;
+    in_transit: { id: number; number: string } | null;
+    holdings: { holder: string; quantity: number }[];
+    can_issue: boolean;
+    can_return: boolean;
+    can_receive_back: boolean;
+}
+
+interface MovementRow {
+    id: number;
+    number: string;
+    kind_label: string;
+    status_label: string;
+    from: string;
+    to: string;
+    quantity: number;
+    moved_on: string;
+    by: string | null;
 }
 
 interface PhotoGroup {
@@ -97,11 +117,13 @@ export default function AssetItemShow({
     item,
     photos,
     history,
+    movements,
     can_manage,
 }: {
     item: Item;
     photos: PhotoGroup[];
     history: HistoryEntry[];
+    movements: MovementRow[];
     can_manage: boolean;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
@@ -129,6 +151,21 @@ export default function AssetItemShow({
                         <Button variant="outline" asChild>
                             <Link href={`/assets/items/labels?ids[]=${item.id}`}>Print tag</Link>
                         </Button>
+                        {can_manage && item.can_issue && (
+                            <Button variant="outline" asChild>
+                                <Link href={`/assets/movements/create?kind=issue&items[]=${item.id}`}>Hand to someone</Link>
+                            </Button>
+                        )}
+                        {can_manage && item.can_return && (
+                            <Button variant="outline" asChild>
+                                <Link href={`/assets/movements/create?kind=return&items[]=${item.id}`}>Record return</Link>
+                            </Button>
+                        )}
+                        {can_manage && item.can_receive_back && (
+                            <Button variant="outline" asChild>
+                                <Link href={`/assets/movements/create?kind=receive_back&items[]=${item.id}`}>Receive back</Link>
+                            </Button>
+                        )}
                         {can_manage && (
                             <Button asChild>
                                 <Link href={`/assets/items/${item.id}/edit`}>Edit</Link>
@@ -141,7 +178,24 @@ export default function AssetItemShow({
                     <dl className="grid content-start gap-4 sm:grid-cols-2">
                         <Fact label="Category">{item.category ?? '-'}</Fact>
                         <Fact label="Counted">{item.tracking_label}</Fact>
-                        <Fact label="Where it is">{item.location}</Fact>
+                        <Fact label="Where it is">
+                            {item.in_transit ? (
+                                <Link href={`/assets/movements/${item.in_transit.id}`} className="underline underline-offset-2">
+                                    On its way ({item.in_transit.number})
+                                </Link>
+                            ) : (
+                                item.location
+                            )}
+                        </Fact>
+                        <Fact label="Who has it">
+                            {item.holdings.length > 0 ? item.holdings.map((h) => `${h.holder}: ${h.quantity}`).join(', ') : item.custody}
+                            {item.custody_since && ` since ${item.custody_since}`}
+                            {item.can_return && (
+                                <span className={item.acknowledged_at ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-500'}>
+                                    {item.acknowledged_at ? ` (acknowledged ${item.acknowledged_at})` : ' (not yet acknowledged)'}
+                                </span>
+                            )}
+                        </Fact>
                         <Fact label="Brand and model">{[item.brand, item.model].filter(Boolean).join(' ') || '-'}</Fact>
                         <Fact label="Serial number">{item.serial_number ?? '-'}</Fact>
                         <Fact label="Bought">
@@ -247,6 +301,27 @@ export default function AssetItemShow({
                             {can_manage && group.uploadable && <PhotoUpload item={item} kind={group.kind} />}
                         </div>
                     ))}
+                </section>
+
+                <section className="grid gap-2">
+                    <h2 className="font-medium">Hand-overs</h2>
+                    {movements.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">None yet.</p>
+                    ) : (
+                        <ul className="grid gap-1 text-sm">
+                            {movements.map((m) => (
+                                <li key={m.id}>
+                                    <span className="text-muted-foreground">{m.moved_on}</span>{' '}
+                                    <Link href={`/assets/movements/${m.id}`} className="underline underline-offset-2">
+                                        {m.number}
+                                    </Link>{' '}
+                                    {m.kind_label}: {m.from} to {m.to}
+                                    {m.quantity > 1 && ` (${m.quantity})`}
+                                    {m.status_label !== 'Done' && <span className="text-amber-600 dark:text-amber-500"> - {m.status_label}</span>}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </section>
 
                 <section className="grid gap-2">

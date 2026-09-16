@@ -3,6 +3,8 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Assets\Models\AssetHolding;
+use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\Employee;
 use Illuminate\Http\RedirectResponse;
@@ -92,6 +94,14 @@ class ChecklistController extends Controller
             ],
             'onboarding' => $list('onboarding'),
             'offboarding' => $list('offboarding'),
+            // ⚠ What the person holds NOW from the asset register (slice A2),
+            // not what was ever issued: current custody, plus counted pieces.
+            'still_holds' => AssetItem::query()->withoutGlobalScopes()->where('custodian_employee_id', $employee->id)->orderBy('tag')->get()
+                ->map(fn (AssetItem $item) => ['id' => $item->id, 'tag' => $item->tag, 'name' => $item->name, 'quantity' => 1])
+                ->concat(AssetHolding::query()->withoutGlobalScopes()->with('item:id,tag,name')->where('employee_id', $employee->id)->get()
+                    ->map(fn (AssetHolding $holding) => ['id' => $holding->asset_item_id, 'tag' => $holding->item?->tag, 'name' => $holding->item?->name, 'quantity' => $holding->quantity]))
+                ->values(),
+            'can_move_assets' => request()->user()->can('assets.items.manage'),
         ]);
     }
 

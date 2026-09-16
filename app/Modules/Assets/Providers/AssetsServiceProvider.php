@@ -2,6 +2,7 @@
 
 namespace App\Modules\Assets\Providers;
 
+use App\Modules\Assets\Console\Commands\RebuildAssetHoldings;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -18,6 +19,11 @@ class AssetsServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+
+        if ($this->app->runningInConsole()) {
+            // Slice A2: prove the holdings of counted groups against their movements.
+            $this->commands([RebuildAssetHoldings::class]);
+        }
         // ⚠⚠ Added 9 August. Until this line, the module loaded migrations ONLY:
         // the tables existed, the actions were tested, and there was no way for
         // a person to reach any of it. A delivery van's only reachable path was

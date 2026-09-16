@@ -3,8 +3,11 @@
 use App\Modules\Assets\Http\Controllers\AssetCategoryController;
 use App\Modules\Assets\Http\Controllers\AssetItemController;
 use App\Modules\Assets\Http\Controllers\AssetLabelController;
+use App\Modules\Assets\Http\Controllers\AssetMovementController;
+use App\Modules\Assets\Http\Controllers\AssetPartyController;
 use App\Modules\Assets\Http\Controllers\DepreciationController;
 use App\Modules\Assets\Http\Controllers\FixedAssetController;
+use App\Modules\Assets\Http\Controllers\MyAssetsController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.')->group(function () {
@@ -41,6 +44,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
             ->whereNumber(['item', 'attachment'])->name('items.photos.destroy');
         Route::post('categories', [AssetCategoryController::class, 'store'])->name('categories.store');
         Route::put('categories/{category}', [AssetCategoryController::class, 'update'])->whereNumber('category')->name('categories.update');
+
+        // Hand-overs (slice A2). Never edited: a mistake is another movement.
+        Route::get('movements/create', [AssetMovementController::class, 'create'])->name('movements.create');
+        Route::post('movements', [AssetMovementController::class, 'store'])->name('movements.store');
+        Route::post('movements/{movement}/receive', [AssetMovementController::class, 'receive'])->whereNumber('movement')->name('movements.receive');
+        Route::post('parties', [AssetPartyController::class, 'store'])->name('parties.store');
+        Route::put('parties/{party}', [AssetPartyController::class, 'update'])->whereNumber('party')->name('parties.update');
     });
 
     Route::middleware('can:assets.items.view')->group(function () {
@@ -52,5 +62,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
             ->where('tag', '[A-Za-z0-9\-]+')->name('items.by-tag');
         Route::get('items/{item}', [AssetItemController::class, 'show'])->whereNumber('item')->name('items.show');
         Route::get('categories', [AssetCategoryController::class, 'index'])->name('categories.index');
+        Route::get('movements', [AssetMovementController::class, 'index'])->name('movements.index');
+        Route::get('movements/{movement}', [AssetMovementController::class, 'show'])->whereNumber('movement')->name('movements.show');
+        Route::get('parties', [AssetPartyController::class, 'index'])->name('parties.index');
     });
+});
+
+// My assets (slice A2): self-scope like My profile, no permission. Under /hrm
+// so it sits with the other self-service tabs.
+Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->group(function () {
+    Route::get('my-assets', [MyAssetsController::class, 'index'])->name('my-assets');
+    Route::post('my-assets/{item}/acknowledge', [MyAssetsController::class, 'acknowledge'])->whereNumber('item')->name('my-assets.acknowledge');
 });

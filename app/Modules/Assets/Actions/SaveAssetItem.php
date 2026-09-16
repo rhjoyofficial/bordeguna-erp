@@ -8,6 +8,7 @@ use App\Modules\Assets\Enums\AssetCondition;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Enums\AssetTracking;
 use App\Modules\Assets\Models\AssetCategory;
+use App\Modules\Assets\Models\AssetHolding;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Support\AssetTag;
 use App\Modules\Foundation\Models\Business;
@@ -83,14 +84,22 @@ final class SaveAssetItem
                     ]);
                 }
 
-                $items->push(AssetItem::create($values + [
+                $item = AssetItem::create($values + [
                     'business_id' => $business->id,
                     'asset_category_id' => $category->id,
                     'tracking' => $tracking,
                     'tag' => $tag,
                     'sequence' => $next + $i,
                     'created_by' => $by->id,
-                ]));
+                ]);
+
+                // A counted group starts with every piece at its own place
+                // (slice A2): the holdings row the movements then draw on.
+                if ($tracking === AssetTracking::Quantity) {
+                    $this->placeHolding($item)->forceFill(['quantity' => $item->quantity])->save();
+                }
+
+                $items->push($item);
             }
 
             return $items;
@@ -121,9 +130,58 @@ final class SaveAssetItem
             unset($values['purchase_price']);
         }
 
-        $item->fill($values)->save();
+        $wasAt = [$item->office_id, $item->warehouse_id];
+        $wasQuantity = $item->quantity;
 
-        return $item->fresh();
+        return DB::transaction(function () use ($item, $values, $wasAt, $wasQuantity) {
+            $item->fill($values)->save();
+
+            // ⚠ A counted group's own row says where its bulk sits and how many
+            // pieces exist. Correcting either corrects the place's holding, and
+            // never what an employee or a party holds: that is a movement's job.
+            if (! $item->isIndividual()) {
+                $delta = $item->quantity - $wasQuantity;
+                $movedHome = [$item->office_id, $item->warehouse_id] !== $wasAt;
+
+                if ($movedHome) {
+                    $old = AssetHolding::query()->withoutGlobalScopes()->where('asset_item_id', $item->id)
+                        ->where('holder_key', AssetHolding::keyFor($wasAt[0], $wasAt[1], null, null))->first();
+                    // ⚠ The pieces at the old place JOIN whatever the new place
+                    // already holds (a part-transfer may have put some there).
+                    $carry = (int) ($old?->quantity ?? 0);
+                    $old?->delete();
+                    $home = $this->placeHolding($item);
+                    $home->forceFill(['quantity' => $home->quantity + $carry])->save();
+                }
+
+                if ($delta !== 0) {
+                    $holding = $this->placeHolding($item);
+
+                    if ($holding->quantity + $delta < 0) {
+                        throw ValidationException::withMessages([
+                            'quantity' => "Only {$holding->quantity} of {$item->tag} are at its place; the rest are with people. Take them back before counting fewer.",
+                        ]);
+                    }
+
+                    $holding->forceFill(['quantity' => $holding->quantity + $delta])->save();
+                }
+
+                AssetHolding::query()->withoutGlobalScopes()->where('asset_item_id', $item->id)->where('quantity', '<=', 0)->delete();
+            }
+
+            return $item->fresh();
+        });
+    }
+
+    /**
+     * The holding row of a counted group's own place, made if missing.
+     */
+    private function placeHolding(AssetItem $item): AssetHolding
+    {
+        return AssetHolding::query()->withoutGlobalScopes()->firstOrCreate(
+            ['asset_item_id' => $item->id, 'holder_key' => AssetHolding::keyFor($item->office_id, $item->warehouse_id, null, null)],
+            ['business_id' => $item->business_id, 'office_id' => $item->office_id, 'warehouse_id' => $item->warehouse_id, 'quantity' => 0],
+        );
     }
 
     /**
