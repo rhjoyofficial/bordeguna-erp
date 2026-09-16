@@ -26,7 +26,7 @@ interface MyWorkProps {
     my_requests: Section<{ type: string; since: string | null }>;
     attendance?: { needs_review: number; holds_payroll: number };
     recurring?: Section<{ label: string; due_on: string; amount: string }>;
-    assets?: { in_transit: number; unacknowledged: number };
+    assets?: { in_transit: number; unacknowledged: number; open_gaps: number };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'My work', href: '/work' }];
@@ -71,6 +71,12 @@ export default function MyWork({ approvals, followups, todos, my_requests, atten
                     <h1 className="text-xl font-semibold">My work</h1>
                     <p className="text-muted-foreground text-sm">Everything waiting on you, gathered from every module.</p>
                 </div>
+
+                {assets && assets.open_gaps > 0 && (
+                    <Link href="/assets/counts" className="block rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+                        <span className="font-semibold">Stock-take gaps to settle:</span> {assets.open_gaps}
+                    </Link>
+                )}
 
                 {assets && (assets.in_transit > 0 || assets.unacknowledged > 0) && (
                     <Link href="/assets/movements?open=1" className="block rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">

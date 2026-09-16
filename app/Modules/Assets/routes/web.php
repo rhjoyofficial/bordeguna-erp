@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Assets\Http\Controllers\AssetCategoryController;
+use App\Modules\Assets\Http\Controllers\AssetCountController;
 use App\Modules\Assets\Http\Controllers\AssetItemController;
 use App\Modules\Assets\Http\Controllers\AssetLabelController;
 use App\Modules\Assets\Http\Controllers\AssetMovementController;
@@ -49,6 +50,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
         Route::get('movements/create', [AssetMovementController::class, 'create'])->name('movements.create');
         Route::post('movements', [AssetMovementController::class, 'store'])->name('movements.store');
         Route::post('movements/{movement}/receive', [AssetMovementController::class, 'receive'])->whereNumber('movement')->name('movements.receive');
+        // Stock-takes (slice A3). Confirming a loss is checked inside the action
+        // (assets.items.write_off), since the same route settles every gap.
+        Route::post('counts', [AssetCountController::class, 'store'])->name('counts.store');
+        Route::post('counts/{count}/mark', [AssetCountController::class, 'mark'])->whereNumber('count')->name('counts.mark');
+        Route::post('counts/{count}/found', [AssetCountController::class, 'addFound'])->whereNumber('count')->name('counts.found');
+        Route::post('counts/{count}/close', [AssetCountController::class, 'close'])->whereNumber('count')->name('counts.close');
+        Route::post('discrepancies/{discrepancy}/resolve', [AssetCountController::class, 'resolve'])->whereNumber('discrepancy')->name('discrepancies.resolve');
         Route::post('parties', [AssetPartyController::class, 'store'])->name('parties.store');
         Route::put('parties/{party}', [AssetPartyController::class, 'update'])->whereNumber('party')->name('parties.update');
     });
@@ -65,6 +73,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
         Route::get('movements', [AssetMovementController::class, 'index'])->name('movements.index');
         Route::get('movements/{movement}', [AssetMovementController::class, 'show'])->whereNumber('movement')->name('movements.show');
         Route::get('parties', [AssetPartyController::class, 'index'])->name('parties.index');
+        Route::get('counts', [AssetCountController::class, 'index'])->name('counts.index');
+        Route::get('counts/{count}', [AssetCountController::class, 'show'])->whereNumber('count')->name('counts.show');
     });
 });
 

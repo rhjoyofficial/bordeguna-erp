@@ -44,6 +44,7 @@ interface Item {
     can_issue: boolean;
     can_return: boolean;
     can_receive_back: boolean;
+    open_count: { id: number; number: string; on_list: boolean; found: boolean | null } | null;
 }
 
 interface MovementRow {
@@ -173,6 +174,45 @@ export default function AssetItemShow({
                         )}
                     </div>
                 </div>
+
+                {/* ⚠ Slice A3: a count of this place is open. Marking is explicit;
+                    opening this page by its QR code marked nothing. */}
+                {item.open_count && can_manage && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-500/40 bg-sky-500/5 p-3 text-sm">
+                        <span>
+                            Stock-take{' '}
+                            <Link href={`/assets/counts/${item.open_count.id}`} className="underline underline-offset-2">
+                                {item.open_count.number}
+                            </Link>{' '}
+                            is open here. {item.open_count.found === true && 'Marked found.'}
+                            {item.open_count.found === false && 'Marked missing.'}
+                        </span>
+                        {item.tracking === 'individual' &&
+                            (item.open_count.on_list ? (
+                                <Button
+                                    size="sm"
+                                    onClick={() =>
+                                        router.post(
+                                            `/assets/counts/${item.open_count!.id}/mark`,
+                                            { item_id: item.id, found: true },
+                                            { preserveScroll: true },
+                                        )
+                                    }
+                                >
+                                    Found here
+                                </Button>
+                            ) : (
+                                <Button
+                                    size="sm"
+                                    onClick={() =>
+                                        router.post(`/assets/counts/${item.open_count!.id}/found`, { tag: item.tag }, { preserveScroll: true })
+                                    }
+                                >
+                                    Found here (not expected)
+                                </Button>
+                            ))}
+                    </div>
+                )}
 
                 <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
                     <dl className="grid content-start gap-4 sm:grid-cols-2">

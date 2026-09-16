@@ -162,7 +162,7 @@ class MyWorkController extends Controller
      * Asset hand-overs waiting on somebody (slice A2): transfers not yet
      * received, and things issued three days ago that nobody has acknowledged.
      *
-     * @return array{in_transit: int, unacknowledged: int}
+     * @return array{in_transit: int, unacknowledged: int, open_gaps: int}
      */
     private function assets(): array
     {
@@ -173,6 +173,8 @@ class MyWorkController extends Controller
             'unacknowledged' => DB::table('asset_items')->where('business_id', $businessId)
                 ->whereNotNull('custodian_employee_id')->whereNull('acknowledged_at')
                 ->where('custody_since', '<=', now()->subDays(3)->toDateString())->count(),
+            // Slice A3: stock-take gaps nobody has settled.
+            'open_gaps' => DB::table('asset_discrepancies')->where('business_id', $businessId)->where('state', 'open')->count(),
         ];
     }
 

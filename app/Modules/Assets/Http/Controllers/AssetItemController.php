@@ -10,6 +10,7 @@ use App\Modules\Assets\Enums\AssetPhotoKind;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Enums\AssetTracking;
 use App\Modules\Assets\Models\AssetCategory;
+use App\Modules\Assets\Models\AssetCount;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\AssetMovementLine;
 use App\Modules\Assets\Models\AssetParty;
@@ -199,6 +200,8 @@ class AssetItemController extends Controller
                 'can_issue' => ! $item->isInTransit() && ! in_array($item->status, [AssetStatus::Disposed, AssetStatus::Missing], true) && $item->custodian_employee_id === null && $item->custodian_party_id === null,
                 'can_return' => $item->custodian_employee_id !== null,
                 'can_receive_back' => $item->custodian_party_id !== null,
+                // Slice A3: a count of its place is open, and what it says so far.
+                'open_count' => $this->openCountFor($item),
             ],
             'movements' => AssetMovementLine::query()->where('asset_item_id', $item->id)
                 ->with(['movement.fromOffice', 'movement.fromWarehouse', 'movement.fromEmployee', 'movement.fromParty', 'movement.toOffice', 'movement.toWarehouse', 'movement.toEmployee', 'movement.toParty', 'movement.createdBy:id,name'])
@@ -326,6 +329,28 @@ class AssetItemController extends Controller
         activity('assets.items')->performedOn($item)->causedBy($request->user())->log('A photo was removed');
 
         return back()->with('success', 'Photo removed.');
+    }
+
+    /**
+     * The open stock-take of this item's place, if any, and its line.
+     *
+     * @return array{id: int, number: string, on_list: bool, found: bool|null}|null
+     */
+    private function openCountFor(AssetItem $item): ?array
+    {
+        $count = AssetCount::query()->where('status', 'open')
+            ->where(fn (Builder $query) => $query
+                ->when($item->office_id, fn (Builder $q) => $q->where('office_id', $item->office_id))
+                ->when($item->warehouse_id, fn (Builder $q) => $q->orWhere('warehouse_id', $item->warehouse_id)))
+            ->first();
+
+        if ($count === null) {
+            return null;
+        }
+
+        $line = $count->lines()->where('asset_item_id', $item->id)->first();
+
+        return ['id' => $count->id, 'number' => $count->number, 'on_list' => $line !== null, 'found' => $line?->found];
     }
 
     /**

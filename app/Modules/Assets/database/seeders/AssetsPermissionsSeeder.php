@@ -35,12 +35,15 @@ class AssetsPermissionsSeeder extends Seeder
             'assets.depreciation.run',
             'assets.items.view',
             'assets.items.manage',
+            // Slice A3: confirming a stock-take loss is the write-off decision.
+            'assets.items.write_off',
         ],
         'Manager' => [
             'assets.view',
             'assets.manage',
             'assets.items.view',
             'assets.items.manage',
+            'assets.items.write_off',
         ],
         'Asset Keeper' => [
             'assets.items.view',
