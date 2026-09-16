@@ -6,10 +6,12 @@ use App\Models\User;
 use App\Modules\Accounting\database\seeders\AccountingPermissionsSeeder;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Assets\database\seeders\AssetAccountMappingSeeder;
-use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
+use App\Modules\Assets\database\seeders\AssetCategorySeeder;
+use App\Modules\Assets\database\seeders\AssetsPermissionsSeeder;
 use App\Modules\Commerce\database\seeders\CommercePermissionsSeeder;
 use App\Modules\Crm\database\seeders\CrmLookupSeeder;
 use App\Modules\Crm\database\seeders\CrmPermissionsSeeder;
+use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
 use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
 use App\Modules\Foundation\database\seeders\FoundationSeeder;
 use App\Modules\Foundation\Support\SeedCredentials;
@@ -97,6 +99,11 @@ class DatabaseSeeder extends Seeder
         $this->call(CrmPermissionsSeeder::class);
         // Joy's shop and supplier types, only into a list that is still empty.
         $this->call(CrmLookupSeeder::class);
+        // ⚠ ABSENT UNTIL 16 SEP 2026, the CRM seeder's story again: the asset
+        // permissions reached only the sandbox. Now with the Asset Keeper role
+        // and the starting categories (only into a business that has none).
+        $this->call(AssetsPermissionsSeeder::class);
+        $this->call(AssetCategorySeeder::class);
         $this->call(ApprovalWorkflowSeeder::class);
         $this->call(HrmChangeRequestWorkflowSeeder::class);
         $this->call(BangladeshHolidayCalendarSeeder::class);

@@ -67,6 +67,9 @@ class FixedAssetController extends Controller
                 ->plus($asset->accumulated()->negated())->toTaka(),
             'monthly_charge' => $asset->monthlyCharge()->toTaka(),
             'is_fully_depreciated' => $asset->isFullyDepreciated(),
+            // ⚠ Plan §2.12: an asset whose cost is not in the books is not
+            // depreciated, and the register says so.
+            'cost_on_books' => $asset->cost_on_books,
             'note' => $asset->note,
         ]);
 
@@ -113,6 +116,7 @@ class FixedAssetController extends Controller
             'supplier_id' => ['nullable', 'integer', Rule::exists('suppliers', 'id')
                 ->where('business_id', $businessId)],
             'note' => ['nullable', 'string'],
+            'cost_in_opening_balances' => ['nullable', 'boolean'],
         ]);
 
         try {
@@ -133,6 +137,7 @@ class FixedAssetController extends Controller
                 salvageValue: (string) ($data['salvage_value'] ?? '0'),
                 depreciationStartsOn: $data['depreciation_starts_on'] ?? null,
                 note: $data['note'] ?? null,
+                costInOpeningBalances: (bool) ($data['cost_in_opening_balances'] ?? false),
             );
         } catch (PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['acquired_on' => $e->getMessage()]);

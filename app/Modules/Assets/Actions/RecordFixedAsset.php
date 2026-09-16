@@ -50,6 +50,7 @@ class RecordFixedAsset
         string $salvageValue = '0',
         mixed $depreciationStartsOn = null,
         ?string $note = null,
+        bool $costInOpeningBalances = false,
     ): FixedAsset {
         $acquired = Carbon::parse($acquiredOn)->startOfDay();
         $starts = $depreciationStartsOn ? Carbon::parse($depreciationStartsOn)->startOfDay() : $acquired->copy();
@@ -127,7 +128,15 @@ class RecordFixedAsset
             ]);
         }
 
-        return DB::transaction(function () use ($assetCode, $name, $assetAccount, $acquired, $starts, $price, $salvage, $usefulLifeMonths, $createdBy, $moneyAccount, $supplier, $note) {
+        // ⚠ Paid from an account OR already in the opening balances, never both:
+        // the second would put the same cost on the books twice.
+        if ($moneyAccount !== null && $costInOpeningBalances) {
+            throw ValidationException::withMessages([
+                'money_account_id' => 'An asset paid for now is not also in the opening balances. Choose one.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($assetCode, $name, $assetAccount, $acquired, $starts, $price, $salvage, $usefulLifeMonths, $createdBy, $moneyAccount, $supplier, $note, $costInOpeningBalances) {
             $asset = FixedAsset::create([
                 'asset_code' => $assetCode,
                 'name' => $name,
@@ -139,6 +148,8 @@ class RecordFixedAsset
                 'depreciation_starts_on' => $starts,
                 'money_account_id' => $moneyAccount?->id,
                 'supplier_id' => $supplier?->id,
+                // ⚠ The recorder's word; the acquisition journal below overrides it.
+                'cost_on_books' => $costInOpeningBalances ? FixedAsset::COST_IN_OPENING_BALANCES : null,
                 'note' => $note,
                 'created_by' => $createdBy->id,
             ]);
@@ -161,6 +172,8 @@ class RecordFixedAsset
                     memo: "Acquired {$asset->asset_code} - {$asset->name}",
                     source: $asset,
                 ), $createdBy);
+
+                $asset->forceFill(['cost_on_books' => FixedAsset::COST_BY_ACQUISITION])->save();
             }
 
             return $asset->fresh();

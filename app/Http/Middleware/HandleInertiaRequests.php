@@ -230,6 +230,9 @@ class HandleInertiaRequests extends Middleware
             // register is its own permission rather than open to the business:
             // what the company owns and paid is closer to payroll than to stock.
             'canViewAssets' => fn () => (bool) $request->user()?->can('assets.view'),
+            // The PHYSICAL register (16 Sep 2026): the Asset Keeper sees it
+            // without the financial one.
+            'canViewAssetItems' => fn () => (bool) $request->user()?->can('assets.items.view'),
             'canRunDepreciation' => fn () => (bool) $request->user()?->can('assets.depreciation.run'),
             // Self-scope (P3): whether the signed-in user has their own employee
             // record, so the "My profile" self-service link can show. Distinct

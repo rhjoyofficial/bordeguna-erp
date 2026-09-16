@@ -62,9 +62,18 @@ class ChargeDepreciation
 
         $charged = 0;
         $skipped = 0;
+        $notOnBooks = [];
         $total = Money::zero();
 
         foreach (FixedAsset::query()->with('depreciations')->orderBy('id')->get() as $asset) {
+            // ⚠⚠ Named, not silently skipped: somebody has to put its cost in the
+            // books (plan §2.12).
+            if (! $asset->costIsOnTheBooks()) {
+                $notOnBooks[] = $asset->asset_code;
+
+                continue;
+            }
+
             if (! $asset->isDepreciableIn($year, $month)) {
                 $skipped++;
 
@@ -121,6 +130,6 @@ class ChargeDepreciation
             $total = $total->plus($amount);
         }
 
-        return ['charged' => $charged, 'skipped' => $skipped, 'total' => $total];
+        return ['charged' => $charged, 'skipped' => $skipped, 'total' => $total, 'not_on_books' => $notOnBooks];
     }
 }

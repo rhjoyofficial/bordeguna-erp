@@ -86,11 +86,13 @@ class DepreciationController extends Controller
         return redirect()
             ->route('assets.depreciation.index')
             ->with('success', sprintf(
-                '%d asset(s) depreciated for %s, %s charged. %d skipped.',
+                '%d asset(s) depreciated for %s, %s charged. %d skipped.%s',
                 $result['charged'],
                 Carbon::create((int) $data['year'], (int) $data['month'], 1)->format('F Y'),
                 $result['total']->toTaka(),
                 $result['skipped'],
+                // ⚠ Said out loud: these wait for their cost to reach the books.
+                $result['not_on_books'] === [] ? '' : ' Not depreciated because their cost is not in the books: '.implode(', ', $result['not_on_books']).'.',
             ));
     }
 }

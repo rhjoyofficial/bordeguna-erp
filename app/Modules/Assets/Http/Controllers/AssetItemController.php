@@ -1,0 +1,414 @@
+<?php
+
+namespace App\Modules\Assets\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\Money;
+use App\Modules\Assets\Actions\SaveAssetItem;
+use App\Modules\Assets\Enums\AssetCondition;
+use App\Modules\Assets\Enums\AssetPhotoKind;
+use App\Modules\Assets\Enums\AssetStatus;
+use App\Modules\Assets\Enums\AssetTracking;
+use App\Modules\Assets\Models\AssetCategory;
+use App\Modules\Assets\Models\AssetItem;
+use App\Modules\Assets\Support\AssetQrCode;
+use App\Modules\Foundation\Actions\DeleteAttachment;
+use App\Modules\Foundation\Actions\StoreAttachment;
+use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\Office;
+use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Purchasing\Models\Supplier;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
+use Spatie\Activitylog\Models\Activity;
+
+/**
+ * The register of what the business keeps (asset management slice A1).
+ *
+ * ⚠⚠ Cost is shown only to someone who may see the financial register
+ * (`assets.view`). The Asset Keeper keeps the things, not the prices (plan §2.14).
+ */
+class AssetItemController extends Controller
+{
+    public function index(Request $request): Response
+    {
+        $filters = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+            'category' => ['nullable', 'integer'],
+            'place' => ['nullable', 'string', 'regex:/^(office|warehouse):\d+$/'],
+            'status' => ['nullable', Rule::enum(AssetStatus::class)],
+            'condition' => ['nullable', Rule::enum(AssetCondition::class)],
+        ]);
+
+        $items = AssetItem::query()
+            ->with(['category:id,name', 'office:id,name', 'warehouse:id,name', 'parent:id,tag'])
+            ->when($filters['q'] ?? null, function (Builder $query, string $q) {
+                $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $q).'%';
+                $query->where(fn (Builder $inner) => $inner
+                    ->where('tag', 'like', $like)->orWhere('name', 'like', $like)
+                    ->orWhere('brand', 'like', $like)->orWhere('model', 'like', $like)
+                    ->orWhere('serial_number', 'like', $like)->orWhere('area', 'like', $like));
+            })
+            ->when($filters['category'] ?? null, fn (Builder $query, $id) => $query->where('asset_category_id', $id))
+            ->when($filters['place'] ?? null, function (Builder $query, string $place) {
+                [$type, $id] = explode(':', $place);
+                $query->where($type === 'office' ? 'office_id' : 'warehouse_id', (int) $id);
+            })
+            ->when($filters['status'] ?? null, fn (Builder $query, $status) => $query->where('status', $status))
+            // ⚠ Disposed things leave the working list unless asked for.
+            ->when(! ($filters['status'] ?? null), fn (Builder $query) => $query->where('status', '!=', AssetStatus::Disposed->value))
+            ->when($filters['condition'] ?? null, fn (Builder $query, $condition) => $query->where('condition', $condition))
+            ->orderBy('tag')
+            ->paginate(30)
+            ->withQueryString();
+
+        $items->getCollection()->transform(fn (AssetItem $item) => [
+            'id' => $item->id,
+            'tag' => $item->tag,
+            'name' => $item->name,
+            'category' => $item->category?->name,
+            'quantity' => $item->quantity,
+            'is_group' => ! $item->isIndividual(),
+            'brand_model' => trim(implode(' ', array_filter([$item->brand, $item->model]))) ?: null,
+            'location' => $item->locationLabel(),
+            'status' => $item->status->value,
+            'status_label' => $item->status->label(),
+            'condition' => $item->condition->value,
+            'condition_label' => $item->condition->label(),
+            'part_of' => $item->parent?->tag,
+        ]);
+
+        return Inertia::render('assets/items/index', [
+            'items' => $items,
+            'filters' => $filters,
+            'categories' => AssetCategory::query()->orderBy('sort')->orderBy('name')->get(['id', 'name']),
+            'places' => $this->places(),
+            'statuses' => AssetStatus::options(AssetStatus::cases()),
+            'conditions' => AssetCondition::options(),
+            'can_manage' => $request->user()->can('assets.items.manage'),
+            'counts' => [
+                'kept' => AssetItem::query()->where('status', '!=', AssetStatus::Disposed->value)->count(),
+                'damaged' => AssetItem::query()->where('status', '!=', AssetStatus::Disposed->value)->where('condition', AssetCondition::Damaged->value)->count(),
+                'under_repair' => AssetItem::query()->where('status', AssetStatus::UnderRepair->value)->count(),
+            ],
+        ]);
+    }
+
+    public function create(Request $request): Response
+    {
+        return Inertia::render('assets/items/form', $this->formOptions($request) + ['item' => null]);
+    }
+
+    public function store(Request $request, SaveAssetItem $save, StoreAttachment $store): RedirectResponse
+    {
+        $data = $this->validated($request, creating: true);
+        $category = AssetCategory::query()->findOrFail($data['asset_category_id']);
+
+        $items = $save->register($category, $data, $request->user(), (int) ($data['copies'] ?? 1));
+
+        // ⚠ A photo taken at registration shows every copy: they are the same thing.
+        foreach ($request->file('photos', []) as $file) {
+            foreach ($items as $item) {
+                $store->handle($item, $file, AssetPhotoKind::Identity->value, $request->user());
+            }
+        }
+
+        if ($items->count() === 1) {
+            return redirect()->route('assets.items.show', $items->first())->with('success', "Registered {$items->first()->tag}.");
+        }
+
+        return redirect()->route('assets.items.index', ['category' => $category->id])
+            ->with('success', "Registered {$items->count()} items: {$items->first()->tag} to {$items->last()->tag}.");
+    }
+
+    public function show(Request $request, AssetItem $item): Response
+    {
+        $item->load(['category:id,name,code', 'office:id,name', 'warehouse:id,name', 'parent:id,tag,name', 'parts:id,parent_id,tag,name,status', 'supplier:id,name', 'createdBy:id,name', 'attachments']);
+        $seesPrice = $request->user()->can('assets.view');
+
+        $history = Activity::query()
+            ->where('subject_type', $item->getMorphClass())
+            ->where('subject_id', $item->id)
+            ->with('causer')
+            ->latest('id')
+            ->limit(50)
+            ->get()
+            ->map(fn (Activity $entry) => [
+                'id' => $entry->id,
+                'when' => $entry->created_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                'who' => $entry->causer?->name,
+                'what' => $entry->description,
+                'changes' => collect($entry->properties['attributes'] ?? [])
+                    ->map(fn ($new, $field) => [
+                        'field' => self::FIELD_LABELS[$field] ?? $field,
+                        'from' => $this->shown($field, ($entry->properties['old'] ?? [])[$field] ?? null),
+                        'to' => $this->shown($field, $new),
+                    ])
+                    ->values(),
+            ]);
+
+        return Inertia::render('assets/items/show', [
+            'item' => [
+                'id' => $item->id,
+                'tag' => $item->tag,
+                'name' => $item->name,
+                'category' => $item->category?->name,
+                'tracking' => $item->tracking->value,
+                'tracking_label' => $item->tracking->label(),
+                'quantity' => $item->quantity,
+                'brand' => $item->brand,
+                'model' => $item->model,
+                'serial_number' => $item->serial_number,
+                'specification' => $item->specification,
+                'location' => $item->locationLabel(),
+                'status' => $item->status->value,
+                'status_label' => $item->status->label(),
+                'condition' => $item->condition->value,
+                'condition_label' => $item->condition->label(),
+                'parent' => $item->parent ? ['id' => $item->parent->id, 'tag' => $item->parent->tag, 'name' => $item->parent->name] : null,
+                'parts' => $item->parts->map(fn (AssetItem $part) => ['id' => $part->id, 'tag' => $part->tag, 'name' => $part->name, 'status_label' => $part->status->label()])->values(),
+                // ⚠ Dates as Dhaka dates, never a model's UTC timestamp.
+                'acquired_on' => $item->acquired_on?->toDateString(),
+                'warranty_ends_on' => $item->warranty_ends_on?->toDateString(),
+                'warranty_expired' => $item->warranty_ends_on !== null && $item->warranty_ends_on->lt(now()->startOfDay()),
+                'supplier' => $item->supplier?->name,
+                'purchase_price' => $seesPrice && $item->purchase_price !== null ? Money::ofTaka((string) $item->purchase_price)->toTaka() : null,
+                'note' => $item->note,
+                'registered_by' => $item->createdBy?->name,
+                'registered_at' => $item->created_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                'tag_url' => $item->tagUrl(),
+                'qr_svg' => AssetQrCode::svg($item->tagUrl()),
+            ],
+            'photos' => collect(AssetPhotoKind::cases())->map(fn (AssetPhotoKind $kind) => [
+                'kind' => $kind->value,
+                'label' => $kind->label(),
+                'uploadable' => in_array($kind, AssetPhotoKind::onTheItem(), true),
+                'files' => $item->attachments->where('collection', $kind->value)->sortByDesc('id')->map(fn (Attachment $file) => [
+                    'id' => $file->id,
+                    'url' => route('attachments.show', $file->id),
+                    'name' => $file->original_name,
+                ])->values(),
+            ])->filter(fn (array $group) => $group['uploadable'] || $group['files']->isNotEmpty())->values(),
+            'history' => $history,
+            'can_manage' => $request->user()->can('assets.items.manage'),
+        ]);
+    }
+
+    public function edit(Request $request, AssetItem $item): Response
+    {
+        $seesPrice = $request->user()->can('assets.view');
+
+        return Inertia::render('assets/items/form', $this->formOptions($request, $item) + [
+            'item' => [
+                'id' => $item->id,
+                'tag' => $item->tag,
+                'asset_category_id' => $item->asset_category_id,
+                'tracking' => $item->tracking->value,
+                'name' => $item->name,
+                'quantity' => $item->quantity,
+                'brand' => $item->brand,
+                'model' => $item->model,
+                'serial_number' => $item->serial_number,
+                'specification' => $item->specification,
+                'place' => $item->office_id ? "office:{$item->office_id}" : "warehouse:{$item->warehouse_id}",
+                'area' => $item->area,
+                'status' => $item->status->value,
+                'status_is_settable' => in_array($item->status, AssetStatus::settableByHand(), true),
+                'status_label' => $item->status->label(),
+                'condition' => $item->condition->value,
+                'parent_id' => $item->parent_id,
+                'acquired_on' => $item->acquired_on?->toDateString(),
+                'supplier_id' => $item->supplier_id,
+                'purchase_price' => $seesPrice && $item->purchase_price !== null ? Money::ofTaka((string) $item->purchase_price)->toTaka() : null,
+                'warranty_ends_on' => $item->warranty_ends_on?->toDateString(),
+                'note' => $item->note,
+            ],
+        ]);
+    }
+
+    public function update(Request $request, AssetItem $item, SaveAssetItem $save): RedirectResponse
+    {
+        $save->update($item, $this->validated($request, creating: false), $request->user());
+
+        return redirect()->route('assets.items.show', $item)->with('success', "{$item->tag} saved.");
+    }
+
+    /**
+     * A scanned QR code lands here. It only ever OPENS the item (plan §2.8).
+     */
+    public function byTag(Request $request, string $tag): RedirectResponse
+    {
+        $item = AssetItem::query()->where('tag', $tag)->first();
+
+        if ($item !== null) {
+            return redirect()->route('assets.items.show', $item);
+        }
+
+        // ⚠ A tag of another of the group's businesses the reader also works in:
+        // say which, rather than a bare "not found".
+        $elsewhere = AssetItem::query()->withoutGlobalScopes()->where('tag', $tag)
+            ->whereIn('business_id', $request->user()->businesses()->select('businesses.id'))
+            ->value('business_id');
+
+        abort_if($elsewhere === null, 404);
+
+        $name = Business::query()->whereKey($elsewhere)->value('name');
+
+        return redirect()->route('dashboard')->with('error', "{$tag} belongs to {$name}. Switch to {$name} and scan it again.");
+    }
+
+    public function storePhotos(Request $request, AssetItem $item, StoreAttachment $store): RedirectResponse
+    {
+        $data = $request->validate([
+            'kind' => ['required', Rule::in(array_map(fn (AssetPhotoKind $kind) => $kind->value, AssetPhotoKind::onTheItem()))],
+            'photos' => ['required', 'array', 'min:1', 'max:6'],
+            'photos.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
+        ]);
+
+        foreach ($request->file('photos', []) as $file) {
+            $store->handle($item, $file, $data['kind'], $request->user());
+        }
+
+        activity('assets.items')->performedOn($item)->causedBy($request->user())
+            ->log(count($data['photos']).' photo(s) added: '.AssetPhotoKind::from($data['kind'])->label());
+
+        return back()->with('success', 'Photo added.');
+    }
+
+    public function destroyPhoto(Request $request, AssetItem $item, Attachment $attachment, DeleteAttachment $delete): RedirectResponse
+    {
+        // ⚠ Only a photo of THIS item, and only one taken on the item itself:
+        // hand-over, repair and disposal photos belong to their documents.
+        abort_unless(
+            $attachment->attachable_type === $item->getMorphClass()
+            && (int) $attachment->attachable_id === $item->id
+            && in_array($attachment->collection, array_map(fn (AssetPhotoKind $kind) => $kind->value, AssetPhotoKind::onTheItem()), true),
+            404,
+        );
+
+        $delete->handle($attachment);
+
+        activity('assets.items')->performedOn($item)->causedBy($request->user())->log('A photo was removed');
+
+        return back()->with('success', 'Photo removed.');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validated(Request $request, bool $creating): array
+    {
+        $data = $request->validate([
+            'asset_category_id' => [$creating ? 'required' : 'prohibited', 'integer'],
+            'tracking' => [$creating ? 'required' : 'prohibited', Rule::enum(AssetTracking::class)],
+            'copies' => [$creating ? 'nullable' : 'prohibited', 'integer', 'min:1', 'max:'.SaveAssetItem::MAX_COPIES],
+            'name' => ['required', 'string', 'max:160'],
+            'quantity' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'brand' => ['nullable', 'string', 'max:80'],
+            'model' => ['nullable', 'string', 'max:120'],
+            'serial_number' => ['nullable', 'string', 'max:120'],
+            'specification' => ['nullable', 'string', 'max:5000'],
+            'place' => ['required', 'string', 'regex:/^(office|warehouse):\d+$/'],
+            'area' => ['nullable', 'string', 'max:120'],
+            'status' => ['required', Rule::enum(AssetStatus::class)],
+            'condition' => ['required', Rule::enum(AssetCondition::class)],
+            'parent_id' => ['nullable', 'integer'],
+            'acquired_on' => ['nullable', 'date'],
+            'supplier_id' => ['nullable', 'integer'],
+            'purchase_price' => ['nullable', 'numeric', 'min:0'],
+            'warranty_ends_on' => ['nullable', 'date'],
+            'note' => ['nullable', 'string', 'max:5000'],
+            'photos' => ['nullable', 'array', 'max:6'],
+            'photos.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
+        ]);
+
+        [$type, $id] = explode(':', $data['place']);
+        $data['office_id'] = $type === 'office' ? (int) $id : null;
+        $data['warehouse_id'] = $type === 'warehouse' ? (int) $id : null;
+        unset($data['place'], $data['photos']);
+
+        return $data;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formOptions(Request $request, ?AssetItem $editing = null): array
+    {
+        return [
+            'categories' => AssetCategory::query()->where('is_active', true)->orderBy('sort')->orderBy('name')
+                ->get(['id', 'name', 'code', 'default_tracking'])
+                ->map(fn (AssetCategory $category) => ['id' => $category->id, 'name' => $category->name, 'code' => $category->code, 'default_tracking' => $category->default_tracking->value]),
+            'places' => $this->places(),
+            'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name']),
+            // Items something can be part of: tagged, still kept, not itself.
+            'parents' => AssetItem::query()
+                ->where('tracking', AssetTracking::Individual->value)
+                ->where('status', '!=', AssetStatus::Disposed->value)
+                ->when($editing, fn (Builder $query) => $query->whereKeyNot($editing->id))
+                ->orderBy('tag')->get(['id', 'tag', 'name'])
+                ->map(fn (AssetItem $item) => ['id' => $item->id, 'label' => "{$item->tag} {$item->name}"]),
+            'statuses' => AssetStatus::options(AssetStatus::settableByHand()),
+            'conditions' => AssetCondition::options(),
+            'trackings' => AssetTracking::options(),
+            'max_copies' => SaveAssetItem::MAX_COPIES,
+            'sees_price' => $request->user()->can('assets.view'),
+        ];
+    }
+
+    /**
+     * Every active office and warehouse, as one list of places.
+     *
+     * @return list<array{value: string, label: string}>
+     */
+    private function places(): array
+    {
+        $offices = Office::query()->where('is_active', true)->orderBy('name')->get(['id', 'name'])
+            ->map(fn (Office $office) => ['value' => "office:{$office->id}", 'label' => "{$office->name} (office)"]);
+        $warehouses = Warehouse::query()->where('is_active', true)->orderBy('name')->get(['id', 'name'])
+            ->map(fn (Warehouse $warehouse) => ['value' => "warehouse:{$warehouse->id}", 'label' => "{$warehouse->name} (warehouse)"]);
+
+        return $offices->concat($warehouses)->values()->all();
+    }
+
+    /**
+     * A logged value as a person reads it: a place by its name, a part-of by its
+     * tag, a status by its label.
+     */
+    private function shown(string $field, mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return match ($field) {
+            'office_id' => Office::query()->whereKey($value)->value('name') ?? "office #{$value}",
+            'warehouse_id' => Warehouse::query()->whereKey($value)->value('name') ?? "warehouse #{$value}",
+            'parent_id' => AssetItem::query()->whereKey($value)->value('tag') ?? "item #{$value}",
+            'status' => AssetStatus::tryFrom((string) $value)?->label() ?? (string) $value,
+            'condition' => AssetCondition::tryFrom((string) $value)?->label() ?? (string) $value,
+            'warranty_ends_on' => substr((string) $value, 0, 10),
+            default => is_scalar($value) ? (string) $value : json_encode($value),
+        };
+    }
+
+    private const FIELD_LABELS = [
+        'name' => 'Name',
+        'quantity' => 'Quantity',
+        'brand' => 'Brand',
+        'model' => 'Model',
+        'serial_number' => 'Serial number',
+        'office_id' => 'Office',
+        'warehouse_id' => 'Warehouse',
+        'area' => 'Room or spot',
+        'status' => 'Status',
+        'condition' => 'Condition',
+        'parent_id' => 'Part of',
+        'warranty_ends_on' => 'Warranty ends',
+    ];
+}

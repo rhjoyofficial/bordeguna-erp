@@ -116,6 +116,7 @@ export function AppSidebar() {
         canUseChat,
         canManageCrmSettings,
         canViewAssets,
+        canViewAssetItems,
         hasEmployeeProfile,
         canManageUsers,
         canManageOrganization,
@@ -353,13 +354,27 @@ export function AppSidebar() {
         // delivery van's only reachable path was Purchasing, which files it as
         // stock and expenses it as cost of goods sold - through one month's P&L
         // and off the balance sheet entirely.
-        ...(canViewAssets
+        // ⭐ 16 Sep 2026: the physical register joins the section. An Asset Keeper
+        // sees the things and their tags; only a reader of the financial register
+        // sees fixed assets and depreciation.
+        ...(canViewAssets || canViewAssetItems
             ? [
                   {
                       label: 'Assets',
                       items: [
-                          { title: 'Fixed assets', url: '/assets', icon: Landmark },
-                          { title: 'Depreciation', url: '/assets/depreciation', icon: Scale },
+                          ...(canViewAssetItems
+                              ? [
+                                    { title: 'Things we keep', url: '/assets/items', icon: PackageSearch },
+                                    { title: 'Asset tags', url: '/assets/items/labels', icon: ScanBarcode },
+                                    { title: 'Asset categories', url: '/assets/categories', icon: Tags },
+                                ]
+                              : []),
+                          ...(canViewAssets
+                              ? [
+                                    { title: 'Fixed assets', url: '/assets', icon: Landmark },
+                                    { title: 'Depreciation', url: '/assets/depreciation', icon: Scale },
+                                ]
+                              : []),
                       ],
                   },
               ]

@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -86,6 +87,11 @@ class WarehouseController extends Controller
         // this check turns the refusal into a sentence, not a blank 500.
         if ($warehouse->stockCounts()->exists()) {
             return back()->with('error', 'Stock counts have been recorded in this warehouse. Switch it off instead of deleting it.');
+        }
+
+        // ⚠ Same for things in the asset register (16 Sep 2026).
+        if (AssetItem::query()->where('warehouse_id', $warehouse->id)->exists()) {
+            return back()->with('error', 'Things in the asset register are kept in this warehouse. Move them or switch it off instead of deleting it.');
         }
 
         $warehouse->delete();

@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Foundation\Models\Department;
 use App\Modules\Foundation\Models\Designation;
 use App\Modules\Foundation\Models\Office;
@@ -141,6 +142,12 @@ class OrganizationController extends Controller
 
         if ($office->departments()->exists()) {
             return back()->with('error', "Remove this office's departments before deleting it.");
+        }
+
+        // ⚠ Things are kept here (asset register, 16 Sep 2026). The foreign key
+        // refuses too; this turns the refusal into a sentence, not a 500.
+        if (AssetItem::query()->where('office_id', $office->id)->exists()) {
+            return back()->with('error', 'Things in the asset register are kept at this office. Move them or switch the office off instead of deleting it.');
         }
 
         $office->delete();

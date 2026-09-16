@@ -22,6 +22,10 @@ class FixedAsset extends Model
 {
     use BelongsToBusiness, LogsActivity;
 
+    public const COST_BY_ACQUISITION = 'acquisition_journal';
+
+    public const COST_IN_OPENING_BALANCES = 'opening_balance';
+
     protected $fillable = [
         'business_id',
         'asset_code',
@@ -34,6 +38,7 @@ class FixedAsset extends Model
         'depreciation_starts_on',
         'money_account_id',
         'supplier_id',
+        'cost_on_books',
         'note',
         'created_by',
     ];
@@ -136,11 +141,22 @@ class FixedAsset extends Model
         return $straightLine->minor >= $remaining->minor ? $remaining : $straightLine;
     }
 
+    /**
+     * ⚠⚠ Is the cost in the ledger at all? By its acquisition journal, or by the
+     * recorder's word that it sits in the opening balances. An asset whose cost
+     * the books never carried must not be written off (plan §2.12, 16 Sep 2026).
+     */
+    public function costIsOnTheBooks(): bool
+    {
+        return in_array($this->cost_on_books, [self::COST_BY_ACQUISITION, self::COST_IN_OPENING_BALANCES], true);
+    }
+
     public function isDepreciableIn(int $year, int $month): bool
     {
         $periodEnd = Carbon::create($year, $month, 1)->endOfMonth();
 
-        return ! $this->isFullyDepreciated()
+        return $this->costIsOnTheBooks()
+            && ! $this->isFullyDepreciated()
             && $this->depreciation_starts_on->lessThanOrEqualTo($periodEnd);
     }
 }

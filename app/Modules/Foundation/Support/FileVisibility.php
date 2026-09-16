@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
+use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\DistributorInspection;
 use App\Modules\Crm\Models\Lead;
@@ -90,6 +91,9 @@ class FileVisibility
         // HoldsIdentityDocuments.
         SupplierCertification::class => 'purchasing.reports.view',
         InventoryAdjustment::class => 'inventory.reports.view',
+        // Photos of the things the business keeps (asset management slice A1,
+        // 16 Sep 2026): for whoever keeps the register.
+        AssetItem::class => 'assets.items.view',
     ];
 
     /**

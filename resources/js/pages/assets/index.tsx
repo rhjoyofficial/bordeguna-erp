@@ -3,6 +3,7 @@ import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -27,6 +28,8 @@ interface Asset {
     book_value: string;
     monthly_charge: string;
     is_fully_depreciated: boolean;
+    // ⚠ Null: the cost is not in the books, so it is not depreciated.
+    cost_on_books: 'acquisition_journal' | 'opening_balance' | null;
     note: string | null;
 }
 
@@ -59,6 +62,7 @@ export default function AssetsIndex({
         money_account_id: '',
         supplier_id: '',
         note: '',
+        cost_in_opening_balances: false as boolean,
     });
 
     const submit: FormEventHandler = (e) => {
@@ -210,6 +214,22 @@ export default function AssetsIndex({
                             <InputError message={errors.money_account_id} />
                         </div>
 
+                        {/* ⚠⚠ Without a payment, depreciation needs the cost to be in the
+                            books some other way: the opening balances. Otherwise it would
+                            write off a cost the ledger never carried (16 Sep 2026). */}
+                        {data.money_account_id === '' && (
+                            <div className="flex max-w-xs items-start gap-2 self-center">
+                                <Checkbox
+                                    id="cost_in_opening_balances"
+                                    checked={data.cost_in_opening_balances}
+                                    onCheckedChange={(checked) => setData('cost_in_opening_balances', checked === true)}
+                                />
+                                <Label htmlFor="cost_in_opening_balances" className="leading-snug font-normal">
+                                    Its cost is already in the opening balances, so it can be depreciated
+                                </Label>
+                            </div>
+                        )}
+
                         <div className="grid gap-2">
                             <Label htmlFor="supplier_id">Bought from (optional)</Label>
                             <SearchSelect fit id="supplier_id" value={data.supplier_id} onChange={(e) => setData('supplier_id', e.target.value)}>
@@ -261,6 +281,11 @@ export default function AssetsIndex({
                                         {asset.is_fully_depreciated && (
                                             <Badge variant="secondary" className="ml-2">
                                                 Fully written off
+                                            </Badge>
+                                        )}
+                                        {asset.cost_on_books === null && (
+                                            <Badge variant="outline" className="ml-2">
+                                                Cost not in the books, not depreciated
                                             </Badge>
                                         )}
                                     </td>
