@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Accounting\Console\Commands\ReleaseDueAmortizations;
+use App\Modules\Assets\Console\Commands\RemindAssetMaintenance;
 use App\Modules\Commerce\Console\Commands\FollowGatewayRefunds;
 use App\Modules\Commerce\Console\Commands\SettleOnlinePayments;
 use App\Modules\Crm\Console\Commands\NotifyFollowUpsDue;
@@ -116,6 +117,15 @@ Schedule::command(NotifyFollowUpsDue::class)
 // an expense voucher here is paid the moment it exists, so a job that made one
 // would record a payment nobody had made, every month, for ever.
 Schedule::command(RollAndRemindRecurringExpenses::class)
+    ->dailyAt('08:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Asset maintenance (slice A4, 17 September 2026): plans due, faults open,
+// warranties ending, to whoever keeps the register.
+//
+// ⚠ 08:30 Dhaka with the other digests. It reminds and nothing else.
+Schedule::command(RemindAssetMaintenance::class)
     ->dailyAt('08:30')
     ->withoutOverlapping()
     ->runInBackground();

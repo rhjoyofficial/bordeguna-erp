@@ -4,6 +4,8 @@ use App\Modules\Assets\Http\Controllers\AssetCategoryController;
 use App\Modules\Assets\Http\Controllers\AssetCountController;
 use App\Modules\Assets\Http\Controllers\AssetItemController;
 use App\Modules\Assets\Http\Controllers\AssetLabelController;
+use App\Modules\Assets\Http\Controllers\AssetMaintenanceController;
+use App\Modules\Assets\Http\Controllers\AssetMaintenancePlanController;
 use App\Modules\Assets\Http\Controllers\AssetMovementController;
 use App\Modules\Assets\Http\Controllers\AssetPartyController;
 use App\Modules\Assets\Http\Controllers\DepreciationController;
@@ -57,6 +59,18 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
         Route::post('counts/{count}/found', [AssetCountController::class, 'addFound'])->whereNumber('count')->name('counts.found');
         Route::post('counts/{count}/close', [AssetCountController::class, 'close'])->whereNumber('count')->name('counts.close');
         Route::post('discrepancies/{discrepancy}/resolve', [AssetCountController::class, 'resolve'])->whereNumber('discrepancy')->name('discrepancies.resolve');
+        // Maintenance (slice A4). Records are never edited once done or
+        // cancelled; only their money changes, and that route is below.
+        Route::get('maintenance/create', [AssetMaintenanceController::class, 'create'])->name('maintenance.create');
+        Route::post('maintenance', [AssetMaintenanceController::class, 'store'])->name('maintenance.store');
+        Route::post('maintenance/{record}/complete', [AssetMaintenanceController::class, 'complete'])->whereNumber('record')->name('maintenance.complete');
+        Route::post('maintenance/{record}/cancel', [AssetMaintenanceController::class, 'cancel'])->whereNumber('record')->name('maintenance.cancel');
+        Route::post('maintenance/{record}/photos', [AssetMaintenanceController::class, 'storePhotos'])->whereNumber('record')->name('maintenance.photos.store');
+        Route::get('maintenance/plans/create', [AssetMaintenancePlanController::class, 'create'])->name('maintenance.plans.create');
+        Route::post('maintenance/plans', [AssetMaintenancePlanController::class, 'store'])->name('maintenance.plans.store');
+        Route::get('maintenance/plans/{plan}/edit', [AssetMaintenancePlanController::class, 'edit'])->whereNumber('plan')->name('maintenance.plans.edit');
+        Route::put('maintenance/plans/{plan}', [AssetMaintenancePlanController::class, 'update'])->whereNumber('plan')->name('maintenance.plans.update');
+        Route::post('maintenance/plans/{plan}/active', [AssetMaintenancePlanController::class, 'setActive'])->whereNumber('plan')->name('maintenance.plans.active');
         Route::post('parties', [AssetPartyController::class, 'store'])->name('parties.store');
         Route::put('parties/{party}', [AssetPartyController::class, 'update'])->whereNumber('party')->name('parties.update');
     });
@@ -75,7 +89,14 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
         Route::get('parties', [AssetPartyController::class, 'index'])->name('parties.index');
         Route::get('counts', [AssetCountController::class, 'index'])->name('counts.index');
         Route::get('counts/{count}', [AssetCountController::class, 'show'])->whereNumber('count')->name('counts.show');
+        Route::get('maintenance', [AssetMaintenanceController::class, 'index'])->name('maintenance.index');
+        Route::get('maintenance/{record}', [AssetMaintenanceController::class, 'show'])->whereNumber('record')->name('maintenance.show');
     });
+
+    // ⚠ What maintenance cost is money: the financial register's readers only
+    // (plan §2.14). The action checks again.
+    Route::post('maintenance/{record}/money', [AssetMaintenanceController::class, 'money'])
+        ->middleware('can:assets.view')->whereNumber('record')->name('maintenance.money');
 });
 
 // My assets (slice A2): self-scope like My profile, no permission. Under /hrm
@@ -83,4 +104,6 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
 Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->group(function () {
     Route::get('my-assets', [MyAssetsController::class, 'index'])->name('my-assets');
     Route::post('my-assets/{item}/acknowledge', [MyAssetsController::class, 'acknowledge'])->whereNumber('item')->name('my-assets.acknowledge');
+    // Slice A4: the holder says something is wrong with it.
+    Route::post('my-assets/{item}/report', [MyAssetsController::class, 'report'])->whereNumber('item')->name('my-assets.report');
 });

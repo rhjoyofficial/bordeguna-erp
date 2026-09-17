@@ -59,6 +59,9 @@ class AssetItem extends Model implements ControlsAttachmentAccess
         'supplier_id',
         'purchase_price',
         'warranty_ends_on',
+        // Slice A4: a service contract, and who holds it.
+        'service_ends_on',
+        'service_party_id',
         'note',
         'created_by',
         // Custody (slice A2): written only by MoveAssets and the acknowledgement.
@@ -86,6 +89,7 @@ class AssetItem extends Model implements ControlsAttachmentAccess
             'sequence' => 'integer',
             'acquired_on' => 'date',
             'warranty_ends_on' => 'date',
+            'service_ends_on' => 'date',
             'purchase_price' => 'decimal:4',
             'custody_since' => 'date',
             'acknowledged_at' => 'datetime',
@@ -97,7 +101,7 @@ class AssetItem extends Model implements ControlsAttachmentAccess
         // ⚠ Price deliberately left out: the history of an item is read by people
         // who may not see what it cost.
         return LogOptions::defaults()
-            ->logOnly(['name', 'quantity', 'brand', 'model', 'serial_number', 'office_id', 'warehouse_id', 'area', 'status', 'condition', 'parent_id', 'warranty_ends_on', 'custodian_employee_id', 'custodian_party_id'])
+            ->logOnly(['name', 'quantity', 'brand', 'model', 'serial_number', 'office_id', 'warehouse_id', 'area', 'status', 'condition', 'parent_id', 'warranty_ends_on', 'service_ends_on', 'service_party_id', 'custodian_employee_id', 'custodian_party_id'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -148,6 +152,21 @@ class AssetItem extends Model implements ControlsAttachmentAccess
     public function custodianParty(): BelongsTo
     {
         return $this->belongsTo(AssetParty::class, 'custodian_party_id');
+    }
+
+    public function serviceParty(): BelongsTo
+    {
+        return $this->belongsTo(AssetParty::class, 'service_party_id');
+    }
+
+    public function maintenancePlans(): HasMany
+    {
+        return $this->hasMany(AssetMaintenancePlan::class, 'asset_item_id');
+    }
+
+    public function maintenanceRecords(): HasMany
+    {
+        return $this->hasMany(AssetMaintenanceRecord::class, 'asset_item_id');
     }
 
     public function transitMovement(): BelongsTo

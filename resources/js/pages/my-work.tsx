@@ -26,7 +26,7 @@ interface MyWorkProps {
     my_requests: Section<{ type: string; since: string | null }>;
     attendance?: { needs_review: number; holds_payroll: number };
     recurring?: Section<{ label: string; due_on: string; amount: string }>;
-    assets?: { in_transit: number; unacknowledged: number; open_gaps: number };
+    assets?: { in_transit: number; unacknowledged: number; open_gaps: number; maintenance_due: number; open_repairs: number };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'My work', href: '/work' }];
@@ -75,6 +75,15 @@ export default function MyWork({ approvals, followups, todos, my_requests, atten
                 {assets && assets.open_gaps > 0 && (
                     <Link href="/assets/counts" className="block rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
                         <span className="font-semibold">Stock-take gaps to settle:</span> {assets.open_gaps}
+                    </Link>
+                )}
+
+                {assets && (assets.maintenance_due > 0 || assets.open_repairs > 0) && (
+                    <Link href="/assets/maintenance" className="block rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+                        <span className="font-semibold">Maintenance waiting:</span>
+                        {assets.maintenance_due > 0 && ` ${assets.maintenance_due} planned ${assets.maintenance_due === 1 ? 'job' : 'jobs'} due`}
+                        {assets.maintenance_due > 0 && assets.open_repairs > 0 && ','}
+                        {assets.open_repairs > 0 && ` ${assets.open_repairs} open ${assets.open_repairs === 1 ? 'fault or job' : 'faults or jobs'}`}
                     </Link>
                 )}
 

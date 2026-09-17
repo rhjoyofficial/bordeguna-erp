@@ -12,6 +12,8 @@ use App\Modules\Assets\Enums\AssetTracking;
 use App\Modules\Assets\Models\AssetCategory;
 use App\Modules\Assets\Models\AssetCount;
 use App\Modules\Assets\Models\AssetItem;
+use App\Modules\Assets\Models\AssetMaintenancePlan;
+use App\Modules\Assets\Models\AssetMaintenanceRecord;
 use App\Modules\Assets\Models\AssetMovementLine;
 use App\Modules\Assets\Models\AssetParty;
 use App\Modules\Assets\Support\AssetQrCode;
@@ -26,6 +28,7 @@ use App\Modules\Purchasing\Models\Supplier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -135,7 +138,7 @@ class AssetItemController extends Controller
 
     public function show(Request $request, AssetItem $item): Response
     {
-        $item->load(['category:id,name,code', 'office:id,name', 'warehouse:id,name', 'parent:id,tag,name', 'parts:id,parent_id,tag,name,status', 'supplier:id,name', 'createdBy:id,name', 'attachments',
+        $item->load(['category:id,name,code', 'office:id,name', 'warehouse:id,name', 'parent:id,tag,name', 'parts:id,parent_id,tag,name,status', 'supplier:id,name', 'createdBy:id,name', 'attachments', 'serviceParty:id,name,organisation',
             'custodianEmployee:id,first_name,last_name,employee_code', 'custodianParty:id,name,organisation', 'transitMovement:id,number', 'holdings.employee:id,first_name,last_name', 'holdings.party:id,name,organisation', 'holdings.office:id,name', 'holdings.warehouse:id,name']);
         $seesPrice = $request->user()->can('assets.view');
 
@@ -184,6 +187,10 @@ class AssetItemController extends Controller
                 'acquired_on' => $item->acquired_on?->toDateString(),
                 'warranty_ends_on' => $item->warranty_ends_on?->toDateString(),
                 'warranty_expired' => $item->warranty_ends_on !== null && $item->warranty_ends_on->lt(now()->startOfDay()),
+                // Slice A4.
+                'service_ends_on' => $item->service_ends_on?->toDateString(),
+                'service_expired' => $item->service_ends_on !== null && $item->service_ends_on->lt(now()->startOfDay()),
+                'service_party' => $item->serviceParty?->label(),
                 'supplier' => $item->supplier?->name,
                 'purchase_price' => $seesPrice && $item->purchase_price !== null ? Money::ofTaka((string) $item->purchase_price)->toTaka() : null,
                 'note' => $item->note,
@@ -228,6 +235,16 @@ class AssetItemController extends Controller
                 ])->values(),
             ])->filter(fn (array $group) => $group['uploadable'] || $group['files']->isNotEmpty())->values(),
             'history' => $history,
+            // Slice A4: its plans and its records.
+            'maintenance' => $item->isIndividual() ? [
+                'plans' => $item->maintenancePlans()->with(['assignee:id,name', 'party:id,name,organisation'])
+                    ->orderByDesc('is_active')->orderBy('next_due_on')->get()
+                    ->map(fn (AssetMaintenancePlan $plan) => AssetMaintenancePlanController::row($plan)),
+                'records' => $item->maintenanceRecords()->with(['reportedBy:id,name', 'doneBy:id,name', 'party:id,name,organisation', 'voucher:id,voucher_number'])
+                    ->orderByDesc('id')->limit(50)->get()
+                    ->map(fn (AssetMaintenanceRecord $record) => AssetMaintenanceController::row($record, $seesPrice)),
+            ] : null,
+            'sees_money' => $seesPrice,
             'can_manage' => $request->user()->can('assets.items.manage'),
         ]);
     }
@@ -259,6 +276,8 @@ class AssetItemController extends Controller
                 'supplier_id' => $item->supplier_id,
                 'purchase_price' => $seesPrice && $item->purchase_price !== null ? Money::ofTaka((string) $item->purchase_price)->toTaka() : null,
                 'warranty_ends_on' => $item->warranty_ends_on?->toDateString(),
+                'service_ends_on' => $item->service_ends_on?->toDateString(),
+                'service_party_id' => $item->service_party_id,
                 'note' => $item->note,
             ],
         ]);
@@ -377,6 +396,8 @@ class AssetItemController extends Controller
             'supplier_id' => ['nullable', 'integer'],
             'purchase_price' => ['nullable', 'numeric', 'min:0'],
             'warranty_ends_on' => ['nullable', 'date'],
+            'service_ends_on' => ['nullable', 'date'],
+            'service_party_id' => ['nullable', 'integer'],
             'note' => ['nullable', 'string', 'max:5000'],
             'photos' => ['nullable', 'array', 'max:6'],
             'photos.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
@@ -401,6 +422,11 @@ class AssetItemController extends Controller
                 ->map(fn (AssetCategory $category) => ['id' => $category->id, 'name' => $category->name, 'code' => $category->code, 'default_tracking' => $category->default_tracking->value]),
             'places' => $this->places(),
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name']),
+            // Active parties, and the one it already names even if switched off.
+            'parties' => AssetParty::query()
+                ->where(fn (Builder $query) => $query->where('is_active', true)->when($editing?->service_party_id, fn (Builder $q, $id) => $q->orWhere('id', $id)))
+                ->orderBy('name')->get()
+                ->map(fn (AssetParty $party) => ['id' => $party->id, 'label' => $party->label()]),
             // Items something can be part of: tagged, still kept, not itself.
             'parents' => AssetItem::query()
                 ->where('tracking', AssetTracking::Individual->value)
@@ -449,7 +475,11 @@ class AssetItemController extends Controller
             'custodian_party_id' => AssetParty::query()->withoutGlobalScopes()->whereKey($value)->first()?->label() ?? "party #{$value}",
             'status' => AssetStatus::tryFrom((string) $value)?->label() ?? (string) $value,
             'condition' => AssetCondition::tryFrom((string) $value)?->label() ?? (string) $value,
-            'warranty_ends_on' => substr((string) $value, 0, 10),
+            // ⚠ The log keeps a date as a UTC timestamp ("2026-10-06T18:00:00Z"
+            // for the 7th in Dhaka): cutting it at ten characters showed the day
+            // before (found on the A4 walk, 17 Sep 2026).
+            'warranty_ends_on', 'service_ends_on' => Carbon::parse((string) $value)->timezone(config('app.timezone'))->toDateString(),
+            'service_party_id' => AssetParty::query()->withoutGlobalScopes()->whereKey($value)->first()?->label() ?? "party #{$value}",
             default => is_scalar($value) ? (string) $value : json_encode($value),
         };
     }
@@ -467,6 +497,8 @@ class AssetItemController extends Controller
         'condition' => 'Condition',
         'parent_id' => 'Part of',
         'warranty_ends_on' => 'Warranty ends',
+        'service_ends_on' => 'Service contract ends',
+        'service_party_id' => 'Serviced by',
         'custodian_employee_id' => 'Held by',
         'custodian_party_id' => 'With outside party',
     ];

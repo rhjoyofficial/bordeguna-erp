@@ -1,3 +1,4 @@
+import { PlanList, RecordList, type MaintenancePlanRow, type MaintenanceRecordRow } from '@/components/assets/maintenance-lists';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +30,9 @@ interface Item {
     acquired_on: string | null;
     warranty_ends_on: string | null;
     warranty_expired: boolean;
+    service_ends_on: string | null;
+    service_expired: boolean;
+    service_party: string | null;
     supplier: string | null;
     purchase_price: string | null;
     note: string | null;
@@ -119,12 +123,14 @@ export default function AssetItemShow({
     photos,
     history,
     movements,
+    maintenance,
     can_manage,
 }: {
     item: Item;
     photos: PhotoGroup[];
     history: HistoryEntry[];
     movements: MovementRow[];
+    maintenance: { plans: MaintenancePlanRow[]; records: MaintenanceRecordRow[] } | null;
     can_manage: boolean;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
@@ -252,6 +258,18 @@ export default function AssetItemShow({
                                 '-'
                             )}
                         </Fact>
+                        {(item.service_ends_on || item.service_party) && (
+                            <Fact label="Service contract">
+                                <span className={item.service_expired ? 'text-muted-foreground' : ''}>
+                                    {item.service_ends_on
+                                        ? item.service_expired
+                                            ? `Ended ${item.service_ends_on}`
+                                            : `Until ${item.service_ends_on}`
+                                        : 'No end date'}
+                                    {item.service_party && ` with ${item.service_party}`}
+                                </span>
+                            </Fact>
+                        )}
                         {item.parent && (
                             <Fact label="Part of">
                                 <Link href={`/assets/items/${item.parent.id}`} className="underline underline-offset-2">
@@ -342,6 +360,33 @@ export default function AssetItemShow({
                         </div>
                     ))}
                 </section>
+
+                {/* Slice A4: what should be done to it, and what was. */}
+                {maintenance && (
+                    <section className="grid gap-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h2 className="font-medium">Maintenance</h2>
+                            {can_manage && (
+                                <div className="flex flex-wrap gap-2">
+                                    <Button size="sm" variant="outline" asChild>
+                                        <Link href={`/assets/maintenance/plans/create?item=${item.id}`}>Plan care</Link>
+                                    </Button>
+                                    <Button size="sm" variant="outline" asChild>
+                                        <Link href={`/assets/maintenance/create?item=${item.id}`}>Record work or a fault</Link>
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                        <div className="grid gap-2">
+                            <p className="text-sm">Plans</p>
+                            <PlanList plans={maintenance.plans} canManage={can_manage} />
+                        </div>
+                        <div className="grid gap-2">
+                            <p className="text-sm">Records</p>
+                            <RecordList records={maintenance.records} />
+                        </div>
+                    </section>
+                )}
 
                 <section className="grid gap-2">
                     <h2 className="font-medium">Hand-overs</h2>

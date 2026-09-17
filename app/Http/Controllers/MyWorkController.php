@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Modules\Assets\Models\AssetMaintenancePlan;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -162,7 +163,7 @@ class MyWorkController extends Controller
      * Asset hand-overs waiting on somebody (slice A2): transfers not yet
      * received, and things issued three days ago that nobody has acknowledged.
      *
-     * @return array{in_transit: int, unacknowledged: int, open_gaps: int}
+     * @return array{in_transit: int, unacknowledged: int, open_gaps: int, maintenance_due: int, open_repairs: int}
      */
     private function assets(): array
     {
@@ -175,6 +176,9 @@ class MyWorkController extends Controller
                 ->where('custody_since', '<=', now()->subDays(3)->toDateString())->count(),
             // Slice A3: stock-take gaps nobody has settled.
             'open_gaps' => DB::table('asset_discrepancies')->where('business_id', $businessId)->where('state', 'open')->count(),
+            // Slice A4: maintenance due or overdue, and faults or jobs still open.
+            'maintenance_due' => AssetMaintenancePlan::query()->due()->count(),
+            'open_repairs' => DB::table('asset_maintenance_records')->where('business_id', $businessId)->where('state', 'open')->count(),
         ];
     }
 

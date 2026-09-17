@@ -119,7 +119,10 @@ export function SearchableSelect({
                         aria-invalid={invalid || undefined}
                         className={cn(
                             'bg-background h-10 justify-between font-normal',
-                            fits ? 'w-auto max-w-[18rem] min-w-[9rem]' : 'w-full',
+                            // ⚠ min-w-0: a long label is truncated, but a button still asks
+                            // for its whole text as its minimum, which widened a phone page
+                            // to 405px (17 Sep 2026, an outside party with a long name).
+                            fits ? 'w-auto max-w-[18rem] min-w-[9rem]' : 'w-full min-w-0',
                             (!selected || value === '') && 'text-muted-foreground',
                             invalid && 'border-destructive',
                             className,

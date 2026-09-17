@@ -375,7 +375,7 @@ it('lists what a leaver still holds, and what waits on the keeper', function () 
         ->and($checklist['can_move_assets'])->toBeTrue();
 
     $work = $this->actingAs($this->keeper)->get('/work')->assertOk()->original->getData()['page']['props'];
-    expect($work['assets'])->toBe(['in_transit' => 1, 'unacknowledged' => 1, 'open_gaps' => 0]);
+    expect($work['assets'])->toBe(['in_transit' => 1, 'unacknowledged' => 1, 'open_gaps' => 0, 'maintenance_due' => 0, 'open_repairs' => 0]);
 
     $staffWork = $this->actingAs($this->staff)->get('/work')->assertOk()->original->getData()['page']['props'];
     expect($staffWork)->not->toHaveKey('assets');

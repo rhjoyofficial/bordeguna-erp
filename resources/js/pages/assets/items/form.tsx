@@ -42,6 +42,8 @@ interface EditingItem {
     supplier_id: number | null;
     purchase_price: string | null;
     warranty_ends_on: string | null;
+    service_ends_on: string | null;
+    service_party_id: number | null;
     note: string | null;
 }
 
@@ -58,6 +60,7 @@ export default function AssetItemForm({
     categories,
     places,
     suppliers,
+    parties,
     parents,
     statuses,
     conditions,
@@ -69,6 +72,7 @@ export default function AssetItemForm({
     categories: Category[];
     places: Option[];
     suppliers: { id: number; name: string }[];
+    parties: { id: number; label: string }[];
     parents: { id: number; label: string }[];
     statuses: Option[];
     conditions: Option[];
@@ -102,6 +106,8 @@ export default function AssetItemForm({
         supplier_id: string;
         purchase_price: string;
         warranty_ends_on: string;
+        service_ends_on: string;
+        service_party_id: string;
         note: string;
         photos: File[];
     }>({
@@ -123,6 +129,8 @@ export default function AssetItemForm({
         supplier_id: item?.supplier_id ? String(item.supplier_id) : '',
         purchase_price: item?.purchase_price ?? '',
         warranty_ends_on: item?.warranty_ends_on ?? '',
+        service_ends_on: item?.service_ends_on ?? '',
+        service_party_id: item?.service_party_id ? String(item.service_party_id) : '',
         note: item?.note ?? '',
         photos: [],
     });
@@ -170,7 +178,7 @@ export default function AssetItemForm({
                     </p>
                 </div>
 
-                <section className="grid gap-4 sm:grid-cols-2">
+                <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                         <Label required>Category</Label>
                         {editing ? (
@@ -273,7 +281,7 @@ export default function AssetItemForm({
                     </div>
                 </section>
 
-                <section className="grid gap-4 sm:grid-cols-2">
+                <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                         <Label required>Where it is</Label>
                         <SearchableSelect value={data.place} onChange={(v) => setData('place', v)} options={places} placeholder="Choose a place" />
@@ -316,7 +324,7 @@ export default function AssetItemForm({
                     )}
                 </section>
 
-                <section className="grid gap-4 sm:grid-cols-2">
+                <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                         <Label htmlFor="acquired_on">Bought on</Label>
                         <Input id="acquired_on" type="date" value={data.acquired_on} onChange={(e) => setData('acquired_on', e.target.value)} />
@@ -357,6 +365,29 @@ export default function AssetItemForm({
                             onChange={(e) => setData('warranty_ends_on', e.target.value)}
                         />
                         <InputError message={errors.warranty_ends_on} />
+                    </div>
+                    {/* Slice A4: a service contract, and who holds it. */}
+                    <div className="grid gap-2">
+                        <Label htmlFor="service_ends_on">Service contract ends</Label>
+                        <Input
+                            id="service_ends_on"
+                            type="date"
+                            value={data.service_ends_on}
+                            onChange={(e) => setData('service_ends_on', e.target.value)}
+                        />
+                        <InputError message={errors.service_ends_on} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Serviced by</Label>
+                        <SearchableSelect
+                            value={data.service_party_id}
+                            onChange={(v) => setData('service_party_id', v)}
+                            options={[
+                                { value: '', label: 'Nobody under contract' },
+                                ...parties.map((p) => ({ value: String(p.id), label: p.label })),
+                            ]}
+                        />
+                        <InputError message={errors.service_party_id} />
                     </div>
                     <div className="grid gap-2 sm:col-span-2">
                         <Label htmlFor="note">Note</Label>

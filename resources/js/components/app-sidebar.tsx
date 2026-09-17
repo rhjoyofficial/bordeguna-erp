@@ -76,6 +76,7 @@ import {
     Wallet,
     Warehouse,
     Waves,
+    Wrench,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -367,6 +368,7 @@ export function AppSidebar() {
                                     { title: 'Things we keep', url: '/assets/items', icon: PackageSearch },
                                     { title: 'Hand-overs', url: '/assets/movements', icon: ArrowLeftRight },
                                     { title: 'Stock-takes', url: '/assets/counts', icon: ClipboardCheck },
+                                    { title: 'Maintenance', url: '/assets/maintenance', icon: Wrench },
                                     { title: 'Asset tags', url: '/assets/items/labels', icon: ScanBarcode },
                                     { title: 'Asset categories', url: '/assets/categories', icon: Tags },
                                     { title: 'Outside parties', url: '/assets/parties', icon: Contact },

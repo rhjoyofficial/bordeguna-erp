@@ -10,6 +10,7 @@ use App\Modules\Assets\Enums\AssetTracking;
 use App\Modules\Assets\Models\AssetCategory;
 use App\Modules\Assets\Models\AssetHolding;
 use App\Modules\Assets\Models\AssetItem;
+use App\Modules\Assets\Models\AssetParty;
 use App\Modules\Assets\Support\AssetTag;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
@@ -258,6 +259,8 @@ final class SaveAssetItem
             'supplier_id' => $supplierId,
             'purchase_price' => $price?->toTaka(),
             'warranty_ends_on' => filled($a['warranty_ends_on'] ?? null) ? Carbon::parse($a['warranty_ends_on'])->startOfDay() : null,
+            'service_ends_on' => filled($a['service_ends_on'] ?? null) ? Carbon::parse($a['service_ends_on'])->startOfDay() : null,
+            'service_party_id' => $this->serviceParty($business, $a['service_party_id'] ?? null),
             'note' => $this->text($a['note'] ?? null, 5000),
         ];
     }
@@ -284,6 +287,24 @@ final class SaveAssetItem
         }
 
         return [$officeId, $warehouseId];
+    }
+
+    /**
+     * Who services it under contract: an outside party of this business.
+     *
+     * @throws ValidationException
+     */
+    private function serviceParty(Business $business, mixed $partyId): ?int
+    {
+        if (blank($partyId)) {
+            return null;
+        }
+
+        if (! AssetParty::query()->withoutGlobalScopes()->whereKey((int) $partyId)->where('business_id', $business->id)->exists()) {
+            throw ValidationException::withMessages(['service_party_id' => 'That outside party is not one of this business.']);
+        }
+
+        return (int) $partyId;
     }
 
     private function parent(Business $business, mixed $parentId, AssetTracking $tracking, ?AssetItem $item): ?int
