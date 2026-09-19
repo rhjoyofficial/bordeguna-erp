@@ -65,7 +65,11 @@ it('reassigns an employee, closing the old assignment and opening a new one', fu
         'supervisor_id' => $this->colleague->id,
     ])->assertRedirect();
 
-    expect($old->fresh()->effective_to->toDateString())->toBe('2026-06-01');
+    // The day before: both ends are inclusive, so ending it on 1 June would
+    // leave two live primary assignments on the transfer day itself.
+    expect($old->fresh()->effective_to->toDateString())->toBe('2026-05-31');
+    expect($this->employee->assignments()->activeOn('2026-06-01')->where('is_primary', true)->count())->toBe(1);
+    expect($this->employee->assignments()->activeOn('2026-05-31')->where('is_primary', true)->count())->toBe(1);
 
     app(BusinessContext::class)->set($this->business->id);
     $current = $this->employee->fresh()->currentAssignment();

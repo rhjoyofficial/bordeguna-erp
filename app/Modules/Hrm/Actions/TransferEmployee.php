@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Actions;
 
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -20,7 +21,12 @@ class TransferEmployee
     public function handle(Employee $employee, EmployeeAssignment $current, string $effectiveFrom, array $placement): EmployeeAssignment
     {
         return DB::transaction(function () use ($employee, $current, $effectiveFrom, $placement) {
-            $current->update(['effective_to' => $effectiveFrom]);
+            // ⚠⚠ THE OLD PLACEMENT ENDS THE DAY BEFORE THE NEW ONE STARTS. Both
+            // ends of an assignment are inclusive (EffectiveDated::activeOn), so
+            // ending it ON the transfer day left two live primary assignments
+            // for that one day, and any report as at that day - a salary sheet
+            // whose period ends on it - printed and counted the person twice.
+            $current->update(['effective_to' => Carbon::parse($effectiveFrom)->subDay()->toDateString()]);
 
             return $employee->assignments()->create([
                 'office_id' => $placement['office_id'] ?? null,

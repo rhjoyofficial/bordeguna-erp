@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Reporting\Concerns;
 
+use App\Modules\Hrm\Reporting\ReportParameters;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -39,7 +40,7 @@ trait ResolvesAssignments
      * department names.
      *
      * @param  string  $employeeColumn  the spine's employee foreign key
-     * @param  string  $asAt            the date the report is about, as Y-m-d
+     * @param  string  $asAt  the date the report is about, as Y-m-d
      */
     protected function joinAssignmentAsAt(Builder $query, string $employeeColumn, string $asAt): Builder
     {
@@ -51,7 +52,14 @@ trait ResolvesAssignments
                     ->where(function ($inner) use ($asAt) {
                         $inner->whereNull('employee_assignments.effective_to')
                             ->orWhereDate('employee_assignments.effective_to', '>=', $asAt);
-                    });
+                    })
+                    // ⚠ One row per spine row, whatever the assignment data
+                    // holds: two live primary assignments would otherwise print
+                    // and total a person twice. The latest one wins.
+                    ->whereRaw(
+                        "employee_assignments.id = (select ea2.id from employee_assignments ea2 where ea2.employee_id = {$employeeColumn} and ea2.is_primary = 1 and date(ea2.effective_from) <= ? and (ea2.effective_to is null or date(ea2.effective_to) >= ?) order by ea2.effective_from desc, ea2.id desc limit 1)",
+                        [$asAt, $asAt],
+                    );
             })
             ->leftJoin('offices', 'offices.id', '=', 'employee_assignments.office_id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_assignments.department_id');
@@ -74,7 +82,7 @@ trait ResolvesAssignments
      * Apply the office and department filters, which are declared by almost
      * every definition and filtered identically by all of them.
      *
-     * @param  \App\Modules\Hrm\Reporting\ReportParameters  $parameters
+     * @param  ReportParameters  $parameters
      */
     protected function filterByAssignment(Builder $query, $parameters): Builder
     {
