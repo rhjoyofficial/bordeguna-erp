@@ -2,11 +2,11 @@
 
 namespace App\Modules\Hrm\Reporting\Definitions;
 
-use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\Payslip;
 use App\Modules\Hrm\Reporting\Concerns\CountsRows;
+use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportMeta;
@@ -41,9 +41,8 @@ use Illuminate\Support\LazyCollection;
  */
 class SalarySheetReport implements ReportDefinition
 {
-    use SignsFromPayrollRun;
-
     use CountsRows;
+    use SignsFromPayrollRun;
 
     public function key(): string
     {
@@ -192,7 +191,13 @@ class SalarySheetReport implements ReportDefinition
                     ->where(function ($inner) use ($asAt) {
                         $inner->whereNull('employee_assignments.effective_to')
                             ->orWhereDate('employee_assignments.effective_to', '>=', $asAt);
-                    });
+                    })
+                    // ⚠⚠ ONE ROW PER PAYSLIP, WHATEVER THE ASSIGNMENT DATA HOLDS.
+                    // An employee with two live primary assignments joined twice
+                    // and was printed twice, and the money totals counted him
+                    // twice. A sheet that adds up to more than was paid is worse
+                    // than one that files a person under the latest assignment.
+                    ->whereRaw('employee_assignments.id = (select ea2.id from employee_assignments ea2 where ea2.employee_id = payslips.employee_id and ea2.is_primary = 1 and date(ea2.effective_from) <= ? and (ea2.effective_to is null or date(ea2.effective_to) >= ?) order by ea2.effective_from desc, ea2.id desc limit 1)', [$asAt, $asAt]);
             })
             ->leftJoin('offices', 'offices.id', '=', 'employee_assignments.office_id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_assignments.department_id')
