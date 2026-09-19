@@ -12,6 +12,7 @@ use App\Modules\Accounting\Http\Controllers\CashFlowController;
 use App\Modules\Accounting\Http\Controllers\CashForecastController;
 use App\Modules\Accounting\Http\Controllers\CostOfGoodsSoldController;
 use App\Modules\Accounting\Http\Controllers\CustomerStatementController;
+use App\Modules\Accounting\Http\Controllers\DayBookController;
 use App\Modules\Accounting\Http\Controllers\DunningController;
 use App\Modules\Accounting\Http\Controllers\FinanceDashboardController;
 use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
@@ -76,6 +77,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::get('period-close', [AccountingPeriodController::class, 'show'])->name('period-close');
         Route::post('period-close', [AccountingPeriodController::class, 'close'])->name('period-close.close');
         Route::post('period-close/unlock', [AccountingPeriodController::class, 'unlock'])->name('period-close.unlock');
+        // Every journal of every module, in posting order. Same reading
+        // permission as the journals it lists.
+        Route::get('day-book', [DayBookController::class, 'index'])->name('day-book');
+        Route::get('day-book/export', [DayBookController::class, 'export'])->name('day-book.export');
         Route::get('journals', [JournalController::class, 'index'])->name('journals.index');
         Route::get('journals/{journal}', [JournalController::class, 'show'])->name('journals.show');
 

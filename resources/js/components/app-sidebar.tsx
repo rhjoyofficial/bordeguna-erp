@@ -513,6 +513,7 @@ export function AppSidebar() {
                           // accounting:reconcile without the SSH: do the books
                           // agree with the documents, right now.
                           { title: 'Reconciliation', url: '/accounting/reconciliation', icon: ShieldCheck },
+                          { title: 'Day book', url: '/accounting/day-book', icon: CalendarClock },
                           { title: 'Journals', url: '/accounting/journals', icon: NotebookPen },
                           { title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen },
                           // Module 2, Slice 1: the boundary the whole ledger obeys.
