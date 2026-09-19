@@ -242,6 +242,14 @@ class ApprovalCards
         }
 
         if ($approvable instanceof Loan) {
+            // ⚠⚠ THE FINAL APPROVAL DISBURSES, AND DISBURSING NEEDS THE ACCOUNT
+            // THE MONEY LEFT. This card can post nothing but "approve", so the
+            // last stage used to come back as a validation error the inbox never
+            // showed: the button looked dead. The loans screen asks the account
+            // and the day, so the final stage is decided there, and the card
+            // says so instead of offering a button that cannot work.
+            $decidedOnRecord = $approvalRequest->remainingStages() <= 1;
+
             return $this->card(
                 $approvalRequest,
                 type: 'Loan / advance',
@@ -252,10 +260,13 @@ class ApprovalCards
                     ['label' => 'Principal', 'value' => $this->money($approvable->principal)],
                     ['label' => 'Monthly deduction', 'value' => $this->money($approvable->installment_amount)],
                     ['label' => 'Repayment starts', 'value' => $approvable->startsOn()->format('F Y')],
+                    $decidedOnRecord
+                        ? ['label' => 'To approve', 'value' => 'Open the record. Approving pays the money out, so it asks which account it leaves and on what day.']
+                        : null,
                 ]),
                 reason: $approvable->reason,
                 viewUrl: route('hrm.loans.index', array_filter(['employee_id' => $approvable->employee_id])),
-                approveUrl: route('hrm.loans.approve', $approvable),
+                approveUrl: $decidedOnRecord ? null : route('hrm.loans.approve', $approvable),
                 rejectUrl: route('hrm.loans.reject', $approvable),
             );
         }

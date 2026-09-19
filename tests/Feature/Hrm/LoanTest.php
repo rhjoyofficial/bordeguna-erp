@@ -36,6 +36,7 @@ use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\SalaryComponent;
 use App\Modules\Hrm\Models\Shift;
+use App\Support\ApprovalCards;
 use App\Support\ApprovalInbox;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -628,4 +629,15 @@ it('picks a month by name rather than by number', function () {
     expect($source)->toContain("'September'")
         ->and(file_get_contents(resource_path('js/pages/hrm/payroll/loans.tsx')))->toContain('<MonthSelect id="loan_month"')
         ->and(file_get_contents(resource_path('js/pages/hrm/payroll/index.tsx')))->toContain('<MonthSelect id="month"');
+});
+
+it('does not offer an inbox Approve that would disburse without naming an account', function () {
+    $loan = requestLoan();
+
+    $card = app(ApprovalCards::class)->present($loan->approvalRequest);
+
+    // One stage in the workflow, so this approval is the final one and pays out.
+    expect($card['approve_url'])->toBeNull();
+    expect($card['reject_url'])->not->toBeNull();
+    expect(collect($card['details'])->pluck('label'))->toContain('To approve');
 });
