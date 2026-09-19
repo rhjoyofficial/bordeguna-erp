@@ -175,3 +175,16 @@ it('protects an account for the date the journal is dated, not today', function 
     expect(SubsystemAccounts::on(Carbon::parse('2026-07-01')))->toHaveKey($this->stock->id)
         ->and(SubsystemAccounts::on(Carbon::parse('1999-01-01')))->toBeEmpty();
 });
+
+it('leaves a general expense head payroll only allocates to open, and keeps the wage head closed', function () {
+    // TA/DA and reimbursements are mapped to Conveyance so travel money lands
+    // where travel is reported. That must not make Conveyance unpayable by
+    // voucher: every rickshaw fare the business pays belongs there too.
+    $owned = SubsystemAccounts::on(Carbon::now());
+    $id = fn (string $code) => Account::where('code', $code)->sole()->id;
+
+    expect($owned)->not->toHaveKey($id('6011'));
+    expect($owned)->toHaveKey($id('6131'));
+    expect($owned)->toHaveKey($id('2130'));
+    expect($owned)->toHaveKey($id('1170'));
+});

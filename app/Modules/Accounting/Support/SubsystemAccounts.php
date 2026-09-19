@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Support;
 
+use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\AccountMapping;
 use Illuminate\Support\Carbon;
 
@@ -48,6 +49,8 @@ final class SubsystemAccounts
     public static function on(Carbon $date): array
     {
         $owned = [];
+        $keysByAccount = [];
+        $accountTypes = [];
 
         foreach (AccountMapping::query()->with('account')->get() as $mapping) {
             if (! self::isOwnedKey($mapping->key)) {
@@ -64,6 +67,35 @@ final class SubsystemAccounts
             }
 
             $owned[$mapping->account_id] = $mapping->key;
+            $accountTypes[$mapping->account_id] = $mapping->account?->type;
+            $keysByAccount[$mapping->account_id][] = $mapping->key;
+        }
+
+        // ⚠⚠ A GENERAL EXPENSE HEAD THAT PAYROLL ONLY ALLOCATES TO IS SHARED,
+        // NOT OWNED. TA/DA and reimbursements are mapped to 6011 Conveyance so
+        // that travel money lands where travel is reported - and that one
+        // mapping made Conveyance unpayable by voucher or journal (found on the
+        // voucher rehearsal, 19 Sep 2026), although every rickshaw fare the
+        // business pays belongs there too. Payroll still owns the wage head
+        // itself (whatever `payroll.earning.default` names), its payables and
+        // employee advances: only an EXPENSE account reached by nothing but
+        // `payroll.earning.<component>` keys, and not the wage head, is freed.
+        $wageAccountIds = [];
+
+        foreach ($keysByAccount as $accountId => $keys) {
+            if (in_array('payroll.earning.default', $keys, true)) {
+                $wageAccountIds[$accountId] = true;
+            }
+        }
+
+        foreach ($keysByAccount as $accountId => $keys) {
+            $onlyEarningComponents = array_filter($keys, fn (string $key) => ! str_starts_with($key, 'payroll.earning.')) === [];
+
+            if ($onlyEarningComponents
+                && ! isset($wageAccountIds[$accountId])
+                && ($accountTypes[$accountId] ?? null) === AccountType::Expense) {
+                unset($owned[$accountId]);
+            }
         }
 
         return $owned;
