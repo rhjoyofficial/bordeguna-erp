@@ -34,7 +34,10 @@ use Illuminate\Validation\ValidationException;
  */
 class RecordSalesInvoice
 {
-    public function __construct(private readonly PostSalesJournals $posting) {}
+    public function __construct(
+        private readonly PostSalesJournals $posting,
+        private readonly ApplyInvoiceTax $tax,
+    ) {}
 
     /**
      * @param  array<int, array{
@@ -56,6 +59,10 @@ class RecordSalesInvoice
         string $invoiceDiscount = '0',
         mixed $dueDate = null,
         ?string $note = null,
+        // ⭐ Whether the prices on THIS invoice already contain the VAT. Null
+        // takes the customer's price group, then the business (plan D2). Read
+        // only while VAT applies; ignored, and stored false, otherwise.
+        ?bool $pricesIncludeTax = null,
     ): SalesInvoice {
         $date = ($invoiceDate === null ? Carbon::now() : Carbon::parse($invoiceDate))->startOfDay();
 
@@ -86,7 +93,7 @@ class RecordSalesInvoice
             ]);
         }
 
-        return DB::transaction(function () use ($customer, $lines, $createdBy, $date, $discount, $dueDate, $note) {
+        return DB::transaction(function () use ($customer, $lines, $createdBy, $date, $discount, $dueDate, $note, $pricesIncludeTax) {
             $invoice = SalesInvoice::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
@@ -278,13 +285,24 @@ class RecordSalesInvoice
                 ]);
             }
 
-            $total = Money::ofMinor($subtotal->minor - $discount->minor);
+            // ⭐⭐ VAT (plan D1-D3). Zero, and nothing written, while the business
+            // is not charging VAT on this date - which is every business today.
+            // ⚠ The tax point is the invoice date in v1: this ERP raises the
+            // invoice with the dispatch. It is STORED so the rule can sharpen
+            // later without anybody re-reading an old document.
+            $inclusive = $this->pricesIncludeTax($customer, $pricesIncludeTax);
+            $taxTotal = $this->tax->handle($invoice, $discount, $inclusive, $date);
+            $taxed = ! $taxTotal->isZero() || $invoice->lines()->where('tax_rate', '>', 0)->exists();
+
+            // Added on top of an exclusive price; already inside an inclusive one.
+            $total = Money::ofMinor($subtotal->minor - $discount->minor + ($inclusive ? 0 : $taxTotal->minor));
 
             $invoice->forceFill([
                 'subtotal' => $subtotal->toTaka(),
                 'invoice_discount' => $discount->toTaka(),
-                // ⚠ Zero until C-SLS-3 is answered. The column is the seam.
-                'tax_total' => '0',
+                'tax_total' => $taxTotal->toTaka(),
+                'tax_point_date' => $date,
+                'prices_include_tax' => $taxed && $inclusive,
                 'total' => $total->toTaka(),
             ])->save();
 
@@ -305,6 +323,28 @@ class RecordSalesInvoice
 
             return $invoice->fresh(['lines', 'customer']);
         });
+    }
+
+    /**
+     * Do this invoice's prices already contain the VAT?
+     *
+     * The clerk's choice wins; otherwise the customer's price group says (a
+     * retail price is what the shopper pays, a distributor's list may be net),
+     * and a customer with no group follows the business.
+     */
+    private function pricesIncludeTax(Customer $customer, ?bool $chosen): bool
+    {
+        if ($chosen !== null) {
+            return $chosen;
+        }
+
+        $group = $customer->priceGroup;
+
+        if ($group !== null) {
+            return (bool) $group->prices_include_tax;
+        }
+
+        return (bool) Business::withoutGlobalScopes()->whereKey($customer->business_id)->value('prices_include_tax');
     }
 
     /**

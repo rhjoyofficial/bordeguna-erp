@@ -158,9 +158,13 @@ class PostSalesJournals
 
         // ⭐ Goods credit sales revenue; a delivery charge credits 4300 Delivery
         // Charges Income, its own line on the profit and loss (Joy, 13 Sep).
-        $subtotal = $invoice->goodsSubtotal();
-        $delivery = $invoice->deliveryChargeTotal();
-        $discount = Money::ofTaka((string) $invoice->invoice_discount);
+        // ⭐ NET OF VAT (VAT plan D2/D3). Identical to the gross figures while
+        // VAT is off; with VAT on, the VAT goes to Output VAT Payable below and
+        // revenue, delivery income and discounts are what is left.
+        $subtotal = $invoice->goodsRevenueExTax();
+        $delivery = $invoice->deliveryExTax();
+        $discount = $invoice->discountExTax();
+        $tax = $invoice->taxTotal();
         $total = Money::ofTaka((string) $invoice->total);
         $cost = $invoice->costReleased();
 
@@ -195,6 +199,13 @@ class PostSalesJournals
         if (! $delivery->isZero()) {
             $deliveryIncome = AccountMapping::resolve('sales.delivery_income', $on);
             $lines[] = JournalLineDraft::credit($deliveryIncome->id, $delivery, 'Delivery on '.$invoice->invoice_number);
+        }
+
+        // ⚠ Its own account, never netted against input VAT in the ledger
+        // (C-VAT-6). The net is the VAT return's arithmetic, not a posting.
+        if (! $tax->isZero()) {
+            $outputVat = AccountMapping::resolve('sales.output_vat', $on);
+            $lines[] = JournalLineDraft::credit($outputVat->id, $tax, 'VAT on '.$invoice->invoice_number, $invoice->customer);
         }
 
         if ($lines === []) {

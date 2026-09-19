@@ -118,6 +118,10 @@ class ChartOfAccountsSeeder extends Seeder
         // (C-VAT-1) overstates revenue until the engine extracts this out of it.
         // ⚠ Planted now and posted to by nothing. The engine is dormant.
         ['2170', 'Output VAT Payable', AccountType::Liability, '2100', true, 'output_vat_payable'],
+        // The VAT return's own account (D9). Filing a return moves the period's
+        // output and input VAT here; what is left is what is owed to NBR, paid by
+        // an ordinary payment voucher. A credit balance owed TO us sits as a debit.
+        ['2175', 'VAT Settlement', AccountType::Liability, '2100', true, 'vat_settlement'],
 
         ['2200', 'Non-Current Liabilities', AccountType::Liability, '2000', false, null],
         ['2210', 'Bank Loans', AccountType::Liability, '2200', true, null],

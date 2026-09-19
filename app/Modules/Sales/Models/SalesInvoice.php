@@ -51,6 +51,8 @@ class SalesInvoice extends Model
             'subtotal' => 'decimal:4',
             'invoice_discount' => 'decimal:4',
             'tax_total' => 'decimal:4',
+            'tax_point_date' => 'date',
+            'prices_include_tax' => 'boolean',
             'total' => 'decimal:4',
         ];
     }
@@ -151,6 +153,59 @@ class SalesInvoice extends Model
     public function goodsSubtotal(): Money
     {
         return Money::ofMinor(Money::ofTaka((string) $this->subtotal)->minor - $this->deliveryChargeTotal()->minor);
+    }
+
+    // ── VAT: what the ledger is credited and debited, NET of VAT ──────────
+    //
+    // ⚠⚠ With VAT off every one of these equals the figure beside it above, to
+    // the paisa, so the journal of an untaxed invoice has not changed at all.
+    // With VAT on and prices INCLUSIVE, `line_net`, `subtotal` and the discount
+    // all still contain the VAT - they are what the customer sees - and these
+    // are what is left once it is taken out. See ApplyInvoiceTax for why the
+    // VAT inside the discount is kept separately.
+
+    public function taxTotal(): Money
+    {
+        return Money::ofTaka((string) $this->tax_total);
+    }
+
+    /** Goods revenue excluding VAT: what 4100 Sales Revenue is credited. */
+    public function goodsRevenueExTax(): Money
+    {
+        return Money::ofMinor($this->goodsSubtotal()->minor - $this->taxInside(delivery: false, withDiscount: true)->minor);
+    }
+
+    /** The delivery charge excluding VAT: what 4300 is credited. */
+    public function deliveryExTax(): Money
+    {
+        return Money::ofMinor($this->deliveryChargeTotal()->minor - $this->taxInside(delivery: true, withDiscount: false)->minor);
+    }
+
+    /** The whole-invoice discount excluding VAT: what 4210 is debited. */
+    public function discountExTax(): Money
+    {
+        $inside = $this->lines->reduce(
+            fn (Money $carry, SalesInvoiceLine $line) => $carry->plus(Money::ofTaka((string) $line->tax_on_discount)),
+            Money::zero(),
+        );
+
+        return Money::ofMinor(Money::ofTaka((string) $this->invoice_discount)->minor - $inside->minor);
+    }
+
+    /**
+     * The VAT sitting INSIDE the stored figures. Zero unless the line's price
+     * included VAT: an exclusive line's `line_net` never contained any.
+     */
+    private function taxInside(bool $delivery, bool $withDiscount): Money
+    {
+        return $this->lines
+            ->filter(fn (SalesInvoiceLine $line) => $line->isDeliveryCharge() === $delivery && $line->prices_include_tax)
+            ->reduce(
+                fn (Money $carry, SalesInvoiceLine $line) => $carry
+                    ->plus(Money::ofTaka((string) $line->tax_amount))
+                    ->plus($withDiscount ? Money::ofTaka((string) $line->tax_on_discount) : Money::zero()),
+                Money::zero(),
+            );
     }
 
     /**

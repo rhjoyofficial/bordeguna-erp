@@ -22,8 +22,12 @@ class SalesInvoiceLine extends Model
         'unit_price',
         'line_discount',
         'line_net',
+        'tax_class_id',
         'tax_rate',
         'tax_amount',
+        'prices_include_tax',
+        'discount_share',
+        'tax_on_discount',
         'cost_released',
     ];
 
@@ -43,6 +47,9 @@ class SalesInvoiceLine extends Model
             'line_net' => 'decimal:4',
             'tax_rate' => 'decimal:4',
             'tax_amount' => 'decimal:4',
+            'prices_include_tax' => 'boolean',
+            'discount_share' => 'decimal:4',
+            'tax_on_discount' => 'decimal:4',
             'cost_released' => 'decimal:4',
         ];
     }
