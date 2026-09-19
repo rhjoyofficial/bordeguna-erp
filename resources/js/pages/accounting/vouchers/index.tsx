@@ -185,7 +185,7 @@ export default function VouchersIndex({
                                     <td className="py-2 pr-3">
                                         {type.value === 'contra' ? (
                                             <>
-                                                {voucher.money_account ?? '—'} → {voucher.to_money_account ?? '—'}
+                                                {voucher.money_account ?? '-'} → {voucher.to_money_account ?? '-'}
                                             </>
                                         ) : (
                                             <>

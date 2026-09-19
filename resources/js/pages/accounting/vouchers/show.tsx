@@ -181,19 +181,19 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                     {type.uses_money_account && (
                         <div>
                             <dt className="text-muted-foreground">{moneyLabelFor(type.value)}</dt>
-                            <dd>{voucher.money_account ?? '—'}</dd>
+                            <dd>{voucher.money_account ?? '-'}</dd>
                         </div>
                     )}
                     {type.value === 'contra' && (
                         <div>
                             <dt className="text-muted-foreground">Moved to</dt>
-                            <dd>{voucher.to_money_account ?? '—'}</dd>
+                            <dd>{voucher.to_money_account ?? '-'}</dd>
                         </div>
                     )}
                     {type.counterparty_label && (
                         <div>
                             <dt className="text-muted-foreground">{type.counterparty_label}</dt>
-                            <dd>{voucher.counterparty ?? '—'}</dd>
+                            <dd>{voucher.counterparty ?? '-'}</dd>
                         </div>
                     )}
                     {voucher.instrument.type && (
