@@ -25,6 +25,7 @@ use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
+use App\Modules\Accounting\Http\Controllers\VoucherController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -171,4 +172,31 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::get('money-transfers', [MoneyTransferController::class, 'index'])->name('money-transfers.index');
         Route::post('money-transfers', [MoneyTransferController::class, 'store'])->name('money-transfers.store');
     });
+
+    // ── Payment, Receive, Contra and Journal vouchers ──────────────────────
+    // Reading follows the books (`accounting.view`); drafting is `prepare`;
+    // whatever writes to the ledger - post, reverse - is `post`.
+    // ⚠ The `doc/...` routes are registered before the `{type}` wildcard.
+    Route::middleware('can:accounting.view')->group(function () {
+        Route::get('vouchers/doc/{voucher}', [VoucherController::class, 'show'])->whereNumber('voucher')->name('vouchers.show');
+        Route::get('vouchers/doc/{voucher}/print', [VoucherController::class, 'print'])->whereNumber('voucher')->name('vouchers.print');
+    });
+
+    Route::middleware('can:accounting.voucher.prepare')->group(function () {
+        Route::get('vouchers/doc/{voucher}/edit', [VoucherController::class, 'edit'])->whereNumber('voucher')->name('vouchers.edit');
+        Route::put('vouchers/doc/{voucher}', [VoucherController::class, 'update'])->whereNumber('voucher')->name('vouchers.update');
+        Route::delete('vouchers/doc/{voucher}', [VoucherController::class, 'destroy'])->whereNumber('voucher')->name('vouchers.destroy');
+        Route::post('vouchers/doc/{voucher}/duplicate', [VoucherController::class, 'duplicate'])->whereNumber('voucher')->name('vouchers.duplicate');
+        Route::post('vouchers/doc/{voucher}/evidence', [VoucherController::class, 'uploadEvidence'])->whereNumber('voucher')->name('vouchers.evidence.store');
+        Route::delete('vouchers/doc/{voucher}/evidence/{attachment}', [VoucherController::class, 'deleteEvidence'])->whereNumber('voucher')->name('vouchers.evidence.destroy');
+        Route::get('vouchers/{type}/create', [VoucherController::class, 'create'])->name('vouchers.create');
+        Route::post('vouchers/{type}', [VoucherController::class, 'store'])->name('vouchers.store');
+    });
+
+    Route::middleware('can:accounting.voucher.post')->group(function () {
+        Route::post('vouchers/doc/{voucher}/post', [VoucherController::class, 'post'])->whereNumber('voucher')->name('vouchers.post');
+        Route::post('vouchers/doc/{voucher}/reverse', [VoucherController::class, 'reverse'])->whereNumber('voucher')->name('vouchers.reverse');
+    });
+
+    Route::get('vouchers/{type}', [VoucherController::class, 'index'])->middleware('can:accounting.view')->name('vouchers.index');
 });

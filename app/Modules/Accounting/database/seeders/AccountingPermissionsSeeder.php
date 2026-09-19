@@ -48,6 +48,8 @@ class AccountingPermissionsSeeder extends Seeder
             'accounting.chart.manage',
             'accounting.journal.post',
             'accounting.income.record',
+            'accounting.voucher.prepare',
+            'accounting.voucher.post',
         ],
         'Finance' => [
             'accounting.view',
@@ -55,6 +57,10 @@ class AccountingPermissionsSeeder extends Seeder
             // a smaller one than writing a journal by hand. Finance can record
             // scrap, interest or a refund without being handed the ledger key.
             'accounting.income.record',
+            // ⚠ Finance PREPARES vouchers; posting one writes to the ledger and
+            // starts with the Owner. Handing it to the accountant is one tick
+            // in Settings > Roles, not a code change (voucher plan, decision 9).
+            'accounting.voucher.prepare',
         ],
         // Musa's role. He prepares and pays; reading a trial balance is part of
         // that, writing to it is not - the same separation that already keeps

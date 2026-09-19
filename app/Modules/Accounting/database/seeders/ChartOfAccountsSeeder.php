@@ -75,7 +75,7 @@ class ChartOfAccountsSeeder extends Seeder
         // ⚠ Not a suspense account. Its balance is a report somebody asks for:
         // what is out and not yet billed. See SALES-PHASE1-DESIGN.md §2.
         ['1155', 'Goods Delivered Not Invoiced', AccountType::Asset, '1100', true, 'goods_delivered_not_invoiced'],
-        ['1160', 'Advances to Suppliers', AccountType::Asset, '1100', true, null],
+        ['1160', 'Advances to Suppliers', AccountType::Asset, '1100', true, 'supplier_advances'],
         ['1170', 'Employee Advances and Loans', AccountType::Asset, '1100', true, 'employee_advances'],
         ['1180', 'Prepaid Expenses', AccountType::Asset, '1100', true, null],
         // ⚠⚠ C-VAT-6. VAT paid on purchases, reclaimable from the government -
@@ -110,7 +110,7 @@ class ChartOfAccountsSeeder extends Seeder
         // because payroll posting has to find it (Phase 3).
         ['2140', 'Employee Deductions Payable', AccountType::Liability, '2100', true, 'employee_deductions_payable'],
         ['2145', 'Employee Reimbursements Payable', AccountType::Liability, '2100', true, 'employee_reimbursements_payable'],
-        ['2150', 'Advances from Customers', AccountType::Liability, '2100', true, null],
+        ['2150', 'Advances from Customers', AccountType::Liability, '2100', true, 'customer_advances'],
         ['2160', 'Accrued Expenses', AccountType::Liability, '2100', true, null],
         // ⚠⚠ C-VAT-6. VAT charged to customers and owed onward to the
         // government. It is never the business's money, which is exactly why it

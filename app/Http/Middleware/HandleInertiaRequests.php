@@ -178,6 +178,8 @@ class HandleInertiaRequests extends Middleware
             'canViewAccounting' => fn () => (bool) $request->user()?->can('accounting.view'),
             'canManageChartOfAccounts' => fn () => (bool) $request->user()?->can('accounting.chart.manage'),
             // C-GL-6: the highest-risk permission in the system. Owner only.
+            'canPrepareVouchers' => fn () => (bool) $request->user()?->can('accounting.voucher.prepare'),
+            'canPostVouchers' => fn () => (bool) $request->user()?->can('accounting.voucher.post'),
             'canPostJournal' => fn () => (bool) $request->user()?->can('accounting.journal.post'),
             // Money LEAVING the business for a supplier. Deliberately not
             // `purchasing.payment.update`, which only guards a payment-status

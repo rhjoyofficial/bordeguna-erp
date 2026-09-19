@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
+use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\AssetMovement;
 use App\Modules\Crm\Models\CrmActivity;
@@ -86,6 +87,8 @@ class FileVisibility
         ExpenseClaimLine::class => 'hrm.payroll.manage',
 
         ExpenseVoucher::class => 'purchasing.expense.record',
+        // A voucher's receipts open for whoever may read the books it posts to.
+        Voucher::class => 'accounting.view',
         SupplierBill::class => 'purchasing.reports.view',
         // A supplier's certificate scans (answer 18) are shown to buyers on
         // purpose. The supplier's own NID scans are NOT mapped: see

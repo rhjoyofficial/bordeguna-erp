@@ -96,6 +96,8 @@ export interface SharedData {
     canViewAssetItems: boolean;
     canRunDepreciation: boolean;
     canManageChartOfAccounts: boolean;
+    canPrepareVouchers: boolean;
+    canPostVouchers: boolean;
     canPostJournal: boolean;
     hasEmployeeProfile: boolean;
     [key: string]: unknown;
