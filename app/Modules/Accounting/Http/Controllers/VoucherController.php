@@ -14,15 +14,16 @@ use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Attachment;
-use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -137,7 +138,7 @@ class VoucherController extends Controller
 
         return Inertia::render('accounting/vouchers/print', [
             'voucher' => $this->document($voucher),
-            'business' => Business::find($voucher->business_id)?->only(['name', 'address', 'phone', 'email']),
+            'issuer' => BusinessIdentity::forCurrent()->toArray(),
         ]);
     }
 
@@ -219,7 +220,16 @@ class VoucherController extends Controller
                     ->with('success', 'Saved as a draft. Posting it needs someone with permission to post vouchers.');
             }
 
-            $voucher = $post->handle($voucher, $request->user());
+            try {
+                $voucher = $post->handle($voucher, $request->user());
+            } catch (ValidationException $e) {
+                // ⚠ The draft IS saved. Landing back on the blank "new" form
+                // would invite a second press and a second draft, so the
+                // refusal is shown on the saved draft's own edit form.
+                return redirect()->route('accounting.vouchers.edit', $voucher)
+                    ->withErrors($e->errors())
+                    ->with('error', 'Saved as a draft, but it could not be posted yet.');
+            }
 
             return redirect()->route('accounting.vouchers.show', $voucher)->with('success', "{$voucher->voucher_number} posted.");
         }

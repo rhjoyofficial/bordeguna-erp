@@ -5,7 +5,9 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Accounting\Enums\JournalType;
+use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\JournalSourceCatalog;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\Business;
@@ -141,8 +143,19 @@ class DayBookController extends Controller
                     return $query->where('journals.journal_type', JournalType::OpeningBalance->value);
                 }
 
+                // ⚠ "Journal voucher" is BOTH the old hand-written journal (no
+                // source) and the new journal voucher document. To a reader they
+                // are one kind, so the filter returns both.
                 if ($kind === JournalSourceCatalog::MANUAL) {
-                    return $query->whereNull('journals.source_type')->where('journals.journal_type', '!=', JournalType::OpeningBalance->value);
+                    return $query->where(fn (Builder $either) => $either
+                        ->where(fn (Builder $manual) => $manual->whereNull('journals.source_type')->where('journals.journal_type', '!=', JournalType::OpeningBalance->value))
+                        ->orWhereHasMorph('source', [Voucher::class], fn (Builder $voucher) => $voucher->where('type', VoucherType::Journal->value)));
+                }
+
+                foreach (VoucherType::cases() as $voucherType) {
+                    if ($kind === $voucherType->label()) {
+                        return $query->whereHasMorph('source', [Voucher::class], fn (Builder $voucher) => $voucher->where('type', $voucherType->value));
+                    }
                 }
 
                 $classes = JournalSourceCatalog::groupByLabel($this->sourceTypesInUse())[$kind] ?? [];
@@ -191,6 +204,11 @@ class DayBookController extends Controller
             return JournalSourceCatalog::OPENING;
         }
 
+        // A voucher says which of the four it is; its class alone cannot.
+        if ($journal->source instanceof Voucher) {
+            return $journal->source->type->label();
+        }
+
         return JournalSourceCatalog::label($journal->source_type) ?? JournalSourceCatalog::MANUAL;
     }
 
@@ -210,7 +228,11 @@ class DayBookController extends Controller
      */
     private function kindsInUse(): array
     {
-        $kinds = array_keys(JournalSourceCatalog::groupByLabel($this->sourceTypesInUse()));
+        $kinds = array_values(array_diff(array_keys(JournalSourceCatalog::groupByLabel($this->sourceTypesInUse())), ['Voucher']));
+
+        foreach (Voucher::query()->whereNotNull('journal_id')->distinct()->pluck('type') as $voucherType) {
+            $kinds[] = $voucherType->label();
+        }
 
         if (Journal::query()->whereNull('source_type')->where('journal_type', '!=', JournalType::OpeningBalance->value)->exists()) {
             $kinds[] = JournalSourceCatalog::MANUAL;
@@ -220,6 +242,7 @@ class DayBookController extends Controller
             $kinds[] = JournalSourceCatalog::OPENING;
         }
 
+        $kinds = array_values(array_unique($kinds));
         sort($kinds);
 
         return $kinds;
