@@ -260,6 +260,7 @@ function RecordDialog({ incomeAccounts, moneyAccounts, customers, today }: Pick<
                             <div key={index} className="grid gap-2">
                                 <div className="grid gap-2 sm:grid-cols-[1fr_8rem]">
                                     <SearchSelect
+                                        newLedger={{ types: ['income'], reload: ['incomeAccounts'] }}
                                         aria-label={`Income account, line ${index + 1}`}
                                         value={line.account_id}
                                         onChange={(e) => setLine(index, 'account_id', e.target.value)}

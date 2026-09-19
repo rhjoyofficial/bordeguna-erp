@@ -185,6 +185,7 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
                                 Charge to
                             </Label>
                             <SearchSelect
+                                newLedger={{ types: ['expense'], reload: ['expenseAccounts'] }}
                                 id="expense_account_id"
                                 value={data.expense_account_id}
                                 onChange={(e) => setData('expense_account_id', e.target.value)}

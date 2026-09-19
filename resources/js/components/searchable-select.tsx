@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 export type SelectOption = {
@@ -46,6 +46,8 @@ export function SearchableSelect({
     invalid = false,
     searchThreshold = 8,
     fit,
+    onCreate,
+    createLabel = 'Add new',
 }: {
     value: string;
     onChange: (value: string) => void;
@@ -75,15 +77,22 @@ export function SearchableSelect({
      * row back over.
      */
     fit?: boolean;
+    /**
+     * A pinned row under the list that adds what is missing (a ledger head)
+     * without leaving the form. Receives whatever was typed into the search.
+     */
+    onCreate?: (typed: string) => void;
+    createLabel?: string;
 }) {
     const [open, setOpen] = useState(false);
+    const [typed, setTyped] = useState('');
     const selected = options.find((option) => option.value === value);
 
     // ⚠ Content-width inside a filter bar unless the page says otherwise. See
     // CompactControls for why this is a context and not a prop on every page.
     const compact = useCompactControls();
     const fits = fit ?? compact;
-    const showSearch = options.length >= searchThreshold;
+    const showSearch = options.length >= searchThreshold || onCreate !== undefined;
 
     // cmdk filters on the `value` prop of each item, so a list of two products
     // sharing a name would collapse to one match. The option's own value and
@@ -107,7 +116,13 @@ export function SearchableSelect({
                 test that fills by name, keeps working. */}
             {name ? <input type="hidden" name={name} value={value} /> : null}
 
-            <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
+            {/* ⚠⚠ `modal` IS LOAD-BEARING (19 Sep 2026, Joy's accountant on the expense
+                form). The list is portalled to <body>, OUTSIDE any open Dialog. A Dialog
+                traps focus and blocks wheel/touch scrolling for everything outside itself,
+                so inside a dialog the search box never received a keystroke and the list
+                would not scroll. A modal popover takes its own focus scope and its own
+                scroll allowance, which works inside and outside a dialog alike. */}
+            <Popover modal open={open} onOpenChange={disabled ? undefined : setOpen}>
                 <PopoverTrigger asChild>
                     <Button
                         id={id}
@@ -132,10 +147,29 @@ export function SearchableSelect({
                         <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                    <Command>
-                        {showSearch ? <CommandInput placeholder={searchPlaceholder} /> : null}
-                        <CommandList>
+                <PopoverContent // ⚠ Tailwind 4 spells a bare custom property `w-(--x)`; the v3 spelling
+                    // `w-[--x]` emitted nothing, so every list fell back to 18rem.
+                    className="w-(--radix-popover-trigger-width) min-w-[14rem] p-0"
+                    align="start"
+                >
+                    <Command
+                        // ⚠ Every typed word must appear in the row (19 Sep 2026). cmdk's
+                        // default is a fuzzy score, which answered "rent" with "Employee
+                        // Refreshment" - in a chart of 200 heads that reads as broken.
+                        filter={(rowValue, search) => {
+                            const row = rowValue.toLowerCase();
+
+                            return search
+                                .toLowerCase()
+                                .split(/\s+/)
+                                .filter(Boolean)
+                                .every((word) => row.includes(word))
+                                ? 1
+                                : 0;
+                        }}
+                    >
+                        {showSearch ? <CommandInput placeholder={searchPlaceholder} value={typed} onValueChange={setTyped} /> : null}
+                        <CommandList className="max-h-[min(20rem,var(--radix-popover-content-available-height,20rem))]">
                             <CommandEmpty>{emptyText}</CommandEmpty>
                             <CommandGroup>
                                 {options.map((option, index) => (
@@ -158,6 +192,20 @@ export function SearchableSelect({
                                 ))}
                             </CommandGroup>
                         </CommandList>
+                        {onCreate ? (
+                            <button
+                                type="button"
+                                className="hover:bg-accent text-primary flex w-full items-center gap-2 border-t px-3 py-2 text-left text-sm font-medium"
+                                onClick={() => {
+                                    setOpen(false);
+                                    onCreate(typed.trim());
+                                }}
+                            >
+                                <Plus className="size-4 shrink-0" />
+                                <span className="shrink-0">{createLabel}</span>
+                                {typed.trim() !== '' ? <span className="text-muted-foreground truncate font-normal">"{typed.trim()}"</span> : null}
+                            </button>
+                        ) : null}
                     </Command>
                 </PopoverContent>
             </Popover>

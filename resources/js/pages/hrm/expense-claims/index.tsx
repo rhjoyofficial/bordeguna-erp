@@ -48,8 +48,7 @@ type Claim = {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Expense claims', href: '/hrm/expense-claims' }];
 
-const money = (value: string | number) =>
-    Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (value: string | number) => Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /**
  * The spends on one claim, which is what the approver is actually deciding on.
@@ -80,9 +79,7 @@ function Lines({ claim }: { claim: Claim }) {
                             </a>
                         ))
                     )}
-                    {line.is_declined && (
-                        <span className="block text-xs text-amber-700 no-underline">Declined: {line.declined_reason}</span>
-                    )}
+                    {line.is_declined && <span className="block text-xs text-amber-700 no-underline">Declined: {line.declined_reason}</span>}
                 </li>
             ))}
         </ul>
@@ -156,9 +153,7 @@ function Decide({ claim }: { claim: Claim }) {
             )}
 
             {allDeclined && (
-                <p className="text-destructive text-xs">
-                    Declining every spend is a rejection. Use Reject, or send the claim back for correction.
-                </p>
+                <p className="text-destructive text-xs">Declining every spend is a rejection. Use Reject, or send the claim back for correction.</p>
             )}
 
             <div className="flex flex-wrap gap-2">
@@ -179,9 +174,7 @@ function Decide({ claim }: { claim: Claim }) {
                     noteRequired
                     noteLabel="What needs correcting"
                     notePlaceholder="The courier amount looks like 350 rather than 550…"
-                    onConfirm={(note) =>
-                        router.post(`/hrm/expense-claims/${claim.id}/send-back`, { note }, { preserveScroll: true })
-                    }
+                    onConfirm={(note) => router.post(`/hrm/expense-claims/${claim.id}/send-back`, { note }, { preserveScroll: true })}
                 />
 
                 <ConfirmDialog
@@ -312,13 +305,7 @@ function SettleRow({
                             ))}
                         </SearchSelect>
                     </div>
-                    <BusyButton
-                        size="sm"
-                        variant="outline"
-                        busyLabel="Adding…"
-                        disabled={period === ''}
-                        onClick={() => settle('payroll')}
-                    >
+                    <BusyButton size="sm" variant="outline" busyLabel="Adding…" disabled={period === ''} onClick={() => settle('payroll')}>
                         Add to salary
                     </BusyButton>
                 </div>
@@ -331,7 +318,11 @@ function SettleRow({
             <div className="grid gap-1">
                 <Label className="text-muted-foreground text-xs">Charge to</Label>
                 <div className="w-56">
-                    <SearchSelect value={head} onChange={(e) => setHead(e.target.value)}>
+                    <SearchSelect
+                        newLedger={{ types: ['expense'], reload: ['expenseAccounts'] }}
+                        value={head}
+                        onChange={(e) => setHead(e.target.value)}
+                    >
                         <option value="">Pick an expense head</option>
                         {expenseAccounts.map((a) => (
                             <option key={a.id} value={String(a.id)}>

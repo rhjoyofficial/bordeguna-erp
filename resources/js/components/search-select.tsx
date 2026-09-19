@@ -1,5 +1,8 @@
+import { LedgerQuickCreate, type LedgerType } from '@/components/ledger-quick-create';
 import { SearchableSelect, type SelectOption } from '@/components/searchable-select';
-import { Children, isValidElement, type ReactNode } from 'react';
+import { type SharedData } from '@/types';
+import { router, usePage } from '@inertiajs/react';
+import { Children, isValidElement, useState, type ReactNode } from 'react';
 
 /**
  * A searchable picker that is drop-in compatible with the native <select> it
@@ -92,6 +95,7 @@ export function SearchSelect({
     searchPlaceholder,
     emptyText,
     fit,
+    newLedger,
 }: {
     children: ReactNode;
     value: string | number;
@@ -107,25 +111,63 @@ export function SearchSelect({
     emptyText?: string;
     /** Size to the option rather than to the column. See SearchableSelect. */
     fit?: boolean;
+    /**
+     * Marks this as a LEDGER picker: a "New ledger head" row appears for anyone
+     * who may change the chart. `types` is what the list holds; `reload` names
+     * the page prop(s) that feed it, re-fetched after a head is added.
+     */
+    newLedger?: { types: LedgerType[]; reload: string[] };
 }) {
+    const canManageChart = usePage<SharedData>().props.canManageChart;
+    const [creating, setCreating] = useState(false);
+    const [typedName, setTypedName] = useState('');
     const collected: { options: SelectOption[]; placeholder?: string } = { options: [] };
     collect(children, collected);
 
+    const offersCreate = newLedger !== undefined && canManageChart && !disabled;
+
     return (
-        <SearchableSelect
-            id={id}
-            name={name}
-            value={value === undefined || value === null ? '' : String(value)}
-            onChange={(next) => onChange({ target: { value: next, name: name ?? '', id: id ?? '' } })}
-            options={collected.options}
-            placeholder={collected.placeholder && collected.placeholder !== '' ? collected.placeholder : 'Select…'}
-            searchPlaceholder={searchPlaceholder}
-            emptyText={emptyText}
-            className={className}
-            disabled={disabled}
-            invalid={invalid}
-            searchThreshold={searchThreshold}
-            fit={fit}
-        />
+        <>
+            <SearchableSelect
+                id={id}
+                name={name}
+                value={value === undefined || value === null ? '' : String(value)}
+                onChange={(next) => onChange({ target: { value: next, name: name ?? '', id: id ?? '' } })}
+                options={collected.options}
+                placeholder={collected.placeholder && collected.placeholder !== '' ? collected.placeholder : 'Select…'}
+                searchPlaceholder={searchPlaceholder}
+                emptyText={emptyText}
+                className={className}
+                disabled={disabled}
+                invalid={invalid}
+                searchThreshold={searchThreshold}
+                fit={fit}
+                onCreate={
+                    offersCreate
+                        ? (typed) => {
+                              setTypedName(typed);
+                              setCreating(true);
+                          }
+                        : undefined
+                }
+                createLabel="New ledger head"
+            />
+            {offersCreate ? (
+                <LedgerQuickCreate
+                    open={creating}
+                    onOpenChange={setCreating}
+                    types={newLedger.types}
+                    initialName={typedName}
+                    onCreated={(account) => {
+                        // The list comes from a page prop: fetch just that prop, then
+                        // choose the new head once it is really in the list.
+                        router.reload({
+                            only: newLedger.reload,
+                            onSuccess: () => onChange({ target: { value: String(account.id), name: name ?? '', id: id ?? '' } }),
+                        });
+                    }}
+                />
+            ) : null}
+        </>
     );
 }

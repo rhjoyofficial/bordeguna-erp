@@ -118,6 +118,8 @@ class HandleInertiaRequests extends Middleware
                 ])
                 ->values()
                 ->all() ?? [],
+            // The "New ledger head" button inside every ledger picker.
+            'canManageChart' => fn () => (bool) $request->user()?->can('accounting.chart.manage'),
             'canManageUsers' => fn () => (bool) $request->user()?->can('foundation.users.manage'),
             // ⚠⚠ TWO CONDITIONS, BOTH REQUIRED (Joy, 30 Aug 2026): the business
             // has the assistant switched on AND this person holds the

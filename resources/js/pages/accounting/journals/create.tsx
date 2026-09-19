@@ -163,6 +163,7 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                                 <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                     <td className="py-2 pr-2">
                                         <SearchSelect
+                                            newLedger={{ types: ['asset', 'liability', 'equity', 'income', 'expense'], reload: ['accounts'] }}
                                             fit
                                             aria-label={`Account for line ${index + 1}`}
                                             value={line.account_id}

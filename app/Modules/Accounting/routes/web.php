@@ -1,26 +1,27 @@
 <?php
 
 use App\Modules\Accounting\Http\Controllers\AccountController;
+use App\Modules\Accounting\Http\Controllers\AccountingPeriodController;
 use App\Modules\Accounting\Http\Controllers\AgeingController;
+use App\Modules\Accounting\Http\Controllers\AmortizationController;
 use App\Modules\Accounting\Http\Controllers\BalanceSheetController;
+use App\Modules\Accounting\Http\Controllers\BankStatementController;
+use App\Modules\Accounting\Http\Controllers\BudgetController;
 use App\Modules\Accounting\Http\Controllers\CashAndBankBookController;
 use App\Modules\Accounting\Http\Controllers\CashFlowController;
+use App\Modules\Accounting\Http\Controllers\CashForecastController;
 use App\Modules\Accounting\Http\Controllers\CostOfGoodsSoldController;
 use App\Modules\Accounting\Http\Controllers\CustomerStatementController;
+use App\Modules\Accounting\Http\Controllers\DunningController;
 use App\Modules\Accounting\Http\Controllers\FinanceDashboardController;
 use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
 use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
-use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
 use App\Modules\Accounting\Http\Controllers\IncomeVoucherController;
+use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
-use App\Modules\Accounting\Http\Controllers\AccountingPeriodController;
-use App\Modules\Accounting\Http\Controllers\BudgetController;
-use App\Modules\Accounting\Http\Controllers\BankStatementController;
-use App\Modules\Accounting\Http\Controllers\AmortizationController;
-use App\Modules\Accounting\Http\Controllers\DunningController;
-use App\Modules\Accounting\Http\Controllers\CashForecastController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
+use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
 use Illuminate\Support\Facades\Route;
@@ -120,6 +121,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
 
     Route::middleware('can:accounting.chart.manage')->group(function () {
         Route::post('accounts', [AccountController::class, 'store'])->name('accounts.store');
+        // A ledger head added from inside another form's picker (JSON).
+        Route::get('accounts/quick/options', [QuickAccountController::class, 'options'])->name('accounts.quick.options');
+        Route::post('accounts/quick', [QuickAccountController::class, 'store'])->name('accounts.quick.store');
         Route::put('accounts/{account}', [AccountController::class, 'update'])->name('accounts.update');
         Route::delete('accounts/{account}', [AccountController::class, 'destroy'])->name('accounts.destroy');
 

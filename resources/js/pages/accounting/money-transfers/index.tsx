@@ -136,6 +136,7 @@ export default function MoneyTransfersIndex({
                         </Field>
                         <Field label="Charge the fee to" htmlFor="fee_account_id" error={errors.fee_account_id}>
                             <SearchSelect
+                                newLedger={{ types: ['expense'], reload: ['fee_accounts'] }}
                                 id="fee_account_id"
                                 value={data.fee_account_id}
                                 onChange={(e) => setData('fee_account_id', e.target.value)}

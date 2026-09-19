@@ -231,7 +231,13 @@ export default function MoneyAccountsIndex({
 
                         <div className="grid gap-2">
                             <Label htmlFor="account_id">Reports under</Label>
-                            <SearchSelect fit id="account_id" value={data.account_id} onChange={(e) => setData('account_id', e.target.value)}>
+                            <SearchSelect
+                                newLedger={{ types: ['asset'], reload: ['ledgerAccounts'] }}
+                                fit
+                                id="account_id"
+                                value={data.account_id}
+                                onChange={(e) => setData('account_id', e.target.value)}
+                            >
                                 <option value="">Not decided yet</option>
                                 {ledgerAccounts.map((account) => (
                                     <option key={account.id} value={account.id}>

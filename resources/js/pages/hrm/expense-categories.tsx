@@ -90,7 +90,12 @@ export default function ExpenseCategoriesPage({ categories, accounts }: Categori
                         </Field>
 
                         <Field label="Posts to" htmlFor="account_id" className="min-w-72 flex-1" error={form.errors.account_id}>
-                            <SearchSelect id="account_id" value={form.data.account_id} onChange={(e) => form.setData('account_id', e.target.value)}>
+                            <SearchSelect
+                                newLedger={{ types: ['expense'], reload: ['accounts'] }}
+                                id="account_id"
+                                value={form.data.account_id}
+                                onChange={(e) => form.setData('account_id', e.target.value)}
+                            >
                                 <option value="">Pick the account…</option>
                                 {accounts.map((account) => (
                                     <option key={account.id} value={String(account.id)}>
@@ -139,6 +144,7 @@ export default function ExpenseCategoriesPage({ categories, accounts }: Categori
                                     <td className="px-3 py-2">
                                         <div className="w-72">
                                             <SearchSelect
+                                                newLedger={{ types: ['expense'], reload: ['accounts'] }}
                                                 value={String(category.account_id)}
                                                 onChange={(e) =>
                                                     router.patch(

@@ -58,6 +58,7 @@ export interface SharedData {
         kind: string;
         at: string | null;
     }[];
+    canManageChart: boolean;
     canManageUsers: boolean;
     canManageOrganization: boolean;
     canManageEmployees: boolean;
