@@ -9,6 +9,7 @@ use App\Modules\Hrm\Actions\ApplyLeave;
 use App\Modules\Hrm\Actions\AssignSchedule;
 use App\Modules\Hrm\Actions\GrantAnnualLeaveQuota;
 use App\Modules\Hrm\Actions\ProcessAttendance;
+use App\Modules\Hrm\Actions\RecordPunch;
 use App\Modules\Hrm\Actions\RequestLeave;
 use App\Modules\Hrm\Actions\RequestMovement;
 use App\Modules\Hrm\Actions\YearEndLeaveProcessor;
@@ -19,6 +20,7 @@ use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Enums\LeaveDayPortion;
 use App\Modules\Hrm\Enums\LeaveLedgerEntryType;
 use App\Modules\Hrm\Enums\MovementType;
+use App\Modules\Hrm\Enums\PunchSource;
 use App\Modules\Hrm\Enums\ScheduleScope;
 use App\Modules\Hrm\Models\AttendancePolicy;
 use App\Modules\Hrm\Models\DailyAttendance;
@@ -27,11 +29,15 @@ use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\Holiday;
 use App\Modules\Hrm\Models\HolidayCalendar;
 use App\Modules\Hrm\Models\LeaveLedgerEntry;
+use App\Modules\Hrm\Models\LeaveRequest;
 use App\Modules\Hrm\Models\LeaveType;
 use App\Modules\Hrm\Models\LeaveYearEndRun;
+use App\Modules\Hrm\Models\Movement;
 use App\Modules\Hrm\Models\Shift;
 use App\Modules\Hrm\Support\LeaveBalance;
+use App\Support\ApprovalCards;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -334,11 +340,11 @@ it('makes an approved movement count as present', function () {
 it('counts holiday work only once it is approved', function () {
     Holiday::create(['holiday_calendar_id' => $this->calendar->id, 'date' => '2026-08-04', 'name' => 'National day']);
 
-    app(\App\Modules\Hrm\Actions\RecordPunch::class)->handle(
-        $this->employee, '2026-08-04 09:00:00', \App\Modules\Hrm\Enums\PunchSource::Biometric, ['direction' => 'in'],
+    app(RecordPunch::class)->handle(
+        $this->employee, '2026-08-04 09:00:00', PunchSource::Biometric, ['direction' => 'in'],
     );
-    app(\App\Modules\Hrm\Actions\RecordPunch::class)->handle(
-        $this->employee, '2026-08-04 18:00:00', \App\Modules\Hrm\Enums\PunchSource::Biometric, ['direction' => 'out'],
+    app(RecordPunch::class)->handle(
+        $this->employee, '2026-08-04 18:00:00', PunchSource::Biometric, ['direction' => 'out'],
     );
 
     $before = app(ProcessAttendance::class)->forDay($this->employee, '2026-08-04');
@@ -479,7 +485,7 @@ it('renders the year-end preview for HR', function () {
 
     leaveHr()->get(route('hrm.leave.year-end', ['year' => 2026]))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/leave/year-end')
             // Compared as a float: JSON renders 6.0 as 6, which a strict
             // comparison would reject.
@@ -493,7 +499,7 @@ it('renders self-service leave with the ledger behind the balance', function () 
 
     leaveStaff()->get(route('hrm.my-leave'))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/leave/my-leave')
             ->has('ledger', 1)
             ->has('balances'));
@@ -523,7 +529,7 @@ it('does not leak leave across businesses', function () {
 it('gives the leave screen everything a create form needs', function () {
     leaveHr()->get(route('hrm.leave.index'))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/leave/index')
             ->has('employees')
             ->has('leave_types')
@@ -545,7 +551,7 @@ it('records a leave request straight from the screen', function () {
         'reason' => 'Cousin\'s marriage ceremony',
     ])->assertRedirect()->assertSessionHasNoErrors();
 
-    expect(\App\Modules\Hrm\Models\LeaveRequest::where('employee_id', $this->employee->id)->count())->toBe(1);
+    expect(LeaveRequest::where('employee_id', $this->employee->id)->count())->toBe(1);
 });
 
 it('records a movement straight from the screen', function () {
@@ -557,7 +563,7 @@ it('records a movement straight from the screen', function () {
         'reason' => 'Outside Dhaka on office work',
     ])->assertRedirect()->assertSessionHasNoErrors();
 
-    expect(\App\Modules\Hrm\Models\Movement::where('employee_id', $this->employee->id)->count())->toBe(1);
+    expect(Movement::where('employee_id', $this->employee->id)->count())->toBe(1);
 });
 
 // =============================================================================
@@ -600,4 +606,50 @@ it('still marks the Unpaid type entirely unpaid', function () {
     );
 
     expect((float) $request->unpaid_days)->toBe(1.0);
+});
+
+// --- One day is asked for once ------------------------------------------------
+
+it('refuses a second request over days already waiting for approval', function () {
+    grantDays($this->earned, 20);
+    $ask = fn (string $from, string $to, LeaveDayPortion $portion = LeaveDayPortion::FullDay) => app(RequestLeave::class)
+        ->handle($this->employee, $this->earned, $from, $to, $portion, 'Tour', $this->staffUser);
+
+    $ask('2026-08-03', '2026-08-04');
+
+    expect(fn () => $ask('2026-08-04', '2026-08-05'))->toThrow(ValidationException::class);
+    expect(LeaveRequest::count())->toBe(1);
+});
+
+it('frees the days again once the first request is rejected', function () {
+    grantDays($this->earned, 20);
+    $ask = fn () => app(RequestLeave::class)
+        ->handle($this->employee, $this->earned, '2026-08-03', '2026-08-03', LeaveDayPortion::FullDay, 'Tour', $this->staffUser);
+
+    $first = $ask();
+    $first->approvalRequest->reject($this->manager, 'Not now');
+
+    expect($ask()->exists)->toBeTrue();
+});
+
+it('allows the two different halves of one date', function () {
+    grantDays($this->earned, 20);
+    $ask = fn (LeaveDayPortion $portion) => app(RequestLeave::class)
+        ->handle($this->employee, $this->earned, '2026-08-03', '2026-08-03', $portion, 'Appointment', $this->staffUser);
+
+    $ask(LeaveDayPortion::FirstHalf);
+
+    expect($ask(LeaveDayPortion::SecondHalf)->exists)->toBeTrue();
+    expect(fn () => $ask(LeaveDayPortion::SecondHalf))->toThrow(ValidationException::class);
+});
+
+it('shows the approver plain dates, never a timestamp', function () {
+    grantDays($this->earned, 20);
+    $request = app(RequestLeave::class)
+        ->handle($this->employee, $this->earned, '2026-08-03', '2026-08-04', LeaveDayPortion::FullDay, 'Tour', $this->staffUser);
+
+    $dates = collect(app(ApprovalCards::class)->present($request->approvalRequest)['details'])
+        ->firstWhere('label', 'Dates')['value'];
+
+    expect($dates)->toBe('3 Aug 2026 → 4 Aug 2026');
 });

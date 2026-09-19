@@ -151,7 +151,7 @@ class ApprovalCards
                 details: array_filter([
                     ['label' => 'Employee', 'value' => $approvable->employee?->fullName()],
                     ['label' => 'Leave type', 'value' => $approvable->leaveType?->name],
-                    ['label' => 'Dates', 'value' => $approvable->start_date.($approvable->end_date !== $approvable->start_date ? " → {$approvable->end_date}" : '')],
+                    ['label' => 'Dates', 'value' => $this->dateRange($approvable->start_date, $approvable->end_date)],
                     ['label' => 'Days', 'value' => $this->qty($approvable->days)],
                     // The single most decision-relevant leave fact: whether the
                     // balance covers it.
@@ -563,6 +563,19 @@ class ApprovalCards
             'requested_at' => $approvalRequest->created_at->diffForHumans(),
             'stage' => $approvalRequest->totalStages() > 1 ? $approvalRequest->currentStage()?->name : null,
         ];
+    }
+
+    /**
+     * `19 Sep 2026`, or `19 Sep 2026 → 20 Sep 2026`. A date-cast column prints
+     * as `2026-09-19 00:00:00` when concatenated, which is what the leave card
+     * showed the approver.
+     */
+    private function dateRange(mixed $start, mixed $end): string
+    {
+        $from = Carbon::parse($start)->format('j M Y');
+        $to = Carbon::parse($end)->format('j M Y');
+
+        return $from === $to ? $from : "{$from} → {$to}";
     }
 
     /** `20.0000` → `20`, `20.5000` → `20.5`. Trims, never rounds. */

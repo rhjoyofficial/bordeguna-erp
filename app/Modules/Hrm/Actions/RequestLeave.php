@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Actions;
 
 use App\Models\User;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
+use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Hrm\Enums\LeaveDayPortion;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\LeaveRequest;
@@ -61,6 +62,8 @@ class RequestLeave
             throw ValidationException::withMessages(['day_portion' => "{$type->name} cannot be taken as a half day."]);
         }
 
+        $this->refuseOverlap($employee, $startDate, $endDate, $portion);
+
         $calculated = $this->calculator->calculate($employee, $startDate, $endDate, $portion);
 
         if ($calculated['days'] <= 0) {
@@ -73,7 +76,7 @@ class RequestLeave
 
         return DB::transaction(function () use (
             $employee, $type, $startDate, $endDate, $portion, $reason,
-            $requestedBy, $calculated, $paidDays, $unpaidDays
+            $requestedBy, $calculated, $unpaidDays
         ) {
             $request = LeaveRequest::create([
                 'employee_id' => $employee->id,
@@ -120,5 +123,42 @@ class RequestLeave
         $paid = min($days, $available);
 
         return [round($paid, 2), round($days - $paid, 2)];
+    }
+
+    /**
+     * One day is asked for once. A second request over days already waiting or
+     * already granted was accepted silently (production, 17 Sep 2026: the same
+     * two days twice in the approver's inbox), and approving both would have
+     * charged the balance twice for one absence. A rejected or returned request
+     * frees its days. Two different halves of one date are two absences, not
+     * one, and are allowed.
+     */
+    private function refuseOverlap(Employee $employee, Carbon $start, Carbon $end, LeaveDayPortion $portion): void
+    {
+        $clash = LeaveRequest::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('start_date', '<=', $end->toDateString())
+            ->whereDate('end_date', '>=', $start->toDateString())
+            ->whereHas('approvalRequest', fn ($query) => $query->whereIn('status', [
+                ApprovalStatus::Pending->value,
+                ApprovalStatus::Approved->value,
+            ]))
+            ->get()
+            ->first(fn (LeaveRequest $existing) => ! ($portion->isPartial()
+                && $existing->day_portion->isPartial()
+                && $existing->day_portion !== $portion));
+
+        if ($clash === null) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'start_date' => sprintf(
+                'Leave for %s to %s is already %s. Ask for different days, or have that request rejected first.',
+                Carbon::parse($clash->start_date)->format('j M Y'),
+                Carbon::parse($clash->end_date)->format('j M Y'),
+                $clash->approvalRequest?->status === ApprovalStatus::Approved ? 'approved' : 'waiting for approval',
+            ),
+        ]);
     }
 }
