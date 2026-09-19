@@ -4,7 +4,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 export type SelectOption = {
     value: string;
@@ -85,6 +85,8 @@ export function SearchableSelect({
     createLabel?: string;
 }) {
     const [open, setOpen] = useState(false);
+    const [inDialog, setInDialog] = useState(false);
+    const triggerRef = useRef<HTMLButtonElement>(null);
     const [typed, setTyped] = useState('');
     const selected = options.find((option) => option.value === value);
 
@@ -116,15 +118,33 @@ export function SearchableSelect({
                 test that fills by name, keeps working. */}
             {name ? <input type="hidden" name={name} value={value} /> : null}
 
-            {/* ⚠⚠ `modal` IS LOAD-BEARING (19 Sep 2026, Joy's accountant on the expense
-                form). The list is portalled to <body>, OUTSIDE any open Dialog. A Dialog
-                traps focus and blocks wheel/touch scrolling for everything outside itself,
-                so inside a dialog the search box never received a keystroke and the list
-                would not scroll. A modal popover takes its own focus scope and its own
-                scroll allowance, which works inside and outside a dialog alike. */}
-            <Popover modal open={open} onOpenChange={disabled ? undefined : setOpen}>
+            {/* ⚠⚠ `modal` INSIDE A DIALOG IS LOAD-BEARING (19 Sep 2026, Joy's accountant on
+                the expense form). The list is portalled to <body>, OUTSIDE any open Dialog.
+                A Dialog traps focus and blocks wheel/touch scrolling for everything outside
+                itself, so the search box never received a keystroke and the list would not
+                scroll. A modal popover takes its own focus scope and scroll allowance.
+
+                ⚠ ONLY inside a dialog. A modal popover switches pointer events off on the
+                page until its exit animation ends, so on a full-page form the click made
+                straight after choosing an option was swallowed - which is exactly how a
+                fast accountant enters a voucher. */}
+            <Popover
+                modal={inDialog}
+                open={open}
+                onOpenChange={
+                    disabled
+                        ? undefined
+                        : (next) => {
+                              if (next) {
+                                  setInDialog(triggerRef.current?.closest('[role="dialog"]') != null);
+                              }
+                              setOpen(next);
+                          }
+                }
+            >
                 <PopoverTrigger asChild>
                     <Button
+                        ref={triggerRef}
                         id={id}
                         type="button"
                         variant="outline"

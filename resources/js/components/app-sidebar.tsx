@@ -514,6 +514,12 @@ export function AppSidebar() {
                           // agree with the documents, right now.
                           { title: 'Reconciliation', url: '/accounting/reconciliation', icon: ShieldCheck },
                           { title: 'Day book', url: '/accounting/day-book', icon: CalendarClock },
+                          // The four vouchers an accountant names (19 Sep 2026). One
+                          // engine behind them; the list page switches between types.
+                          { title: 'Payment vouchers', url: '/accounting/vouchers/payment', icon: Banknote },
+                          { title: 'Receive vouchers', url: '/accounting/vouchers/receipt', icon: HandCoins },
+                          { title: 'Contra vouchers', url: '/accounting/vouchers/contra', icon: ArrowLeftRight },
+                          { title: 'Journal vouchers', url: '/accounting/vouchers/journal', icon: NotebookPen },
                           { title: 'Journals', url: '/accounting/journals', icon: NotebookPen },
                           { title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen },
                           // Module 2, Slice 1: the boundary the whole ledger obeys.
