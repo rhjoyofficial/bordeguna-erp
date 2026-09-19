@@ -21,6 +21,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum as EnumRule;
 use Illuminate\Validation\ValidationException;
@@ -137,13 +138,23 @@ class LoanController extends Controller
             ]);
         }
 
-        if (! $approval->approve($request->user(), $note)) {
+        // ⚠⚠ THE FINAL APPROVAL AND THE PAYOUT ARE ONE TRANSACTION. Committed
+        // apart, a payout that threw left the loan approved and never paid, with
+        // no screen that could pay it. Together, a refusal rolls the approval
+        // back too and the loan is still waiting on its last approver.
+        $applied = DB::transaction(function () use ($approval, $request, $note, $disburse, $loan, $account, $data) {
+            if (! $approval->approve($request->user(), $note)) {
+                return null;
+            }
+
+            return $disburse->handle($loan, $account, $request->user(), $data['disbursed_on'] ?? null);
+        });
+
+        if ($applied === null) {
             $notify->handle($approval->fresh(), $loan->summaryLine());
 
             return back()->with('success', 'Approved. Sent to the next stage.');
         }
-
-        $applied = $disburse->handle($loan, $account, $request->user(), $data['disbursed_on'] ?? null);
 
         return back()->with('success', sprintf(
             '%s disbursed from %s on %s. %d installment(s) scheduled from %s.',

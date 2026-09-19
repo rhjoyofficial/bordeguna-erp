@@ -1,7 +1,9 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\AssignSchedule;
@@ -640,4 +642,22 @@ it('does not offer an inbox Approve that would disburse without naming an accoun
     expect($card['approve_url'])->toBeNull();
     expect($card['reject_url'])->not->toBeNull();
     expect(collect($card['details'])->pluck('label'))->toContain('To approve');
+});
+
+it('leaves the loan awaiting its last approver when the payout throws', function () {
+    $loan = requestLoan();
+    $account = MoneyAccount::create([
+        'name' => 'Cash Box',
+        'type' => MoneyAccountType::Cash,
+    ]);
+
+    $this->mock(DisburseLoan::class)->shouldReceive('handle')->andThrow(new RuntimeException('payout failed'));
+
+    loanHr()->withoutExceptionHandling();
+    expect(fn () => loanHr()->post(route('hrm.loans.approve', $loan), ['money_account_id' => $account->id]))
+        ->toThrow(RuntimeException::class);
+
+    // The approval rolled back with the payout, so somebody can still act.
+    expect($loan->fresh()->approvalRequest->isPending())->toBeTrue();
+    expect($loan->fresh()->status)->toBe(LoanStatus::Pending);
 });
