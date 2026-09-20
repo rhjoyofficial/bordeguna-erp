@@ -96,7 +96,10 @@ class PostVoucher
         $date = $voucher->voucher_date->copy()->startOfDay();
 
         if ($type === VoucherType::Contra) {
-            $from = $this->usable($voucher->moneyAccount, 'money_account_id', $date);
+            // ⭐ A gateway may be a contra's SOURCE: its payout reaching the bank
+            // (accountant meeting 19 Sep 2026, F4). It has no statement flow of
+            // its own, unlike a courier, so without this the payout had no screen.
+            $from = $this->usable($voucher->moneyAccount, 'money_account_id', $date, allowGateway: true);
             $to = $this->usable($voucher->toMoneyAccount, 'to_money_account_id', $date);
 
             if ($from->id === $to->id) {
@@ -169,7 +172,7 @@ class PostVoucher
         return $lines;
     }
 
-    private function usable(?MoneyAccount $account, string $field, mixed $date): MoneyAccount
+    private function usable(?MoneyAccount $account, string $field, mixed $date, bool $allowGateway = false): MoneyAccount
     {
         if ($account === null) {
             throw ValidationException::withMessages([$field => 'Choose the cash, bank or mobile account.']);
@@ -179,8 +182,12 @@ class PostVoucher
             throw ValidationException::withMessages([$field => "{$account->name} is no longer active."]);
         }
 
-        if ($account->isCourier() || $account->isGateway()) {
+        if ($account->isCourier()) {
             throw ValidationException::withMessages([$field => "{$account->name} is settled by its own statements, not by a voucher."]);
+        }
+
+        if ($account->isGateway() && ! $allowGateway) {
+            throw ValidationException::withMessages([$field => "{$account->name} holds money from online sales. It can only be the account a contra voucher moves money OUT of, when its payout reaches the bank."]);
         }
 
         if ($account->account_id === null) {

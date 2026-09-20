@@ -254,7 +254,8 @@ export default function VoucherFormPage({
                             >
                                 <option value="">Choose an account</option>
                                 {moneyAccounts
-                                    .filter((account) => String(account.id) !== data.money_account_id)
+                                    // Money never moves INTO a gateway by hand: the gateway fills itself from sales.
+                                    .filter((account) => String(account.id) !== data.money_account_id && account.type !== 'gateway')
                                     .map((account) => (
                                         <option key={account.id} value={account.id}>
                                             {account.label}

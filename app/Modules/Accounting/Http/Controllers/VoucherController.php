@@ -13,6 +13,7 @@ use App\Modules\Accounting\Support\AmountInWords;
 use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\StoreAttachment;
+use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -313,7 +314,17 @@ class VoucherController extends Controller
                 ]),
             ],
             'today' => Carbon::today()->toDateString(),
-            'moneyAccounts' => fn () => MoneyAccount::query()->handled()->where('is_active', true)->whereNotNull('account_id')
+            // ⭐ A CONTRA may move money OUT OF a payment gateway (accountant
+            // meeting 19 Sep, F4: an SSLCommerz payout reaching the bank had no
+            // screen). The gateway is offered as a SOURCE only, and only here:
+            // the form hides it from "Moved to" and from every other voucher.
+            'moneyAccounts' => fn () => MoneyAccount::query()
+                ->when(
+                    $type === VoucherType::Contra,
+                    fn ($query) => $query->where('type', '!=', MoneyAccountType::Courier->value),
+                    fn ($query) => $query->handled(),
+                )
+                ->where('is_active', true)->whereNotNull('account_id')
                 ->orderBy('name')->get()
                 ->map(fn (MoneyAccount $account) => ['id' => $account->id, 'label' => $account->label(), 'type' => $account->type->value]),
             'accounts' => fn () => VoucherAccounts::selectable(Carbon::today())->map(fn ($account) => [

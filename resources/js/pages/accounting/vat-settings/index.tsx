@@ -54,7 +54,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const selectClass =
-    'border-input bg-background focus-visible:ring-ring h-9 w-auto min-w-56 rounded-md border px-3 text-sm focus-visible:ring-1 focus-visible:outline-none';
+    'border-input bg-background focus-visible:ring-ring h-9 w-fit min-w-56 self-start rounded-md border px-3 text-sm focus-visible:ring-1 focus-visible:outline-none';
 
 export default function VatSettings({ settings, regimes, classes, documents }: Props) {
     const form = useForm({

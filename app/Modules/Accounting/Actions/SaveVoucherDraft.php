@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\VoucherAccounts;
+use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Support\Carbon;
@@ -48,7 +49,8 @@ class SaveVoucherDraft
         $date = Carbon::parse($data['voucher_date'])->startOfDay();
         $businessId = app(BusinessContext::class)->id();
 
-        $from = $this->moneyAccount($data['money_account_id'] ?? null, 'money_account_id', $businessId);
+        // A contra's SOURCE may be a payment gateway (its payout reaching the bank).
+        $from = $this->moneyAccount($data['money_account_id'] ?? null, 'money_account_id', $businessId, allowGateway: $type === VoucherType::Contra);
         $to = $this->moneyAccount($data['to_money_account_id'] ?? null, 'to_money_account_id', $businessId);
 
         if (! $type->usesMoneyAccount()) {
@@ -106,7 +108,7 @@ class SaveVoucherDraft
         });
     }
 
-    private function moneyAccount(mixed $id, string $field, ?int $businessId): ?MoneyAccount
+    private function moneyAccount(mixed $id, string $field, ?int $businessId, bool $allowGateway = false): ?MoneyAccount
     {
         if ($id === null || $id === '') {
             return null;
@@ -114,7 +116,13 @@ class SaveVoucherDraft
 
         // ⚠ Resolved through the tenant scope: another business's bank is
         // "not found", never "found and refused".
-        $account = MoneyAccount::query()->handled()->find((int) $id);
+        $account = MoneyAccount::query()
+            ->when(
+                $allowGateway,
+                fn ($query) => $query->where('type', '!=', MoneyAccountType::Courier->value),
+                fn ($query) => $query->handled(),
+            )
+            ->find((int) $id);
 
         if ($account === null || $account->business_id !== $businessId) {
             throw ValidationException::withMessages([$field => 'Choose one of this business\'s cash, bank or mobile accounts.']);

@@ -51,6 +51,7 @@ final class SubsystemAccounts
         $owned = [];
         $keysByAccount = [];
         $accountTypes = [];
+        $accountParents = [];
 
         foreach (AccountMapping::query()->with('account')->get() as $mapping) {
             if (! self::isOwnedKey($mapping->key)) {
@@ -68,6 +69,7 @@ final class SubsystemAccounts
 
             $owned[$mapping->account_id] = $mapping->key;
             $accountTypes[$mapping->account_id] = $mapping->account?->type;
+            $accountParents[$mapping->account_id] = $mapping->account?->parent_id;
             $keysByAccount[$mapping->account_id][] = $mapping->key;
         }
 
@@ -88,11 +90,20 @@ final class SubsystemAccounts
             }
         }
 
+        $wageParents = array_values(array_filter(array_map(fn (int $id) => $accountParents[$id] ?? null, array_keys($wageAccountIds))));
+
         foreach ($keysByAccount as $accountId => $keys) {
             $onlyEarningComponents = array_filter($keys, fn (string $key) => ! str_starts_with($key, 'payroll.earning.')) === [];
 
+            // ⚠ Overtime and Bonus sit in the wage head's OWN group (6130
+            // Employee and Staff) and are payroll's as much as Salaries is: only
+            // payroll knows the hours and the festival. A head in another group
+            // that payroll merely allocates to (Conveyance) is what is shared.
+            $inWageGroup = in_array($accountParents[$accountId] ?? null, $wageParents, true);
+
             if ($onlyEarningComponents
                 && ! isset($wageAccountIds[$accountId])
+                && ! $inWageGroup
                 && ($accountTypes[$accountId] ?? null) === AccountType::Expense) {
                 unset($owned[$accountId]);
             }

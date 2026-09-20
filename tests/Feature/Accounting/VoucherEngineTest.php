@@ -403,3 +403,32 @@ it('writes the amount in words the way a Bangladeshi voucher does', function (st
     ['253467891.05', 'Taka Twenty Five Crore Thirty Four Lakh Sixty Seven Thousand Eight Hundred Ninety One and Paisa Five Only'],
     ['100', 'Taka One Hundred Only'],
 ]);
+
+// ─── Accountant meeting 19 Sep 2026, F4: a gateway payout reaching the bank ───
+
+it('moves a gateway payout into the bank with a contra, and only in that direction', function () {
+    $gateway = MoneyAccount::create([
+        'business_id' => $this->business->id, 'name' => 'SSLCommerz', 'type' => 'gateway', 'is_active' => true,
+        'account_id' => Account::where('code', '1146')->sole()->id,
+    ]);
+
+    $voucher = ($this->post)(($this->draft)(VoucherType::Contra, [
+        'money_account_id' => $gateway->id, 'to_money_account_id' => $this->bank->id,
+        'amount' => '5000', 'narration' => 'SSLCommerz payout',
+    ]));
+
+    expect($voucher->voucher_number)->toStartWith('CV-')
+        ->and(($this->balance)('1146'))->toBe(-500000)
+        ->and(($this->balance)('1120'))->toBe(500000);
+
+    // Into a gateway by hand: refused. A gateway fills itself from sales.
+    expect(fn () => ($this->draft)(VoucherType::Contra, [
+        'money_account_id' => $this->bank->id, 'to_money_account_id' => $gateway->id, 'amount' => '10',
+    ]))->toThrow(ValidationException::class);
+
+    // And a gateway still can never pay an expense.
+    expect(fn () => ($this->draft)(VoucherType::Payment, [
+        'money_account_id' => $gateway->id,
+        'lines' => [['account_id' => ($this->id)('6055'), 'amount' => '10']],
+    ]))->toThrow(ValidationException::class);
+});

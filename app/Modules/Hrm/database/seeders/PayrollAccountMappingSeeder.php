@@ -97,6 +97,18 @@ class PayrollAccountMappingSeeder extends Seeder
         'payroll.deduction.lwp' => 'salaries_expense',
         'payroll.deduction.absent' => 'salaries_expense',
 
+        // ─── Accountant meeting 19 Sep 2026, D1 and D2 ───────────────────────
+        // Overtime and bonus were falling through to Salaries and Wages, so the
+        // P&L could not show either. They have had accounts of their own since
+        // the master expense chart; nothing pointed at them.
+        'payroll.earning.overtime' => 'overtime_expense',
+        'payroll.earning.bonus' => 'bonus_expense',
+        // ⚠ A FINE IS NOT A LIABILITY. It fell through to Employee Deductions
+        // Payable, which says the company owes that money onward to somebody.
+        // It owes it to nobody: it is wage the employee did not get, exactly
+        // like an absence, so it credits the wage cost back.
+        'payroll.deduction.penalty' => 'salaries_expense',
+
         // ─── The two sides of the settlement ─────────────────────────────────
         'payroll.net_payable' => 'salaries_payable',
 
