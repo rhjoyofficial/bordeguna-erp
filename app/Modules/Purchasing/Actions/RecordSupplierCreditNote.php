@@ -43,6 +43,11 @@ class RecordSupplierCreditNote
         array $allocations,
         User $createdBy,
         ?string $note = null,
+        // ⭐ VAT (plan D6/D7): how much of the credit is VAT the supplier is
+        // giving back. It is INSIDE the amounts allocated to the bills, since a
+        // bill's outstanding balance includes its VAT. It comes back out of
+        // Input VAT Receivable, and only the rest relieves GRNI.
+        string $taxAmount = '0',
     ): SupplierCreditNote {
         $date = Carbon::parse($creditDate)->startOfDay();
 
@@ -65,7 +70,13 @@ class RecordSupplierCreditNote
             ]);
         }
 
-        return DB::transaction(function () use ($supplier, $purchaseReturn, $creditNoteNumber, $date, $allocations, $createdBy, $note) {
+        $tax = Money::ofTaka($taxAmount === '' ? '0' : $taxAmount);
+
+        if ($tax->minor < 0) {
+            throw ValidationException::withMessages(['tax_amount' => 'The VAT on a credit note cannot be negative.']);
+        }
+
+        return DB::transaction(function () use ($supplier, $purchaseReturn, $creditNoteNumber, $date, $allocations, $createdBy, $note, $tax) {
             // ⚠ Re-read under a lock: two clerks recording credits against the
             // same return at once is how a return gets credited twice, and
             // `lockForUpdate` is a no-op on SQLite, so the RE-READ is the part
@@ -108,9 +119,15 @@ class RecordSupplierCreditNote
             // already recorded against it. The figure is the one the return's
             // own posting debited GRNI with, so a fully credited return brings
             // GRNI to exactly zero rather than stranding paisa.
+            if ($tax->minor > $total->minor) {
+                throw ValidationException::withMessages(['tax_amount' => 'The VAT cannot be more than the credit note itself.']);
+            }
+
             $creditable = $return->invoiceableValue()->plus($return->creditedTotal()->negated());
 
-            if ($total->minor > $creditable->minor) {
+            // ⚠ The return is valued at COST, which holds no claimable VAT, so
+            // it is the goods part of the credit that is measured against it.
+            if ($total->minor - $tax->minor > $creditable->minor) {
                 throw ValidationException::withMessages([
                     'allocations' => "Return #{$return->id} has only {$creditable->format()} left to credit.",
                 ]);
@@ -122,6 +139,7 @@ class RecordSupplierCreditNote
                 'credit_note_number' => $creditNoteNumber,
                 'credit_date' => $date,
                 'total' => $total->toTaka(),
+                'tax_total' => $tax->toTaka(),
                 'note' => $note,
                 'created_by' => $createdBy->id,
             ]);

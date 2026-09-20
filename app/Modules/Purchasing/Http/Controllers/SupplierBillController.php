@@ -7,6 +7,8 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\Actions\ReverseSupplierBill;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -15,6 +17,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -86,6 +89,11 @@ class SupplierBillController extends Controller
         $purchaseOrder->load(['lines.product:id,name,sku', 'supplier']);
 
         return Inertia::render('purchasing/bills/create', [
+            // ⭐ VAT plan D7. False for every business today; the screen then
+            // shows nothing about VAT at all.
+            'vat' => [
+                'applies' => Business::query()->find(app(BusinessContext::class)->id())?->vatAppliesOn(Carbon::today()) ?? false,
+            ],
             'order' => [
                 'id' => $purchaseOrder->id,
                 'po_number' => $purchaseOrder->po_number,
@@ -128,6 +136,10 @@ class SupplierBillController extends Controller
             'lines.*.purchase_order_line_id' => ['required', 'integer', 'exists:purchase_order_lines,id'],
             'lines.*.quantity' => ['required', 'numeric', 'min:0'],
             'lines.*.unit_cost' => ['required', 'numeric', 'min:0'],
+            // ⭐ VAT (plan D7): said once for the whole bill, as the supplier's
+            // own invoice says it once. Ignored while VAT is off.
+            'prices_include_tax' => ['nullable', 'boolean'],
+            'tax_recoverable' => ['nullable', 'boolean'],
         ]);
 
         // ⚠⚠ Resolved through the SCOPED model, never by raw id. A bare
@@ -141,6 +153,7 @@ class SupplierBillController extends Controller
                 'line' => PurchaseOrderLine::findOrFail($line['purchase_order_line_id']),
                 'quantity' => (string) $line['quantity'],
                 'unitCost' => (string) $line['unit_cost'],
+                'taxRecoverable' => (bool) ($data['tax_recoverable'] ?? true),
             ])
             ->values()
             ->all();
@@ -161,6 +174,7 @@ class SupplierBillController extends Controller
                 purchaseOrder: $order,
                 dueDate: $data['due_date'] ?? null,
                 note: $data['note'] ?? null,
+                pricesIncludeTax: (bool) ($data['prices_include_tax'] ?? false),
             );
         } catch (PeriodClosedException $e) {
             throw ValidationException::withMessages(['bill_date' => $e->getMessage()]);
@@ -191,6 +205,9 @@ class SupplierBillController extends Controller
                 'due_date' => $bill->due_date?->toDateString(),
                 'note' => $bill->note,
                 'total' => Money::ofTaka((string) $bill->total)->toTaka(),
+                // VAT inside that total; '0.00' on every untaxed bill.
+                'tax_total' => Money::ofTaka((string) $bill->tax_total)->toTaka(),
+                'tax_claimed' => $bill->recoverableTax()->toTaka(),
                 'paid' => $bill->paidTotal()->toTaka(),
                 'credited' => $bill->creditedTotal()->toTaka(),
                 'outstanding' => $bill->outstanding()->toTaka(),

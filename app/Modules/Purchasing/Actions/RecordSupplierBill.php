@@ -4,7 +4,11 @@ namespace App\Modules\Purchasing\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\TaxCalculator;
+use App\Modules\Accounting\Support\TaxSplit;
 use App\Modules\Foundation\Models\AccountingPeriod;
+use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\Supplier;
@@ -29,7 +33,10 @@ use InvalidArgumentException;
  */
 class RecordSupplierBill
 {
-    public function __construct(private readonly PostPurchaseJournals $posting) {}
+    public function __construct(
+        private readonly PostPurchaseJournals $posting,
+        private readonly TaxCalculator $tax,
+    ) {}
 
     /**
      * @param  array<int, array{line: PurchaseOrderLine, quantity: string, unitCost: string}>  $lines
@@ -43,6 +50,11 @@ class RecordSupplierBill
         ?PurchaseOrder $purchaseOrder = null,
         mixed $dueDate = null,
         ?string $note = null,
+        // ⭐ VAT (plan D7). Does the unit cost typed from the supplier's bill
+        // already contain the VAT? Read only while this business charges VAT.
+        // Each line may also carry `taxRate` (the percentage the SUPPLIER
+        // printed, which is the truth for a purchase) and `taxRecoverable`.
+        bool $pricesIncludeTax = false,
     ): SupplierBill {
         $date = Carbon::parse($billDate);
 
@@ -64,7 +76,10 @@ class RecordSupplierBill
             );
         }
 
-        return DB::transaction(function () use ($supplier, $billNumber, $date, $lines, $createdBy, $purchaseOrder, $dueDate, $note) {
+        $business = Business::withoutGlobalScopes()->find($supplier->business_id ?? app(BusinessContext::class)->id());
+        $taxed = $this->tax->appliesOn($business, $date);
+
+        return DB::transaction(function () use ($supplier, $billNumber, $date, $lines, $createdBy, $purchaseOrder, $dueDate, $note, $business, $taxed, $pricesIncludeTax) {
             $bill = SupplierBill::create([
                 'supplier_id' => $supplier->id,
                 'purchase_order_id' => $purchaseOrder?->id,
@@ -78,6 +93,7 @@ class RecordSupplierBill
 
             /** @var list<Money> $lineTotals */
             $lineTotals = [];
+            $taxTotal = Money::zero();
 
             foreach ($lines as $entry) {
                 // ⚠ Re-read under a lock, the same lesson as I3: two people
@@ -131,13 +147,42 @@ class RecordSupplierBill
                 // each line, and the bill total has to equal what the journal
                 // credits to Accounts Payable to the paisa.
                 $lineTotal = Money::ofProduct($entry['quantity'], $entry['unitCost']);
-                $lineTotals[] = $lineTotal;
+
+                // ⭐⭐ VAT ON A PURCHASE (plan D7). `line_total` stays what was
+                // typed. The split decides how much of it is the goods and how
+                // much is VAT; `tax_recoverable` decides where that VAT goes:
+                // claimable VAT to Input VAT Receivable with stock carried NET,
+                // anything else left inside the cost of what was bought.
+                // ⚠ Nothing here runs while the business charges no VAT, and the
+                // bill is then exactly the bill it always was.
+                $split = TaxSplit::untaxed($lineTotal);
+                $classId = null;
+                $recoverable = false;
+
+                if ($taxed) {
+                    $classId = $line->product?->tax_class_id;
+                    $rate = isset($entry['taxRate']) && $entry['taxRate'] !== ''
+                        ? (string) $entry['taxRate']
+                        : $this->tax->rateFor($business, $classId, $date);
+
+                    $split = $this->tax->split($lineTotal, $rate, $pricesIncludeTax);
+                    $recoverable = ! $split->tax->isZero() && (bool) ($entry['taxRecoverable'] ?? true);
+                }
+
+                // What the supplier is owed for this line, VAT and all.
+                $lineTotals[] = $split->gross;
+                $taxTotal = $taxTotal->plus($split->tax);
 
                 $bill->lines()->create([
                     'purchase_order_line_id' => $line->id,
                     'quantity' => $entry['quantity'],
                     'unit_cost' => $entry['unitCost'],
                     'line_total' => $lineTotal->toTaka(),
+                    'tax_class_id' => $classId,
+                    'tax_rate' => $split->rate,
+                    'tax_amount' => $split->tax->toTaka(),
+                    'prices_include_tax' => $taxed && $pricesIncludeTax,
+                    'tax_recoverable' => $recoverable,
                 ]);
 
                 $line->update([
@@ -145,7 +190,14 @@ class RecordSupplierBill
                 ]);
             }
 
-            $bill->update(['total' => Money::sum($lineTotals)->toTaka()]);
+            // ⚠ `total` is what the supplier is OWED: the goods plus any VAT,
+            // whichever way round the costs were typed.
+            $bill->forceFill([
+                'total' => Money::sum($lineTotals)->toTaka(),
+                'tax_total' => $taxTotal->toTaka(),
+                'tax_point_date' => $date,
+                'prices_include_tax' => $taxed && $pricesIncludeTax,
+            ])->save();
 
             $this->posting->forBill($bill->fresh(['lines', 'supplier']), $createdBy);
 

@@ -7,6 +7,7 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\RecordSupplierCreditNote;
 use App\Modules\Purchasing\Models\PurchaseReturn;
@@ -15,6 +16,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -74,6 +76,8 @@ class SupplierCreditNoteController extends Controller
         $supplier = $supplierId === null ? null : Supplier::query()->find($supplierId);
 
         return Inertia::render('purchasing/credit-notes/create', [
+            // VAT plan D7: false today, and the VAT field is then not shown.
+            'vatApplies' => Business::query()->find(app(BusinessContext::class)->id())?->vatAppliesOn(Carbon::today()) ?? false,
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name']),
             'selectedSupplierId' => $supplier?->id,
             'returns' => $supplier === null ? [] : $this->creditableReturnsFor($supplier),
@@ -94,6 +98,8 @@ class SupplierCreditNoteController extends Controller
             'credit_note_number' => ['required', 'string', 'max:100'],
             'credit_date' => ['required', 'date'],
             'note' => ['nullable', 'string'],
+            // The VAT the supplier is giving back, INSIDE the amounts below.
+            'tax_amount' => ['nullable', 'numeric', 'min:0'],
             'allocations' => ['required', 'array', 'min:1'],
             'allocations.*.supplier_bill_id' => ['required', 'integer', 'distinct'],
             // ⚠ gte:0 - the form sends a row per open bill; zero means "not
@@ -130,6 +136,7 @@ class SupplierCreditNoteController extends Controller
                 allocations: $allocations,
                 createdBy: $request->user(),
                 note: $data['note'] ?? null,
+                taxAmount: (string) ($data['tax_amount'] ?? '0'),
             );
         } catch (PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['credit_date' => $e->getMessage()]);

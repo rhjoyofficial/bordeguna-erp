@@ -33,12 +33,15 @@ export default function CreditNoteCreate({
     returns,
     bills,
     today,
+    vatApplies,
 }: {
     suppliers: { id: number; name: string }[];
     selectedSupplierId: number | null;
     returns: CreditableReturn[];
     bills: OpenBill[];
     today: string;
+    // VAT plan D7. False while VAT is off, and nothing is shown.
+    vatApplies: boolean;
 }) {
     const { data, setData, post, errors, processing } = useForm({
         supplier_id: selectedSupplierId ? String(selectedSupplierId) : '',
@@ -46,6 +49,7 @@ export default function CreditNoteCreate({
         credit_note_number: '',
         credit_date: today,
         note: '',
+        tax_amount: '',
         allocations: bills.map((bill) => ({ supplier_bill_id: bill.id, amount: '0' })),
     });
 
@@ -124,6 +128,22 @@ export default function CreditNoteCreate({
                         <Input id="credit_date" type="date" value={data.credit_date} onChange={(e) => setData('credit_date', e.target.value)} />
                         <InputError message={errors.credit_date} />
                     </div>
+                    {vatApplies && (
+                        <div className="grid gap-2">
+                            <Label htmlFor="tax_amount">VAT inside this credit</Label>
+                            <Input
+                                id="tax_amount"
+                                className="w-36"
+                                value={data.tax_amount}
+                                onChange={(e) => setData('tax_amount', e.target.value)}
+                            />
+                            <p className="text-muted-foreground text-xs">
+                                The VAT printed on the supplier&apos;s credit note. It is part of the amounts below, and comes back out of
+                                input VAT. Leave empty if the credit note shows none.
+                            </p>
+                            <InputError message={errors.tax_amount} />
+                        </div>
+                    )}
                     <div className="grid gap-2 md:col-span-2">
                         <Label htmlFor="note">Note</Label>
                         <textarea

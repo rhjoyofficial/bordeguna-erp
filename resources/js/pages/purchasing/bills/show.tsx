@@ -14,6 +14,8 @@ type Bill = {
     due_date: string | null;
     note: string | null;
     total: string;
+    tax_total: string;
+    tax_claimed: string;
     paid: string;
     credited: string;
     outstanding: string;
@@ -80,6 +82,12 @@ export default function BillShow({ bill, journals, can_reverse }: { bill: Bill; 
                         </div>
                     )}
                 </div>
+
+                {Number(bill.tax_total) > 0 && (
+                    <p className="text-muted-foreground text-sm">
+                        The total includes VAT of {bill.tax_total}, of which {bill.tax_claimed} is claimed as input VAT.
+                    </p>
+                )}
 
                 <div className="grid gap-4 sm:grid-cols-4">
                     {[

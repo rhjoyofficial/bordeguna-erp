@@ -19,6 +19,11 @@ class SupplierBillLine extends Model
         'quantity',
         'unit_cost',
         'line_total',
+        'tax_class_id',
+        'tax_rate',
+        'tax_amount',
+        'prices_include_tax',
+        'tax_recoverable',
     ];
 
     protected function casts(): array
@@ -27,6 +32,10 @@ class SupplierBillLine extends Model
             'quantity' => 'decimal:4',
             'unit_cost' => 'decimal:4',
             'line_total' => 'decimal:4',
+            'tax_rate' => 'decimal:4',
+            'tax_amount' => 'decimal:4',
+            'prices_include_tax' => 'boolean',
+            'tax_recoverable' => 'boolean',
         ];
     }
 

@@ -29,6 +29,7 @@ class SupplierCreditNote extends Model
         'credit_note_number',
         'credit_date',
         'total',
+        'tax_total',
         'note',
         'created_by',
     ];

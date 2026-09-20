@@ -35,13 +35,16 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const money = (value: number) => value.toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
-export default function RecordBill({ order }: { order: Order }) {
+export default function RecordBill({ order, vat }: { order: Order; vat: { applies: boolean } }) {
     const { data, setData, post, errors, processing } = useForm({
         purchase_order_id: order.id,
         bill_number: '',
         bill_date: new Date().toISOString().slice(0, 10),
         due_date: '',
         note: '',
+        // VAT plan D7. Sent always, read by the server only while VAT is on.
+        prices_include_tax: false as boolean,
+        tax_recoverable: true as boolean,
         lines: order.lines.map((line) => ({
             purchase_order_line_id: line.id,
             // Defaulted to what is still billable and to the AGREED price, so
@@ -117,6 +120,40 @@ export default function RecordBill({ order }: { order: Order }) {
                         <InputError message={errors.note} />
                     </div>
                 </div>
+
+                {vat.applies && (
+                    <div className="bg-muted/30 grid gap-4 rounded-lg border p-4 md:grid-cols-2">
+                        <div className="grid gap-1">
+                            <Label required>The costs on the supplier&apos;s bill</Label>
+                            <select
+                                className="border-input bg-background h-9 w-auto rounded-md border px-3 text-sm"
+                                value={data.prices_include_tax ? 'inclusive' : 'exclusive'}
+                                onChange={(e) => setData('prices_include_tax', e.target.value === 'inclusive')}
+                            >
+                                <option value="exclusive">have VAT added on top</option>
+                                <option value="inclusive">already include VAT</option>
+                            </select>
+                            <p className="text-muted-foreground text-xs">
+                                Type the unit cost exactly as the supplier printed it. VAT is worked out when the bill is saved.
+                            </p>
+                        </div>
+                        <div className="grid gap-1">
+                            <Label required>The VAT on this bill</Label>
+                            <select
+                                className="border-input bg-background h-9 w-auto rounded-md border px-3 text-sm"
+                                value={data.tax_recoverable ? 'yes' : 'no'}
+                                onChange={(e) => setData('tax_recoverable', e.target.value === 'yes')}
+                            >
+                                <option value="yes">can be claimed back (a proper VAT invoice)</option>
+                                <option value="no">cannot be claimed back</option>
+                            </select>
+                            <p className="text-muted-foreground text-xs">
+                                Claimed VAT goes to Input VAT and the goods are kept at their net cost. VAT that cannot be claimed becomes
+                                part of the cost of the goods.
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">

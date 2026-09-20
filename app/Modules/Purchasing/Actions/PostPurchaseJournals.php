@@ -153,8 +153,15 @@ class PostPurchaseJournals
         // standard cost, and nothing here revalues a batch or rewrites cost of
         // goods sold. The variance is the gap between what was agreed and what
         // was invoiced, and it is reported rather than absorbed.
+        // ⭐ VAT (plan D7). Claimable VAT is not a cost: it comes out of what is
+        // compared with the received value, and goes to Input VAT Receivable on
+        // a line of its own (C-VAT-6: never netted against output VAT in the
+        // ledger). VAT that may NOT be claimed stays in `total`, so it lands in
+        // the variance and therefore in the cost of the goods. Zero today.
+        $recoverableTax = $bill->recoverableTax();
+
         $received = $this->receivedValueOf($bill);
-        $variance = Money::ofMinor($total->minor - $received->minor);
+        $variance = Money::ofMinor($total->minor - $recoverableTax->minor - $received->minor);
 
         // ⚠ The party is the SUPPLIER, which is what turns one Accounts Payable
         // balance into a subsidiary ledger somebody can act on: "who do we owe"
@@ -171,6 +178,11 @@ class PostPurchaseJournals
                 $variance,
                 "Price variance on {$bill->bill_number}",
             );
+        }
+
+        if (! $recoverableTax->isZero()) {
+            $inputVat = AccountMapping::resolve('purchasing.input_vat', $on);
+            $lines[] = JournalLineDraft::debit($inputVat->id, $recoverableTax, 'VAT on '.$bill->bill_number, $bill->supplier);
         }
 
         $lines[] = JournalLineDraft::credit($payable->id, $total, $bill->bill_number, $bill->supplier);
@@ -354,10 +366,23 @@ class PostPurchaseJournals
             return null;
         }
 
+        // ⭐ VAT the supplier gives back is un-claimed: out of Input VAT
+        // Receivable, and only the goods part relieves GRNI. Zero today.
+        $tax = Money::ofTaka((string) $creditNote->tax_total);
+        $goods = Money::ofMinor($total->minor - $tax->minor);
+
         $lines = [
             JournalLineDraft::debit($payable->id, $total, $creditNote->credit_note_number, $creditNote->supplier),
-            JournalLineDraft::credit($grni->id, $total, $creditNote->credit_note_number),
         ];
+
+        if (! $goods->isZero()) {
+            $lines[] = JournalLineDraft::credit($grni->id, $goods, $creditNote->credit_note_number);
+        }
+
+        if (! $tax->isZero()) {
+            $inputVat = AccountMapping::resolve('purchasing.input_vat', $on);
+            $lines[] = JournalLineDraft::credit($inputVat->id, $tax, 'VAT on '.$creditNote->credit_note_number, $creditNote->supplier);
+        }
 
         $lines = LedgerRounding::balance($lines, $on, "Rounding on credit note {$creditNote->credit_note_number}");
 

@@ -128,4 +128,19 @@ class SupplierBill extends Model
     {
         return $this->outstanding()->minor <= 0;
     }
+
+    /**
+     * The VAT on this bill that may be claimed back (VAT plan D7): what goes to
+     * Input VAT Receivable. VAT on a line marked not recoverable is part of the
+     * cost of the goods and is not counted here. Zero on every untaxed bill.
+     */
+    public function recoverableTax(): Money
+    {
+        return $this->lines->reduce(
+            fn (Money $carry, SupplierBillLine $line) => $line->tax_recoverable
+                ? $carry->plus(Money::ofTaka((string) $line->tax_amount))
+                : $carry,
+            Money::zero(),
+        );
+    }
 }
