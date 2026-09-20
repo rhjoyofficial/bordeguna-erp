@@ -16,6 +16,8 @@ interface Invoice {
     invoice_discount: string;
     tax_total: string;
     total: string;
+    /** Frozen on the invoice. `taxed` is false for every invoice raised while VAT is off. */
+    vat: { taxed: boolean; bin: string | null; prices_include_tax: boolean; value_excluding_vat: string };
     note: string | null;
     customer: { name: string; code: string | null; address: string | null; phone: string | null; email: string | null } | null;
     lines: {
@@ -25,6 +27,8 @@ interface Invoice {
         unit_price: string;
         line_discount: string;
         line_net: string;
+        tax_rate: string;
+        tax_amount: string;
         product: { name: string; sku: string } | null;
     }[];
 }
@@ -165,6 +169,13 @@ export default function InvoicePrint({
                                         <td className="pr-4 text-black/55">Currency</td>
                                         <td>BDT (৳)</td>
                                     </tr>
+                                    {/* A tax invoice names the seller's registration. */}
+                                    {invoice.vat.taxed && invoice.vat.bin && (
+                                        <tr>
+                                            <td className="pr-4 text-black/55">Seller BIN</td>
+                                            <td className="font-medium">{invoice.vat.bin}</td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                             <span className={`mt-3 inline-block border px-3 py-1 text-xs tracking-widest uppercase ${status.tone}`}>
@@ -183,6 +194,12 @@ export default function InvoicePrint({
                                 <th className="w-24 border border-black/25 px-2 py-1 text-right font-medium">Rate</th>
                                 <th className="w-24 border border-black/25 px-2 py-1 text-right font-medium">Discount</th>
                                 <th className="w-28 border border-black/25 px-2 py-1 text-right font-medium">Amount</th>
+                                {invoice.vat.taxed && (
+                                    <>
+                                        <th className="w-14 border border-black/25 px-2 py-1 text-right font-medium">VAT %</th>
+                                        <th className="w-24 border border-black/25 px-2 py-1 text-right font-medium">VAT</th>
+                                    </>
+                                )}
                             </tr>
                         </thead>
                         <tbody>
@@ -202,6 +219,12 @@ export default function InvoicePrint({
                                     <td className="border border-black/25 px-2 py-1 text-right">{money(line.unit_price)}</td>
                                     <td className="border border-black/25 px-2 py-1 text-right">{money(line.line_discount)}</td>
                                     <td className="border border-black/25 px-2 py-1 text-right">{money(line.line_net)}</td>
+                                    {invoice.vat.taxed && (
+                                        <>
+                                            <td className="border border-black/25 px-2 py-1 text-right">{quantity(line.tax_rate)}</td>
+                                            <td className="border border-black/25 px-2 py-1 text-right">{money(line.tax_amount)}</td>
+                                        </>
+                                    )}
                                 </tr>
                             ))}
                         </tbody>
@@ -225,10 +248,16 @@ export default function InvoicePrint({
                                 invites a question with no good answer. When a business
                                 does register, this line appears on its own. */}
                             {Number(invoice.tax_total) > 0 && (
-                                <div className="flex justify-between py-1">
-                                    <dt className="text-black/55">VAT</dt>
-                                    <dd>{money(invoice.tax_total)}</dd>
-                                </div>
+                                <>
+                                    <div className="flex justify-between py-1">
+                                        <dt className="text-black/55">Value excluding VAT</dt>
+                                        <dd>{money(invoice.vat.value_excluding_vat)}</dd>
+                                    </div>
+                                    <div className="flex justify-between py-1">
+                                        <dt className="text-black/55">{invoice.vat.prices_include_tax ? 'VAT included in the prices' : 'VAT added'}</dt>
+                                        <dd>{money(invoice.tax_total)}</dd>
+                                    </div>
+                                </>
                             )}
                             <div className="mt-1 flex justify-between border-t-2 border-black/70 py-2 text-base font-semibold">
                                 <dt>Total</dt>

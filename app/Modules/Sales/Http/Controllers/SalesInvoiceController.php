@@ -8,7 +8,9 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Foundation\Support\DocumentMoney;
 use App\Modules\Foundation\Support\PrintableDocument;
@@ -26,6 +28,7 @@ use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\AmountInWords;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -181,7 +184,30 @@ class SalesInvoiceController extends Controller
             'billable' => $billable,
             'agreed_order_discounts' => $agreedOrderDiscounts ?? [],
             'agreed_delivery_charges' => $agreedDeliveryCharges ?? [],
+            'vat' => $this->vatFor($customerId),
         ]);
+    }
+
+    /**
+     * What the invoice screen needs to offer the VAT choice (VAT plan D2).
+     *
+     * `applies` is false for every business today, and the screen then shows
+     * nothing at all. When VAT is on, the starting answer is the selected
+     * customer's price group, then the business; the clerk may change it for
+     * this one invoice, and the saved invoice freezes whichever was used.
+     *
+     * @return array{applies: bool, default_inclusive: bool, bin: ?string}
+     */
+    private function vatFor(?int $customerId): array
+    {
+        $business = Business::query()->find(app(BusinessContext::class)->id());
+        $group = $customerId === null ? null : Customer::query()->with('priceGroup')->find($customerId)?->priceGroup;
+
+        return [
+            'applies' => $business?->vatAppliesOn(Carbon::today()) ?? false,
+            'default_inclusive' => (bool) ($group?->prices_include_tax ?? $business?->prices_include_tax ?? false),
+            'bin' => $business?->vat_bin,
+        ];
     }
 
     public function store(Request $request, RecordSalesInvoice $action, ResolveSellingPrice $resolver): RedirectResponse
@@ -192,6 +218,8 @@ class SalesInvoiceController extends Controller
             'due_date' => ['nullable', 'date'],
             'invoice_discount' => ['nullable', 'numeric', 'min:0'],
             'note' => ['nullable', 'string'],
+            // Null = take the customer's price group, then the business.
+            'prices_include_tax' => ['nullable', 'boolean'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.delivery_line_id' => ['nullable', 'integer', 'exists:delivery_lines,id'],
             'lines.*.description' => ['nullable', 'string', 'max:255'],
@@ -270,6 +298,7 @@ class SalesInvoiceController extends Controller
                 invoiceDiscount: (string) ($data['invoice_discount'] ?? '0'),
                 dueDate: $data['due_date'] ?? null,
                 note: $data['note'] ?? null,
+                pricesIncludeTax: isset($data['prices_include_tax']) ? (bool) $data['prices_include_tax'] : null,
             );
         } catch (NoSellingPriceException $e) {
             // ⚠ C-SLS-E1. The message names the product and the date it looked on.
@@ -371,6 +400,17 @@ class SalesInvoiceController extends Controller
                 'invoice_discount' => (string) $invoice->invoice_discount,
                 'tax_total' => (string) $invoice->tax_total,
                 'total' => (string) $invoice->total,
+                // ⭐ What a tax invoice must say (VAT plan D10): the seller's BIN,
+                // the value excluding VAT, the rate and the VAT per line, and
+                // whether the prices shown already contained the VAT. All read
+                // from what was FROZEN on the invoice, never from today's
+                // settings, so a reprint years later says what it said.
+                'vat' => [
+                    'taxed' => $invoice->taxTotal()->minor > 0,
+                    'bin' => Business::query()->whereKey($invoice->business_id)->value('vat_bin'),
+                    'prices_include_tax' => (bool) $invoice->prices_include_tax,
+                    'value_excluding_vat' => Money::ofMinor(Money::ofTaka((string) $invoice->total)->minor - $invoice->taxTotal()->minor)->toTaka(),
+                ],
                 'note' => $invoice->note,
                 'customer' => $invoice->customer === null ? null : [
                     'name' => $invoice->customer->name,
@@ -386,6 +426,8 @@ class SalesInvoiceController extends Controller
                     'unit_price' => (string) $line->unit_price,
                     'line_discount' => (string) $line->line_discount,
                     'line_net' => (string) $line->line_net,
+                    'tax_rate' => (string) $line->tax_rate,
+                    'tax_amount' => (string) $line->tax_amount,
                     'product' => $line->product === null ? null : [
                         'name' => $line->product->name,
                         'sku' => $line->product->sku,

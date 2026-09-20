@@ -45,6 +45,7 @@ export default function InvoiceCreate({
     billable,
     agreed_order_discounts,
     agreed_delivery_charges,
+    vat,
 }: {
     customers: { id: number; name: string }[];
     customerId: number | null;
@@ -55,12 +56,15 @@ export default function InvoiceCreate({
     // The delivery charge each website order agreed, not yet billed. The server
     // adds it as its own line on the first invoice billing that order's goods.
     agreed_delivery_charges: { order_number: string; amount: string }[];
+    // VAT plan D2. `applies` is false while VAT is off, and nothing is shown.
+    vat: { applies: boolean; default_inclusive: boolean; bin: string | null };
 }) {
     const { data, setData, post, errors, processing } = useForm<{
         customer_id: string;
         invoice_date: string;
         due_date: string;
         invoice_discount: string;
+        prices_include_tax: boolean;
         note: string;
         lines: LineDraft[];
     }>({
@@ -68,6 +72,7 @@ export default function InvoiceCreate({
         invoice_date: '',
         due_date: '',
         invoice_discount: '',
+        prices_include_tax: vat.default_inclusive,
         note: '',
         // Every billable line starts included at its full uninvoiced quantity
         // and its server-supplied price. Set a quantity to 0 to leave it off.
@@ -226,6 +231,25 @@ export default function InvoiceCreate({
                                 <Label>Due date (optional)</Label>
                                 <Input type="date" value={data.due_date} onChange={(e) => setData('due_date', e.target.value)} />
                             </div>
+                            {vat.applies && (
+                                <div className="grid gap-2">
+                                    <Label required>The prices on this invoice</Label>
+                                    <select
+                                        className="border-input bg-background h-9 w-auto rounded-md border px-3 text-sm"
+                                        value={data.prices_include_tax ? 'inclusive' : 'exclusive'}
+                                        onChange={(e) => setData('prices_include_tax', e.target.value === 'inclusive')}
+                                    >
+                                        <option value="inclusive">already include VAT</option>
+                                        <option value="exclusive">have VAT added on top</option>
+                                    </select>
+                                    <p className="text-muted-foreground text-xs">
+                                        {data.prices_include_tax
+                                            ? 'The customer pays exactly the total shown here. The VAT inside it is worked out when the invoice is saved.'
+                                            : 'VAT is added to the total shown here when the invoice is saved, and the customer pays the larger figure.'}
+                                    </p>
+                                    <InputError message={errors.prices_include_tax} />
+                                </div>
+                            )}
                             <div className="grid gap-2">
                                 <Label>Whole-invoice discount (optional)</Label>
                                 <Input value={data.invoice_discount} onChange={(e) => setData('invoice_discount', e.target.value)} />

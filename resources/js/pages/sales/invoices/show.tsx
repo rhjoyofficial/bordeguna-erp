@@ -150,6 +150,13 @@ export default function InvoiceShow({
                             <span className="text-muted-foreground">Discount on the bill</span>
                             <span className="tabular-nums">{invoice.invoice_discount}</span>
                         </div>
+                        {/* Shown only on a taxed invoice; every invoice raised while VAT is off has none. */}
+                        {Number(invoice.tax_total) > 0 && (
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">VAT</span>
+                                <span className="tabular-nums">{invoice.tax_total}</span>
+                            </div>
+                        )}
                         <div className="flex justify-between font-semibold">
                             <span>Total</span>
                             <span className="tabular-nums">{invoice.total}</span>
