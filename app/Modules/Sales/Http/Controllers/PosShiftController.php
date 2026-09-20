@@ -3,10 +3,13 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Sales\Actions\PostTillOverShort;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -120,7 +123,7 @@ class PosShiftController extends Controller
         return back()->with('success', 'Movement recorded.');
     }
 
-    public function close(Request $request, int $shift): RedirectResponse
+    public function close(Request $request, int $shift, PostTillOverShort $postOverShort): RedirectResponse
     {
         $this->authorize('sales.sell');
 
@@ -149,7 +152,28 @@ class PosShiftController extends Controller
         $verdict = $overShort === 0.0 ? 'exactly balanced'
             : ($overShort > 0 ? number_format($overShort, 2).' over' : number_format(-$overShort, 2).' short');
 
-        return back()->with('success', 'Shift closed: '.$verdict.'. Book any difference as its own adjustment.');
+        // ⭐ The difference is BOOKED, not left for somebody to remember
+        // (accountant meeting 19 Sep 2026, F5). The shift is already closed
+        // above: a closed month or missing setup must never undo a day's close,
+        // so a refusal here is reported and the shift stays closed.
+        $booked = '';
+
+        try {
+            $till = MoneyAccount::query()->find($row->money_account_id);
+            $journal = $till === null ? null : $postOverShort->handle(
+                $till, Money::ofTaka(number_format($overShort, 2, '.', '')), $shift, Carbon::today(), $request->user(),
+            );
+
+            if ($journal !== null) {
+                DB::table('pos_shifts')->where('id', $shift)->update(['over_short_journal_id' => $journal->id]);
+                $booked = ' The difference is booked to Cash Over and Short.';
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            $booked = ' The difference could NOT be booked ('.$e->getMessage().'); record it with a journal voucher.';
+        }
+
+        return back()->with('success', 'Shift closed: '.$verdict.'.'.$booked);
     }
 
     /** Float + cash into the till during the shift + movements in - out. */

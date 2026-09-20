@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -136,4 +137,33 @@ it('shows the shift screen with the running expectation, and keeps outsiders off
     test()->actingAs(test()->bystander)->withSession(['current_business_id' => test()->business->id])
         ->get(route('sales.shifts'))
         ->assertForbidden();
+});
+
+// ─── Accountant meeting 19 Sep 2026, F5: the difference is booked ─────────────
+
+it('books a short till to Cash Over and Short when the shift closes', function () {
+    $loss = Account::create([
+        'code' => '6812', 'name' => 'Cash Over and Short', 'type' => 'expense', 'is_postable' => true, 'system_slug' => 'cash_over_short',
+    ]);
+    AccountMapping::assign('sales.cash_over_short', $loss, now()->parse('2000-01-01'), 'test');
+
+    $shift = openShift(2000);
+    asCashier()->post(route('sales.shifts.close', $shift), ['closing_count' => 1950])->assertSessionHasNoErrors();
+
+    $closed = DB::table('pos_shifts')->find($shift);
+    $lines = DB::table('journal_lines')->where('journal_id', $closed->over_short_journal_id)->pluck('amount_minor', 'account_id');
+
+    // 50 short: the expense is debited and the till is credited.
+    expect($closed->over_short_journal_id)->not->toBeNull()
+        ->and((int) $lines[$loss->id])->toBe(5000)
+        ->and((int) $lines[$this->till->account_id])->toBe(-5000);
+});
+
+it('still closes the shift when the books are not set up to take the difference', function () {
+    $shift = openShift(2000);
+    asCashier()->post(route('sales.shifts.close', $shift), ['closing_count' => 1950])->assertSessionHasNoErrors();
+
+    $closed = DB::table('pos_shifts')->find($shift);
+
+    expect($closed->status)->toBe('closed')->and($closed->over_short_journal_id)->toBeNull();
 });

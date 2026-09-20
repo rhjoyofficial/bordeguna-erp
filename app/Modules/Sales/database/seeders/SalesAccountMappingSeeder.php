@@ -65,6 +65,9 @@ class SalesAccountMappingSeeder extends Seeder
         // What an online payment gateway keeps from each payment (14 September):
         // the gross the customer paid less the `store_amount` it settles.
         'sales.gateway_fees' => 'payment_gateway_charge',
+
+        // The counted-versus-expected difference of a cashier shift.
+        'sales.cash_over_short' => 'cash_over_short',
     ];
 
     public function run(): void

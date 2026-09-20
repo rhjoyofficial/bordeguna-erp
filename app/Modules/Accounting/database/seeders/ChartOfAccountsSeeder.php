@@ -392,6 +392,9 @@ class ChartOfAccountsSeeder extends Seeder
         ['6710', 'Depreciation', AccountType::Expense, '6700', true, 'depreciation_expense'],
         ['6800', 'System Accounts', AccountType::Expense, '6000', false, null],
         ['6810', 'Rounding Differences', AccountType::Expense, '6800', true, 'rounding_difference'],
+        // What a till was over or short by when its shift was counted and closed
+        // (accountant meeting 19 Sep 2026, F5). A debit is cash that went missing.
+        ['6812', 'Cash Over and Short', AccountType::Expense, '6800', true, 'cash_over_short'],
     ];
 
     public function run(): void
