@@ -529,6 +529,9 @@ export function AppSidebar() {
                           { title: 'Accruals & prepayments', url: '/accounting/amortizations', icon: CalendarClock },
                           { title: 'Payment reminders', url: '/accounting/dunning', icon: BellRing },
                           { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },
+                          // The VAT switch, the BIN and the rates (Owner only;
+                          // the route refuses anyone else).
+                          { title: 'VAT settings', url: '/accounting/vat-settings', icon: Percent },
                           // ⚠⚠ Directly under the screen that NAMES the accounts,
                           // because this is the only way to move money between
                           // them. Five accounts existed with no transfer document

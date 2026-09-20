@@ -25,6 +25,7 @@ use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
+use App\Modules\Accounting\Http\Controllers\VatSettingsController;
 use App\Modules\Accounting\Http\Controllers\VoucherController;
 use Illuminate\Support\Facades\Route;
 
@@ -135,6 +136,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
 
         // ⚠ No delete route. A money account is deactivated, never removed:
         // a payment made in August must still be nameable in December.
+        // ⭐ VAT settings: the switch, the BIN, the rates (VAT plan T1).
+        // Owner only, like the chart: it changes what every invoice charges.
+        Route::get('vat-settings', [VatSettingsController::class, 'index'])->name('vat-settings.index');
+        Route::put('vat-settings', [VatSettingsController::class, 'update'])->name('vat-settings.update');
+        Route::post('vat-settings/rates', [VatSettingsController::class, 'storeRate'])->name('vat-settings.rates.store');
+
         Route::post('money-accounts', [MoneyAccountController::class, 'store'])->name('money-accounts.store');
         Route::put('money-accounts/{moneyAccount}', [MoneyAccountController::class, 'update'])->name('money-accounts.update');
     });
