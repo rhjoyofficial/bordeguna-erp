@@ -25,6 +25,7 @@ use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
+use App\Modules\Accounting\Http\Controllers\VatReturnController;
 use App\Modules\Accounting\Http\Controllers\VatSettingsController;
 use App\Modules\Accounting\Http\Controllers\VoucherController;
 use Illuminate\Support\Facades\Route;
@@ -81,6 +82,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::post('period-close/unlock', [AccountingPeriodController::class, 'unlock'])->name('period-close.unlock');
         // Every journal of every module, in posting order. Same reading
         // permission as the journals it lists.
+        // ⭐ VAT return (VAT plan T5): the registers and the period's position.
+        // Reading is for anyone who sees the books; filing is below, Owner only.
+        Route::get('vat-return', [VatReturnController::class, 'index'])->name('vat-return.index');
+        Route::get('vat-return/export', [VatReturnController::class, 'export'])->name('vat-return.export');
         Route::get('day-book', [DayBookController::class, 'index'])->name('day-book');
         Route::get('day-book/export', [DayBookController::class, 'export'])->name('day-book.export');
         Route::get('journals', [JournalController::class, 'index'])->name('journals.index');
@@ -138,6 +143,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // a payment made in August must still be nameable in December.
         // ⭐ VAT settings: the switch, the BIN, the rates (VAT plan T1).
         // Owner only, like the chart: it changes what every invoice charges.
+        Route::post('vat-return', [VatReturnController::class, 'store'])->name('vat-return.store');
         Route::get('vat-settings', [VatSettingsController::class, 'index'])->name('vat-settings.index');
         Route::put('vat-settings', [VatSettingsController::class, 'update'])->name('vat-settings.update');
         Route::post('vat-settings/rates', [VatSettingsController::class, 'storeRate'])->name('vat-settings.rates.store');

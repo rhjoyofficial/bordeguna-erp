@@ -375,6 +375,9 @@ class ChartOfAccountsSeeder extends Seeder
         ['6508', 'Legal Fee', AccountType::Expense, '6500', true, null],
         ['6509', 'Government Fee', AccountType::Expense, '6500', true, null],
         ['6510', 'Other Regulatory', AccountType::Expense, '6500', true, null],
+        // The turnover-tax regime's charge for a period (VAT plan D5). A cost of
+        // the seller, never a line on an invoice, so it is an expense.
+        ['6511', 'Turnover Tax', AccountType::Expense, '6500', true, 'turnover_tax'],
         ['6550', 'Repair and Maintenance', AccountType::Expense, '6000', false, null],
         ['6551', 'Computer and IT Repair', AccountType::Expense, '6550', true, null],
         ['6552', 'Printer Repair', AccountType::Expense, '6550', true, null],

@@ -531,6 +531,7 @@ export function AppSidebar() {
                           { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },
                           // The VAT switch, the BIN and the rates (Owner only;
                           // the route refuses anyone else).
+                          { title: 'VAT return', url: '/accounting/vat-return', icon: Percent },
                           { title: 'VAT settings', url: '/accounting/vat-settings', icon: Percent },
                           // ⚠⚠ Directly under the screen that NAMES the accounts,
                           // because this is the only way to move money between

@@ -30,6 +30,7 @@ class TaxAccountMappingSeeder extends Seeder
         'sales.output_vat' => 'output_vat_payable',
         'purchasing.input_vat' => 'input_vat_receivable',
         'accounting.vat_settlement' => 'vat_settlement',
+        'accounting.turnover_tax_expense' => 'turnover_tax',
     ];
 
     public function run(): void
