@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Models\TaxClass;
 use App\Modules\Accounting\Models\TaxRate;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
@@ -18,6 +19,7 @@ use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
+use App\Modules\Sales\Actions\RecordSalesReturn;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
@@ -247,4 +249,101 @@ it('refuses to invoice when VAT is on and no standard rate was ever set', functi
     expect(fn () => ($this->invoice)([['deliveryLine' => $lines[0], 'quantity' => '10', 'unitPrice' => '1000']]))
         ->toThrow(ValidationException::class);
     expect(SalesInvoice::count())->toBe(0);
+});
+
+// ─── Returns: the credit note gives the VAT back (plan D6) ──────────────────
+
+function returnOf($delivery, string $quantity)
+{
+    return app(RecordSalesReturn::class)->handle(
+        delivery: $delivery,
+        lines: [['deliveryLine' => $delivery->lines->first(), 'quantityToStock' => $quantity, 'quantityWrittenOff' => '0']],
+        createdBy: test()->user,
+    );
+}
+
+function postedFor($document): array
+{
+    $journal = Journal::where('source_type', $document->getMorphClass())->where('source_id', $document->id)->sole();
+    $byCode = [];
+
+    foreach (JournalLine::where('journal_id', $journal->id)->get() as $line) {
+        $code = Account::find($line->account_id)->code;
+        $byCode[$code] = ($byCode[$code] ?? 0) + $line->amount_minor;
+    }
+
+    expect(array_sum($byCode))->toBe(0);
+
+    return $byCode;
+}
+
+it('gives back the VAT that was added on top, when the goods come back', function () {
+    ($this->vatOn)();
+    $lines = ($this->delivered)([[$this->honey, '10']]);
+    ($this->invoice)([['deliveryLine' => $lines[0], 'quantity' => '10', 'unitPrice' => '1000']], '0', false);
+
+    $return = returnOf($lines[0]->delivery, '4');
+    $posted = postedFor($return);
+
+    // 4 of 10 back: 4,000 of sales and 600 of VAT, so the customer is owed 4,600.
+    expect((float) $return->credit_total)->toBe(4600.0)
+        ->and((float) $return->tax_total)->toBe(600.0)
+        ->and($posted['4200'])->toBe(400000)
+        ->and($posted['2170'])->toBe(60000)
+        ->and($posted['1140'])->toBe(-460000);
+});
+
+it('gives back the VAT inside an inclusive price, and credits exactly what was paid', function () {
+    ($this->vatOn)();
+    $lines = ($this->delivered)([[$this->honey, '10']]);
+    ($this->invoice)([['deliveryLine' => $lines[0], 'quantity' => '10', 'unitPrice' => '1150']], '1150', true);
+
+    $return = returnOf($lines[0]->delivery, '10');
+    $posted = postedFor($return);
+
+    // The whole invoice back: the customer paid 10,350, of which 1,350 was VAT.
+    expect((float) $return->credit_total)->toBe(10350.0)
+        ->and((float) $return->tax_total)->toBe(1350.0)
+        ->and($posted['4200'])->toBe(1000000)
+        ->and($posted['4210'])->toBe(-100000)
+        ->and($posted['2170'])->toBe(135000)
+        ->and($posted['1140'])->toBe(-1035000);
+});
+
+it('strands no VAT when a line comes back in two parts', function () {
+    ($this->vatOn)();
+    $lines = ($this->delivered)([[$this->honey, '3']]);
+    // 3 x 333.33 = 999.99; VAT 150.00 (149.9985 rounded).
+    $invoice = ($this->invoice)([['deliveryLine' => $lines[0], 'quantity' => '3', 'unitPrice' => '333.33']], '0', false);
+
+    $first = returnOf($lines[0]->delivery, '1');
+    $second = returnOf($lines[0]->delivery->fresh('lines'), '2');
+
+    expect(Money::ofTaka((string) $first->tax_total)->minor + Money::ofTaka((string) $second->tax_total)->minor)
+        ->toBe(Money::ofTaka((string) $invoice->tax_total)->minor);
+    postedFor($first);
+    postedFor($second);
+});
+
+it('gives back the ORIGINAL rate even after the rate has changed', function () {
+    ($this->vatOn)();
+    $lines = ($this->delivered)([[$this->honey, '10']]);
+    ($this->invoice)([['deliveryLine' => $lines[0], 'quantity' => '10', 'unitPrice' => '1000']], '0', false);
+
+    TaxRate::create([
+        'business_id' => $this->business->id, 'tax_class_id' => $this->standard->id,
+        'rate' => '5', 'effective_from' => '2026-10-05',
+    ]);
+
+    expect((float) returnOf($lines[0]->delivery, '10')->tax_total)->toBe(1500.0);
+});
+
+it('gives back no VAT on goods that were invoiced without any', function () {
+    $lines = ($this->delivered)([[$this->honey, '10']]);
+    ($this->invoice)([['deliveryLine' => $lines[0], 'quantity' => '10', 'unitPrice' => '1000']]);
+    ($this->vatOn)();
+
+    $return = returnOf($lines[0]->delivery, '10');
+
+    expect((float) $return->tax_total)->toBe(0.0)->and(postedFor($return))->not->toHaveKey('2170');
 });

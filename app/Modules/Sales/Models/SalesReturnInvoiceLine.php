@@ -27,6 +27,8 @@ class SalesReturnInvoiceLine extends Model
         'gross',
         'discount',
         'net',
+        'tax',
+        'tax_on_discount',
     ];
 
     protected function casts(): array

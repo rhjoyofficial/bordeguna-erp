@@ -313,8 +313,15 @@ class PostSalesJournals
         $creditGross = Money::zero();
         $creditDiscount = Money::zero();
         $creditNet = Money::zero();
+        // ⭐ VAT (plan D6). All three are zero on a return of untaxed goods.
+        $taxBack = Money::zero();
+        $taxInsideGross = Money::zero();
+        $taxOnDiscount = Money::zero();
 
         foreach ($salesReturn->lines as $line) {
+            $taxBack = $taxBack->plus(Money::ofTaka((string) $line->tax_amount));
+            $taxInsideGross = $taxInsideGross->plus(Money::ofTaka((string) $line->tax_inside_gross));
+            $taxOnDiscount = $taxOnDiscount->plus(Money::ofTaka((string) $line->tax_on_discount));
             $costRestored = $costRestored->plus(Money::ofTaka((string) $line->cost_restored));
             $costWrittenOff = $costWrittenOff->plus(Money::ofTaka((string) $line->cost_written_off));
             $gdniRelief = $gdniRelief->plus(Money::ofTaka((string) $line->gdni_relief));
@@ -336,9 +343,20 @@ class PostSalesJournals
             $lines[] = JournalLineDraft::debit($loss->id, $costWrittenOff, 'Written off on '.$salesReturn->return_number);
         }
 
-        if (! $creditGross->isZero()) {
+        // ⚠ Sales Returns and the discount clawed back are posted NET of VAT,
+        // exactly as the invoice posted revenue and the discount net of VAT. The
+        // VAT itself comes back out of Output VAT Payable below.
+        $returnsExTax = Money::ofMinor($creditGross->minor - $taxInsideGross->minor);
+        $creditDiscount = Money::ofMinor($creditDiscount->minor - $taxOnDiscount->minor);
+
+        if (! $returnsExTax->isZero()) {
             $returns = AccountMapping::resolve('sales.sales_returns', $on);
-            $lines[] = JournalLineDraft::debit($returns->id, $creditGross, $salesReturn->return_number);
+            $lines[] = JournalLineDraft::debit($returns->id, $returnsExTax, $salesReturn->return_number);
+        }
+
+        if (! $taxBack->isZero()) {
+            $outputVat = AccountMapping::resolve('sales.output_vat', $on);
+            $lines[] = JournalLineDraft::debit($outputVat->id, $taxBack, 'VAT given back on '.$salesReturn->return_number, $salesReturn->customer);
         }
 
         if (! $gdniRelief->isZero()) {

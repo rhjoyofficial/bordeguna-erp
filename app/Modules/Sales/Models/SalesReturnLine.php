@@ -29,6 +29,10 @@ class SalesReturnLine extends Model
         'credit_gross',
         'credit_discount',
         'credit_net',
+        'tax_rate',
+        'tax_amount',
+        'tax_inside_gross',
+        'tax_on_discount',
     ];
 
     protected function casts(): array

@@ -95,6 +95,7 @@ class RecordSalesReturn
             ]);
 
             $creditTotal = Money::zero();
+            $taxTotal = Money::zero();
             /** @var array<int, Money> $creditByInvoice keyed by invoice id */
             $creditByInvoice = [];
 
@@ -163,7 +164,7 @@ class RecordSalesReturn
                     $costRestored->minor + $costWrittenOff->minor - $gdniRelief->minor,
                 );
 
-                [$creditGross, $creditDiscount, $creditNet] = $this->creditInvoicedPortion($returnLine, $line, $invoiced, $creditByInvoice);
+                [$creditGross, $creditDiscount, $creditNet, $creditTax, $taxInsideGross, $taxOnDiscount] = $this->creditInvoicedPortion($returnLine, $line, $invoiced, $creditByInvoice);
 
                 $returnLine->forceFill([
                     'gdni_relief' => $gdniRelief->toTaka(),
@@ -173,9 +174,13 @@ class RecordSalesReturn
                     'credit_gross' => $creditGross->toTaka(),
                     'credit_discount' => $creditDiscount->toTaka(),
                     'credit_net' => $creditNet->toTaka(),
+                    'tax_amount' => $creditTax->toTaka(),
+                    'tax_inside_gross' => $taxInsideGross->toTaka(),
+                    'tax_on_discount' => $taxOnDiscount->toTaka(),
                 ])->save();
 
                 $creditTotal = $creditTotal->plus($creditNet);
+                $taxTotal = $taxTotal->plus($creditTax);
 
                 $line->forceFill([
                     'quantity_returned' => number_format(
@@ -187,7 +192,7 @@ class RecordSalesReturn
                 ])->save();
             }
 
-            $return->forceFill(['credit_total' => $creditTotal->toTaka()])->save();
+            $return->forceFill(['credit_total' => $creditTotal->toTaka(), 'tax_total' => $taxTotal->toTaka()])->save();
 
             $this->allocateCredit($return, $creditByInvoice);
 
@@ -373,8 +378,13 @@ class RecordSalesReturn
      * pro-rated share of any invoice-level discount, remainder discipline
      * per invoice line so a fully returned line credits its net exactly.
      *
+     * ⭐ VAT (plan D6): the return gives back the VAT the ORIGINAL line was
+     * charged, pro rata, last portion taking what is left. `net` is what the
+     * customer is credited, so where VAT was added on top it includes the VAT;
+     * where the price contained it, `gross` already does.
+     *
      * @param  array<int, Money>  $creditByInvoice
-     * @return array{0: Money, 1: Money, 2: Money} [gross, discount, net]
+     * @return array{0: Money, 1: Money, 2: Money, 3: Money, 4: Money, 5: Money} [gross, discount, net, tax, taxInsideGross, taxOnDiscount]
      */
     private function creditInvoicedPortion(
         SalesReturnLine $returnLine,
@@ -385,9 +395,12 @@ class RecordSalesReturn
         $gross = Money::zero();
         $discount = Money::zero();
         $net = Money::zero();
+        $tax = Money::zero();
+        $taxInsideGross = Money::zero();
+        $taxOnDiscount = Money::zero();
 
         if ($invoiced <= 0) {
-            return [$gross, $discount, $net];
+            return [$gross, $discount, $net, $tax, $taxInsideGross, $taxOnDiscount];
         }
 
         $invoiceLines = SalesInvoiceLine::query()
@@ -405,7 +418,7 @@ class RecordSalesReturn
 
             $already = SalesReturnInvoiceLine::query()
                 ->where('sales_invoice_line_id', $invoiceLine->id)
-                ->selectRaw('COALESCE(SUM(quantity), 0) as qty, COALESCE(SUM(gross), 0) as gross, COALESCE(SUM(discount), 0) as discount')
+                ->selectRaw('COALESCE(SUM(quantity), 0) as qty, COALESCE(SUM(gross), 0) as gross, COALESCE(SUM(discount), 0) as discount, COALESCE(SUM(tax), 0) as tax, COALESCE(SUM(tax_on_discount), 0) as tax_on_discount')
                 ->first();
 
             $lineQuantity = $this->scale((string) $invoiceLine->quantity);
@@ -432,17 +445,29 @@ class RecordSalesReturn
                 ? (int) round($invoiceDiscount->minor * $lineNet->minor / $subtotal->minor)
                 : 0;
 
+            // The VAT frozen onto the invoice line, and the VAT inside its
+            // discount share. Both zero on anything invoiced without VAT.
+            $lineTax = Money::ofTaka((string) $invoiceLine->tax_amount);
+            $lineTaxOnDiscount = Money::ofTaka((string) $invoiceLine->tax_on_discount);
+
             if ($take >= $available) {
                 // Remainder discipline: the last portion takes what is LEFT of
                 // the line's net and discount share, so nothing strands.
                 $takeGross = Money::ofMinor($lineNet->minor - Money::ofTaka((string) $already->gross)->minor);
                 $takeDiscount = Money::ofMinor($lineDiscountShare - Money::ofTaka((string) $already->discount)->minor);
+                $takeTax = Money::ofMinor($lineTax->minor - Money::ofTaka((string) $already->tax)->minor);
+                $takeTaxOnDiscount = Money::ofMinor($lineTaxOnDiscount->minor - Money::ofTaka((string) $already->tax_on_discount)->minor);
             } else {
                 $takeGross = Money::ofMinor((int) round($lineNet->minor * $take / $lineQuantity));
                 $takeDiscount = Money::ofMinor((int) round($lineDiscountShare * $take / $lineQuantity));
+                $takeTax = Money::ofMinor((int) round($lineTax->minor * $take / $lineQuantity));
+                $takeTaxOnDiscount = Money::ofMinor((int) round($lineTaxOnDiscount->minor * $take / $lineQuantity));
             }
 
-            $takeNet = Money::ofMinor($takeGross->minor - $takeDiscount->minor);
+            // ⚠ Added on top of an exclusive price, so the customer is owed it
+            // back on top; an inclusive price already holds it inside `gross`.
+            $inclusive = (bool) $invoiceLine->prices_include_tax;
+            $takeNet = Money::ofMinor($takeGross->minor - $takeDiscount->minor + ($inclusive ? 0 : $takeTax->minor));
 
             $returnLine->invoiceLineCredits()->create([
                 'business_id' => $returnLine->business_id,
@@ -451,6 +476,8 @@ class RecordSalesReturn
                 'gross' => $takeGross->toTaka(),
                 'discount' => $takeDiscount->toTaka(),
                 'net' => $takeNet->toTaka(),
+                'tax' => $takeTax->toTaka(),
+                'tax_on_discount' => $takeTaxOnDiscount->toTaka(),
             ]);
 
             $creditByInvoice[$invoice->id] = ($creditByInvoice[$invoice->id] ?? Money::zero())->plus($takeNet);
@@ -458,6 +485,13 @@ class RecordSalesReturn
             $gross = $gross->plus($takeGross);
             $discount = $discount->plus($takeDiscount);
             $net = $net->plus($takeNet);
+            $tax = $tax->plus($takeTax);
+            $taxOnDiscount = $taxOnDiscount->plus($takeTaxOnDiscount);
+
+            if ($inclusive) {
+                $taxInsideGross = $taxInsideGross->plus($takeTax)->plus($takeTaxOnDiscount);
+            }
+
             $remaining -= $take;
         }
 
@@ -470,7 +504,7 @@ class RecordSalesReturn
             ]);
         }
 
-        return [$gross, $discount, $net];
+        return [$gross, $discount, $net, $tax, $taxInsideGross, $taxOnDiscount];
     }
 
     /**
