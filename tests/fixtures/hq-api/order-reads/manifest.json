@@ -1,0 +1,20 @@
+{
+    "contract": "hq-order-reads.v1",
+    "origin": "bordeguna-erp tests/Feature/HqApi/HqOrderReadTest.php",
+    "canonical": "sha256 of json_encode(json_decode(file), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION)",
+    "files": {
+        "availability": "1c4a6b3467cca9a4057c4b3c69d79478edfc72ba10b28913d55bf140961a479c",
+        "availability-store": "392e99d3ee874e09a8c692750e519630c05380681a4128a75b27a170c4d1fce1",
+        "eligibility": "d9b792dd35c19b8912bbb76b95a63c5f2642052afc38ee40beb4743abaef805d",
+        "eligibility-none": "e69725e8ee5ee980681704ac8d79dc9269f98137b25b156504e7812745c685a8",
+        "forbidden": "cd8443f82184f93e655a481727b38bc42e8308fc58ce0cac08cbae7e36d18ca4",
+        "price-customer": "4a62eaa444dc2490ddd600a083bd37dd7d13d758f9f16e3b274d25a1778cc90b",
+        "price-nobody": "23087dd69efb3f8f36c1fa2750429f398fbc4e00812cc8c93014aa46d14d4b15",
+        "price-none": "19ec2274e8a6a45947bd48bdced5e6683f3a39bf5fb2d4417b6f9280a687fdb4",
+        "price-store": "b9da390206b38ea3b259781ab65dabc36897b55475a6f87efb24b5fbd6250e15",
+        "products": "eccf3c2cd93ae02d06a0b7afe69553c0b902b7eae6f262fb479aa78e19ee4e9d",
+        "sku": "6b8b8a7b5b4a5ef227386e8ba23d44bdbd852bfed2d3e86280de08a63d49a224",
+        "sku-not-found": "d1dbc2d2108c5dd46be9a7c2356b5f18457f8b1d5849350b49083651030bb105"
+    },
+    "contract_digest": "e646da534fe9549ec5bf72a845e537bc1437072b693c2c367c6e33a022289b22"
+}

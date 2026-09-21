@@ -1,0 +1,35 @@
+{
+    "data": {
+        "sku": "HON-500",
+        "product_id": 1,
+        "unit_price": "780.0000",
+        "currency": "BDT",
+        "basis": "selling_price",
+        "quantity": "1",
+        "on": "2026-09-21",
+        "priced_as": "customer",
+        "store": null,
+        "mrp": null,
+        "mrp_note": "The ERP keeps no MRP on a product or in the price list. A production batch may carry the MRP printed on its label, which prices nothing.",
+        "price_source": {
+            "rule_id": 4,
+            "tier": "customer",
+            "price_group": null,
+            "customer_specific": true,
+            "min_quantity": "0.0000",
+            "effective_from": "2026-06-01",
+            "effective_to": null,
+            "is_discount": false,
+            "discount_label": null,
+            "explanation": "Agreed price for this customer"
+        },
+        "promotions_applied_to_sales_orders": [],
+        "promotions_note": "Buy X Get Y promotions are applied only by a counter sale. A sales order carries none.",
+        "tier_note": null
+    },
+    "meta": {
+        "business_id": 1,
+        "contract": "hq-order-reads.v1",
+        "as_of": "2026-09-21T10:00:00+06:00"
+    }
+}

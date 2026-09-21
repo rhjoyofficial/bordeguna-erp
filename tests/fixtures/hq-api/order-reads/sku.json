@@ -1,0 +1,31 @@
+{
+    "data": {
+        "id": 1,
+        "sku": "HON-500",
+        "barcode": "8940000000011",
+        "name": "Alpha Foods honey 500g",
+        "type": "finished_good",
+        "is_active": true,
+        "orderable": true,
+        "unit": {
+            "name": "Piece",
+            "abbreviation": "pcs"
+        },
+        "brand": {
+            "code": "LLD",
+            "name": "LaLaDia"
+        },
+        "category": {
+            "name": "Honey"
+        },
+        "availability_override": null,
+        "lead_time_days": 2,
+        "variant_model": "none",
+        "variant_note": "The ERP has no variants: a SKU names exactly one product in a business."
+    },
+    "meta": {
+        "business_id": 1,
+        "contract": "hq-order-reads.v1",
+        "as_of": "2026-09-21T10:00:00+06:00"
+    }
+}

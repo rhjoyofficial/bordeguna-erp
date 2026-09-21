@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Hq\HqOrderReadController;
 use App\Http\Controllers\Api\Hq\HqReadController;
 use App\Http\Middleware\HqApiContext;
 use Illuminate\Support\Facades\Route;
@@ -12,7 +13,8 @@ use Illuminate\Support\Facades\Route;
  | business plus the ERP permission names it may exercise. HqApiContext checks the ability against
  | the {business} in the URL and enters the tenant scope from the TOKEN, never from a header.
  |
- | Read-first: the only write in Phase 1 is POST tickets. Payroll, salary, journals, stock
+ | Read-first: the only write in Phase 1 is POST tickets (POST reports/{key}/run and POST
+ | order-reads/customer-eligibility are reads sent as POST). Payroll, salary, journals, stock
  | adjustments and approvals are never reachable here.
  */
 Route::prefix('hq/v1')->name('hq.')->middleware(['auth:sanctum', 'throttle:120,1'])->group(function () {
@@ -31,5 +33,15 @@ Route::prefix('hq/v1')->name('hq.')->middleware(['auth:sanctum', 'throttle:120,1
         Route::get('approvals/pending', [HqReadController::class, 'pendingApprovals'])->name('approvals.pending');
         Route::get('reports', [HqReadController::class, 'reports'])->name('reports');
         Route::post('reports/{key}/run', [HqReadController::class, 'runReport'])->name('reports.run');
+
+        // Phase 4 read side (HQ docs/81 C.5): what HQ must know before it could ever take an order.
+        // ⛔ Reads only. The customer check is a POST so the phone stays out of access logs; it writes nothing.
+        Route::prefix('order-reads')->name('order-reads.')->group(function () {
+            Route::get('products', [HqOrderReadController::class, 'products'])->name('products');
+            Route::get('skus/{sku}', [HqOrderReadController::class, 'sku'])->name('skus.show');
+            Route::get('prices/{sku}', [HqOrderReadController::class, 'price'])->name('prices.show');
+            Route::get('availability/{sku}', [HqOrderReadController::class, 'availability'])->name('availability.show');
+            Route::post('customer-eligibility', [HqOrderReadController::class, 'customerEligibility'])->name('customer-eligibility');
+        });
     });
 });

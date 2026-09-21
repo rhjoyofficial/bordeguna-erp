@@ -1,0 +1,59 @@
+{
+    "data": [
+        {
+            "id": 4,
+            "sku": "GHE-250",
+            "barcode": null,
+            "name": "Alpha Foods ghee 250g",
+            "type": "finished_good",
+            "is_active": true,
+            "orderable": true,
+            "unit": {
+                "name": "Piece",
+                "abbreviation": "pcs"
+            },
+            "brand": {
+                "code": "LLD",
+                "name": "LaLaDia"
+            },
+            "category": null,
+            "availability_override": "strict",
+            "lead_time_days": null
+        },
+        {
+            "id": 1,
+            "sku": "HON-500",
+            "barcode": "8940000000011",
+            "name": "Alpha Foods honey 500g",
+            "type": "finished_good",
+            "is_active": true,
+            "orderable": true,
+            "unit": {
+                "name": "Piece",
+                "abbreviation": "pcs"
+            },
+            "brand": {
+                "code": "LLD",
+                "name": "LaLaDia"
+            },
+            "category": {
+                "name": "Honey"
+            },
+            "availability_override": null,
+            "lead_time_days": 2
+        }
+    ],
+    "meta": {
+        "business_id": 1,
+        "contract": "hq-order-reads.v1",
+        "page": 1,
+        "per_page": 2,
+        "total": 3,
+        "orderable_means": "Only that a sales order accepts this type of product: a service cannot be ordered. Price, activity and availability are separate reads.",
+        "as_of": "2026-09-21T10:00:00+06:00"
+    },
+    "links": {
+        "next": "http://localhost/api/hq/v1/1/order-reads/products?per_page=2&page=2",
+        "prev": null
+    }
+}

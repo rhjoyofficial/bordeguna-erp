@@ -1,0 +1,33 @@
+{
+    "data": {
+        "sku": "GHE-250",
+        "product_id": 4,
+        "stock": {
+            "on_hand": "0",
+            "unit": "pcs",
+            "warehouses": [],
+            "warehouses_withheld": false
+        },
+        "availability": {
+            "decided_per_store": true,
+            "product_is_active": true,
+            "product_type_is_stocked": true,
+            "availability_override": "strict",
+            "verdict_needs_store": false,
+            "store": {
+                "key": "laladia",
+                "policy": "strict",
+                "published": true,
+                "has_price": true,
+                "sellable": false,
+                "made_to_order": false,
+                "message": "Out of stock."
+            }
+        }
+    },
+    "meta": {
+        "business_id": 1,
+        "contract": "hq-order-reads.v1",
+        "as_of": "2026-09-21T10:00:00+06:00"
+    }
+}

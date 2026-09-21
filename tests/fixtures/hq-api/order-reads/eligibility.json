@@ -1,0 +1,34 @@
+{
+    "data": {
+        "phone_matchable": true,
+        "phone_normalized": "01711000004",
+        "customer_exists": true,
+        "match": {
+            "id": 4,
+            "display_name": "Salma Begum",
+            "is_active": true
+        },
+        "active_matches": 2,
+        "inactive_matches": 0,
+        "would_create_new_customer": false,
+        "refusal_rules_the_erp_has": [
+            "inactive_customer"
+        ],
+        "fields_the_erp_does_not_have": [
+            "blocked",
+            "cod_eligible",
+            "credit_hold"
+        ],
+        "credit_limit_enforced": false,
+        "notes": [
+            "A sales order refuses an inactive customer. The website skips an inactive match and creates a new customer instead.",
+            "A household may share a number, so more than one active customer can hold it; the first by id is the one picked.",
+            "The ERP keeps no blocked, cash-on-delivery or credit-hold flag, and shows a credit limit without enforcing it."
+        ]
+    },
+    "meta": {
+        "business_id": 1,
+        "contract": "hq-order-reads.v1",
+        "as_of": "2026-09-21T10:00:00+06:00"
+    }
+}

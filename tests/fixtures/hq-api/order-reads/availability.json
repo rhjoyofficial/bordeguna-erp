@@ -1,0 +1,36 @@
+{
+    "data": {
+        "sku": "HON-500",
+        "product_id": 1,
+        "stock": {
+            "on_hand": "5",
+            "unit": "pcs",
+            "warehouses": [
+                {
+                    "code": "MAIN",
+                    "name": "Main",
+                    "on_hand": "3"
+                },
+                {
+                    "code": "SHOP",
+                    "name": "Shop floor",
+                    "on_hand": "2"
+                }
+            ],
+            "warehouses_withheld": false
+        },
+        "availability": {
+            "decided_per_store": true,
+            "product_is_active": true,
+            "product_type_is_stocked": true,
+            "availability_override": null,
+            "verdict_needs_store": true,
+            "store": null
+        }
+    },
+    "meta": {
+        "business_id": 1,
+        "contract": "hq-order-reads.v1",
+        "as_of": "2026-09-21T10:00:00+06:00"
+    }
+}
