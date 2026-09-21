@@ -2,10 +2,10 @@
 
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Notifications\SetPasswordNotification;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Enums\EmploymentType;
 use App\Modules\Hrm\Models\Employee;
-use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\Models\Permission;
@@ -76,7 +76,7 @@ it('creates a login, joins it to the employee and emails a password link', funct
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
     expect($user->fresh()->hasRole('Self-service'))->toBeTrue();
 
-    Notification::assertSentTo($user, ResetPassword::class);
+    Notification::assertSentTo($user, SetPasswordNotification::class);
     expect(DB::table('password_reset_tokens')->where('email', 'munna@example.com')->exists())->toBeTrue();
 });
 
