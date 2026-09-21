@@ -1,5 +1,12 @@
 <?php
 
+use App\Models\User;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Foundation\Models\ApprovalRequest;
+use App\Modules\Foundation\Models\MoneyAccount;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
 /*
 |--------------------------------------------------------------------------
 | Test Case
@@ -11,8 +18,8 @@
 |
 */
 
-pest()->extend(Tests\TestCase::class)
-    ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
+pest()->extend(TestCase::class)
+    ->use(RefreshDatabase::class)
     ->in('Feature');
 
 /*
@@ -61,8 +68,8 @@ function something()
  * action already checks `isPending()` first, which is exactly what this does.
  */
 function approveIfPending(
-    \App\Modules\Foundation\Models\ApprovalRequest $request,
-    \App\Models\User $user,
+    ApprovalRequest $request,
+    User $user,
     ?string $note = null,
 ): void {
     $current = $request->fresh();
@@ -70,4 +77,29 @@ function approveIfPending(
     if ($current !== null && $current->isPending()) {
         $current->approve($user, $note);
     }
+}
+
+/**
+ * A cash, bank or wallet head the CURRENT business can post a plain line to.
+ *
+ * ⚠ Since 21 Sep 2026 each such head belongs to one Bank & cash account and is
+ * posted only through it (PostJournal stamps a plain line with its owner and
+ * refuses a head nobody in this business owns). A test that uses the seeded
+ * 11201 as "the bank" therefore gives its business a money account on it first,
+ * which is exactly what a real installation has.
+ */
+function moneyHead(string $slug): Account
+{
+    $account = Account::bySlug($slug);
+
+    MoneyAccount::query()->firstOrCreate(
+        ['account_id' => $account->id],
+        ['name' => $account->name, 'type' => match ($slug) {
+            'cash_in_hand' => 'cash',
+            'mobile_financial_services' => 'mfs',
+            default => 'bank',
+        }],
+    );
+
+    return $account;
 }

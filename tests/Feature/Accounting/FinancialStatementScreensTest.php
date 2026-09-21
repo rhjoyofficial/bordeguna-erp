@@ -49,7 +49,7 @@ beforeEach(function () {
     $this->outsider->businesses()->attach($this->business->id);
     $this->outsider->assignRole($outsider);
 
-    $bank = Account::bySlug('cash_at_bank');
+    $bank = moneyHead('cash_at_bank');
     $capital = Account::bySlug('owners_capital');
     $revenue = Account::where('code', '4100')->first();
     $rent = Account::where('code', '6051')->first();

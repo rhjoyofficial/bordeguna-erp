@@ -3,9 +3,11 @@
 namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Enums\NormalBalance;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\BalanceSheet;
 use App\Modules\Accounting\Support\FiscalYear;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\StatementLine;
 use App\Modules\Accounting\Support\StatementSection;
 use App\Modules\Foundation\Models\Business;
@@ -94,7 +96,25 @@ class BalanceSheetController extends Controller
                 // Accumulated depreciation reads as a deduction, and saying so
                 // costs one flag and saves a reader the arithmetic (C-FS-7).
                 'is_contra' => $line->isContra(),
+                'group_code' => $line->group?->code,
             ])->values()->all(),
+            // ⚠ Sub-group subtotals (Bank Accounts inside Current Assets), summed
+            // from the same lines as the section so the two can never disagree.
+            'groups' => $section->lines
+                ->filter(fn (StatementLine $line) => $line->group !== null)
+                ->groupBy(fn (StatementLine $line) => $line->group->code)
+                ->map(function (Collection $lines) {
+                    $total = Money::sum($lines->map(fn (StatementLine $line) => $line->amount));
+                    $group = $lines->first()->group;
+
+                    return [
+                        'code' => $group->code,
+                        'name' => $group->name,
+                        'total' => $total->absolute()->format(),
+                        'is_contra' => ! $total->isZero() && ($group->type->normalBalance() === NormalBalance::Debit ? $total->isCredit() : $total->isDebit()),
+                    ];
+                })
+                ->all(),
         ])->values()->all();
     }
 }

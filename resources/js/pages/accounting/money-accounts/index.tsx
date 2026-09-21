@@ -181,6 +181,7 @@ export default function MoneyAccountsIndex({
                                     </option>
                                 ))}
                             </SearchSelect>
+                            <InputError message={errors.type} />
                         </div>
 
                         {!isCash && (
@@ -229,22 +230,20 @@ export default function MoneyAccountsIndex({
                             </>
                         )}
 
+                        {/*
+                          ⚠⚠ No ledger picker (21 Sep 2026). A cash box, bank account or
+                          wallet gets a ledger head of its own, made by the system when it
+                          is saved, so its balance is its own line on every report. A
+                          courier's or gateway's always reports under 1145 / 1146.
+                        */}
                         <div className="grid gap-2">
-                            <Label htmlFor="account_id">Reports under</Label>
-                            <SearchSelect
-                                newLedger={{ types: ['asset'], reload: ['ledgerAccounts'] }}
-                                fit
-                                id="account_id"
-                                value={data.account_id}
-                                onChange={(e) => setData('account_id', e.target.value)}
-                            >
-                                <option value="">Not decided yet</option>
-                                {ledgerAccounts.map((account) => (
-                                    <option key={account.id} value={account.id}>
-                                        {account.label}
-                                    </option>
-                                ))}
-                            </SearchSelect>
+                            <span className="text-sm font-medium">Ledger</span>
+                            <p className="text-muted-foreground flex h-10 max-w-72 items-center text-sm">
+                                {isCourier || isGateway
+                                    ? (ledgerAccounts.find((account) => String(account.id) === data.account_id)?.label ??
+                                      (isCourier ? '1145 - Receivable from Couriers' : '1146 - Receivable from Payment Gateways'))
+                                    : (editing?.ledger_account ?? 'Its own, created when you save')}
+                            </p>
                             <InputError message={errors.account_id} />
                         </div>
 

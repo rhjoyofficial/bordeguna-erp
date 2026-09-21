@@ -108,10 +108,10 @@ it('posts a payment: debits each line, credits the money account once', function
         ->and($voucher->voucher_number)->toBe('PV-2026-27-0001')
         ->and(($this->balance)('6051'))->toBe(2500000)
         ->and(($this->balance)('2210'))->toBe(1000050)
-        ->and(($this->balance)('1120'))->toBe(-3500050);
+        ->and(($this->balance)('11201'))->toBe(-3500050);
 
     $journal = $voucher->journal()->with('lines')->first();
-    $moneyLine = $journal->lines->firstWhere('account_id', ($this->id)('1120'));
+    $moneyLine = $journal->lines->firstWhere('account_id', ($this->id)('11201'));
 
     // The bank line says WHICH bank: that is what the cash book reads.
     expect($moneyLine->money_account_id)->toBe($this->bank->id)
@@ -128,7 +128,7 @@ it('posts a receipt: debits the money account, credits each line', function () {
     ]));
 
     expect($voucher->voucher_number)->toBe('RV-2026-27-0001')
-        ->and(($this->balance)('1120'))->toBe(50000000)
+        ->and(($this->balance)('11201'))->toBe(50000000)
         ->and(($this->balance)('3100'))->toBe(-50000000);
 });
 
@@ -141,8 +141,8 @@ it('posts a contra between two money accounts and nothing else', function () {
     ]));
 
     expect($voucher->voucher_number)->toBe('CV-2026-27-0001')
-        ->and(($this->balance)('1120'))->toBe(-2000000)
-        ->and(($this->balance)('1110'))->toBe(2000000);
+        ->and(($this->balance)('11201'))->toBe(-2000000)
+        ->and(($this->balance)('11101'))->toBe(2000000);
 
     $lines = $voucher->journal->lines;
 
@@ -232,8 +232,8 @@ it('refuses accounts a subsystem owns, cash and bank heads, and system heads', f
     'accounts receivable, owned by Sales' => ['1140', 'sales.accounts_receivable'],
     'accounts payable, owned by Purchasing' => ['2110', 'purchasing.accounts_payable'],
     'stock, owned by Inventory' => ['1150', 'inventory.stock_on_hand'],
-    'a bank head: money moves through the money account field' => ['1120', null],
-    'cash in hand' => ['1110', null],
+    'a bank head: money moves through the money account field' => ['11201', null],
+    'cash in hand' => ['11101', null],
     'opening balance equity' => ['3900', null],
     'employee reimbursements payable, settled by claims' => ['2145', null],
     'a heading' => ['6050', null],
@@ -350,7 +350,7 @@ it('reverses with a reason: the original stays, a second journal undoes it, both
         ->and($reversed->reversal_reason)->toBe('Paid from the wrong bank')
         ->and($reversed->reversalJournal->reverses_journal_id)->toBe($voucher->journal_id)
         ->and(($this->balance)('6051'))->toBe(0)
-        ->and(($this->balance)('1120'))->toBe(0)
+        ->and(($this->balance)('11201'))->toBe(0)
         ->and(Journal::count())->toBe(2);
 });
 
@@ -419,7 +419,7 @@ it('moves a gateway payout into the bank with a contra, and only in that directi
 
     expect($voucher->voucher_number)->toStartWith('CV-')
         ->and(($this->balance)('1146'))->toBe(-500000)
-        ->and(($this->balance)('1120'))->toBe(500000);
+        ->and(($this->balance)('11201'))->toBe(500000);
 
     // Into a gateway by hand: refused. A gateway fills itself from sales.
     expect(fn () => ($this->draft)(VoucherType::Contra, [

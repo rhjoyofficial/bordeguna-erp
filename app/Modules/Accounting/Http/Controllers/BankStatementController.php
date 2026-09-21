@@ -36,6 +36,11 @@ class BankStatementController extends Controller
         $accounts = MoneyAccount::query()->handled()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'type']);
         $accountId = (int) $request->query('money_account_id', (string) ($accounts->first()?->id ?? 0));
 
+        // ⚠ The id comes from the address bar and every query below is raw, so
+        // the business scope never saw it: another business's bank statement
+        // could be read by changing a number (found 21 Sep 2026).
+        abort_unless($accountId === 0 || MoneyAccount::query()->whereKey($accountId)->exists(), 404);
+
         $statementLines = DB::table('bank_statement_lines')
             ->where('money_account_id', $accountId)
             ->orderByDesc('txn_date')->orderByDesc('id')
@@ -79,7 +84,7 @@ class BankStatementController extends Controller
         $this->authorize('accounting.journal.post');
 
         $data = $request->validate([
-            'money_account_id' => ['required', Rule::exists('money_accounts', 'id')],
+            'money_account_id' => ['required', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'file' => ['required', 'file', 'mimes:csv,txt', 'max:5120'],
         ]);
 
@@ -138,8 +143,7 @@ class BankStatementController extends Controller
     {
         $this->authorize('accounting.journal.post');
 
-        $statementLine = DB::table('bank_statement_lines')->where('id', $line)->first();
-        abort_if($statementLine === null, 404);
+        $statementLine = $this->ownLine($line);
 
         $data = $request->validate([
             'journal_line_id' => ['required', Rule::exists('journal_lines', 'id')],
@@ -171,6 +175,7 @@ class BankStatementController extends Controller
     public function unmatch(Request $request, int $line): RedirectResponse
     {
         $this->authorize('accounting.journal.post');
+        $this->ownLine($line);
 
         DB::table('bank_statement_lines')->where('id', $line)->update([
             'match_status' => 'unmatched',
@@ -186,6 +191,7 @@ class BankStatementController extends Controller
     public function ignore(Request $request, int $line): RedirectResponse
     {
         $this->authorize('accounting.journal.post');
+        $this->ownLine($line);
 
         DB::table('bank_statement_lines')->where('id', $line)->update([
             'match_status' => 'ignored',
@@ -201,7 +207,7 @@ class BankStatementController extends Controller
     /**
      * The one journal line this statement row can only be - or null.
      *
-     * @param array{txn_date: string, amount: float} $row
+     * @param  array{txn_date: string, amount: float}  $row
      */
     private function soleCandidate(int $moneyAccountId, array $row): ?int
     {
@@ -219,5 +225,18 @@ class BankStatementController extends Controller
             ->pluck('journal_lines.id');
 
         return $candidates->count() === 1 ? (int) $candidates->first() : null;
+    }
+
+    /** A statement line of THIS business, or a 404: the table is read raw, outside the business scope. */
+    private function ownLine(int $line): object
+    {
+        $statementLine = DB::table('bank_statement_lines')
+            ->where('id', $line)
+            ->where('business_id', app(BusinessContext::class)->id())
+            ->first();
+
+        abort_if($statementLine === null, 404);
+
+        return $statementLine;
     }
 }

@@ -5,11 +5,14 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\MoneyAccount;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -83,16 +86,55 @@ class MoneyAccountController extends Controller
         ]);
     }
 
+    /**
+     * ⚠⚠ A cash box, bank account or wallet gets its OWN ledger head, created
+     * here by the system and never picked (21 Sep 2026, Support\MoneyLedgers):
+     * BRAC Bank becomes "11201 BRAC Bank - Bor de Guna" under 1120 Bank Accounts.
+     */
     public function store(Request $request): RedirectResponse
     {
-        $account = MoneyAccount::create($this->validated($request));
+        $account = DB::transaction(function () use ($request) {
+            $account = MoneyAccount::create($this->validated($request));
+            MoneyLedgers::ensureOwnLedger($account);
 
-        return back()->with('success', "{$account->label()} added.");
+            return $account;
+        });
+
+        return back()->with('success', "{$account->label()} added, with its own ledger.");
     }
 
     public function update(Request $request, MoneyAccount $moneyAccount): RedirectResponse
     {
-        $moneyAccount->update($this->validated($request));
+        $data = $this->validated($request);
+
+        // ⚠ Once money has moved through an account its kind is fixed: its
+        // postings sit on a Bank ledger, and calling it a wallet now would put
+        // half its history in one group and the rest in another.
+        if ($data['type'] !== $moneyAccount->type->value
+            && DB::table('journal_lines')->where('money_account_id', $moneyAccount->id)->exists()) {
+            throw ValidationException::withMessages([
+                'type' => "{$moneyAccount->name} already has postings, so its kind cannot change. Deactivate it and add a new account instead.",
+            ]);
+        }
+
+        DB::transaction(function () use ($moneyAccount, $data) {
+            $previousHead = $moneyAccount->account_id;
+            $moneyAccount->update($data);
+            MoneyLedgers::ensureOwnLedger($moneyAccount);
+
+            // Turned into a courier or gateway account before anything was
+            // posted: the head it had of its own is left empty, so it goes.
+            if (! MoneyLedgers::hasOwnLedger($moneyAccount->type) && $previousHead !== null) {
+                $old = Account::find($previousHead);
+
+                if ($old !== null && MoneyLedgers::isMoneyHead($old)
+                    && MoneyLedgers::ownersOf($old->id)->isEmpty()
+                    && ! DB::table('journal_lines')->where('account_id', $old->id)->exists()
+                    && $old->system_slug === null) {
+                    $old->delete();
+                }
+            }
+        });
 
         return back()->with('success', "{$moneyAccount->label()} updated.");
     }
@@ -130,7 +172,7 @@ class MoneyAccountController extends Controller
             ]);
         }
 
-        return $request->validate([
+        $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::enum(MoneyAccountType::class)],
             // ⚠ Everything below is optional because CASH needs none of it,
@@ -161,5 +203,13 @@ class MoneyAccountController extends Controller
             'is_active' => ['required', 'boolean'],
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
+
+        // ⚠ Cash, bank and wallets never choose their ledger: the system gives
+        // each its own. Whatever the request says is ignored, not trusted.
+        if (MoneyLedgers::hasOwnLedger(MoneyAccountType::from($validated['type']))) {
+            unset($validated['account_id']);
+        }
+
+        return $validated;
     }
 }

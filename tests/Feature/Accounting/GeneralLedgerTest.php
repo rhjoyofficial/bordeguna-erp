@@ -56,7 +56,7 @@ beforeEach(function () {
     $this->outsider->businesses()->attach($this->business->id);
     $this->outsider->assignRole($outsider);
 
-    $this->bank = Account::bySlug('cash_at_bank');
+    $this->bank = moneyHead('cash_at_bank');
     $this->capital = Account::bySlug('owners_capital');
     $this->payable = Account::bySlug('accounts_payable');
 

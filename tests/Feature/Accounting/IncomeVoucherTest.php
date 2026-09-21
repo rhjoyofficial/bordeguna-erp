@@ -99,7 +99,7 @@ it('debits the money account and credits the income head', function () {
         ->and($voucher->payer())->toBe('Adabor scrap dealer')
         // Money in is a DEBIT to the asset, income is a CREDIT and therefore
         // negative in the ledger's signed convention.
-        ->and(($this->balanceOn)('1120'))->toBe(150000)
+        ->and(($this->balanceOn)('11201'))->toBe(150000)
         ->and(($this->balanceOn)('4910'))->toBe(-150000);
 
     $journal = Journal::query()->latest('id')->first();
@@ -116,7 +116,7 @@ it('splits one receipt across several heads', function () {
 
     expect($voucher->total)->toBe('1750.0000')
         ->and($voucher->lines)->toHaveCount(2)
-        ->and(($this->balanceOn)('1120'))->toBe(175000)
+        ->and(($this->balanceOn)('11201'))->toBe(175000)
         ->and(($this->balanceOn)('4910'))->toBe(-150000)
         ->and(($this->balanceOn)('4920'))->toBe(-25000);
 });

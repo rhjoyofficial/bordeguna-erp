@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\JournalSequence;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
+use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -58,7 +59,11 @@ class PostJournal
         $this->assertBalanced($draft);
         $this->assertMoneyAccountsBelongHere($draft, $businessId);
 
-        return DB::transaction(function () use ($draft, $postedBy, $businessId, $reverses) {
+        // ⚠ A reversal posts back exactly what the original posted, money
+        // account and all, so it is never re-stamped or refused here.
+        $lines = $reverses === null ? $this->withMoneyHeadsOwned($draft, $businessId) : $draft->lines;
+
+        return DB::transaction(function () use ($draft, $lines, $postedBy, $businessId, $reverses) {
             $business = Business::withoutGlobalScopes()->findOrFail($businessId);
 
             $journal = new Journal;
@@ -80,7 +85,7 @@ class PostJournal
 
             $journal->save();
 
-            foreach ($draft->lines as $index => $lineDraft) {
+            foreach ($lines as $index => $lineDraft) {
                 $line = new JournalLine;
                 $line->journal_id = $journal->id;
                 $line->business_id = $businessId;
@@ -165,6 +170,70 @@ class PostJournal
         if (! $total->isZero()) {
             throw JournalException::unbalanced($total);
         }
+    }
+
+    /**
+     * ⚠⚠ A CASH, BANK OR WALLET HEAD IS POSTED ONLY THROUGH ITS OWN MONEY ACCOUNT
+     * (21 Sep 2026, Support\MoneyLedgers). Checked here, at the one place every
+     * posting passes, rather than on each screen.
+     *
+     * - A line naming a money account must sit on that account's own head: BRAC's
+     *   money on bKash's ledger is a cash book that no longer adds up.
+     * - A line naming none (a manual journal, an opening balance) is stamped with
+     *   the head's one money account in THIS business, so the bank statement
+     *   match, the cash forecast and the cockpit all see it.
+     * - A head whose money account belongs to another business, or that no money
+     *   account reports under, is refused: the chart is shared by four businesses,
+     *   and LaLaDia posting to Bor de Guna's BRAC Bank is the leak this closes.
+     *
+     * @return list<JournalLineDraft>
+     */
+    private function withMoneyHeadsOwned(JournalDraft $draft, int $businessId): array
+    {
+        $groupIds = MoneyLedgers::groupIds();
+
+        if ($groupIds === []) {
+            return $draft->lines;
+        }
+
+        $moneyHeads = Account::query()
+            ->whereIn('id', array_map(fn (JournalLineDraft $line) => $line->accountId, $draft->lines))
+            ->whereIn('parent_id', $groupIds)
+            ->get()
+            ->keyBy('id');
+
+        return array_map(function (JournalLineDraft $line) use ($moneyHeads, $businessId) {
+            $head = $moneyHeads->get($line->accountId);
+
+            if ($head === null) {
+                return $line;
+            }
+
+            if ($line->moneyAccount !== null) {
+                if ((int) $line->moneyAccount->account_id !== $head->id) {
+                    throw JournalException::moneyHeadOfAnotherAccount($head, $line->moneyAccount->name);
+                }
+
+                return $line;
+            }
+
+            $owners = MoneyLedgers::ownersOf($head->id);
+            $here = $owners->where('business_id', $businessId);
+
+            if ($here->count() > 1) {
+                throw JournalException::moneyHeadShared($head);
+            }
+
+            if ($owners->isEmpty()) {
+                throw JournalException::moneyHeadWithoutAccount($head);
+            }
+
+            if ($here->isEmpty()) {
+                throw JournalException::moneyHeadOfAnotherBusiness($head);
+            }
+
+            return JournalLineDraft::signed($line->accountId, $line->amount, $line->memo, $line->party, $here->first());
+        }, $draft->lines);
     }
 
     private function assertMoneyAccountsBelongHere(JournalDraft $draft, int $businessId): void

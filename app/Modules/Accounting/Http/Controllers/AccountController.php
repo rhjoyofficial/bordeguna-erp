@@ -5,8 +5,10 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\MoneyLedgers;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -54,6 +56,7 @@ class AccountController extends Controller
 
         $account = new Account($data);
         $account->assertConsistentWithParent();
+        $this->assertTreeStaysSound($account);
         $account->save();
 
         return back()->with('success', "Account {$account->label()} created.");
@@ -78,6 +81,7 @@ class AccountController extends Controller
         }
 
         $account->assertConsistentWithParent();
+        $this->assertTreeStaysSound($account);
         $account->save();
 
         return back()->with('success', "Account {$account->label()} updated.");
@@ -96,9 +100,75 @@ class AccountController extends Controller
             return back()->with('error', collect($e->errors())->flatten()->first());
         }
 
+        // ⚠ A cash, bank or wallet head belongs to its Bank & cash account, and
+        // the database would refuse the delete with an error page anyway.
+        if (MoneyLedgers::isMoneyHead($account) || DB::table('money_accounts')->where('account_id', $account->id)->exists()) {
+            return back()->with('error', "{$account->label()} is the ledger of a Bank & cash account. Deactivate the account there instead.");
+        }
+
+        if (DB::table('journal_lines')->where('account_id', $account->id)->exists()) {
+            return back()->with('error', "{$account->label()} has postings, so it cannot be deleted. Deactivate it instead.");
+        }
+
         $account->delete();
 
         return back()->with('success', 'Account deleted.');
+    }
+
+    /**
+     * The rules that keep the chart a tree the statements can read, checked on
+     * the server because the form offers every account of the same type.
+     *
+     * ⚠⚠ Cash, bank and wallet ledgers are made by Bank & cash, one per money
+     * account (21 Sep 2026, Support\MoneyLedgers). A head typed in by hand under
+     * Bank Accounts would be a bank ledger with no bank behind it, which the
+     * posting engine refuses anyway, so the chart does not offer the way in.
+     */
+    private function assertTreeStaysSound(Account $account): void
+    {
+        $moneyGroups = MoneyLedgers::groupIds();
+        $parentChanged = ! $account->exists || $account->isDirty('parent_id');
+
+        if ($account->exists && in_array((int) $account->getOriginal('parent_id'), $moneyGroups, true)
+            && collect($account->getDirty())->keys()->diff(['note', 'updated_at'])->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'name' => 'This is the ledger of a Bank & cash account. Rename, move or deactivate it from Accounting > Bank & cash.',
+            ]);
+        }
+
+        if ($parentChanged && $account->parent_id !== null && in_array((int) $account->parent_id, $moneyGroups, true)) {
+            throw ValidationException::withMessages([
+                'parent_id' => 'Cash, bank and wallet ledgers are made in Accounting > Bank & cash: add the account there and it gets its own ledger.',
+            ]);
+        }
+
+        if ($account->exists && in_array($account->id, $moneyGroups, true) && $account->isDirty(['code', 'type', 'parent_id', 'is_postable'])) {
+            throw ValidationException::withMessages([
+                'code' => 'This group holds the cash, bank or wallet ledgers. Only its name can change.',
+            ]);
+        }
+
+        if ($parentChanged && $account->parent_id !== null && Account::whereKey($account->parent_id)->value('is_postable')) {
+            throw ValidationException::withMessages([
+                'parent_id' => 'Choose a heading to sit under, not an account that is posted to: the statements would skip it.',
+            ]);
+        }
+
+        if ($account->exists && $account->is_postable && $account->isDirty('is_postable') && $account->children()->exists()) {
+            throw ValidationException::withMessages([
+                'is_postable' => 'This account has accounts under it, so it stays a heading.',
+            ]);
+        }
+
+        // ⚠ The 4900 rule: a head with history cannot become a heading, or its
+        // postings would sit on an account nothing can post to or reverse.
+        if ($account->exists && ! $account->is_postable && $account->isDirty('is_postable')
+            && (DB::table('journal_lines')->where('account_id', $account->id)->exists()
+                || DB::table('money_accounts')->where('account_id', $account->id)->exists())) {
+            throw ValidationException::withMessages([
+                'is_postable' => 'This account already has postings or a Bank & cash account, so it cannot become a heading.',
+            ]);
+        }
     }
 
     /**

@@ -44,7 +44,7 @@ beforeEach(function () {
 
     $this->seed(ChartOfAccountsSeeder::class);
 
-    $this->cash = Account::bySlug('cash_in_hand');
+    $this->cash = moneyHead('cash_in_hand');
     $this->capital = Account::bySlug('owners_capital');
 
     $this->bank = MoneyAccount::create([
@@ -52,7 +52,7 @@ beforeEach(function () {
         'name' => 'BRAC Bank',
         'type' => 'bank',
         'is_active' => true,
-        'account_id' => Account::bySlug('cash_at_bank')->id,
+        'account_id' => moneyHead('cash_at_bank')->id,
     ]);
 
     $this->journal = fn (string $date, string $taka, ?User $by = null, JournalType $type = JournalType::Manual, string $memo = 'Capital') => app(PostJournal::class)->handle(
@@ -128,7 +128,7 @@ it('shows each line on its own side with the account it hit', function () {
 
     $this->actingAs($this->reader)->get('/accounting/day-book')
         ->assertInertia(fn (Assert $page) => $page
-            ->where('journals.data.0.lines.0.code', '1110')
+            ->where('journals.data.0.lines.0.code', '11101')
             ->where('journals.data.0.lines.0.debit', '500.00')
             ->where('journals.data.0.lines.0.credit', '')
             ->where('journals.data.0.lines.1.code', '3100')
@@ -160,6 +160,7 @@ it('never shows another business its journals', function () {
 
     $elsewhere = Business::create(['name' => 'Elsewhere', 'slug' => 'elsewhere', 'fiscal_year_start_month' => 7]);
     TenantScope::enter($elsewhere->id);
+    moneyHead('cash_in_hand');
     app(PostJournal::class)->handle(new JournalDraft(
         date: Carbon::parse('2026-09-19'),
         lines: [

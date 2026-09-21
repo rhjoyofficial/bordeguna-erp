@@ -91,7 +91,7 @@ it('shows the form every head of the chart, greys the ones a voucher may not use
                     ->and($row('1160 - Advances to Suppliers'))->toMatchArray(['usable' => true, 'party' => 'supplier'])
                     ->and($row('2150 - Advances from Customers'))->toMatchArray(['usable' => true, 'party' => 'customer'])
                     // cash and bank heads move through the money account field, and say so
-                    ->and($row('1120 - Cash at Bank'))->toMatchArray(['usable' => false, 'hint' => 'Cash or bank: choose it in Paid from above.'])
+                    ->and($row('11201 - Main Bank Account'))->toMatchArray(['usable' => false, 'hint' => 'Cash or bank: choose it in Paid from above.'])
                     ->and($row('1140 - Accounts Receivable'))->toMatchArray(['usable' => false, 'hint' => 'Posted by sales invoices. Record a customer\'s payment on the invoice.'])
                     ->and($row('6131 - Salaries and Wages'))->toMatchArray(['usable' => false, 'hint' => 'Posted by Payroll: payroll runs, loans and advances.'])
                     ->and($row('3900 - Opening Balance Equity'))->toMatchArray(['usable' => false, 'hint' => 'Used only by opening balances.'])
