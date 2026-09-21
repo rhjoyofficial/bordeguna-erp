@@ -126,6 +126,13 @@ services:
     restart: unless-stopped
     env_file: [.env]
     command: php artisan schedule:work
+    # ⚠⚠ A REAPER AS PID 1. `schedule:work` runs as PID 1 and never waits for
+    # the children of `runInBackground()` commands, so each one stays a zombie.
+    # HQ's scheduler, built the same way, reached its pids limit this way on
+    # 18 Sep 2026 and ran nothing for three days (HQ docs/81 C.8). This one
+    # gathers only a handful a day and every deploy recreates it, but the
+    # limit is the same; `init: true` puts docker-init in front to reap them.
+    init: true
     volumes:
       - storage:/var/www/html/storage
     networks: [internal]
