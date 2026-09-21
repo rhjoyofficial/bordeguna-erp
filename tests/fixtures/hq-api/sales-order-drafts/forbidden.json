@@ -1,0 +1,6 @@
+{
+    "error": {
+        "code": "forbidden",
+        "message": "Token lacks ability sales.orders.draft."
+    }
+}

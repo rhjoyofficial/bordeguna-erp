@@ -1,0 +1,11 @@
+{
+    "error": {
+        "code": "refused",
+        "message": "The ERP will not take this draft as it stands."
+    },
+    "errors": {
+        "store_key": [
+            "The store bionic is not live, so it takes no orders."
+        ]
+    }
+}

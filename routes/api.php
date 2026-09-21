@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Hq\HqOrderReadController;
 use App\Http\Controllers\Api\Hq\HqReadController;
+use App\Http\Controllers\Api\Hq\HqSalesOrderDraftController;
 use App\Http\Middleware\HqApiContext;
 use Illuminate\Support\Facades\Route;
 
@@ -13,9 +14,10 @@ use Illuminate\Support\Facades\Route;
  | business plus the ERP permission names it may exercise. HqApiContext checks the ability against
  | the {business} in the URL and enters the tenant scope from the TOKEN, never from a header.
  |
- | Read-first: the only write in Phase 1 is POST tickets (POST reports/{key}/run and POST
- | order-reads/customer-eligibility are reads sent as POST). Payroll, salary, journals, stock
- | adjustments and approvals are never reachable here.
+ | Read-first: the writes are POST tickets and, since HQ docs/83 C.3, POST sales-order-drafts (a draft
+ | and nothing after it, behind its own ability `sales.orders.draft`). POST reports/{key}/run and POST
+ | order-reads/customer-eligibility are reads sent as POST. Payroll, salary, journals, stock
+ | adjustments, approvals and real sales orders are never reachable here.
  */
 Route::prefix('hq/v1')->name('hq.')->middleware(['auth:sanctum', 'throttle:120,1'])->group(function () {
     Route::get('businesses', [HqReadController::class, 'businesses'])->name('businesses');
@@ -43,5 +45,11 @@ Route::prefix('hq/v1')->name('hq.')->middleware(['auth:sanctum', 'throttle:120,1
             Route::get('availability/{sku}', [HqOrderReadController::class, 'availability'])->name('availability.show');
             Route::post('customer-eligibility', [HqOrderReadController::class, 'customerEligibility'])->name('customer-eligibility');
         });
+
+        // Phase 4 draft write (HQ docs/83 C.3): a DRAFT sales order and nothing after it. No order, no
+        // number, no approval, no customer, no stock, no journal, no notification. ⛔ There is no route
+        // that confirms, changes or cancels a draft.
+        Route::post('sales-order-drafts', [HqSalesOrderDraftController::class, 'store'])->name('sales-order-drafts.store');
+        Route::get('sales-order-drafts/{key}', [HqSalesOrderDraftController::class, 'show'])->name('sales-order-drafts.show');
     });
 });

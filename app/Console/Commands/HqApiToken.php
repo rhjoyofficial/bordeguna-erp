@@ -16,7 +16,7 @@ use Illuminate\Console\Command;
  */
 final class HqApiToken extends Command
 {
-    protected $signature = 'hq:api:token {email} {business} {--abilities= : comma-separated ERP permission names the token may exercise} {--name=hq} {--revoke}';
+    protected $signature = 'hq:api:token {email} {business} {--abilities= : comma-separated ERP permission names the token may exercise} {--write : allow abilities from WRITE_ABILITIES, each named explicitly} {--name=hq} {--revoke}';
 
     protected $description = 'Issue (or revoke) an HQ API token scoped to one business.';
 
@@ -25,6 +25,14 @@ final class HqApiToken extends Command
         'purchasing.view', 'purchasing.reports.view', 'accounting.view', 'hrm.employees.view', 'hrm.attendance.view',
         'crm.tickets.view', 'crm.tickets.manage', 'crm.contacts.view',
     ];
+
+    /**
+     * Abilities that let HQ WRITE something in the ERP (HQ docs/83 C.3). ⛔ Never issued by default and
+     * never by accident: each must be named in `--abilities` AND the command must be given `--write`,
+     * so a read token copied from a runbook cannot pick one up. Today there is one, and what it writes
+     * is a draft with nothing after it.
+     */
+    public const WRITE_ABILITIES = ['sales.orders.draft'];
 
     public function handle(): int
     {
@@ -46,9 +54,15 @@ final class HqApiToken extends Command
         }
 
         $abilities = collect(explode(',', (string) $this->option('abilities')))->map(fn ($a) => trim($a))->filter()->values();
-        $unknown = $abilities->reject(fn ($a) => in_array($a, self::READ_ABILITIES, true));
+        $unknown = $abilities->reject(fn ($a) => in_array($a, self::READ_ABILITIES, true) || in_array($a, self::WRITE_ABILITIES, true));
         if ($unknown->isNotEmpty()) {
             $this->error('Refusing abilities outside the HQ read allow-list: '.$unknown->implode(', '));
+
+            return self::FAILURE;
+        }
+        $writes = $abilities->filter(fn ($a) => in_array($a, self::WRITE_ABILITIES, true));
+        if ($writes->isNotEmpty() && ! $this->option('write')) {
+            $this->error('Refusing write abilities without --write: '.$writes->implode(', ').'. A write ability is issued only when asked for by name.');
 
             return self::FAILURE;
         }

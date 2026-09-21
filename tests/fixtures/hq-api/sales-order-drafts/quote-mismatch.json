@@ -1,0 +1,11 @@
+{
+    "error": {
+        "code": "quote_mismatch",
+        "message": "Figures in the proposal no longer match the ERP's own. Nothing was written; quote again."
+    },
+    "errors": {
+        "lines.0.unit_price": [
+            "Proposed 800.00, the ERP's price is 850.00."
+        ]
+    }
+}
