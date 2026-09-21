@@ -9,6 +9,8 @@ use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
+use App\Modules\Purchasing\Support\ReceivedBatchDates;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use RuntimeException;
@@ -29,10 +31,16 @@ class RecordGoodsReceipt
     ) {}
 
     /**
-     * @param  array<int, array{line: PurchaseOrderLine, quantity: string}>  $lineReceipts
+     * @param  array<int, array{line: PurchaseOrderLine, quantity: string, batch_number?: ?string, manufactured_date?: ?string, expiry_date?: ?string}>  $lineReceipts
+     * @param  string|null  $supplierChallanNumber  the number on the supplier's own delivery note
      */
-    public function handle(PurchaseOrder $order, array $lineReceipts, User $receivedBy, ?string $note = null): GoodsReceipt
-    {
+    public function handle(
+        PurchaseOrder $order,
+        array $lineReceipts,
+        User $receivedBy,
+        ?string $note = null,
+        ?string $supplierChallanNumber = null,
+    ): GoodsReceipt {
         if (! $order->isReceivable()) {
             throw new RuntimeException("Purchase order #{$order->id} is not open for receiving.");
         }
@@ -43,11 +51,12 @@ class RecordGoodsReceipt
             throw new InvalidArgumentException('At least one line must have a received quantity greater than zero.');
         }
 
-        return DB::transaction(function () use ($order, $lineReceipts, $receivedBy, $note) {
+        return DB::transaction(function () use ($order, $lineReceipts, $receivedBy, $note, $supplierChallanNumber) {
             $receipt = GoodsReceipt::create([
                 'purchase_order_id' => $order->id,
                 'received_by' => $receivedBy->id,
                 'received_at' => now(),
+                'supplier_challan_number' => $supplierChallanNumber,
                 'note' => $note,
             ]);
 
@@ -73,12 +82,28 @@ class RecordGoodsReceipt
                 $remaining = (float) $line->quantityRemaining();
 
                 if ((float) $quantity > $remaining) {
-                    throw new InvalidArgumentException("Cannot receive {$quantity} of line #{$line->id}; only {$remaining} remains on the order.");
+                    // ⚠ Named by PRODUCT, not by line id. "line #7" meant nothing to
+                    // the storekeeper reading it; the product is what he typed against.
+                    throw new InvalidArgumentException("Cannot receive {$quantity} of {$line->product->name} ({$line->product->sku}); only {$remaining} remains on the order.");
                 }
 
                 $movement = null;
 
                 if ($line->product->type->isStocked()) {
+                    // ⚠⚠ Checked HERE as well as on the form, because this is the
+                    // chokepoint every receipt passes and the form is only one way
+                    // in. Receiving goods that are already out of date would put
+                    // them straight into the "expired" list and the nightly
+                    // write-off proposals the same evening: that is a refusal at
+                    // the door, not a receipt. The controller asks the same class
+                    // first so the sentence lands under the right box.
+                    $manufacturedDate = $this->dateOrNull($entry['manufactured_date'] ?? null);
+                    $expiryDate = $this->dateOrNull($entry['expiry_date'] ?? null);
+
+                    foreach (ReceivedBatchDates::problems($manufacturedDate, $expiryDate) as $problem) {
+                        throw new InvalidArgumentException("{$line->product->name} ({$line->product->sku}): {$problem}");
+                    }
+
                     // ⚠⚠ THE ONE POINT WHERE THE PURCHASE UNIT BECOMES THE STOCK
                     // UNIT. Everything upstream of here - order, receipt line,
                     // supplier bill, purchase return - stays in the unit the
@@ -98,10 +123,21 @@ class RecordGoodsReceipt
                         quantity: $converted['quantity'],
                         unitCost: $converted['unitCost'],
                         performedBy: $receivedBy,
+                        // ⚠⚠ The label data reaches the BATCH, which is the only
+                        // place FEFO, the Expiry screen and the nightly expired-
+                        // stock proposals look. Until 21 Sep 2026 a receipt passed
+                        // none of it, so every bought batch had a null expiry:
+                        // FEFO queued it behind every dated batch and could not
+                        // tell which of two deliveries goes off first, and nothing
+                        // bought ever reached the Expiry screen. Only opening
+                        // stock and production output did.
+                        batchNumber: $this->textOrNull($entry['batch_number'] ?? null),
+                        expiryDate: $expiryDate,
                         note: "Received against {$order->po_number}".($note ? ": {$note}" : ''),
                         purchaseQuantity: $converted['purchaseQuantity'],
                         purchaseUnitId: $converted['purchaseUnitId'],
                         conversionFactor: $converted['factor'],
+                        manufacturedDate: $manufacturedDate,
                     );
                 }
 
@@ -125,6 +161,22 @@ class RecordGoodsReceipt
 
             return $receipt->fresh('lines');
         });
+    }
+
+    private function textOrNull(?string $value): ?string
+    {
+        $value = $value === null ? null : trim($value);
+
+        return $value === '' ? null : $value;
+    }
+
+    private function dateOrNull(?string $value): ?string
+    {
+        $value = $this->textOrNull($value);
+
+        // ⚠ Stored as a plain Y-m-d. The batch casts it to a `date`, and a value
+        // carrying a time of day is how a Dhaka midnight becomes the day before.
+        return $value === null ? null : Carbon::parse($value)->toDateString();
     }
 
     private function recomputeStatus(PurchaseOrder $order): void

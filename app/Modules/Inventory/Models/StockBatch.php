@@ -40,9 +40,10 @@ class StockBatch extends Model
         return [
             'status' => StockBatchStatus::class,
             'expiry_date' => 'date',
-            // C-MFG-13: set by the production run, null on purchase-created
-            // batches. `mrp` is informational label data ONLY - nothing prices
-            // off a batch; the selling price resolver reads product_prices.
+            // C-MFG-13: set by the production run, and by a goods receipt when
+            // the supplier's label gives it (optional there). `mrp` is
+            // informational label data ONLY - nothing prices off a batch; the
+            // selling price resolver reads product_prices.
             'manufactured_date' => 'date',
             'mrp' => 'decimal:4',
             'received_at' => 'datetime',

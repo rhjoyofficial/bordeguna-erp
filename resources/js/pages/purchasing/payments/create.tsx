@@ -44,12 +44,15 @@ export default function PaymentCreate({
     bills,
     moneyAccounts,
     today,
+    prefill,
 }: {
     suppliers: SupplierRow[];
     selectedSupplierId: number | null;
     bills: BillRow[];
     moneyAccounts: MoneyAccountRow[];
     today: string;
+    // Set when the form was opened from a bill's "Pay this bill" button.
+    prefill?: { bill_id: number; amount: string } | null;
 }) {
     const { data, setData } = useForm({
         supplier_id: selectedSupplierId ?? '',
@@ -57,8 +60,10 @@ export default function PaymentCreate({
         paid_on: today,
         reference: '',
         note: '',
-        // bill id -> amount typed by the clerk
-        amounts: {} as Record<number, string>,
+        // bill id -> amount typed by the clerk. ⚠ A prefill is only a typed
+        // number: it can be changed or cleared, and the server re-checks it
+        // against what is outstanding exactly as if the clerk had typed it.
+        amounts: (prefill ? { [prefill.bill_id]: prefill.amount } : {}) as Record<number, string>,
     });
 
     const [processing, setProcessing] = useState(false);

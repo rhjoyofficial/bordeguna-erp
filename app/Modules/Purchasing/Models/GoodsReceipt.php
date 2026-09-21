@@ -2,8 +2,8 @@
 
 namespace App\Modules\Purchasing\Models;
 
-use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Models\User;
+use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,6 +18,8 @@ class GoodsReceipt extends Model
         'purchase_order_id',
         'received_by',
         'received_at',
+        // The supplier's delivery note number, as printed on their paper.
+        'supplier_challan_number',
         'note',
     ];
 
