@@ -324,6 +324,9 @@ class SalesInvoiceController extends Controller
             'customer',
             'lines.product:id,name,sku',
             'lines.deliveryLine.delivery:id,delivery_number,delivered_at',
+            // The counter's price trail: who changed a price or gave a discount.
+            'lines.overriddenBy:id,name',
+            'discountGivenBy:id,name',
             'allocations.receipt.moneyAccount:id,name',
         ]);
 
