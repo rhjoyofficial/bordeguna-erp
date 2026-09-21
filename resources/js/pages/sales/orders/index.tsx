@@ -99,6 +99,9 @@ let nextUid = 1;
 const newLine = (): LineDraft => ({ uid: nextUid++, product_id: '', quantity: '', unit_price: '' });
 
 const money = (value: number) => value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// The server's 900.0000 shown as 900.00; two prices equal in value are the same price.
+const money2 = (value: string) => parseFloat(value).toFixed(2);
+const samePrice = (a: string, b: string | null | undefined) => b != null && b !== '' && parseFloat(a) === parseFloat(b);
 
 // Last ten digits: 01711-000000, +8801711000000 and 1711000000 are one phone.
 const phoneKey = (phone: string | null | undefined) => (phone ?? '').replace(/\D/g, '').slice(-10);
@@ -234,7 +237,8 @@ function OrderLineRow({
     }, [customerId, line.product_id, line.quantity]);
 
     const product = products.find((p) => String(p.id) === line.product_id);
-    const unitPrice = line.unit_price !== '' ? line.unit_price : (price?.unit_price ?? '');
+    const listed = price?.unit_price ? money2(price.unit_price) : '';
+    const unitPrice = line.unit_price !== '' ? line.unit_price : listed;
     const lineTotal = unitPrice !== '' && line.quantity !== '' ? parseFloat(unitPrice) * parseFloat(line.quantity) : null;
 
     return (
@@ -270,9 +274,9 @@ function OrderLineRow({
                 ) : (
                     <p className="flex h-9 items-center text-sm tabular-nums">{price?.loading ? '…' : unitPrice || '-'}</p>
                 )}
-                {canOverride && line.unit_price !== '' && price?.unit_price && line.unit_price !== price.unit_price && (
+                {canOverride && line.unit_price !== '' && price?.unit_price && !samePrice(line.unit_price, price.unit_price) && (
                     <button type="button" className="text-muted-foreground w-fit text-xs underline" onClick={() => onChange({ unit_price: '' })}>
-                        Changed from {price.unit_price}: undo
+                        Changed from {listed}: undo
                     </button>
                 )}
                 <InputError message={errors[`lines.${index}.unit_price`]} />
@@ -328,7 +332,8 @@ function QuickCustomerDialog({
     useEffect(() => {
         if (open) {
             clearErrors();
-            const looksLikePhone = /^[+\d\s-]{6,}$/.test(typed);
+            // Digits (with + - or spaces) are a phone, however few: a search is often partial.
+            const looksLikePhone = /\d/.test(typed) && /^[+\d\s-]+$/.test(typed);
             setData({
                 name: looksLikePhone ? '' : typed,
                 phone: looksLikePhone ? typed : '',
@@ -474,7 +479,7 @@ function CreateOrderForm({
         lines: form.lines.map((line) => ({
             product_id: line.product_id,
             quantity: line.quantity,
-            ...(canOverridePrice && line.unit_price !== '' && line.unit_price !== prices[line.uid]?.unit_price
+            ...(canOverridePrice && line.unit_price !== '' && !samePrice(line.unit_price, prices[line.uid]?.unit_price)
                 ? { unit_price: line.unit_price }
                 : {}),
         })),
