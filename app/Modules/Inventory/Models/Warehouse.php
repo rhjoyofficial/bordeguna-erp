@@ -57,6 +57,31 @@ class Warehouse extends Model
             ->dontSubmitEmptyLogs();
     }
 
+    /**
+     * Make this the business's default warehouse, and make sure nothing else is.
+     *
+     * ⚠ Both writes in one transaction. Half of this applied leaves a business
+     * with two defaults or none, and every screen that preselects "the default"
+     * (Stock, Opening stock, Stock count, the counter) would then pick
+     * whichever row the database returned first. Same shape as
+     * ShippingZone::makeDefault.
+     *
+     * ⚠ Row by row, not a mass update, so each change lands in the activity log
+     * like any other edit of `is_default`.
+     */
+    public function makeDefault(): void
+    {
+        $this->getConnection()->transaction(function (): void {
+            static::query()
+                ->where('is_default', true)
+                ->whereKeyNot($this->getKey())
+                ->get()
+                ->each(fn (self $other) => $other->update(['is_default' => false]));
+
+            $this->update(['is_default' => true]);
+        });
+    }
+
     public function stockBatches(): HasMany
     {
         return $this->hasMany(StockBatch::class);

@@ -34,7 +34,9 @@ use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\database\seeders\InventoryDemoDataSeeder;
 use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
 use App\Modules\Inventory\database\seeders\InventoryReasonsSeeder;
+use App\Modules\Inventory\database\seeders\InventoryUnitsSeeder;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
+use App\Modules\Sales\database\seeders\PriceGroupSeeder;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
@@ -128,7 +130,19 @@ class DatabaseSeeder extends Seeder
         $this->call(BorDeGunaEmployeeSeeder::class);
 
         $this->call(InventoryReasonsSeeder::class);
+        // ⚠⚠ ABSENT UNTIL 21 SEP 2026. A unit is required on every product and
+        // the only seeder that planted any was the demo one below, which skips
+        // production - so a real business started with no units and the product
+        // form was a dead end. Additive only, matched on aliases; BEFORE the
+        // demo seeder so the two agree on the same rows.
+        $this->call(InventoryUnitsSeeder::class);
         $this->call(InventoryDemoDataSeeder::class);
+
+        // ⚠⚠ ABSENT UNTIL 21 SEP 2026, the CRM seeder's story again. Production
+        // has its four groups per business because somebody ran this by hand;
+        // a business created after that would have none, and a customer with
+        // no group falls to RETAIL, which would not exist. Idempotent per code.
+        $this->call(PriceGroupSeeder::class);
 
         // ⚠ Walks every business, like the permission seeders above, so it must
         // run after BorDeGunaOrganisationSeeder has created the real one.

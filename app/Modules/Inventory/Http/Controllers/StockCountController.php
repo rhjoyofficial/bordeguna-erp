@@ -4,6 +4,7 @@ namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Models\Reason;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\CompleteStockCount;
 use App\Modules\Inventory\Actions\StartStockCount;
 use App\Modules\Inventory\Enums\StockBatchStatus;
@@ -18,6 +19,9 @@ use App\Modules\Inventory\Models\Warehouse;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -58,6 +62,8 @@ class StockCountController extends Controller
                     'completed_at' => $count->completed_at?->toDateTimeString(),
                 ]),
             'warehouses' => Warehouse::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
+            // Preselected when starting a count, like every other stock screen.
+            'defaultWarehouseId' => Warehouse::query()->where('is_active', true)->where('is_default', true)->value('id'),
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
             'brands' => Brand::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'canWrite' => $this->mayWrite(),
@@ -68,11 +74,15 @@ class StockCountController extends Controller
     {
         $this->authorizeWrite();
 
+        // ⚠ Scoped to this business: a bare `exists` passes another tenant's
+        // id and findOrFail then answers with a blank 404, not a field error.
         $data = $request->validate([
-            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
-            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
-            'brand_id' => ['nullable', 'integer', 'exists:brands,id'],
+            'warehouse_id' => ['required', 'integer', $this->ownRow('warehouses')],
+            'category_id' => ['nullable', 'integer', $this->ownRow('categories')],
+            'brand_id' => ['nullable', 'integer', $this->ownRow('brands')],
             'note' => ['nullable', 'string'],
+        ], [
+            'warehouse_id.required' => 'Choose the warehouse to count.',
         ]);
 
         $count = $action->handle(
@@ -149,6 +159,7 @@ class StockCountController extends Controller
                     'id' => $product->id, 'name' => $product->name, 'sku' => $product->sku,
                 ]) : [],
             'canWrite' => $this->mayWrite(),
+            'awaitingApproval' => session('awaitingApproval'),
         ]);
     }
 
@@ -199,6 +210,54 @@ class StockCountController extends Controller
         return back()->with('success', 'Line saved.');
     }
 
+    /**
+     * "Save all": every row typed since the last save, in one request.
+     *
+     * ⚠⚠ WHY (21 Sep 2026). Each row had its own Save button and Complete
+     * reads only what was SAVED, so a counter who typed forty numbers and
+     * pressed Complete had every unsaved one treated as "nobody looked" -
+     * skipped, silently, with the count closed behind it.
+     *
+     * ⚠ Keyed by LINE ID (`lines.{id}.counted_quantity`), so a refusal lands on
+     * the row it belongs to rather than on "line 7 of whatever was sent".
+     */
+    public function updateLines(Request $request, StockCount $stockCount): RedirectResponse
+    {
+        $this->authorizeWrite();
+        $this->assertDraft($stockCount);
+
+        $data = $request->validate([
+            'lines' => ['required', 'array', 'min:1'],
+            'lines.*' => ['array'],
+            'lines.*.counted_quantity' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
+        ], [
+            'lines.*.counted_quantity.numeric' => 'Enter a number.',
+            'lines.*.counted_quantity.min' => 'A count cannot be below zero.',
+            'lines.*.unit_cost.numeric' => 'Enter a number.',
+            'lines.*.unit_cost.min' => 'A cost cannot be below zero.',
+        ]);
+
+        $lines = $stockCount->lines()->whereIn('id', array_keys($data['lines']))->get()->keyBy('id');
+
+        // ⚠ Only this count's own lines. An id from another count (or another
+        // business) is refused whole rather than half-saved.
+        if ($lines->count() !== count($data['lines'])) {
+            throw ValidationException::withMessages(['count' => 'Some of these lines are not on this count. Reload the page and try again.']);
+        }
+
+        DB::transaction(function () use ($data, $lines): void {
+            foreach ($data['lines'] as $id => $values) {
+                $lines[$id]->update([
+                    'counted_quantity' => $values['counted_quantity'] ?? null,
+                    'unit_cost' => $values['unit_cost'] ?? null,
+                ]);
+            }
+        });
+
+        return back()->with('success', count($data['lines']) === 1 ? 'Line saved.' : count($data['lines']).' lines saved.');
+    }
+
     /** C-CNT-8: found stock - the book says absent, the counter says here. */
     public function addLine(Request $request, StockCount $stockCount): RedirectResponse
     {
@@ -206,7 +265,7 @@ class StockCountController extends Controller
         $this->assertDraft($stockCount);
 
         $data = $request->validate([
-            'product_id' => ['required', 'integer', 'exists:products,id'],
+            'product_id' => ['required', 'integer', $this->ownRow('products')],
         ]);
 
         $product = Product::findOrFail($data['product_id']);
@@ -236,7 +295,9 @@ class StockCountController extends Controller
         $this->authorizeWrite();
 
         $data = $request->validate([
-            'reason_id' => ['required', 'integer', 'exists:reasons,id'],
+            'reason_id' => ['required', 'integer', $this->ownRow('reasons')],
+        ], [
+            'reason_id.required' => 'Choose a reason for the corrections.',
         ]);
 
         // ⚠ The whole action surfaces as a form error, never a blank 500 - the
@@ -252,10 +313,19 @@ class StockCountController extends Controller
             return back()->withErrors(['count' => $e->getMessage()]);
         }
 
-        $variances = $count->lines->filter(fn (StockCountLine $line) => $line->adjustment()->exists())->count();
+        $count->load('lines.adjustment.approvalRequest');
+        $raised = $count->lines->filter(fn (StockCountLine $line) => $line->adjustment !== null);
+        $waiting = $raised->filter(fn (StockCountLine $line) => $line->adjustment->approvalRequest?->isPending())->count();
 
-        return back()->with('success', "Stock count {$count->count_number} completed. "
-            .($variances === 0 ? 'The shelf agrees with the book: no corrections needed.' : "{$variances} variance correction(s) raised."));
+        $response = back()->with('success', "Stock count {$count->count_number} completed. "
+            .($raised->isEmpty() ? 'The shelf agrees with the book: no corrections needed.' : "{$raised->count()} variance correction(s) raised."));
+
+        // ⚠ Each variance is its own correction and, under the threshold rule,
+        // may be waiting for an approver. Say so, and where (the page links it).
+        return $waiting === 0 ? $response : $response->with(
+            'awaitingApproval',
+            "{$waiting} correction(s) from this count are waiting for approval. Stock does not change until they are approved.",
+        );
     }
 
     public function cancel(StockCount $stockCount): RedirectResponse
@@ -296,6 +366,11 @@ class StockCountController extends Controller
             ->pluck('unit_cost', 'product_id')
             ->map(fn ($cost) => (string) $cost)
             ->all();
+    }
+
+    private function ownRow(string $table): Exists
+    {
+        return Rule::exists($table, 'id')->where('business_id', app(BusinessContext::class)->id());
     }
 
     private function mayWrite(): bool

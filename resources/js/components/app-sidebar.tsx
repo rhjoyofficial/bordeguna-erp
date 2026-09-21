@@ -1,6 +1,7 @@
 import { NavGroups, type NavGroup } from '@/components/nav-groups';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import { useSidebarScrollMemory } from '@/hooks/use-sidebar-scroll-memory';
 import { settingsNavItems } from '@/lib/settings-nav';
 import { type SharedData } from '@/types';
@@ -125,6 +126,10 @@ export function AppSidebar() {
         canManageReasons,
     } = usePage<SharedData>().props;
 
+    // ⚠ Inventory's write permissions, shared by the module itself. Staff were
+    // shown Production, Stock requests and Purchase units and got 403 on each.
+    const inventory = useInventoryAbilities();
+
     const settingsItems = settingsNavItems({
         canManageUsers,
         canManageOrganization,
@@ -184,9 +189,10 @@ export function AppSidebar() {
                           // Manufacturing phase 1: the production run and the report that
                           // notices a drifting yield - shipped WITH their screens in one
                           // commit, the reachability rule this file records.
-                          { title: 'Production', url: '/inventory/production-runs', icon: Factory },
+                          ...(inventory.manageProduction ? [{ title: 'Production', url: '/inventory/production-runs', icon: Factory }] : []),
                           { title: 'Production yield', url: '/inventory/production-yield', icon: FileBarChart },
-                          { title: 'Stock requests', url: '/inventory/stock-requests', icon: ClipboardList },
+                          // The approver's queue: the index authorizes stock.approve.
+                          ...(inventory.approveStock ? [{ title: 'Stock requests', url: '/inventory/stock-requests', icon: ClipboardList }] : []),
                           // C-CNT: cycle counting - the recurring answer to
                           // "is the shelf what the book says". Route, screen
                           // and this line ship in one commit.
@@ -224,7 +230,11 @@ export function AppSidebar() {
                           { title: 'Units of measure', url: '/inventory/units', icon: Ruler },
                           // C-IMP-7 again. This one was built on 9 August and had no way
                           // in until 20 August.
-                          { title: 'Purchase units', url: '/inventory/unit-conversions', icon: Scale },
+                          ...(inventory.manageCatalog ? [{ title: 'Purchase units', url: '/inventory/unit-conversions', icon: Scale }] : []),
+                          // 21 Sep 2026: the approval limit for corrections had a
+                          // column for seven weeks and no screen. Route, screen and
+                          // this line ship in one commit - the reachability rule.
+                          ...(inventory.approveStock ? [{ title: 'Inventory settings', url: '/inventory/settings', icon: SlidersHorizontal }] : []),
                       ],
                   },
               ]

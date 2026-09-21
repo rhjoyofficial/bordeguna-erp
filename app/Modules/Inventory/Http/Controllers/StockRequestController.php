@@ -5,6 +5,7 @@ namespace App\Modules\Inventory\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Models\Reason;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\ApproveStockRequest;
 use App\Modules\Inventory\Actions\SubmitStockRequest;
 use App\Modules\Inventory\Enums\StockRequestType;
@@ -14,6 +15,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -55,14 +57,28 @@ class StockRequestController extends Controller
     {
         $this->authorize('inventory.stock.request');
 
+        $businessId = app(BusinessContext::class)->id();
+
+        // ⚠ A stock request is ONLY a transfer since slice 3; corrections go to
+        // `stock.adjustments.store`, which Staff may also raise. The Stock
+        // screen used to send `type: adjustment` here and the refusal was never
+        // rendered, so Staff could not report damage at all (21 Sep 2026).
         $data = $request->validate([
             'type' => ['required', new Enum(StockRequestType::class)],
-            'product_id' => ['required', 'exists:products,id'],
-            'warehouse_id' => ['required', 'exists:warehouses,id'],
-            'target_warehouse_id' => ['required', 'exists:warehouses,id', 'different:warehouse_id'],
+            'product_id' => ['required', Rule::exists('products', 'id')->where('business_id', $businessId)],
+            'warehouse_id' => ['required', Rule::exists('warehouses', 'id')->where('business_id', $businessId)],
+            'target_warehouse_id' => ['required', Rule::exists('warehouses', 'id')->where('business_id', $businessId), 'different:warehouse_id'],
             'quantity' => ['required', 'numeric', 'gt:0'],
-            'reason_id' => ['required', 'exists:reasons,id'],
+            'reason_id' => ['required', Rule::exists('reasons', 'id')->where('business_id', $businessId)],
             'note' => ['nullable', 'string'],
+        ], [
+            'target_warehouse_id.different' => 'Stock has to move to a different warehouse.',
+            'target_warehouse_id.required' => 'Choose where the stock goes.',
+            'reason_id.required' => 'Choose why it is moving.',
+            'product_id.required' => 'Choose the product.',
+            'warehouse_id.required' => 'Choose the warehouse.',
+            'quantity.required' => 'Enter how many.',
+            'quantity.gt' => 'Enter a quantity above zero.',
         ]);
 
         // ⚠ C-INV-E1. Both of SubmitStockRequest's refusals are non-validation
@@ -82,7 +98,9 @@ class StockRequestController extends Controller
             throw ValidationException::withMessages(['stock' => $e->getMessage()]);
         }
 
-        return back()->with('success', 'Stock request submitted.');
+        return back()
+            ->with('success', 'Stock request submitted.')
+            ->with('awaitingApproval', 'Request to move stock submitted. Nothing moves until a manager approves it.');
     }
 
     public function approve(Request $request, StockRequest $stockRequest, ApproveStockRequest $action): RedirectResponse

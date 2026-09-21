@@ -1,10 +1,11 @@
+import { Pagination } from '@/components/data-table/pagination';
 import { Field, FormRow } from '@/components/form/field';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
@@ -27,11 +28,6 @@ interface Option {
     code?: string;
 }
 
-interface Paginated<T> {
-    data: T[];
-    links: { url: string | null; label: string; active: boolean }[];
-}
-
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Inventory', href: '/inventory' },
     { title: 'Stock counts', href: '/inventory/stock-counts' },
@@ -42,18 +38,22 @@ const statusVariant = (status: string) => (status === 'completed' ? 'default' : 
 export default function StockCountsIndex({
     counts,
     warehouses,
+    defaultWarehouseId,
     categories,
     brands,
     canWrite,
 }: {
     counts: Paginated<CountRow>;
     warehouses: Option[];
+    defaultWarehouseId: number | null;
     categories: Option[];
     brands: Option[];
     canWrite: boolean;
 }) {
     const { data, setData, post, errors, processing, reset } = useForm({
-        warehouse_id: warehouses.length === 1 ? String(warehouses[0].id) : '',
+        // The default warehouse, like every other stock screen; a single
+        // warehouse is the default whether or not anybody marked it.
+        warehouse_id: defaultWarehouseId ? String(defaultWarehouseId) : warehouses.length === 1 ? String(warehouses[0].id) : '',
         category_id: '',
         brand_id: '',
     });
@@ -72,7 +72,17 @@ export default function StockCountsIndex({
                     description="Walk a warehouse (or one category or brand of it), write down what is actually on the shelf, and every difference becomes an ordinary stock correction through the same approval flow as a hand-typed one."
                 />
 
-                {canWrite && (
+                {canWrite && warehouses.length === 0 && (
+                    <div className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
+                        No warehouse yet, so there is nothing to count.{' '}
+                        <Link href="/inventory/warehouses" className="text-foreground underline underline-offset-2">
+                            Warehouses
+                        </Link>{' '}
+                        is where one is added.
+                    </div>
+                )}
+
+                {canWrite && warehouses.length > 0 && (
                     <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">
                         <FormRow className="gap-3">
                             <Field label="Warehouse" htmlFor="warehouse_id" size="md" error={errors.warehouse_id} required>
@@ -155,6 +165,10 @@ export default function StockCountsIndex({
                         </tbody>
                     </table>
                 </div>
+
+                {/* ⚠ Paginated on the server (15 a page) with no control here, so the
+                    sixteenth count was unreachable (21 Sep 2026 audit). */}
+                <Pagination meta={counts} />
             </div>
         </AppLayout>
     );
