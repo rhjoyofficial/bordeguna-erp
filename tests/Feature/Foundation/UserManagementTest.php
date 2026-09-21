@@ -2,8 +2,8 @@
 
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Notifications\SetPasswordNotification;
 use App\Modules\Foundation\Support\BusinessContext;
-use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\Models\Permission;
@@ -170,7 +170,7 @@ it('emails a member a link to set their own password', function () {
         ->assertRedirect()
         ->assertSessionHasNoErrors();
 
-    Notification::assertSentTo($this->staff, ResetPassword::class);
+    Notification::assertSentTo($this->staff, SetPasswordNotification::class);
     expect(DB::table('password_reset_tokens')->where('email', $this->staff->email)->exists())->toBeTrue();
 });
 

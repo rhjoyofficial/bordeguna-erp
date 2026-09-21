@@ -69,6 +69,8 @@ class SalesInvoiceController extends Controller
                 'due_date' => $invoice->due_date?->toDateString(),
                 'outstanding' => $invoice->outstanding()->toTaka(),
                 'is_settled' => $invoice->isSettled(),
+                // Some money in, not all: "Unpaid" said the opposite (21 Sep 2026).
+                'is_part_paid' => ! $invoice->isSettled() && $invoice->receivedTotal()->minor > 0,
             ]));
 
         return Inertia::render('sales/invoices/index', [
@@ -131,6 +133,7 @@ class SalesInvoiceController extends Controller
 
                 return [
                     'delivery_line_id' => $line->id,
+                    'delivery_id' => $line->delivery_id,
                     'delivery_number' => $line->delivery->delivery_number,
                     'delivered_at' => $line->delivery->delivered_at->toDateString(),
                     'product_name' => $line->product->name,
@@ -180,6 +183,9 @@ class SalesInvoiceController extends Controller
         }
 
         return Inertia::render('sales/invoices/create', [
+            // ⭐ "Invoice this challan" from the order page (21 Sep 2026): only that
+            // challan's lines start included; the customer's others start at 0.
+            'onlyDeliveryId' => $request->integer('delivery_id') ?: null,
             'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name']),
             'customerId' => $customerId,
             'billable' => $billable,
@@ -318,6 +324,9 @@ class SalesInvoiceController extends Controller
             'customer',
             'lines.product:id,name,sku',
             'lines.deliveryLine.delivery:id,delivery_number,delivered_at',
+            // The counter's price trail: who changed a price or gave a discount.
+            'lines.overriddenBy:id,name',
+            'discountGivenBy:id,name',
             'allocations.receipt.moneyAccount:id,name',
         ]);
 

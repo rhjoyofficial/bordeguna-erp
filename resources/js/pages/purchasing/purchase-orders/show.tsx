@@ -1,7 +1,7 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
+import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
-import { SearchSelect } from '@/components/search-select';
+import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,12 +67,47 @@ interface Line {
     unit_cost: string;
 }
 
+/**
+ * A receipt as the server shapes it: dates already formatted in Dhaka, and each
+ * line's label data read from the stock batch it created (where FEFO reads it).
+ */
 interface Receipt {
     id: number;
-    received_by: { name: string };
-    received_at: string;
+    received_by: string | null;
+    received_at: string | null;
+    supplier_challan_number: string | null;
     note: string | null;
-    lines: { id: number; quantity_received: string; purchase_order_line: { id: number; product: { name: string; sku: string } } }[];
+    lines: {
+        id: number;
+        product: string | null;
+        sku: string | null;
+        quantity_received: string;
+        batch_number: string | null;
+        manufactured_date: string | null;
+        expiry_date: string | null;
+    }[];
+}
+
+interface BillRow {
+    id: number;
+    bill_number: string;
+    bill_date: string | null;
+    total: string;
+    outstanding: string;
+    is_reversed: boolean;
+}
+
+/** Derived from the order's supplier bills; see PurchaseOrderBilling. */
+interface Billing {
+    state: 'nothing_billed' | 'owed' | 'settled';
+    billed: string;
+    outstanding: string;
+}
+
+interface LastCost {
+    unit_cost: string;
+    po_number: string | null;
+    received_on: string | null;
 }
 
 interface Return {
@@ -87,7 +122,6 @@ interface Order {
     id: number;
     po_number: string;
     status: 'open' | 'partially_received' | 'received' | 'cancelled';
-    payment_status: 'unpaid' | 'partially_paid' | 'paid';
     expected_date: string | null;
     note: string | null;
     supplier: { name: string; contact_name: string | null; phone: string | null; payment_terms: string | null };
@@ -100,7 +134,6 @@ interface Order {
         review_note: string | null;
     };
     lines: Line[];
-    goods_receipts: Receipt[];
     returns: Return[];
 }
 
@@ -125,25 +158,44 @@ function returnable(line: Line): number {
     return Math.max(0, parseFloat(line.quantity_received) - parseFloat(line.quantity_returned));
 }
 
-function ReceiveGoodsForm({ order }: { order: Order }) {
+type ReceiveLine = {
+    purchase_order_line_id: number;
+    quantity: string;
+    batch_number: string;
+    manufactured_date: string;
+    expiry_date: string;
+};
+
+const blankReceiveLine = (line: Line): ReceiveLine => ({
+    purchase_order_line_id: line.id,
+    quantity: String(remaining(line)),
+    batch_number: '',
+    manufactured_date: '',
+    expiry_date: '',
+});
+
+function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
     const receivableLines = order.lines.filter((line) => remaining(line) > 0);
     const { data, setData, post, errors, processing, reset, transform } = useForm<{
+        supplier_challan_number: string;
         note: string;
-        lines: { purchase_order_line_id: number; quantity: string }[];
+        lines: ReceiveLine[];
     }>({
+        supplier_challan_number: '',
         note: '',
         lines: [],
     });
 
-    // Untouched lines default to the full remaining quantity - computed here
-    // (not pre-seeded into `lines`) so it always reflects the current order
-    // prop rather than whatever it was when this component first mounted.
+    // Untouched lines default to the full remaining quantity and no label data -
+    // computed here (not pre-seeded into `lines`) so it always reflects the
+    // current order prop rather than whatever it was when this component first
+    // mounted.
+    // ⚠ The ORDER of this array is the order of receivableLines, and the server
+    // keys every per-line error by that index (`lines.2.expiry_date`). The form
+    // renders errors by the same index, so the two must never be sorted apart.
     transform((formData) => ({
         ...formData,
-        lines: receivableLines.map((line) => ({
-            purchase_order_line_id: line.id,
-            quantity: formData.lines.find((entry) => entry.purchase_order_line_id === line.id)?.quantity ?? String(remaining(line)),
-        })),
+        lines: receivableLines.map((line) => formData.lines.find((entry) => entry.purchase_order_line_id === line.id) ?? blankReceiveLine(line)),
     }));
 
     const submit: FormEventHandler = (e) => {
@@ -151,52 +203,123 @@ function ReceiveGoodsForm({ order }: { order: Order }) {
         post(route('purchasing.purchase-orders.receive', order.id), { onSuccess: () => reset() });
     };
 
+    const entryFor = (line: Line): ReceiveLine => data.lines.find((entry) => entry.purchase_order_line_id === line.id) ?? blankReceiveLine(line);
+
     // Upserts rather than only mapping existing entries - this component can
     // stay mounted (returning null) from before anything was receivable, so
     // useForm's initial `lines` must not be relied on to already contain a
     // row for every current line.
-    const updateQuantity = (lineId: number, quantity: string) => {
-        const exists = data.lines.some((entry) => entry.purchase_order_line_id === lineId);
+    const updateLine = (line: Line, patch: Partial<ReceiveLine>) => {
+        const exists = data.lines.some((entry) => entry.purchase_order_line_id === line.id);
         setData(
             'lines',
             exists
-                ? data.lines.map((entry) => (entry.purchase_order_line_id === lineId ? { ...entry, quantity } : entry))
-                : [...data.lines, { purchase_order_line_id: lineId, quantity }],
+                ? data.lines.map((entry) => (entry.purchase_order_line_id === line.id ? { ...entry, ...patch } : entry))
+                : [...data.lines, { ...entryFor(line), ...patch }],
         );
     };
+
+    const lineError = (index: number, field: keyof ReceiveLine): string | undefined => errors[`lines.${index}.${field}` as keyof typeof errors];
 
     if (receivableLines.length === 0) {
         return null;
     }
 
     return (
-        <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-xl border p-4">
-            <h3 className="font-medium">Record goods receipt</h3>
-            <p className="text-muted-foreground text-sm">Defaults to the full remaining quantity - reduce a line for a partial shipment.</p>
-            {receivableLines.map((line) => {
-                const entry = data.lines.find((e) => e.purchase_order_line_id === line.id);
+        <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
+            <div>
+                <h3 className="font-medium">Record goods receipt</h3>
+                <p className="text-muted-foreground text-sm">
+                    Defaults to the full remaining quantity - reduce a line for a partial shipment, or set it to 0 if it did not come. Copy the batch
+                    number and dates from the label when it has them: stock with the earliest expiry is sold first.
+                </p>
+            </div>
+
+            <FormRow className="gap-3">
+                <Field label="Supplier challan no." htmlFor="supplier_challan_number" size="md" error={errors.supplier_challan_number}>
+                    <Input
+                        id="supplier_challan_number"
+                        value={data.supplier_challan_number}
+                        placeholder="From their delivery note"
+                        onChange={(e) => setData('supplier_challan_number', e.target.value)}
+                    />
+                </Field>
+                <Field label="Note" htmlFor="receipt_note" size="grow" error={errors.note}>
+                    <Input id="receipt_note" value={data.note} onChange={(e) => setData('note', e.target.value)} />
+                </Field>
+            </FormRow>
+
+            {receivableLines.map((line, index) => {
+                const entry = entryFor(line);
+                const unit = purchaseUnitOf(line);
+                // A service has no stock, so it has no batch and no label.
+                const stocked = line.product.type !== 'service';
 
                 return (
-                    <div key={line.id} className="grid grid-cols-[2fr_1fr] items-center gap-2">
-                        <span>
-                            {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>{' '}
+                    <div key={line.id} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-2 border-t pt-3">
+                        <p className="text-sm">
+                            <span className="font-medium">{line.product.name}</span>{' '}
+                            <span className="text-muted-foreground">({line.product.sku})</span>{' '}
                             <span className="text-muted-foreground text-xs">
                                 remaining {remaining(line)}
-                                {purchaseUnitOf(line) ? ` ${purchaseUnitOf(line)}` : ''}
+                                {unit ? ` ${unit}` : ''}
                             </span>
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <Input value={entry?.quantity ?? String(remaining(line))} onChange={(e) => updateQuantity(line.id, e.target.value)} />
-                            {purchaseUnitOf(line) && <span className="text-muted-foreground w-10 shrink-0 text-sm">{purchaseUnitOf(line)}</span>}
-                        </div>
+                        </p>
+                        <FormRow className="gap-3">
+                            <Field label="Quantity" htmlFor={`receive-qty-${line.id}`} size="sm" required error={lineError(index, 'quantity')}>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        id={`receive-qty-${line.id}`}
+                                        inputMode="decimal"
+                                        required
+                                        value={entry.quantity}
+                                        onChange={(e) => updateLine(line, { quantity: e.target.value })}
+                                    />
+                                    {unit && <span className="text-muted-foreground shrink-0 text-sm">{unit}</span>}
+                                </div>
+                            </Field>
+                            {stocked && (
+                                <>
+                                    <Field label="Batch no." htmlFor={`receive-batch-${line.id}`} size="sm" error={lineError(index, 'batch_number')}>
+                                        <Input
+                                            id={`receive-batch-${line.id}`}
+                                            value={entry.batch_number}
+                                            placeholder="As on the label"
+                                            onChange={(e) => updateLine(line, { batch_number: e.target.value })}
+                                        />
+                                    </Field>
+                                    <Field label="Made on" htmlFor={`receive-mfg-${line.id}`} error={lineError(index, 'manufactured_date')}>
+                                        <Input
+                                            id={`receive-mfg-${line.id}`}
+                                            type="date"
+                                            max={today}
+                                            value={entry.manufactured_date}
+                                            onChange={(e) => updateLine(line, { manufactured_date: e.target.value })}
+                                        />
+                                    </Field>
+                                    {/* ⚠ `min` only saves a round trip. The server refuses an
+                                        expiry before today whatever the browser allows. */}
+                                    <Field label="Expires on" htmlFor={`receive-exp-${line.id}`} error={lineError(index, 'expiry_date')}>
+                                        <Input
+                                            id={`receive-exp-${line.id}`}
+                                            type="date"
+                                            min={today}
+                                            value={entry.expiry_date}
+                                            onChange={(e) => updateLine(line, { expiry_date: e.target.value })}
+                                        />
+                                    </Field>
+                                </>
+                            )}
+                        </FormRow>
+                        <InputError message={lineError(index, 'purchase_order_line_id')} />
                     </div>
                 );
             })}
+
+            {/* Refusals about the receipt as a whole: over-receiving, an order not
+                open, a closed period, a missing account mapping. */}
             <InputError message={errors.lines} />
-            <div className="grid gap-2">
-                <Label>Note (optional)</Label>
-                <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
-            </div>
+
             <Button disabled={processing} className="w-fit">
                 Record receipt
             </Button>
@@ -280,20 +403,43 @@ function ReturnGoodsForm({ order }: { order: Order }) {
     );
 }
 
+const billingSentence = (billing: Billing): string => {
+    switch (billing.state) {
+        case 'owed':
+            return `Billed ${billing.billed}; ${billing.outstanding} is still owed to the supplier.`;
+        case 'settled':
+            return `Billed ${billing.billed}; every bill against this order is settled.`;
+        default:
+            return 'No supplier bill has been recorded against this order yet.';
+    }
+};
+
 export default function PurchaseOrderShow({
     timeline,
     order,
+    receipts,
+    bills,
+    billing,
+    last_costs,
+    today,
     can_approve,
     can_receive,
-    can_update_payment,
+    can_record_bill,
+    can_record_payment,
     can_return,
     can_cancel,
 }: {
     timeline?: TimelineEntry[];
     order: Order;
+    receipts: Receipt[];
+    bills: BillRow[];
+    billing: Billing;
+    last_costs: Record<number, LastCost>;
+    today: string;
     can_approve: boolean;
     can_receive: boolean;
-    can_update_payment: boolean;
+    can_record_bill: boolean;
+    can_record_payment: boolean;
     can_return: boolean;
     can_cancel: boolean;
 }) {
@@ -305,8 +451,7 @@ export default function PurchaseOrderShow({
     const approve = () => router.post(route('purchasing.purchase-orders.approve', order.id));
     const reject = (review_note: string) => router.post(route('purchasing.purchase-orders.reject', order.id), { review_note });
     const cancel = () => router.post(route('purchasing.purchase-orders.cancel', order.id));
-    const setPaymentStatus = (payment_status: string) =>
-        router.post(route('purchasing.purchase-orders.payment-status', order.id), { payment_status });
+    const anythingReceived = order.lines.some((line) => parseFloat(line.quantity_received) > 0);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -359,31 +504,54 @@ export default function PurchaseOrderShow({
                     <p className="text-destructive text-sm">Rejected: {order.approval_request.review_note}</p>
                 )}
 
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
-                            <th className="py-2">Product</th>
-                            <th className="py-2">Ordered</th>
-                            <th className="py-2">Received</th>
-                            <th className="py-2">Returned</th>
-                            <th className="py-2">Unit cost</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {order.lines.map((line) => (
-                            <tr key={line.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                <td className="py-2">
-                                    {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>
-                                    {line.product.type === 'service' && <span className="text-muted-foreground"> - service</span>}
-                                </td>
-                                <td className="py-2">{line.quantity_ordered}</td>
-                                <td className="py-2">{line.quantity_received}</td>
-                                <td className="text-muted-foreground py-2">{line.quantity_returned}</td>
-                                <td className="text-muted-foreground py-2">{line.unit_cost}</td>
+                {/* ⚠ Wrapped: seven columns do not fit a phone (Sales UX audit). The
+                    UNIT column is the purchase unit, the one every quantity and
+                    cost on this order is in (see purchaseUnitOf). */}
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
+                                <th className="py-2 pr-3">Product</th>
+                                <th className="py-2 pr-3">Unit</th>
+                                <th className="py-2 pr-3 text-right">Ordered</th>
+                                <th className="py-2 pr-3 text-right">Received</th>
+                                <th className="py-2 pr-3 text-right">Returned</th>
+                                <th className="py-2 pr-3 text-right">Unit cost</th>
+                                <th className="py-2">Last received at</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {order.lines.map((line) => {
+                                const last = last_costs[line.product.id];
+
+                                return (
+                                    <tr key={line.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                        <td className="py-2 pr-3">
+                                            {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>
+                                            {line.product.type === 'service' && <span className="text-muted-foreground"> - service</span>}
+                                        </td>
+                                        <td className="text-muted-foreground py-2 pr-3">{purchaseUnitOf(line) ?? '-'}</td>
+                                        <td className="py-2 pr-3 text-right tabular-nums">{line.quantity_ordered}</td>
+                                        <td className="py-2 pr-3 text-right tabular-nums">{line.quantity_received}</td>
+                                        <td className="text-muted-foreground py-2 pr-3 text-right tabular-nums">{line.quantity_returned}</td>
+                                        <td className="text-muted-foreground py-2 pr-3 text-right tabular-nums">{line.unit_cost}</td>
+                                        <td className="text-muted-foreground py-2 text-xs">
+                                            {last ? (
+                                                <>
+                                                    <span className="text-foreground text-sm tabular-nums">{last.unit_cost}</span>
+                                                    {last.po_number && ` on ${last.po_number}`}
+                                                    {last.received_on && `, ${last.received_on}`}
+                                                </>
+                                            ) : (
+                                                '-'
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
 
                 <div className="flex flex-wrap gap-2">
                     {can_cancel && (
@@ -401,34 +569,95 @@ export default function PurchaseOrderShow({
                             onConfirm={() => cancel()}
                         />
                     )}
-                    {can_update_payment && order.approval_request.status === 'approved' && (
-                        <div className="flex items-center gap-2">
-                            <Label className="text-muted-foreground text-xs">Payment:</Label>
-                            <SearchSelect className="capitalize" value={order.payment_status} onChange={(e) => setPaymentStatus(e.target.value)}>
-                                <option value="unpaid">Unpaid</option>
-                                <option value="partially_paid">Partially paid</option>
-                                <option value="paid">Paid</option>
-                            </SearchSelect>
-                        </div>
-                    )}
+                    {/* ⚠⚠ The "Payment: Unpaid / Partially paid / Paid" dropdown that
+                        sat here was removed on 21 Sep 2026 (Sales UX audit #11). It
+                        set a status on the order that moved no money and reached no
+                        ledger, so the order could read "Paid" while the supplier was
+                        owed in full. Payment now shows below, read from the bills. */}
                 </div>
 
-                {can_receive && order.approval_request.status === 'approved' && order.status !== 'cancelled' && <ReceiveGoodsForm order={order} />}
+                {/* The purchase chain, walked from the order: receive -> bill -> pay.
+                    Each button opens the next screen already filled in. */}
+                {order.approval_request.status === 'approved' && (anythingReceived || bills.length > 0) && (
+                    <div className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-xl border p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                                <h3 className="font-medium">Supplier bills and payment</h3>
+                                <p className="text-muted-foreground text-sm">{billingSentence(billing)}</p>
+                            </div>
+                            {can_record_bill && (
+                                <Button size="sm" asChild>
+                                    <Link href={route('purchasing.bills.create', order.id)}>Record the supplier bill</Link>
+                                </Button>
+                            )}
+                        </div>
+                        {bills.length > 0 && (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="text-muted-foreground border-b text-left">
+                                            <th className="py-2 pr-3">Bill</th>
+                                            <th className="py-2 pr-3">Date</th>
+                                            <th className="py-2 pr-3 text-right">Total</th>
+                                            <th className="py-2 pr-3 text-right">Outstanding</th>
+                                            <th className="py-2"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {bills.map((bill) => (
+                                            <tr key={bill.id} className="border-b last:border-b-0">
+                                                <td className="py-2 pr-3">
+                                                    <Link href={route('purchasing.bills.show', bill.id)} className="font-medium hover:underline">
+                                                        {bill.bill_number}
+                                                    </Link>
+                                                    {bill.is_reversed && <span className="text-destructive ml-2 text-xs">reversed</span>}
+                                                </td>
+                                                <td className="py-2 pr-3">{bill.bill_date ?? '-'}</td>
+                                                <td className="py-2 pr-3 text-right tabular-nums">{bill.total}</td>
+                                                <td className="py-2 pr-3 text-right tabular-nums">{bill.outstanding}</td>
+                                                <td className="py-2 text-right">
+                                                    {can_record_payment && !bill.is_reversed && parseFloat(bill.outstanding) > 0 && (
+                                                        <Button size="sm" variant="outline" asChild>
+                                                            <Link href={route('purchasing.payments.create', { bill_id: bill.id })}>
+                                                                Pay this bill
+                                                            </Link>
+                                                        </Button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                )}
 
-                {order.goods_receipts.length > 0 && (
+                {can_receive && order.approval_request.status === 'approved' && order.status !== 'cancelled' && (
+                    <ReceiveGoodsForm order={order} today={today} />
+                )}
+
+                {receipts.length > 0 && (
                     <div className="flex flex-col gap-2">
                         <h3 className="font-medium">Receipt history</h3>
-                        {order.goods_receipts.map((receipt) => (
+                        {receipts.map((receipt) => (
                             <div key={receipt.id} className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
                                 <p className="text-muted-foreground">
-                                    {receipt.received_by.name} - {receipt.received_at}
+                                    {receipt.received_by} - {receipt.received_at}
+                                    {receipt.supplier_challan_number && ` - challan ${receipt.supplier_challan_number}`}
                                     {receipt.note && ` - ${receipt.note}`}
                                 </p>
                                 <ul className="mt-1 list-disc pl-5">
                                     {receipt.lines.map((line) => (
                                         <li key={line.id}>
-                                            {line.purchase_order_line.product.name} ({line.purchase_order_line.product.sku}) -{' '}
-                                            {line.quantity_received}
+                                            {line.product} ({line.sku}) - {line.quantity_received}
+                                            {(line.batch_number || line.manufactured_date || line.expiry_date) && (
+                                                <span className="text-muted-foreground text-xs">
+                                                    {line.batch_number && ` · batch ${line.batch_number}`}
+                                                    {line.manufactured_date && ` · made ${line.manufactured_date}`}
+                                                    {line.expiry_date && ` · expires ${line.expiry_date}`}
+                                                </span>
+                                            )}
                                         </li>
                                     ))}
                                 </ul>

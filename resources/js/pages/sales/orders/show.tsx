@@ -369,11 +369,13 @@ function ChallanCard({
     couriers,
     canDeliver,
     canRecordOutcome,
+    customerId,
 }: {
     challan: Challan;
     couriers: { id: number; name: string }[];
     canDeliver: boolean;
     canRecordOutcome: boolean;
+    customerId: number;
 }) {
     const consignment = challan.consignment;
 
@@ -384,6 +386,16 @@ function ChallanCard({
                     {challan.delivery_number}
                 </Link>
                 <span className="text-muted-foreground">- {challan.delivered_at}</span>
+                {/* ⭐ The next steps where the challan is (21 Sep 2026): print it for
+                    the driver, then bill it, without hunting through two lists. */}
+                <a href={route('sales.deliveries.print', challan.id)} target="_blank" rel="noreferrer" className="text-muted-foreground underline">
+                    Print challan
+                </a>
+                {canDeliver && (
+                    <Link href={route('sales.invoices.create', { customer_id: customerId, delivery_id: challan.id })} className="underline">
+                        Invoice this challan
+                    </Link>
+                )}
                 {consignment && (
                     <Badge variant={consignment.status === 'booked' ? 'secondary' : consignment.status === 'returned' ? 'destructive' : 'default'}>
                         {consignment.status_label}
@@ -925,9 +937,69 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
     );
 }
 
+interface NextStep {
+    kind: 'approve' | 'invoice' | 'parcel' | 'collect' | 'deliver' | 'done';
+    title: string;
+    detail: string;
+    href: string | null;
+    can: boolean;
+}
+
+// ⭐ What is left to do on this order, in order (21 Sep 2026): the order,
+// challan, invoice and receipt are four screens, and nothing said which was
+// next. The first step leads; any others are listed under it.
+function NextSteps({ steps }: { steps: NextStep[] }) {
+    if (steps.length === 0) {
+        return null;
+    }
+
+    const [first, ...rest] = steps;
+
+    if (first.kind === 'done') {
+        return (
+            <p className="text-muted-foreground text-sm">
+                <span className="text-foreground font-medium">{first.title}.</span> {first.detail}
+            </p>
+        );
+    }
+
+    const action = (step: NextStep, primary: boolean) => {
+        if (step.href === null || !step.can) {
+            return null;
+        }
+        return (
+            <Button size="sm" variant={primary ? 'default' : 'outline'} asChild>
+                {step.href.startsWith('#') ? <a href={step.href}>{step.title}</a> : <Link href={step.href}>{step.title}</Link>}
+            </Button>
+        );
+    };
+
+    return (
+        <div className="border-primary/40 bg-primary/5 flex flex-col gap-2 rounded-xl border p-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <p className="font-medium">Next: {first.title}</p>
+                    <p className="text-muted-foreground">{first.detail}</p>
+                </div>
+                {action(first, true)}
+            </div>
+            {rest.map((step) => (
+                <div key={step.kind} className="border-primary/20 flex flex-wrap items-center justify-between gap-2 border-t pt-2">
+                    <div>
+                        <p>Also: {step.title}</p>
+                        <p className="text-muted-foreground">{step.detail}</p>
+                    </div>
+                    {action(step, false)}
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export default function SalesOrderShow({
     order,
     challans,
+    next_steps,
     couriers,
     exposure,
     payments,
@@ -945,6 +1017,7 @@ export default function SalesOrderShow({
 }: {
     order: Order;
     challans: Challan[];
+    next_steps: NextStep[];
     couriers: { id: number; name: string }[];
     exposure: Exposure;
     payments: Payments;
@@ -1010,6 +1083,8 @@ export default function SalesOrderShow({
                         </Button>
                     </div>
                 </div>
+
+                <NextSteps steps={next_steps} />
 
                 {/* ⭐⭐ A WEBSITE ORDER, AND WHAT SOMEBODY NEEDS TO ACT ON IT.
                     Slice 2.4 lands these in this approval queue deliberately -
@@ -1090,7 +1165,7 @@ export default function SalesOrderShow({
                 </div>
 
                 {order.approval_request?.status === 'pending' && can_approve && (
-                    <div className="border-sidebar-border/70 dark:border-sidebar-border flex gap-2 rounded-xl border p-4">
+                    <div id="approval" className="border-sidebar-border/70 dark:border-sidebar-border flex scroll-mt-4 gap-2 rounded-xl border p-4">
                         {credit_refusal === null && (
                             <Button size="sm" onClick={approve}>
                                 Approve
@@ -1222,11 +1297,13 @@ export default function SalesOrderShow({
                 )}
 
                 {can_deliver && order.approval_request?.status === 'approved' && ['open', 'partially_delivered'].includes(order.status) && (
-                    <DeliverForm order={order} warehouses={warehouses} />
+                    <div id="deliver" className="scroll-mt-4">
+                        <DeliverForm order={order} warehouses={warehouses} />
+                    </div>
                 )}
 
                 {challans.length > 0 && (
-                    <div className="flex flex-col gap-2">
+                    <div id="challans" className="flex scroll-mt-4 flex-col gap-2">
                         <h3 className="font-medium">Challans against this order</h3>
                         {challans.map((challan) => (
                             <ChallanCard
@@ -1235,6 +1312,7 @@ export default function SalesOrderShow({
                                 couriers={couriers}
                                 canDeliver={can_deliver}
                                 canRecordOutcome={can_record_outcome}
+                                customerId={order.customer.id}
                             />
                         ))}
                     </div>

@@ -1,4 +1,4 @@
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { FormEventHandler } from 'react';
 
 import InputError from '@/components/input-error';
@@ -23,6 +23,7 @@ type Bill = {
     reversed_at: string | null;
     reversal_note: string | null;
     supplier: string | null;
+    purchase_order_id: number | null;
     po_number: string | null;
     lines: Array<{
         id: number;
@@ -44,7 +45,17 @@ type JournalView = {
 
 const money = (value: string) => Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
-export default function BillShow({ bill, journals, can_reverse }: { bill: Bill; journals: JournalView[]; can_reverse: boolean }) {
+export default function BillShow({
+    bill,
+    journals,
+    can_pay,
+    can_reverse,
+}: {
+    bill: Bill;
+    journals: JournalView[];
+    can_pay: boolean;
+    can_reverse: boolean;
+}) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchasing', href: '/purchasing/purchase-orders' },
         { title: 'Bills', href: '/purchasing/bills' },
@@ -69,11 +80,29 @@ export default function BillShow({ bill, journals, can_reverse }: { bill: Bill; 
                         <h1 className="text-xl font-semibold">Bill {bill.bill_number}</h1>
                         <p className="text-muted-foreground text-sm">
                             {bill.supplier}
-                            {bill.po_number ? ` · against ${bill.po_number}` : ''}
+                            {bill.po_number && bill.purchase_order_id ? (
+                                <>
+                                    {' · against '}
+                                    <Link href={route('purchasing.purchase-orders.show', bill.purchase_order_id)} className="hover:underline">
+                                        {bill.po_number}
+                                    </Link>
+                                </>
+                            ) : (
+                                ''
+                            )}
                             {bill.bill_date ? ` · dated ${bill.bill_date}` : ''}
                             {bill.due_date ? ` · due ${bill.due_date}` : ''}
                         </p>
                     </div>
+
+                    {/* The next step of the purchase chain. Opens the payment form
+                        with this supplier chosen and this bill's outstanding typed
+                        in; the account and the button are still the clerk's. */}
+                    {can_pay && (
+                        <Button asChild>
+                            <Link href={route('purchasing.payments.create', { bill_id: bill.id })}>Pay this bill</Link>
+                        </Button>
+                    )}
 
                     {bill.is_reversed && (
                         <div className="border-destructive/40 bg-destructive/10 rounded border px-3 py-2 text-sm">

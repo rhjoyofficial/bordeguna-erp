@@ -17,14 +17,25 @@ import { FormEventHandler } from 'react';
 interface Option {
     id: number;
     name: string;
-    sku?: string;
+}
+
+/**
+ * A product as the order form needs it: the unit its quantity and cost are
+ * typed in (the PURCHASE unit when it is bought in another one), and what it
+ * last arrived at, so a price is typed against the last real one.
+ */
+interface ProductOption extends Option {
+    sku: string;
+    unit: string | null;
+    last_cost: { unit_cost: string; po_number: string | null; received_on: string | null } | null;
 }
 
 interface OrderRow {
     id: number;
     po_number: string;
     status: 'open' | 'partially_received' | 'received' | 'cancelled';
-    payment_status: 'unpaid' | 'partially_paid' | 'paid';
+    // Derived from the order's supplier bills (PurchaseOrderBilling), never typed.
+    billing: { state: 'nothing_billed' | 'owed' | 'settled'; billed: string; outstanding: string };
     total_ordered: string;
     supplier: { name: string };
     warehouse: { name: string };
@@ -48,7 +59,7 @@ const approvalVariant: Record<OrderRow['approval_request']['status'], 'secondary
 
 type LineDraft = { product_id: string; quantity: string; unit_cost: string };
 
-function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Option[]; warehouses: Option[]; products: Option[] }) {
+function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Option[]; warehouses: Option[]; products: ProductOption[] }) {
     const { data, setData, post, errors, processing, reset } = useForm<{
         supplier_id: string;
         warehouse_id: string;
@@ -91,7 +102,7 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
                 two pickers fit their names, the date sizes itself, the note
                 takes what is left. */}
             <FormRow className="gap-3">
-                <Field label="Supplier" error={errors.supplier_id}>
+                <Field label="Supplier" required error={errors.supplier_id}>
                     <SearchableSelect
                         value={data.supplier_id}
                         onChange={(v) => setData('supplier_id', v)}
@@ -100,7 +111,7 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
                         searchPlaceholder="Search suppliers…"
                     />
                 </Field>
-                <Field label="Receiving warehouse" error={errors.warehouse_id}>
+                <Field label="Receiving warehouse" required error={errors.warehouse_id}>
                     <SearchableSelect
                         value={data.warehouse_id}
                         onChange={(v) => setData('warehouse_id', v)}
@@ -119,42 +130,63 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
 
             <div className="flex flex-col gap-2">
                 <p className="text-sm font-medium">Line items</p>
-                {data.lines.map((line, index) => (
-                    <div key={index} className="flex flex-wrap items-start gap-2">
-                        <div className="grid min-w-64 flex-1 gap-1">
-                            <SearchableSelect
-                                value={line.product_id}
-                                onChange={(v) => updateLine(index, { product_id: v })}
-                                options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} - ${p.name}` : p.name }))}
-                                placeholder="Select product"
-                                searchPlaceholder="Search products…"
-                            />
-                            <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
+                {data.lines.map((line, index) => {
+                    const chosen = products.find((p) => String(p.id) === line.product_id);
+
+                    return (
+                        <div key={index} className="flex flex-wrap items-start gap-2">
+                            <div className="grid min-w-64 flex-1 gap-1">
+                                <SearchableSelect
+                                    value={line.product_id}
+                                    onChange={(v) => updateLine(index, { product_id: v })}
+                                    options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} - ${p.name}` : p.name }))}
+                                    placeholder="Select product"
+                                    searchPlaceholder="Search products…"
+                                />
+                                <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
+                            </div>
+                            <div className="grid w-32 gap-1">
+                                {/* ⚠ The unit beside the box: "100" of mustard oil is
+                                kilograms or litres, and a supplier sends what the
+                                order says. */}
+                                <div className="flex items-center gap-1.5">
+                                    <Input
+                                        placeholder="Quantity"
+                                        value={line.quantity}
+                                        onChange={(e) => updateLine(index, { quantity: e.target.value })}
+                                    />
+                                    {chosen?.unit && <span className="text-muted-foreground shrink-0 text-xs">{chosen.unit}</span>}
+                                </div>
+                                <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
+                            </div>
+                            <div className="grid w-44 gap-1">
+                                <Input
+                                    placeholder={chosen?.unit ? `Unit cost per ${chosen.unit}` : 'Unit cost'}
+                                    value={line.unit_cost}
+                                    onChange={(e) => updateLine(index, { unit_cost: e.target.value })}
+                                />
+                                {chosen?.last_cost && (
+                                    <p className="text-muted-foreground text-xs">
+                                        Last received at {chosen.last_cost.unit_cost}
+                                        {chosen.last_cost.po_number &&
+                                            ` (${chosen.last_cost.po_number}${chosen.last_cost.received_on ? `, ${chosen.last_cost.received_on}` : ''})`}
+                                    </p>
+                                )}
+                                <InputError message={errors[`lines.${index}.unit_cost` as keyof typeof errors]} />
+                            </div>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-10"
+                                onClick={() => removeLine(index)}
+                                disabled={data.lines.length === 1}
+                            >
+                                Remove
+                            </Button>
                         </div>
-                        <div className="grid w-24 gap-1">
-                            <Input placeholder="Quantity" value={line.quantity} onChange={(e) => updateLine(index, { quantity: e.target.value })} />
-                            <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
-                        </div>
-                        <div className="grid w-36 gap-1">
-                            <Input
-                                placeholder="Unit cost"
-                                value={line.unit_cost}
-                                onChange={(e) => updateLine(index, { unit_cost: e.target.value })}
-                            />
-                            <InputError message={errors[`lines.${index}.unit_cost` as keyof typeof errors]} />
-                        </div>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-10"
-                            onClick={() => removeLine(index)}
-                            disabled={data.lines.length === 1}
-                        >
-                            Remove
-                        </Button>
-                    </div>
-                ))}
+                    );
+                })}
                 <Button type="button" variant="outline" size="sm" className="w-fit" onClick={addLine}>
                     + Add line
                 </Button>
@@ -181,7 +213,7 @@ export default function PurchaseOrdersIndex({
     orders: Paginated<OrderRow>;
     suppliers: Option[];
     warehouses: Option[];
-    products: Option[];
+    products: ProductOption[];
     can_create: boolean;
     filters: { search: string; status: string };
 }) {
@@ -222,7 +254,7 @@ export default function PurchaseOrdersIndex({
                                 <th className="p-3 text-right">Qty ordered</th>
                                 <th className="p-3">Approval</th>
                                 <th className="p-3">Status</th>
-                                <th className="p-3">Payment</th>
+                                <th className="p-3">Billing</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -246,7 +278,15 @@ export default function PurchaseOrdersIndex({
                                             {order.status.replace('_', ' ')}
                                         </Badge>
                                     </td>
-                                    <td className="text-muted-foreground p-3 capitalize">{order.payment_status.replace('_', ' ')}</td>
+                                    {/* ⚠ Read from the supplier bills, replacing a hand-set
+                                        "Paid" that nothing tied to money (audit #11). */}
+                                    <td className="text-muted-foreground p-3 whitespace-nowrap">
+                                        {order.billing.state === 'nothing_billed' && 'Nothing billed'}
+                                        {order.billing.state === 'owed' && (
+                                            <span className="text-foreground tabular-nums">{order.billing.outstanding} owed</span>
+                                        )}
+                                        {order.billing.state === 'settled' && 'Settled'}
+                                    </td>
                                 </tr>
                             ))}
                             {orders.data.length === 0 && (

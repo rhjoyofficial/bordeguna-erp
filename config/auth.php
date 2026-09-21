@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\User;
+
 return [
 
     /*
@@ -62,7 +64,7 @@ return [
     'providers' => [
         'users' => [
             'driver' => 'eloquent',
-            'model' => env('AUTH_MODEL', App\Models\User::class),
+            'model' => env('AUTH_MODEL', User::class),
         ],
 
         // 'users' => [
@@ -94,13 +96,14 @@ return [
         'users' => [
             'provider' => 'users',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
-            // 24 hours, Joy's decision 25 Aug 2026. An hour was the default and
-            // it beat two employees in a row: the link is used as an invitation
-            // to staff who read email at night, not only as a reset for someone
-            // sitting at the screen. Applies to every reset link, not just
-            // invitations, so a stolen mailbox stays useful to a thief for a day
-            // rather than an hour.
-            'expire' => 1440,
+            // 48 hours, Joy's decision 21 Sep 2026 ("minimum 48hrs"), raised from
+            // the 24 of 25 Aug. An hour was the original default and it beat two
+            // employees in a row: the link is used as an invitation to staff and
+            // outside people who read email at night, not only as a reset for
+            // someone at the screen. ⚠ Applies to every reset link, not just
+            // invitations, so a stolen mailbox stays useful to a thief for two
+            // days: the price of an invitation that arrives on a Friday.
+            'expire' => (int) env('AUTH_PASSWORD_LINK_MINUTES', 2880),
             'throttle' => 60,
         ],
     ],

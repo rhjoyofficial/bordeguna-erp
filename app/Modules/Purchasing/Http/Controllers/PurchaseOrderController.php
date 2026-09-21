@@ -13,21 +13,23 @@ use App\Modules\Purchasing\Actions\CancelPurchaseOrder;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Actions\RecordPurchaseReturn;
-use App\Modules\Purchasing\Actions\UpdatePurchaseOrderPaymentStatus;
-use App\Modules\Purchasing\Enums\PaymentStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Support\LastReceivedCost;
+use App\Modules\Purchasing\Support\PurchaseOrderBilling;
+use App\Modules\Purchasing\Support\ReceivedBatchDates;
+use App\Support\RecordTimeline;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use InvalidArgumentException;
 use RuntimeException;
-use App\Support\RecordTimeline;
 
 /**
  * ⚠⚠ C-PUR-E1. Every refusal below already carried a message written for a
@@ -53,19 +55,43 @@ class PurchaseOrderController extends Controller
             'status' => $request->string('status')->toString(),
         ];
 
-        $orders = PurchaseOrder::with(['supplier:id,name', 'warehouse:id,name', 'approvalRequest'])
+        $orders = PurchaseOrder::with(['supplier:id,name', 'warehouse:id,name', 'approvalRequest', ...PurchaseOrderBilling::eagerLoad()])
             ->withSum('lines as total_ordered', 'quantity_ordered')
             ->when($filters['search'], fn ($query, $search) => $query->where('po_number', 'like', "%{$search}%"))
             ->when($filters['status'], fn ($query, $status) => $query->where('status', $status))
             ->latest()
             ->paginate(15)
-            ->withQueryString();
+            ->withQueryString()
+            // ⚠⚠ "Billing" is DERIVED from the order's supplier bills, replacing
+            // the hand-set payment status this column used to show (audit #11).
+            // The retired column is hidden so no screen can read it by accident.
+            ->through(function (PurchaseOrder $order) {
+                $order->setAttribute('billing', PurchaseOrderBilling::summarise($order));
+
+                return $order->unsetRelation('bills')->makeHidden('payment_status');
+            });
+
+        $lastCosts = LastReceivedCost::forProducts();
 
         return Inertia::render('purchasing/purchase-orders/index', [
             'orders' => $orders,
             'suppliers' => Supplier::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'warehouses' => Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'products' => Product::where('is_active', true)->orderBy('name')->get(['id', 'name', 'sku']),
+            // ⚠ The unit comes with the product so the quantity and cost boxes
+            // can say which unit they mean (the PURCHASE unit when the product
+            // is bought in another one), and the last received cost so a new
+            // price is typed against the last real one, not from memory.
+            'products' => Product::where('is_active', true)
+                ->with(['unitOfMeasure:id,abbreviation', 'purchaseUnit:id,abbreviation'])
+                ->orderBy('name')
+                ->get(['id', 'name', 'sku', 'unit_of_measure_id', 'purchase_unit_id'])
+                ->map(fn (Product $product) => [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'sku' => $product->sku,
+                    'unit' => $product->purchaseUnit?->abbreviation ?? $product->unitOfMeasure?->abbreviation,
+                    'last_cost' => $lastCosts[$product->id] ?? null,
+                ]),
             'can_create' => request()->user()->can('purchasing.po.create'),
             'filters' => $filters,
         ]);
@@ -133,19 +159,76 @@ class PurchaseOrderController extends Controller
             'goodsReceipts.receivedBy:id,name',
             'goodsReceipts.lines.purchaseOrderLine:id,product_id',
             'goodsReceipts.lines.purchaseOrderLine.product:id,name,sku',
+            // The batch each receipt line created: its label data is shown in
+            // the receipt history, read from where FEFO reads it.
+            'goodsReceipts.lines.stockMovement:id,batch_id',
+            'goodsReceipts.lines.stockMovement.batch:id,batch_number,manufactured_date,expiry_date',
             'returns.returnedBy:id,name',
             'returns.lines.purchaseOrderLine:id,product_id',
             'returns.lines.purchaseOrderLine.product:id,name,sku',
+            ...PurchaseOrderBilling::eagerLoad(),
         ]);
 
         $user = request()->user();
         $canApprove = $user->can('purchasing.po.approve');
 
+        $receipts = $purchaseOrder->goodsReceipts->map(fn ($receipt) => [
+            'id' => $receipt->id,
+            'received_by' => $receipt->receivedBy?->name,
+            // ⚠ Formatted here, in the app's Asia/Dhaka clock. The datetime cast
+            // serialises in UTC, which put a 9 a.m. delivery at 3 a.m.
+            'received_at' => $receipt->received_at?->format('Y-m-d H:i'),
+            'supplier_challan_number' => $receipt->supplier_challan_number,
+            'note' => $receipt->note,
+            'lines' => $receipt->lines->map(fn ($line) => [
+                'id' => $line->id,
+                'product' => $line->purchaseOrderLine?->product?->name,
+                'sku' => $line->purchaseOrderLine?->product?->sku,
+                'quantity_received' => (string) $line->quantity_received,
+                'batch_number' => $line->stockMovement?->batch?->batch_number,
+                // ⚠ toDateString(), never the date cast: a Dhaka midnight
+                // serialised in UTC is 18:00 the day before.
+                'manufactured_date' => $line->stockMovement?->batch?->manufactured_date?->toDateString(),
+                'expiry_date' => $line->stockMovement?->batch?->expiry_date?->toDateString(),
+            ])->values(),
+        ])->values();
+
+        $bills = $purchaseOrder->bills->map(fn (SupplierBill $bill) => [
+            'id' => $bill->id,
+            'bill_number' => $bill->bill_number,
+            'bill_date' => $bill->bill_date?->toDateString(),
+            'total' => Money::ofTaka((string) $bill->total)->toTaka(),
+            'outstanding' => PurchaseOrderBilling::outstandingOf($bill)->toTaka(),
+            'is_reversed' => $bill->isReversed(),
+        ])->values();
+
+        $billing = PurchaseOrderBilling::summarise($purchaseOrder);
+
+        $purchaseOrder->unsetRelation('goodsReceipts')->unsetRelation('bills')->makeHidden('payment_status');
+
         return Inertia::render('purchasing/purchase-orders/show', [
             'order' => $purchaseOrder,
+            'receipts' => $receipts,
+            'bills' => $bills,
+            'billing' => $billing,
+            // What each product last arrived at on ANOTHER order, beside this
+            // order's own agreed cost.
+            'last_costs' => (object) LastReceivedCost::forProducts(
+                $purchaseOrder->lines->pluck('product_id')->unique()->values()->all(),
+                excludingOrderId: $purchaseOrder->id,
+            ),
+            // The storekeeper's date, for the date pickers' limits. The server
+            // still decides; the limit only saves a round trip.
+            'today' => now()->toDateString(),
             'can_approve' => $canApprove,
             'can_receive' => $user->can('purchasing.receipt.record'),
-            'can_update_payment' => $user->can('purchasing.payment.update'),
+            // ⚠ The next step of the chain, offered only when there is something
+            // to bill: received, not returned, not already invoiced. The bill
+            // form opens prefilled with exactly those quantities at the agreed
+            // price (SupplierBillController::create).
+            'can_record_bill' => $user->can('purchasing.bill.record')
+                && $purchaseOrder->lines->contains(fn (PurchaseOrderLine $line) => (float) $line->billableQuantity() > 0),
+            'can_record_payment' => $user->can('purchasing.payment.record'),
             'can_return' => $canApprove,
             'can_cancel' => $canApprove
                 && $purchaseOrder->status !== PurchaseOrderStatus::Cancelled
@@ -237,31 +320,52 @@ class PurchaseOrderController extends Controller
         return back()->with('success', 'Purchase order cancelled.');
     }
 
-    public function updatePaymentStatus(Request $request, PurchaseOrder $purchaseOrder, UpdatePurchaseOrderPaymentStatus $action): RedirectResponse
-    {
-        $this->authorize('purchasing.payment.update');
-
-        $data = $request->validate(['payment_status' => ['required', new Enum(PaymentStatus::class)]]);
-
-        try {
-            $action->handle($purchaseOrder, PaymentStatus::from($data['payment_status']));
-        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
-            return back()->with('error', $e->getMessage());
-        }
-
-        return back()->with('success', 'Payment status updated.');
-    }
-
     public function receive(Request $request, PurchaseOrder $purchaseOrder, RecordGoodsReceipt $action): RedirectResponse
     {
         $this->authorize('purchasing.receipt.record');
 
         $data = $request->validate([
             'note' => ['nullable', 'string'],
+            'supplier_challan_number' => ['nullable', 'string', 'max:100'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.purchase_order_line_id' => ['required', 'exists:purchase_order_lines,id'],
             'lines.*.quantity' => ['required', 'numeric', 'min:0'],
+            // ⚠ All three optional: plenty of what is bought (cartons, labels,
+            // jars) carries no batch or date at all. Whether a food product
+            // MUST carry an expiry is an owner question, not a rule to guess.
+            'lines.*.batch_number' => ['nullable', 'string', 'max:100'],
+            'lines.*.manufactured_date' => ['nullable', 'date_format:Y-m-d'],
+            'lines.*.expiry_date' => ['nullable', 'date_format:Y-m-d'],
+        ], [], [
+            // ⚠ Named for a person. Without these the refusal reads
+            // "The lines.2.expiry_date field must match the format Y-m-d."
+            'supplier_challan_number' => 'supplier challan number',
+            'lines.*.quantity' => 'quantity',
+            'lines.*.batch_number' => 'batch number',
+            'lines.*.manufactured_date' => 'manufacture date',
+            'lines.*.expiry_date' => 'expiry date',
         ]);
+
+        // ⚠⚠ The label checks, per line, so each sentence lands under the box
+        // it is about (`lines.2.expiry_date`) rather than in one message at the
+        // bottom. The SAME class runs again inside RecordGoodsReceipt, which is
+        // what actually protects the stock; this pass is for the person typing.
+        // A line left at 0 is "not in this delivery" and is not checked.
+        $dateProblems = [];
+
+        foreach ($data['lines'] as $index => $entry) {
+            if ((float) $entry['quantity'] <= 0) {
+                continue;
+            }
+
+            foreach (ReceivedBatchDates::problems($entry['manufactured_date'] ?? null, $entry['expiry_date'] ?? null) as $field => $problem) {
+                $dateProblems["lines.{$index}.{$field}"] = $problem;
+            }
+        }
+
+        if ($dateProblems !== []) {
+            throw ValidationException::withMessages($dateProblems);
+        }
 
         $purchaseOrder->load('lines');
 
@@ -269,6 +373,9 @@ class PurchaseOrderController extends Controller
             ->map(fn (array $entry) => [
                 'line' => $purchaseOrder->lines->firstWhere('id', $entry['purchase_order_line_id']),
                 'quantity' => $entry['quantity'],
+                'batch_number' => $entry['batch_number'] ?? null,
+                'manufactured_date' => $entry['manufactured_date'] ?? null,
+                'expiry_date' => $entry['expiry_date'] ?? null,
             ])
             ->filter(fn (array $entry) => $entry['line'] !== null)
             ->all();
@@ -280,7 +387,13 @@ class PurchaseOrderController extends Controller
         // those was a blank 500. Over-receiving is the commonest of them: a
         // storekeeper types 50 where 20 remains.
         try {
-            $action->handle($purchaseOrder, $lineReceipts, $request->user(), $data['note'] ?? null);
+            $action->handle(
+                $purchaseOrder,
+                $lineReceipts,
+                $request->user(),
+                $data['note'] ?? null,
+                $data['supplier_challan_number'] ?? null,
+            );
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
         }

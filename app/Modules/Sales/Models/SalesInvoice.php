@@ -76,6 +76,12 @@ class SalesInvoice extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /** Who allowed the discount on the whole bill at the counter (21 Sep 2026). */
+    public function discountGivenBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'discount_given_by');
+    }
+
     public function lines(): HasMany
     {
         return $this->hasMany(SalesInvoiceLine::class);

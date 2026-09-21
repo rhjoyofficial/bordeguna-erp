@@ -119,6 +119,18 @@ class SupplierBill extends Model
 
     public function outstanding(): Money
     {
+        // ⚠⚠ A REVERSED BILL OWES NOTHING. Its journal has been reversed, so
+        // Accounts Payable no longer holds it, and a reversal is refused once
+        // anything was paid or credited, so there is no settled part to report
+        // either. Until 21 Sep 2026 this still returned the full total, which
+        // put a reversed bill on the "Pay a supplier" form, in the supplier's
+        // amount owed, and let RecordSupplierPayment pay it: a debit to Accounts
+        // Payable with no credit behind it. The cockpit and cash forecast
+        // already left reversed bills out; this makes the document agree.
+        if ($this->isReversed()) {
+            return Money::zero();
+        }
+
         return Money::ofTaka((string) $this->total)
             ->plus($this->paidTotal()->negated())
             ->plus($this->creditedTotal()->negated());

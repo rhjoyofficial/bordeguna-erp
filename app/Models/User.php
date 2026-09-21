@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Notifications\SetPasswordNotification;
 use App\Modules\Hrm\Models\Employee;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -33,6 +34,17 @@ class User extends Authenticatable
         // C-I18N-1: the person's own UI language, 'en' or 'bn'.
         'locale',
     ];
+
+    /**
+     * ⚠ The set-password email in this ERP's own words (21 Sep 2026). Laravel's
+     * stock message says "we received a password reset request" and gives the
+     * lifetime in minutes, which reads as an attack to somebody who has just
+     * been invited.
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new SetPasswordNotification($token));
+    }
 
     public function businesses(): BelongsToMany
     {

@@ -46,7 +46,10 @@ class RecordSalesInvoice
      *     description?: string|null,
      *     quantity: string,
      *     unitPrice: string,
-     *     discount?: string|null
+     *     discount?: string|null,
+     *     listPrice?: string|null,
+     *     overrideReason?: string|null,
+     *     overriddenBy?: User|null
      * }>  $lines
      *
      * @throws ValidationException
@@ -63,6 +66,10 @@ class RecordSalesInvoice
         // takes the customer's price group, then the business (plan D2). Read
         // only while VAT applies; ignored, and stored false, otherwise.
         ?bool $pricesIncludeTax = null,
+        // Why the whole bill was discounted, and who allowed it: the counter's
+        // trail (21 Sep 2026). Kept only when given.
+        ?string $discountReason = null,
+        ?User $discountGivenBy = null,
     ): SalesInvoice {
         $date = ($invoiceDate === null ? Carbon::now() : Carbon::parse($invoiceDate))->startOfDay();
 
@@ -93,7 +100,7 @@ class RecordSalesInvoice
             ]);
         }
 
-        return DB::transaction(function () use ($customer, $lines, $createdBy, $date, $discount, $dueDate, $note, $pricesIncludeTax) {
+        return DB::transaction(function () use ($customer, $lines, $createdBy, $date, $discount, $dueDate, $note, $pricesIncludeTax, $discountReason, $discountGivenBy) {
             $invoice = SalesInvoice::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
@@ -129,6 +136,23 @@ class RecordSalesInvoice
                 if ($lineDiscount->minor > $gross->minor) {
                     throw ValidationException::withMessages([
                         "lines.{$index}.discount" => 'A line discount cannot exceed the line total.',
+                    ]);
+                }
+
+                // ⚠⚠ THE COUNTER'S PRICE TRAIL (21 Sep 2026). A caller that
+                // passes the list price is saying "this line may differ from
+                // it". A line that does - a changed price or a discount - keeps
+                // what the list said, why and who; one that does not keeps
+                // nothing, so NULL always means "sold at its list price".
+                // ⚠ Refused here as well as on the screen: a trail that one
+                // caller can skip is not a trail.
+                $listPrice = $entry['listPrice'] ?? null;
+                $overridden = $listPrice !== null && bccomp((string) $unitPrice, (string) $listPrice, 4) !== 0;
+                $conceded = $listPrice !== null && ($overridden || $lineDiscount->minor > 0);
+
+                if ($conceded && (trim((string) ($entry['overrideReason'] ?? '')) === '' || ($entry['overriddenBy'] ?? null) === null)) {
+                    throw ValidationException::withMessages([
+                        "lines.{$index}.override_reason" => 'A changed price or a discount needs a reason and the person who allowed it.',
                     ]);
                 }
 
@@ -205,6 +229,10 @@ class RecordSalesInvoice
                     'description' => $entry['description'] ?? null,
                     'quantity' => $quantity,
                     'unit_price' => $unitPrice,
+                    'list_price' => $conceded ? $listPrice : null,
+                    'price_overridden' => $overridden,
+                    'override_reason' => $conceded ? trim((string) $entry['overrideReason']) : null,
+                    'overridden_by' => $conceded ? $entry['overriddenBy']->id : null,
                     'line_discount' => $lineDiscount->toTaka(),
                     'line_net' => $net->toTaka(),
                     'cost_released' => $costReleased->toTaka(),
@@ -300,6 +328,8 @@ class RecordSalesInvoice
             $invoice->forceFill([
                 'subtotal' => $subtotal->toTaka(),
                 'invoice_discount' => $discount->toTaka(),
+                'discount_reason' => $discountReason !== null && trim($discountReason) !== '' ? trim($discountReason) : null,
+                'discount_given_by' => $discountReason !== null && trim($discountReason) !== '' ? $discountGivenBy?->id : null,
                 'tax_total' => $taxTotal->toTaka(),
                 'tax_point_date' => $date,
                 'prices_include_tax' => $taxed && $inclusive,

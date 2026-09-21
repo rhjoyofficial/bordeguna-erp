@@ -174,37 +174,48 @@ export function AppSidebar() {
         // business" was written before the zero-permission Self-service role
         // existed, and a self-service login could read the stock book and the
         // supplier bills. Every real role holds the view permissions.
+        //
+        // ⭐ 21 Sep 2026: each module is split in two, the day's work and the
+        // setup behind it. One flat list of 20 Inventory and 16 Sales rows put
+        // "Units of measure" between "Stock" and "Counter sale" for somebody
+        // selling all day. The setup groups start closed and open themselves on
+        // any of their pages, like Settings; every url and gate is unchanged.
         ...(canViewInventory
             ? [
                   {
                       label: 'Inventory',
                       items: [
                           { title: 'Inventory', url: '/inventory', icon: Boxes },
-                          { title: 'Products', url: '/inventory/products', icon: PackageSearch },
                           { title: 'Stock', url: '/inventory/stock', icon: ClipboardList },
+                          // Stock on the road between warehouses, and where it is
+                          // marked received. It had no menu row until 21 Sep 2026.
+                          { title: 'Transfers', url: '/inventory/stock/transfers', icon: ArrowLeftRight },
+                          // C-CNT: cycle counting - the recurring answer to
+                          // "is the shelf what the book says". Route, screen
+                          // and this line ship in one commit.
+                          { title: 'Stock counts', url: '/inventory/stock-counts', icon: ClipboardCheck },
+                          // The approver's queue: the index authorizes stock.approve.
+                          ...(inventory.approveStock ? [{ title: 'Stock requests', url: '/inventory/stock-requests', icon: ClipboardList }] : []),
                           // DreamsPOS gaps INV-2/INV-3 (Joy, 24 Aug): what needs
                           // reordering, and which batches are past or near their date.
                           { title: 'Low stocks', url: '/inventory/low-stocks', icon: TrendingDown },
                           { title: 'Stock expiry', url: '/inventory/expiry', icon: Timer },
+                          // C-BIN-4/6. Placement is floor work, gated like the
+                          // other floor work; the pick list prints what this
+                          // screen records.
+                          ...(canRecordOpeningStock ? [{ title: 'Bin placement', url: '/inventory/bin-placement', icon: Grid3x3 }] : []),
                           // Manufacturing phase 1: the production run and the report that
                           // notices a drifting yield - shipped WITH their screens in one
                           // commit, the reachability rule this file records.
                           ...(inventory.manageProduction ? [{ title: 'Production', url: '/inventory/production-runs', icon: Factory }] : []),
                           { title: 'Production yield', url: '/inventory/production-yield', icon: FileBarChart },
-                          // The approver's queue: the index authorizes stock.approve.
-                          ...(inventory.approveStock ? [{ title: 'Stock requests', url: '/inventory/stock-requests', icon: ClipboardList }] : []),
-                          // C-CNT: cycle counting - the recurring answer to
-                          // "is the shelf what the book says". Route, screen
-                          // and this line ship in one commit.
-                          { title: 'Stock counts', url: '/inventory/stock-counts', icon: ClipboardCheck },
-                          // ⚠⚠ The cutover's one irreversible document, and it had no
-                          // link at all until 19 Aug. Gated, because the route is:
-                          // opening stock sets the FIFO layers behind every margin.
-                          ...(canRecordOpeningStock ? [{ title: 'Opening stock', url: '/inventory/opening-stock', icon: ClipboardCheck }] : []),
-                          // C-BIN-4/6. Placement is floor work, gated like the
-                          // other floor work; the pick list prints what this
-                          // screen records.
-                          ...(canRecordOpeningStock ? [{ title: 'Bin placement', url: '/inventory/bin-placement', icon: Grid3x3 }] : []),
+                      ],
+                  },
+                  {
+                      label: 'Inventory setup',
+                      defaultOpen: false,
+                      items: [
+                          { title: 'Products', url: '/inventory/products', icon: PackageSearch },
                           // C-IMP-7. The whole point of the import screen is that Joy
                           // stops sending files to be loaded for him, so it has to be
                           // findable without being told where it is.
@@ -214,11 +225,10 @@ export function AppSidebar() {
                           // that had no way back out. Gated on the same
                           // permission as the catalogue it prints from.
                           ...(canImportCatalogue ? [{ title: 'Barcode labels', url: '/inventory/labels', icon: ScanBarcode }] : []),
-                          // C-BOM-9. Route, screen and this line shipped in one commit.
-                          // The recipe screen posts nothing - it only decides what a run
-                          // suggests - but a template nobody can find saves nobody any
-                          // typing.
-                          ...(canManageBom ? [{ title: 'Recipes (BOM)', url: '/inventory/bills-of-material', icon: ListTree }] : []),
+                          // ⚠⚠ The cutover's one irreversible document, and it had no
+                          // link at all until 19 Aug. Gated, because the route is:
+                          // opening stock sets the FIFO layers behind every margin.
+                          ...(canRecordOpeningStock ? [{ title: 'Opening stock', url: '/inventory/opening-stock', icon: ClipboardCheck }] : []),
                           { title: 'Warehouses', url: '/inventory/warehouses', icon: Warehouse },
                           // WMS bins phase 1: route, screen and this line ship
                           // in one commit - the reachability rule.
@@ -231,6 +241,11 @@ export function AppSidebar() {
                           // C-IMP-7 again. This one was built on 9 August and had no way
                           // in until 20 August.
                           ...(inventory.manageCatalog ? [{ title: 'Purchase units', url: '/inventory/unit-conversions', icon: Scale }] : []),
+                          // C-BOM-9. Route, screen and this line shipped in one commit.
+                          // The recipe screen posts nothing - it only decides what a run
+                          // suggests - but a template nobody can find saves nobody any
+                          // typing.
+                          ...(canManageBom ? [{ title: 'Recipes (BOM)', url: '/inventory/bills-of-material', icon: ListTree }] : []),
                           // 21 Sep 2026: the approval limit for corrections had a
                           // column for seven weeks and no screen. Route, screen and
                           // this line ship in one commit - the reachability rule.
@@ -244,6 +259,9 @@ export function AppSidebar() {
         // sidebar and not from any other screen - so the entire revenue side of
         // the ERP could only be reached by typing a URL. Fixed here, and a
         // structural test now fails if any module ships without navigation.
+        //
+        // The order follows a sale: sell or take the order, deliver, bill,
+        // collect, and what comes back.
         ...(canViewSales || canSell
             ? [
                   {
@@ -256,11 +274,25 @@ export function AppSidebar() {
                           // commit - the reachability lesson this file records.
                           ...(canViewSales ? [{ title: 'Sales orders', url: '/sales/orders', icon: ClipboardList }] : []),
                           ...(canRecordOrders ? [{ title: 'Quotations', url: '/sales/quotations', icon: FileText }] : []),
-                          ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
+                          ...(canViewSales ? [{ title: 'Deliveries', url: '/sales/deliveries', icon: PackageCheck }] : []),
+                          // Parcels out with couriers: where their answers are entered.
+                          ...(canViewSales ? [{ title: 'Parcels', url: '/sales/consignments', icon: Truck }] : []),
+                          ...(canViewSales ? [{ title: 'Invoices', url: '/sales/invoices', icon: FileText }] : []),
                           // ⭐ Money in, and the list of it (21 Sep 2026): before this a receipt
                           // could only be taken from one invoice's page, and never listed.
                           ...(canRecordReceipts ? [{ title: 'Receive payment', url: '/sales/receipts/new', icon: HandCoins }] : []),
                           ...(canViewSales ? [{ title: 'Receipts', url: '/sales/receipts', icon: HandCoins }] : []),
+                          ...(canViewSales ? [{ title: 'Courier payouts', url: '/sales/courier-statements', icon: Wallet }] : []),
+                          // Goods coming back - shipped WITH its screens in one
+                          // commit, same reachability rule as the order book.
+                          ...(canViewSales ? [{ title: 'Returns', url: '/sales/returns', icon: Undo2 }] : []),
+                          ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
+                      ],
+                  },
+                  {
+                      label: 'Sales setup',
+                      defaultOpen: false,
+                      items: [
                           ...(canViewSales || canManagePrices ? [{ title: 'Selling prices', url: '/sales/prices', icon: BadgeDollarSign }] : []),
                           // Who a price is for, and which groups pay MRP (21 Sep 2026).
                           ...(canManagePrices ? [{ title: 'Price groups', url: '/sales/price-groups', icon: BadgeDollarSign }] : []),
@@ -273,14 +305,6 @@ export function AppSidebar() {
                           // C-IMP-7. Reachable, or it is the fifth screen built
                           // and never found.
                           ...(canImportPrices ? [{ title: 'Import prices', url: '/sales/prices/import', icon: Upload }] : []),
-                          ...(canViewSales ? [{ title: 'Invoices', url: '/sales/invoices', icon: FileText }] : []),
-                          ...(canViewSales ? [{ title: 'Deliveries', url: '/sales/deliveries', icon: PackageCheck }] : []),
-                          // Parcels out with couriers: where their answers are entered.
-                          ...(canViewSales ? [{ title: 'Parcels', url: '/sales/consignments', icon: Truck }] : []),
-                          ...(canViewSales ? [{ title: 'Courier payouts', url: '/sales/courier-statements', icon: Wallet }] : []),
-                          // Goods coming back - shipped WITH its screens in one
-                          // commit, same reachability rule as the order book.
-                          ...(canViewSales ? [{ title: 'Returns', url: '/sales/returns', icon: Undo2 }] : []),
                       ],
                   },
               ]

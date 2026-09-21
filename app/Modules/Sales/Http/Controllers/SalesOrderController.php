@@ -13,6 +13,7 @@ use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
@@ -29,21 +30,25 @@ use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\RecordOrderPayment;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Actions\SendPaidOrderForApproval;
+use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\Delivery;
+use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Support\DeliveryBilling;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
+use App\Modules\Sales\Support\OrderNextSteps;
 use DomainException;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -93,12 +98,31 @@ class SalesOrderController extends Controller
             // product, for a human deciding whether to take the next order.
             // Nothing anywhere enforces it.
             'committed' => $this->committedVersusOnHand(),
-            'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name', 'credit_limit']),
+            // ⭐ Phone and type ride along (21 Sep 2026): the picker finds a
+            // customer by phone, and the quick "New customer" warns on a number
+            // that is already somebody's.
+            'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name', 'phone', 'type', 'credit_limit']),
             'warehouses' => Warehouse::query()->where('is_active', true)
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
             'products' => Product::query()->where('is_active', true)->stocked()
-                ->orderBy('name')->get(['id', 'name', 'sku']),
+                ->with('unitOfMeasure:id,abbreviation')
+                ->orderBy('name')->get(['id', 'name', 'sku', 'unit_of_measure_id'])
+                ->map(fn (Product $product) => [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'sku' => $product->sku,
+                    'unit' => $product->unitOfMeasure?->abbreviation,
+                ]),
             'can_create' => $request->user()->can('sales.orders.record'),
+            'can_override_price' => $request->user()->can('sales.price.override'),
+            // A customer can be added from the order form by whoever may add one
+            // on the Customers screen, with the same fields that decide the price.
+            'can_add_customer' => $request->user()->can('sales.customers.manage'),
+            'customer_types' => collect(CustomerType::cases())
+                ->reject(fn (CustomerType $type) => $type === CustomerType::WalkIn)
+                ->map(fn (CustomerType $type) => ['value' => $type->value, 'label' => $type->label()])
+                ->values(),
+            'price_groups' => PriceGroup::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']),
         ]);
     }
 
@@ -233,12 +257,14 @@ class SalesOrderController extends Controller
         // ⭐ Each challan with what a courier needs: its lines, its parcel, and
         // the amount to collect if it were delivered today. Shaped here, dates
         // as dates, never a model handed to the page.
-        $challans = Delivery::query()
+        $deliveries = Delivery::query()
             ->whereIn('id', $deliveryIds)
             ->with(['lines.product:id,name,sku', 'lines.orderLine', 'customer', 'consignment.courier:id,name', 'consignment.invoice:id,invoice_number', 'consignment.salesReturn:id,return_number'])
             ->orderBy('delivered_at')
             ->orderBy('id')
-            ->get()
+            ->get();
+
+        $challans = $deliveries
             ->map(function (Delivery $delivery) use ($resolver) {
                 $consignment = $delivery->consignment;
                 $untouched = $delivery->lines->every(fn ($line) => (float) $line->quantity_invoiced <= 0 && (float) $line->quantity_returned <= 0);
@@ -283,6 +309,8 @@ class SalesOrderController extends Controller
                 'expected_date' => $order->expected_date?->toDateString(),
             ]),
             'challans' => $challans,
+            // ⭐ What is left to do, in order (21 Sep 2026): the page leads with it.
+            'next_steps' => OrderNextSteps::for($order, $deliveries, $user),
             'couriers' => MoneyAccount::query()->active()->where('type', MoneyAccountType::Courier->value)
                 ->orderBy('name')->get(['id', 'name']),
             'can_record_outcome' => $user->can('sales.sell') && $user->can('sales.receipt.record') && $user->can('sales.returns.record'),
@@ -485,6 +513,35 @@ class SalesOrderController extends Controller
         return back()->with('success', 'Refund recorded.');
     }
 
+    /**
+     * The price a line would be ordered at, for the order form as it is typed
+     * (21 Sep 2026). The same resolver the order runs, so the form shows what
+     * the order will say; a product with no price for this customer is named
+     * here, before the order is refused for it.
+     */
+    public function price(Request $request, ResolveSellingPrice $resolver): JsonResponse
+    {
+        $businessId = app(BusinessContext::class)->id();
+
+        $data = $request->validate([
+            'product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
+            'quantity' => ['required', 'numeric', 'min:0'],
+            'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', $businessId)],
+        ]);
+
+        $product = Product::findOrFail($data['product_id']);
+        $customer = Customer::findOrFail($data['customer_id']);
+        $resolved = $resolver->find($product, $customer, (string) ($data['quantity'] ?: '1'));
+
+        return response()->json([
+            'unit_price' => $resolved?->unitPrice,
+            'explanation' => $resolved?->explain(),
+            'refusal' => $resolved === null
+                ? "No price is set for {$customer->name} on {$product->name}. Set it under Sales setup, Selling prices, or this line cannot be ordered."
+                : null,
+        ]);
+    }
+
     public function store(Request $request, CreateSalesOrder $action): RedirectResponse
     {
         $this->authorize('sales.orders.record');
@@ -503,6 +560,17 @@ class SalesOrderController extends Controller
             // resolves the price at the order date.
             'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
         ]);
+
+        // ⚠⚠ A typed price is a margin decision (21 Sep 2026): whoever may take an
+        // order had it for any figure, with nothing to say who chose it. Only a
+        // holder of the counter's own override permission may send one now.
+        foreach ($data['lines'] as $index => $line) {
+            if (isset($line['unit_price']) && ! $request->user()->can('sales.price.override')) {
+                throw ValidationException::withMessages([
+                    "lines.{$index}.unit_price" => 'You may not change the price. The order takes the price set for this customer.',
+                ]);
+            }
+        }
 
         $products = Product::query()
             ->whereIn('id', collect($data['lines'])->pluck('product_id'))

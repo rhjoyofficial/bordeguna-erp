@@ -93,7 +93,9 @@ it('shows the counter to someone who may sell', function () {
     ($this->asRole)('Staff')->get('/sales/counter')->assertOk();
 });
 
-it('sells over the counter and lands on the invoice', function () {
+// ⚠ Back to a FRESH counter since 21 Sep 2026, not the invoice page: that page
+// is the internal view, with the cost of the goods and the journal on it.
+it('sells over the counter and comes back to a fresh counter', function () {
     $response = ($this->asRole)('Staff')->post('/sales/counter', [
         'customer_id' => Customer::walkIn()->id,
         'warehouse_id' => $this->warehouse->id,
@@ -106,7 +108,7 @@ it('sells over the counter and lands on the invoice', function () {
     expect($invoice)->not->toBeNull()
         ->and((float) $invoice->total)->toBe(2550.0);
 
-    $response->assertRedirect(route('sales.invoices.show', $invoice->id));
+    $response->assertRedirect(route('sales.counter.create'));
 });
 
 // ⚠ The counter must quote from the SAME resolver the sale uses, or the price
@@ -129,9 +131,13 @@ it('answers a price check from the real resolver', function () {
         ->assertJson(['unit_price' => '850.0000']);
 });
 
+// ⚠ A NAMED customer since 21 Sep 2026: the walk-in cannot owe money
+// (CounterFastAndSafeTest pins that refusal).
 it('lets a sale go on account when no money account is chosen', function () {
+    $shop = Customer::create(['business_id' => $this->business->id, 'code' => 'CUST-01', 'name' => 'Adabor Grocery']);
+
     ($this->asRole)('Staff')->post('/sales/counter', [
-        'customer_id' => Customer::walkIn()->id,
+        'customer_id' => $shop->id,
         'warehouse_id' => $this->warehouse->id,
         'lines' => [['product_id' => $this->product->id, 'quantity' => '2']],
     ]);

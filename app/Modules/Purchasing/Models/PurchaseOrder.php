@@ -2,13 +2,13 @@
 
 namespace App\Modules\Purchasing\Models;
 
+use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Enums\PaymentStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,6 +35,11 @@ class PurchaseOrder extends Model
         'supplier_id',
         'warehouse_id',
         'status',
+        // ⚠⚠ RETIRED 21 Sep 2026, kept only so old rows still read. It was a
+        // hand-set "Unpaid / Partially paid / Paid" dropdown that moved no money
+        // and reached no ledger, so a PO could say "Paid" while Accounts Payable
+        // said the supplier was owed in full. Nothing writes it any more; every
+        // screen derives payment from the order's supplier bills instead.
         'payment_status',
         'expected_date',
         'note',
@@ -86,6 +91,16 @@ class PurchaseOrder extends Model
     public function returns(): HasMany
     {
         return $this->hasMany(PurchaseReturn::class);
+    }
+
+    /**
+     * The supplier's invoices raised against this order. Whether the order is
+     * paid is read from THESE (their allocations and credit notes), never from
+     * the old `payment_status` column, which nothing ever tied to money.
+     */
+    public function bills(): HasMany
+    {
+        return $this->hasMany(SupplierBill::class);
     }
 
     public function isReceivable(): bool

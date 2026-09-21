@@ -27,35 +27,34 @@ use Inertia\Response;
  */
 class PosShiftController extends Controller
 {
+    /**
+     * ⚠⚠ EVERY OPEN TILL, not the first one found (21 Sep 2026). The table
+     * always allowed one open shift per till, but this screen showed only the
+     * first, so a second till could be opened and never seen or closed here.
+     */
     public function index(Request $request): Response
     {
         $this->authorize('sales.sell');
 
-        $open = DB::table('pos_shifts')->where('business_id', app(BusinessContext::class)->id())->where('status', 'open')->first();
+        $businessId = app(BusinessContext::class)->id();
+        $open = DB::table('pos_shifts')->where('business_id', $businessId)->where('status', 'open')->orderBy('opened_at')->get();
 
         return Inertia::render('sales/shifts', [
-            'open_shift' => $open === null ? null : [
-                'id' => $open->id,
-                'money_account_id' => $open->money_account_id,
-                'till' => DB::table('money_accounts')->where('id', $open->money_account_id)->value('name'),
-                'opened_at' => $open->opened_at,
-                'opened_by' => DB::table('users')->where('id', $open->opened_by)->value('name'),
-                'opening_float' => $open->opening_float,
-                'expected_cash' => $this->expectedCash($open),
-                'movements' => DB::table('pos_cash_movements')->where('shift_id', $open->id)
-                    ->orderByDesc('id')->get(['id', 'type', 'amount', 'reason', 'created_at']),
-                'cash_sales' => $this->cashSales($open),
-            ],
-            'tills' => MoneyAccount::query()->where('type', 'cash')->where('is_active', true)
+            'open_shifts' => $open->map(fn (object $shift) => $this->present($shift, $request->user()->id))->values(),
+            // ⚠ Only a cash box with its own ledger, and only one not already
+            // open: a second shift on one till would split its cash between two
+            // counts that could never both be right.
+            'tills' => MoneyAccount::query()->where('type', 'cash')->where('is_active', true)->whereNotNull('account_id')
+                ->whereNotIn('id', $open->pluck('money_account_id'))
                 ->orderBy('name')->get(['id', 'name']),
-            'closed_shifts' => DB::table('pos_shifts')->where('business_id', app(BusinessContext::class)->id())->where('status', 'closed')
+            'closed_shifts' => DB::table('pos_shifts')->where('business_id', $businessId)->where('status', 'closed')
                 ->orderByDesc('id')->limit(30)
                 ->get()
                 ->map(fn ($shift) => [
                     'id' => $shift->id,
                     'till' => DB::table('money_accounts')->where('id', $shift->money_account_id)->value('name'),
-                    'opened_at' => $shift->opened_at,
-                    'closed_at' => $shift->closed_at,
+                    'opened_at' => $this->when($shift->opened_at),
+                    'closed_at' => $this->when($shift->closed_at),
                     'opening_float' => $shift->opening_float,
                     'expected_cash' => $shift->expected_cash,
                     'closing_count' => $shift->closing_count,
@@ -65,13 +64,48 @@ class PosShiftController extends Controller
         ]);
     }
 
+    /** @return array<string, mixed> */
+    private function present(object $shift, int $userId): array
+    {
+        $flows = $this->tillFlows($shift);
+
+        return [
+            'id' => $shift->id,
+            'money_account_id' => $shift->money_account_id,
+            'till' => DB::table('money_accounts')->where('id', $shift->money_account_id)->value('name'),
+            'opened_at' => $this->when($shift->opened_at),
+            'opened_by' => DB::table('users')->where('id', $shift->opened_by)->value('name'),
+            'is_mine' => (int) $shift->opened_by === $userId,
+            'opening_float' => $shift->opening_float,
+            'money_in' => $flows['in'],
+            'money_out' => $flows['out'],
+            'movements_net' => $flows['movements'],
+            'expected_cash' => $this->expectedCash($shift),
+            'movements' => DB::table('pos_cash_movements')->where('shift_id', $shift->id)
+                ->orderByDesc('id')->get(['id', 'type', 'amount', 'reason', 'created_at']),
+        ];
+    }
+
+    /** A timestamp as the cashier reads it, in the application's (Dhaka) time. */
+    private function when(?string $timestamp): ?string
+    {
+        return $timestamp === null ? null : Carbon::parse($timestamp)->format('d M Y, g:i A');
+    }
+
     public function open(Request $request): RedirectResponse
     {
         $this->authorize('sales.sell');
 
         $data = $request->validate([
+            // ⚠ A cash box of THIS business with its own ledger: a bare exists
+            // accepted another business's account, or a bank account, as a till.
             'money_account_id' => [
-                'required', Rule::exists('money_accounts', 'id'),
+                'required',
+                Rule::exists('money_accounts', 'id')
+                    ->where('business_id', app(BusinessContext::class)->id())
+                    ->where('type', 'cash')
+                    ->where('is_active', true)
+                    ->whereNotNull('account_id'),
                 // ⚠ One open shift per till: two people cannot both hold
                 // custody of the same drawer.
                 function (string $attribute, mixed $value, \Closure $fail) {
@@ -176,23 +210,46 @@ class PosShiftController extends Controller
         return back()->with('success', 'Shift closed: '.$verdict.'.'.$booked);
     }
 
-    /** Float + cash into the till during the shift + movements in - out. */
+    /**
+     * What should be in the drawer: the float, plus every movement of this
+     * till's money the LEDGER recorded since the shift opened, plus the
+     * custody movements typed on this screen.
+     *
+     * ⚠⚠ Read from the journal lines stamped with the till (21 Sep 2026), not
+     * from receipts alone. The old sum counted money received and nothing that
+     * left: a cash refund, a payment voucher paid from the till or cash moved to
+     * the bank took money out of the drawer and not out of "expected", so the
+     * count read short by exactly that much and the shortfall was booked to
+     * Cash Over and Short. Every one of those posts a line on the till (its own
+     * ledger since the same day), so the ledger is the one complete answer.
+     */
     private function expectedCash(object $shift): float
     {
+        $flows = $this->tillFlows($shift);
+
+        return round((float) $shift->opening_float + $flows['in'] - $flows['out'] + $flows['movements'], 2);
+    }
+
+    /** @return array{in: float, out: float, movements: float} */
+    private function tillFlows(object $shift): array
+    {
+        $ledger = DB::table('journal_lines')
+            ->where('business_id', $shift->business_id)
+            ->where('money_account_id', $shift->money_account_id)
+            ->where('created_at', '>=', $shift->opened_at)
+            ->selectRaw('COALESCE(SUM(CASE WHEN amount_minor > 0 THEN amount_minor ELSE 0 END), 0) as money_in')
+            ->selectRaw('COALESCE(SUM(CASE WHEN amount_minor < 0 THEN -amount_minor ELSE 0 END), 0) as money_out')
+            ->first();
+
         $movements = DB::table('pos_cash_movements')
             ->where('shift_id', $shift->id)
             ->selectRaw("SUM(CASE WHEN type = 'cash_in' THEN amount ELSE -amount END) as net")
             ->value('net') ?? 0;
 
-        return round((float) $shift->opening_float + $this->cashSales($shift) + (float) $movements, 2);
-    }
-
-    /** Money received into this till since the shift opened. */
-    private function cashSales(object $shift): float
-    {
-        return round((float) DB::table('customer_receipts')
-            ->where('money_account_id', $shift->money_account_id)
-            ->where('created_at', '>=', $shift->opened_at)
-            ->sum('amount'), 2);
+        return [
+            'in' => round(((int) $ledger->money_in) / 100, 2),
+            'out' => round(((int) $ledger->money_out) / 100, 2),
+            'movements' => round((float) $movements, 2),
+        ];
     }
 }

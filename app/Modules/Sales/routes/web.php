@@ -60,6 +60,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::post('orders', [SalesOrderController::class, 'store'])->name('orders.store');
         // C-SO-3: exposure is SHOWN at order time, enforced by nobody.
         Route::post('orders/exposure', [SalesOrderController::class, 'exposure'])->name('orders.exposure');
+        // The order form's price per line, as it is typed (21 Sep 2026). Reads
+        // and writes nothing, so a GET, like the counter's price check.
+        Route::get('orders/price', [SalesOrderController::class, 'price'])->name('orders.price');
     });
 
     // ⚠ C-SO-1: goods leave against an APPROVED order only. Owner and Manager.

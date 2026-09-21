@@ -44,8 +44,14 @@ class RecordCounterSale
      *     product: Product,
      *     quantity: string,
      *     unitPrice?: string|null,
-     *     discount?: string|null
-     * }>  $lines
+     *     discount?: string|null,
+     *     listPrice?: string|null,
+     *     overrideReason?: string|null,
+     *     overriddenBy?: User|null
+     * }>  $lines  `listPrice`, `overrideReason` and `overriddenBy` are the
+     *             counter's price trail, handed straight to the invoice line
+     *             (see RecordSalesInvoice). This action decides nothing about
+     *             who may change a price: the counter screen does.
      *
      * @throws ValidationException
      */
@@ -59,6 +65,8 @@ class RecordCounterSale
         string $invoiceDiscount = '0',
         ?string $reference = null,
         ?string $note = null,
+        ?string $discountReason = null,
+        ?User $discountGivenBy = null,
     ): CounterSale {
         $lines = array_values(array_filter($lines, fn (array $entry) => (float) $entry['quantity'] > 0));
 
@@ -70,10 +78,12 @@ class RecordCounterSale
 
         $date = $soldAt === null ? Carbon::now() : Carbon::parse($soldAt);
 
-        return DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $moneyAccount, $date, $invoiceDiscount, $reference, $note) {
-            // ⚠⚠ THE PRICE IS RESOLVED ONCE, HERE, and copied onto the invoice
-            // line. Resolving it again later would let an invoice disagree with
-            // what the customer was told at the counter.
+        return DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $moneyAccount, $date, $invoiceDiscount, $reference, $note, $discountReason, $discountGivenBy) {
+            // ⚠⚠ THE PRICE IS RESOLVED ONCE and copied onto the invoice line:
+            // here when the caller gives none, or by the counter screen, which
+            // resolves it first so it can tell a typed price from the list one
+            // (21 Sep 2026). Resolving it again later would let an invoice
+            // disagree with what the customer was told at the counter.
             $priced = [];
 
             foreach ($lines as $entry) {
@@ -88,6 +98,9 @@ class RecordCounterSale
                             $date,
                         )->unitPrice,
                     'discount' => $entry['discount'] ?? '0',
+                    'listPrice' => $entry['listPrice'] ?? null,
+                    'overrideReason' => $entry['overrideReason'] ?? null,
+                    'overriddenBy' => $entry['overriddenBy'] ?? null,
                 ];
             }
 
@@ -118,6 +131,9 @@ class RecordCounterSale
                     'quantity' => $entry['quantity'],
                     'unitPrice' => $entry['unitPrice'],
                     'discount' => $entry['discount'],
+                    'listPrice' => $entry['listPrice'],
+                    'overrideReason' => $entry['overrideReason'],
+                    'overriddenBy' => $entry['overriddenBy'],
                 ];
             }
 
@@ -128,6 +144,8 @@ class RecordCounterSale
                 invoiceDate: $date,
                 invoiceDiscount: $invoiceDiscount,
                 note: $note,
+                discountReason: $discountReason,
+                discountGivenBy: $discountGivenBy,
             );
 
             $receipt = null;

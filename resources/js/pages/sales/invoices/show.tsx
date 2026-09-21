@@ -23,6 +23,8 @@ interface Invoice {
     due_date: string | null;
     subtotal: string;
     invoice_discount: string;
+    discount_reason: string | null;
+    discount_given_by: { id: number; name: string } | null;
     tax_total: string;
     total: string;
     note: string | null;
@@ -32,6 +34,11 @@ interface Invoice {
         description: string | null;
         quantity: string;
         unit_price: string;
+        // The counter's price trail (21 Sep 2026): null on a line sold at its list price.
+        list_price: string | null;
+        price_overridden: boolean;
+        override_reason: string | null;
+        overridden_by: { id: number; name: string } | null;
         line_discount: string;
         line_net: string;
         cost_released: string;
@@ -97,7 +104,9 @@ export default function InvoiceShow({
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
-                        <Badge variant={isSettled ? 'secondary' : 'outline'}>{isSettled ? 'Paid' : 'Unpaid'}</Badge>
+                        <Badge variant={isSettled ? 'secondary' : 'outline'}>
+                            {isSettled ? 'Paid' : parseFloat(received) > 0 ? 'Part paid' : 'Unpaid'}
+                        </Badge>
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/sales/invoices/${invoice.id}/print`}>Print / send</Link>
                         </Button>
@@ -128,7 +137,18 @@ export default function InvoiceShow({
                         <tbody>
                             {invoice.lines.map((line) => (
                                 <tr key={line.id} className="border-t">
-                                    <td className="p-3">{line.product?.name ?? line.description ?? '-'}</td>
+                                    <td className="p-3">
+                                        {line.product?.name ?? line.description ?? '-'}
+                                        {/* ⚠ The counter's price trail: a changed price or a
+                                            discount always says what the list said, why and who. */}
+                                        {line.list_price !== null && (
+                                            <p className="text-muted-foreground mt-0.5 text-xs">
+                                                {line.price_overridden ? `List price ${line.list_price}, changed` : 'Discounted'}
+                                                {line.overridden_by ? ` by ${line.overridden_by.name}` : ''}
+                                                {line.override_reason ? `: ${line.override_reason}` : ''}
+                                            </p>
+                                        )}
+                                    </td>
                                     <td className="text-muted-foreground p-3">{line.delivery_line?.delivery?.delivery_number ?? '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{line.quantity}</td>
                                     <td className="p-3 text-right tabular-nums">{line.unit_price}</td>
@@ -150,6 +170,11 @@ export default function InvoiceShow({
                             <span className="text-muted-foreground">Discount on the bill</span>
                             <span className="tabular-nums">{invoice.invoice_discount}</span>
                         </div>
+                        {invoice.discount_reason && (
+                            <p className="text-muted-foreground text-xs">
+                                Given{invoice.discount_given_by ? ` by ${invoice.discount_given_by.name}` : ''}: {invoice.discount_reason}
+                            </p>
+                        )}
                         {/* Shown only on a taxed invoice; every invoice raised while VAT is off has none. */}
                         {Number(invoice.tax_total) > 0 && (
                             <div className="flex justify-between">

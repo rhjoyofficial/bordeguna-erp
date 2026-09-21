@@ -86,6 +86,24 @@ class SupplierPaymentController extends Controller
     {
         $supplierId = $request->integer('supplier_id') ?: null;
 
+        // "Pay this bill" from a bill's page (21 Sep 2026). ⚠ Resolved through
+        // the SCOPED model, so another business's bill id finds nothing, and the
+        // bill decides the supplier: a bill can only be paid to whoever issued
+        // it. It PREFILLS the amount and nothing more; the clerk still chooses
+        // the account and presses the button, and RecordSupplierPayment still
+        // re-checks everything.
+        $prefillBill = $request->integer('bill_id')
+            ? SupplierBill::query()->find($request->integer('bill_id'))
+            : null;
+
+        if ($prefillBill !== null && $prefillBill->outstanding()->minor <= 0) {
+            $prefillBill = null;
+        }
+
+        if ($prefillBill !== null) {
+            $supplierId = $prefillBill->supplier_id;
+        }
+
         $supplier = $supplierId === null
             ? null
             : Supplier::query()->find($supplierId);
@@ -94,6 +112,10 @@ class SupplierPaymentController extends Controller
             'suppliers' => $this->suppliersWithOutstanding(),
             'selectedSupplierId' => $supplier?->id,
             'bills' => $supplier === null ? [] : $this->openBillsFor($supplier),
+            'prefill' => $prefillBill === null ? null : [
+                'bill_id' => $prefillBill->id,
+                'amount' => $prefillBill->outstanding()->toTaka(),
+            ],
             // ⚠ Only accounts the payment can be booked out of: one with no
             // ledger head is refused by PostPurchaseJournals on submit.
             'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()
