@@ -97,7 +97,9 @@ export default function InvoiceShow({
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
-                        <Badge variant={isSettled ? 'secondary' : 'outline'}>{isSettled ? 'Paid' : 'Unpaid'}</Badge>
+                        <Badge variant={isSettled ? 'secondary' : 'outline'}>
+                            {isSettled ? 'Paid' : parseFloat(received) > 0 ? 'Part paid' : 'Unpaid'}
+                        </Badge>
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/sales/invoices/${invoice.id}/print`}>Print / send</Link>
                         </Button>

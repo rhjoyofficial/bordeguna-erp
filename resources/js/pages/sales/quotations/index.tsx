@@ -35,7 +35,7 @@ interface QuotationsProps {
     customers: Option[];
     leads: Option[];
     products: Option[];
-    warehouses: Option[];
+    warehouses: (Option & { is_default?: boolean })[];
 }
 
 interface DraftLine {
@@ -239,7 +239,9 @@ export default function Quotations({ quotations, customers, leads, products, war
     const quotationError = usePage<{ errors: Record<string, string | undefined> }>().props.errors?.quotation;
 
     const accept = (quote: QuoteRow) => {
-        router.post(`/sales/quotations/${quote.id}/accept`, { warehouse_id: warehouses[0]?.id ?? null }, { preserveScroll: true });
+        // The default warehouse, not whichever sorts first (21 Sep 2026).
+        const warehouse = warehouses.find((w) => w.is_default) ?? warehouses[0];
+        router.post(`/sales/quotations/${quote.id}/accept`, { warehouse_id: warehouse?.id ?? null }, { preserveScroll: true });
     };
 
     return (

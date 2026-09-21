@@ -369,11 +369,13 @@ function ChallanCard({
     couriers,
     canDeliver,
     canRecordOutcome,
+    customerId,
 }: {
     challan: Challan;
     couriers: { id: number; name: string }[];
     canDeliver: boolean;
     canRecordOutcome: boolean;
+    customerId: number;
 }) {
     const consignment = challan.consignment;
 
@@ -384,6 +386,16 @@ function ChallanCard({
                     {challan.delivery_number}
                 </Link>
                 <span className="text-muted-foreground">- {challan.delivered_at}</span>
+                {/* ⭐ The next steps where the challan is (21 Sep 2026): print it for
+                    the driver, then bill it, without hunting through two lists. */}
+                <a href={route('sales.deliveries.print', challan.id)} target="_blank" rel="noreferrer" className="text-muted-foreground underline">
+                    Print challan
+                </a>
+                {canDeliver && (
+                    <Link href={route('sales.invoices.create', { customer_id: customerId, delivery_id: challan.id })} className="underline">
+                        Invoice this challan
+                    </Link>
+                )}
                 {consignment && (
                     <Badge variant={consignment.status === 'booked' ? 'secondary' : consignment.status === 'returned' ? 'destructive' : 'default'}>
                         {consignment.status_label}
@@ -1235,6 +1247,7 @@ export default function SalesOrderShow({
                                 couriers={couriers}
                                 canDeliver={can_deliver}
                                 canRecordOutcome={can_record_outcome}
+                                customerId={order.customer.id}
                             />
                         ))}
                     </div>

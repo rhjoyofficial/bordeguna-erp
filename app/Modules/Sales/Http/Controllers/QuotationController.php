@@ -68,7 +68,9 @@ class QuotationController extends Controller
                 ->orderBy('name')->get(['id', 'name']),
             'products' => Product::query()->where('is_active', true)->stocked()
                 ->orderBy('name')->get(['id', 'name', 'sku']),
-            'warehouses' => Warehouse::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            // ⚠ The default warehouse first and flagged: accepting a quotation
+            // used to send whichever came first by name (21 Sep 2026).
+            'warehouses' => Warehouse::query()->where('is_active', true)->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
         ]);
     }
 
@@ -179,7 +181,8 @@ class QuotationController extends Controller
         }
 
         $data = $request->validate([
-            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+            // ⚠ Scoped: a bare exists: accepted another business's warehouse.
+            'warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
         ]);
 
         $lines = DB::table('quotation_lines')->where('quotation_id', $row->id)->get()

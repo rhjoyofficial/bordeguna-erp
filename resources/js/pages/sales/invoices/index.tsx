@@ -18,6 +18,7 @@ interface Invoice {
     total: string;
     outstanding: string;
     is_settled: boolean;
+    is_part_paid: boolean;
     customer: { id: number; name: string } | null;
 }
 
@@ -94,7 +95,9 @@ export default function InvoicesIndex({
                                     <td className="p-3 text-right tabular-nums">{invoice.total}</td>
                                     <td className="p-3 text-right tabular-nums">{invoice.outstanding}</td>
                                     <td className="p-3">
-                                        <Badge variant={invoice.is_settled ? 'secondary' : 'outline'}>{invoice.is_settled ? 'Paid' : 'Unpaid'}</Badge>
+                                        <Badge variant={invoice.is_settled ? 'secondary' : 'outline'}>
+                                            {invoice.is_settled ? 'Paid' : invoice.is_part_paid ? 'Part paid' : 'Unpaid'}
+                                        </Badge>
                                     </td>
                                 </tr>
                             ))}

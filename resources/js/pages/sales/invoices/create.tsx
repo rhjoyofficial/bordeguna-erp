@@ -10,6 +10,7 @@ import { FormEventHandler } from 'react';
 
 interface BillableLine {
     delivery_line_id: number;
+    delivery_id: number;
     delivery_number: string;
     delivered_at: string;
     product_name: string;
@@ -43,6 +44,7 @@ export default function InvoiceCreate({
     customers,
     customerId,
     billable,
+    onlyDeliveryId,
     agreed_order_discounts,
     agreed_delivery_charges,
     vat,
@@ -50,6 +52,7 @@ export default function InvoiceCreate({
     customers: { id: number; name: string }[];
     customerId: number | null;
     billable: BillableLine[];
+    onlyDeliveryId: number | null;
     // Website slice 2.5b: what each order agreed off the WHOLE order (a coupon),
     // previewed for billing everything shown. The server bills it automatically.
     agreed_order_discounts: { order_number: string; coupon_code: string | null; amount: string }[];
@@ -78,7 +81,8 @@ export default function InvoiceCreate({
         // and its server-supplied price. Set a quantity to 0 to leave it off.
         lines: billable.map((line) => ({
             delivery_line_id: line.delivery_line_id,
-            quantity: line.quantity_uninvoiced,
+            // From "Invoice this challan": only that challan's lines start included.
+            quantity: onlyDeliveryId === null || line.delivery_id === onlyDeliveryId ? line.quantity_uninvoiced : '0',
             unit_price: line.unit_price ?? '',
             // ⚠ EMPTY where the order agreed a discount, so the SERVER decides
             // it for the quantity actually billed. Prefilling the full figure
