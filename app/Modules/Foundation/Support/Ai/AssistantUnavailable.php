@@ -33,6 +33,19 @@ class AssistantUnavailable extends RuntimeException
         return new self('The assistant is busy right now. Please try again in a minute.');
     }
 
+    /**
+     * ⚠⚠ NOT "BUSY", AND NOT "TRY AGAIN". A provider account with no credit, or
+     * one that reached its spend limit, refuses every message until a person
+     * adds money or raises the limit; waiting a minute changes nothing. Until
+     * 21 Sep 2026 this read as "busy" on OpenAI (a 429 is also its billing
+     * answer) and as "temporarily unavailable" on Anthropic (a 400), so the
+     * panel asked people to retry something no retry could fix.
+     */
+    public static function noCredit(): self
+    {
+        return new self('The AI provider account has no credit left, or it has reached its spending limit. An Owner can add credit or raise the limit on the provider billing page; the key itself is fine.');
+    }
+
     public static function unreachable(): self
     {
         return new self('The assistant is temporarily unavailable. Please try again in a minute.');

@@ -17,6 +17,8 @@ use Throwable;
  */
 class AnthropicDriver implements AssistantDriver
 {
+    use AnnouncesToolUse;
+
     /** ⚠ A model that keeps asking for one more lookup would bill forever
      * and never answer. Six is generous for the questions this is for. */
     private const MAX_TOOL_ROUNDS = 6;
@@ -162,29 +164,6 @@ class AnthropicDriver implements AssistantDriver
         return $answer;
     }
 
-    /**
-     * What to show while a tool runs.
-     *
-     * ⚠ Describes the ACTION, never the table or the arguments. "Looking that
-     * up" is honest; echoing `read_data {"table":"sales_invoices"}` would put
-     * the schema on screen for somebody who may not be allowed to know it
-     * exists.
-     *
-     * ⚠ No trailing newline any more. These are labels for a transient status
-     * line, not lines of an answer.
-     */
-    private function announce(string $tool): string
-    {
-        return match ($tool) {
-            'read_data' => 'Looking that up',
-            'list_todos', 'list_notes' => 'Checking your list',
-            'create_todo' => 'Adding that to your list',
-            'complete_todo' => 'Updating your list',
-            'create_note' => 'Writing that note',
-            default => 'Working on it',
-        };
-    }
-
     public function stream(string $key, string $model, array $system, array $messages, callable $onText): string
     {
         $full = '';
@@ -263,8 +242,30 @@ class AnthropicDriver implements AssistantDriver
         return match (true) {
             $e->status === 404 => AssistantUnavailable::badModel($model),
             $e->status === 401, $e->status === 403 => AssistantUnavailable::badKey(),
+            $this->isCreditRefusal($e) => AssistantUnavailable::noCredit(),
             $e->status === 429 => AssistantUnavailable::rateLimited(),
             default => AssistantUnavailable::unreachable(),
         };
+    }
+
+    /**
+     * ⚠⚠ ANTHROPIC SAYS "NO CREDIT" WITH A 400, NOT A 429. An account whose
+     * balance ran out answers "Your credit balance is too low to access the
+     * Anthropic API. Please go to Plans & Billing to upgrade or purchase
+     * credits." as an invalid request, which the match above used to call
+     * "temporarily unavailable": the exact message Hudhud showed from the day
+     * the balance went negative. The SDK folds the response body into the
+     * exception message, which is where the phrase is read from; nothing from
+     * the message is ever shown to the user.
+     */
+    private function isCreditRefusal(APIStatusException $e): bool
+    {
+        if ($e->status !== 400) {
+            return false;
+        }
+
+        $message = strtolower($e->getMessage());
+
+        return str_contains($message, 'credit balance') || str_contains($message, 'purchase credits');
     }
 }

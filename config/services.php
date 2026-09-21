@@ -40,4 +40,15 @@ return [
         'model' => env('ANTHROPIC_MODEL', 'claude-opus-5'),
     ],
 
+    // ⚠ The key and model normally come from Settings > AI providers; these are
+    // only the fallback, as for Anthropic. No model here on purpose: without
+    // one the driver's own default applies (OpenAiDriver::defaultModel()).
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_MODEL'),
+        // Every OpenAI call reasons a little before answering; `low` keeps the
+        // panel quick and the bill small. none, low, medium, high are accepted.
+        'reasoning_effort' => env('OPENAI_REASONING_EFFORT', 'low'),
+    ],
+
 ];

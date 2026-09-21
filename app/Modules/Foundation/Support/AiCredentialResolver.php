@@ -80,7 +80,13 @@ class AiCredentialResolver
             return (string) $row->model;
         }
 
-        return (string) config("services.{$provider}.model", 'claude-opus-5');
+        // ⚠⚠ NO CLAUDE FALLBACK FOR EVERY PROVIDER. This defaulted to
+        // `claude-opus-5` whatever the provider, so an OpenAI key saved with
+        // "Provider default" sent a Claude model id to OpenAI on every message
+        // (a 404 in the panel) while the Test button, which uses the driver
+        // default, said the key worked. An empty answer lets the caller use the
+        // driver's own default instead.
+        return (string) config("services.{$provider}.model", '');
     }
 
     /**
