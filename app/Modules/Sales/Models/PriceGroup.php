@@ -35,6 +35,10 @@ class PriceGroup extends Model
         'code',
         'name',
         'prices_include_tax',
+        // ⚠ Pays MRP when a product has no price for this group (21 Sep 2026).
+        // True for RETAIL; a dealer group left false is REFUSED instead, which
+        // is the owner's rule: no sale until he sets the price.
+        'falls_back_to_mrp',
         'is_active',
         'note',
     ];
@@ -43,6 +47,7 @@ class PriceGroup extends Model
     {
         return [
             'prices_include_tax' => 'boolean',
+            'falls_back_to_mrp' => 'boolean',
             'is_active' => 'boolean',
         ];
     }
@@ -54,13 +59,14 @@ class PriceGroup extends Model
      */
     protected $attributes = [
         'prices_include_tax' => true,
+        'falls_back_to_mrp' => false,
         'is_active' => true,
     ];
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['code', 'name', 'prices_include_tax', 'is_active'])
+            ->logOnly(['code', 'name', 'prices_include_tax', 'falls_back_to_mrp', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

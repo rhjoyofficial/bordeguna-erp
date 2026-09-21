@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordOpeningStock;
 use App\Modules\Inventory\Models\OpeningStock;
 use App\Modules\Inventory\Models\Product;
@@ -10,6 +11,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -38,30 +40,52 @@ class OpeningStockController extends Controller
         // typing fifty lines.
         $done = $recorded->pluck('warehouse_id')->all();
 
+        $active = Warehouse::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code', 'is_default']);
+        $awaiting = $active->whereNotIn('id', $done)->values();
+
         return Inertia::render('inventory/opening-stock/index', [
             'openingStocks' => $recorded,
-            'warehouses' => Warehouse::query()->where('is_active', true)
-                ->whereNotIn('id', $done)
-                ->orderBy('name')->get(['id', 'name', 'code']),
+            'warehouses' => $awaiting->map->only(['id', 'name', 'code'])->values(),
+            // ⚠ The default warehouse first, when it is still waiting: it is
+            // where the count most likely happened, and the form used to open
+            // on whichever warehouse sorted first alphabetically.
+            'defaultWarehouseId' => $awaiting->firstWhere('is_default', true)?->id ?? $awaiting->first()?->id,
+            // ⚠⚠ "Every active warehouse already has its opening stock" was
+            // shown to a business with NO warehouses at all (21 Sep 2026): zero
+            // left to do read as all done. The page needs to tell them apart.
+            'hasWarehouses' => $active->isNotEmpty(),
+            'canManageWarehouses' => request()->user()?->can('inventory.catalog.manage') ?? false,
+            // The unit beside each quantity box: "40" is kilograms or sacks, and
+            // the count sheet the numbers came from says which.
             'products' => Product::query()->where('is_active', true)->stocked()
-                ->orderBy('name')->get(['id', 'name', 'sku']),
+                ->with('unitOfMeasure:id,abbreviation')
+                ->orderBy('name')->get(['id', 'name', 'sku', 'unit_of_measure_id'])
+                ->map(fn (Product $product) => [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'sku' => $product->sku,
+                    'unit' => $product->unitOfMeasure?->abbreviation,
+                ]),
             // ⚠ ALL active warehouses, not just the ones still awaiting the
             // document. The count sheet is printed before the count and the
             // person printing it may well be checking one already recorded;
             // the sheet itself says so in red rather than hiding the warehouse.
-            'countSheetWarehouses' => Warehouse::query()->where('is_active', true)
-                ->orderBy('name')->get(['id', 'name', 'code']),
+            'countSheetWarehouses' => $active->map->only(['id', 'name', 'code'])->values(),
+            'countSheetDefaultId' => $active->firstWhere('is_default', true)?->id ?? $active->first()?->id,
         ]);
     }
 
     public function store(Request $request, RecordOpeningStock $action): RedirectResponse
     {
         $data = $request->validate([
-            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            // ⚠ Both lookups scoped to this business. Another tenant's product id
+            // passed a bare `exists` and then fell out of the scoped product
+            // list below as an undefined index - a blank 500.
+            'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'as_at' => ['required', 'date'],
             'note' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             'lines.*.unit_cost' => ['required', 'numeric', 'min:0'],
             'lines.*.batch_number' => ['nullable', 'string', 'max:100'],

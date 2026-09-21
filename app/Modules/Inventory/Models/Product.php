@@ -31,6 +31,10 @@ class Product extends Model
         'sku',
         'barcode',
         'name',
+        // The printed maximum retail price (21 Sep 2026). What a consumer or a
+        // retail shop pays when no price has been set for their group, and the
+        // base a "% off MRP" price is worked out from. Null = not known yet.
+        'mrp',
         'type',
         'description',
         'low_stock_threshold',
@@ -54,6 +58,7 @@ class Product extends Model
     {
         return [
             'type' => ProductType::class,
+            'mrp' => 'decimal:4',
             'low_stock_threshold' => 'decimal:4',
             'content_quantity' => 'decimal:4',
             'is_active' => 'boolean',

@@ -5,6 +5,7 @@ namespace App\Modules\Inventory\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Models\Reason;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\ApproveInventoryAdjustment;
 use App\Modules\Inventory\Actions\CreateInventoryAdjustment;
 use App\Modules\Inventory\Actions\DispatchStockTransfer;
@@ -14,13 +15,16 @@ use App\Modules\Inventory\Enums\InventoryAdjustmentType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Enums\TransferStatus;
 use App\Modules\Inventory\Models\InventoryAdjustment;
+use App\Modules\Inventory\Models\InventorySetting;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockTransfer;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AdjustmentCause;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -46,20 +50,85 @@ class StockController extends Controller
             ->when($filters['warehouse_id'], fn ($query, $warehouseId) => $query->where('warehouse_id', $warehouseId))
             ->selectRaw('product_id, warehouse_id, SUM(current_quantity) as quantity')
             ->groupBy('product_id', 'warehouse_id')
-            ->with(['product:id,name,sku,low_stock_threshold', 'warehouse:id,name'])
+            // ⚠ The unit rides along: "12" of rice means nothing until it says
+            // kg or bags, and the list used to say neither.
+            ->with(['product:id,name,sku,low_stock_threshold,unit_of_measure_id', 'product.unitOfMeasure:id,abbreviation', 'warehouse:id,name'])
             ->paginate(20)
             ->withQueryString();
 
+        $user = $request->user();
+        $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name', 'is_default']);
+
         return Inertia::render('inventory/stock/index', [
             'stock' => $stockByProductWarehouse,
-            'products' => Product::stocked()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'sku']),
-            'warehouses' => Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'adjustment_reasons' => Reason::active()->forContext('inventory.stock_adjustment')->orderBy('name')->get(['id', 'name']),
+            'products' => Product::stocked()->where('is_active', true)
+                ->with('unitOfMeasure:id,abbreviation')
+                ->orderBy('name')
+                ->get(['id', 'name', 'sku', 'unit_of_measure_id'])
+                ->map(fn (Product $product) => [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'sku' => $product->sku,
+                    'unit' => $product->unitOfMeasure?->abbreviation,
+                ]),
+            'warehouses' => $warehouses->map(fn (Warehouse $warehouse) => ['id' => $warehouse->id, 'name' => $warehouse->name])->values(),
+            // Preselected in both dialogs: most corrections and moves start in
+            // the default warehouse, and a one-warehouse business has no choice.
+            'default_warehouse_id' => $warehouses->firstWhere('is_default', true)?->id
+                ?? ($warehouses->count() === 1 ? $warehouses->first()->id : null),
+            'on_hand' => $this->onHand(),
+            'last_costs' => $this->lastCosts(),
+            // ⚠ Annotated with the type each reason means, so the dialog asks
+            // the right follow-up: "how much was lost" for damage, "more or less
+            // than the system shows" for a count correction. See AdjustmentCause.
+            'adjustment_reasons' => Reason::active()->forContext('inventory.stock_adjustment')->orderBy('name')->get()
+                ->map(fn (Reason $reason) => AdjustmentCause::describe($reason))->values(),
             'transfer_reasons' => Reason::active()->forContext('inventory.stock_transfer')->orderBy('name')->get(['id', 'name']),
-            'can_adjust_directly' => $request->user()->can('inventory.stock.adjust'),
+            'can_adjust_directly' => $user->can('inventory.stock.adjust'),
+            // Staff: they may RAISE a correction and ASK for a move, and a
+            // manager decides. Somebody with neither reads the list only.
+            'can_request' => $user->can('inventory.stock.request'),
+            'can_set_threshold' => $user->can('inventory.stock.approve'),
+            // ⚠ Read, never created: InventorySetting::forCurrentBusiness()
+            // writes a row, and opening a page should not.
+            'approval_threshold' => InventorySetting::query()->value('adjustment_approval_threshold'),
+            'awaiting_approval' => $request->session()->get('awaitingApproval'),
             'in_transit_count' => StockTransfer::where('status', TransferStatus::InTransit)->count(),
             'filters' => $filters,
         ]);
+    }
+
+    /**
+     * What each product holds in each warehouse, so the dialog can say "12 kg
+     * on hand" beside the quantity box before anybody writes off 120.
+     *
+     * @return array<string, string> "{product_id}-{warehouse_id}" => quantity
+     */
+    private function onHand(): array
+    {
+        return StockBatch::query()
+            ->where('status', StockBatchStatus::Active)
+            ->selectRaw('product_id, warehouse_id, SUM(current_quantity) as quantity')
+            ->groupBy('product_id', 'warehouse_id')
+            ->get()
+            ->mapWithKeys(fn ($row) => [$row->product_id.'-'.$row->warehouse_id => (string) $row->quantity])
+            ->all();
+    }
+
+    /**
+     * C-SC-1: found stock needs a cost, and the cost is never invented. The
+     * newest batch's cost is SUGGESTED beside the box and a human accepts or
+     * overrides it - the same suggestion the stock count makes.
+     *
+     * @return array<int, string> product_id => unit cost
+     */
+    private function lastCosts(): array
+    {
+        return StockBatch::query()
+            ->whereIn('id', StockBatch::query()->selectRaw('MAX(id)')->groupBy('product_id'))
+            ->pluck('unit_cost', 'product_id')
+            ->map(fn ($cost) => (string) $cost)
+            ->all();
     }
 
     /**
@@ -85,17 +154,38 @@ class StockController extends Controller
             403,
         );
 
+        $businessId = app(BusinessContext::class)->id();
+
+        // ⚠⚠ `type` is OPTIONAL since 21 Sep 2026. The screen never sent it and
+        // the refusal landed on a key it never rendered, so no correction typed
+        // on the Stock screen ever saved. A person answers "What happened?"
+        // once (the reason) and the type follows from it; a caller that knows
+        // better - a stock count, a test - still sends its own.
+        //
+        // ⚠ The three lookups are scoped to THIS business. A bare
+        // `exists:products,id` passes another tenant's id and the findOrFail
+        // below then answers with a blank 404 instead of a field error.
         $data = $request->validate([
-            'type' => ['required', new Enum(InventoryAdjustmentType::class)],
-            'product_id' => ['required', 'exists:products,id'],
-            'warehouse_id' => ['required', 'exists:warehouses,id'],
+            'type' => ['nullable', new Enum(InventoryAdjustmentType::class)],
+            'product_id' => ['required', Rule::exists('products', 'id')->where('business_id', $businessId)],
+            'warehouse_id' => ['required', Rule::exists('warehouses', 'id')->where('business_id', $businessId)],
             'direction' => ['required', new Enum(AdjustmentDirection::class)],
             'quantity' => ['required', 'numeric', 'gt:0'],
             'unit_cost' => ['nullable', 'required_if:direction,increase', 'numeric', 'min:0'],
-            'reason_id' => ['required', 'exists:reasons,id'],
+            'reason_id' => ['required', Rule::exists('reasons', 'id')->where('business_id', $businessId)],
             'effective_date' => ['nullable', 'date'],
             'note' => ['nullable', 'string'],
+        ], [
+            'reason_id.required' => 'Choose what happened.',
+            'product_id.required' => 'Choose the product.',
+            'warehouse_id.required' => 'Choose the warehouse.',
+            'quantity.required' => 'Enter how many.',
+            'quantity.gt' => 'Enter a quantity above zero.',
+            'direction.required' => 'Choose whether there is more or less than the system shows.',
+            'unit_cost.required_if' => 'Stock that turned up needs a cost for each unit.',
         ]);
+
+        $reason = Reason::findOrFail($data['reason_id']);
 
         // ⚠⚠ C-INV-E1. CreateInventoryAdjustment raises NO ValidationException at
         // all: every one of its refusals is a DomainException or an
@@ -104,12 +194,12 @@ class StockController extends Controller
         // form-level key the three stock forms now render.
         try {
             $adjustment = $action->handle(
-                type: InventoryAdjustmentType::from($data['type']),
+                type: isset($data['type']) ? InventoryAdjustmentType::from($data['type']) : AdjustmentCause::typeFor($reason),
                 direction: AdjustmentDirection::from($data['direction']),
                 product: Product::findOrFail($data['product_id']),
                 warehouse: Warehouse::findOrFail($data['warehouse_id']),
                 quantity: $data['quantity'],
-                reason: Reason::findOrFail($data['reason_id']),
+                reason: $reason,
                 createdBy: $request->user(),
                 unitCost: $data['unit_cost'] ?? null,
                 note: $data['note'] ?? null,
@@ -119,22 +209,40 @@ class StockController extends Controller
             throw ValidationException::withMessages(['stock' => $e->getMessage()]);
         }
 
-        return back()->with('success', $adjustment->approvalRequest->isComplete()
-            ? 'Stock adjustment saved.'
-            : 'Stock adjustment submitted for approval.');
+        if ($adjustment->approvalRequest->isComplete()) {
+            return back()->with('success', 'Stock adjustment saved.');
+        }
+
+        // ⚠ "Submitted for approval" with nowhere to go is a dead end: the
+        // person has to know the correction changes nothing yet, and where the
+        // approver will find it. The page turns this into a notice with a link
+        // to /approvals (a flashed key is not a prop until a page passes it).
+        return back()
+            ->with('success', 'Stock adjustment submitted for approval.')
+            ->with('awaitingApproval', 'Stock adjustment submitted for approval. Stock does not change until it is approved.');
     }
 
     public function storeTransfer(Request $request, DispatchStockTransfer $action): RedirectResponse
     {
         $this->authorize('inventory.stock.adjust');
 
+        $businessId = app(BusinessContext::class)->id();
+
         $data = $request->validate([
-            'product_id' => ['required', 'exists:products,id'],
-            'warehouse_id' => ['required', 'exists:warehouses,id'],
-            'target_warehouse_id' => ['required', 'exists:warehouses,id', 'different:warehouse_id'],
+            'product_id' => ['required', Rule::exists('products', 'id')->where('business_id', $businessId)],
+            'warehouse_id' => ['required', Rule::exists('warehouses', 'id')->where('business_id', $businessId)],
+            'target_warehouse_id' => ['required', Rule::exists('warehouses', 'id')->where('business_id', $businessId), 'different:warehouse_id'],
             'quantity' => ['required', 'numeric', 'gt:0'],
-            'reason_id' => ['required', 'exists:reasons,id'],
+            'reason_id' => ['required', Rule::exists('reasons', 'id')->where('business_id', $businessId)],
             'note' => ['nullable', 'string'],
+        ], [
+            'target_warehouse_id.different' => 'Stock has to move to a different warehouse.',
+            'target_warehouse_id.required' => 'Choose where the stock goes.',
+            'reason_id.required' => 'Choose why it is moving.',
+            'product_id.required' => 'Choose the product.',
+            'warehouse_id.required' => 'Choose the warehouse.',
+            'quantity.required' => 'Enter how many.',
+            'quantity.gt' => 'Enter a quantity above zero.',
         ]);
 
         // ⚠ Transferring consumes FIFO stock, so insufficient stock is the

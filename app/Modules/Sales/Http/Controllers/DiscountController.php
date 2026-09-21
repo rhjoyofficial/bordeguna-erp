@@ -3,6 +3,7 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
@@ -13,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -96,8 +98,12 @@ class DiscountController extends Controller
         $this->authorize('sales.prices.manage');
 
         $data = $request->validate([
-            'product_id' => ['required', 'integer', 'exists:products,id'],
-            'price_group_id' => ['nullable', 'integer', 'exists:price_groups,id'],
+            // ⚠ Scoped: a bare `exists:` accepted another business's product or group.
+            'product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            // ⚠⚠ A group is required (21 Sep 2026). "Everyone" wrote a price for
+            // nobody in particular, which lost to every Retail price and so never
+            // applied, while the screen reported success.
+            'price_group_id' => ['required', 'integer', Rule::exists('price_groups', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'unit_price' => ['required', 'numeric', 'min:0'],
             'min_quantity' => ['nullable', 'numeric', 'min:1'],
             'effective_from' => ['required', 'date'],
@@ -125,7 +131,7 @@ class DiscountController extends Controller
 
         $price = ProductPrice::create([
             'product_id' => $data['product_id'],
-            'price_group_id' => $data['price_group_id'] ?: null,
+            'price_group_id' => $data['price_group_id'],
             'customer_id' => null,
             'min_quantity' => $data['min_quantity'] ?? 1,
             'unit_price' => $data['unit_price'],

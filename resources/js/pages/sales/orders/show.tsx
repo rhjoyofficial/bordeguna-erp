@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 interface Line {
@@ -885,9 +885,16 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
                 />
                 <InputError message={errors.warehouse_id} />
             </div>
-            {deliverableLines.map((line) => {
+            {deliverableLines.map((line, index) => {
                 const entry = data.lines.find((e) => e.sales_order_line_id === line.id);
                 const unit = line.product.unit_of_measure?.abbreviation;
+                // ⚠⚠ Over-delivery ("only 20 remains on order ...") used to be
+                // refused on a key this form never rendered, so Record challan
+                // looked like it did nothing - the commonest warehouse mistake,
+                // failing silently (audit #1, 21 Sep 2026). The server now puts
+                // every per-line refusal on `lines.{row}.quantity`, where row is
+                // this line's place in what the transform above sends.
+                const lineError = (errors as Record<string, string | undefined>)[`lines.${index}.quantity`];
 
                 return (
                     <div key={line.id} className="grid grid-cols-[2fr_1fr] items-center gap-2">
@@ -902,6 +909,7 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
                             <Input value={entry?.quantity ?? String(remaining(line))} onChange={(e) => updateQuantity(line.id, e.target.value)} />
                             {unit && <span className="text-muted-foreground w-10 shrink-0 text-sm">{unit}</span>}
                         </div>
+                        <InputError message={lineError} className="col-span-2" />
                     </div>
                 );
             })}
@@ -932,6 +940,8 @@ export default function SalesOrderShow({
     can_cancel,
     can_record_outcome,
     warehouses,
+    credit_refusal,
+    can_override_credit,
 }: {
     order: Order;
     challans: Challan[];
@@ -947,6 +957,8 @@ export default function SalesOrderShow({
     can_cancel: boolean;
     can_record_outcome: boolean;
     warehouses: { id: number; name: string; is_default?: boolean }[];
+    credit_refusal: string | null;
+    can_override_credit: boolean;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Sales orders', href: '/sales/orders' },
@@ -954,9 +966,14 @@ export default function SalesOrderShow({
     ];
 
     const approve = () => router.post(route('sales.orders.approve', order.id));
+    // ⚠ Sets the credit rules aside, with the reason recorded for the accountant.
+    const approveAnyway = (credit_override_reason: string) => router.post(route('sales.orders.approve', order.id), { credit_override_reason });
     const reject = (review_note: string) => router.post(route('sales.orders.reject', order.id), { review_note });
     const cancel = () => router.post(route('sales.orders.cancel', order.id));
     const closeShort = (reason: string) => router.post(route('sales.orders.close', order.id), { reason });
+    // ⚠ The close-short reason is typed in a dialog that has closed by the time
+    // the answer comes back, so its refusal is shown beside the button instead.
+    const reasonError = usePage<{ errors: Record<string, string | undefined> }>().props.errors?.reason;
 
     const overLimit = exposure.credit_limit !== null && parseFloat(exposure.total) > parseFloat(exposure.credit_limit);
     // Only a column when some line carries one: an order typed into the ERP never does.
@@ -1056,7 +1073,8 @@ export default function SalesOrderShow({
                     </div>
                 )}
 
-                {/* ⚠ C-SO-3: shown beside the limit, enforced by nobody. */}
+                {/* ⚠⚠ Enforced since 21 Sep 2026: an order over the limit, or a
+                    distributor's before payment, is refused at approval. */}
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
                     <p className="text-muted-foreground">
                         Customer exposure: open invoices {exposure.open_invoices} + undelivered orders {exposure.undelivered_orders}
@@ -1064,16 +1082,33 @@ export default function SalesOrderShow({
                         <span className="text-foreground font-medium">{exposure.total}</span>
                         {exposure.credit_limit !== null && <> against a credit limit of {exposure.credit_limit}</>}
                     </p>
-                    {overLimit && (
-                        <p className="text-destructive mt-1 font-medium">Over the credit limit. Shown for your judgement - nothing is blocked.</p>
+                    {credit_refusal ? (
+                        <p className="text-destructive mt-1 font-medium">{credit_refusal}</p>
+                    ) : (
+                        overLimit && <p className="text-destructive mt-1 font-medium">Over the credit limit.</p>
                     )}
                 </div>
 
                 {order.approval_request?.status === 'pending' && can_approve && (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border flex gap-2 rounded-xl border p-4">
-                        <Button size="sm" onClick={approve}>
-                            Approve
-                        </Button>
+                        {credit_refusal === null && (
+                            <Button size="sm" onClick={approve}>
+                                Approve
+                            </Button>
+                        )}
+                        {credit_refusal !== null && can_override_credit && (
+                            <ConfirmDialog
+                                trigger={<Button size="sm">Approve anyway</Button>}
+                                title={`Approve ${order.order_number} over the credit rules`}
+                                description={`${credit_refusal} Your reason is kept with the order for the accountant.`}
+                                confirmLabel="Approve with this reason"
+                                withNote
+                                noteRequired
+                                noteLabel="Why approve it anyway"
+                                notePlaceholder="e.g. a cheque for the balance is promised for the 25th"
+                                onConfirm={approveAnyway}
+                            />
+                        )}
                         <ConfirmDialog
                             trigger={
                                 <Button size="sm" variant="ghost">
@@ -1177,10 +1212,12 @@ export default function SalesOrderShow({
                             cancelLabel="Keep order open"
                             destructive
                             withNote
+                            noteRequired
                             noteLabel="Reason (required)"
                             notePlaceholder="Why is the rest not being taken?"
                             onConfirm={closeShort}
                         />
+                        <InputError message={reasonError} className="basis-full" />
                     </div>
                 )}
 

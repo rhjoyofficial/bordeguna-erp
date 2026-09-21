@@ -44,7 +44,14 @@ class ProductPriceController extends Controller
             ->orderByDesc('effective_from')
             ->orderByDesc('id')
             ->paginate(20)
-            ->withQueryString();
+            ->withQueryString()
+            // ⚠ Dhaka dates. The date casts serialise as UTC timestamps and the
+            // list sliced them, so a price starting on the 1st read as starting
+            // on the 31st - on the one screen that says when a price applies.
+            ->through(fn (ProductPrice $price) => array_merge($price->toArray(), [
+                'effective_from' => $price->effective_from?->toDateString(),
+                'effective_to' => $price->effective_to?->toDateString(),
+            ]));
 
         return Inertia::render('sales/prices/index', [
             'prices' => $prices,
@@ -77,12 +84,18 @@ class ProductPriceController extends Controller
                 'nullable', 'integer',
                 Rule::exists('customers', 'id')->where('business_id', $businessId),
             ],
+            // ⚠⚠ A group or a customer, never neither (21 Sep 2026). A price
+            // for nobody in particular was the silent fallback that could charge
+            // a dealer a retail figure; now it would reach consumers only, so it
+            // is asked for by name: choose Retail.
             'price_group_id' => [
-                'nullable', 'integer',
+                'nullable', 'integer', 'required_without:customer_id',
                 Rule::exists('price_groups', 'id')->where('business_id', $businessId),
             ],
             'min_quantity' => ['nullable', 'numeric', 'min:0'],
             'note' => ['nullable', 'string', 'max:255'],
+        ], [
+            'price_group_id.required_without' => 'Choose who this price is for: a price group (Retail for consumers) or one customer.',
         ]);
 
         // ⚠ A rule cannot be for a customer AND a group at once - the resolver

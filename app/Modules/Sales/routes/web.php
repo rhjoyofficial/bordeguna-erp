@@ -10,10 +10,13 @@ use App\Modules\Sales\Http\Controllers\CustomerImportController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
 use App\Modules\Sales\Http\Controllers\DiscountController;
 use App\Modules\Sales\Http\Controllers\PosShiftController;
+use App\Modules\Sales\Http\Controllers\PriceGroupController;
 use App\Modules\Sales\Http\Controllers\PriceImportController;
+use App\Modules\Sales\Http\Controllers\ProductGroupPriceController;
 use App\Modules\Sales\Http\Controllers\ProductPriceController;
 use App\Modules\Sales\Http\Controllers\PromotionController;
 use App\Modules\Sales\Http\Controllers\QuotationController;
+use App\Modules\Sales\Http\Controllers\ReceiptController;
 use App\Modules\Sales\Http\Controllers\SalesInvoiceController;
 use App\Modules\Sales\Http\Controllers\SalesOrderController;
 use App\Modules\Sales\Http\Controllers\SalesReturnController;
@@ -117,6 +120,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::post('promotions', [PromotionController::class, 'store'])->name('promotions.store');
         Route::post('promotions/{promotion}/toggle', [PromotionController::class, 'toggle'])->name('promotions.toggle');
         Route::post('prices', [ProductPriceController::class, 'store'])->name('prices.store');
+        // The product dialog's "Prices" section (21 Sep 2026): one price per
+        // group, JSON beside the product. ⚠ A GET that reads and a PUT that
+        // writes; the dialog stamps X-Business-Id like every other write.
+        Route::get('group-prices', [ProductGroupPriceController::class, 'show'])->name('group-prices.show');
+        Route::put('group-prices/{product}', [ProductGroupPriceController::class, 'update'])->name('group-prices.update');
+        // Price groups: which exist, and which fall back to MRP.
+        Route::get('price-groups', [PriceGroupController::class, 'index'])->name('price-groups.index');
+        Route::post('price-groups', [PriceGroupController::class, 'store'])->name('price-groups.store');
+        Route::put('price-groups/{priceGroup}', [PriceGroupController::class, 'update'])->name('price-groups.update');
         Route::post('prices/{productPrice}/close', [ProductPriceController::class, 'close'])->name('prices.close');
 
         // Discounts. Same table, same resolver, a friendlier door: set a lower
@@ -207,6 +219,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
             ->whereNumber('invoice')->name('invoices.slip');
         Route::get('deliveries/{delivery}/print', [DeliveryController::class, 'print'])
             ->whereNumber('delivery')->name('deliveries.print');
+        // Every receipt, with what it paid: the list that did not exist.
+        Route::get('receipts', [ReceiptController::class, 'index'])->name('receipts.index');
         Route::get('receipts/{receipt}/print', [SalesInvoiceController::class, 'printReceipt'])
             ->whereNumber('receipt')->name('receipts.print');
         // The same receipt on a till roll. Same permission - a thermal copy of a
@@ -216,6 +230,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     });
 
     Route::middleware('can:sales.receipt.record')->group(function () {
+        // ⭐ Receive payment from the customer's side, over several invoices at
+        // once, oldest first (21 Sep 2026). The per-invoice form stays too.
+        Route::get('receipts/new', [ReceiptController::class, 'create'])->name('receipts.create');
+        Route::post('receipts', [ReceiptController::class, 'store'])->name('receipts.store');
         Route::post('invoices/{invoice}/receipts', [SalesInvoiceController::class, 'receipt'])->name('invoices.receipts.store');
         // Money paid for an order, before or after its invoice (SSLCommerz
         // slice P1). The same trust level as a receipt, because it is one.

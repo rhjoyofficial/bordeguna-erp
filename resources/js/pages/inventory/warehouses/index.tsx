@@ -3,6 +3,7 @@ import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -31,7 +32,7 @@ const breadcrumbs: BreadcrumbItem[] = [
  * ⚠ The default warehouse's status button is disabled with the reason in its
  * title; the server refuses too, so a stale page cannot get past it.
  */
-function WarehouseRow({ warehouse }: { warehouse: Warehouse }) {
+function WarehouseRow({ warehouse, canManage }: { warehouse: Warehouse; canManage: boolean }) {
     const [editing, setEditing] = useState(false);
     const { data, setData, put, errors, processing, reset, clearErrors } = useForm({
         name: warehouse.name,
@@ -51,6 +52,7 @@ function WarehouseRow({ warehouse }: { warehouse: Warehouse }) {
     };
 
     const toggle = () => router.patch(route('inventory.warehouses.toggle-active', warehouse.id), {}, { preserveScroll: true });
+    const makeDefault = () => router.patch(route('inventory.warehouses.make-default', warehouse.id), {}, { preserveScroll: true });
 
     if (editing) {
         return (
@@ -91,7 +93,7 @@ function WarehouseRow({ warehouse }: { warehouse: Warehouse }) {
                     <button
                         type="button"
                         onClick={toggle}
-                        disabled={warehouse.is_default && warehouse.is_active}
+                        disabled={!canManage || (warehouse.is_default && warehouse.is_active)}
                         title={
                             warehouse.is_default
                                 ? 'The default warehouse cannot be switched off'
@@ -107,18 +109,29 @@ function WarehouseRow({ warehouse }: { warehouse: Warehouse }) {
                 </div>
             </td>
             <td className="p-3 text-right whitespace-nowrap">
-                <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-                    Edit
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={warehouse.is_default}
-                    onClick={() => router.delete(route('inventory.warehouses.destroy', warehouse.id), { preserveScroll: true })}
-                    title={warehouse.is_default ? 'The default warehouse cannot be deleted' : undefined}
-                >
-                    Delete
-                </Button>
+                {canManage && (
+                    <>
+                        {/* 21 Sep 2026: `is_default` had no control anywhere, so the
+                            warehouse every screen preselects could not be chosen. */}
+                        {!warehouse.is_default && warehouse.is_active && (
+                            <Button variant="ghost" size="sm" onClick={makeDefault}>
+                                Make default
+                            </Button>
+                        )}
+                        <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                            Edit
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={warehouse.is_default}
+                            onClick={() => router.delete(route('inventory.warehouses.destroy', warehouse.id), { preserveScroll: true })}
+                            title={warehouse.is_default ? 'The default warehouse cannot be deleted' : undefined}
+                        >
+                            Delete
+                        </Button>
+                    </>
+                )}
             </td>
         </tr>
     );
@@ -130,6 +143,9 @@ function StatusBadge({ warehouse }: { warehouse: Warehouse }) {
 
 export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[] }) {
     const { data, setData, post, errors, processing, reset } = useForm({ name: '', code: '' });
+    // ⚠ Staff read this page (inventory.reports.view) and were offered Add,
+    // Edit and Delete, every one of which answered 403.
+    const { manageCatalog } = useInventoryAbilities();
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -142,22 +158,32 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
             <div className="flex flex-col gap-6 p-4">
                 <ReportHeading
                     title="Warehouses"
-                    description="Where stock is kept. Switch a warehouse off rather than deleting it once it has held stock; the default warehouse receives every document that does not name one."
+                    description="Where stock is kept. Switch a warehouse off rather than deleting it once it has held stock; the default warehouse receives every document that does not name one, and the stock screens open on it."
                 />
 
-                <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">
-                    <FormRow className="gap-3">
-                        <Field label="Name" htmlFor="name" size="md" error={errors.name} required>
-                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. Cold Storage" />
-                        </Field>
-                        <Field label="Code" htmlFor="code" size="xs" error={errors.code} required>
-                            <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="e.g. COLD" />
-                        </Field>
-                        <Button disabled={processing} className="self-end">
-                            Add
-                        </Button>
-                    </FormRow>
-                </form>
+                {manageCatalog && (
+                    <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">
+                        <FormRow className="gap-3">
+                            <Field label="Name" htmlFor="name" size="md" error={errors.name} required>
+                                <Input
+                                    id="name"
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    placeholder="e.g. Cold Storage"
+                                />
+                            </Field>
+                            <Field label="Code" htmlFor="code" size="xs" error={errors.code} required>
+                                <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="e.g. COLD" />
+                            </Field>
+                            <Button disabled={processing} className="self-end">
+                                Add
+                            </Button>
+                        </FormRow>
+                        {warehouses.length === 0 && (
+                            <p className="text-muted-foreground mt-2 text-xs">The first warehouse you add becomes the default.</p>
+                        )}
+                    </form>
+                )}
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
@@ -171,12 +197,14 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
                         </thead>
                         <tbody>
                             {warehouses.map((warehouse) => (
-                                <WarehouseRow key={warehouse.id} warehouse={warehouse} />
+                                <WarehouseRow key={warehouse.id} warehouse={warehouse} canManage={manageCatalog} />
                             ))}
                             {warehouses.length === 0 && (
                                 <tr>
                                     <td colSpan={4} className="text-muted-foreground p-4 text-center">
-                                        No warehouses yet.
+                                        {manageCatalog
+                                            ? 'No warehouses yet. Add the first one above: stock, opening stock and counts all need one.'
+                                            : 'No warehouses yet. Ask a manager to add one.'}
                                     </td>
                                 </tr>
                             )}

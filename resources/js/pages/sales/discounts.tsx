@@ -34,7 +34,9 @@ export default function Discounts() {
 
     const form = useForm({
         product_id: '',
-        price_group_id: '',
+        // ⚠ A group is required (21 Sep 2026): "Everyone" wrote a price that lost
+        // to every Retail price and so never applied. Retail is the consumer.
+        price_group_id: String(groups.find((g) => g.code === 'RETAIL')?.id ?? ''),
         unit_price: '',
         min_quantity: '1',
         effective_from: on,
@@ -134,13 +136,12 @@ export default function Discounts() {
                     </FormRow>
 
                     <FormRow>
-                        <Field label="Customer group" htmlFor="group">
+                        <Field label="Customer group" htmlFor="group" error={form.errors.price_group_id}>
                             <SearchSelect
                                 id="group"
                                 value={form.data.price_group_id}
                                 onChange={(e) => form.setData('price_group_id', e.target.value)}
                             >
-                                <option value="">Everyone</option>
                                 {groups.map((g) => (
                                     <option key={g.id} value={g.id}>
                                         {g.name}

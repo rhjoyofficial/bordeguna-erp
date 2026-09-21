@@ -46,24 +46,33 @@ const money = (value: number) => value.toLocaleString('en-BD', { minimumFraction
 export default function OpeningStockIndex({
     openingStocks,
     warehouses,
+    defaultWarehouseId,
+    hasWarehouses,
+    canManageWarehouses,
     products,
     countSheetWarehouses,
+    countSheetDefaultId,
 }: {
     openingStocks: OpeningStock[];
     warehouses: { id: number; name: string; code: string }[];
-    products: { id: number; name: string; sku: string }[];
+    defaultWarehouseId: number | null;
+    hasWarehouses: boolean;
+    canManageWarehouses: boolean;
+    products: { id: number; name: string; sku: string; unit: string | null }[];
     countSheetWarehouses: { id: number; name: string; code: string }[];
+    countSheetDefaultId: number | null;
 }) {
     // Count-sheet picker. Deliberately NOT part of the posting form: it writes
     // nothing, and sharing the form's state would let a stray warehouse change
     // made while printing follow through into the document that posts.
-    const [sheetWarehouse, setSheetWarehouse] = useState(String(countSheetWarehouses[0]?.id ?? ''));
+    const [sheetWarehouse, setSheetWarehouse] = useState(String(countSheetDefaultId ?? countSheetWarehouses[0]?.id ?? ''));
     const [sheetDate, setSheetDate] = useState(new Date().toISOString().slice(0, 10));
     const sheetUrl = (format: 'print' | 'csv') =>
         `/inventory/opening-stock/count-sheet?warehouse=${sheetWarehouse}&as_at=${sheetDate}&format=${format}`;
 
     const { data, setData, post, errors, processing, reset } = useForm({
-        warehouse_id: String(warehouses[0]?.id ?? ''),
+        // The default warehouse when it is still waiting, not whichever sorts first.
+        warehouse_id: String(defaultWarehouseId ?? warehouses[0]?.id ?? ''),
         as_at: new Date().toISOString().slice(0, 10),
         note: '',
         lines: [emptyLine()] as Line[],
@@ -143,9 +152,34 @@ export default function OpeningStockIndex({
                     </div>
                 )}
 
-                {warehouses.length === 0 ? (
+                {/* ⚠⚠ With NO warehouses this used to say every warehouse was done
+                    (21 Sep 2026): zero left to do read as all finished. */}
+                {!hasWarehouses ? (
+                    <div className="text-muted-foreground rounded-lg border border-dashed p-6 text-center">
+                        No warehouse yet. Opening stock is recorded per warehouse, so add one first.{' '}
+                        {canManageWarehouses ? (
+                            <Link href="/inventory/warehouses" className="text-foreground underline underline-offset-2">
+                                Add a warehouse
+                            </Link>
+                        ) : (
+                            'Ask a manager to add one.'
+                        )}
+                    </div>
+                ) : warehouses.length === 0 ? (
                     <div className="text-muted-foreground rounded-lg border p-6 text-center">
-                        Every active warehouse already has its opening stock recorded.
+                        Every active warehouse already has its opening stock recorded. Later corrections go through{' '}
+                        <Link href="/inventory/stock" className="text-foreground underline underline-offset-2">
+                            Record damage or loss
+                        </Link>{' '}
+                        on the Stock screen.
+                    </div>
+                ) : products.length === 0 ? (
+                    <div className="text-muted-foreground rounded-lg border border-dashed p-6 text-center">
+                        No products that hold stock yet, so there is nothing to count in.{' '}
+                        <Link href="/inventory/products" className="text-foreground underline underline-offset-2">
+                            Add products
+                        </Link>{' '}
+                        first.
                     </div>
                 ) : (
                     <form onSubmit={submit} className="flex flex-col gap-4">
@@ -185,9 +219,24 @@ export default function OpeningStockIndex({
                             <table className="w-full text-sm">
                                 <thead className="bg-muted/50 text-left">
                                     <tr>
-                                        <th className="p-3">Product</th>
-                                        <th className="w-28 p-3">Quantity</th>
-                                        <th className="w-32 p-3">Unit cost</th>
+                                        <th className="p-3">
+                                            Product
+                                            <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                                *
+                                            </span>
+                                        </th>
+                                        <th className="w-32 p-3">
+                                            Quantity
+                                            <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                                *
+                                            </span>
+                                        </th>
+                                        <th className="w-32 p-3">
+                                            Unit cost
+                                            <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                                *
+                                            </span>
+                                        </th>
                                         <th className="w-36 p-3">Batch</th>
                                         <th className="w-40 p-3">Expiry</th>
                                         <th className="w-32 p-3 text-right">Value</th>
@@ -214,7 +263,13 @@ export default function OpeningStockIndex({
                                                 <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">
-                                                <Input value={line.quantity} onChange={(e) => setLine(index, { quantity: e.target.value })} />
+                                                {/* The unit beside the box: "40" is kilograms or sacks. */}
+                                                <div className="flex items-center gap-1.5">
+                                                    <Input value={line.quantity} onChange={(e) => setLine(index, { quantity: e.target.value })} />
+                                                    <span className="text-muted-foreground text-xs">
+                                                        {products.find((p) => String(p.id) === line.product_id)?.unit ?? ''}
+                                                    </span>
+                                                </div>
                                                 <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">
@@ -223,6 +278,8 @@ export default function OpeningStockIndex({
                                             </td>
                                             <td className="p-3">
                                                 <Input value={line.batch_number} onChange={(e) => setLine(index, { batch_number: e.target.value })} />
+                                                {/* ⚠ Validated and refused on the server, and never shown (21 Sep 2026 audit). */}
+                                                <InputError message={errors[`lines.${index}.batch_number` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">
                                                 <Input
@@ -230,6 +287,7 @@ export default function OpeningStockIndex({
                                                     value={line.expiry_date}
                                                     onChange={(e) => setLine(index, { expiry_date: e.target.value })}
                                                 />
+                                                <InputError message={errors[`lines.${index}.expiry_date` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3 text-right tabular-nums">
                                                 {money((Number(line.quantity) || 0) * (Number(line.unit_cost) || 0))}

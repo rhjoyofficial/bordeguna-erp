@@ -115,7 +115,7 @@ class StaffPurchaseController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($employee, $businessId, $data, $lines, $request) {
+        DB::transaction(function () use ($employee, $businessId, $data, $lines) {
             $id = DB::table('staff_purchase_requests')->insertGetId([
                 'business_id' => $businessId,
                 'number' => $this->nextNumber($businessId),
@@ -277,11 +277,19 @@ class StaffPurchaseController extends Controller
             ->get()
             ->keyBy('product_id');
 
-        // MRP = the general list price, which IS the end-customer price
-        // (Joy's pricing model, 23 Aug).
-        $mrps = ProductPrice::query()
-            ->whereNull('price_group_id')
+        // ⚠⚠ MRP is the product's own printed MRP (21 Sep 2026). Before that it
+        // was read from a price for nobody in particular, which the catalogue
+        // import never wrote, so the cap fell back to the STAFF price and let a
+        // person take more than the rule allows. The Retail price, then that
+        // old kind of price, are kept only as fallbacks for a product with no MRP.
+        $retailGroupId = PriceGroup::query()->where('code', PriceGroup::DEFAULT_CODE)->value('id');
+        $retailPrices = ProductPrice::query()
+            ->where(fn ($query) => $query->where('price_group_id', $retailGroupId)->orWhereNull('price_group_id'))
+            ->whereNull('customer_id')
+            ->where('min_quantity', 0)
+            ->where('is_discount', false)
             ->tap($inForce)
+            ->orderByRaw('CASE WHEN price_group_id IS NULL THEN 0 ELSE 1 END')
             ->orderBy('effective_from')
             ->get()
             ->keyBy('product_id');
@@ -289,13 +297,13 @@ class StaffPurchaseController extends Controller
         return Product::query()->where('is_active', true)
             ->whereIn('id', $staffPrices->keys())
             ->orderBy('name')
-            ->get(['id', 'name', 'sku'])
+            ->get(['id', 'name', 'sku', 'mrp'])
             ->map(fn (Product $product) => [
                 'id' => $product->id,
                 'name' => $product->name,
                 'sku' => $product->sku,
                 'staff_price' => (float) $staffPrices[$product->id]->unit_price,
-                'mrp' => (float) ($mrps[$product->id]->unit_price ?? $staffPrices[$product->id]->unit_price),
+                'mrp' => (float) ($product->mrp ?? $retailPrices[$product->id]->unit_price ?? $staffPrices[$product->id]->unit_price),
             ])
             ->values();
     }

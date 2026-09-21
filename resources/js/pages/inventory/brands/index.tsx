@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -32,6 +33,8 @@ const EMPTY = { name: '', code: '', note: '' };
 export default function BrandsIndex({ brands }: { brands: Brand[] }) {
     const { data, setData, post, put, errors, processing, reset, clearErrors } = useForm(EMPTY);
     const [editing, setEditing] = useState<Brand | null>(null);
+    // ⚠ Staff read this page and were offered Add, Edit and Retire, all 403.
+    const { manageCatalog } = useInventoryAbilities();
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -74,39 +77,43 @@ export default function BrandsIndex({ brands }: { brands: Brand[] }) {
                     </p>
                 </div>
 
-                <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-                    <div className="grid gap-2">
-                        <Label htmlFor="name">{editing ? `Editing ${editing.name}` : 'New brand'}</Label>
-                        <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. LaLaDia" />
-                        <InputError message={errors.name} />
-                    </div>
-                    {!editing && (
+                {manageCatalog && (
+                    <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
                         <div className="grid gap-2">
-                            <Label htmlFor="code" required>
-                                SKU code
+                            <Label htmlFor="name" required>
+                                {editing ? `Editing ${editing.name}` : 'New brand'}
                             </Label>
-                            <Input
-                                id="code"
-                                value={data.code}
-                                onChange={(e) => setData('code', e.target.value.toUpperCase())}
-                                placeholder="e.g. LLD"
-                                className="w-32 font-mono"
-                            />
-                            <InputError message={errors.code} />
+                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. LaLaDia" />
+                            <InputError message={errors.name} />
                         </div>
-                    )}
-                    <div className="grid gap-2">
-                        <Label htmlFor="note">Note</Label>
-                        <Input id="note" value={data.note} onChange={(e) => setData('note', e.target.value)} placeholder="optional" />
-                        <InputError message={errors.note} />
-                    </div>
-                    <Button disabled={processing}>{editing ? 'Save' : 'Add'}</Button>
-                    {editing && (
-                        <Button type="button" variant="ghost" onClick={cancel}>
-                            Cancel
-                        </Button>
-                    )}
-                </form>
+                        {!editing && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="code" required>
+                                    SKU code
+                                </Label>
+                                <Input
+                                    id="code"
+                                    value={data.code}
+                                    onChange={(e) => setData('code', e.target.value.toUpperCase())}
+                                    placeholder="e.g. LLD"
+                                    className="w-32 font-mono"
+                                />
+                                <InputError message={errors.code} />
+                            </div>
+                        )}
+                        <div className="grid gap-2">
+                            <Label htmlFor="note">Note</Label>
+                            <Input id="note" value={data.note} onChange={(e) => setData('note', e.target.value)} placeholder="optional" />
+                            <InputError message={errors.note} />
+                        </div>
+                        <Button disabled={processing}>{editing ? 'Save' : 'Add'}</Button>
+                        {editing && (
+                            <Button type="button" variant="ghost" onClick={cancel}>
+                                Cancel
+                            </Button>
+                        )}
+                    </form>
+                )}
 
                 <table className="w-full text-sm">
                     <thead>
@@ -133,16 +140,22 @@ export default function BrandsIndex({ brands }: { brands: Brand[] }) {
                                     <Badge variant={brand.is_active ? 'default' : 'secondary'}>{brand.is_active ? 'Active' : 'Retired'}</Badge>
                                 </td>
                                 <td className="py-2 text-right">
-                                    <Button variant="ghost" size="sm" onClick={() => edit(brand)}>
-                                        Edit
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => router.patch(route('inventory.brands.toggle-active', brand.id), {}, { preserveScroll: true })}
-                                    >
-                                        {brand.is_active ? 'Retire' : 'Reactivate'}
-                                    </Button>
+                                    {manageCatalog && (
+                                        <>
+                                            <Button variant="ghost" size="sm" onClick={() => edit(brand)}>
+                                                Edit
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    router.patch(route('inventory.brands.toggle-active', brand.id), {}, { preserveScroll: true })
+                                                }
+                                            >
+                                                {brand.is_active ? 'Retire' : 'Reactivate'}
+                                            </Button>
+                                        </>
+                                    )}
                                 </td>
                             </tr>
                         ))}

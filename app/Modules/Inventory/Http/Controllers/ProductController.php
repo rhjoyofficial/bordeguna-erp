@@ -2,9 +2,9 @@
 
 namespace App\Modules\Inventory\Http\Controllers;
 
-use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\TaxClass;
+use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Brand;
@@ -56,6 +56,7 @@ class ProductController extends Controller
                 'sku' => $product->sku,
                 'barcode' => $product->barcode,
                 'name' => $product->name,
+                'mrp' => $product->mrp === null ? null : (string) $product->mrp,
                 'type' => $product->type->value,
                 'category' => $product->category?->name,
                 'brand' => $product->brand?->name,
@@ -99,22 +100,32 @@ class ProductController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    /**
+     * ⚠ Answers JSON to the product dialog (21 Sep 2026), which saves the
+     * product first and then its prices beside it (Sales, a separate module),
+     * and needs the new product's id to do that. Any other caller still gets the
+     * redirect it always got.
+     */
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $data = $this->validated($request);
 
-        Product::create($data + ['is_active' => true]);
+        $product = Product::create($data + ['is_active' => true]);
 
-        return back()->with('success', 'Product created.');
+        return $request->wantsJson()
+            ? response()->json(['id' => $product->id, 'name' => $product->name], 201)
+            : back()->with('success', 'Product created.');
     }
 
-    public function update(Request $request, Product $product): RedirectResponse
+    public function update(Request $request, Product $product): RedirectResponse|JsonResponse
     {
         $data = $this->validated($request, $product);
 
         $product->update($data);
 
-        return back()->with('success', 'Product updated.');
+        return $request->wantsJson()
+            ? response()->json(['id' => $product->id, 'name' => $product->name])
+            : back()->with('success', 'Product updated.');
     }
 
     public function destroy(Product $product): RedirectResponse
@@ -227,6 +238,9 @@ class ProductController extends Controller
                 Rule::unique('products', 'barcode')->where('business_id', $businessId)->ignore($product),
             ],
             'name' => ['required', 'string', 'max:255'],
+            // The printed MRP (21 Sep 2026): the consumer price when no Retail
+            // price is set, and the base of any "% off MRP" price.
+            'mrp' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
             'type' => ['required', new Enum(ProductType::class)],
             // ⚠⚠ Scoped to the business. A bare `exists:` accepts another
             // business's id, and unlike the sales and purchasing screens -
@@ -268,6 +282,9 @@ class ProductController extends Controller
             'availability_override' => ['nullable', Rule::in([AvailabilityPolicy::Strict->value])],
             // ⚠ Null promises nothing. A zero would promise same-day.
             'lead_time_days' => ['nullable', 'integer', 'min:1', 'max:365'],
+            // ⚠ Sometimes, so an older form that never sends it cannot switch a
+            // product off by omission; the dialog sends it to bring one back.
+            'is_active' => ['sometimes', 'boolean'],
         ]);
     }
 }

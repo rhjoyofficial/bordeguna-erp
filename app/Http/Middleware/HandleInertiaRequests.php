@@ -62,6 +62,12 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                // ⚠⚠ Dead until 21 Sep 2026. DiscountController flashed
+                // "saved, but another rule outranks it" as `warning`, and only
+                // the two keys above were ever shared, so the one message that
+                // says a discount will NOT apply reached nobody (the dead-engine
+                // family again: a flashed key is not a prop until it is here).
+                'warning' => fn () => $request->session()->get('warning'),
             ],
 
             // ⚠⚠ FLASHED PREVIEWS. Found dead on 30 August 2026, and this is
@@ -218,6 +224,8 @@ class HandleInertiaRequests extends Middleware
             'canViewStores' => fn () => (bool) $request->user()?->can('commerce.stores.view'),
             'canSell' => fn () => (bool) $request->user()?->can('sales.sell'),
             'canRecordOrders' => fn () => (bool) $request->user()?->can('sales.orders.record'),
+            // Receive payment (21 Sep 2026): the menu offers it only to who may.
+            'canRecordReceipts' => fn () => (bool) $request->user()?->can('sales.receipt.record'),
             'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),
             'canViewCrm' => fn () => (bool) $request->user()?->can('crm.leads.view'),
             'canViewContacts' => fn () => (bool) $request->user()?->can('crm.contacts.view'),

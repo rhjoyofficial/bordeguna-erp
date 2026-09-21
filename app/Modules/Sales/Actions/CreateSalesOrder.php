@@ -238,7 +238,11 @@ class CreateSalesOrder
             if ($origin?->awaitingPayment !== true) {
                 $order->submitForApproval($createdBy);
 
-                if ($createdBy->can('sales.orders.approve')) {
+                // ⚠⚠ Approving one's own order is still an approval, so the
+                // credit rules apply here too (21 Sep 2026): an order they refuse
+                // is saved but left pending, for an Owner to decide with a reason.
+                // Without this a manager's own order would skip the check.
+                if ($createdBy->can('sales.orders.approve') && app(CheckCustomerCredit::class)->refusalFor($order) === null) {
                     $order->approvalRequest->approve($createdBy);
                 }
             }

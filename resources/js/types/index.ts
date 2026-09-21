@@ -46,7 +46,7 @@ export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
-    flash: { success?: string | null; error?: string | null };
+    flash: { success?: string | null; error?: string | null; warning?: string | null };
     pendingApprovalsCount: number;
     canReviewApprovals: boolean;
     /** Stored, addressed to this user, and unread. In-app only since 23 Aug. */
@@ -73,6 +73,7 @@ export interface SharedData {
     canViewSales: boolean;
     canSell: boolean;
     canRecordOrders: boolean;
+    canRecordReceipts: boolean;
     canManagePrices: boolean;
     canRecordOpeningStock: boolean;
     canImportCatalogue: boolean;

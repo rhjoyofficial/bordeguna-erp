@@ -12,6 +12,7 @@ import { Head, Link } from '@inertiajs/react';
 interface Delivery {
     id: number;
     delivery_number: string;
+    /** ⚠ A plain Y-m-d Dhaka date from the server; the raw cast serialises in UTC. */
     delivered_at: string;
     fully_invoiced: boolean;
     customer: { id: number; name: string } | null;
@@ -71,7 +72,7 @@ export default function DeliveriesIndex({
                             {deliveries.data.map((delivery) => (
                                 <tr key={delivery.id} className="border-t">
                                     <td className="p-3 font-medium">{delivery.delivery_number}</td>
-                                    <td className="p-3">{delivery.delivered_at?.slice(0, 10)}</td>
+                                    <td className="p-3">{delivery.delivered_at}</td>
                                     <td className="p-3">{delivery.customer?.name ?? '-'}</td>
                                     <td className="p-3">{delivery.warehouse?.name ?? '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{delivery.lines.length}</td>

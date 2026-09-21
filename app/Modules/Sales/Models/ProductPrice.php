@@ -23,6 +23,12 @@ class ProductPrice extends Model
         'price_group_id',
         'min_quantity',
         'unit_price',
+        // How the price was set (21 Sep 2026): 'fixed', or 'percent_off_mrp'
+        // with the percentage and the MRP it was worked out from. ⚠ Record
+        // only: unit_price is the price, and nothing recomputes it from these.
+        'price_method',
+        'percent_off',
+        'basis_mrp',
         'effective_from',
         'effective_to',
         'is_discount',
@@ -36,6 +42,8 @@ class ProductPrice extends Model
         return [
             'min_quantity' => 'decimal:4',
             'unit_price' => 'decimal:4',
+            'percent_off' => 'decimal:4',
+            'basis_mrp' => 'decimal:4',
             // ⚠ Dates, not datetimes. Comparing a datetime cast against a date
             // string has produced five separate defects on this project.
             'effective_from' => 'date',
