@@ -5,6 +5,7 @@ import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
@@ -17,6 +18,9 @@ interface Option {
     id: number;
     name: string;
     sku?: string;
+    unit?: string | null;
+    phone?: string | null;
+    type?: string;
     is_default?: boolean;
     credit_limit?: string | null;
 }
@@ -71,14 +75,39 @@ const approvalVariant: Record<'pending' | 'approved' | 'rejected', 'secondary' |
     rejected: 'destructive',
 };
 
-type LineDraft = { product_id: string; quantity: string };
+type LineDraft = { uid: number; product_id: string; quantity: string; unit_price: string };
+
+interface LinePrice {
+    unit_price: string | null;
+    explanation: string | null;
+    refusal: string | null;
+    loading: boolean;
+}
+
+interface CustomerType {
+    value: string;
+    label: string;
+}
+
+interface PriceGroupOption {
+    id: number;
+    code: string;
+    name: string;
+}
+
+let nextUid = 1;
+const newLine = (): LineDraft => ({ uid: nextUid++, product_id: '', quantity: '', unit_price: '' });
+
+const money = (value: number) => value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Last ten digits: 01711-000000, +8801711000000 and 1711000000 are one phone.
+const phoneKey = (phone: string | null | undefined) => (phone ?? '').replace(/\D/g, '').slice(-10);
 
 /*
- * ⚠ C-SO-3 (shown, never enforced): the moment a customer is picked, the
- * SERVER answers what they already stand at - open invoices plus approved
- * undelivered orders - next to their credit limit. Nothing blocks; a human
- * decides. The number comes from the same CustomerExposure the order screen
- * shows, never computed here.
+ * ⚠ C-SO-3, shown as the customer is picked: what they already stand at - open
+ * invoices plus approved undelivered orders - next to their credit limit. The
+ * number comes from the same CustomerExposure the order screen shows. Since
+ * 21 Sep 2026 approval refuses an order over the limit, so the box says so.
  */
 function ExposureBox({ customerId }: { customerId: string }) {
     const [exposure, setExposure] = useState<Exposure | null>(null);
@@ -120,17 +149,306 @@ function ExposureBox({ customerId }: { customerId: string }) {
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-md border p-3 text-sm">
             <p className="text-muted-foreground">
-                Exposure: open invoices {exposure.open_invoices} + undelivered orders {exposure.undelivered_orders} ={' '}
+                Already owed and promised: open invoices {exposure.open_invoices} + undelivered orders {exposure.undelivered_orders} ={' '}
                 <span className="text-foreground font-medium">{exposure.total}</span>
                 {exposure.credit_limit !== null && <> against a credit limit of {exposure.credit_limit}</>}
             </p>
-            {overLimit && <p className="text-destructive mt-1 font-medium">Over the credit limit. Shown for your judgement - nothing is blocked.</p>}
+            {overLimit && (
+                <p className="text-destructive mt-1 font-medium">
+                    Over the credit limit. The order can be recorded, but approval is refused unless an Owner approves it with a reason.
+                </p>
+            )}
         </div>
     );
 }
 
-function CreateOrderForm({ customers, warehouses, products }: { customers: Option[]; warehouses: Option[]; products: Option[] }) {
-    const { data, setData, post, errors, processing, reset } = useForm<{
+/*
+ * ⭐ One line of the order with its price, asked of the server as it is typed
+ * (21 Sep 2026): the same resolver the order runs, so what the form shows is
+ * what the order will say, and a product with no price for this customer is
+ * named here instead of refusing the whole order on submit.
+ */
+function OrderLineRow({
+    line,
+    index,
+    customerId,
+    products,
+    price,
+    canOverride,
+    canRemove,
+    errors,
+    onChange,
+    onPriced,
+    onRemove,
+}: {
+    line: LineDraft;
+    index: number;
+    customerId: string;
+    products: Option[];
+    price: LinePrice | undefined;
+    canOverride: boolean;
+    canRemove: boolean;
+    errors: Record<string, string | undefined>;
+    onChange: (patch: Partial<LineDraft>) => void;
+    onPriced: (price: LinePrice | undefined) => void;
+    onRemove: () => void;
+}) {
+    useEffect(() => {
+        if (!customerId || !line.product_id) {
+            onPriced(undefined);
+            return;
+        }
+
+        let cancelled = false;
+        onPriced({ unit_price: null, explanation: null, refusal: null, loading: true });
+
+        const timer = window.setTimeout(async () => {
+            const query = new URLSearchParams({ product_id: line.product_id, quantity: line.quantity || '1', customer_id: customerId });
+
+            try {
+                const response = await fetch(`${route('sales.orders.price')}?${query.toString()}`, {
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                });
+                const body = response.ok ? await response.json() : null;
+
+                if (!cancelled) {
+                    onPriced(
+                        body
+                            ? { unit_price: body.unit_price, explanation: body.explanation, refusal: body.refusal, loading: false }
+                            : { unit_price: null, explanation: null, refusal: 'The price could not be looked up. Try again.', loading: false },
+                    );
+                }
+            } catch {
+                if (!cancelled) {
+                    onPriced({ unit_price: null, explanation: null, refusal: 'The price could not be looked up. Try again.', loading: false });
+                }
+            }
+        }, 300);
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [customerId, line.product_id, line.quantity]);
+
+    const product = products.find((p) => String(p.id) === line.product_id);
+    const unitPrice = line.unit_price !== '' ? line.unit_price : (price?.unit_price ?? '');
+    const lineTotal = unitPrice !== '' && line.quantity !== '' ? parseFloat(unitPrice) * parseFloat(line.quantity) : null;
+
+    return (
+        <div className="border-sidebar-border/70 dark:border-sidebar-border grid grid-cols-2 items-start gap-2 border-b pb-2 sm:grid-cols-[3fr_1fr_1fr_1fr_auto]">
+            <div className="col-span-2 grid gap-1 sm:col-span-1">
+                <SearchableSelect
+                    value={line.product_id}
+                    onChange={(v) => onChange({ product_id: v, unit_price: '' })}
+                    options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} - ${p.name}` : p.name }))}
+                    placeholder="Select product"
+                    searchPlaceholder="Search products…"
+                />
+                <InputError message={errors[`lines.${index}.product_id`]} />
+            </div>
+            <div className="grid gap-1">
+                <Input
+                    placeholder={product?.unit ? `Quantity (${product.unit})` : 'Quantity'}
+                    inputMode="decimal"
+                    value={line.quantity}
+                    onChange={(e) => onChange({ quantity: e.target.value })}
+                />
+                <InputError message={errors[`lines.${index}.quantity`]} />
+            </div>
+            <div className="grid gap-1">
+                {canOverride ? (
+                    <Input
+                        placeholder="Price"
+                        inputMode="decimal"
+                        value={unitPrice}
+                        onChange={(e) => onChange({ unit_price: e.target.value })}
+                        aria-label="Unit price"
+                    />
+                ) : (
+                    <p className="flex h-9 items-center text-sm tabular-nums">{price?.loading ? '…' : unitPrice || '-'}</p>
+                )}
+                {canOverride && line.unit_price !== '' && price?.unit_price && line.unit_price !== price.unit_price && (
+                    <button type="button" className="text-muted-foreground w-fit text-xs underline" onClick={() => onChange({ unit_price: '' })}>
+                        Changed from {price.unit_price}: undo
+                    </button>
+                )}
+                <InputError message={errors[`lines.${index}.unit_price`]} />
+            </div>
+            <p className="flex h-9 items-center justify-end text-sm font-medium tabular-nums">
+                {lineTotal !== null && !isNaN(lineTotal) ? money(lineTotal) : ''}
+            </p>
+            <Button type="button" variant="ghost" size="sm" onClick={onRemove} disabled={!canRemove}>
+                Remove
+            </Button>
+            {(price?.refusal || price?.explanation) && (
+                <p className={`col-span-2 text-xs sm:col-span-5 ${price.refusal ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    {price.refusal ?? price.explanation}
+                </p>
+            )}
+        </div>
+    );
+}
+
+/*
+ * ⭐ A customer added without leaving the order (21 Sep 2026). The same fields
+ * the Customers screen asks for that decide the price: who they are (type) and
+ * what they pay (price group). The group is preselected from the type and can
+ * be changed; they are two different facts. A phone that is already somebody's
+ * is named before a second record is made for the same person.
+ */
+function QuickCustomerDialog({
+    open,
+    onOpenChange,
+    typed,
+    customers,
+    customerTypes,
+    priceGroups,
+    onCreated,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    typed: string;
+    customers: Option[];
+    customerTypes: CustomerType[];
+    priceGroups: PriceGroupOption[];
+    onCreated: (customerId: string) => void;
+}) {
+    const groupFor = (type: string) => priceGroups.find((group) => group.code === type.toUpperCase())?.id;
+    const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
+        name: '',
+        phone: '',
+        type: 'retail',
+        price_group_id: '',
+        address: '',
+    });
+
+    useEffect(() => {
+        if (open) {
+            clearErrors();
+            const looksLikePhone = /^[+\d\s-]{6,}$/.test(typed);
+            setData({
+                name: looksLikePhone ? '' : typed,
+                phone: looksLikePhone ? typed : '',
+                type: 'retail',
+                price_group_id: String(groupFor('retail') ?? ''),
+                address: '',
+            });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
+
+    const samePhone = phoneKey(data.phone).length === 10 ? customers.find((c) => phoneKey(c.phone) === phoneKey(data.phone)) : undefined;
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        const name = data.name.trim();
+        post(route('sales.customers.store'), {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: (page) => {
+                // The newest customer of that name is the one just made.
+                const list = (page.props as unknown as { customers: Option[] }).customers;
+                const created = list.filter((c) => c.name === name).sort((a, b) => b.id - a.id)[0];
+                if (created) onCreated(String(created.id));
+                reset();
+                onOpenChange(false);
+            },
+        });
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>New customer</DialogTitle>
+                    <DialogDescription>Added to Customers and picked for this order. Everything else can be filled in later.</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={submit} className="grid gap-3">
+                    <div className="grid gap-1">
+                        <Label htmlFor="quick-name">Name</Label>
+                        <Input id="quick-name" value={data.name} onChange={(e) => setData('name', e.target.value)} autoFocus />
+                        <InputError message={errors.name} />
+                    </div>
+                    <div className="grid gap-1">
+                        <Label htmlFor="quick-phone">Phone</Label>
+                        <Input id="quick-phone" value={data.phone} onChange={(e) => setData('phone', e.target.value)} inputMode="tel" />
+                        <InputError message={errors.phone} />
+                        {samePhone && (
+                            <p className="text-destructive text-xs">
+                                {samePhone.name} already has this phone.{' '}
+                                <button
+                                    type="button"
+                                    className="underline"
+                                    onClick={() => {
+                                        onCreated(String(samePhone.id));
+                                        onOpenChange(false);
+                                    }}
+                                >
+                                    Use {samePhone.name}
+                                </button>
+                            </p>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-1">
+                            <Label>Who they are</Label>
+                            <SearchableSelect
+                                value={data.type}
+                                onChange={(v) => setData({ ...data, type: v, price_group_id: String(groupFor(v) ?? data.price_group_id) })}
+                                options={customerTypes.map((type) => ({ value: type.value, label: type.label }))}
+                            />
+                            <InputError message={errors.type} />
+                        </div>
+                        <div className="grid gap-1">
+                            <Label>Prices they pay</Label>
+                            <SearchableSelect
+                                value={data.price_group_id}
+                                onChange={(v) => setData('price_group_id', v)}
+                                options={priceGroups.map((group) => ({ value: String(group.id), label: group.name }))}
+                                placeholder="Retail"
+                            />
+                            <InputError message={errors.price_group_id} />
+                        </div>
+                    </div>
+                    <div className="grid gap-1">
+                        <Label htmlFor="quick-address">Address (optional)</Label>
+                        <Input id="quick-address" value={data.address} onChange={(e) => setData('address', e.target.value)} />
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                            Cancel
+                        </Button>
+                        <Button disabled={processing}>Add customer</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function CreateOrderForm({
+    customers,
+    warehouses,
+    products,
+    canOverridePrice,
+    canAddCustomer,
+    customerTypes,
+    priceGroups,
+    onClose,
+}: {
+    customers: Option[];
+    warehouses: Option[];
+    products: Option[];
+    canOverridePrice: boolean;
+    canAddCustomer: boolean;
+    customerTypes: CustomerType[];
+    priceGroups: PriceGroupOption[];
+    onClose: () => void;
+}) {
+    const { data, setData, post, errors, processing, transform } = useForm<{
         customer_id: string;
         warehouse_id: string;
         expected_date: string;
@@ -138,108 +456,179 @@ function CreateOrderForm({ customers, warehouses, products }: { customers: Optio
         lines: LineDraft[];
     }>({
         customer_id: '',
-        warehouse_id: '',
+        // The default warehouse, as everywhere else; "decided at delivery" is one click away.
+        warehouse_id: String(warehouses.find((w) => w.is_default)?.id ?? ''),
         expected_date: '',
         note: '',
-        lines: [{ product_id: '', quantity: '' }],
+        lines: [newLine()],
     });
+    const [prices, setPrices] = useState<Record<number, LinePrice | undefined>>({});
+    const [quickOpen, setQuickOpen] = useState(false);
+    const [typedCustomer, setTypedCustomer] = useState('');
+    const lineErrors = errors as Record<string, string | undefined>;
+
+    // ⚠ A price goes to the server only when somebody allowed to change it did.
+    // Otherwise the server resolves it, as it always has.
+    transform((form) => ({
+        ...form,
+        lines: form.lines.map((line) => ({
+            product_id: line.product_id,
+            quantity: line.quantity,
+            ...(canOverridePrice && line.unit_price !== '' && line.unit_price !== prices[line.uid]?.unit_price
+                ? { unit_price: line.unit_price }
+                : {}),
+        })),
+    }));
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        post(route('sales.orders.store'), { onSuccess: () => reset() });
+        post(route('sales.orders.store'));
     };
 
-    const updateLine = (index: number, patch: Partial<LineDraft>) => {
+    const updateLine = (uid: number, patch: Partial<LineDraft>) =>
         setData(
             'lines',
-            data.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+            data.lines.map((line) => (line.uid === uid ? { ...line, ...patch } : line)),
         );
-    };
-
-    const addLine = () => setData('lines', [...data.lines, { product_id: '', quantity: '' }]);
-    const removeLine = (index: number) =>
+    const removeLine = (uid: number) =>
         setData(
             'lines',
-            data.lines.filter((_, i) => i !== index),
+            data.lines.filter((line) => line.uid !== uid),
         );
 
+    const total = data.lines.reduce((sum, line) => {
+        const unit = line.unit_price !== '' ? line.unit_price : prices[line.uid]?.unit_price;
+        return unit && line.quantity ? sum + parseFloat(unit) * parseFloat(line.quantity) : sum;
+    }, 0);
+    const unpriced = data.lines.some((line) => line.product_id && prices[line.uid]?.refusal && line.unit_price === '');
+
+    // ⚠ The dialog is a SIBLING of the form, not inside it: React bubbles a
+    // portal's submit up the component tree, so adding a customer from inside
+    // the form would have recorded the order too.
     return (
-        <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
-            <h3 className="font-medium">New sales order</h3>
-            <p className="text-muted-foreground text-sm">
-                Prices are agreed at order time: the server resolves each line's price for this customer on this date and writes it on the order,
-                where it stays - a later invoice bills the order price, not the rule of the day.
-            </p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="grid gap-2">
-                    <Label>Customer</Label>
-                    <SearchableSelect
-                        value={data.customer_id}
-                        onChange={(v) => setData('customer_id', v)}
-                        options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
-                        placeholder="Select customer"
-                        searchPlaceholder="Search customers…"
-                    />
-                    <InputError message={errors.customer_id} />
+        <>
+            {canAddCustomer && (
+                <QuickCustomerDialog
+                    open={quickOpen}
+                    onOpenChange={setQuickOpen}
+                    typed={typedCustomer}
+                    customers={customers}
+                    customerTypes={customerTypes}
+                    priceGroups={priceGroups}
+                    onCreated={(id) => setData('customer_id', id)}
+                />
+            )}
+            <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
+                <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-medium">New sales order</h3>
+                    <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+                        Close
+                    </Button>
                 </div>
-                <div className="grid gap-2">
-                    <Label>Preferred warehouse (optional)</Label>
-                    <SearchableSelect
-                        value={data.warehouse_id}
-                        onChange={(v) => setData('warehouse_id', v)}
-                        options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
-                        placeholder="Decided at delivery"
-                        clearable
-                        searchPlaceholder="Search warehouses…"
-                    />
-                    <InputError message={errors.warehouse_id} />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                    <div className="grid gap-2 sm:col-span-2">
+                        <Label>Customer</Label>
+                        <SearchableSelect
+                            value={data.customer_id}
+                            onChange={(v) => setData('customer_id', v)}
+                            options={customers.map((c) => ({
+                                value: String(c.id),
+                                label: c.phone ? `${c.name} - ${c.phone}` : c.name,
+                                keywords: c.phone ?? '',
+                            }))}
+                            placeholder="Select customer"
+                            searchPlaceholder="Name or phone…"
+                            {...(canAddCustomer
+                                ? {
+                                      onCreate: (typed: string) => {
+                                          setTypedCustomer(typed);
+                                          setQuickOpen(true);
+                                      },
+                                      createLabel: 'New customer',
+                                  }
+                                : {})}
+                        />
+                        <InputError message={errors.customer_id} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Warehouse</Label>
+                        <SearchableSelect
+                            value={data.warehouse_id}
+                            onChange={(v) => setData('warehouse_id', v)}
+                            options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+                            placeholder="Decided at delivery"
+                            clearable
+                            searchPlaceholder="Search warehouses…"
+                        />
+                        <InputError message={errors.warehouse_id} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Expected date (optional)</Label>
+                        <Input type="date" value={data.expected_date} onChange={(e) => setData('expected_date', e.target.value)} />
+                    </div>
                 </div>
-                <div className="grid gap-2">
-                    <Label>Expected date (optional)</Label>
-                    <Input type="date" value={data.expected_date} onChange={(e) => setData('expected_date', e.target.value)} />
+
+                <ExposureBox customerId={data.customer_id} />
+
+                <div className="flex flex-col gap-2">
+                    <div className="text-muted-foreground hidden grid-cols-[3fr_1fr_1fr_1fr_auto] gap-2 text-xs sm:grid">
+                        <span>Product</span>
+                        <span>Quantity</span>
+                        <span>Price</span>
+                        <span className="text-right">Line total</span>
+                        <span className="w-16" />
+                    </div>
+                    {!data.customer_id && (
+                        <p className="text-muted-foreground text-sm">Pick the customer first: the price depends on who is buying.</p>
+                    )}
+                    {data.lines.map((line, index) => (
+                        <OrderLineRow
+                            key={line.uid}
+                            line={line}
+                            index={index}
+                            customerId={data.customer_id}
+                            products={products}
+                            price={prices[line.uid]}
+                            canOverride={canOverridePrice}
+                            canRemove={data.lines.length > 1}
+                            errors={lineErrors}
+                            onChange={(patch) => updateLine(line.uid, patch)}
+                            onPriced={(price) => setPrices((current) => ({ ...current, [line.uid]: price }))}
+                            onRemove={() => removeLine(line.uid)}
+                        />
+                    ))}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-fit"
+                            onClick={() => setData('lines', [...data.lines, newLine()])}
+                        >
+                            + Add line
+                        </Button>
+                        <p className="text-sm">
+                            Order total <span className="font-medium tabular-nums">{money(total)}</span>
+                        </p>
+                    </div>
                 </div>
+
+                <InputError message={errors.lines} />
+
                 <div className="grid gap-2">
                     <Label>Note (optional)</Label>
                     <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
                 </div>
-            </div>
 
-            <ExposureBox customerId={data.customer_id} />
+                <p className="text-muted-foreground text-xs">
+                    The price is fixed on the order when it is recorded: a later price change does not move it, and the invoice bills this price.
+                </p>
 
-            <div className="flex flex-col gap-2">
-                <Label>Line items</Label>
-                {data.lines.map((line, index) => (
-                    <div key={index} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[3fr_1fr_auto]">
-                        <div className="grid gap-1">
-                            <SearchableSelect
-                                value={line.product_id}
-                                onChange={(v) => updateLine(index, { product_id: v })}
-                                options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} - ${p.name}` : p.name }))}
-                                placeholder="Select product"
-                                searchPlaceholder="Search products…"
-                            />
-                            <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
-                        </div>
-                        <div className="grid gap-1">
-                            <Input placeholder="Quantity" value={line.quantity} onChange={(e) => updateLine(index, { quantity: e.target.value })} />
-                            <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
-                        </div>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeLine(index)} disabled={data.lines.length === 1}>
-                            Remove
-                        </Button>
-                    </div>
-                ))}
-                <Button type="button" variant="outline" size="sm" className="w-fit" onClick={addLine}>
-                    + Add line
+                <Button disabled={processing || unpriced} className="w-fit">
+                    Record sales order
                 </Button>
-            </div>
-
-            <InputError message={errors.lines} />
-
-            <Button disabled={processing} className="w-fit">
-                Record sales order
-            </Button>
-        </form>
+            </form>
+        </>
     );
 }
 
@@ -250,6 +639,10 @@ export default function SalesOrdersIndex({
     warehouses,
     products,
     can_create,
+    can_override_price,
+    can_add_customer,
+    customer_types,
+    price_groups,
     filters: initialFilters,
 }: {
     orders: Paginated<OrderRow>;
@@ -258,14 +651,39 @@ export default function SalesOrdersIndex({
     warehouses: Option[];
     products: Option[];
     can_create: boolean;
+    can_override_price: boolean;
+    can_add_customer: boolean;
+    customer_types: CustomerType[];
+    price_groups: PriceGroupOption[];
     filters: { search: string; status: string };
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/orders', initialFilters);
+    // ⭐ The form is at the top, one click away (21 Sep 2026): it used to sit
+    // under the whole order list and the stock table.
+    const [creating, setCreating] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('new'));
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Sales orders" />
             <div className="flex flex-col gap-6 p-4">
+                {can_create && !creating && (
+                    <Button className="w-fit" onClick={() => setCreating(true)}>
+                        New sales order
+                    </Button>
+                )}
+                {can_create && creating && (
+                    <CreateOrderForm
+                        customers={customers}
+                        warehouses={warehouses}
+                        products={products}
+                        canOverridePrice={can_override_price}
+                        canAddCustomer={can_add_customer}
+                        customerTypes={customer_types}
+                        priceGroups={price_groups}
+                        onClose={() => setCreating(false)}
+                    />
+                )}
+
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
                     <FilterField label="Search" htmlFor="filter-search" className="min-w-56 flex-1">
                         <Input
@@ -378,8 +796,6 @@ export default function SalesOrdersIndex({
                         </div>
                     </div>
                 )}
-
-                {can_create && <CreateOrderForm customers={customers} warehouses={warehouses} products={products} />}
             </div>
         </AppLayout>
     );
