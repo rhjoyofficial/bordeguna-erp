@@ -13,7 +13,6 @@ use App\Modules\Accounting\Support\AmountInWords;
 use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\StoreAttachment;
-use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -316,28 +315,52 @@ class VoucherController extends Controller
             'today' => Carbon::today()->toDateString(),
             // ⭐ A CONTRA may move money OUT OF a payment gateway (accountant
             // meeting 19 Sep, F4: an SSLCommerz payout reaching the bank had no
-            // screen). The gateway is offered as a SOURCE only, and only here:
-            // the form hides it from "Moved to" and from every other voucher.
+            // screen). The gateway is usable as a SOURCE only, and only here: it
+            // is greyed under "Moved to" and on every other voucher.
+            //
+            // ⚠ EVERY account in Bank & cash is sent, the unusable ones with the
+            // reason (Joy, 21 Sep 2026: an account set up there but missing from
+            // the list, with nothing saying why, reads as a broken form). Usable
+            // ones first; PostVoucher refuses the rest whatever the form sends.
             'moneyAccounts' => fn () => MoneyAccount::query()
-                ->when(
-                    $type === VoucherType::Contra,
-                    fn ($query) => $query->where('type', '!=', MoneyAccountType::Courier->value),
-                    fn ($query) => $query->handled(),
-                )
-                ->where('is_active', true)->whereNotNull('account_id')
                 ->orderBy('name')->get()
-                ->map(fn (MoneyAccount $account) => ['id' => $account->id, 'label' => $account->label(), 'type' => $account->type->value]),
-            'accounts' => fn () => VoucherAccounts::selectable(Carbon::today())->map(fn ($account) => [
-                'id' => $account->id,
-                'label' => $account->label(),
-                'party' => isset($partySlugs[$account->system_slug])
-                    ? ($account->system_slug === 'supplier_advances' ? 'supplier' : 'customer')
+                ->map(fn (MoneyAccount $account) => [
+                    'id' => $account->id,
+                    'label' => $account->label(),
+                    'type' => $account->type->value,
+                    'hint' => $this->moneyAccountHint($type, $account),
+                ])
+                ->sortBy(fn (array $row) => $row['hint'] === null ? 0 : 1)
+                ->values(),
+            // Every head of the chart, the unusable ones greyed with where they
+            // are posted instead (VoucherAccounts::catalogue).
+            'accounts' => fn () => VoucherAccounts::catalogue(Carbon::today(), $type)->map(fn (array $row) => [
+                'id' => $row['account']->id,
+                'label' => $row['account']->label(),
+                'party' => isset($partySlugs[$row['account']->system_slug])
+                    ? ($row['account']->system_slug === 'supplier_advances' ? 'supplier' : 'customer')
                     : null,
+                'usable' => $row['usable'],
+                'heading' => $row['heading'],
+                'hint' => $row['hint'],
             ]),
             'suppliers' => fn () => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),
             'customers' => fn () => Customer::query()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
             'instrumentTypes' => Voucher::INSTRUMENT_TYPES,
         ]);
+    }
+
+    /** Why this money account cannot be chosen on this voucher type, or null when it can. */
+    private function moneyAccountHint(VoucherType $type, MoneyAccount $account): ?string
+    {
+        return match (true) {
+            ! $account->is_active => 'Switched off in Bank & cash.',
+            $account->account_id === null => 'Set "Reports under" for it in Bank & cash first.',
+            $account->isCourier() => 'Courier money: settled from Sales > Courier payouts.',
+            // A contra may move money OUT of a gateway; the form greys it under "Moved to".
+            $account->isGateway() && $type !== VoucherType::Contra => 'Online-sale money: moved to the bank by a Contra voucher.',
+            default => null,
+        };
     }
 
     /**

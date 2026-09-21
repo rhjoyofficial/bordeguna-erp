@@ -52,6 +52,10 @@ type OptionLike = {
     value?: string | number;
     disabled?: boolean;
     children?: ReactNode;
+    /** `<option data-hint="...">`: a smaller second line under the label (see SelectOption.hint). */
+    'data-hint'?: string | null;
+    /** `<option data-heading>`: a bold group title that cannot be chosen. */
+    'data-heading'?: boolean;
 };
 
 /** Walks children, flattening fragments and mapped arrays, collecting <option>s. */
@@ -78,7 +82,13 @@ function collect(children: ReactNode, into: { options: SelectOption[]; placehold
             into.placeholder = label;
         }
 
-        into.options.push({ value, label, disabled: props.disabled });
+        into.options.push({
+            value,
+            label,
+            disabled: props.disabled,
+            hint: props['data-hint'] || undefined,
+            heading: props['data-heading'] || undefined,
+        });
     });
 }
 

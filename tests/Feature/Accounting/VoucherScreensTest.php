@@ -4,6 +4,7 @@ use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Foundation\Models\Business;
@@ -67,7 +68,10 @@ beforeEach(function () {
 
 afterEach(fn () => Carbon::setTestNow());
 
-it('offers the form only accounts a voucher may use, and marks the party-enabled ones', function () {
+it('shows the form every head of the chart, greys the ones a voucher may not use with where they are posted, and marks the party-enabled ones', function () {
+    AccountMapping::assign('sales.accounts_receivable', Account::where('code', '1140')->sole(), Carbon::parse('2000-01-01'));
+    AccountMapping::assign('payroll.earning.default', Account::where('code', '6131')->sole(), Carbon::parse('2000-01-01'));
+
     $this->actingAs($this->finance)->get('/accounting/vouchers/payment/create')
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
@@ -75,13 +79,61 @@ it('offers the form only accounts a voucher may use, and marks the party-enabled
             ->where('type.value', 'payment')
             ->where('type.fixed_side', 'debit')
             ->where('moneyAccounts.0.label', 'BRAC Bank')
-            ->where('accounts', fn ($accounts) => collect($accounts)->pluck('label')->contains('6051 - Office Rent')
-                // cash and bank heads move through the money account field
-                && ! collect($accounts)->pluck('label')->contains('1120 - Cash at Bank')
-                && ! collect($accounts)->pluck('label')->contains('3900 - Opening Balance Equity')
-                && collect($accounts)->firstWhere('label', '1160 - Advances to Suppliers')['party'] === 'supplier'
-                && collect($accounts)->firstWhere('label', '2150 - Advances from Customers')['party'] === 'customer'
-                && collect($accounts)->firstWhere('label', '6051 - Office Rent')['party'] === null));
+            ->where('moneyAccounts.0.hint', null)
+            ->where('accounts', function ($accounts) {
+                $accounts = collect($accounts)->keyBy('label');
+                $row = fn (string $label) => $accounts->get($label) ?? throw new RuntimeException("{$label} is missing from the picker");
+
+                // ⭐ Nothing in the chart is missing (Joy, 21 Sep 2026).
+                expect($accounts)->toHaveCount(Account::count());
+
+                expect($row('6051 - Office Rent'))->toMatchArray(['usable' => true, 'heading' => false, 'hint' => null, 'party' => null])
+                    ->and($row('1160 - Advances to Suppliers'))->toMatchArray(['usable' => true, 'party' => 'supplier'])
+                    ->and($row('2150 - Advances from Customers'))->toMatchArray(['usable' => true, 'party' => 'customer'])
+                    // cash and bank heads move through the money account field, and say so
+                    ->and($row('1120 - Cash at Bank'))->toMatchArray(['usable' => false, 'hint' => 'Cash or bank: choose it in Paid from above.'])
+                    ->and($row('1140 - Accounts Receivable'))->toMatchArray(['usable' => false, 'hint' => 'Posted by sales invoices. Record a customer\'s payment on the invoice.'])
+                    ->and($row('6131 - Salaries and Wages'))->toMatchArray(['usable' => false, 'hint' => 'Posted by Payroll: payroll runs, loans and advances.'])
+                    ->and($row('3900 - Opening Balance Equity'))->toMatchArray(['usable' => false, 'hint' => 'Used only by opening balances.'])
+                    ->and($row('6050 - Office and Administration'))->toMatchArray(['usable' => false, 'heading' => true]);
+
+                return true;
+            }));
+});
+
+it('greys what a voucher refuses, and still refuses it when a form sends it anyway', function () {
+    AccountMapping::assign('sales.accounts_receivable', Account::where('code', '1140')->sole(), Carbon::parse('2000-01-01'));
+
+    $this->actingAs($this->owner)->post('/accounting/vouchers/payment', ($this->payload)([
+        'lines' => [['account_id' => Account::where('code', '1140')->sole()->id, 'amount' => '500']],
+    ]))->assertSessionHasErrors('lines.0.account_id');
+
+    expect(Voucher::count())->toBe(0);
+});
+
+it('lists every Bank & cash account, and says why one cannot be chosen', function () {
+    MoneyAccount::create(['business_id' => $this->business->id, 'name' => 'Petty Cash', 'type' => 'cash', 'is_active' => true, 'account_id' => null]);
+    MoneyAccount::create(['business_id' => $this->business->id, 'name' => 'Old Cash Box', 'type' => 'cash', 'is_active' => false, 'account_id' => Account::bySlug('cash_in_hand')->id]);
+    MoneyAccount::create(['business_id' => $this->business->id, 'name' => 'Pathao', 'type' => 'courier', 'is_active' => true, 'account_id' => Account::bySlug('courier_receivable')->id]);
+    MoneyAccount::create(['business_id' => $this->business->id, 'name' => 'SSLCommerz', 'type' => 'gateway', 'is_active' => true, 'account_id' => Account::bySlug('gateway_receivable')->id]);
+
+    $hints = fn (string $type) => collect($this->actingAs($this->owner)->get("/accounting/vouchers/{$type}/create")
+        ->assertOk()->original->getData()['page']['props']['moneyAccounts'])->pluck('hint', 'label');
+
+    $payment = $hints('payment');
+
+    // Usable first, so the one to pick is at the top.
+    expect($payment->keys()->first())->toBe('BRAC Bank')
+        ->and($payment->all())->toBe([
+            'BRAC Bank' => null,
+            'Old Cash Box' => 'Switched off in Bank & cash.',
+            'Pathao' => 'Courier money: settled from Sales > Courier payouts.',
+            'Petty Cash' => 'Set "Reports under" for it in Bank & cash first.',
+            'SSLCommerz' => 'Online-sale money: moved to the bank by a Contra voucher.',
+        ]);
+
+    // A contra may move money OUT of a gateway, so there it is usable.
+    expect($hints('contra')->get('SSLCommerz'))->toBeNull();
 });
 
 it('refuses an unknown voucher type', function () {

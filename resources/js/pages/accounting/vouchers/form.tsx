@@ -20,10 +20,22 @@ export interface VoucherTypeProps {
     counterparty_label: string | null;
 }
 
+/** Every head of the chart; the ones a line cannot use come greyed, with where they are posted instead. */
 interface AccountOption {
     id: number;
     label: string;
     party: 'supplier' | 'customer' | null;
+    usable: boolean;
+    heading: boolean;
+    hint: string | null;
+}
+
+/** Every account in Bank & cash; `hint` says why one cannot be chosen here, null when it can. */
+interface MoneyOption {
+    id: number;
+    label: string;
+    type: string;
+    hint: string | null;
 }
 
 interface Option {
@@ -106,7 +118,7 @@ export default function VoucherFormPage({
     type: VoucherTypeProps;
     voucher: ExistingVoucher | null;
     today: string;
-    moneyAccounts: (Option & { type: string })[];
+    moneyAccounts: MoneyOption[];
     accounts: AccountOption[];
     suppliers: Option[];
     customers: Option[];
@@ -220,22 +232,28 @@ export default function VoucherFormPage({
                             >
                                 <option value="">Choose an account</option>
                                 {moneyAccounts.map((account) => (
-                                    <option key={account.id} value={account.id}>
+                                    <option key={account.id} value={account.id} disabled={account.hint !== null} data-hint={account.hint}>
                                         {account.label}
                                     </option>
                                 ))}
                             </SearchSelect>
                             <p className="text-muted-foreground text-xs">
-                                {moneyAccounts.length === 0 ? (
+                                {moneyAccounts.every((account) => account.hint !== null) ? (
                                     <>
-                                        No cash or bank account yet. Add one in{' '}
+                                        No cash or bank account can be used yet. Add one in{' '}
+                                        <Link href="/accounting/money-accounts" className="underline">
+                                            Bank &amp; cash
+                                        </Link>
+                                        , with "Reports under" set.
+                                    </>
+                                ) : (
+                                    <>
+                                        {moneyHint} The list comes from{' '}
                                         <Link href="/accounting/money-accounts" className="underline">
                                             Bank &amp; cash
                                         </Link>
                                         .
                                     </>
-                                ) : (
-                                    moneyHint
                                 )}
                             </p>
                             <InputError message={errors.money_account_id} />
@@ -254,15 +272,27 @@ export default function VoucherFormPage({
                             >
                                 <option value="">Choose an account</option>
                                 {moneyAccounts
-                                    // Money never moves INTO a gateway by hand: the gateway fills itself from sales.
-                                    .filter((account) => String(account.id) !== data.money_account_id && account.type !== 'gateway')
-                                    .map((account) => (
-                                        <option key={account.id} value={account.id}>
-                                            {account.label}
-                                        </option>
-                                    ))}
+                                    .filter((account) => String(account.id) !== data.money_account_id)
+                                    .map((account) => {
+                                        // Money never moves INTO a gateway by hand: the gateway fills itself from sales.
+                                        const hint =
+                                            account.hint ??
+                                            (account.type === 'gateway' ? 'Online-sale money: it only leaves a gateway, never enters one.' : null);
+
+                                        return (
+                                            <option key={account.id} value={account.id} disabled={hint !== null} data-hint={hint}>
+                                                {account.label}
+                                            </option>
+                                        );
+                                    })}
                             </SearchSelect>
-                            <p className="text-muted-foreground text-xs">Cash deposited, cash withdrawn, or bank to bank.</p>
+                            <p className="text-muted-foreground text-xs">
+                                Cash deposited, cash withdrawn, or bank to bank. The list comes from{' '}
+                                <Link href="/accounting/money-accounts" className="underline">
+                                    Bank &amp; cash
+                                </Link>
+                                .
+                            </p>
                             <InputError message={errors.to_money_account_id} />
                         </div>
                     )}
@@ -335,7 +365,13 @@ export default function VoucherFormPage({
                                                     >
                                                         <option value="">Choose a ledger head</option>
                                                         {accounts.map((account) => (
-                                                            <option key={account.id} value={account.id}>
+                                                            <option
+                                                                key={account.id}
+                                                                value={account.id}
+                                                                disabled={!account.usable}
+                                                                data-heading={account.heading}
+                                                                data-hint={account.heading ? null : account.hint}
+                                                            >
                                                                 {account.label}
                                                             </option>
                                                         ))}

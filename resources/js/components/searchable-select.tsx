@@ -12,6 +12,10 @@ export type SelectOption = {
     /** Extra text the search should match on but the row should not show: a SKU, a code, a phone number. */
     keywords?: string;
     disabled?: boolean;
+    /** A second, smaller line under the label: why a greyed row cannot be chosen, and where to go instead. */
+    hint?: string;
+    /** A group title in the list (a chart heading): shown in bold, never chosen. */
+    heading?: boolean;
 };
 
 /**
@@ -192,24 +196,44 @@ export function SearchableSelect({
                         <CommandList className="max-h-[min(20rem,var(--radix-popover-content-available-height,20rem))]">
                             <CommandEmpty>{emptyText}</CommandEmpty>
                             <CommandGroup>
-                                {options.map((option, index) => (
-                                    <CommandItem
-                                        key={option.value}
-                                        value={searchValues[index]}
-                                        disabled={option.disabled}
-                                        onSelect={() => {
-                                            if (option.value === value && clearable) {
-                                                onChange('');
-                                            } else {
-                                                onChange(option.value);
-                                            }
-                                            setOpen(false);
-                                        }}
-                                    >
-                                        <Check className={cn('mr-2 size-4', value === option.value ? 'opacity-100' : 'opacity-0')} />
-                                        {option.label}
-                                    </CommandItem>
-                                ))}
+                                {options.map((option, index) =>
+                                    option.heading ? (
+                                        <CommandItem
+                                            key={option.value}
+                                            value={searchValues[index]}
+                                            disabled
+                                            className="text-foreground pt-3 font-semibold data-[disabled=true]:opacity-100"
+                                        >
+                                            {option.label}
+                                        </CommandItem>
+                                    ) : (
+                                        <CommandItem
+                                            key={option.value}
+                                            value={searchValues[index]}
+                                            disabled={option.disabled}
+                                            // A greyed row with a reason must stay readable: the reason is the point.
+                                            className={option.hint ? 'data-[disabled=true]:opacity-70' : undefined}
+                                            onSelect={() => {
+                                                if (option.value === value && clearable) {
+                                                    onChange('');
+                                                } else {
+                                                    onChange(option.value);
+                                                }
+                                                setOpen(false);
+                                            }}
+                                        >
+                                            <Check className={cn('mr-2 size-4', value === option.value ? 'opacity-100' : 'opacity-0')} />
+                                            {option.hint ? (
+                                                <span className="min-w-0">
+                                                    <span className="block">{option.label}</span>
+                                                    <span className="text-muted-foreground block text-xs">{option.hint}</span>
+                                                </span>
+                                            ) : (
+                                                option.label
+                                            )}
+                                        </CommandItem>
+                                    ),
+                                )}
                             </CommandGroup>
                         </CommandList>
                         {onCreate ? (

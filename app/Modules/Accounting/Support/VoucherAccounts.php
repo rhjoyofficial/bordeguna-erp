@@ -2,7 +2,9 @@
 
 namespace App\Modules\Accounting\Support;
 
+use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
@@ -35,6 +37,31 @@ final class VoucherAccounts
 
     private const MONEY_SLUGS = ['cash_in_hand', 'cash_at_bank', 'mobile_financial_services', 'courier_receivable', 'gateway_receivable'];
 
+    /** Where a module's heads ARE posted, keyed by mapping prefix. Shown under a refused row. */
+    private const MODULE_INSTEAD = [
+        'sales.' => 'Posted by Sales: invoices, receipts and returns.',
+        'purchasing.' => 'Posted by Purchases: supplier bills and payments.',
+        'inventory.' => 'Posted by Inventory: goods received, stock adjustments and counts.',
+        'payroll.' => 'Posted by Payroll: payroll runs, loans and advances.',
+        'assets.' => 'Posted by Fixed assets: depreciation and disposals.',
+    ];
+
+    /** Heads one particular screen posts, named more exactly than their module. */
+    private const KEY_INSTEAD = [
+        'sales.accounts_receivable' => 'Posted by sales invoices. Record a customer\'s payment on the invoice.',
+        'purchasing.accounts_payable' => 'Posted by supplier bills. Pay a supplier from Purchases > Payments.',
+        'sales.output_vat' => 'Posted by sales invoices and cleared by the VAT return.',
+        'purchasing.input_vat' => 'Posted by supplier bills and cleared by the VAT return.',
+        'sales.cash_over_short' => 'Posted when a cashier shift is closed.',
+        'sales.gateway_fees' => 'Posted when an online payment is settled.',
+    ];
+
+    private const RESERVED_INSTEAD = [
+        'employee_reimbursements_payable' => 'Posted by Payroll > Expense claims.',
+        'opening_balance_equity' => 'Used only by opening balances.',
+        'retained_earnings' => 'Kept by the system: profit carried forward at year end.',
+    ];
+
     /** slug => the party class a line on that account must carry */
     public const PARTY_ACCOUNTS = [
         'supplier_advances' => Supplier::class,
@@ -42,19 +69,33 @@ final class VoucherAccounts
     ];
 
     /**
-     * @return Collection<int, Account>
+     * EVERY head of the chart, in chart order: the ones a line may use and, so
+     * that nothing looks missing, the ones it may not, each saying where that
+     * head is posted instead.
+     *
+     * ⚠⚠ WHY THE REFUSED HEADS ARE LISTED AT ALL (Joy, 21 Sep 2026): a head he
+     * could see in the Chart of accounts was simply absent from the picker, with
+     * nothing to say why, and read as a limitation of the voucher. A greyed row
+     * naming the screen that posts there answers the question an empty search
+     * raised. It still cannot be chosen, and SaveVoucherDraft and PostVoucher
+     * refuse it whatever a form sends: this list decides what is SHOWN, never
+     * what is allowed.
+     *
+     * @return Collection<int, array{account: Account, heading: bool, usable: bool, hint: ?string}>
      */
-    public static function selectable(Carbon $on): Collection
+    public static function catalogue(Carbon $on, VoucherType $type): Collection
     {
-        $refused = self::refusedIds($on);
+        $refused = self::refusedRows($on, $type);
 
-        return Account::query()
-            ->where('is_postable', true)
-            ->where('is_active', true)
-            ->inChartOrder()
-            ->get()
-            ->reject(fn (Account $account) => isset($refused[$account->id]))
-            ->values();
+        return Account::query()->inChartOrder()->get()->map(function (Account $account) use ($refused) {
+            $hint = match (true) {
+                ! $account->is_postable => 'Group heading. Choose a head under it.',
+                ! $account->is_active => 'Switched off in the Chart of accounts.',
+                default => $refused[$account->id]['instead'] ?? null,
+            };
+
+            return ['account' => $account, 'heading' => ! $account->is_postable, 'usable' => $hint === null, 'hint' => $hint];
+        })->values();
     }
 
     /** Why this account cannot sit on a voucher line, or null when it can. */
@@ -64,7 +105,7 @@ final class VoucherAccounts
             return "{$account->label()} cannot be posted to.";
         }
 
-        return self::refusedIds($on)[$account->id] ?? null;
+        return self::refusedRows($on)[$account->id]['reason'] ?? null;
     }
 
     /** The party class a line on this account must carry, or null for none. */
@@ -74,31 +115,58 @@ final class VoucherAccounts
     }
 
     /**
-     * @return array<int, string> account id => the reason it is refused
+     * @return array<int, array{reason: string, instead: string}> account id => why it is refused, and where it is posted instead
      */
-    private static function refusedIds(Carbon $on): array
+    private static function refusedRows(Carbon $on, ?VoucherType $type = null): array
     {
         $refused = [];
 
         foreach (SubsystemAccounts::on($on) as $accountId => $key) {
-            $module = ucfirst(strtok($key, '.'));
-            $refused[$accountId] = "This account belongs to {$module} and is posted only by its own documents.";
+            $prefix = strtok($key, '.').'.';
+            $refused[$accountId] = [
+                'reason' => 'This account belongs to '.ucfirst(rtrim($prefix, '.')).' and is posted only by its own documents.',
+                'instead' => self::KEY_INSTEAD[$key] ?? self::MODULE_INSTEAD[$prefix] ?? 'Posted only by its own documents.',
+            ];
         }
+
+        $money = 'Cash and bank move through the Paid from / Received into field, not a line.';
+        $moneyInstead = match ($type) {
+            VoucherType::Payment => 'Cash or bank: choose it in Paid from above.',
+            VoucherType::Receipt => 'Cash or bank: choose it in Received into above.',
+            default => 'Cash or bank moves by a Payment, Receive or Contra voucher.',
+        };
+        $courierInstead = 'Courier money: settled from Sales > Courier payouts.';
+        $gatewayInstead = 'Online-sale money: moved to the bank by a Contra voucher.';
 
         // ⚠ Every business's money accounts, not only this one's: the chart is
         // shared, so 1120 is "a bank ledger" whichever business asks.
-        foreach (MoneyAccount::withoutGlobalScopes()->whereNotNull('account_id')->distinct()->pluck('account_id') as $accountId) {
-            $refused[$accountId] = 'Cash and bank move through the Paid from / Received into field, not a line.';
+        foreach (MoneyAccount::withoutGlobalScopes()->whereNotNull('account_id')->get(['account_id', 'type']) as $tied) {
+            $instead = match ($tied->type) {
+                MoneyAccountType::Courier => $courierInstead,
+                MoneyAccountType::Gateway => $gatewayInstead,
+                default => $moneyInstead,
+            };
+
+            // A ledger a till or bank also sits on reads as cash, whatever else shares it.
+            $before = $refused[$tied->account_id]['instead'] ?? null;
+            $refused[$tied->account_id] = ['reason' => $money, 'instead' => $before === $moneyInstead ? $moneyInstead : $instead];
         }
 
         // The chart's own cash and bank heads, even before a money account has
         // been tied to them: a line there is still money with no till named.
-        foreach (Account::query()->whereIn('system_slug', self::MONEY_SLUGS)->pluck('id') as $accountId) {
-            $refused[$accountId] = 'Cash and bank move through the Paid from / Received into field, not a line.';
+        foreach (Account::query()->whereIn('system_slug', self::MONEY_SLUGS)->get(['id', 'system_slug']) as $account) {
+            $refused[$account->id] = ['reason' => $money, 'instead' => match ($account->system_slug) {
+                'courier_receivable' => $courierInstead,
+                'gateway_receivable' => $gatewayInstead,
+                default => $moneyInstead,
+            }];
         }
 
-        foreach (Account::query()->whereIn('system_slug', self::RESERVED_SLUGS)->pluck('id') as $accountId) {
-            $refused[$accountId] = 'This account is kept by the system and cannot be used on a voucher.';
+        foreach (Account::query()->whereIn('system_slug', self::RESERVED_SLUGS)->get(['id', 'system_slug']) as $account) {
+            $refused[$account->id] = [
+                'reason' => 'This account is kept by the system and cannot be used on a voucher.',
+                'instead' => self::RESERVED_INSTEAD[$account->system_slug],
+            ];
         }
 
         return $refused;
