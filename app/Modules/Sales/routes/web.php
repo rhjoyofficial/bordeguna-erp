@@ -10,7 +10,9 @@ use App\Modules\Sales\Http\Controllers\CustomerImportController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
 use App\Modules\Sales\Http\Controllers\DiscountController;
 use App\Modules\Sales\Http\Controllers\PosShiftController;
+use App\Modules\Sales\Http\Controllers\PriceGroupController;
 use App\Modules\Sales\Http\Controllers\PriceImportController;
+use App\Modules\Sales\Http\Controllers\ProductGroupPriceController;
 use App\Modules\Sales\Http\Controllers\ProductPriceController;
 use App\Modules\Sales\Http\Controllers\PromotionController;
 use App\Modules\Sales\Http\Controllers\QuotationController;
@@ -117,6 +119,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::post('promotions', [PromotionController::class, 'store'])->name('promotions.store');
         Route::post('promotions/{promotion}/toggle', [PromotionController::class, 'toggle'])->name('promotions.toggle');
         Route::post('prices', [ProductPriceController::class, 'store'])->name('prices.store');
+        // The product dialog's "Prices" section (21 Sep 2026): one price per
+        // group, JSON beside the product. ⚠ A GET that reads and a PUT that
+        // writes; the dialog stamps X-Business-Id like every other write.
+        Route::get('group-prices', [ProductGroupPriceController::class, 'show'])->name('group-prices.show');
+        Route::put('group-prices/{product}', [ProductGroupPriceController::class, 'update'])->name('group-prices.update');
+        // Price groups: which exist, and which fall back to MRP.
+        Route::get('price-groups', [PriceGroupController::class, 'index'])->name('price-groups.index');
+        Route::post('price-groups', [PriceGroupController::class, 'store'])->name('price-groups.store');
+        Route::put('price-groups/{priceGroup}', [PriceGroupController::class, 'update'])->name('price-groups.update');
         Route::post('prices/{productPrice}/close', [ProductPriceController::class, 'close'])->name('prices.close');
 
         // Discounts. Same table, same resolver, a friendlier door: set a lower

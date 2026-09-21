@@ -19,6 +19,13 @@ use Illuminate\Support\Collection;
  * beats the standard selling price. Within a tier, the highest quantity break
  * the line qualifies for wins.
  *
+ * ⚠⚠ AND NO GROUP IS PRICED FROM ANOTHER (Joy, 21 Sep 2026: "keep them null so
+ * I can not sell them until I add the price ... to whom I wanna sell"). The
+ * standard tier and the product's MRP answer ONLY for a group that falls back
+ * to MRP (RETAIL: consumers and retail shops). A dealer, distributor or
+ * corporate buyer with no price of their own gets no price, and the sale is
+ * refused, instead of being charged a retail figure nobody chose for them.
+ *
  * ⚠ This is the whole of the pricing engine, and it is deliberately the only
  * place that decides a price. Every future pricing feature Joy listed -
  * customer, distributor, promotional, quantity - is a ROW, not a branch in here.
@@ -63,7 +70,7 @@ class ResolveSellingPrice
             ->inForceOn($this->asDate($on))
             ->get();
 
-        return $this->winnerAmong($candidates, $customer, $quantity, $priceGroupId);
+        return $this->winnerAmong($product, $candidates, $customer, $quantity, $priceGroupId);
     }
 
     /**
@@ -89,7 +96,7 @@ class ResolveSellingPrice
 
         return $products
             ->mapWithKeys(fn (Product $product) => [
-                $product->id => $this->winnerAmong($rules->get($product->id, collect()), $customer, $quantity, $priceGroupId),
+                $product->id => $this->winnerAmong($product, $rules->get($product->id, collect()), $customer, $quantity, $priceGroupId),
             ])
             ->filter()
             ->all();
@@ -98,13 +105,23 @@ class ResolveSellingPrice
     /**
      * @param  Collection<int, ProductPrice>  $candidates
      */
-    private function winnerAmong($candidates, ?Customer $customer, string $quantity, ?int $priceGroupId = null): ?ResolvedPrice
+    private function winnerAmong(Product $product, $candidates, ?Customer $customer, string $quantity, ?int $priceGroupId = null): ?ResolvedPrice
     {
         $wanted = $this->scale($quantity);
-        $applicable = $candidates->filter(fn (ProductPrice $rule) => $this->applies($rule, $customer, $wanted, $priceGroupId));
+        $groupId = $this->effectiveGroupId($product, $customer, $priceGroupId);
+        // ⚠ A group named with nobody known is a WEBSITE (every caller that
+        // names one is a shop), and a website sells to consumers only: it pays
+        // MRP when nothing is set, whatever the group is called.
+        $fallsBackToMrp = ($customer === null && $priceGroupId !== null) || $this->fallsBackToMrp($groupId);
+
+        $applicable = $candidates->filter(fn (ProductPrice $rule) => $this->applies($rule, $customer, $wanted, $groupId, $fallsBackToMrp));
 
         if ($applicable->isEmpty()) {
-            return null;
+            // ⚠ MRP is the last word for a consumer or a retail shop, and no
+            // word at all for anybody else.
+            return $fallsBackToMrp && $product->mrp !== null && (float) $product->mrp > 0
+                ? ResolvedPrice::fromMrp($product, $groupId)
+                : null;
         }
 
         // ⚠ Sorted in PHP rather than SQL, and with an explicit comparator. The
@@ -139,11 +156,11 @@ class ResolveSellingPrice
     /**
      * ⚠ A rule for a DIFFERENT customer, or for a group this customer is not in,
      * does not apply - and neither does a quantity break the line does not
-     * reach. A null customer (a price check with nobody at the counter yet) sees
-     * only the default tier, which is the honest answer: their price is not
-     * knowable until they are known.
+     * reach. The standard tier (no customer, no group) applies only to a group
+     * that falls back to MRP: it is a consumer price, and a dealer must never
+     * inherit it silently.
      */
-    private function applies(ProductPrice $rule, ?Customer $customer, int $wantedQuantity, ?int $priceGroupId = null): bool
+    private function applies(ProductPrice $rule, ?Customer $customer, int $wantedQuantity, ?int $groupId, bool $fallsBackToMrp): bool
     {
         if ($this->scale((string) $rule->min_quantity) > $wantedQuantity) {
             return false;
@@ -154,24 +171,48 @@ class ResolveSellingPrice
         }
 
         if ($rule->price_group_id !== null) {
-            // ⭐⭐ A WEBSITE IS A PRICE GROUP (ADR-005), and that is the whole
-            // reason this parameter exists. A shop browsing its catalogue has a
-            // price group but no customer yet, and without this it would fall
-            // through to the default tier and quote a price the sales order
-            // would then disagree with. It is NOT a new kind of pricing - it is
-            // the same group tier, named directly instead of through somebody.
-            //
-            // ⚠ A real customer always wins. The group is only read this way
-            // when nobody is known, so a signed-in customer is never priced as
-            // the website instead of as themselves.
-            if ($customer === null) {
-                return $priceGroupId !== null && $priceGroupId === $rule->price_group_id;
-            }
-
-            return $this->groupIdFor($customer) === $rule->price_group_id;
+            return $groupId !== null && $groupId === $rule->price_group_id;
         }
 
-        return true;
+        return $fallsBackToMrp;
+    }
+
+    /**
+     * Whose prices this line is read at.
+     *
+     * ⭐⭐ A WEBSITE IS A PRICE GROUP (ADR-005): a shop browsing its catalogue
+     * has a group but no customer yet, so the group can be named directly. ⚠ A
+     * real customer always wins: the named group is read only when nobody is
+     * known. ⚠ Nobody known and no group named is a price CHECK (HQ, a quote
+     * before the buyer is chosen): it reads the standard tier only, as it always
+     * has; HQ is built against that answer.
+     */
+    private function effectiveGroupId(Product $product, ?Customer $customer, ?int $priceGroupId): ?int
+    {
+        return $customer !== null ? $this->groupIdFor($customer) : $priceGroupId;
+    }
+
+    /**
+     * ℹ No group at all (a business whose groups were never seeded) keeps the
+     * old behaviour, the standard tier, rather than refusing every sale.
+     *
+     * @var array<int, bool>
+     */
+    private array $fallsBack = [];
+
+    private function fallsBackToMrp(?int $groupId): bool
+    {
+        if ($groupId === null) {
+            return true;
+        }
+
+        // ⚠ RETAIL always does: it IS the consumer price (D-PRC-2), whatever a
+        // row created before the switch existed says.
+        return $this->fallsBack[$groupId] ??= (bool) PriceGroup::query()
+            ->withoutGlobalScopes()
+            ->whereKey($groupId)
+            ->where(fn ($query) => $query->where('falls_back_to_mrp', true)->orWhere('code', PriceGroup::DEFAULT_CODE))
+            ->exists();
     }
 
     /**
@@ -204,15 +245,20 @@ class ResolveSellingPrice
             return $customer->price_group_id;
         }
 
-        if (! array_key_exists($customer->business_id, $this->defaultGroupIds)) {
-            $this->defaultGroupIds[$customer->business_id] = PriceGroup::query()
+        return $this->defaultGroupIdFor($customer->business_id);
+    }
+
+    private function defaultGroupIdFor(int $businessId): ?int
+    {
+        if (! array_key_exists($businessId, $this->defaultGroupIds)) {
+            $this->defaultGroupIds[$businessId] = PriceGroup::query()
                 ->withoutGlobalScopes()
-                ->where('business_id', $customer->business_id)
+                ->where('business_id', $businessId)
                 ->where('code', PriceGroup::DEFAULT_CODE)
                 ->value('id');
         }
 
-        return $this->defaultGroupIds[$customer->business_id];
+        return $this->defaultGroupIds[$businessId];
     }
 
     /**

@@ -16,6 +16,7 @@ use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Support\Carbon;
@@ -149,11 +150,18 @@ describe('who may do what', function () {
     });
 
     it('lets a Manager set a selling price', function () {
+        // ⚠ A price names who it is for (21 Sep 2026): a group, here Retail.
+        $retail = PriceGroup::firstOrCreate(
+            ['business_id' => $this->business->id, 'code' => 'RETAIL'],
+            ['name' => 'Retail', 'falls_back_to_mrp' => true],
+        );
+
         ($this->asRole)('Manager')->post('/sales/prices', [
             'product_id' => $this->product->id,
+            'price_group_id' => $retail->id,
             'unit_price' => '900',
             'effective_from' => '2026-08-05',
-        ])->assertRedirect();
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
         expect(ProductPrice::count())->toBe(2);
     });

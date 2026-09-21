@@ -44,7 +44,9 @@ export default function PricesIndex({
         effective_from: new Date().toISOString().slice(0, 10),
         effective_to: '',
         customer_id: '',
-        price_group_id: '',
+        // ⚠ Retail by default (21 Sep 2026): a price for nobody in particular is
+        // no longer accepted, and Retail is who "everyone" always meant.
+        price_group_id: String(priceGroups.find((g) => g.code === 'RETAIL')?.id ?? ''),
         min_quantity: '0',
         note: '',
     });
@@ -103,7 +105,7 @@ export default function PricesIndex({
                     <div className="grid gap-2">
                         <Label htmlFor="customer_id">For one customer</Label>
                         <SearchSelect id="customer_id" value={data.customer_id} onChange={(e) => setData('customer_id', e.target.value)}>
-                            <option value="">Everyone</option>
+                            <option value="">No particular customer</option>
                             {customers.map((c) => (
                                 <option key={c.id} value={c.id}>
                                     {c.name}
@@ -116,7 +118,7 @@ export default function PricesIndex({
                         {/* ⚠ Rows, never typed: the free-text version of this field
                             is how a distributor gets silently charged retail. */}
                         <SearchSelect id="price_group_id" value={data.price_group_id} onChange={(e) => setData('price_group_id', e.target.value)}>
-                            <option value="">No group</option>
+                            <option value="">Choose a group</option>
                             {priceGroups.map((g) => (
                                 <option key={g.id} value={g.id}>
                                     {g.code}
@@ -157,7 +159,7 @@ export default function PricesIndex({
                                         ) : price.price_group ? (
                                             <Badge variant="outline">{price.price_group.code}</Badge>
                                         ) : (
-                                            <span className="text-muted-foreground">Everyone</span>
+                                            <span className="text-muted-foreground">Standard (consumers only)</span>
                                         )}
                                     </td>
                                     <td className="p-3 text-right tabular-nums">{price.min_quantity}</td>

@@ -46,7 +46,13 @@ class PriceGroupSeeder extends Seeder
                 foreach (self::GROUPS as $group) {
                     PriceGroup::firstOrCreate(
                         ['business_id' => $businessId, 'code' => $group['code']],
-                        ['name' => $group['name'], 'prices_include_tax' => true, 'is_active' => true],
+                        [
+                            'name' => $group['name'],
+                            'prices_include_tax' => true,
+                            // Only RETAIL pays MRP when a product has no price for it (21 Sep 2026).
+                            'falls_back_to_mrp' => $group['code'] === PriceGroup::DEFAULT_CODE,
+                            'is_active' => true,
+                        ],
                     );
                 }
             } finally {

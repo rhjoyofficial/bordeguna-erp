@@ -247,6 +247,8 @@ export function AppSidebar() {
                           ...(canRecordOrders ? [{ title: 'Quotations', url: '/sales/quotations', icon: FileText }] : []),
                           ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
                           ...(canViewSales || canManagePrices ? [{ title: 'Selling prices', url: '/sales/prices', icon: BadgeDollarSign }] : []),
+                          // Who a price is for, and which groups pay MRP (21 Sep 2026).
+                          ...(canManagePrices ? [{ title: 'Price groups', url: '/sales/price-groups', icon: BadgeDollarSign }] : []),
                           // Joy's own word for it, 23 Aug: a place to set a
                           // discount price on any product. It writes ordinary
                           // price rows, so nothing downstream learns a new idea.
