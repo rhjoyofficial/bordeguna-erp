@@ -2,6 +2,7 @@
 
 namespace App\Modules\Sales\Models;
 
+use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Models\Product;
 use Illuminate\Database\Eloquent\Model;
@@ -20,6 +21,13 @@ class SalesInvoiceLine extends Model
         'description',
         'quantity',
         'unit_price',
+        // ⚠ The counter's price trail (21 Sep 2026): what the list said, that
+        // the price was changed, why, and who. Null / false on a line sold at
+        // its list price, and on every line raised from a challan or an order.
+        'list_price',
+        'price_overridden',
+        'override_reason',
+        'overridden_by',
         'line_discount',
         'line_net',
         'tax_class_id',
@@ -33,6 +41,7 @@ class SalesInvoiceLine extends Model
 
     protected $attributes = [
         'line_discount' => 0,
+        'price_overridden' => false,
         'tax_rate' => 0,
         'tax_amount' => 0,
         'cost_released' => 0,
@@ -43,6 +52,8 @@ class SalesInvoiceLine extends Model
         return [
             'quantity' => 'decimal:4',
             'unit_price' => 'decimal:4',
+            'list_price' => 'decimal:4',
+            'price_overridden' => 'boolean',
             'line_discount' => 'decimal:4',
             'line_net' => 'decimal:4',
             'tax_rate' => 'decimal:4',
@@ -67,6 +78,12 @@ class SalesInvoiceLine extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /** Who changed this line's price, or discounted it, at the counter. */
+    public function overriddenBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'overridden_by');
     }
 
     /**

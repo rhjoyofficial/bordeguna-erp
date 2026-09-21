@@ -160,6 +160,12 @@ class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmen
         return static::query()->where('code', self::WALK_IN_CODE)->first();
     }
 
+    /** The same test walkIn() finds the row by, so the two cannot disagree. */
+    public function isWalkIn(): bool
+    {
+        return $this->code === self::WALK_IN_CODE;
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);

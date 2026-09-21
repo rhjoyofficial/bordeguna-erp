@@ -143,7 +143,8 @@ const dictionary = {
     // The till is where the language matters most: the person behind it serves
     // customers all day and has no time to read a second language.
     'pos.title': { en: 'Counter sale', bn: 'কাউন্টার বিক্রি' },
-    'pos.search_placeholder': { en: 'Search product or SKU', bn: 'পণ্য বা এসকেইউ খুঁজুন' },
+    'pos.search_placeholder': { en: 'Search or scan: name, SKU, barcode', bn: 'খুঁজুন বা স্ক্যান করুন: নাম, এসকেইউ, বারকোড' },
+    'pos.scan_no_match': { en: 'No product has the code {code}.', bn: '{code} কোডের কোনো পণ্য নেই।' },
     'pos.search_aria': { en: 'Search products', bn: 'পণ্য খোঁজা' },
     'pos.all': { en: 'All', bn: 'সব' },
     'pos.no_match': { en: 'Nothing matches that search.', bn: 'এই খোঁজায় কিছু মেলেনি।' },
@@ -177,10 +178,47 @@ const dictionary = {
     'pos.resume_cart': { en: 'Resume', bn: 'ফিরিয়ে আনুন' },
     'pos.discard_cart': { en: 'Discard', bn: 'বাতিল' },
     'pos.hold_label_placeholder': { en: 'Who is this for? e.g. uncle in the blue shirt', bn: 'কার কার্ট? যেমন নীল শার্টের কাকা' },
+    // ⚠ Not "enter it by hand" any more: the server prices every line from the
+    // list itself (21 Sep 2026), so a failed lookup only leaves the screen's
+    // total unsure, never the sale's price.
     'pos.price_lookup_failed': {
-        en: 'Could not look the price up just now. Enter it by hand.',
-        bn: 'এখন দাম আনা গেল না। হাতে লিখে দিন।',
+        en: 'Could not look the price up just now. The price list still decides it when you finish.',
+        bn: 'এখন দাম আনা গেল না। শেষ করার সময় তালিকার দামই ধরা হবে।',
     },
+    // ── Paid into: the cashier's own till, or a deliberate choice ──
+    'pos.choose_paid_into': { en: 'Choose where the money goes', bn: 'টাকা কোথায় জমা হবে বেছে নিন' },
+    'pos.choose_paid_into_first': {
+        en: 'Choose "Paid into" first: your till, a bank or bKash, or on account.',
+        bn: 'আগে "টাকা যেখানে জমা" বেছে নিন: আপনার ক্যাশ, ব্যাংক বা বিকাশ, অথবা বাকিতে।',
+    },
+    'pos.no_open_till': {
+        en: 'You have no open till shift, so no cash till is filled in for you. Open your till shift first:',
+        bn: 'আপনার কোনো খোলা ক্যাশ শিফট নেই, তাই কোনো ক্যাশ নিজে থেকে বসানো হয়নি। আগে আপনার ক্যাশ শিফট খুলুন:',
+    },
+    'pos.open_shift_link': { en: 'Sales > Cashier shifts', bn: 'সেলস > ক্যাশিয়ার শিফট' },
+    'pos.bank_still_works': { en: 'Bank and bKash payments work without a shift.', bn: 'শিফট ছাড়াও ব্যাংক ও বিকাশে টাকা নেওয়া যায়।' },
+    'pos.till_not_usable': {
+        en: 'Your till {name} cannot take a payment here yet: it has no ledger account.',
+        bn: 'আপনার ক্যাশ {name} এখনও এখানে টাকা নিতে পারে না: এর কোনো লেজার হিসাব নেই।',
+    },
+    'pos.not_your_till': { en: '{name} is not your till. Your open shift is on {till}.', bn: '{name} আপনার ক্যাশ নয়। আপনার খোলা শিফট {till}-এ।' },
+    'pos.cash_given': { en: 'Cash given', bn: 'ক্রেতা দিলেন' },
+    'pos.change_due': { en: 'Change to give: {amount}', bn: 'ফেরত দিন: {amount}' },
+    'pos.cash_short': { en: 'Short by {amount}', bn: '{amount} কম' },
+    // ── Price changes: permission, and a reason kept on the invoice ──
+    'pos.list_price': { en: 'List price {price}', bn: 'তালিকার দাম {price}' },
+    'pos.override_reason_placeholder': { en: 'Why? (kept on the invoice)', bn: 'কেন? (ইনভয়েসে থাকবে)' },
+    'pos.price_locked': {
+        en: 'List price only. Changing a price or giving a discount needs the price-override permission.',
+        bn: 'শুধু তালিকার দাম। দাম বদলাতে বা ছাড় দিতে দাম-পরিবর্তনের অনুমতি লাগে।',
+    },
+    'pos.discount_reason_placeholder': { en: 'Why is the bill discounted?', bn: 'পুরো বিলে ছাড় কেন?' },
+    // ── After the sale ──
+    'pos.sale_done': { en: 'Sale complete: {number}, total {total}.', bn: 'বিক্রি সম্পন্ন: {number}, মোট {total}।' },
+    'pos.sale_on_account': { en: 'Left on account: the customer owes it.', bn: 'বাকিতে রাখা হলো: ক্রেতার কাছে পাওনা।' },
+    'pos.received_change': { en: 'Received {received}, change {change}.', bn: 'নেওয়া হলো {received}, ফেরত {change}।' },
+    'pos.print_slip': { en: 'Print slip', bn: 'স্লিপ প্রিন্ট করুন' },
+    'pos.dismiss': { en: 'Dismiss', bn: 'বন্ধ করুন' },
     'pos.no_price_for_product': {
         en: 'No price is set for this product.',
         bn: 'এই পণ্যের কোনো দাম দেওয়া নেই।',

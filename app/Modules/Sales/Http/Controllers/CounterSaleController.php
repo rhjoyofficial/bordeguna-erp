@@ -3,8 +3,11 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Modules\Accounting\Exceptions\JournalException;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
+use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -12,6 +15,7 @@ use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Sales\Actions\CheckCustomerCredit;
 use App\Modules\Sales\Actions\RecordCounterSale;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Models\Customer;
@@ -21,6 +25,8 @@ use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -37,8 +43,11 @@ class CounterSaleController extends Controller
 {
     public function create(Request $request, ResolveSellingPrice $resolver): Response
     {
+        // ⚠ `barcode` too: a scanner types the code and presses Enter, and the
+        // screen adds the product whose SKU or barcode is exactly that code
+        // (Sales UX audit #4). Inventory prints the labels; the till must read them.
         $products = Product::query()->where('is_active', true)->stocked()
-            ->orderBy('name')->get(['id', 'name', 'sku', 'category_id']);
+            ->orderBy('name')->get(['id', 'name', 'sku', 'barcode', 'category_id']);
 
         return Inertia::render('sales/counter/create', [
             'warehouses' => Warehouse::query()->where('is_active', true)
@@ -56,12 +65,23 @@ class CounterSaleController extends Controller
             // is a shelf label, never the till.
             'cardPrices' => collect($resolver->findMany($products, Customer::walkIn()))
                 ->map(fn ($resolved) => (float) $resolved->unitPrice),
+            // The phone (as typed, and in its matching form) so the picker finds a
+            // regular by the number they give at the counter, not only by name.
             'customers' => Customer::query()->active()->orderBy('name')
-                ->get(['id', 'name', 'code', 'is_system', 'price_group_id']),
+                ->get(['id', 'name', 'code', 'phone', 'phone_normalized', 'is_system', 'price_group_id']),
             // ⚠ Only accounts the sale's receipt can be booked into (see
-            // MoneyAccount::withLedger). The screen preselects the first one.
+            // MoneyAccount::withLedger). ⚠⚠ NONE IS PRESELECTED FROM THIS LIST:
+            // until 21 Sep 2026 the screen took the first one, alphabetically,
+            // so cash landed in whichever account sorted first. The default is
+            // the cashier's own till, below, or nothing.
             'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
+            'myTill' => $this->openTillOf($request),
+            'canOverridePrice' => $request->user()->can('sales.price.override'),
+            // The sale just finished, once: its slip opens in a new tab and the
+            // change is shown. ⚠ A flashed key is not a prop until it is passed
+            // here (dead engine #9), so it is passed here.
+            'lastSale' => $request->session()->get('counterSale'),
             'walkInId' => Customer::walkIn()?->id,
             // Held carts: bookmarks, not transactions. Newest first, with just
             // enough to recognise whose cart it was.
@@ -95,6 +115,31 @@ class CounterSaleController extends Controller
     }
 
     /**
+     * The till this person has an open shift on, which is where their cash goes.
+     *
+     * ⚠ Read-only use of the shift table: the shift screen owns it. The newest
+     * open shift wins if somebody holds two tills at once, which the shift
+     * screen does not stop.
+     *
+     * @return array{shift_id: int, money_account_id: int, name: string|null}|null
+     */
+    private function openTillOf(Request $request): ?array
+    {
+        $shift = DB::table('pos_shifts')
+            ->where('business_id', app(BusinessContext::class)->id())
+            ->where('status', 'open')
+            ->where('opened_by', $request->user()->id)
+            ->orderByDesc('opened_at')->orderByDesc('id')
+            ->first();
+
+        return $shift === null ? null : [
+            'shift_id' => (int) $shift->id,
+            'money_account_id' => (int) $shift->money_account_id,
+            'name' => DB::table('money_accounts')->where('id', $shift->money_account_id)->value('name'),
+        ];
+    }
+
+    /**
      * Park the cart so the queue keeps moving. Saves the counter state and
      * NOTHING else: no stock reserved, no document posted, no price frozen -
      * on resume the resolver prices the lines again, as it always does.
@@ -110,6 +155,9 @@ class CounterSaleController extends Controller
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
             'lines.*.discount' => ['nullable', 'numeric', 'min:0'],
+            // Kept with a held discount, so a resumed cart still says why. The
+            // permission is asked again when the sale is finished, not here.
+            'lines.*.override_reason' => ['nullable', 'string', 'max:255'],
         ]);
 
         DB::table('pos_held_carts')->insert([
@@ -157,7 +205,7 @@ class CounterSaleController extends Controller
         ]);
     }
 
-    public function store(Request $request, RecordCounterSale $action): RedirectResponse
+    public function store(Request $request, RecordCounterSale $action, ResolveSellingPrice $resolver, CheckCustomerCredit $credit): RedirectResponse
     {
         $data = $request->validate([
             'customer_id' => ['required', 'integer', 'exists:customers,id'],
@@ -168,19 +216,60 @@ class CounterSaleController extends Controller
             // credit, and it is a deliberate feature of the counter screen.
             'money_account_id' => ['nullable', 'integer', 'exists:money_accounts,id'],
             'held_cart_id' => ['nullable', 'integer', 'exists:pos_held_carts,id'],
-            'invoice_discount' => ['nullable', 'numeric', 'min:0'],
+            // ⚠ `decimal`, not only `numeric`: "1e3" is numeric, and Money
+            // refuses it with a 500 instead of a sentence.
+            'invoice_discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,4'],
+            'discount_reason' => ['nullable', 'string', 'max:255'],
+            // What the customer handed over for a cash sale. Only SHOWN (the
+            // change to give back), never stored as money.
+            'cash_given' => ['nullable', 'regex:/^\d+(\.\d{1,2})?$/'],
             'reference' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
-            'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
-            'lines.*.discount' => ['nullable', 'numeric', 'min:0'],
+            // ⚠ Sent ONLY when the cashier changed the price (see priceLines).
+            // A plain number, because it is compared digit for digit with the
+            // list price.
+            'lines.*.unit_price' => ['nullable', 'regex:/^\d+(\.\d{1,4})?$/'],
+            'lines.*.discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,4'],
+            'lines.*.override_reason' => ['nullable', 'string', 'max:255'],
+        ], [
+            'lines.*.unit_price.regex' => 'Type the price as a plain number, like 850 or 850.50.',
+            'cash_given.regex' => 'Type the cash given as a plain number, like 1000 or 1000.50.',
         ]);
+
+        $user = $request->user();
+        $customer = Customer::findOrFail($data['customer_id']);
+        $warehouse = Warehouse::findOrFail($data['warehouse_id']);
+        $moneyAccount = isset($data['money_account_id'])
+            ? MoneyAccount::findOrFail($data['money_account_id'])
+            : null;
+
+        // ⚠⚠ A WALK-IN CANNOT OWE MONEY (Sales UX audit #13). The walk-in row is
+        // everybody nobody knows, so a debt on it is a debt nobody can be asked
+        // for. The counter refuses it; a named customer can take goods on
+        // account under the credit rules below.
+        // ⚠ Only the counter: a staff purchase deducted from salary is also
+        // booked to the walk-in on account, and settles through payroll.
+        if ($moneyAccount === null && $customer->isWalkIn()) {
+            throw ValidationException::withMessages([
+                'money_account_id' => 'A walk-in customer cannot take goods on account: nobody would know whom to ask for the money. Take the payment, or choose the named customer who will owe it.',
+            ]);
+        }
+
+        // Cash tendered means something only for cash going into a cash till.
+        $cashGiven = $moneyAccount?->type === MoneyAccountType::Cash && isset($data['cash_given'])
+            ? Money::ofTaka((string) $data['cash_given'])
+            : null;
 
         $products = Product::query()
             ->whereIn('id', collect($data['lines'])->pluck('product_id'))
             ->get()->keyBy('id');
+
+        // One instant for pricing and for the documents, so the price the
+        // server checked is the price of the moment the sale is dated.
+        $at = Carbon::now();
 
         // ⚠⚠ C-SLS-E1. Four different refusals can reach this counter: no price
         // in force, not enough stock, a closed month, a missing mapping. Each
@@ -189,32 +278,77 @@ class CounterSaleController extends Controller
         // changes nothing about which sales are refused, only whether the
         // refusal can be read. The key is `lines` because that is what the
         // counter screen renders.
-        $saleLines = collect($data['lines'])->map(fn (array $line) => [
-            'product' => $products[$line['product_id']],
-            'quantity' => (string) $line['quantity'],
-            'unitPrice' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
-            'discount' => isset($line['discount']) ? (string) $line['discount'] : '0',
-        ])->all();
-
-        // Buy X Get Y: the SERVER decides what the cart earned, and the free
-        // line arrives priced at zero - revenue 0, cost still posts.
-        $saleLines = array_merge($saleLines, app(ApplyPromotions::class)->earnedLines($saleLines));
-
-        $moneyAccount = isset($data['money_account_id'])
-            ? MoneyAccount::findOrFail($data['money_account_id'])
-            : null;
-
         try {
-            $sale = $action->handle(
-                customer: Customer::findOrFail($data['customer_id']),
-                warehouse: Warehouse::findOrFail($data['warehouse_id']),
-                lines: $saleLines,
-                createdBy: $request->user(),
-                moneyAccount: $moneyAccount,
-                invoiceDiscount: (string) ($data['invoice_discount'] ?? '0'),
-                reference: $data['reference'] ?? null,
-                note: $data['note'] ?? null,
-            );
+            [$saleLines, $refusals] = $this->priceLines($data['lines'], $products, $customer, $user, $at, $resolver);
+
+            $invoiceDiscount = (string) ($data['invoice_discount'] ?? '0');
+            $discountReason = trim((string) ($data['discount_reason'] ?? ''));
+            $billDiscounted = Money::ofTaka($invoiceDiscount)->minor > 0;
+
+            // ⚠ The whole-bill discount is the same concession as a line one,
+            // so it asks the same permission and a reason. Without this a line
+            // discount refused on its row could simply be typed on the bill.
+            if ($billDiscounted && ! $user->can('sales.price.override')) {
+                $refusals['invoice_discount'] = 'Giving a discount needs the price-override permission, which your role does not have. Sell at the list price, or ask a Manager.';
+            } elseif ($billDiscounted && $discountReason === '') {
+                $refusals['discount_reason'] = 'Say why the bill is discounted.';
+            }
+
+            // Every refusal at once: a cashier fixing one row at a time, with a
+            // customer waiting, is the slowest way to learn about three.
+            if ($refusals !== []) {
+                throw ValidationException::withMessages($refusals);
+            }
+
+            // Buy X Get Y: the SERVER decides what the cart earned, and the free
+            // line arrives priced at zero - revenue 0, cost still posts.
+            $saleLines = array_merge($saleLines, app(ApplyPromotions::class)->earnedLines($saleLines, $at));
+
+            $sale = DB::transaction(function () use ($action, $credit, $customer, $warehouse, $saleLines, $user, $moneyAccount, $at, $invoiceDiscount, $billDiscounted, $discountReason, $cashGiven, $data) {
+                // ⚠ One credit decision per customer at a time: two tills selling
+                // on account to the same shop at once must not both see the room
+                // that only one of them has. (A no-op on SQLite; real on MySQL.)
+                if ($moneyAccount === null) {
+                    Customer::query()->whereKey($customer->id)->lockForUpdate()->first();
+                }
+
+                $sale = $action->handle(
+                    customer: $customer,
+                    warehouse: $warehouse,
+                    lines: $saleLines,
+                    createdBy: $user,
+                    moneyAccount: $moneyAccount,
+                    soldAt: $at,
+                    invoiceDiscount: $invoiceDiscount,
+                    reference: $data['reference'] ?? null,
+                    note: $data['note'] ?? null,
+                    discountReason: $billDiscounted ? $discountReason : null,
+                    discountGivenBy: $billDiscounted ? $user : null,
+                );
+
+                // ⚠⚠ Asked AFTER the invoice is written, in this transaction, so
+                // the amount is the invoice's own total (VAT and promotions
+                // included) and a refusal takes the whole sale back with it:
+                // no stock moved, no number used. The same two rules an order
+                // meets at approval (CheckCustomerCredit), with no override
+                // here - the cashier takes the payment, or an Owner approves a
+                // sales order instead.
+                $total = Money::ofTaka((string) $sale->invoice->total);
+
+                if ($moneyAccount === null && ($refusal = $credit->refusalForAmount($customer, $total, alreadyOwed: true)) !== null) {
+                    throw ValidationException::withMessages(['money_account_id' => $refusal->getMessage()]);
+                }
+
+                // Less cash than the bill is not a cash sale; recording it as
+                // one would leave the till short by the difference.
+                if ($cashGiven !== null && $cashGiven->minor < $total->minor) {
+                    throw ValidationException::withMessages([
+                        'cash_given' => "The customer gave {$cashGiven->format()}, less than the total of {$total->format()}. Take the rest, or clear Cash given.",
+                    ]);
+                }
+
+                return $sale;
+            });
         } catch (MappingNotFound|JournalException $e) {
             // ⚠ "Paid into" an account with no ledger head is the usual cause,
             // and the picker offered one - first, alphabetically - until 21 Sep
@@ -237,8 +371,93 @@ class CounterSaleController extends Controller
             DB::table('pos_held_carts')->where('business_id', app(BusinessContext::class)->id())->where('id', $data['held_cart_id'])->delete();
         }
 
+        $total = Money::ofTaka((string) $sale->invoice->total);
+
+        // ⚠⚠ BACK TO A FRESH COUNTER, not the invoice page (Sales UX audit #4).
+        // The invoice page is the internal view: it shows Staff the cost of the
+        // goods and the journal, and it left the cashier one click from the
+        // slip and two from the next customer. The slip opens in its own tab.
         return redirect()
-            ->route('sales.invoices.show', $sale->invoice->id)
-            ->with('success', "Sale complete. Invoice {$sale->invoice->invoice_number}.");
+            ->route('sales.counter.create')
+            ->with('success', "Sale complete. Invoice {$sale->invoice->invoice_number}.")
+            ->with('counterSale', [
+                'invoice_id' => $sale->invoice->id,
+                'invoice_number' => $sale->invoice->invoice_number,
+                'total' => $total->toTaka(),
+                'on_account' => $moneyAccount === null,
+                'slip_url' => route('sales.invoices.slip', $sale->invoice->id),
+                'cash_given' => $cashGiven?->toTaka(),
+                'change' => $cashGiven === null ? null : Money::ofMinor($cashGiven->minor - $total->minor)->toTaka(),
+            ]);
+    }
+
+    /**
+     * Price every line on the server, and say which lines break the price rules.
+     *
+     * ⚠⚠ THE SERVER PRICES THE SALE, NOT THE SCREEN (ChatGPT V1, 21 Sep 2026).
+     * The counter used to send a price with every line and the server took
+     * whatever arrived, so anybody who could sell could type any price with no
+     * trace. Now every line is priced here by the same resolver the invoice
+     * would use. The screen sends `unit_price` only when the cashier changed
+     * it, and a sent price equal to the list is simply the list price.
+     *
+     * A changed price, or a discount on the line, needs `sales.price.override`
+     * AND a reason; the invoice line then keeps the list price, the reason and
+     * who (RecordSalesInvoice). ⚠ No cap: the owner has not set one.
+     *
+     * ⚠ An override changes a price that EXISTS. A product with no price for
+     * this buyer is still refused (NoSellingPriceException) even for an Owner:
+     * Joy keeps groups unpriced precisely so they cannot be sold to until he
+     * sets their price.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     * @param  Collection<int, Product>  $products
+     * @return array{0: list<array<string, mixed>>, 1: array<string, string>}
+     */
+    private function priceLines(array $lines, Collection $products, Customer $customer, User $user, Carbon $at, ResolveSellingPrice $resolver): array
+    {
+        $mayOverride = $user->can('sales.price.override');
+        $priced = [];
+        $refusals = [];
+
+        foreach (array_values($lines) as $index => $line) {
+            $product = $products[$line['product_id']];
+            $quantity = (string) $line['quantity'];
+            $listPrice = (string) $resolver->resolve($product, $customer, $quantity, $at)->unitPrice;
+
+            $typed = isset($line['unit_price']) ? (string) $line['unit_price'] : null;
+            $changed = $typed !== null && bccomp($typed, $listPrice, 4) !== 0;
+            $discount = isset($line['discount']) ? (string) $line['discount'] : '0';
+            $discounted = Money::ofTaka($discount)->minor > 0;
+            $reason = trim((string) ($line['override_reason'] ?? ''));
+
+            if ($changed && ! $mayOverride) {
+                $refusals["lines.{$index}.unit_price"] = "Changing the price of {$product->name} needs the price-override permission, which your role does not have. The price list says ".Money::ofTaka($listPrice)->format().'.';
+            }
+
+            if ($discounted && ! $mayOverride) {
+                $refusals["lines.{$index}.discount"] = "A discount on {$product->name} needs the price-override permission, which your role does not have.";
+            }
+
+            if ($mayOverride && ($changed || $discounted) && $reason === '') {
+                $refusals["lines.{$index}.override_reason"] = $changed
+                    ? "Say why {$product->name} is sold at a price other than the list price."
+                    : "Say why {$product->name} is discounted.";
+            }
+
+            $priced[] = [
+                'product' => $product,
+                'quantity' => $quantity,
+                // ⚠ The list price unless the cashier changed it: a figure the
+                // screen sends that matches the list is not an override.
+                'unitPrice' => $changed ? $typed : $listPrice,
+                'discount' => $discount,
+                'listPrice' => $listPrice,
+                'overrideReason' => $reason === '' ? null : $reason,
+                'overriddenBy' => $user,
+            ];
+        }
+
+        return [$priced, $refusals];
     }
 }

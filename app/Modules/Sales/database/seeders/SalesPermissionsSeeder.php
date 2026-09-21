@@ -42,6 +42,10 @@ class SalesPermissionsSeeder extends Seeder
             // Approve an order over the credit limit, or a distributor's
             // before payment, with a written reason (21 Sep 2026). Owner only.
             'sales.credit.override',
+            // Change a price, or give a discount, at the counter, with a
+            // reason kept on the invoice (21 Sep 2026). No cap yet: the owner
+            // has not set one.
+            'sales.price.override',
             'sales.orders.cancel',
             'sales.returns.record',
             'sales.returns.refund',
@@ -63,6 +67,9 @@ class SalesPermissionsSeeder extends Seeder
             'sales.orders.cancel',
             'sales.returns.record',
             'sales.returns.refund',
+            // ⚠ Staff sell at the list price only: a changed price or a
+            // discount is a margin decision, like setting the price itself.
+            'sales.price.override',
         ],
         // ⚠ Staff TAKE orders (order-book data entry, the same trust level as
         // sales.sell) but cannot approve them - a staff-created order sits
