@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Enums\ProductType;
@@ -36,7 +37,6 @@ beforeEach(function () {
         'purchasing.po.create',
         'purchasing.po.approve',
         'purchasing.receipt.record',
-        'purchasing.payment.update',
         'purchasing.reports.view',
     ];
 
@@ -175,7 +175,7 @@ it('runs a purchase order through the seeded approval workflow', function () {
     // Seed the business's default workflows, then confirm a real PO now runs
     // through the configurable engine (workflow attached, single stage) and
     // still approves exactly as before — the "migrate without rewrites" proof.
-    app(\App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder::class)->run();
+    app(ApprovalWorkflowSeeder::class)->run();
 
     $order = app(CreatePurchaseOrder::class)->handle(
         supplier: $this->supplier,

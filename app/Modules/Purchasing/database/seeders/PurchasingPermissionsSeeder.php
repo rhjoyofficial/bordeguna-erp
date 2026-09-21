@@ -10,15 +10,20 @@ use Spatie\Permission\Models\Role;
 /**
  * Mirrors InventoryPermissionsSeeder's shape: Staff gets the operational
  * permissions (create a PO, record what physically arrived) but not the
- * financial-commitment ones (approving a PO, marking it paid) — same
+ * financial-commitment ones (approving a PO, paying for it) — same
  * philosophy as Inventory's direct-adjust-vs-approval-queue split.
  *
  * ⚠⚠ `purchasing.payment.record` is deliberately NOT `purchasing.payment.update`.
- * The older one guards a payment-STATUS string on a purchase order, which moves
- * no money and reaches no ledger. This one lets money actually leave the
+ * The older one guarded a payment-STATUS string on a purchase order, which moved
+ * no money and reached no ledger. This one lets money actually leave the
  * business. Reusing the existing name would have silently handed every current
  * holder the power to pay suppliers, which is exactly the kind of quiet
  * privilege widening an ACL review is supposed to catch.
+ *
+ * ⚠ `purchasing.payment.update` is no longer seeded (21 Sep 2026): the
+ * dropdown it guarded was removed and it gates nothing. The row already in an
+ * existing database is left alone, since deleting a permission also drops every
+ * role's grant of it, and that is a decision for a person, not a seeder.
  *
  * ⚠ Owner and Manager only. Staff can raise a PO and receive goods; deciding
  * that money leaves the bank is a different job.
@@ -39,7 +44,6 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.po.create',
             'purchasing.po.approve',
             'purchasing.receipt.record',
-            'purchasing.payment.update',
             'purchasing.payment.record',
             // ⚠ Same reasoning as payment.record: a credit note reduces what
             // leaves the bank, so recording one is a financial decision.
@@ -59,7 +63,6 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.po.create',
             'purchasing.po.approve',
             'purchasing.receipt.record',
-            'purchasing.payment.update',
             'purchasing.payment.record',
             'purchasing.credit_note.record',
             'purchasing.expense.record',

@@ -215,6 +215,7 @@ class SupplierBillController extends Controller
                 'reversed_at' => $bill->reversed_at?->toDateString(),
                 'reversal_note' => $bill->reversal_note,
                 'supplier' => $bill->supplier?->name,
+                'purchase_order_id' => $bill->purchase_order_id,
                 'po_number' => $bill->purchaseOrder?->po_number,
                 'lines' => $bill->lines->map(fn ($line) => [
                     'id' => $line->id,
@@ -237,6 +238,12 @@ class SupplierBillController extends Controller
                     'amount' => $line->amount()->toTaka(),
                 ]),
             ]),
+            // ⚠ The next step of the purchase chain: the payment form opens with
+            // this supplier chosen and this bill's outstanding typed in. Offered
+            // only when there is something to pay; a reversed bill owes nothing.
+            'can_pay' => request()->user()->can('purchasing.payment.record')
+                && ! $bill->isReversed()
+                && $bill->outstanding()->minor > 0,
             // ⚠ Offered only when it would not be refused. The refusal still
             // stands server-side either way.
             'can_reverse' => request()->user()->can('purchasing.bill.record')

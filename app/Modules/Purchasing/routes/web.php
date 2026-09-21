@@ -65,7 +65,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     });
 
     // Purchase orders — index/show open to any business member; store/approve/
-    // reject/cancel/payment-status/receive each authorize internally.
+    // reject/cancel/receive each authorize internally.
     Route::middleware('can:purchasing.reports.view')->group(function () {
         Route::get('purchase-orders', [PurchaseOrderController::class, 'index'])->name('purchase-orders.index');
         Route::get('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->name('purchase-orders.show');
@@ -76,7 +76,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     Route::post('purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve'])->name('purchase-orders.approve');
     Route::post('purchase-orders/{purchaseOrder}/reject', [PurchaseOrderController::class, 'reject'])->name('purchase-orders.reject');
     Route::post('purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])->name('purchase-orders.cancel');
-    Route::post('purchase-orders/{purchaseOrder}/payment-status', [PurchaseOrderController::class, 'updatePaymentStatus'])->name('purchase-orders.payment-status');
+    // ⚠⚠ No `payment-status` route any more (21 Sep 2026). It set a hand-typed
+    // "Paid" on the order that moved no money and reached no ledger, so the
+    // order could say Paid while Accounts Payable owed the supplier in full.
+    // Paying is a supplier payment against a bill; the order page reads it.
     Route::post('purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
     Route::post('purchase-orders/{purchaseOrder}/returns', [PurchaseOrderController::class, 'returnGoods'])->name('purchase-orders.returns.store');
 

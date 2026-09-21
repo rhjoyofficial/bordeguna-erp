@@ -37,9 +37,11 @@ class RecordStockIn
         ?string $purchaseQuantity = null,
         ?int $purchaseUnitId = null,
         ?string $conversionFactor = null,
-        // ⚠ The production pair, supplied ONLY by the production run (C-MFG-13).
-        // Null for every purchased batch: a goods receipt does not know when the
-        // supplier manufactured, and `mrp` is label data the run declares.
+        // ⚠ The production pair (C-MFG-13). `manufacturedDate` comes from the
+        // production run, and since 21 Sep 2026 also from a goods receipt when
+        // the storekeeper copies it off the supplier's label (optional, so most
+        // bought batches still carry null). `mrp` is label data only the run
+        // declares.
         ?string $manufacturedDate = null,
         ?string $mrp = null,
     ): StockMovement {
