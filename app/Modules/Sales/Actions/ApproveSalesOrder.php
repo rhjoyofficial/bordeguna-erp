@@ -3,7 +3,10 @@
 namespace App\Modules\Sales\Actions;
 
 use App\Models\User;
+use App\Modules\Sales\Exceptions\CreditRefused;
+use App\Modules\Sales\Models\CreditOverride;
 use App\Modules\Sales\Models\SalesOrder;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
@@ -17,7 +20,18 @@ use RuntimeException;
  */
 class ApproveSalesOrder
 {
-    public function handle(SalesOrder $order, User $reviewedBy): SalesOrder
+    public function __construct(private readonly CheckCustomerCredit $credit) {}
+
+    /**
+     * ⚠⚠ THE CREDIT RULES ARE CHECKED HERE (21 Sep 2026), the one place every
+     * approval passes: the order page and the Approvals page both call this. A
+     * refused order can still be approved by somebody holding
+     * sales.credit.override who writes a reason, and that is recorded, once,
+     * in credit_overrides; without both, the refusal stands.
+     *
+     * @throws CreditRefused
+     */
+    public function handle(SalesOrder $order, User $reviewedBy, ?string $creditOverrideReason = null): SalesOrder
     {
         // ⚠ An online order waiting for its payment has not been sent for
         // approval at all (SSLCommerz slice P2c). There is nothing to confirm yet.
@@ -29,7 +43,34 @@ class ApproveSalesOrder
             throw new RuntimeException("Sales order {$order->order_number} has already been reviewed.");
         }
 
-        $complete = $order->approvalRequest->approve($reviewedBy);
+        $refusal = $this->credit->refusalFor($order);
+
+        if ($refusal !== null) {
+            $reason = trim((string) $creditOverrideReason);
+
+            if ($reason === '' || ! $reviewedBy->can('sales.credit.override')) {
+                throw $refusal;
+            }
+        }
+
+        $complete = DB::transaction(function () use ($order, $reviewedBy, $refusal, $creditOverrideReason) {
+            if ($refusal !== null) {
+                CreditOverride::create([
+                    'business_id' => $order->business_id,
+                    'customer_id' => $order->customer_id,
+                    'sales_order_id' => $order->id,
+                    'rule' => $refusal->rule,
+                    'credit_limit' => $refusal->creditLimit?->toTaka(),
+                    'owed_before' => $refusal->owedBefore->toTaka(),
+                    'amount' => $refusal->amount->toTaka(),
+                    'owed_after' => $refusal->owedAfter->toTaka(),
+                    'reason' => trim((string) $creditOverrideReason),
+                    'overridden_by' => $reviewedBy->id,
+                ]);
+            }
+
+            return $order->approvalRequest->approve($reviewedBy);
+        });
 
         // ⚠ Only when the approval is COMPLETE. A multi-stage approval that has
         // only advanced a stage has not confirmed anything to the customer yet.
