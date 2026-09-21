@@ -16,6 +16,7 @@ use App\Modules\Sales\Http\Controllers\ProductGroupPriceController;
 use App\Modules\Sales\Http\Controllers\ProductPriceController;
 use App\Modules\Sales\Http\Controllers\PromotionController;
 use App\Modules\Sales\Http\Controllers\QuotationController;
+use App\Modules\Sales\Http\Controllers\ReceiptController;
 use App\Modules\Sales\Http\Controllers\SalesInvoiceController;
 use App\Modules\Sales\Http\Controllers\SalesOrderController;
 use App\Modules\Sales\Http\Controllers\SalesReturnController;
@@ -218,6 +219,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
             ->whereNumber('invoice')->name('invoices.slip');
         Route::get('deliveries/{delivery}/print', [DeliveryController::class, 'print'])
             ->whereNumber('delivery')->name('deliveries.print');
+        // Every receipt, with what it paid: the list that did not exist.
+        Route::get('receipts', [ReceiptController::class, 'index'])->name('receipts.index');
         Route::get('receipts/{receipt}/print', [SalesInvoiceController::class, 'printReceipt'])
             ->whereNumber('receipt')->name('receipts.print');
         // The same receipt on a till roll. Same permission - a thermal copy of a
@@ -227,6 +230,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     });
 
     Route::middleware('can:sales.receipt.record')->group(function () {
+        // ⭐ Receive payment from the customer's side, over several invoices at
+        // once, oldest first (21 Sep 2026). The per-invoice form stays too.
+        Route::get('receipts/new', [ReceiptController::class, 'create'])->name('receipts.create');
+        Route::post('receipts', [ReceiptController::class, 'store'])->name('receipts.store');
         Route::post('invoices/{invoice}/receipts', [SalesInvoiceController::class, 'receipt'])->name('invoices.receipts.store');
         // Money paid for an order, before or after its invoice (SSLCommerz
         // slice P1). The same trust level as a receipt, because it is one.

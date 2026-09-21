@@ -218,6 +218,8 @@ class HandleInertiaRequests extends Middleware
             'canViewStores' => fn () => (bool) $request->user()?->can('commerce.stores.view'),
             'canSell' => fn () => (bool) $request->user()?->can('sales.sell'),
             'canRecordOrders' => fn () => (bool) $request->user()?->can('sales.orders.record'),
+            // Receive payment (21 Sep 2026): the menu offers it only to who may.
+            'canRecordReceipts' => fn () => (bool) $request->user()?->can('sales.receipt.record'),
             'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),
             'canViewCrm' => fn () => (bool) $request->user()?->can('crm.leads.view'),
             'canViewContacts' => fn () => (bool) $request->user()?->can('crm.contacts.view'),

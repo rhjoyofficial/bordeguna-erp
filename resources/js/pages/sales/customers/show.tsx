@@ -93,6 +93,10 @@ export default function CustomerShow({
                     />
                     <div className="flex items-center gap-2">
                         {!customer.is_active && <Badge variant="secondary">Inactive</Badge>}
+                        {/* ⭐ Money in from here, across every unpaid invoice (21 Sep 2026). */}
+                        <Button size="sm" asChild>
+                            <Link href={`/sales/receipts/new?customer_id=${customer.id}`}>Receive payment</Link>
+                        </Button>
                         <Button variant="outline" size="sm" asChild>
                             <Link href={statement_url}>Full statement</Link>
                         </Button>

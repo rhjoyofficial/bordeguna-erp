@@ -103,6 +103,7 @@ export function AppSidebar() {
         canViewStores,
         canSell,
         canRecordOrders,
+        canRecordReceipts,
         canManagePrices,
         canRecordOpeningStock,
         canImportCatalogue,
@@ -246,6 +247,10 @@ export function AppSidebar() {
                           ...(canViewSales ? [{ title: 'Sales orders', url: '/sales/orders', icon: ClipboardList }] : []),
                           ...(canRecordOrders ? [{ title: 'Quotations', url: '/sales/quotations', icon: FileText }] : []),
                           ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
+                          // ⭐ Money in, and the list of it (21 Sep 2026): before this a receipt
+                          // could only be taken from one invoice's page, and never listed.
+                          ...(canRecordReceipts ? [{ title: 'Receive payment', url: '/sales/receipts/new', icon: HandCoins }] : []),
+                          ...(canViewSales ? [{ title: 'Receipts', url: '/sales/receipts', icon: HandCoins }] : []),
                           ...(canViewSales || canManagePrices ? [{ title: 'Selling prices', url: '/sales/prices', icon: BadgeDollarSign }] : []),
                           // Who a price is for, and which groups pay MRP (21 Sep 2026).
                           ...(canManagePrices ? [{ title: 'Price groups', url: '/sales/price-groups', icon: BadgeDollarSign }] : []),
