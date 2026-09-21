@@ -39,6 +39,7 @@ use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Support\DeliveryBilling;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
+use App\Modules\Sales\Support\OrderNextSteps;
 use DomainException;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -233,12 +234,14 @@ class SalesOrderController extends Controller
         // ⭐ Each challan with what a courier needs: its lines, its parcel, and
         // the amount to collect if it were delivered today. Shaped here, dates
         // as dates, never a model handed to the page.
-        $challans = Delivery::query()
+        $deliveries = Delivery::query()
             ->whereIn('id', $deliveryIds)
             ->with(['lines.product:id,name,sku', 'lines.orderLine', 'customer', 'consignment.courier:id,name', 'consignment.invoice:id,invoice_number', 'consignment.salesReturn:id,return_number'])
             ->orderBy('delivered_at')
             ->orderBy('id')
-            ->get()
+            ->get();
+
+        $challans = $deliveries
             ->map(function (Delivery $delivery) use ($resolver) {
                 $consignment = $delivery->consignment;
                 $untouched = $delivery->lines->every(fn ($line) => (float) $line->quantity_invoiced <= 0 && (float) $line->quantity_returned <= 0);
@@ -283,6 +286,8 @@ class SalesOrderController extends Controller
                 'expected_date' => $order->expected_date?->toDateString(),
             ]),
             'challans' => $challans,
+            // ⭐ What is left to do, in order (21 Sep 2026): the page leads with it.
+            'next_steps' => OrderNextSteps::for($order, $deliveries, $user),
             'couriers' => MoneyAccount::query()->active()->where('type', MoneyAccountType::Courier->value)
                 ->orderBy('name')->get(['id', 'name']),
             'can_record_outcome' => $user->can('sales.sell') && $user->can('sales.receipt.record') && $user->can('sales.returns.record'),

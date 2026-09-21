@@ -105,11 +105,15 @@ function NavGroupSection({ group, activeUrl }: { group: NavGroup; activeUrl: str
 export function NavGroups({ groups }: { groups: NavGroup[] }) {
     const activeUrl = useActiveUrl(groups);
 
+    // A group whose every row is gated away is not drawn: a cashier who may
+    // sell but not price would otherwise see an empty "Sales setup" heading.
     return (
         <>
-            {groups.map((group) => (
-                <NavGroupSection key={group.label} group={group} activeUrl={activeUrl} />
-            ))}
+            {groups
+                .filter((group) => group.items.length > 0)
+                .map((group) => (
+                    <NavGroupSection key={group.label} group={group} activeUrl={activeUrl} />
+                ))}
         </>
     );
 }

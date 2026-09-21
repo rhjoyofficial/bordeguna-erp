@@ -12,11 +12,14 @@ use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Sales\Actions\ApproveSalesOrder;
+use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\ProductPrice;
 use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
@@ -98,4 +101,97 @@ it('offers the default warehouse first when a quotation is accepted', function (
         ->assertInertia(fn (Assert $page) => $page
             ->where('warehouses.0.id', $this->main->id)
             ->where('warehouses.0.is_default', true));
+});
+
+/**
+ * The order page leads with what is left to do (21 Sep 2026): approve, bill
+ * what has left, collect, deliver the rest - and says when nothing is.
+ */
+describe('the next step on an order', function () {
+    beforeEach(function () {
+        Permission::firstOrCreate(['name' => 'sales.orders.approve', 'guard_name' => 'web']);
+        Permission::firstOrCreate(['name' => 'sales.receipt.record', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'Manager', 'business_id' => $this->business->id, 'guard_name' => 'web'])
+            ->givePermissionTo(['sales.sell', 'sales.reports.view', 'sales.orders.record', 'sales.orders.approve', 'sales.receipt.record']);
+        $this->manager = User::factory()->create();
+        $this->manager->businesses()->attach($this->business->id);
+        $this->manager->assignRole('Manager');
+
+        ProductPrice::create(['business_id' => $this->business->id, 'product_id' => $this->product->id, 'unit_price' => '850', 'effective_from' => '2026-09-01']);
+
+        // Taken by the Seller, who may not approve it, so it waits.
+        $this->order = app(CreateSalesOrder::class)->handle(
+            customer: $this->customer,
+            lines: [['product' => $this->product, 'quantity' => '5']],
+            createdBy: $this->user,
+            warehouse: $this->main,
+        );
+
+        $this->steps = fn (?User $as = null) => $this->actingAs($as ?? $this->manager)
+            ->get(route('sales.orders.show', $this->order))
+            ->original->getData()['page']['props']['next_steps'];
+
+        $this->deliverOrder = fn (string $qty) => app(RecordDelivery::class)->handle(
+            customer: $this->customer, warehouse: $this->main,
+            lines: [['product' => $this->product, 'quantity' => $qty, 'orderLine' => $this->order->fresh()->lines->first()]],
+            createdBy: $this->manager, deliveredAt: '2026-09-10 09:00:00',
+        );
+        $this->bill = fn ($delivery, string $qty) => app(RecordSalesInvoice::class)->handle(
+            customer: $this->customer,
+            lines: [['deliveryLine' => $delivery->lines->first(), 'quantity' => $qty, 'unitPrice' => '850']],
+            createdBy: $this->manager, invoiceDate: '2026-09-10',
+        );
+    });
+
+    it('asks for approval first, and tells a seller who cannot give it that it is waiting', function () {
+        $steps = ($this->steps)($this->user);
+
+        expect(collect($steps)->pluck('kind')->all())->toBe(['approve'])
+            ->and($steps[0]['can'])->toBeFalse()
+            ->and($steps[0]['detail'])->toContain('Waiting for a manager');
+    });
+
+    it('sends an approved order to delivery', function () {
+        app(ApproveSalesOrder::class)->handle($this->order, $this->manager);
+
+        $steps = ($this->steps)();
+
+        expect(collect($steps)->pluck('kind')->all())->toBe(['deliver'])
+            ->and($steps[0]['title'])->toBe('Deliver the goods');
+    });
+
+    it('bills what has left before delivering the rest, starting the invoice on that challan', function () {
+        app(ApproveSalesOrder::class)->handle($this->order, $this->manager);
+        $challan = ($this->deliverOrder)('2');
+
+        $steps = ($this->steps)();
+
+        expect(collect($steps)->pluck('kind')->all())->toBe(['invoice', 'deliver'])
+            ->and($steps[0]['detail'])->toContain($challan->delivery_number)
+            ->and($steps[0]['href'])->toContain('delivery_id='.$challan->id)
+            ->and($steps[1]['title'])->toBe('Deliver the rest');
+    });
+
+    it('asks for the money once the challan is billed, and names what is owed', function () {
+        app(ApproveSalesOrder::class)->handle($this->order, $this->manager);
+        $invoice = ($this->bill)(($this->deliverOrder)('2'), '2');
+
+        $steps = ($this->steps)();
+
+        expect(collect($steps)->pluck('kind')->all())->toBe(['collect', 'deliver'])
+            ->and($steps[0]['detail'])->toContain($invoice->invoice_number)
+            ->and($steps[0]['href'])->toContain('customer_id='.$this->customer->id)
+            ->and($steps[0]['can'])->toBeTrue();
+    });
+
+    it('says there is nothing left once everything is delivered, billed and paid', function () {
+        app(ApproveSalesOrder::class)->handle($this->order, $this->manager);
+        $invoice = ($this->bill)(($this->deliverOrder)('5'), '5');
+        $cash = MoneyAccount::create(['business_id' => $this->business->id, 'name' => 'Main Cash', 'type' => 'cash', 'account_id' => Account::bySlug('cash_in_hand')->id]);
+        app(RecordCustomerReceipt::class)->handle($this->customer, $cash, '2026-09-10', [['invoice' => $invoice, 'amount' => (string) $invoice->fresh()->total]], $this->manager);
+
+        $steps = ($this->steps)();
+
+        expect(collect($steps)->pluck('kind')->all())->toBe(['done']);
+    });
 });
