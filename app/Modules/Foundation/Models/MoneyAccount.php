@@ -63,7 +63,7 @@ class MoneyAccount extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'type', 'account_number', 'bank_name', 'branch', 'provider', 'is_active'])
+            ->logOnly(['name', 'type', 'account_id', 'account_number', 'bank_name', 'branch', 'provider', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -105,9 +105,10 @@ class MoneyAccount extends Model
      * load, and the inversion is the kind that is never noticed until something
      * has to be extracted. Accounting resolves the label from its own side.
      *
-     * ⚠ Several money accounts can legitimately share one ledger account: three
-     * bank accounts may all report as "Cash at Bank". The ledger answers "how
-     * much is in the bank"; this table answers "which bank".
+     * ⚠ Since 21 Sep 2026 every cash box, bank account and wallet has a ledger
+     * head of its own (Accounting's MoneyLedgers), so the ledger answers "how
+     * much is in BRAC" and not only "how much is in the bank". Courier and
+     * gateway accounts still share 1145 and 1146 by design.
      */
     public function ledgerAccountId(): ?int
     {

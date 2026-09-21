@@ -111,9 +111,24 @@ it('seeds every code at the same width, because chart order IS code order', func
     // ⚠ Account::scopeInChartOrder sorts by a STRING. A three-digit code sorts
     // before every four-digit one, so a single short code silently moves an
     // account to the top of every report that uses the chart order.
+    //
+    // ⚠ The one exception (21 Sep 2026): a cash, bank or wallet head is its
+    // group's code without the trailing zero plus two digits, 11201 under 1120,
+    // which sorts straight after the group and before 1130.
+    $moneyGroups = Account::whereIn('system_slug', ['cash_accounts', 'bank_accounts', 'mfs_accounts'])->pluck('code', 'id');
+
     foreach (Account::all() as $account) {
+        if ($moneyGroups->has($account->parent_id)) {
+            expect($account->code)->toMatch('/^'.substr($moneyGroups[$account->parent_id], 0, 3).'\d{2}$/');
+
+            continue;
+        }
+
         expect(strlen($account->code))->toBe(4, "{$account->code} is not four digits");
     }
+
+    $codes = Account::query()->inChartOrder()->pluck('code')->all();
+    expect(array_slice($codes, array_search('1110', $codes, true), 6))->toBe(['1110', '11101', '1120', '11201', '1130', '11301']);
 });
 
 it('never lets a group account be posted to', function () {

@@ -59,6 +59,26 @@ class JournalException extends RuntimeException
         return new self('That money account belongs to a different business.');
     }
 
+    public static function moneyHeadWithoutAccount(Account $account): self
+    {
+        return new self("{$account->label()} is a cash, bank or wallet ledger with no Bank & cash account behind it. Add the account under Accounting > Bank & cash, which gives it its own ledger, and post through that.");
+    }
+
+    public static function moneyHeadOfAnotherBusiness(Account $account): self
+    {
+        return new self("{$account->label()} is a cash, bank or wallet ledger of another business.");
+    }
+
+    public static function moneyHeadShared(Account $account): self
+    {
+        return new self("{$account->label()} is shared by more than one Bank & cash account, so a plain line cannot say which one. Post through the account itself.");
+    }
+
+    public static function moneyHeadOfAnotherAccount(Account $account, string $moneyAccountName): self
+    {
+        return new self("{$account->label()} is not the ledger of {$moneyAccountName}. Money moves on its own account's ledger.");
+    }
+
     public static function alreadyReversed(string $journalNumber): self
     {
         return new self("{$journalNumber} has already been reversed. Post a new journal rather than reversing it twice.");

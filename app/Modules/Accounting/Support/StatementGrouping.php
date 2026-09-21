@@ -54,14 +54,14 @@ final class StatementGrouping
                 continue;
             }
 
-            $section = self::headerFor($row->account, $chart);
+            [$section, $group] = self::headersFor($row->account, $chart);
 
             $grouped[$section->code] ??= [
                 'account' => $section,
                 'lines' => [],
             ];
 
-            $grouped[$section->code]['lines'][] = new StatementLine($row->account, $amount);
+            $grouped[$section->code]['lines'][] = new StatementLine($row->account, $amount, $group);
         }
 
         return collect($grouped)
@@ -91,7 +91,19 @@ final class StatementGrouping
     }
 
     /**
-     * The nearest ancestor that is a heading rather than a postable account.
+     * The section a head prints under, and the sub-group inside it, if any.
+     *
+     * ⚠⚠ THE SECTION IS THE HEADING JUST BELOW THE ROOT, and a deeper heading is
+     * a SUB-GROUP inside it (21 Sep 2026). Until then every group in the chart
+     * sat one level below a root, so "nearest heading" and "heading below the
+     * root" were the same account and every statement printed exactly as it
+     * does now. Then cash, bank and wallets became groups under 1100:
+     *
+     *   11201 BRAC Bank  →  1120 Bank Accounts  →  1100 Current Assets  →  1000 Assets
+     *
+     * Nearest-heading would have printed Bank Accounts as its own section beside
+     * Current Assets, leaving the bank OUT of the current-assets total. So the
+     * section stays 1100 and Bank Accounts becomes a subtotal inside it.
      *
      * ⚠ Falls back to the account itself when it has no header above it - a
      * postable account sitting at the root is unusual but legal, and a statement
@@ -101,31 +113,39 @@ final class StatementGrouping
      * screen is indistinguishable from an outage.
      *
      * @param  Collection<int, Account>  $chart
+     * @return array{0: Account, 1: ?Account} [section, sub-group]
      */
-    private static function headerFor(Account $account, Collection $chart): Account
+    private static function headersFor(Account $account, Collection $chart): array
     {
+        /** @var list<Account> $headings nearest first */
+        $headings = [];
         $current = $account;
+        $reachedRoot = false;
 
         for ($depth = 0; $depth < 20; $depth++) {
-            $parentId = $current->parent_id;
-
-            if ($parentId === null) {
-                return $current;
-            }
-
-            $parent = $chart->get($parentId);
+            $parent = $current->parent_id === null ? null : $chart->get($current->parent_id);
 
             if ($parent === null) {
-                return $current;
+                $reachedRoot = $current->parent_id === null;
+                break;
             }
 
             if (! $parent->is_postable) {
-                return $parent;
+                $headings[] = $parent;
             }
 
             $current = $parent;
         }
 
-        return $account;
+        if ($headings === []) {
+            return [$account, null];
+        }
+
+        $last = count($headings) - 1;
+        // The top heading is the root itself: the section is the one below it.
+        $rootIsHeading = $reachedRoot && $headings[$last]->id === $current->id;
+        $section = $rootIsHeading && $last > 0 ? $headings[$last - 1] : $headings[$last];
+
+        return [$section, $headings[0]->id === $section->id ? null : $headings[0]];
     }
 }

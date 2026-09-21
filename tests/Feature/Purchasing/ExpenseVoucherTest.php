@@ -74,7 +74,7 @@ it('records what was spent and takes it out of the account it came from', functi
     // Two expenses debited, one credit to the cash box.
     expect(($this->balanceOn)('6051'))->toBe(1800000)
         ->and(($this->balanceOn)('6011'))->toBe(250000)
-        ->and(($this->balanceOn)('1110'))->toBe(-2050000);
+        ->and(($this->balanceOn)('11101'))->toBe(-2050000);
 
     $journal = Journal::first();
 

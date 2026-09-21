@@ -51,6 +51,7 @@ beforeEach(function () {
     $this->founder->assignRole($role);
 
     $this->seed(ChartOfAccountsSeeder::class);
+    moneyHead('cash_in_hand');
 
     $this->post = function (string $debitCode, string $creditCode, string $amount) {
         return app(PostJournal::class)->handle(new JournalDraft(
@@ -109,7 +110,10 @@ it('keeps every group header non-postable, because a postable header would swall
 });
 
 it('keeps every code four digits so lexicographic order stays chart order', function () {
-    $bad = Account::query()->pluck('code')->reject(fn ($code) => preg_match('/^\d{4}$/', (string) $code) === 1);
+    // ⚠ Except a cash, bank or wallet head: 11101-11399, its group's code less the zero, plus two digits (21 Sep 2026).
+    $bad = Account::query()->pluck('code')
+        ->reject(fn ($code) => preg_match('/^\d{4}$/', (string) $code) === 1)
+        ->reject(fn ($code) => preg_match('/^11[123]\d{2}$/', (string) $code) === 1);
 
     expect($bad->all())->toBe([]);
 });
@@ -142,9 +146,9 @@ it('refuses to hold an expense account for anything section 18 forbids', functio
 // ─── WHAT THE STRUCTURE BUYS ────────────────────────────────────────────────
 
 it('prints the document s groups as profit and loss sections without a line of report code', function () {
-    ($this->post)('6241', '1110', '5000');      // Facebook advertising, paid cash
-    ($this->post)('6011', '1110', '300');       // a rickshaw fare
-    ($this->post)('6371', '1110', '1200');      // a courier charge
+    ($this->post)('6241', '11101', '5000');      // Facebook advertising, paid cash
+    ($this->post)('6011', '11101', '300');       // a rickshaw fare
+    ($this->post)('6371', '11101', '1200');      // a courier charge
 
     $sections = IncomeStatement::between(
         Carbon::parse('2026-07-01')->startOfDay(),
@@ -166,8 +170,8 @@ it('prints the document s groups as profit and loss sections without a line of r
 });
 
 it('separates the two marketing groups, which is the whole reason the document splits them', function () {
-    ($this->post)('6241', '1110', '5000');      // online: Facebook
-    ($this->post)('6293', '1110', '2000');      // offline: banner and poster
+    ($this->post)('6241', '11101', '5000');      // online: Facebook
+    ($this->post)('6293', '11101', '2000');      // offline: banner and poster
 
     $sections = IncomeStatement::between(
         Carbon::parse('2026-07-01')->startOfDay(),

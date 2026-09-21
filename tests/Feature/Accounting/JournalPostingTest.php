@@ -46,8 +46,8 @@ beforeEach(function () {
 
     $this->seed(ChartOfAccountsSeeder::class);
 
-    $this->cash = Account::bySlug('cash_in_hand');
-    $this->bank = Account::bySlug('cash_at_bank');
+    $this->cash = moneyHead('cash_in_hand');
+    $this->bank = moneyHead('cash_at_bank');
     $this->capital = Account::bySlug('owners_capital');
     $this->rent = Account::where('code', '6051')->first();
 
@@ -359,6 +359,9 @@ it('keeps one business out of another business books', function () {
 
     // The second business starts its own numbering, because a voucher number
     // belongs to a set of books rather than to the installation.
+    // ⚠ And it needs a cash account of its own: the first business's cash head
+    // is posted only through that business's money account.
+    moneyHead('cash_in_hand');
     $theirs = app(PostJournal::class)->handle(new JournalDraft(
         date: Carbon::parse('2026-08-03'),
         lines: [

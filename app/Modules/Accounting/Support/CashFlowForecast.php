@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Support;
 
+use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -28,8 +29,14 @@ class CashFlowForecast
     {
         $today = Carbon::today();
 
+        // ⚠⚠ Every query below is RAW, and the business scope is an Eloquent
+        // scope, so none of them was filtered: the forecast of one business added
+        // up the cash, invoices, bills and payroll of all four (found 21 Sep 2026).
+        $businessId = app(BusinessContext::class)->id();
+        $own = fn ($query, string $table) => $query->where("{$table}.business_id", $businessId);
+
         // Opening cash: every money account's ledger balance, right now.
-        $openingCash = (float) DB::table('journal_lines')
+        $openingCash = (float) $own(DB::table('journal_lines'), 'journal_lines')
             ->whereNotNull('money_account_id')
             ->sum('amount_minor') / 100;
 
@@ -45,7 +52,7 @@ class CashFlowForecast
             ->groupBy('sales_invoice_id')
             ->pluck('credited', 'sales_invoice_id');
 
-        $invoicesIn = DB::table('sales_invoices')
+        $invoicesIn = $own(DB::table('sales_invoices'), 'sales_invoices')
             ->get(['id', 'due_date', 'invoice_date', 'total'])
             ->map(function ($invoice) use ($receiptAllocations, $creditAllocations) {
                 $outstanding = (float) $invoice->total
@@ -70,7 +77,7 @@ class CashFlowForecast
             ->groupBy('supplier_bill_id')
             ->pluck('credited', 'supplier_bill_id');
 
-        $billsOut = DB::table('supplier_bills')
+        $billsOut = $own(DB::table('supplier_bills'), 'supplier_bills')
             ->whereNull('reversed_at')
             ->get(['id', 'due_date', 'bill_date', 'total'])
             ->map(function ($bill) use ($billPayments, $billCredits) {
@@ -86,7 +93,7 @@ class CashFlowForecast
             ->filter(fn ($row) => $row['amount'] > 0.009);
 
         // ── Standing costs still due.
-        $recurringOut = DB::table('recurring_expense_occurrences')
+        $recurringOut = $own(DB::table('recurring_expense_occurrences'), 'recurring_expense_occurrences')
             ->where('status', 'due')
             ->get(['due_on', 'expected_amount'])
             ->map(fn ($occurrence) => [
@@ -96,7 +103,7 @@ class CashFlowForecast
 
         // ── Payroll: the last run that reached approval or beyond, placed on
         // the 1st of each coming month. An ESTIMATE and labelled as one.
-        $payrollEstimate = (float) (DB::table('payroll_runs')
+        $payrollEstimate = (float) ($own(DB::table('payroll_runs'), 'payroll_runs')
             ->whereIn('status', ['approved', 'disbursed', 'locked'])
             ->orderByDesc('id')
             ->value('total_net') ?? 0);

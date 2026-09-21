@@ -56,7 +56,7 @@ beforeEach(function () {
     $this->stock = Account::bySlug('stock_on_hand');
     $this->wages = Account::bySlug('salaries_expense');
     $this->capital = Account::bySlug('owners_capital');
-    $this->bank = Account::bySlug('cash_at_bank');
+    $this->bank = moneyHead('cash_at_bank');
     $this->rounding = Account::bySlug('rounding_difference');
 
     $this->postByHand = fn (Account $debit, Account $credit, string $type = 'manual') => $this

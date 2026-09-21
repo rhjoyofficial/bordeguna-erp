@@ -162,6 +162,12 @@ final class VoucherAccounts
             }];
         }
 
+        // Every head under the cash, bank and wallet groups, tied or not: each is
+        // one money account's own ledger, and a line there names no till or bank.
+        foreach (Account::query()->whereIn('parent_id', MoneyLedgers::groupIds())->pluck('id') as $accountId) {
+            $refused[$accountId] ??= ['reason' => $money, 'instead' => $moneyInstead];
+        }
+
         foreach (Account::query()->whereIn('system_slug', self::RESERVED_SLUGS)->get(['id', 'system_slug']) as $account) {
             $refused[$account->id] = [
                 'reason' => 'This account is kept by the system and cannot be used on a voucher.',

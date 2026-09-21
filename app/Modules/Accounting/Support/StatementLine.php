@@ -17,9 +17,14 @@ use App\Modules\Accounting\Models\Account;
  */
 final class StatementLine
 {
+    /**
+     * @param  ?Account  $group  the sub-group heading inside the section, when the head sits deeper
+     *                           than the section (a bank account under Bank Accounts under Current Assets)
+     */
     public function __construct(
         public readonly Account $account,
         public readonly Money $amount,
+        public readonly ?Account $group = null,
     ) {}
 
     /**

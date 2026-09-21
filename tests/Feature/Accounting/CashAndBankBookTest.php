@@ -85,11 +85,20 @@ afterEach(fn () => Carbon::setTestNow());
 
 // ─── C-CBB-1. THE GRAIN ─────────────────────────────────────────────────────
 
+// ⚠ Since 21 Sep 2026 a new account always gets a head of its own, so a shared
+// head exists only where the migration could not split history honestly. The
+// book still shows it as one row naming both.
 it('collapses two bank accounts sharing one ledger account into one row naming both', function () {
-    MoneyAccount::create(['business_id' => $this->business->id, 'name' => 'BRAC Current', 'type' => 'bank', 'account_id' => $this->bank->id]);
+    $brac = MoneyAccount::create(['business_id' => $this->business->id, 'name' => 'BRAC Current', 'type' => 'bank', 'account_id' => $this->bank->id]);
     MoneyAccount::create(['business_id' => $this->business->id, 'name' => 'City Savings', 'type' => 'bank', 'account_id' => $this->bank->id]);
 
-    ($this->post)($this->bank->id, '1000', '2026-07-05');
+    app(PostJournal::class)->handle(new JournalDraft(
+        date: Carbon::parse('2026-07-05'),
+        lines: [
+            JournalLineDraft::debit($this->bank->id, Money::ofTaka('1000'), moneyAccount: $brac),
+            JournalLineDraft::credit($this->capital->id, Money::ofTaka('1000')),
+        ],
+    ), $this->reader);
 
     $book = ($this->book)();
 
@@ -108,8 +117,8 @@ it('keeps separate ledger accounts as separate rows in chart order', function ()
 
     $book = ($this->book)();
 
-    // 1110 Cash in Hand before 1120 Cash at Bank: the chart's order, not creation order.
-    expect($book->rows->map(fn ($row) => $row->account->code)->all())->toBe(['1110', '1120'])
+    // 11101 Main Cash before 11201 Main Bank Account: the chart's order, not creation order.
+    expect($book->rows->map(fn ($row) => $row->account->code)->all())->toBe(['11101', '11201'])
         ->and($book->closing()->minor)->toBe(250000);
 });
 
@@ -180,7 +189,7 @@ it('shows the book with formatted figures and the unmapped banner', function () 
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('accounting/cash-and-bank/index')
-            ->where('rows.0.code', '1120')
+            ->where('rows.0.code', '11201')
             ->where('rows.0.opening', '9,000.00')
             ->where('rows.0.in', '1,000.00')
             ->where('rows.0.out', null)

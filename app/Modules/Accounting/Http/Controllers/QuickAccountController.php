@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\MoneyLedgers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -36,6 +37,8 @@ class QuickAccountController extends Controller
             ->where('type', $data['type'])
             ->where('is_postable', false)
             ->where('is_active', true)
+            // Cash, bank and wallet ledgers are made by Bank & cash, one per account.
+            ->whereNotIn('id', MoneyLedgers::groupIds())
             ->inChartOrder()
             ->get();
 
@@ -57,7 +60,7 @@ class QuickAccountController extends Controller
             // ⚠ Required here although the chart screen allows a root account:
             // a head created in passing must land inside a group, or the profit
             // and loss prints it under no section heading at all.
-            'parent_id' => ['required', 'integer', Rule::exists('accounts', 'id')->where(fn ($query) => $query->where('is_postable', 0))],
+            'parent_id' => ['required', 'integer', Rule::exists('accounts', 'id')->where(fn ($query) => $query->where('is_postable', 0)->whereNotIn('id', MoneyLedgers::groupIds()))],
         ]);
 
         $account = new Account($data + ['is_postable' => true, 'is_active' => true]);

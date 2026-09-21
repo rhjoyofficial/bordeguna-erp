@@ -27,9 +27,12 @@ use Illuminate\Database\Seeder;
  * present, so a later addition was never planted on an installation that had run
  * the earlier version.
  *
- * ⚠ Codes are all four digits so that lexicographic ordering IS chart ordering
+ * ⚠ Codes are four digits so that lexicographic ordering IS chart ordering
  * (see Account::scopeInChartOrder). A three-digit code sorts before every
- * four-digit one and quietly moves an account to the top of the report.
+ * four-digit one and quietly moves an account to the top of the report. The one
+ * exception is the head of a cash box, bank account or wallet: its group's code
+ * without the trailing zero, plus two digits (11201 under 1120), which sorts
+ * straight after the group and before the next four-digit code.
  *
  * ℹ NO VAT ACCOUNTS, on purpose. C-ACC-1 settled that Bor de Guna is not doing
  * VAT accounting yet and that unit costs are recorded gross of any tax charged.
@@ -50,9 +53,17 @@ class ChartOfAccountsSeeder extends Seeder
         // ─── 1000 Assets ────────────────────────────────────────────────────
         ['1000', 'Assets', AccountType::Asset, null, false, null],
         ['1100', 'Current Assets', AccountType::Asset, '1000', false, null],
-        ['1110', 'Cash in Hand', AccountType::Asset, '1100', true, 'cash_in_hand'],
-        ['1120', 'Cash at Bank', AccountType::Asset, '1100', true, 'cash_at_bank'],
-        ['1130', 'Mobile Financial Services', AccountType::Asset, '1100', true, 'mobile_financial_services'],
+        // ⚠⚠ Cash, bank and mobile wallets are GROUPS with one head per money
+        // account under each (21 Sep 2026, Support\MoneyLedgers). The heads are
+        // created by the system when a Bank & cash account is saved; the three
+        // planted here are placeholders the first account of each kind takes
+        // over, and they carry the slugs the chart has always had.
+        ['1110', 'Cash in Hand', AccountType::Asset, '1100', false, 'cash_accounts'],
+        ['11101', 'Main Cash', AccountType::Asset, '1110', true, 'cash_in_hand'],
+        ['1120', 'Bank Accounts', AccountType::Asset, '1100', false, 'bank_accounts'],
+        ['11201', 'Main Bank Account', AccountType::Asset, '1120', true, 'cash_at_bank'],
+        ['1130', 'Mobile Financial Services', AccountType::Asset, '1100', false, 'mfs_accounts'],
+        ['11301', 'Main Mobile Wallet', AccountType::Asset, '1130', true, 'mobile_financial_services'],
         ['1140', 'Accounts Receivable', AccountType::Asset, '1100', true, 'accounts_receivable'],
         // Cash on delivery a courier has collected and not yet paid out (13 Sep
         // 2026). A receivable, not cash: the courier owes it, net of its fees,

@@ -73,7 +73,7 @@ it('keeps a van on the balance sheet instead of through the profit and loss', fu
 
     // Dr Vehicles, Cr the bank. Nothing touched an expense account.
     expect(($this->balanceOn)('1230'))->toBe(120000000)
-        ->and(($this->balanceOn)('1120'))->toBe(-120000000)
+        ->and(($this->balanceOn)('11201'))->toBe(-120000000)
         ->and(($this->balanceOn)('6710'))->toBe(0);
 
     expect(Journal::first()->source->is($asset))->toBeTrue();

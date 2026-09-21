@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Assets\Models\FixedAsset;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -104,6 +105,15 @@ class RecordFixedAsset
                 'account_id' => $assetAccount->system_slug === 'accumulated_depreciation'
                     ? "{$assetAccount->label()} is where depreciation accumulates, not where an asset is recorded."
                     : "{$assetAccount->label()} is used by the system itself and cannot hold a fixed asset.",
+            ]);
+        }
+
+        // ⚠ The heads under Cash in Hand, Bank Accounts and Mobile Financial
+        // Services carry no slug (21 Sep 2026: one per money account), so the
+        // test above no longer catches "Dr cash / Cr cash" on its own.
+        if (MoneyLedgers::isMoneyHead($assetAccount)) {
+            throw ValidationException::withMessages([
+                'account_id' => "{$assetAccount->label()} is the ledger of a cash box, bank account or wallet and cannot hold a fixed asset.",
             ]);
         }
 

@@ -51,7 +51,7 @@ beforeEach(function () {
 
     $this->seed(ChartOfAccountsSeeder::class);
 
-    $this->bank = Account::bySlug('cash_at_bank');
+    $this->bank = moneyHead('cash_at_bank');
     $this->capital = Account::bySlug('owners_capital');
     $this->stock = Account::bySlug('stock_on_hand');
     $this->payable = Account::bySlug('accounts_payable');

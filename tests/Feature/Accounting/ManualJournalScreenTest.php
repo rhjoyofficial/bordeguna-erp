@@ -79,6 +79,7 @@ beforeEach(function () {
 // ─── THE MILESTONE ──────────────────────────────────────────────────────────
 
 it('lets the Founder post a capital introduction from the screen', function () {
+    moneyHead('cash_at_bank'); // the bank a manual journal posts to has its Bank & cash account
     // ⚠⚠ THE THING THIS WHOLE PHASE IS FOR: Joy puts his own money into the
     // business, through a screen, and the ledger records both halves.
     $this->actingAs($this->founder)
@@ -95,6 +96,7 @@ it('lets the Founder post a capital introduction from the screen', function () {
 });
 
 it('records an opening balance as its own kind of entry', function () {
+    moneyHead('cash_at_bank'); // the bank a manual journal posts to has its Bank & cash account
     // ⚠ The discriminator exists so the opening photograph can be told apart
     // from a year of trading. A report that cannot separate the two shows a year
     // that begins with a phantom sale.
@@ -138,6 +140,7 @@ it('refuses to let anyone but the Founder post a journal', function () {
 });
 
 it('lets someone who may read the books see them without being able to write', function () {
+    moneyHead('cash_at_bank'); // the bank a manual journal posts to has its Bank & cash account
     $this->actingAs($this->founder)->post(route('accounting.journals.store'), ($this->payload)());
 
     $this->actingAs($this->coordinator)
@@ -238,6 +241,7 @@ it('refuses a journal with only one line', function () {
 });
 
 it('takes an amount a human typed with commas', function () {
+    moneyHead('cash_at_bank'); // the bank a manual journal posts to has its Bank & cash account
     $this->actingAs($this->founder)
         ->post(route('accounting.journals.store'), ($this->payload)([
             'lines' => [
@@ -253,6 +257,7 @@ it('takes an amount a human typed with commas', function () {
 // ─── Reversing from the screen ──────────────────────────────────────────────
 
 it('reverses a journal from its own page', function () {
+    moneyHead('cash_at_bank'); // the bank a manual journal posts to has its Bank & cash account
     $this->actingAs($this->founder)->post(route('accounting.journals.store'), ($this->payload)());
     $original = Journal::first();
 
@@ -265,6 +270,7 @@ it('reverses a journal from its own page', function () {
 });
 
 it('refuses to let a reader reverse anything', function () {
+    moneyHead('cash_at_bank'); // the bank a manual journal posts to has its Bank & cash account
     $this->actingAs($this->founder)->post(route('accounting.journals.store'), ($this->payload)());
 
     $this->actingAs($this->coordinator)
@@ -273,6 +279,7 @@ it('refuses to let a reader reverse anything', function () {
 });
 
 it('shows the user why a second reversal was refused', function () {
+    moneyHead('cash_at_bank'); // the bank a manual journal posts to has its Bank & cash account
     $this->actingAs($this->founder)->post(route('accounting.journals.store'), ($this->payload)());
     $original = Journal::first();
 
@@ -286,6 +293,7 @@ it('shows the user why a second reversal was refused', function () {
 });
 
 it('keeps one business journals out of another', function () {
+    moneyHead('cash_at_bank'); // the bank a manual journal posts to has its Bank & cash account
     $this->actingAs($this->founder)->post(route('accounting.journals.store'), ($this->payload)());
     $theirs = Journal::first();
 
@@ -329,7 +337,7 @@ it('lets the Founder add the bank account an opening balance needs', function ()
         ->and($account->is_active)->toBeTrue();
 });
 
-it('lets a cash box exist before anybody has decided what it reports under', function () {
+it('gives a new cash box a ledger head of its own the moment it is saved', function () {
     $this->actingAs($this->founder)
         ->post(route('accounting.money-accounts.store'), [
             'name' => 'Office cash box',
@@ -338,9 +346,14 @@ it('lets a cash box exist before anybody has decided what it reports under', fun
         ])
         ->assertRedirect();
 
-    // ⚠ Nullable on purpose. Refusing to record a real account because its
-    // mapping is undecided would lose the fact that the account exists.
-    expect(MoneyAccount::first()->account_id)->toBeNull();
+    // ⚠ 21 Sep 2026: no longer left undecided. Every cash box, bank account and
+    // wallet reports under a head of its own, made here, so its balance is its
+    // own line on every report. The first one takes over the seeded placeholder.
+    $head = Account::find(MoneyAccount::where('name', 'Office cash box')->sole()->account_id);
+
+    expect($head->code)->toBe('11101')
+        ->and($head->name)->toBe("Office cash box - {$this->business->name}")
+        ->and($head->parent->system_slug)->toBe('cash_accounts');
 });
 
 it('deactivates a money account rather than offering to delete it', function () {
@@ -443,12 +456,11 @@ it('offers only asset accounts for a bank account to report under', function () 
  * closed by SURFACING, not refusing.
  */
 it('tells the screen which money accounts have no ledger account', function () {
+    // ⚠ The screen can no longer make one; only a row older than 21 Sep 2026 can
+    // still be unmapped, so it is planted directly.
+    MoneyAccount::create(['name' => 'Unmapped cash box', 'type' => MoneyAccountType::Cash->value, 'is_active' => true]);
     $this->actingAs($this->founder)->post(route('accounting.money-accounts.store'), [
-        'name' => 'Unmapped cash box', 'type' => MoneyAccountType::Cash->value, 'is_active' => true,
-    ]);
-    $this->actingAs($this->founder)->post(route('accounting.money-accounts.store'), [
-        'name' => 'Mapped bank', 'type' => MoneyAccountType::Bank->value,
-        'account_id' => $this->bank->id, 'is_active' => true,
+        'name' => 'Mapped bank', 'type' => MoneyAccountType::Bank->value, 'is_active' => true,
     ]);
 
     $response = $this->actingAs($this->founder)->get(route('accounting.money-accounts.index'))->assertOk();
@@ -464,13 +476,18 @@ it('tells the screen which money accounts have no ledger account', function () {
         ->and($accounts->firstWhere('name', 'Mapped bank')['is_unmapped'])->toBeFalse();
 });
 
-it('still allows a money account to be created before its mapping is decided', function () {
-    // ⚠ The behaviour the surfacing fix deliberately preserves.
+it('never lets a request choose the ledger of a cash, bank or wallet account', function () {
+    // ⚠ Whatever the request says is ignored: Stock on Hand here would have
+    // filed a wallet's money as inventory.
     $this->actingAs($this->founder)->post(route('accounting.money-accounts.store'), [
-        'name' => 'Undecided wallet', 'type' => MoneyAccountType::Mfs->value, 'is_active' => true,
+        'name' => 'bKash merchant', 'type' => MoneyAccountType::Mfs->value, 'is_active' => true,
+        'account_id' => Account::bySlug('stock_on_hand')->id,
     ])->assertRedirect()->assertSessionHasNoErrors();
 
-    expect(MoneyAccount::where('name', 'Undecided wallet')->sole()->account_id)->toBeNull();
+    $head = Account::find(MoneyAccount::where('name', 'bKash merchant')->sole()->account_id);
+
+    expect($head->parent->system_slug)->toBe('mfs_accounts')
+        ->and($head->system_slug)->toBe('mobile_financial_services');
 });
 
 it('reports zero unmapped accounts once every one is mapped', function () {

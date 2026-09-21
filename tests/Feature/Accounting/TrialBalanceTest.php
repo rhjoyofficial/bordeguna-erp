@@ -53,8 +53,8 @@ beforeEach(function () {
 
     $this->seed(ChartOfAccountsSeeder::class);
 
-    $this->bank = Account::bySlug('cash_at_bank');
-    $this->cash = Account::bySlug('cash_in_hand');
+    $this->bank = moneyHead('cash_at_bank');
+    $this->cash = moneyHead('cash_in_hand');
     $this->capital = Account::bySlug('owners_capital');
     $this->opening = Account::bySlug('opening_balance_equity');
     $this->rent = Account::where('code', '6051')->first();
