@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import type { BreadcrumbItem } from '@/types';
 
 type Line = {
@@ -39,7 +40,7 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
     const { data, setData, post, errors, processing } = useForm({
         purchase_order_id: order.id,
         bill_number: '',
-        bill_date: new Date().toISOString().slice(0, 10),
+        bill_date: dhakaToday(),
         due_date: '',
         note: '',
         // VAT plan D7. Sent always, read by the server only while VAT is on.

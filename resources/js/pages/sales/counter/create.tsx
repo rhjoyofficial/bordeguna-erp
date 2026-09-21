@@ -511,10 +511,16 @@ export default function CounterSale({
                                                 <p className="ml-auto text-sm font-semibold tabular-nums">{money(lineTotal)}</p>
                                             </div>
                                             {line.explanation && <p className="text-muted-foreground mt-1 text-xs">{line.explanation}</p>}
+                                            {/* ⚠ Price and discount too: "A line discount cannot
+                                                exceed the line total" is refused on
+                                                `lines.N.discount`, which used to be dropped here,
+                                                so Finish looked like it did nothing (audit #1). */}
                                             <InputError
                                                 message={
                                                     errors[`lines.${data.lines.indexOf(line)}.product_id` as keyof typeof errors] ??
-                                                    errors[`lines.${data.lines.indexOf(line)}.quantity` as keyof typeof errors]
+                                                    errors[`lines.${data.lines.indexOf(line)}.quantity` as keyof typeof errors] ??
+                                                    errors[`lines.${data.lines.indexOf(line)}.unit_price` as keyof typeof errors] ??
+                                                    errors[`lines.${data.lines.indexOf(line)}.discount` as keyof typeof errors]
                                                 }
                                             />
                                         </div>

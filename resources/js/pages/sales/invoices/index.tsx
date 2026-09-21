@@ -13,6 +13,7 @@ import { Head, Link } from '@inertiajs/react';
 interface Invoice {
     id: number;
     invoice_number: string;
+    /** ⚠ A plain Y-m-d Dhaka date from the server; the raw cast serialises in UTC. */
     invoice_date: string;
     total: string;
     outstanding: string;
@@ -88,7 +89,7 @@ export default function InvoicesIndex({
                                             {invoice.invoice_number}
                                         </Link>
                                     </td>
-                                    <td className="p-3">{invoice.invoice_date?.slice(0, 10)}</td>
+                                    <td className="p-3">{invoice.invoice_date}</td>
                                     <td className="p-3">{invoice.customer?.name ?? '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{invoice.total}</td>
                                     <td className="p-3 text-right tabular-nums">{invoice.outstanding}</td>

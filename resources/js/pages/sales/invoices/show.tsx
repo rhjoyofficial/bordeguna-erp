@@ -193,6 +193,12 @@ export default function InvoiceShow({
                                         </option>
                                     ))}
                                 </SearchSelect>
+                                {moneyAccounts.length === 0 && (
+                                    <p className="text-muted-foreground text-sm">
+                                        No bank, cash or wallet account can take money yet. Set one up under Finance &amp; Accounts &gt; Bank &amp;
+                                        cash.
+                                    </p>
+                                )}
                                 <InputError message={errors.money_account_id} />
                             </div>
                             <div className="grid gap-2">
@@ -200,7 +206,19 @@ export default function InvoiceShow({
                                     Amount
                                 </Label>
                                 <Input id="amount" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
-                                <InputError message={errors.amount} />
+                                {/* ⚠⚠ The engine refuses an over-receipt on
+                                    `allocations.0.amount` ("has only 1,200.00
+                                    outstanding"), a key this form never rendered,
+                                    so Record receipt looked like it did nothing
+                                    (audit #1, 21 Sep 2026). It is this box's
+                                    error, so it is shown under this box. */}
+                                <InputError
+                                    message={
+                                        errors.amount ??
+                                        (errors as Record<string, string | undefined>)['allocations.0.amount'] ??
+                                        (errors as Record<string, string | undefined>).allocations
+                                    }
+                                />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="received_on" required>

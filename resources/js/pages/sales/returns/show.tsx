@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -62,7 +63,7 @@ export default function ReturnShow({
     const { data, setData, post, errors, processing, reset } = useForm({
         money_account_id: '',
         amount: refundable,
-        refunded_on: new Date().toISOString().slice(0, 10),
+        refunded_on: dhakaToday(),
         reference: '',
     });
 

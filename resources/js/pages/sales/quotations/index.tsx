@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 
 /**
  * Quotations (Module 4, Slice 2): a promise of a price with an expiry.
@@ -72,6 +72,22 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
             form.data.lines.map((line, i) => (i === index ? { ...line, [key]: value } : line)),
         );
 
+    const isFilled = (line: DraftLine) => line.product_id !== '' && line.quantity !== '';
+
+    // ⚠ Blank rows are dropped before the form is sent (see transform below),
+    // so the server's `lines.N` counts filled rows only. This finds the error
+    // for an on-screen row by the position it was actually sent at.
+    const lineError = (index: number): string | undefined => {
+        const line = form.data.lines[index];
+        if (!isFilled(line)) {
+            return undefined;
+        }
+        const sentAt = form.data.lines.slice(0, index).filter(isFilled).length;
+        const errors = form.errors as Record<string, string | undefined>;
+
+        return errors[`lines.${sentAt}.product_id`] ?? errors[`lines.${sentAt}.quantity`] ?? errors[`lines.${sentAt}.unit_price`];
+    };
+
     return (
         <form
             className="border-border bg-card space-y-3 rounded-lg border p-4"
@@ -82,7 +98,7 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                     lead_id: data.party_kind === 'lead' ? data.lead_id || null : null,
                     valid_until: data.valid_until,
                     note: data.note || null,
-                    lines: data.lines.filter((line) => line.product_id !== '' && line.quantity !== ''),
+                    lines: data.lines.filter(isFilled),
                 }));
                 form.post('/sales/quotations', { preserveScroll: true, onSuccess: () => form.reset() });
             }}
@@ -144,22 +160,43 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                         </div>
                         <div className="space-y-1">
                             <Label className="text-xs">Quantity</Label>
-                            <Input className="w-24" type="number" step="0.0001" min="0" value={line.quantity} onChange={(e) => patch(index, 'quantity', e.target.value)} />
+                            <Input
+                                className="w-24"
+                                type="number"
+                                step="0.0001"
+                                min="0"
+                                value={line.quantity}
+                                onChange={(e) => patch(index, 'quantity', e.target.value)}
+                            />
                         </div>
                         <div className="space-y-1">
                             <Label className="text-xs">Quoted price (blank = list price)</Label>
-                            <Input className="w-40" type="number" step="0.01" min="0" placeholder="from price list" value={line.unit_price} onChange={(e) => patch(index, 'unit_price', e.target.value)} />
+                            <Input
+                                className="w-40"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="from price list"
+                                value={line.unit_price}
+                                onChange={(e) => patch(index, 'unit_price', e.target.value)}
+                            />
                         </div>
                         {form.data.lines.length > 1 && (
                             <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => form.setData('lines', form.data.lines.filter((_, i) => i !== index))}
+                                onClick={() =>
+                                    form.setData(
+                                        'lines',
+                                        form.data.lines.filter((_, i) => i !== index),
+                                    )
+                                }
                             >
                                 Remove
                             </Button>
                         )}
+                        <InputError message={lineError(index)} className="basis-full" />
                     </div>
                 ))}
                 <Button
@@ -194,6 +231,13 @@ const statusColor: Record<string, string> = {
 };
 
 export default function Quotations({ quotations, customers, leads, products, warehouses }: QuotationsProps) {
+    // ⚠⚠ Send, Accepted and Rejected are bare buttons, and every one of their
+    // refusals ("expired on ...", "went to a lead - convert it first", "is
+    // accepted and cannot change now") comes back on `quotation` - which this
+    // page never rendered, so the buttons simply did nothing (audit #1,
+    // 21 Sep 2026). Shown above the list, where the button was pressed.
+    const quotationError = usePage<{ errors: Record<string, string | undefined> }>().props.errors?.quotation;
+
     const accept = (quote: QuoteRow) => {
         router.post(`/sales/quotations/${quote.id}/accept`, { warehouse_id: warehouses[0]?.id ?? null }, { preserveScroll: true });
     };
@@ -205,12 +249,18 @@ export default function Quotations({ quotations, customers, leads, products, war
                 <div>
                     <h1 className="text-xl font-semibold">Quotations</h1>
                     <p className="text-muted-foreground text-sm">
-                        A promise of a price with an expiry - nothing reserved, nothing posted. Accepting one creates the sales order at
-                        the quoted prices, exactly as written.
+                        A promise of a price with an expiry - nothing reserved, nothing posted. Accepting one creates the sales order at the quoted
+                        prices, exactly as written.
                     </p>
                 </div>
 
                 <NewQuoteForm customers={customers} leads={leads} products={products} />
+
+                {quotationError && (
+                    <p role="alert" className="border-destructive/50 bg-destructive/10 text-destructive rounded-md border p-3 text-sm">
+                        {quotationError}
+                    </p>
+                )}
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
@@ -257,14 +307,20 @@ export default function Quotations({ quotations, customers, leads, products, war
                                             )}
                                             {(quote.status === 'draft' || quote.status === 'sent') && (
                                                 <>
-                                                    <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => accept(quote)}>
+                                                    <Button
+                                                        size="sm"
+                                                        className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                                        onClick={() => accept(quote)}
+                                                    >
                                                         Accepted
                                                     </Button>
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
                                                         className="text-destructive"
-                                                        onClick={() => router.post(`/sales/quotations/${quote.id}/reject`, {}, { preserveScroll: true })}
+                                                        onClick={() =>
+                                                            router.post(`/sales/quotations/${quote.id}/reject`, {}, { preserveScroll: true })
+                                                        }
                                                     >
                                                         Rejected
                                                     </Button>

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 interface Line {
@@ -885,9 +885,16 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
                 />
                 <InputError message={errors.warehouse_id} />
             </div>
-            {deliverableLines.map((line) => {
+            {deliverableLines.map((line, index) => {
                 const entry = data.lines.find((e) => e.sales_order_line_id === line.id);
                 const unit = line.product.unit_of_measure?.abbreviation;
+                // ⚠⚠ Over-delivery ("only 20 remains on order ...") used to be
+                // refused on a key this form never rendered, so Record challan
+                // looked like it did nothing - the commonest warehouse mistake,
+                // failing silently (audit #1, 21 Sep 2026). The server now puts
+                // every per-line refusal on `lines.{row}.quantity`, where row is
+                // this line's place in what the transform above sends.
+                const lineError = (errors as Record<string, string | undefined>)[`lines.${index}.quantity`];
 
                 return (
                     <div key={line.id} className="grid grid-cols-[2fr_1fr] items-center gap-2">
@@ -902,6 +909,7 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
                             <Input value={entry?.quantity ?? String(remaining(line))} onChange={(e) => updateQuantity(line.id, e.target.value)} />
                             {unit && <span className="text-muted-foreground w-10 shrink-0 text-sm">{unit}</span>}
                         </div>
+                        <InputError message={lineError} className="col-span-2" />
                     </div>
                 );
             })}
@@ -957,6 +965,9 @@ export default function SalesOrderShow({
     const reject = (review_note: string) => router.post(route('sales.orders.reject', order.id), { review_note });
     const cancel = () => router.post(route('sales.orders.cancel', order.id));
     const closeShort = (reason: string) => router.post(route('sales.orders.close', order.id), { reason });
+    // ⚠ The close-short reason is typed in a dialog that has closed by the time
+    // the answer comes back, so its refusal is shown beside the button instead.
+    const reasonError = usePage<{ errors: Record<string, string | undefined> }>().props.errors?.reason;
 
     const overLimit = exposure.credit_limit !== null && parseFloat(exposure.total) > parseFloat(exposure.credit_limit);
     // Only a column when some line carries one: an order typed into the ERP never does.
@@ -1177,10 +1188,12 @@ export default function SalesOrderShow({
                             cancelLabel="Keep order open"
                             destructive
                             withNote
+                            noteRequired
                             noteLabel="Reason (required)"
                             notePlaceholder="Why is the rest not being taken?"
                             onConfirm={closeShort}
                         />
+                        <InputError message={reasonError} className="basis-full" />
                     </div>
                 )}
 

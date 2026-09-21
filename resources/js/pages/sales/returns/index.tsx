@@ -10,6 +10,7 @@ import { Head, Link } from '@inertiajs/react';
 interface SalesReturnRow {
     id: number;
     return_number: string;
+    /** ⚠ A plain Y-m-d Dhaka date from the server; the raw cast serialises in UTC. */
     returned_at: string;
     credit_total: string;
     refunded_total: string;
@@ -73,7 +74,7 @@ export default function ReturnsIndex({
                                             {row.return_number}
                                         </Link>
                                     </td>
-                                    <td className="p-3">{row.returned_at?.slice(0, 10)}</td>
+                                    <td className="p-3">{row.returned_at}</td>
                                     <td className="p-3">{row.customer?.name ?? '-'}</td>
                                     <td className="p-3">{row.delivery?.delivery_number ?? '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{parseFloat(row.credit_total).toFixed(2)}</td>

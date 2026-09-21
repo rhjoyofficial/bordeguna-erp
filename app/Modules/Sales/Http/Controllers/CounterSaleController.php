@@ -3,6 +3,7 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Exceptions\JournalException;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -13,8 +14,10 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordCounterSale;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
-use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Support\ApplyPromotions;
+use App\Modules\Sales\Support\MoneyAccountRefusal;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,7 +58,9 @@ class CounterSaleController extends Controller
                 ->map(fn ($resolved) => (float) $resolved->unitPrice),
             'customers' => Customer::query()->active()->orderBy('name')
                 ->get(['id', 'name', 'code', 'is_system', 'price_group_id']),
-            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
+            // ⚠ Only accounts the sale's receipt can be booked into (see
+            // MoneyAccount::withLedger). The screen preselects the first one.
+            'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
             'walkInId' => Customer::walkIn()?->id,
             // Held carts: bookmarks, not transactions. Newest first, with just
@@ -193,7 +198,11 @@ class CounterSaleController extends Controller
 
         // Buy X Get Y: the SERVER decides what the cart earned, and the free
         // line arrives priced at zero - revenue 0, cost still posts.
-        $saleLines = array_merge($saleLines, app(\App\Modules\Sales\Support\ApplyPromotions::class)->earnedLines($saleLines));
+        $saleLines = array_merge($saleLines, app(ApplyPromotions::class)->earnedLines($saleLines));
+
+        $moneyAccount = isset($data['money_account_id'])
+            ? MoneyAccount::findOrFail($data['money_account_id'])
+            : null;
 
         try {
             $sale = $action->handle(
@@ -201,14 +210,24 @@ class CounterSaleController extends Controller
                 warehouse: Warehouse::findOrFail($data['warehouse_id']),
                 lines: $saleLines,
                 createdBy: $request->user(),
-                moneyAccount: isset($data['money_account_id'])
-                    ? MoneyAccount::findOrFail($data['money_account_id'])
-                    : null,
+                moneyAccount: $moneyAccount,
                 invoiceDiscount: (string) ($data['invoice_discount'] ?? '0'),
                 reference: $data['reference'] ?? null,
                 note: $data['note'] ?? null,
             );
-        } catch (NoSellingPriceException|InsufficientStockException|PeriodClosedException|MappingNotFound $e) {
+        } catch (MappingNotFound|JournalException $e) {
+            // ⚠ "Paid into" an account with no ledger head is the usual cause,
+            // and the picker offered one - first, alphabetically - until 21 Sep
+            // 2026. Said on the field the cashier can change; any other missing
+            // mapping keeps its own sentence on `lines`, as before.
+            if ($moneyAccount !== null && $moneyAccount->account_id === null) {
+                throw ValidationException::withMessages(['money_account_id' => MoneyAccountRefusal::sentence($moneyAccount, $e)]);
+            }
+
+            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        } catch (InsufficientStockException|PeriodClosedException|DomainException $e) {
+            // DomainException is NoSellingPriceException's parent, and a missing
+            // unit conversion's.
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
         }
 

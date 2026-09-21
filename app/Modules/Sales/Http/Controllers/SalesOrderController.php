@@ -37,12 +37,17 @@ use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Support\DeliveryBilling;
+use App\Modules\Sales\Support\MoneyAccountRefusal;
+use DomainException;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
+use RuntimeException;
 
 /**
  * The order book - what is promised, to whom, and how much of it has left.
@@ -285,9 +290,10 @@ class SalesOrderController extends Controller
             'exposure' => app(CustomerExposure::class)->handle($order->customer),
             'payments' => $this->payments($order),
             // ⚠ Where money can be taken or paid back by hand: never a courier's
-            // account, which only a parcel outcome and a payout statement touch.
+            // account, which only a parcel outcome and a payout statement touch,
+            // and never one with no ledger head, which the posting refuses.
             'money_accounts' => $user->can('sales.receipt.record') || $user->can('sales.returns.refund')
-                ? MoneyAccount::query()->active()->handled()->orderBy('name')->get(['id', 'name', 'type'])
+                ? MoneyAccount::query()->active()->handled()->withLedger()->orderBy('name')->get(['id', 'name', 'type'])
                     ->map(fn (MoneyAccount $account) => ['id' => $account->id, 'name' => $account->name, 'type' => $account->type->label()])
                     ->values()
                 : [],
@@ -413,10 +419,12 @@ class SalesOrderController extends Controller
             'note' => ['nullable', 'string'],
         ]);
 
+        $moneyAccount = MoneyAccount::findOrFail($data['money_account_id']);
+
         try {
             $action->handle(
                 order: $order,
-                moneyAccount: MoneyAccount::findOrFail($data['money_account_id']),
+                moneyAccount: $moneyAccount,
                 receivedOn: $data['received_on'],
                 amount: (string) $data['amount'],
                 createdBy: $request->user(),
@@ -426,7 +434,7 @@ class SalesOrderController extends Controller
         } catch (PeriodClosedException $e) {
             throw ValidationException::withMessages(['received_on' => $e->getMessage()]);
         } catch (MappingNotFound $e) {
-            throw ValidationException::withMessages(['money_account_id' => $e->getMessage()]);
+            throw ValidationException::withMessages(['money_account_id' => MoneyAccountRefusal::sentence($moneyAccount, $e)]);
         }
 
         // ⚠ An online order the customer paid by hand instead (a bKash transfer):
@@ -449,10 +457,12 @@ class SalesOrderController extends Controller
             'note' => ['nullable', 'string'],
         ]);
 
+        $moneyAccount = MoneyAccount::findOrFail($data['money_account_id']);
+
         try {
             $action->forOrder(
                 order: $order,
-                moneyAccount: MoneyAccount::findOrFail($data['money_account_id']),
+                moneyAccount: $moneyAccount,
                 amount: (string) $data['amount'],
                 createdBy: $request->user(),
                 refundedOn: $data['refunded_on'],
@@ -462,7 +472,7 @@ class SalesOrderController extends Controller
         } catch (PeriodClosedException $e) {
             throw ValidationException::withMessages(['refunded_on' => $e->getMessage()]);
         } catch (MappingNotFound $e) {
-            throw ValidationException::withMessages(['money_account_id' => $e->getMessage()]);
+            throw ValidationException::withMessages(['money_account_id' => MoneyAccountRefusal::sentence($moneyAccount, $e)]);
         }
 
         return back()->with('success', 'Refund recorded.');
@@ -530,11 +540,31 @@ class SalesOrderController extends Controller
         return response()->json($action->handle(Customer::findOrFail($data['customer_id'])));
     }
 
+    /*
+     * ⚠⚠ THE FOUR BARE BUTTONS: approve, reject, cancel, close short.
+     *
+     * Each action refuses with a sentence written for a person ("already been
+     * reviewed", "has deliveries against it - close it short instead", "waiting
+     * for its online payment") and none of them was caught, so every refusal
+     * came up as a 500 page (audit #2, 21 Sep 2026). A second approve is the
+     * ordinary way it happens: two managers, or one double-click.
+     *
+     * Caught the way PurchaseOrderController catches its own: a button has no
+     * form to hang a field error on, so the sentence goes to the error toast.
+     * ⚠ A database error is a RuntimeException too (PDOException), and its SQL
+     * must never be read out in a toast, so it is let through to the error page.
+     */
     public function approve(Request $request, SalesOrder $order, ApproveSalesOrder $action): RedirectResponse
     {
         $this->authorize('sales.orders.approve');
 
-        $action->handle($order, $request->user());
+        try {
+            $action->handle($order, $request->user());
+        } catch (QueryException $e) {
+            throw $e;
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Sales order approved.');
     }
@@ -545,7 +575,13 @@ class SalesOrderController extends Controller
 
         $data = $request->validate(['review_note' => ['nullable', 'string']]);
 
-        $action->handle($order, $request->user(), $data['review_note'] ?? null);
+        try {
+            $action->handle($order, $request->user(), $data['review_note'] ?? null);
+        } catch (QueryException $e) {
+            throw $e;
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Sales order rejected.');
     }
@@ -554,7 +590,13 @@ class SalesOrderController extends Controller
     {
         $this->authorize('sales.orders.cancel');
 
-        $action->handle($order);
+        try {
+            $action->handle($order);
+        } catch (QueryException $e) {
+            throw $e;
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Sales order cancelled.');
     }
@@ -563,9 +605,22 @@ class SalesOrderController extends Controller
     {
         $this->authorize('sales.orders.cancel');
 
-        $data = $request->validate(['reason' => ['required', 'string']]);
+        // ⚠ The one of the four that takes input. An empty reason is refused on
+        // `reason`, which the order page now renders (and its dialog no longer
+        // lets through empty); a refusal about the order itself goes to the
+        // toast like the other three.
+        $data = $request->validate(
+            ['reason' => ['required', 'string']],
+            ['reason.required' => 'Say why the rest of the order is not being taken.'],
+        );
 
-        $action->handle($order, $request->user(), $data['reason']);
+        try {
+            $action->handle($order, $request->user(), $data['reason']);
+        } catch (QueryException $e) {
+            throw $e;
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Sales order closed short.');
     }
@@ -589,7 +644,7 @@ class SalesOrderController extends Controller
 
         $order->load('lines.product');
 
-        $lines = collect($data['lines'])
+        $kept = collect($data['lines'])
             ->filter(fn (array $entry) => (float) $entry['quantity'] > 0)
             ->map(function (array $entry) use ($order) {
                 $orderLine = $order->lines->firstWhere('id', $entry['sales_order_line_id']);
@@ -600,9 +655,14 @@ class SalesOrderController extends Controller
                     'orderLine' => $orderLine,
                 ];
             })
-            ->filter()
-            ->values()
-            ->all();
+            ->filter();
+
+        $lines = $kept->values()->all();
+
+        // Which row of the form each line the action sees came from. The action
+        // numbers only the lines with a quantity, so without this "line 0" of an
+        // over-delivery is the first line with a quantity, not the first row.
+        $formRow = $kept->keys()->values()->all();
 
         // ⚠ C-SLS-E1. Delivering more than the warehouse holds, or into a month
         // somebody has already reported on, is refused by the action. Both are
@@ -618,6 +678,21 @@ class SalesOrderController extends Controller
             );
         } catch (InsufficientStockException|PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        } catch (ValidationException $e) {
+            // ⚠⚠ OVER-DELIVERY WAS INVISIBLE. RecordDelivery refuses it on
+            // `lines.N.orderLine`, the form rendered only `lines`, and so the
+            // commonest warehouse mistake - typing 50 where 20 remain - made
+            // Record challan look like it did nothing (audit #1, 21 Sep 2026).
+            // Every per-line refusal is put back on the form row it came from,
+            // as `lines.{row}.quantity`, which the form renders under that line.
+            throw ValidationException::withMessages(collect($e->errors())
+                ->mapWithKeys(function (array $messages, string $key) use ($formRow) {
+                    if (preg_match('/^lines\.(\d+)\./', $key, $match) === 1) {
+                        return ['lines.'.($formRow[(int) $match[1]] ?? $match[1]).'.quantity' => $messages];
+                    }
+
+                    return [$key => $messages];
+                })->all());
         }
 
         return back()->with('success', "Challan {$delivery->delivery_number} recorded against {$order->order_number}.");

@@ -85,6 +85,20 @@ class MoneyAccount extends Model
         return $query->whereNotIn('type', [MoneyAccountType::Courier->value, MoneyAccountType::Gateway->value]);
     }
 
+    /**
+     * Accounts the ledger can book money into: those with a ledger head.
+     *
+     * ⚠ For pickers. An account with no head is refused by every posting path
+     * (MappingNotFound), so offering it builds a form that fails on submit - and
+     * before 21 Sep 2026 the customer receipt defaulted to it whenever it sorted
+     * first, then answered with a blank 500. Money transfers and courier payouts
+     * already filtered this way; the receipt and refund pickers did not.
+     */
+    public function scopeWithLedger(Builder $query): Builder
+    {
+        return $query->whereNotNull('account_id');
+    }
+
     public function isCourier(): bool
     {
         return $this->type === MoneyAccountType::Courier;
