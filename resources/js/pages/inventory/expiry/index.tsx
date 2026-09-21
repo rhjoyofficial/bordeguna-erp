@@ -38,9 +38,11 @@ export default function ExpiryIndex({ expired, expiring, soon_days }: { expired:
                     <h2 className="text-lg font-medium">Stock expiry</h2>
                     <p className="text-muted-foreground text-xs">
                         Expired stock is never sold (the FIFO picker refuses it by date), and the nightly job proposes a write-off for each expired
-                        batch on{' '}
-                        <Link href="/inventory/stock" className="text-primary hover:underline">
-                            the stock screen
+                        batch. The proposals wait in{' '}
+                        {/* ⚠ This said "on the stock screen", where no proposal has ever
+                            appeared: they are ordinary corrections, reviewed in Approvals. */}
+                        <Link href="/approvals" className="text-primary hover:underline">
+                            Approvals
                         </Link>
                         .
                     </p>

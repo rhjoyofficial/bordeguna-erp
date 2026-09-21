@@ -6,6 +6,7 @@ use App\Modules\Inventory\Http\Controllers\BrandController;
 use App\Modules\Inventory\Http\Controllers\CategoryController;
 use App\Modules\Inventory\Http\Controllers\ExpiryController;
 use App\Modules\Inventory\Http\Controllers\InventoryDashboardController;
+use App\Modules\Inventory\Http\Controllers\InventorySettingController;
 use App\Modules\Inventory\Http\Controllers\LabelSheetController;
 use App\Modules\Inventory\Http\Controllers\LowStockController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockController;
@@ -123,6 +124,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::post('warehouses', [WarehouseController::class, 'store'])->name('warehouses.store');
         Route::put('warehouses/{warehouse}', [WarehouseController::class, 'update'])->name('warehouses.update');
         Route::patch('warehouses/{warehouse}/toggle-active', [WarehouseController::class, 'toggleActive'])->name('warehouses.toggle-active');
+        // 21 Sep 2026: `is_default` existed from the first migration and no
+        // screen could set it. Same power as creating the warehouse.
+        Route::patch('warehouses/{warehouse}/make-default', [WarehouseController::class, 'makeDefault'])->name('warehouses.make-default');
         Route::delete('warehouses/{warehouse}', [WarehouseController::class, 'destroy'])->name('warehouses.destroy');
 
         // WMS bins phase 1 (C-BIN-4): warehouse structure, the same power that
@@ -231,8 +235,19 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     Route::post('stock-counts', [StockCountController::class, 'store'])->name('stock-counts.store');
     Route::patch('stock-counts/{stockCount}/lines/{line}', [StockCountController::class, 'updateLine'])->scopeBindings()->name('stock-counts.lines.update');
     Route::post('stock-counts/{stockCount}/lines', [StockCountController::class, 'addLine'])->name('stock-counts.lines.store');
+    // "Save all": every typed row in one request, so walking the floor and
+    // saving at the end cannot silently leave half the sheet unsaved.
+    Route::patch('stock-counts/{stockCount}/lines', [StockCountController::class, 'updateLines'])->name('stock-counts.lines.update-many');
     Route::post('stock-counts/{stockCount}/complete', [StockCountController::class, 'complete'])->name('stock-counts.complete');
     Route::post('stock-counts/{stockCount}/cancel', [StockCountController::class, 'cancel'])->name('stock-counts.cancel');
+
+    // The approval limit for stock corrections (21 Sep 2026). Deciding which
+    // corrections need an approver is part of approving them, so it rides the
+    // approver's own permission; nobody gains a power here.
+    Route::middleware('can:inventory.stock.approve')->group(function () {
+        Route::get('settings', [InventorySettingController::class, 'edit'])->name('settings.edit');
+        Route::put('settings', [InventorySettingController::class, 'update'])->name('settings.update');
+    });
 
     // Approval queue — index/store/approve/reject each authorize internally
     Route::get('stock-requests', [StockRequestController::class, 'index'])->name('stock-requests.index');

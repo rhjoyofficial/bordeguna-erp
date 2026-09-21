@@ -4,13 +4,15 @@ namespace App\Modules\Inventory\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use Illuminate\Database\Eloquent\Model;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * Per-business Inventory configuration. One row, created on first use.
  */
 class InventorySetting extends Model
 {
-    use BelongsToBusiness;
+    use BelongsToBusiness, LogsActivity;
 
     protected $fillable = [
         'business_id',
@@ -24,6 +26,19 @@ class InventorySetting extends Model
             'adjustment_approval_threshold' => 'decimal:4',
             'production_yield_tolerance_percent' => 'decimal:4',
         ];
+    }
+
+    /**
+     * ⚠ Logged since the threshold got a screen (21 Sep 2026). Raising the
+     * limit is how a large write-off stops needing an approver, so "who moved
+     * it, from what, to what" has to be answerable afterwards.
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['adjustment_approval_threshold', 'production_yield_tolerance_percent'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
     }
 
     public static function forCurrentBusiness(): self

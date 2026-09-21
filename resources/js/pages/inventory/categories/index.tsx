@@ -2,6 +2,7 @@ import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -24,6 +25,9 @@ const EMPTY = { name: '', code: '' };
 export default function CategoriesIndex({ categories }: { categories: Category[] }) {
     const { data, setData, post, put, errors, processing, reset, clearErrors } = useForm(EMPTY);
     const [editing, setEditing] = useState<Category | null>(null);
+    // ⚠ Staff read this page (inventory.reports.view) and were offered Add,
+    // Edit and Delete, every one of which answered 403 (21 Sep 2026 audit).
+    const { manageCatalog } = useInventoryAbilities();
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -82,32 +86,34 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
                     )}
                 </div>
 
-                <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-                    <div className="grid gap-2">
-                        <Label htmlFor="name" required>
-                            {editing ? `Editing ${editing.name}` : 'New category'}
-                        </Label>
-                        <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. Bulk Honey" />
-                        <InputError message={errors.name} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="code">SKU code</Label>
-                        <Input
-                            id="code"
-                            value={data.code}
-                            onChange={(e) => setData('code', e.target.value.toUpperCase())}
-                            placeholder="e.g. HON"
-                            className="w-40 font-mono"
-                        />
-                        <InputError message={errors.code} />
-                    </div>
-                    <Button disabled={processing}>{editing ? 'Save' : 'Add'}</Button>
-                    {editing && (
-                        <Button type="button" variant="ghost" onClick={cancel}>
-                            Cancel
-                        </Button>
-                    )}
-                </form>
+                {manageCatalog && (
+                    <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+                        <div className="grid gap-2">
+                            <Label htmlFor="name" required>
+                                {editing ? `Editing ${editing.name}` : 'New category'}
+                            </Label>
+                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. Bulk Honey" />
+                            <InputError message={errors.name} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="code">SKU code</Label>
+                            <Input
+                                id="code"
+                                value={data.code}
+                                onChange={(e) => setData('code', e.target.value.toUpperCase())}
+                                placeholder="e.g. HON"
+                                className="w-40 font-mono"
+                            />
+                            <InputError message={errors.code} />
+                        </div>
+                        <Button disabled={processing}>{editing ? 'Save' : 'Add'}</Button>
+                        {editing && (
+                            <Button type="button" variant="ghost" onClick={cancel}>
+                                Cancel
+                            </Button>
+                        )}
+                    </form>
+                )}
 
                 <table className="w-full text-sm">
                     <thead>
@@ -127,12 +133,16 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
                                 </td>
                                 <td className="text-muted-foreground py-2">{category.slug}</td>
                                 <td className="py-2 text-right">
-                                    <Button variant="ghost" size="sm" onClick={() => edit(category)}>
-                                        Edit
-                                    </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => destroy(category)}>
-                                        Delete
-                                    </Button>
+                                    {manageCatalog && (
+                                        <>
+                                            <Button variant="ghost" size="sm" onClick={() => edit(category)}>
+                                                Edit
+                                            </Button>
+                                            <Button variant="ghost" size="sm" onClick={() => destroy(category)}>
+                                                Delete
+                                            </Button>
+                                        </>
+                                    )}
                                 </td>
                             </tr>
                         ))}

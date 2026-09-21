@@ -4,6 +4,7 @@ import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -36,7 +37,7 @@ const breadcrumbs: BreadcrumbItem[] = [
  * turns code and name into inputs in place, and the delete refusal for a bin
  * with history arrives as a readable sentence from the server.
  */
-function BinRow({ bin }: { bin: Bin }) {
+function BinRow({ bin, canManage }: { bin: Bin; canManage: boolean }) {
     const [editing, setEditing] = useState(false);
     const { data, setData, put, errors, processing, reset, clearErrors } = useForm({
         code: bin.code,
@@ -63,7 +64,7 @@ function BinRow({ bin }: { bin: Bin }) {
                 <td className="p-2" colSpan={2}>
                     <form id={`bin-${bin.id}`} onSubmit={save}>
                         <FormRow className="gap-3">
-                            <Field label="Code" htmlFor={`code-${bin.id}`} size="xs" error={errors.code}>
+                            <Field label="Code" htmlFor={`code-${bin.id}`} size="xs" error={errors.code} required>
                                 <Input id={`code-${bin.id}`} value={data.code} onChange={(e) => setData('code', e.target.value)} autoFocus />
                             </Field>
                             <Field label="Name" htmlFor={`name-${bin.id}`} size="md" error={errors.name}>
@@ -100,17 +101,31 @@ function BinRow({ bin }: { bin: Bin }) {
                 )}
             </td>
             <td className="p-3">
-                <button type="button" onClick={toggle} title={bin.is_active ? 'Click to switch off' : 'Click to switch on'} className="rounded-full">
+                <button
+                    type="button"
+                    onClick={toggle}
+                    disabled={!canManage}
+                    title={canManage ? (bin.is_active ? 'Click to switch off' : 'Click to switch on') : undefined}
+                    className="rounded-full disabled:cursor-default"
+                >
                     <StatusBadge bin={bin} />
                 </button>
             </td>
             <td className="p-3 text-right whitespace-nowrap">
-                <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-                    Edit
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => router.delete(route('inventory.bins.destroy', bin.id), { preserveScroll: true })}>
-                    Delete
-                </Button>
+                {canManage && (
+                    <>
+                        <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                            Edit
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.delete(route('inventory.bins.destroy', bin.id), { preserveScroll: true })}
+                        >
+                            Delete
+                        </Button>
+                    </>
+                )}
             </td>
         </tr>
     );
@@ -127,6 +142,10 @@ export default function BinsIndex({ bins, warehouses }: { bins: Bin[]; warehouse
         name: '',
     });
 
+    // ⚠ Staff read this page and were offered Add, Edit, Delete and the status
+    // switch, every one of which answered 403 (21 Sep 2026 audit).
+    const { manageCatalog } = useInventoryAbilities();
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         post(route('inventory.bins.store'), { onSuccess: () => reset('code', 'name') });
@@ -141,29 +160,36 @@ export default function BinsIndex({ bins, warehouses }: { bins: Bin[]; warehouse
                     description="Named shelf locations inside each warehouse. Place batches on them from the Bin placement screen, and the pick list will print the shelf beside the batch. Switch a bin off rather than deleting it once stock has sat in it."
                 />
 
-                <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">
-                    <FormRow className="gap-3">
-                        <Field label="Warehouse" htmlFor="warehouse_id" size="md" error={errors.warehouse_id} required>
-                            <SearchSelect id="warehouse_id" value={data.warehouse_id} onChange={(e) => setData('warehouse_id', e.target.value)}>
-                                <option value="">Choose a warehouse</option>
-                                {warehouses.map((warehouse) => (
-                                    <option key={warehouse.id} value={warehouse.id}>
-                                        {warehouse.name} ({warehouse.code})
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                        </Field>
-                        <Field label="Code" htmlFor="code" size="xs" error={errors.code} required>
-                            <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="e.g. A-1" />
-                        </Field>
-                        <Field label="Name (optional)" htmlFor="name" size="md" error={errors.name}>
-                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. Top rack, left" />
-                        </Field>
-                        <Button disabled={processing} className="self-end">
-                            Add
-                        </Button>
-                    </FormRow>
-                </form>
+                {manageCatalog && (
+                    <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">
+                        <FormRow className="gap-3">
+                            <Field label="Warehouse" htmlFor="warehouse_id" size="md" error={errors.warehouse_id} required>
+                                <SearchSelect id="warehouse_id" value={data.warehouse_id} onChange={(e) => setData('warehouse_id', e.target.value)}>
+                                    <option value="">Choose a warehouse</option>
+                                    {warehouses.map((warehouse) => (
+                                        <option key={warehouse.id} value={warehouse.id}>
+                                            {warehouse.name} ({warehouse.code})
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                            </Field>
+                            <Field label="Code" htmlFor="code" size="xs" error={errors.code} required>
+                                <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="e.g. A-1" />
+                            </Field>
+                            <Field label="Name (optional)" htmlFor="name" size="md" error={errors.name}>
+                                <Input
+                                    id="name"
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    placeholder="e.g. Top rack, left"
+                                />
+                            </Field>
+                            <Button disabled={processing} className="self-end">
+                                Add
+                            </Button>
+                        </FormRow>
+                    </form>
+                )}
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
@@ -178,12 +204,12 @@ export default function BinsIndex({ bins, warehouses }: { bins: Bin[]; warehouse
                         </thead>
                         <tbody>
                             {bins.map((bin) => (
-                                <BinRow key={bin.id} bin={bin} />
+                                <BinRow key={bin.id} bin={bin} canManage={manageCatalog} />
                             ))}
                             {bins.length === 0 && (
                                 <tr>
                                     <td colSpan={5} className="text-muted-foreground p-4 text-center">
-                                        No bins yet. Add the shelf locations of a warehouse above.
+                                        {manageCatalog ? 'No bins yet. Add the shelf locations of a warehouse above.' : 'No bins yet.'}
                                     </td>
                                 </tr>
                             )}
