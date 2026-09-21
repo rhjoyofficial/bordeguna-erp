@@ -940,6 +940,8 @@ export default function SalesOrderShow({
     can_cancel,
     can_record_outcome,
     warehouses,
+    credit_refusal,
+    can_override_credit,
 }: {
     order: Order;
     challans: Challan[];
@@ -955,6 +957,8 @@ export default function SalesOrderShow({
     can_cancel: boolean;
     can_record_outcome: boolean;
     warehouses: { id: number; name: string; is_default?: boolean }[];
+    credit_refusal: string | null;
+    can_override_credit: boolean;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Sales orders', href: '/sales/orders' },
@@ -962,6 +966,8 @@ export default function SalesOrderShow({
     ];
 
     const approve = () => router.post(route('sales.orders.approve', order.id));
+    // ⚠ Sets the credit rules aside, with the reason recorded for the accountant.
+    const approveAnyway = (credit_override_reason: string) => router.post(route('sales.orders.approve', order.id), { credit_override_reason });
     const reject = (review_note: string) => router.post(route('sales.orders.reject', order.id), { review_note });
     const cancel = () => router.post(route('sales.orders.cancel', order.id));
     const closeShort = (reason: string) => router.post(route('sales.orders.close', order.id), { reason });
@@ -1067,7 +1073,8 @@ export default function SalesOrderShow({
                     </div>
                 )}
 
-                {/* ⚠ C-SO-3: shown beside the limit, enforced by nobody. */}
+                {/* ⚠⚠ Enforced since 21 Sep 2026: an order over the limit, or a
+                    distributor's before payment, is refused at approval. */}
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
                     <p className="text-muted-foreground">
                         Customer exposure: open invoices {exposure.open_invoices} + undelivered orders {exposure.undelivered_orders}
@@ -1075,16 +1082,33 @@ export default function SalesOrderShow({
                         <span className="text-foreground font-medium">{exposure.total}</span>
                         {exposure.credit_limit !== null && <> against a credit limit of {exposure.credit_limit}</>}
                     </p>
-                    {overLimit && (
-                        <p className="text-destructive mt-1 font-medium">Over the credit limit. Shown for your judgement - nothing is blocked.</p>
+                    {credit_refusal ? (
+                        <p className="text-destructive mt-1 font-medium">{credit_refusal}</p>
+                    ) : (
+                        overLimit && <p className="text-destructive mt-1 font-medium">Over the credit limit.</p>
                     )}
                 </div>
 
                 {order.approval_request?.status === 'pending' && can_approve && (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border flex gap-2 rounded-xl border p-4">
-                        <Button size="sm" onClick={approve}>
-                            Approve
-                        </Button>
+                        {credit_refusal === null && (
+                            <Button size="sm" onClick={approve}>
+                                Approve
+                            </Button>
+                        )}
+                        {credit_refusal !== null && can_override_credit && (
+                            <ConfirmDialog
+                                trigger={<Button size="sm">Approve anyway</Button>}
+                                title={`Approve ${order.order_number} over the credit rules`}
+                                description={`${credit_refusal} Your reason is kept with the order for the accountant.`}
+                                confirmLabel="Approve with this reason"
+                                withNote
+                                noteRequired
+                                noteLabel="Why approve it anyway"
+                                notePlaceholder="e.g. a cheque for the balance is promised for the 25th"
+                                onConfirm={approveAnyway}
+                            />
+                        )}
                         <ConfirmDialog
                             trigger={
                                 <Button size="sm" variant="ghost">

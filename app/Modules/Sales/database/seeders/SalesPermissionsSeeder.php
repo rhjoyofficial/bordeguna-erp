@@ -39,6 +39,9 @@ class SalesPermissionsSeeder extends Seeder
             'sales.reports.view',
             'sales.orders.record',
             'sales.orders.approve',
+            // Approve an order over the credit limit, or a distributor's
+            // before payment, with a written reason (21 Sep 2026). Owner only.
+            'sales.credit.override',
             'sales.orders.cancel',
             'sales.returns.record',
             'sales.returns.refund',

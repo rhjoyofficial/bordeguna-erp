@@ -20,6 +20,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\PickPlan;
 use App\Modules\Sales\Actions\ApproveSalesOrder;
 use App\Modules\Sales\Actions\CancelSalesOrder;
+use App\Modules\Sales\Actions\CheckCustomerCredit;
 use App\Modules\Sales\Actions\CloseSalesOrder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\CustomerExposure;
@@ -288,6 +289,12 @@ class SalesOrderController extends Controller
             // ⚠ C-SO-3: exposure SHOWN beside the credit limit, enforced by
             // nobody. The human decides.
             'exposure' => app(CustomerExposure::class)->handle($order->customer),
+            // ⚠⚠ Enforced since 21 Sep 2026: what approving this order would
+            // meet, so the page says it before the button is pressed.
+            'credit_refusal' => $order->approvalRequest?->isPending()
+                ? app(CheckCustomerCredit::class)->refusalFor($order)?->getMessage()
+                : null,
+            'can_override_credit' => $user->can('sales.credit.override'),
             'payments' => $this->payments($order),
             // ⚠ Where money can be taken or paid back by hand: never a courier's
             // account, which only a parcel outcome and a payout statement touch,
@@ -522,8 +529,14 @@ class SalesOrderController extends Controller
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
         }
 
+        // ⚠ Say so when the credit rules held back an approval the person would
+        // otherwise have given their own order (21 Sep 2026).
+        $held = $order->approvalRequest?->isPending() && $request->user()->can('sales.orders.approve')
+            ? app(CheckCustomerCredit::class)->refusalFor($order)?->getMessage()
+            : null;
+
         return redirect()->route('sales.orders.show', $order)
-            ->with('success', "Sales order {$order->order_number} recorded.");
+            ->with('success', "Sales order {$order->order_number} recorded.".($held ? " It is waiting for approval: {$held}" : ''));
     }
 
     /**
@@ -558,8 +571,12 @@ class SalesOrderController extends Controller
     {
         $this->authorize('sales.orders.approve');
 
+        // ⚠ Only an Owner's written reason sets the credit rules aside, and
+        // ApproveSalesOrder checks the permission itself (21 Sep 2026).
+        $data = $request->validate(['credit_override_reason' => ['nullable', 'string', 'max:500']]);
+
         try {
-            $action->handle($order, $request->user());
+            $action->handle($order, $request->user(), $data['credit_override_reason'] ?? null);
         } catch (QueryException $e) {
             throw $e;
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
