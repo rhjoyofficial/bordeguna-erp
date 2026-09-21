@@ -1,8 +1,8 @@
-import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 
@@ -25,9 +25,12 @@ interface OpenShift {
     till: string;
     opened_at: string;
     opened_by: string;
+    is_mine: boolean;
     opening_float: string;
+    money_in: number;
+    money_out: number;
+    movements_net: number;
     expected_cash: number;
-    cash_sales: number;
     movements: Movement[];
 }
 
@@ -44,7 +47,7 @@ interface ClosedShift {
 }
 
 interface ShiftsProps {
-    open_shift: OpenShift | null;
+    open_shifts: OpenShift[];
     tills: { id: number; name: string }[];
     closed_shifts: ClosedShift[];
 }
@@ -214,7 +217,82 @@ function CloseForm({ shiftId, expected }: { shiftId: number; expected: number })
     );
 }
 
-export default function Shifts({ open_shift, tills, closed_shifts }: ShiftsProps) {
+/**
+ * One open till. ⚠ Money in and out come from the LEDGER lines stamped with
+ * this till since it opened (receipts, refunds, payment and contra vouchers),
+ * so a cash refund or an expense paid from the drawer lowers "expected" as it
+ * lowers the drawer (21 Sep 2026).
+ */
+function ShiftCard({ shift }: { shift: OpenShift }) {
+    return (
+        <section className="border-border space-y-4 rounded-xl border p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-base font-semibold">
+                    {shift.till}
+                    {shift.is_mine && <span className="text-primary ml-2 text-xs font-medium">your till</span>}
+                </h2>
+                <p className="text-muted-foreground text-sm">
+                    Opened by {shift.opened_by}, {shift.opened_at}
+                </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                <div className="border-border bg-card rounded-lg border px-3 py-2">
+                    <p className="text-muted-foreground text-xs">Opening float</p>
+                    <p className="font-semibold tabular-nums">{money(shift.opening_float)}</p>
+                </div>
+                <div className="border-border bg-card rounded-lg border px-3 py-2">
+                    <p className="text-muted-foreground text-xs">Money in</p>
+                    <p className="font-semibold tabular-nums">{money(shift.money_in)}</p>
+                </div>
+                <div className="border-border bg-card rounded-lg border px-3 py-2">
+                    <p className="text-muted-foreground text-xs">Money out</p>
+                    <p className="font-semibold tabular-nums">{money(shift.money_out)}</p>
+                </div>
+                <div className="border-border bg-card rounded-lg border px-3 py-2">
+                    <p className="text-muted-foreground text-xs">Till movements</p>
+                    <p className="font-semibold tabular-nums">{money(shift.movements_net)}</p>
+                </div>
+                <div className="border-primary/40 bg-primary/5 col-span-2 rounded-lg border px-3 py-2 sm:col-span-1">
+                    <p className="text-muted-foreground text-xs">Expected in the drawer</p>
+                    <p className="text-lg font-semibold tabular-nums">{money(shift.expected_cash)}</p>
+                </div>
+            </div>
+            <p className="text-muted-foreground text-xs">
+                Money in and out are everything the books recorded for this till since it opened: sales, receipts, refunds, and payment or contra
+                vouchers. To pay an expense or take cash to the bank, use a voucher from this till; a movement below only records custody, such as
+                change brought in.
+            </p>
+
+            <div className="space-y-3">
+                <h3 className="text-sm font-semibold">Till movements</h3>
+                <MovementForm shiftId={shift.id} />
+                {shift.movements.length > 0 && (
+                    <table className="w-full text-sm">
+                        <tbody>
+                            {shift.movements.map((movement) => (
+                                <tr key={movement.id} className="border-t">
+                                    <td className="py-1.5 pr-3">{movement.type === 'cash_in' ? 'In' : 'Out'}</td>
+                                    <td className="py-1.5 pr-3 text-right tabular-nums">
+                                        {movement.type === 'cash_in' ? '' : '-'}
+                                        {money(movement.amount)}
+                                    </td>
+                                    <td className="text-muted-foreground py-1.5">{movement.reason}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
+
+            <CloseForm shiftId={shift.id} expected={shift.expected_cash} />
+        </section>
+    );
+}
+
+export default function Shifts({ open_shifts, tills, closed_shifts }: ShiftsProps) {
+    // Your own till first: it is the one you are here to count.
+    const ordered = [...open_shifts].sort((a, b) => Number(b.is_mine) - Number(a.is_mine));
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cashier shifts" />
@@ -222,59 +300,27 @@ export default function Shifts({ open_shift, tills, closed_shifts }: ShiftsProps
                 <div>
                     <h1 className="text-xl font-semibold">Cashier shifts</h1>
                     <p className="text-muted-foreground text-sm">
-                        The accountability wrapper around the till: a counted float in, every movement with a reason, a counted close. The
-                        shift records custody only; money still moves through receipts and expenses as always.
+                        Each till opens with a counted float and closes with a count. The system works out what should be in the drawer; the
+                        difference is booked to Cash Over and Short.
                     </p>
                 </div>
 
-                {open_shift === null ? (
+                {ordered.map((shift) => (
+                    <ShiftCard key={shift.id} shift={shift} />
+                ))}
+
+                {tills.length > 0 ? (
                     <OpenForm tills={tills} />
                 ) : (
-                    <div className="space-y-4">
-                        <div className="flex flex-wrap gap-4">
-                            <div className="border-border bg-card rounded-lg border px-4 py-3">
-                                <p className="text-muted-foreground text-xs">Open on {open_shift.till}</p>
-                                <p className="text-sm">
-                                    by {open_shift.opened_by} since {open_shift.opened_at}
-                                </p>
-                            </div>
-                            <div className="border-border bg-card rounded-lg border px-4 py-3">
-                                <p className="text-muted-foreground text-xs">Opening float</p>
-                                <p className="text-lg font-semibold tabular-nums">{money(open_shift.opening_float)}</p>
-                            </div>
-                            <div className="border-border bg-card rounded-lg border px-4 py-3">
-                                <p className="text-muted-foreground text-xs">Cash sales this shift</p>
-                                <p className="text-lg font-semibold tabular-nums">{money(open_shift.cash_sales)}</p>
-                            </div>
-                            <div className="border-primary/40 bg-primary/5 rounded-lg border px-4 py-3">
-                                <p className="text-muted-foreground text-xs">Expected in the drawer now</p>
-                                <p className="text-lg font-semibold tabular-nums">{money(open_shift.expected_cash)}</p>
-                            </div>
-                        </div>
-
-                        <div className="border-border bg-card space-y-3 rounded-lg border p-4">
-                            <h3 className="font-semibold">Till movements</h3>
-                            <MovementForm shiftId={open_shift.id} />
-                            {open_shift.movements.length > 0 && (
-                                <table className="w-full text-sm">
-                                    <tbody>
-                                        {open_shift.movements.map((movement) => (
-                                            <tr key={movement.id} className="border-t">
-                                                <td className="py-1.5 pr-3">{movement.type === 'cash_in' ? 'In' : 'Out'}</td>
-                                                <td className="py-1.5 pr-3 text-right tabular-nums">
-                                                    {movement.type === 'cash_in' ? '' : '-'}
-                                                    {money(movement.amount)}
-                                                </td>
-                                                <td className="text-muted-foreground py-1.5">{movement.reason}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
-
-                        <CloseForm shiftId={open_shift.id} expected={open_shift.expected_cash} />
-                    </div>
+                    open_shifts.length === 0 && (
+                        <p className="text-muted-foreground text-sm">
+                            No cash box to open. Add one under{' '}
+                            <a href="/accounting/money-accounts" className="underline">
+                                Accounting &gt; Bank &amp; cash
+                            </a>{' '}
+                            (kind: Cash).
+                        </p>
+                    )
                 )}
 
                 <div className="space-y-2">

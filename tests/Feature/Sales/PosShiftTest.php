@@ -1,8 +1,12 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\Actions\PostJournal;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
+use App\Modules\Accounting\Support\JournalDraft;
+use App\Modules\Accounting\Support\JournalLineDraft;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -46,6 +50,17 @@ beforeEach(function () {
         'name' => 'Counter Till', 'type' => 'cash', 'account_id' => $gl->id,
         'currency' => 'BDT', 'is_active' => true,
     ]);
+
+    // Money into (positive) or out of (negative) the till, through the one
+    // posting engine, exactly as a sale, a refund or a voucher reaches it.
+    $sales = Account::create(['code' => '4100', 'name' => 'Sales', 'type' => 'income', 'is_postable' => true]);
+    $this->postToTill = fn (string $taka) => app(PostJournal::class)->handle(new JournalDraft(
+        date: now(),
+        lines: [
+            JournalLineDraft::signed($gl->id, Money::ofTaka($taka), moneyAccount: $this->till),
+            JournalLineDraft::signed($sales->id, Money::ofTaka($taka)->negated()),
+        ],
+    ), $this->cashier);
 });
 
 function asCashier()
@@ -79,19 +94,9 @@ it('opens a shift with a counted float, and refuses a second on the same till', 
 it('computes expected cash from float, cash sales and till movements - and the over/short from the count', function () {
     $shift = openShift(2000);
 
-    // A cash sale of 1,500 lands in the till during the shift.
-    DB::table('customer_receipts')->insert([
-        'business_id' => $this->business->id,
-        'customer_id' => DB::table('customers')->insertGetId([
-            'business_id' => $this->business->id, 'code' => 'CUS-0001', 'name' => 'Walk-in', 'type' => 'walk_in',
-            'created_at' => now(), 'updated_at' => now(),
-        ]),
-        'money_account_id' => $this->till->id,
-        'received_on' => now()->toDateString(),
-        'amount' => 1500,
-        'created_by' => $this->cashier->id,
-        'created_at' => now(), 'updated_at' => now(),
-    ]);
+    // A cash sale of 1,500 lands in the till during the shift, as the ledger
+    // records it: a line on the till stamped with the till (21 Sep 2026).
+    ($this->postToTill)('1500');
 
     // 300 taken out for change; 100 put in.
     asCashier()->post(route('sales.shifts.movement', $shift), [
@@ -131,8 +136,9 @@ it('shows the shift screen with the running expectation, and keeps outsiders off
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('sales/shifts')
-            ->where('open_shift.opening_float', fn ($value) => (float) $value === 2000.0)
-            ->where('open_shift.expected_cash', fn ($value) => (float) $value === 2000.0));
+            ->where('open_shifts.0.opening_float', fn ($value) => (float) $value === 2000.0)
+            ->where('open_shifts.0.expected_cash', fn ($value) => (float) $value === 2000.0)
+            ->where('open_shifts.0.is_mine', true));
 
     test()->actingAs(test()->bystander)->withSession(['current_business_id' => test()->business->id])
         ->get(route('sales.shifts'))
@@ -166,4 +172,51 @@ it('still closes the shift when the books are not set up to take the difference'
     $closed = DB::table('pos_shifts')->find($shift);
 
     expect($closed->status)->toBe('closed')->and($closed->over_short_journal_id)->toBeNull();
+});
+
+// ─── 21 Sep 2026: the ledger is the till's truth, and every till is shown ─────
+
+it('counts money that LEFT the till, so a cash refund is not booked as a shortage', function () {
+    $shift = openShift(2000);
+
+    ($this->postToTill)('1500');   // a cash sale
+    ($this->postToTill)('-400');   // a cash refund, or an expense paid from the drawer
+
+    // The drawer holds 2,000 + 1,500 - 400 = 3,100, and so does the expectation.
+    asCashier()->post(route('sales.shifts.close', $shift), ['closing_count' => 3100])->assertSessionHasNoErrors();
+
+    $closed = DB::table('pos_shifts')->find($shift);
+
+    expect((float) $closed->expected_cash)->toBe(3100.0)
+        ->and((float) $closed->over_short)->toBe(0.0);
+});
+
+it('shows every open till, and offers only the tills that are not open', function () {
+    $second = MoneyAccount::create([
+        'business_id' => $this->business->id, 'name' => 'Back Till', 'type' => 'cash',
+        'account_id' => Account::create(['code' => '11102', 'name' => 'Back Till', 'type' => 'asset', 'is_postable' => true])->id,
+    ]);
+    $third = MoneyAccount::create([
+        'business_id' => $this->business->id, 'name' => 'Office Cash', 'type' => 'cash',
+        'account_id' => Account::create(['code' => '11103', 'name' => 'Office Cash', 'type' => 'asset', 'is_postable' => true])->id,
+    ]);
+
+    openShift(2000);
+    asCashier()->post(route('sales.shifts.open'), ['money_account_id' => $second->id, 'opening_float' => 500])->assertSessionHasNoErrors();
+
+    asCashier()->get(route('sales.shifts'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('open_shifts', 2)
+            ->where('tills', fn ($tills) => collect($tills)->pluck('id')->all() === [$third->id]));
+});
+
+it('will not open a shift on the cash box of another business or on a bank account', function () {
+    $other = Business::create(['name' => 'Other', 'slug' => 'other']);
+    $theirs = MoneyAccount::withoutGlobalScopes()->create(['business_id' => $other->id, 'name' => 'Their Till', 'type' => 'cash', 'account_id' => $this->till->account_id]);
+    $bank = MoneyAccount::create(['business_id' => $this->business->id, 'name' => 'BRAC', 'type' => 'bank', 'account_id' => $this->till->account_id]);
+
+    foreach ([$theirs, $bank] as $account) {
+        asCashier()->post(route('sales.shifts.open'), ['money_account_id' => $account->id, 'opening_float' => 1])
+            ->assertSessionHasErrors('money_account_id');
+    }
 });
