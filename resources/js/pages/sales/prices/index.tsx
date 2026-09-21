@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -14,6 +15,7 @@ interface Price {
     id: number;
     unit_price: string;
     min_quantity: string;
+    /** ⚠ Plain Y-m-d Dhaka dates from the server; the raw casts serialise in UTC. */
     effective_from: string;
     effective_to: string | null;
     note: string | null;
@@ -41,7 +43,7 @@ export default function PricesIndex({
     const { data, setData, post, errors, processing, reset } = useForm({
         product_id: '',
         unit_price: '',
-        effective_from: new Date().toISOString().slice(0, 10),
+        effective_from: dhakaToday(),
         effective_to: '',
         customer_id: '',
         price_group_id: '',
@@ -163,8 +165,8 @@ export default function PricesIndex({
                                     <td className="p-3 text-right tabular-nums">{price.min_quantity}</td>
                                     <td className="p-3 text-right tabular-nums">{price.unit_price}</td>
                                     <td className="text-muted-foreground p-3">
-                                        {price.effective_from?.slice(0, 10)}
-                                        {price.effective_to ? ` to ${price.effective_to.slice(0, 10)}` : ' onwards'}
+                                        {price.effective_from}
+                                        {price.effective_to ? ` to ${price.effective_to}` : ' onwards'}
                                     </td>
                                 </tr>
                             ))}

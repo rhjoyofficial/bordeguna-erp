@@ -10,7 +10,9 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Sales\Actions\RecordCustomerRefund;
 use App\Modules\Sales\Actions\RecordSalesReturn;
 use App\Modules\Sales\Models\Delivery;
+use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesReturn;
+use App\Modules\Sales\Support\MoneyAccountRefusal;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -43,13 +45,13 @@ class SalesReturnController extends Controller
             ->orderByDesc('returned_at')
             ->orderByDesc('id')
             ->paginate(20)
-            ->withQueryString();
-
-        $returns->getCollection()->transform(function (SalesReturn $return) {
-            $return->setAttribute('refunded_total', $return->refundedTotal()->toTaka());
-
-            return $return;
-        });
+            ->withQueryString()
+            ->through(fn (SalesReturn $return) => array_merge($return->toArray(), [
+                // ⚠ The Dhaka date: the date cast serialises as a UTC timestamp,
+                // and the list sliced it, showing every return a day early.
+                'returned_at' => $return->returned_at?->toDateString(),
+                'refunded_total' => $return->refundedTotal()->toTaka(),
+            ]));
 
         return Inertia::render('sales/returns/index', [
             'returns' => $returns,
@@ -77,7 +79,7 @@ class SalesReturnController extends Controller
         // screen, same caps, same engine - only the way in changes.
         $invoiceNumber = trim((string) $request->query('invoice_number', ''));
         if ($deliveryId === null && $invoiceNumber !== '') {
-            $invoice = \App\Modules\Sales\Models\SalesInvoice::query()
+            $invoice = SalesInvoice::query()
                 ->with('lines.deliveryLine:id,delivery_id')
                 ->where('invoice_number', $invoiceNumber)
                 ->first();
@@ -128,7 +130,8 @@ class SalesReturnController extends Controller
             'lines' => $lines,
             'invoiceLookupError' => $invoiceLookupError,
             'can_refund' => $request->user()->can('sales.returns.refund'),
-            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
+            // ⚠ Only accounts a refund can be booked out of (see withLedger).
+            'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
         ]);
     }
@@ -184,14 +187,34 @@ class SalesReturnController extends Controller
                 );
 
                 if (isset($data['refund'])) {
-                    $refundAction->handle(
-                        salesReturn: $return,
-                        moneyAccount: MoneyAccount::findOrFail($data['refund']['money_account_id']),
-                        amount: (string) $data['refund']['amount'],
-                        createdBy: $request->user(),
-                        refundedOn: $data['returned_at'] ?? null,
-                        reference: $return->return_number,
-                    );
+                    $refundAccount = MoneyAccount::findOrFail($data['refund']['money_account_id']);
+
+                    // ⚠⚠ The refund action refuses on ITS keys (`amount`,
+                    // `money_account_id`), and this form's fields are `refund.*`.
+                    // So "only 450.00 left to refund" was written on a key the
+                    // page never rendered, and Record return looked like it did
+                    // nothing (audit #1, 21 Sep 2026). Re-keyed onto the fields
+                    // the cashier typed into; thrown inside the transaction, so
+                    // the return rolls back with it as before.
+                    try {
+                        $refundAction->handle(
+                            salesReturn: $return,
+                            moneyAccount: $refundAccount,
+                            amount: (string) $data['refund']['amount'],
+                            createdBy: $request->user(),
+                            refundedOn: $data['returned_at'] ?? null,
+                            reference: $return->return_number,
+                        );
+                    } catch (ValidationException $e) {
+                        throw ValidationException::withMessages(collect($e->errors())
+                            ->mapWithKeys(fn (array $messages, string $key) => [
+                                (in_array($key, ['amount', 'money_account_id'], true) ? "refund.{$key}" : $key) => $messages,
+                            ])->all());
+                    } catch (MappingNotFound $e) {
+                        throw ValidationException::withMessages([
+                            'refund.money_account_id' => MoneyAccountRefusal::sentence($refundAccount, $e),
+                        ]);
+                    }
                 }
 
                 return $return;
@@ -229,7 +252,8 @@ class SalesReturnController extends Controller
             // this did to the books" is the trust-building question.
             'journal' => $journal,
             'can_refund' => $request->user()->can('sales.returns.refund'),
-            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
+            // ⚠ Only accounts a refund can be booked out of (see withLedger).
+            'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
         ]);
     }
@@ -249,10 +273,12 @@ class SalesReturnController extends Controller
 
         // ⚠ C-SLS-E1. Cash going back into a closed month is refused; the date
         // field is the one the user can actually change.
+        $moneyAccount = MoneyAccount::findOrFail($data['money_account_id']);
+
         try {
             $action->handle(
                 salesReturn: $salesReturn,
-                moneyAccount: MoneyAccount::findOrFail($data['money_account_id']),
+                moneyAccount: $moneyAccount,
                 amount: (string) $data['amount'],
                 createdBy: $request->user(),
                 refundedOn: $data['refunded_on'],
@@ -262,7 +288,7 @@ class SalesReturnController extends Controller
         } catch (PeriodClosedException $e) {
             throw ValidationException::withMessages(['refunded_on' => $e->getMessage()]);
         } catch (MappingNotFound $e) {
-            throw ValidationException::withMessages(['money_account_id' => $e->getMessage()]);
+            throw ValidationException::withMessages(['money_account_id' => MoneyAccountRefusal::sentence($moneyAccount, $e)]);
         }
 
         return back()->with('success', 'Refund recorded.');

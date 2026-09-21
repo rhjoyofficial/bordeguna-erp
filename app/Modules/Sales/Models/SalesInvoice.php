@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Models;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -127,6 +128,46 @@ class SalesInvoice extends Model
     public function isSettled(): bool
     {
         return $this->outstanding()->minor <= 0;
+    }
+
+    /**
+     * Invoices that still owe money - isSettled() asked in SQL.
+     *
+     * ⚠⚠ SO A LIST CAN FILTER BEFORE IT PAGINATES. The invoice list used to
+     * paginate twenty rows and then drop the settled ones in PHP, so "Unpaid"
+     * showed whichever of the latest twenty happened to be unpaid and hid every
+     * older debt behind a pager that counted the wrong thing (Sales UX audit
+     * #12, 21 Sep 2026). "Who owes us money" is the one question that list
+     * exists to answer.
+     */
+    public function scopeUnsettled(Builder $query): Builder
+    {
+        return $query->whereRaw(self::outstandingPaisaSql($query).' > 0');
+    }
+
+    public function scopeSettled(Builder $query): Builder
+    {
+        return $query->whereRaw(self::outstandingPaisaSql($query).' <= 0');
+    }
+
+    /**
+     * outstanding() in paisa, as an SQL expression over one invoice row.
+     *
+     * ⚠ Each figure is rounded to whole paisa exactly where outstanding() rounds
+     * it (the total, the sum received, the sum credited, each through
+     * Money::ofTaka), so the list and the invoice page cannot disagree about an
+     * invoice a fraction of a paisa either side of paid. ROUND on a MySQL
+     * DECIMAL is half away from zero, the same rule as Money::ofTaka.
+     */
+    private static function outstandingPaisaSql(Builder $query): string
+    {
+        $invoices = $query->getModel()->getTable();
+        $receipts = (new CustomerReceiptAllocation)->getTable();
+        $credits = (new SalesReturnAllocation)->getTable();
+
+        return "(ROUND({$invoices}.total * 100)"
+            ." - COALESCE((SELECT ROUND(SUM(r.amount) * 100) FROM {$receipts} r WHERE r.sales_invoice_id = {$invoices}.id), 0)"
+            ." - COALESCE((SELECT ROUND(SUM(c.amount) * 100) FROM {$credits} c WHERE c.sales_invoice_id = {$invoices}.id), 0))";
     }
 
     /**

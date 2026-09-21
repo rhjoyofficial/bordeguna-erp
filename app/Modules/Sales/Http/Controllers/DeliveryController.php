@@ -40,25 +40,30 @@ class DeliveryController extends Controller
                 fn ($q) => $q->where('delivery_number', 'like', "%{$search}%")
                     ->orWhereHas('customer', fn ($c) => $c->where('name', 'like', "%{$search}%"))
             ))
+            // ⚠⚠ Filtered in SQL, BEFORE paginate: the badge's own rule below,
+            // asked of the database. It used to drop fully invoiced challans
+            // from the twenty already paginated, so "Not fully invoiced" showed
+            // only what happened to be among the latest twenty (audit #12,
+            // 21 Sep 2026) - and this is the list month-end billing starts from.
+            ->when($filters['status'] === 'uninvoiced', fn ($query) => $query->whereHas(
+                'lines',
+                fn ($line) => $line->whereColumn('quantity_invoiced', '<', 'quantity'),
+            ))
             ->orderByDesc('delivered_at')
             ->orderByDesc('id')
             ->paginate(20)
-            ->withQueryString();
-
-        $deliveries->getCollection()->transform(function (Delivery $delivery) {
-            // ⚠ Fully invoiced means every line is billed. Partly billed is a
-            // normal state, not an error, and it is exactly what the GDNI
-            // balance reports.
-            $delivery->setAttribute('fully_invoiced', $delivery->lines->every(
-                fn ($line) => (float) $line->quantity_invoiced >= (float) $line->quantity
-            ));
-
-            return $delivery;
-        });
-
-        if ($filters['status'] === 'uninvoiced') {
-            $deliveries->setCollection($deliveries->getCollection()->reject->fully_invoiced->values());
-        }
+            ->withQueryString()
+            ->through(fn (Delivery $delivery) => array_merge($delivery->toArray(), [
+                // ⚠ The Dhaka date. The datetime serialises in UTC and the list
+                // sliced it, so a challan written before 6 am read as yesterday's.
+                'delivered_at' => $delivery->delivered_at?->toDateString(),
+                // ⚠ Fully invoiced means every line is billed. Partly billed is a
+                // normal state, not an error, and it is exactly what the GDNI
+                // balance reports.
+                'fully_invoiced' => $delivery->lines->every(
+                    fn ($line) => (float) $line->quantity_invoiced >= (float) $line->quantity
+                ),
+            ]));
 
         return Inertia::render('sales/deliveries/index', [
             'deliveries' => $deliveries,

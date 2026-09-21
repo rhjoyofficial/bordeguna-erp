@@ -94,7 +94,9 @@ class SupplierPaymentController extends Controller
             'suppliers' => $this->suppliersWithOutstanding(),
             'selectedSupplierId' => $supplier?->id,
             'bills' => $supplier === null ? [] : $this->openBillsFor($supplier),
-            'moneyAccounts' => MoneyAccount::query()->handled()
+            // ⚠ Only accounts the payment can be booked out of: one with no
+            // ledger head is refused by PostPurchaseJournals on submit.
+            'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(['id', 'name', 'type']),

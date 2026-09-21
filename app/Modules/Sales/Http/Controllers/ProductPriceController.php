@@ -44,7 +44,14 @@ class ProductPriceController extends Controller
             ->orderByDesc('effective_from')
             ->orderByDesc('id')
             ->paginate(20)
-            ->withQueryString();
+            ->withQueryString()
+            // ⚠ Dhaka dates. The date casts serialise as UTC timestamps and the
+            // list sliced them, so a price starting on the 1st read as starting
+            // on the 31st - on the one screen that says when a price applies.
+            ->through(fn (ProductPrice $price) => array_merge($price->toArray(), [
+                'effective_from' => $price->effective_from?->toDateString(),
+                'effective_to' => $price->effective_to?->toDateString(),
+            ]));
 
         return Inertia::render('sales/prices/index', [
             'prices' => $prices,

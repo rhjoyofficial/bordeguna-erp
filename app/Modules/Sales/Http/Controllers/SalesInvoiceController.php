@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Accounting\Exceptions\JournalException;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
@@ -26,6 +27,7 @@ use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\AmountInWords;
+use App\Modules\Sales\Support\MoneyAccountRefusal;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -48,27 +50,26 @@ class SalesInvoiceController extends Controller
                 fn ($q) => $q->where('invoice_number', 'like', "%{$search}%")
                     ->orWhereHas('customer', fn ($c) => $c->where('name', 'like', "%{$search}%"))
             ))
+            // ⚠⚠ Filtered in SQL, BEFORE paginate. It used to filter the twenty
+            // rows already paginated, so "Unpaid" hid every older debt and the
+            // pager still counted all invoices (audit #12, 21 Sep 2026).
+            ->when($filters['status'] === 'open', fn ($query) => $query->unsettled())
+            ->when($filters['status'] === 'settled', fn ($query) => $query->settled())
             ->orderByDesc('invoice_date')
             ->orderByDesc('id')
             ->paginate(20)
-            ->withQueryString();
-
-        // ⚠ Outstanding is DERIVED per invoice from its allocations, never
-        // stored. Computed here for display only.
-        $invoices->getCollection()->transform(function (SalesInvoice $invoice) {
-            $invoice->setAttribute('outstanding', $invoice->outstanding()->toTaka());
-            $invoice->setAttribute('is_settled', $invoice->isSettled());
-
-            return $invoice;
-        });
-
-        $rows = $invoices->getCollection();
-
-        if ($filters['status'] === 'open') {
-            $invoices->setCollection($rows->reject->is_settled->values());
-        } elseif ($filters['status'] === 'settled') {
-            $invoices->setCollection($rows->filter->is_settled->values());
-        }
+            ->withQueryString()
+            // ⚠ Outstanding is DERIVED per invoice from its allocations, never
+            // stored. Computed here for display only. ⚠ The date as a Dhaka
+            // date: handed over inside the model it serialises as a UTC
+            // timestamp, and the list sliced that, showing every invoice a day
+            // early (the lesson show() and print() had already learned).
+            ->through(fn (SalesInvoice $invoice) => array_merge($invoice->toArray(), [
+                'invoice_date' => $invoice->invoice_date?->toDateString(),
+                'due_date' => $invoice->due_date?->toDateString(),
+                'outstanding' => $invoice->outstanding()->toTaka(),
+                'is_settled' => $invoice->isSettled(),
+            ]));
 
         return Inertia::render('sales/invoices/index', [
             'invoices' => $invoices,
@@ -356,7 +357,10 @@ class SalesInvoiceController extends Controller
             // trust the system, and hiding it behind the ledger screen is how
             // people stop checking.
             'journal' => $journal,
-            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
+            // ⚠ Only accounts the receipt can be booked into. One with no ledger
+            // head was offered here - and, sorting first, preselected - and then
+            // failed on submit (audit #2, 21 Sep 2026).
+            'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
         ]);
     }
@@ -686,15 +690,29 @@ class SalesInvoiceController extends Controller
             'note' => ['nullable', 'string'],
         ]);
 
-        $action->handle(
-            customer: $invoice->customer,
-            moneyAccount: MoneyAccount::findOrFail($data['money_account_id']),
-            receivedOn: $data['received_on'],
-            allocations: [['invoice' => $invoice, 'amount' => (string) $data['amount']]],
-            createdBy: $request->user(),
-            reference: $data['reference'] ?? null,
-            note: $data['note'] ?? null,
-        );
+        $moneyAccount = MoneyAccount::findOrFail($data['money_account_id']);
+
+        // ⚠⚠ Two ordinary refusals used to arrive as a blank 500 here: money
+        // into an account with no ledger head, and money dated into a month
+        // somebody has closed (audit #2, 21 Sep 2026). Both already carried a
+        // sentence; nothing caught them, and bootstrap/app.php renders neither.
+        // Order payments had caught both all along. Each lands on the field the
+        // person can change: the date, or the account.
+        try {
+            $action->handle(
+                customer: $invoice->customer,
+                moneyAccount: $moneyAccount,
+                receivedOn: $data['received_on'],
+                allocations: [['invoice' => $invoice, 'amount' => (string) $data['amount']]],
+                createdBy: $request->user(),
+                reference: $data['reference'] ?? null,
+                note: $data['note'] ?? null,
+            );
+        } catch (PeriodClosedException $e) {
+            throw ValidationException::withMessages(['received_on' => $e->getMessage()]);
+        } catch (MappingNotFound|JournalException $e) {
+            throw ValidationException::withMessages(['money_account_id' => MoneyAccountRefusal::sentence($moneyAccount, $e)]);
+        }
 
         return back()->with('success', 'Receipt recorded.');
     }
