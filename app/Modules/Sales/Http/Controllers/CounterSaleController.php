@@ -265,17 +265,26 @@ class CounterSaleController extends Controller
         // makes THEIR count wrong. Bank and mobile money are not tills and
         // still work without a shift.
         if ($moneyAccount?->type === MoneyAccountType::Cash) {
-            $till = $this->openTillOf($request);
+            // ⚠ ANY till this cashier has an open shift on, not only the newest:
+            // a person may legitimately hold two drawers at once.
+            $mine = DB::table('pos_shifts')
+                ->join('money_accounts', 'money_accounts.id', '=', 'pos_shifts.money_account_id')
+                ->where('pos_shifts.business_id', app(BusinessContext::class)->id())
+                ->where('pos_shifts.status', 'open')
+                ->where('pos_shifts.opened_by', $user->id)
+                ->pluck('money_accounts.name', 'pos_shifts.money_account_id');
 
-            if ($till === null) {
+            if ($mine->isEmpty()) {
                 throw ValidationException::withMessages([
                     'money_account_id' => 'Open your shift first: cash is counted into a till, and you have none open. Bank or mobile money still works.',
                 ]);
             }
 
-            if ($till['money_account_id'] !== $moneyAccount->id) {
+            if (! $mine->has($moneyAccount->id)) {
+                $names = $mine->values()->implode(', ');
+
                 throw ValidationException::withMessages([
-                    'money_account_id' => "Cash goes into the till of your own open shift, {$till['name']}, not into {$moneyAccount->name}. Choose your till, or bank or mobile money.",
+                    'money_account_id' => "Cash goes into the till of your own open shift, {$names}, not into {$moneyAccount->name}. Choose your till, or bank or mobile money.",
                 ]);
             }
         }

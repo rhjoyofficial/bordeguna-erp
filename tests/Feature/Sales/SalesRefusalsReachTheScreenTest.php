@@ -125,6 +125,11 @@ beforeEach(function () {
         setPermissionsTeamId($this->business->id);
         $user->assignRole($role);
 
+        // Cash at the counter needs the seller's own open shift (26 Sep 2026);
+        // both tills, so the one with no ledger is refused for THAT reason.
+        openTill($user, $this->cash);
+        openTill($user, $this->noLedger);
+
         return $this->actingAs($user);
     };
 
