@@ -1,0 +1,46 @@
+{
+    "data": {
+        "store": {
+            "key": "laladia"
+        },
+        "lines": [
+            {
+                "sku": "HON-500",
+                "product_id": 1,
+                "quantity": 2,
+                "unit_price": "850.0000",
+                "line_total": "1700.00",
+                "price_note": "Price for group [RETAIL]",
+                "sellable": true,
+                "made_to_order": false
+            },
+            {
+                "sku": "GHE-250",
+                "product_id": 2,
+                "quantity": 1,
+                "unit_price": "650.5000",
+                "line_total": "650.50",
+                "price_note": "Price for group [RETAIL]",
+                "sellable": true,
+                "made_to_order": true
+            }
+        ],
+        "payment_methods": [
+            "cod"
+        ],
+        "goods_total": "2350.50",
+        "delivery_charge": "120.00",
+        "order_discount": "0.00",
+        "agreed_total": "2470.50",
+        "delivery_promise": "Delivered within 24 to 72 hours after we confirm your order.",
+        "quoted_at": "2026-09-21T10:00:00+06:00",
+        "effects": {
+            "written": false
+        }
+    },
+    "meta": {
+        "business_id": 1,
+        "contract": "hq-sales-orders.v1",
+        "as_of": "2026-09-21T10:00:00+06:00"
+    }
+}

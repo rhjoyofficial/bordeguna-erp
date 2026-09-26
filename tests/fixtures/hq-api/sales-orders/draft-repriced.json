@@ -1,0 +1,17 @@
+{
+    "error": {
+        "code": "quote_mismatch",
+        "message": "Figures in the proposal no longer match the ERP's own. Nothing was written; quote again."
+    },
+    "errors": {
+        "lines.0.unit_price": [
+            "The draft agreed 850.00, the ERP's price is now 900.00. Write a new draft."
+        ],
+        "draft.goods_total": [
+            "The draft agreed 2350.50, the ERP's figure is now 2450.50. Write a new draft."
+        ],
+        "draft.agreed_total": [
+            "The draft agreed 2470.50, the ERP's figure is now 2570.50. Write a new draft."
+        ]
+    }
+}

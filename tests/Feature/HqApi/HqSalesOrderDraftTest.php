@@ -41,7 +41,7 @@ const DRAFTS_FIXTURES = 'tests/fixtures/hq-api/sales-order-drafts';
 /*
  | The contract identity. HQ's `tests/Feature/Erp/SalesOrderDraftContractTest.php` pins the SAME value.
  */
-const DRAFTS_CONTRACT_DIGEST = '414fdaa6dae0d89a260e3af7db2838211d2b7898cd32c72d4afc714862d2a02f';
+const DRAFTS_CONTRACT_DIGEST = 'ef78eece9e857c0aa88dd785ff698a5ef232b0c98d18bca75bd1f31f3e9b23da';
 
 /** Every table a draft must leave exactly as it found it. */
 const DRAFTS_UNTOUCHED = [
@@ -318,8 +318,8 @@ it('issues the write ability only when it is named and --write is given', functi
     $this->artisan('hq:api:token', ['email' => 'hq@bordeguna.test', 'business' => $this->a->id, '--abilities' => 'inventory.view,sales.orders.draft', '--write' => true])->assertSuccessful();
     expect($this->hq->tokens()->first()->abilities)->toBe(['inventory.view', 'sales.orders.draft', "hq:business:{$this->a->id}"]);
 
-    // --write widens nothing else.
-    $this->artisan('hq:api:token', ['email' => 'hq@bordeguna.test', 'business' => $this->a->id, '--abilities' => 'sales.orders.record', '--write' => true])->assertFailed();
+    // --write widens nothing else: approving is never HQ's (HQ docs/88 A point 3).
+    $this->artisan('hq:api:token', ['email' => 'hq@bordeguna.test', 'business' => $this->a->id, '--abilities' => 'sales.orders.approve', '--write' => true])->assertFailed();
 });
 
 it('keeps each business to itself: another business\'s store, product and draft are not there', function () {

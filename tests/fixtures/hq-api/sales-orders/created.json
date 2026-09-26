@@ -1,0 +1,81 @@
+{
+    "data": {
+        "id": 1,
+        "order_number": "SO-2026-27-0001",
+        "shop_reference": "LLD1-20260921-ABCD2345",
+        "status": "open",
+        "approval_status": "pending",
+        "deliverable": false,
+        "channel": "website",
+        "store": {
+            "key": "laladia"
+        },
+        "customer": {
+            "id": 1
+        },
+        "recipient": {
+            "name": "Rahim Uddin",
+            "phone": "+880 1711-000001"
+        },
+        "destination": {
+            "district": "Bagerhat",
+            "thana": "Fakirhat",
+            "area": null,
+            "postcode": "9371",
+            "address_line": "House 4, Road 2",
+            "landmark": "Near the mosque"
+        },
+        "lines": [
+            {
+                "sku": "HON-500",
+                "product_id": 1,
+                "quantity": 2,
+                "quantity_delivered": "0.0000",
+                "unit_price": "850.0000",
+                "line_discount": "0.00",
+                "price_note": "Price for group [RETAIL]"
+            },
+            {
+                "sku": "GHE-250",
+                "product_id": 2,
+                "quantity": 1,
+                "quantity_delivered": "0.0000",
+                "unit_price": "650.5000",
+                "line_discount": "0.00",
+                "price_note": "Price for group [RETAIL]"
+            }
+        ],
+        "payment_method": "cod",
+        "goods_total": "2350.50",
+        "order_discount": "0.00",
+        "delivery_charge": "120.00",
+        "agreed_total": "2470.50",
+        "delivery_promise": "Delivered within 24 to 72 hours after we confirm your order.",
+        "ordered_at": "2026-09-21",
+        "hq": {
+            "draft_key": "hq:draft-0000000001",
+            "idempotency_key": "hq:order-0000000001",
+            "proposal_fingerprint": "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0",
+            "approval_uuid": "apr-0001"
+        },
+        "cancellation": {
+            "requested": false
+        },
+        "effects": {
+            "sales_order_created": true,
+            "approval_requested": true,
+            "approved_by_hq": false,
+            "stock_moved": false,
+            "journal_posted": false,
+            "payment_taken": false,
+            "courier_booked": false
+        },
+        "next_step": "A person in the ERP approves or rejects it in the approval inbox; goods leave only against an approved order.",
+        "replayed": false
+    },
+    "meta": {
+        "business_id": 1,
+        "contract": "hq-sales-orders.v1",
+        "as_of": "2026-09-21T10:00:00+06:00"
+    }
+}

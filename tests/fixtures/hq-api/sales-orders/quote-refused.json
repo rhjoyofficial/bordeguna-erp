@@ -1,0 +1,11 @@
+{
+    "error": {
+        "code": "refused",
+        "message": "The ERP would not take this order as it stands."
+    },
+    "errors": {
+        "lines.0.sku": [
+            "No product with SKU NOPE-1 in this business."
+        ]
+    }
+}

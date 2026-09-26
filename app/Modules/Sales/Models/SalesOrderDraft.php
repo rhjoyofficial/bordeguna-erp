@@ -15,9 +15,10 @@ use LogicException;
  *
  * ⚠⚠ NOT A SALES ORDER, AND IT NEVER BECOMES ONE ON ITS OWN. It has no order number, no approval
  * request, no customer it created, no stock, no journal and no notification. `CreateSalesOrder` does
- * all of those, which is exactly why a draft does not go through it. Turning a draft into an order is
- * a later capability with its own gate; there is no method here, and no route anywhere, that moves a
- * draft out of `draft`.
+ * all of those, which is exactly why a draft does not go through it. An order is made FROM a draft only
+ * by `ConfirmHqSalesOrderDraft` (HQ docs/88 A point 3), and the link is its own row
+ * (`SalesOrderHqConfirmation`); there is no method here, and no route anywhere, that moves a draft out
+ * of `draft`.
  *
  * ⛔ IMMUTABLE. A draft is the ERP's record of what was agreed at one moment, and HQ reconciles
  * against it; a row that could be edited afterwards would be a record that proves nothing. Every

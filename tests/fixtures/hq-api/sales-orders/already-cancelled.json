@@ -1,0 +1,6 @@
+{
+    "error": {
+        "code": "already_cancelled",
+        "message": "Order SO-2026-27-0001 is already cancelled. Nothing was written."
+    }
+}

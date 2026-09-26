@@ -1,0 +1,6 @@
+{
+    "error": {
+        "code": "idempotency_key_reused",
+        "message": "This idempotency key was already used for a different order. Nothing was written."
+    }
+}

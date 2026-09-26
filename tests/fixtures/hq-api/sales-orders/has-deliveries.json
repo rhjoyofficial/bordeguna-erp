@@ -1,0 +1,6 @@
+{
+    "error": {
+        "code": "has_deliveries",
+        "message": "Sales order SO-2026-27-0002 has deliveries against it. It cannot be cancelled; a person in the ERP closes it short or records a return."
+    }
+}
