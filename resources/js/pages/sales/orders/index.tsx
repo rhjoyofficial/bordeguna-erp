@@ -443,6 +443,7 @@ function CreateOrderForm({
     customerTypes,
     priceGroups,
     onClose,
+    initialCustomerId = null,
 }: {
     customers: Option[];
     warehouses: Option[];
@@ -452,6 +453,7 @@ function CreateOrderForm({
     customerTypes: CustomerType[];
     priceGroups: PriceGroupOption[];
     onClose: () => void;
+    initialCustomerId?: number | null;
 }) {
     const { data, setData, post, errors, processing, transform } = useForm<{
         customer_id: string;
@@ -460,7 +462,7 @@ function CreateOrderForm({
         note: string;
         lines: LineDraft[];
     }>({
-        customer_id: '',
+        customer_id: initialCustomerId ? String(initialCustomerId) : '',
         // The default warehouse, as everywhere else; "decided at delivery" is one click away.
         warehouse_id: String(warehouses.find((w) => w.is_default)?.id ?? ''),
         expected_date: '',
@@ -648,6 +650,8 @@ export default function SalesOrdersIndex({
     can_add_customer,
     customer_types,
     price_groups,
+    own_only = false,
+    preselect_customer = null,
     filters: initialFilters,
 }: {
     orders: Paginated<OrderRow>;
@@ -660,12 +664,16 @@ export default function SalesOrdersIndex({
     can_add_customer: boolean;
     customer_types: CustomerType[];
     price_groups: PriceGroupOption[];
+    own_only?: boolean;
+    preselect_customer?: number | null;
     filters: { search: string; status: string };
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/orders', initialFilters);
     // ⭐ The form is at the top, one click away (21 Sep 2026): it used to sit
     // under the whole order list and the stock table.
-    const [creating, setCreating] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('new'));
+    const [creating, setCreating] = useState(
+        () => typeof window !== 'undefined' && (new URLSearchParams(window.location.search).has('new') || preselect_customer !== null),
+    );
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -678,6 +686,7 @@ export default function SalesOrdersIndex({
                 )}
                 {can_create && creating && (
                     <CreateOrderForm
+                        initialCustomerId={preselect_customer}
                         customers={customers}
                         warehouses={warehouses}
                         products={products}
@@ -687,6 +696,10 @@ export default function SalesOrdersIndex({
                         priceGroups={price_groups}
                         onClose={() => setCreating(false)}
                     />
+                )}
+
+                {own_only && (
+                    <p className="text-muted-foreground text-sm">You see the orders you took. Each one waits for a Manager's approval before it is delivered.</p>
                 )}
 
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>

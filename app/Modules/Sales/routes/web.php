@@ -39,6 +39,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::get('prices', [ProductPriceController::class, 'index'])->name('prices.index');
         Route::get('invoices', [SalesInvoiceController::class, 'index'])->name('invoices.index');
         Route::get('deliveries', [DeliveryController::class, 'index'])->name('deliveries.index');
+    });
+
+    // ⭐ 26 Sep 2026 (Q21): read sales, or record orders and see your own.
+    Route::middleware('can:sales.orders.see')->group(function () {
         Route::get('orders', [SalesOrderController::class, 'index'])->name('orders.index');
         Route::get('orders/{order}', [SalesOrderController::class, 'show'])
             ->whereNumber('order')->name('orders.show');

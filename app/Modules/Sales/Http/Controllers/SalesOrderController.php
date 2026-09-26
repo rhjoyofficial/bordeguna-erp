@@ -71,7 +71,12 @@ class SalesOrderController extends Controller
             'status' => $request->string('status')->toString(),
         ];
 
+        // ⭐ 26 Sep 2026 (Q21): a field officer (sales.orders.record without
+        // sales.reports.view) sees the orders he took and nobody else's.
+        $ownOnly = ! $request->user()->can('sales.reports.view');
+
         $orders = SalesOrder::query()
+            ->when($ownOnly, fn ($query) => $query->where('created_by', $request->user()->id))
             ->with(['customer:id,name', 'warehouse:id,name', 'approvalRequest'])
             ->withSum('lines as total_ordered', 'quantity_ordered')
             ->withSum('lines as total_delivered', 'quantity_delivered')
@@ -93,6 +98,9 @@ class SalesOrderController extends Controller
         return Inertia::render('sales/orders/index', [
             'orders' => $orders,
             'filters' => $filters,
+            'own_only' => $ownOnly,
+            // A CRM lead's "New order" link names the customer (26 Sep 2026).
+            'preselect_customer' => $request->integer('customer') ?: null,
             // ⚠ C-SO-2 (Joy): NO reservation. This report is the honest
             // substitute - what is promised against what is on the shelf, per
             // product, for a human deciding whether to take the next order.
@@ -179,8 +187,24 @@ class SalesOrderController extends Controller
      * It reserves nothing: between printing and picking somebody may sell the
      * same box at the counter, and the sheet says so.
      */
+    /**
+     * ⭐ 26 Sep 2026 (Q21): without sales.reports.view a person opens only the
+     * orders they took. Checked on the document, not only on the list, so a
+     * guessed order number is a 403 and not somebody else's dealer.
+     */
+    private function assertMayOpen(Request $request, SalesOrder $order): void
+    {
+        if ($request->user()->can('sales.reports.view') || (int) $order->created_by === (int) $request->user()->id) {
+            return;
+        }
+
+        abort(403, 'That order was taken by somebody else.');
+    }
+
     public function pickList(SalesOrder $order): Response
     {
+        $this->assertMayOpen(request(), $order);
+
         $order->load([
             'customer',
             'warehouse:id,name,code',
@@ -232,6 +256,8 @@ class SalesOrderController extends Controller
 
     public function show(Request $request, SalesOrder $order, ResolveSellingPrice $resolver): Response
     {
+        $this->assertMayOpen($request, $order);
+
         $order->load([
             'customer',
             'warehouse:id,name',

@@ -37,6 +37,7 @@ export interface Lead {
     lost_reason_id: number | null;
     note: string | null;
     converted_customer: string | null;
+    converted_customer_id?: number | null;
     /** Plan D12: the supplier a supplier lead became. */
     converted_supplier: string | null;
     converted_supplier_id: number | null;
