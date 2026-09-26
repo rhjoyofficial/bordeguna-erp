@@ -8,6 +8,7 @@ use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -205,7 +206,7 @@ class SaveVoucherDraft
         $party = $class::query()->find((int) $partyId);
 
         if ($party === null) {
-            throw ValidationException::withMessages(["lines.{$index}.party_id" => 'That name is not in this business\'s list.']);
+            throw ValidationException::withMessages(["lines.{$index}.party_id" => 'That '.PartyLedgers::noun($class).' is not in this business\'s list.']);
         }
 
         return [$party->getMorphClass(), $party->getKey()];

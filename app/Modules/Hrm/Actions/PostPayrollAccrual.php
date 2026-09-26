@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Hrm\Models\PayrollRun;
 use Illuminate\Support\Carbon;
 
@@ -96,9 +97,15 @@ class PostPayrollAccrual
         $on = $this->accountingDate($run);
         $lines = [];
 
-        // Expense and deduction totals are aggregated by account: nobody asks
-        // the ledger which employee a wage COST belongs to.
+        // Expense totals are aggregated by account: nobody asks the ledger
+        // which employee a wage COST belongs to. A deduction that lands on a
+        // PARTY-KEPT head (Employee Deductions Payable, Employee Advances) is
+        // kept per employee instead, because that head is that employee's
+        // ledger (Support\PartyLedgers, 26 Sep 2026): "what is held from Musa"
+        // and "what Musa has repaid" must be answerable from the ledger alone.
         $byAccount = [];
+        $byAccountAndEmployee = [];
+        $employees = [];
         $netByEmployee = [];
 
         foreach ($run->payslips()->with(['lines', 'employee'])->get() as $payslip) {
@@ -118,6 +125,16 @@ class PostPayrollAccrual
                 // or the expense itself.
                 $signed = $line->isEarning() ? $amount : $amount->negated();
 
+                if (PartyLedgers::requiresParty($account) && $payslip->employee !== null) {
+                    $key = $account->id.':'.$payslip->employee->id;
+                    $employees[$payslip->employee->id] = $payslip->employee;
+                    $byAccountAndEmployee[$key] = isset($byAccountAndEmployee[$key])
+                        ? $byAccountAndEmployee[$key]->plus($signed)
+                        : $signed;
+
+                    continue;
+                }
+
                 $byAccount[$account->id] = isset($byAccount[$account->id])
                     ? $byAccount[$account->id]->plus($signed)
                     : $signed;
@@ -130,7 +147,7 @@ class PostPayrollAccrual
             }
         }
 
-        if ($byAccount === [] && $netByEmployee === []) {
+        if ($byAccount === [] && $byAccountAndEmployee === [] && $netByEmployee === []) {
             return null;
         }
 
@@ -143,6 +160,17 @@ class PostPayrollAccrual
             }
 
             $lines[] = JournalLineDraft::signed($accountId, $amount, 'Payroll '.$run->period?->label());
+        }
+
+        foreach ($byAccountAndEmployee as $key => $amount) {
+            if ($amount->isZero()) {
+                continue;
+            }
+
+            [$accountId, $employeeId] = array_map('intval', explode(':', $key));
+            $employee = $employees[$employeeId];
+
+            $lines[] = JournalLineDraft::signed($accountId, $amount, 'Payroll '.$run->period?->label().' '.$employee->employee_code, $employee);
         }
 
         // ⚠ One line per employee, because Wages Payable is a SUBSIDIARY LEDGER:

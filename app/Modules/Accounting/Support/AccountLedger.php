@@ -223,7 +223,7 @@ final class AccountLedger
                 return [
                     'type' => class_basename($line->party_type),
                     'id' => (int) $line->party_id,
-                    'label' => $party?->name ?? class_basename($line->party_type)." #{$line->party_id}",
+                    'label' => PartyLedgers::label($party, $line->party_type, (int) $line->party_id),
                 ];
             })
             ->sortBy('label')

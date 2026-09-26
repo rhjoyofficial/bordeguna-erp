@@ -6,6 +6,7 @@ use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Hrm\Models\Employee;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Support\Carbon;
@@ -27,9 +28,13 @@ use Illuminate\Support\Collection;
  *  3. A few heads that belong to one process each (RESERVED_SLUGS).
  *
  * ⚠⚠ MONEY WITH A CUSTOMER OR SUPPLIER BUT NO DOCUMENT IS AN ADVANCE, never raw
- * AR/AP (plan decision 6). The two advance accounts are the only party-enabled
- * heads: a line there MUST name its supplier or customer, and a line anywhere
- * else must not - a customer on "Office Rent" means nothing.
+ * AR/AP (plan decision 6). The party-enabled heads (Support\PartyLedgers) are
+ * the two advance accounts and, since 26 Sep 2026, the employee ledgers 1170
+ * Employee Advances and 2140 Employee Deductions Payable: a line there MUST
+ * name its supplier, customer or employee, and a line anywhere else must not -
+ * a customer on "Office Rent" means nothing. The employee heads are mapped
+ * under `payroll.*` and would count as owned; they are let through BECAUSE the
+ * employee on the line is the sub-ledger payroll itself keeps (PartyLedgers).
  */
 final class VoucherAccounts
 {
@@ -54,6 +59,7 @@ final class VoucherAccounts
         'purchasing.input_vat' => 'Posted by supplier bills and cleared by the VAT return.',
         'sales.cash_over_short' => 'Posted when a cashier shift is closed.',
         'sales.gateway_fees' => 'Posted when an online payment is settled.',
+        'payroll.net_payable' => 'Posted by Payroll. Salaries are paid from Payroll > Payments, which clears each employee\'s line.',
     ];
 
     private const RESERVED_INSTEAD = [
@@ -62,10 +68,12 @@ final class VoucherAccounts
         'retained_earnings' => 'Kept by the system: profit carried forward at year end.',
     ];
 
-    /** slug => the party class a line on that account must carry */
+    /** slug => the party class a line on that account must carry (PartyLedgers::voucherPickable()). */
     public const PARTY_ACCOUNTS = [
         'supplier_advances' => Supplier::class,
         'customer_advances' => Customer::class,
+        'employee_advances' => Employee::class,
+        'employee_deductions_payable' => Employee::class,
     ];
 
     /**
@@ -121,7 +129,15 @@ final class VoucherAccounts
     {
         $refused = [];
 
+        $partyHeads = Account::query()->whereIn('system_slug', array_keys(PartyLedgers::voucherPickable()))->pluck('id')->flip();
+
         foreach (SubsystemAccounts::on($on) as $accountId => $key) {
+            // An employee ledger is posted WITH its employee: that is the
+            // sub-ledger, so a voucher line there explains itself.
+            if ($partyHeads->has($accountId)) {
+                continue;
+            }
+
             $prefix = strtok($key, '.').'.';
             $refused[$accountId] = [
                 'reason' => 'This account belongs to '.ucfirst(rtrim($prefix, '.')).' and is posted only by its own documents.',

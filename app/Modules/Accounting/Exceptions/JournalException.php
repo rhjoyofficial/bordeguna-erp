@@ -39,6 +39,11 @@ class JournalException extends RuntimeException
         return new self("{$account->label()} is a heading, not an account you can post to. Choose one of the accounts under it.");
     }
 
+    public static function partyRequired(Account $account, string $noun, int $lineNo): self
+    {
+        return new self("Line {$lineNo}: {$account->label()} keeps one ledger per {$noun}, so every posting there names the {$noun}. This one names nobody.");
+    }
+
     public static function inactiveAccount(Account $account): self
     {
         return new self("{$account->label()} has been deactivated and cannot be posted to.");

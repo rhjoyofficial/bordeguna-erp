@@ -14,6 +14,7 @@ use App\Modules\Accounting\Http\Controllers\CostOfGoodsSoldController;
 use App\Modules\Accounting\Http\Controllers\CustomerStatementController;
 use App\Modules\Accounting\Http\Controllers\DayBookController;
 use App\Modules\Accounting\Http\Controllers\DunningController;
+use App\Modules\Accounting\Http\Controllers\EmployeeStatementController;
 use App\Modules\Accounting\Http\Controllers\FinanceDashboardController;
 use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
 use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
@@ -112,6 +113,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // One customer's account, told in documents and checked by the ledger
         // (C-CST-1). C-GLA-A now covers this screen too.
         Route::get('customer-statement', [CustomerStatementController::class, 'index'])->name('customer-statement');
+        // One employee's ledgers (26 Sep 2026): the accountant's "head per employee".
+        Route::get('employee-statement', [EmployeeStatementController::class, 'index'])->name('employee-statement');
 
         // accounting:reconcile as a screen: the same engine, the same strings
         // (C-RSC-1), for the business the user is standing in.

@@ -28,7 +28,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function JournalsIndex({ journals }: { journals: Paginated<JournalRow> }) {
-    const { canPostJournal } = usePage<SharedData>().props;
+    const { canPostJournal, canPrepareVouchers } = usePage<SharedData>().props;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -42,10 +42,19 @@ export default function JournalsIndex({ journals }: { journals: Paginated<Journa
                             leaves both the error and the correction on the record.
                         </p>
                     </div>
-                    {canPostJournal && (
+                    {/* 26 Sep 2026: a hand-written entry is a Journal voucher (draft, print,
+                        reverse-and-copy, prepare/post split). The Owner-only manual screen
+                        stays reachable by its address for the rare case, not from here. */}
+                    {canPrepareVouchers ? (
                         <Button asChild>
-                            <Link href={route('accounting.journals.create')}>New journal</Link>
+                            <Link href="/accounting/vouchers/journal/create">New journal voucher</Link>
                         </Button>
+                    ) : (
+                        canPostJournal && (
+                            <Button asChild>
+                                <Link href={route('accounting.journals.create')}>New journal</Link>
+                            </Button>
+                        )
                     )}
                 </div>
 

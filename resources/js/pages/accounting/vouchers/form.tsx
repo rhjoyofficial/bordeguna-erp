@@ -7,7 +7,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { Trash2 } from 'lucide-react';
-import { useMemo, useRef } from 'react';
+import { Fragment, useMemo, useRef } from 'react';
 
 export interface VoucherTypeProps {
     value: 'payment' | 'receipt' | 'contra' | 'journal';
@@ -24,7 +24,7 @@ export interface VoucherTypeProps {
 interface AccountOption {
     id: number;
     label: string;
-    party: 'supplier' | 'customer' | null;
+    party: 'supplier' | 'customer' | 'employee' | null;
     usable: boolean;
     heading: boolean;
     hint: string | null;
@@ -34,6 +34,9 @@ interface AccountOption {
 interface MoneyOption {
     id: number;
     label: string;
+    /** The account's own ledger head, "11201 - BRAC Bank - Bor de Guna"; null until "Reports under" is set. */
+    ledger: string | null;
+    group: string;
     type: string;
     hint: string | null;
 }
@@ -96,8 +99,40 @@ const INSTRUMENT_LABEL: Record<string, string> = {
 const MONEY_LABEL: Record<string, [string, string]> = {
     payment: ['Paid from', 'Which cash box, bank or wallet the money left.'],
     receipt: ['Received into', 'Which cash box, bank or wallet the money came into.'],
-    contra: ['Moved from', 'The account the money left.'],
+    contra: ['Moved from (ledger head)', 'The ledger head the money left.'],
 };
+
+const MONEY_GROUPS = ['Cash in hand', 'Bank accounts', 'Mobile wallets', 'Payment gateways', 'Courier accounts'];
+
+/**
+ * Money accounts as their LEDGER HEADS, grouped (26 Sep 2026, "money flows by
+ * heading"). Each cash, bank and wallet account owns one head, so the head IS
+ * the account; the value stays the money account id the server expects.
+ */
+function MoneyHeadOptions({ accounts, hintFor }: { accounts: MoneyOption[]; hintFor?: (account: MoneyOption) => string | null }) {
+    return (
+        <>
+            {MONEY_GROUPS.filter((group) => accounts.some((account) => account.group === group)).map((group) => (
+                <Fragment key={group}>
+                    <option value={`group:${group}`} disabled data-heading>
+                        {group}
+                    </option>
+                    {accounts
+                        .filter((account) => account.group === group)
+                        .map((account) => {
+                            const hint = hintFor ? hintFor(account) : account.hint;
+
+                            return (
+                                <option key={account.id} value={account.id} disabled={hint !== null} data-hint={hint}>
+                                    {account.ledger ?? account.label}
+                                </option>
+                            );
+                        })}
+                </Fragment>
+            ))}
+        </>
+    );
+}
 
 const blankLine = (side: string): LineForm => ({ account_id: '', side, amount: '', narration: '', party_id: '' });
 
@@ -113,6 +148,7 @@ export default function VoucherFormPage({
     accounts,
     suppliers,
     customers,
+    employees,
     instrumentTypes,
 }: {
     type: VoucherTypeProps;
@@ -122,6 +158,7 @@ export default function VoucherFormPage({
     accounts: AccountOption[];
     suppliers: Option[];
     customers: Option[];
+    employees: Option[];
     instrumentTypes: string[];
 }) {
     const { canPostVouchers } = usePage<SharedData>().props;
@@ -230,12 +267,8 @@ export default function VoucherFormPage({
                                 value={data.money_account_id}
                                 onChange={(e) => setData('money_account_id', e.target.value)}
                             >
-                                <option value="">Choose an account</option>
-                                {moneyAccounts.map((account) => (
-                                    <option key={account.id} value={account.id} disabled={account.hint !== null} data-hint={account.hint}>
-                                        {account.label}
-                                    </option>
-                                ))}
+                                <option value="">Choose a ledger head</option>
+                                <MoneyHeadOptions accounts={moneyAccounts} />
                             </SearchSelect>
                             <p className="text-muted-foreground text-xs">
                                 {moneyAccounts.every((account) => account.hint !== null) ? (
@@ -263,31 +296,25 @@ export default function VoucherFormPage({
                     {type.value === 'contra' && (
                         <div className="grid gap-2">
                             <Label htmlFor="to_money_account_id" required>
-                                Moved to
+                                Moved to (ledger head)
                             </Label>
                             <SearchSelect
                                 id="to_money_account_id"
                                 value={data.to_money_account_id}
                                 onChange={(e) => setData('to_money_account_id', e.target.value)}
                             >
-                                <option value="">Choose an account</option>
-                                {moneyAccounts
-                                    .filter((account) => String(account.id) !== data.money_account_id)
-                                    .map((account) => {
-                                        // Money never moves INTO a gateway by hand: the gateway fills itself from sales.
-                                        const hint =
-                                            account.hint ??
-                                            (account.type === 'gateway' ? 'Online-sale money: it only leaves a gateway, never enters one.' : null);
-
-                                        return (
-                                            <option key={account.id} value={account.id} disabled={hint !== null} data-hint={hint}>
-                                                {account.label}
-                                            </option>
-                                        );
-                                    })}
+                                <option value="">Choose a ledger head</option>
+                                <MoneyHeadOptions
+                                    accounts={moneyAccounts.filter((account) => String(account.id) !== data.money_account_id)}
+                                    // Money never moves INTO a gateway by hand: the gateway fills itself from sales.
+                                    hintFor={(account) =>
+                                        account.hint ??
+                                        (account.type === 'gateway' ? 'Online-sale money: it only leaves a gateway, never enters one.' : null)
+                                    }
+                                />
                             </SearchSelect>
                             <p className="text-muted-foreground text-xs">
-                                Cash deposited, cash withdrawn, or bank to bank. The list comes from{' '}
+                                Cash deposited, cash withdrawn, or bank to bank, head to head. Each account is its own ledger head, made in{' '}
                                 <Link href="/accounting/money-accounts" className="underline">
                                     Bank &amp; cash
                                 </Link>
@@ -386,9 +413,9 @@ export default function VoucherFormPage({
                                                                 invalid={Boolean(lineError(index, 'party_id'))}
                                                             >
                                                                 <option value="">
-                                                                    {party === 'supplier' ? 'Which supplier?' : 'Which customer?'}
+                                                                    {party === 'supplier' ? 'Which supplier?' : party === 'employee' ? 'Which employee?' : 'Which customer?'}
                                                                 </option>
-                                                                {(party === 'supplier' ? suppliers : customers).map((option) => (
+                                                                {(party === 'supplier' ? suppliers : party === 'employee' ? employees : customers).map((option) => (
                                                                     <option key={option.id} value={option.id}>
                                                                         {option.label}
                                                                     </option>

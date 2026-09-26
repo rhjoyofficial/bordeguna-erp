@@ -12,6 +12,7 @@ use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\MoneyLedgers;
+use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -58,6 +59,7 @@ class PostJournal
         $this->assertAccountsArePostable($draft);
         $this->assertBalanced($draft);
         $this->assertMoneyAccountsBelongHere($draft, $businessId);
+        $this->assertPartyLedgersNameTheirParty($draft);
 
         // ⚠ A reversal posts back exactly what the original posted, money
         // account and all, so it is never re-stamped or refused here.
@@ -163,6 +165,30 @@ class PostJournal
      * either balances exactly or it is refused. "Exactly" is possible only
      * because the amounts are whole paisa - see Support\Money.
      */
+    private function assertPartyLedgersNameTheirParty(JournalDraft $draft): void
+    {
+        // ⚠⚠ A line on a party-kept control head (Support\PartyLedgers: advances
+        // to suppliers and from customers, employee advances, deductions payable,
+        // salaries payable) ALWAYS names its party, whichever module posts it.
+        // That one rule is what makes "1170 > Musa Islam" a ledger: the parties
+        // add up to the control head, or the reconciliation screen says so (R7).
+        // Checked here, on the only way into the ledger, not in the screens
+        // (26 Sep 2026).
+        $accounts = Account::query()->findMany(collect($draft->lines)->pluck('accountId')->unique())->keyBy('id');
+
+        foreach ($draft->lines as $index => $line) {
+            $account = $accounts->get($line->accountId);
+
+            if ($account === null || ($class = PartyLedgers::partyClassFor($account)) === null) {
+                continue;
+            }
+
+            if (! $line->party instanceof $class) {
+                throw JournalException::partyRequired($account, PartyLedgers::noun($class), $index + 1);
+            }
+        }
+    }
+
     private function assertBalanced(JournalDraft $draft): void
     {
         $total = $draft->total();

@@ -11,6 +11,7 @@ use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
@@ -134,9 +135,10 @@ class PostVoucher
             $partyClass = VoucherAccounts::partyClassFor($row->account);
 
             if ($partyClass !== null && $row->party === null) {
-                $who = class_basename($partyClass) === 'Supplier' ? 'supplier' : 'customer';
+                $who = PartyLedgers::noun($partyClass);
+                $what = $row->account->system_slug === 'employee_deductions_payable' ? 'deduction' : 'advance';
 
-                throw ValidationException::withMessages(["lines.{$index}.party_id" => "Say which {$who} this advance belongs to."]);
+                throw ValidationException::withMessages(["lines.{$index}.party_id" => "Say which {$who} this {$what} belongs to."]);
             }
 
             $lines[] = $row->isDebit()

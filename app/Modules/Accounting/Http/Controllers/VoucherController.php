@@ -8,15 +8,20 @@ use App\Modules\Accounting\Actions\ReverseVoucher;
 use App\Modules\Accounting\Actions\SaveVoucherDraft;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Enums\VoucherType;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\AmountInWords;
+use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\StoreAttachment;
+use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
+use App\Modules\Hrm\Enums\EmployeeStatus;
+use App\Modules\Hrm\Models\Employee;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Http\RedirectResponse;
@@ -287,7 +292,7 @@ class VoucherController extends Controller
     private function form(VoucherType $type, ?Voucher $voucher): Response
     {
         $voucher?->load('lines');
-        $partySlugs = array_flip(array_keys(VoucherAccounts::PARTY_ACCOUNTS));
+        $partyNouns = array_map(fn (string $class) => PartyLedgers::noun($class), PartyLedgers::voucherPickable());
 
         return Inertia::render('accounting/vouchers/form', [
             'type' => $this->typeProps($type),
@@ -322,30 +327,50 @@ class VoucherController extends Controller
             // reason (Joy, 21 Sep 2026: an account set up there but missing from
             // the list, with nothing saying why, reads as a broken form). Usable
             // ones first; PostVoucher refuses the rest whatever the form sends.
-            'moneyAccounts' => fn () => MoneyAccount::query()
-                ->orderBy('name')->get()
-                ->map(fn (MoneyAccount $account) => [
-                    'id' => $account->id,
-                    'label' => $account->label(),
-                    'type' => $account->type->value,
-                    'hint' => $this->moneyAccountHint($type, $account),
-                ])
-                ->sortBy(fn (array $row) => $row['hint'] === null ? 0 : 1)
-                ->values(),
+            //
+            // ⭐ 26 Sep 2026 (the accountant: "money flows by heading"): every
+            // account is shown AS ITS LEDGER HEAD, grouped Cash / Bank / Mobile,
+            // because each cash, bank and wallet account owns exactly one head
+            // (MoneyLedgers). The server still resolves head to money account,
+            // so the cash book and the till guard are untouched.
+            'moneyAccounts' => function () use ($type) {
+                $accounts = MoneyAccount::query()->orderBy('name')->get();
+                $heads = Account::query()->findMany($accounts->pluck('account_id')->filter())->keyBy('id');
+
+                return $accounts
+                    ->map(fn (MoneyAccount $account) => [
+                        'id' => $account->id,
+                        'label' => $account->label(),
+                        'ledger' => $heads->get($account->account_id)?->label(),
+                        'type' => $account->type->value,
+                        'group' => match ($account->type) {
+                            MoneyAccountType::Cash => 'Cash in hand',
+                            MoneyAccountType::Bank => 'Bank accounts',
+                            MoneyAccountType::Mfs => 'Mobile wallets',
+                            MoneyAccountType::Gateway => 'Payment gateways',
+                            default => 'Courier accounts',
+                        },
+                        'hint' => $this->moneyAccountHint($type, $account),
+                    ])
+                    ->sortBy(fn (array $row) => $row['hint'] === null ? 0 : 1)
+                    ->values();
+            },
             // Every head of the chart, the unusable ones greyed with where they
             // are posted instead (VoucherAccounts::catalogue).
             'accounts' => fn () => VoucherAccounts::catalogue(Carbon::today(), $type)->map(fn (array $row) => [
                 'id' => $row['account']->id,
                 'label' => $row['account']->label(),
-                'party' => isset($partySlugs[$row['account']->system_slug])
-                    ? ($row['account']->system_slug === 'supplier_advances' ? 'supplier' : 'customer')
-                    : null,
+                'party' => $partyNouns[$row['account']->system_slug ?? ''] ?? null,
                 'usable' => $row['usable'],
                 'heading' => $row['heading'],
                 'hint' => $row['hint'],
             ]),
             'suppliers' => fn () => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),
             'customers' => fn () => Customer::query()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
+            // Every employee, separated ones too: a person who left may still
+            // owe an advance or be owed a deduction refund.
+            'employees' => fn () => Employee::query()->orderBy('first_name')->orderBy('last_name')->get()
+                ->map(fn (Employee $e) => ['id' => $e->id, 'label' => PartyLedgers::label($e).' ('.$e->employee_code.')'.($e->status !== EmployeeStatus::Separated ? '' : ' (left)')]),
             'instrumentTypes' => Voucher::INSTRUMENT_TYPES,
         ]);
     }
@@ -395,7 +420,7 @@ class VoucherController extends Controller
             'total_in_words' => AmountInWords::taka($voucher->total()),
             'lines' => $voucher->lines->map(fn ($line) => [
                 'account' => $line->account?->label(),
-                'party' => $line->party?->getAttribute('name'),
+                'party' => PartyLedgers::label($line->party, $line->party_type, $line->party_id),
                 'narration' => $line->narration,
                 'debit' => $line->isDebit() ? $line->amount()->format() : '',
                 'credit' => $line->isDebit() ? '' : $line->amount()->format(),

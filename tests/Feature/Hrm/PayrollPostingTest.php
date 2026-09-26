@@ -153,6 +153,30 @@ it('posts the wage bill when the run is approved', function () {
         ->and($amountOn($advances))->toBe(-200000);
 });
 
+it('keeps each deduction on an employee ledger against that employee, and the wage cost against nobody', function () {
+    // 26 Sep 2026: 2140 Employee Deductions Payable and 1170 Employee Advances
+    // are ONE LEDGER PER EMPLOYEE (Accounting Support\PartyLedgers). The accrual
+    // used to lump every employee's deductions into one line per account, which
+    // made "what is held from Karim" unanswerable from the books.
+    $run = ($this->buildRun)();
+
+    app(TransitionPayrollRun::class)->markApproved($run, $this->user);
+
+    $journal = Journal::first();
+    $lineOn = fn (string $slug) => JournalLine::where('journal_id', $journal->id)->where('account_id', Account::bySlug($slug)->id)->get();
+
+    foreach (['employee_deductions_payable', 'employee_advances', 'salaries_payable'] as $slug) {
+        $lines = $lineOn($slug);
+
+        expect($lines)->toHaveCount(1, $slug)
+            ->and($lines->first()->party_type)->toBe($this->employee->getMorphClass(), $slug)
+            ->and($lines->first()->party_id)->toBe($this->employee->id, $slug);
+    }
+
+    expect($lineOn('salaries_expense')->first()->party_id)->toBeNull()
+        ->and($journal->balance()->isZero())->toBeTrue();
+});
+
 it('dates the accrual to the period the work was done in', function () {
     $run = ($this->buildRun)();
 

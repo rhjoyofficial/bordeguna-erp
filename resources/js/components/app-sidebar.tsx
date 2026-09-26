@@ -538,6 +538,9 @@ export function AppSidebar() {
                           // The follow-up the ageing raises: which invoices,
                           // which payments, in what order, for ONE customer.
                           { title: 'Customer statement', url: '/accounting/customer-statement', icon: Contact },
+                          // One employee's ledgers: advances, salary owed, deductions
+                          // held, claims owed (the accountant, 26 Sep 2026).
+                          { title: 'Employee statement', url: '/accounting/employee-statement', icon: Contact },
                           { title: 'Payables ageing', url: '/accounting/payables-ageing', icon: ReceiptText },
                           // ⚠ "Cash & bank book" is the REPORT; "Bank & cash"
                           // below is the setup screen that names the accounts.
@@ -579,7 +582,8 @@ export function AppSidebar() {
                           // them. Five accounts existed with no transfer document
                           // at all, so a bank-to-till withdrawal could only be a
                           // hand-written journal - which meant it went unrecorded.
-                          { title: 'Money transfer', url: '/accounting/money-transfers', icon: ArrowLeftRight },
+                          // 26 Sep 2026: new moves are Contra vouchers (above); this is the TRF- history.
+                          { title: 'Transfer history', url: '/accounting/money-transfers', icon: ArrowLeftRight },
                           // ⚠⚠ 4900 Other Income was postable from the day the
                           // chart was seeded and NO SCREEN COULD REACH IT, so
                           // scrap, interest, rent and supplier refunds had to be

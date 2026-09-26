@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Support;
 
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Foundation\Models\Business;
@@ -143,6 +144,41 @@ final class SubledgerReconciliation
 
         if (AccountMapping::forKeyOn('payroll.net_payable', $today) !== null) {
             $this->reconcileEmployeeAdvances($business, $today);
+        }
+
+        $this->reconcilePartyLedgers($business);
+    }
+
+    /**
+     * R7. Every party-kept control head is fully explained by its parties.
+     *
+     * PostJournal refuses a new line on 1160 / 2150 / 1170 / 2140 / 2130 that
+     * names nobody (26 Sep 2026). Lines from before that rule, or slipped in
+     * around the engine, are exactly what would make "Musa Islam's ledger" a
+     * lie, so they are reported by head and amount rather than hidden. One
+     * check per head that has any posting at all.
+     */
+    private function reconcilePartyLedgers(string $business): void
+    {
+        foreach (PartyLedgers::all() as $slug => $class) {
+            $account = Account::bySlug($slug);
+
+            if ($account === null || JournalLine::query()->where('account_id', $account->id)->doesntExist()) {
+                continue;
+            }
+
+            $this->checks++;
+            $noun = PartyLedgers::noun($class);
+            $morph = (new $class)->getMorphClass();
+            $unnamedLines = fn () => JournalLine::query()->where('account_id', $account->id)
+                ->where(fn ($q) => $q->whereNull('party_id')->orWhere('party_type', '!=', $morph));
+
+            $unnamedCount = $unnamedLines()->count();
+
+            if ($unnamedCount > 0) {
+                $unnamed = Money::ofMinor((int) $unnamedLines()->sum('amount_minor'));
+                $this->problems[] = "{$business}: {$account->label()} has {$unnamedCount} posting(s) worth {$unnamed->absolute()->format()} with no {$noun} named, so the {$noun} ledgers do not add up to it.";
+            }
         }
     }
 

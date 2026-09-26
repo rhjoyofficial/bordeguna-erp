@@ -42,12 +42,6 @@ final class LedgerEntry
             return null;
         }
 
-        $party = $this->line->party;
-
-        if ($party === null) {
-            return class_basename($this->line->party_type)." #{$this->line->party_id}";
-        }
-
-        return $party->name ?? class_basename($party)." #{$party->getKey()}";
+        return PartyLedgers::label($this->line->party, $this->line->party_type, (int) $this->line->party_id);
     }
 }

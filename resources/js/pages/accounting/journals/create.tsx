@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useMemo } from 'react';
 
 interface AccountOption {
@@ -108,7 +108,15 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
             <Head title="New journal" />
             <form onSubmit={submit} className="flex flex-col gap-6 p-4">
                 <div>
-                    <h1 className="text-lg font-semibold">New journal</h1>
+                    <h1 className="text-lg font-semibold">New journal (direct)</h1>
+                    <p className="mt-1 rounded-md border border-dashed px-3 py-2 text-sm">
+                        Since 26 Sep 2026 the everyday way is a{' '}
+                        <Link href="/accounting/vouchers/journal/create" className="underline">
+                            Journal voucher
+                        </Link>
+                        : drafted, numbered when posted, printable, reversed and copied, and it names the employee, customer or supplier on a
+                        party ledger. This screen posts straight to the ledger and is kept for the Owner.
+                    </p>
                     <p className="text-muted-foreground text-sm">
                         Every entry needs at least two lines, and the debits must equal the credits exactly before it can be posted.
                     </p>
