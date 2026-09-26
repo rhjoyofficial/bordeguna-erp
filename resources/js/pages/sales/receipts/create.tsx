@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useMemo, useState } from 'react';
@@ -19,12 +20,6 @@ interface OpenInvoice {
     outstanding: string;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales/orders' },
-    { title: 'Receipts', href: '/sales/receipts' },
-    { title: 'Receive payment', href: '/sales/receipts/new' },
-];
-
 // Whole paisa, so the split adds up exactly to what was typed.
 const toPaisa = (value: string) => Math.round((parseFloat(value) || 0) * 100);
 const fromPaisa = (paisa: number) => (paisa / 100).toFixed(2);
@@ -34,6 +29,9 @@ const money = (paisa: number) => (paisa / 100).toLocaleString('en-IN', { minimum
  * ⭐ Receive payment (21 Sep 2026): pick the customer, type what they paid, and
  * it is spread over their oldest invoices first. Every figure stays editable
  * before anything is posted, and nothing is posted that does not add up.
+ *
+ * ⭐ Daily screen 4 of 6 in plain words and Bangla (26 Sep 2026). Digits,
+ * dates and money never translate.
  */
 export default function ReceiptCreate({
     customers,
@@ -48,6 +46,12 @@ export default function ReceiptCreate({
     moneyAccounts: { id: number; name: string; type: string }[];
     today: string;
 }) {
+    const { t } = useTranslation();
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: t('receipt.sales'), href: '/sales/orders' },
+        { title: t('receipt.receipts'), href: '/sales/receipts' },
+        { title: t('receipt.title'), href: '/sales/receipts/new' },
+    ];
     const [received, setReceived] = useState('');
     const [split, setSplit] = useState<Record<number, string>>({});
     const form = useForm({
@@ -98,22 +102,20 @@ export default function ReceiptCreate({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Receive payment" />
+            <Head title={t('receipt.title')} />
             <form onSubmit={submit} className="flex max-w-5xl flex-col gap-6 p-4">
                 <div>
-                    <h1 className="text-lg font-semibold">Receive payment</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Money a customer paid. It settles their oldest invoices first; change the split below before you post if they said otherwise.
-                    </p>
+                    <h1 className="text-lg font-semibold">{t('receipt.title')}</h1>
+                    <p className="text-muted-foreground text-sm">{t('receipt.intro')}</p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="grid gap-2 sm:col-span-2">
                         <Label htmlFor="customer" required>
-                            Customer
+                            {t('receipt.customer')}
                         </Label>
                         <SearchSelect id="customer" value={form.data.customer_id} onChange={(e) => chooseCustomer(e.target.value)}>
-                            <option value="">Choose a customer</option>
+                            <option value="">{t('receipt.choose_customer')}</option>
                             {customers.map((c) => (
                                 <option key={c.id} value={c.id}>
                                     {c.phone ? `${c.name} (${c.phone})` : c.name}
@@ -124,7 +126,7 @@ export default function ReceiptCreate({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="received" required>
-                            Amount received (taka)
+                            {t('receipt.amount_received')}
                         </Label>
                         <Input
                             id="received"
@@ -139,7 +141,7 @@ export default function ReceiptCreate({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="received_on" required>
-                            Date received
+                            {t('receipt.date_received')}
                         </Label>
                         <Input
                             id="received_on"
@@ -152,14 +154,14 @@ export default function ReceiptCreate({
                     </div>
                     <div className="grid gap-2 sm:col-span-2">
                         <Label htmlFor="account" required>
-                            Received into
+                            {t('receipt.received_into')}
                         </Label>
                         <SearchSelect
                             id="account"
                             value={form.data.money_account_id}
                             onChange={(e) => form.setData('money_account_id', e.target.value)}
                         >
-                            <option value="">Cash, bank or wallet</option>
+                            <option value="">{t('receipt.cash_bank_wallet')}</option>
                             {moneyAccounts.map((account) => (
                                 <option key={account.id} value={account.id}>
                                     {account.name}
@@ -168,47 +170,46 @@ export default function ReceiptCreate({
                         </SearchSelect>
                         {moneyAccounts.length === 0 && (
                             <p className="text-xs text-amber-600 dark:text-amber-500">
-                                No cash, bank or wallet account yet. Add one under{' '}
+                                {t('receipt.no_money_account')}{' '}
                                 <Link href="/accounting/money-accounts" className="underline">
                                     Accounting &gt; Bank &amp; cash
                                 </Link>
-                                .
                             </p>
                         )}
                         <InputError message={form.errors.money_account_id} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="reference">Reference</Label>
+                        <Label htmlFor="reference">{t('receipt.reference')}</Label>
                         <Input
                             id="reference"
                             value={form.data.reference}
                             onChange={(e) => form.setData('reference', e.target.value)}
-                            placeholder="cheque no., bKash TrxID"
+                            placeholder={t('receipt.reference_placeholder')}
                         />
                         <InputError message={form.errors.reference} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="note">Note</Label>
-                        <Input id="note" value={form.data.note} onChange={(e) => form.setData('note', e.target.value)} placeholder="optional" />
+                        <Label htmlFor="note">{t('receipt.note')}</Label>
+                        <Input id="note" value={form.data.note} onChange={(e) => form.setData('note', e.target.value)} placeholder={t('receipt.optional')} />
                     </div>
                 </div>
 
                 {customer && (
                     <section className="grid gap-2">
-                        <h2 className="text-sm font-semibold">Unpaid invoices of {customer.name}</h2>
+                        <h2 className="text-sm font-semibold">{t('receipt.unpaid_invoices_of', { name: customer.name })}</h2>
                         {invoices.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">Nothing is owed: every invoice of this customer is paid.</p>
+                            <p className="text-muted-foreground text-sm">{t('receipt.nothing_owed')}</p>
                         ) : (
                             <div className="overflow-x-auto">
                                 <table className="w-full min-w-[40rem] text-sm">
                                     <thead>
                                         <tr className="text-muted-foreground border-b text-left">
-                                            <th className="py-2">Invoice</th>
-                                            <th className="py-2">Date</th>
-                                            <th className="py-2">Due</th>
-                                            <th className="py-2 text-right">Total</th>
-                                            <th className="py-2 text-right">Still owed</th>
-                                            <th className="py-2 text-right">Pay now</th>
+                                            <th className="py-2">{t('receipt.col_invoice')}</th>
+                                            <th className="py-2">{t('receipt.col_date')}</th>
+                                            <th className="py-2">{t('receipt.col_due')}</th>
+                                            <th className="py-2 text-right">{t('receipt.col_total')}</th>
+                                            <th className="py-2 text-right">{t('receipt.col_still_owed')}</th>
+                                            <th className="py-2 text-right">{t('receipt.col_pay_now')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -224,7 +225,7 @@ export default function ReceiptCreate({
                                                     {invoice.due ?? '-'}
                                                     {invoice.is_overdue && (
                                                         <Badge variant="destructive" className="ml-2">
-                                                            overdue
+                                                            {t('receipt.overdue')}
                                                         </Badge>
                                                     )}
                                                 </td>
@@ -232,7 +233,7 @@ export default function ReceiptCreate({
                                                 <td className="py-2 text-right tabular-nums">{money(toPaisa(invoice.outstanding))}</td>
                                                 <td className="py-2 text-right">
                                                     <Input
-                                                        aria-label={`Pay now on ${invoice.number}`}
+                                                        aria-label={t('receipt.pay_now_on', { number: invoice.number })}
                                                         type="number"
                                                         inputMode="decimal"
                                                         min={0}
@@ -249,7 +250,7 @@ export default function ReceiptCreate({
                                     <tfoot>
                                         <tr className="font-medium">
                                             <td className="py-2" colSpan={4}>
-                                                Owed in all
+                                                {t('receipt.owed_in_all')}
                                             </td>
                                             <td className="py-2 text-right tabular-nums">{money(owed)}</td>
                                             <td className="py-2 text-right tabular-nums">{money(allocated)}</td>
@@ -262,23 +263,21 @@ export default function ReceiptCreate({
                 )}
 
                 {receivedPaisa > owed && owed > 0 && (
-                    <p className="text-sm text-amber-600 dark:text-amber-500">
-                        They owe only {money(owed)}. Record {money(owed)} here; money paid ahead of an order is taken on that order's page.
-                    </p>
+                    <p className="text-sm text-amber-600 dark:text-amber-500">{t('receipt.owe_only', { owed: money(owed) })}</p>
                 )}
                 {mismatch && receivedPaisa <= owed && (
                     <p className="text-sm text-amber-600 dark:text-amber-500">
-                        The split adds up to {money(allocated)}, not the {money(receivedPaisa)} received. Change a figure so they agree.
+                        {t('receipt.split_mismatch', { allocated: money(allocated), received: money(receivedPaisa) })}
                     </p>
                 )}
                 <InputError message={form.errors.allocations} />
 
                 <div className="flex items-center gap-3">
                     <Button disabled={form.processing || rows.length === 0 || mismatch || !form.data.money_account_id}>
-                        {allocated > 0 ? `Receive ${money(allocated)}` : 'Receive payment'}
+                        {allocated > 0 ? t('receipt.receive_amount', { amount: money(allocated) }) : t('receipt.receive_button')}
                     </Button>
                     <Link href="/sales/receipts" className="text-muted-foreground text-sm hover:underline">
-                        Cancel
+                        {t('receipt.cancel')}
                     </Link>
                 </div>
             </form>
