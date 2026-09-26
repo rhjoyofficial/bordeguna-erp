@@ -36,6 +36,8 @@ interface CustomerInfo {
     email: string | null;
     address: string | null;
     payment_terms: string | null;
+    credit_days: number | null;
+    credit_days_effective: number;
     price_group: string;
     is_active: boolean;
     note: string | null;
@@ -78,7 +80,8 @@ export default function CustomerShow({
         ['Phone', customer.phone],
         ['Email', customer.email],
         ['Address', customer.address],
-        ['Payment terms', customer.payment_terms],
+        ['Credit days', customer.credit_days === null ? `${customer.credit_days_effective} (default)` : String(customer.credit_days)],
+        ['Terms note', customer.payment_terms],
         ['Price group', customer.price_group],
     ];
 

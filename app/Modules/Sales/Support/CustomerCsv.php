@@ -33,6 +33,8 @@ class CustomerCsv
         'type', 'contact_name', 'phone', 'email', 'address',
         'price_group', 'payment_terms', 'credit_limit', 'bin', 'tin',
         'note', 'is_active',
+        // ⚠ Last, so a spreadsheet saved from the old template still lines up.
+        'credit_days',
     ];
 
     /** What each column is for, shown beside the template. */
@@ -45,7 +47,8 @@ class CustomerCsv
         'email' => 'Optional. Must be a real address if given.',
         'address' => 'Free text, one line.',
         'price_group' => 'Price group CODE, e.g. RETAIL or DEALER. Blank means they bill at RETAIL.',
-        'payment_terms' => 'Free text. e.g. 30 days, Cash on delivery. Blank means nothing agreed.',
+        'payment_terms' => 'A note about terms, e.g. cheque on delivery. Not used for dates.',
+        'credit_days' => 'Days after the invoice date it falls due, digits only. Blank means 10.',
         'credit_limit' => 'Amount in BDT, digits only. Blank means no limit recorded.',
         'bin' => 'Business Identification Number (VAT). Optional.',
         'tin' => 'Taxpayer Identification Number. Optional.',

@@ -31,6 +31,8 @@ interface Customer {
     note: string | null;
     phone: string | null;
     payment_terms: string | null;
+    credit_days: number | null;
+    credit_days_effective: number;
     credit_limit: string | null;
     price_group_id: number | null;
     is_system: boolean;
@@ -58,6 +60,7 @@ const EMPTY = {
     tin: '',
     address: '',
     payment_terms: '',
+    credit_days: '',
     credit_limit: '',
     price_group_id: '',
     note: '',
@@ -115,6 +118,7 @@ export default function CustomersIndex({
             tin: customer.tin ?? '',
             address: customer.address ?? '',
             payment_terms: customer.payment_terms ?? '',
+            credit_days: customer.credit_days === null ? '' : String(customer.credit_days),
             credit_limit: customer.credit_limit ?? '',
             price_group_id: customer.price_group_id !== null ? String(customer.price_group_id) : '',
             note: customer.note ?? '',
@@ -180,12 +184,23 @@ export default function CustomersIndex({
                                 ))}
                             </SearchSelect>
                         </Field>
-                        <Field label="Payment terms" htmlFor="payment_terms" size="sm">
+                        {/* ⭐ Days, not words (26 Sep 2026): an invoice falls due this many
+                            days after its date. Blank means the default, 10. */}
+                        <Field label="Credit days" htmlFor="credit_days" size="sm" error={errors.credit_days}>
+                            <Input
+                                id="credit_days"
+                                inputMode="numeric"
+                                value={data.credit_days}
+                                onChange={(e) => setData('credit_days', e.target.value)}
+                                placeholder={data.type === 'walk_in' ? '0' : '10'}
+                            />
+                        </Field>
+                        <Field label="Terms note" htmlFor="payment_terms" size="sm">
                             <Input
                                 id="payment_terms"
                                 value={data.payment_terms}
                                 onChange={(e) => setData('payment_terms', e.target.value)}
-                                placeholder="Net 30"
+                                placeholder="e.g. cheque on delivery"
                             />
                         </Field>
                         <Field label="Credit limit" htmlFor="credit_limit" size="sm" error={errors.credit_limit}>
@@ -274,7 +289,7 @@ export default function CustomersIndex({
                                 <th className="p-3">Customer</th>
                                 <th className="p-3">Type</th>
                                 <th className="p-3">Phone</th>
-                                <th className="p-3">Terms</th>
+                                <th className="p-3">Credit days</th>
                                 <th className="p-3 text-right">Credit limit</th>
                                 <th className="p-3"></th>
                             </tr>
@@ -309,7 +324,9 @@ export default function CustomersIndex({
                                         )}
                                     </td>
                                     <td className="p-3">{customer.phone ?? '-'}</td>
-                                    <td className="p-3">{customer.payment_terms ?? '-'}</td>
+                                    <td className="p-3">
+                                        {customer.credit_days_effective} days{customer.credit_days === null ? ' (default)' : ''}
+                                    </td>
                                     <td className="p-3 text-right tabular-nums">{customer.credit_limit ?? '-'}</td>
                                     <td className="p-3 text-right">
                                         {/* ⚠ The walk-in row IS editable - a business may want to

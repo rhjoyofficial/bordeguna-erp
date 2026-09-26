@@ -106,7 +106,13 @@ class RecordSalesInvoice
                 'customer_id' => $customer->id,
                 'invoice_number' => $this->nextNumber($customer->business_id, $date),
                 'invoice_date' => $date,
-                'due_date' => $dueDate === null ? null : Carbon::parse($dueDate)->startOfDay(),
+                // ⭐ Never blank (Joy, 26 Sep 2026): a due date typed on the
+                // invoice wins; otherwise the customer's credit days from the
+                // invoice date, 10 by default, 0 for the walk-in row. Ageing by
+                // due date needs every invoice to have one.
+                'due_date' => $dueDate === null
+                    ? $date->copy()->addDays($customer->creditDays())
+                    : Carbon::parse($dueDate)->startOfDay(),
                 'note' => $note,
                 'created_by' => $createdBy->id,
             ]);

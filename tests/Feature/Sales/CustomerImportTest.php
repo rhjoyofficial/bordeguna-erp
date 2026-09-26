@@ -311,3 +311,14 @@ it('does not let a member without customer management import or export', functio
     $asStaff()->get(route('sales.customers.export'))->assertForbidden();
     $asStaff()->get(route('sales.customers.template'))->assertForbidden();
 });
+
+it('imports credit days as the last column and refuses a figure that is not whole days', function () {
+    // The new column is LAST so an old template still lines up: 14 old columns, then credit_days.
+    $header = 'code,name,type,contact_name,phone,email,address,price_group,payment_terms,credit_limit,bin,tin,note,is_active,credit_days';
+
+    ($this->review)(($this->file)("CUS-0020,Terms Dealer,dealer,,,,,DEALER,,,,,,,45\n", $header))
+        ->assertSessionHas('customerImportPlan', fn ($plan) => $plan['errors'] === []);
+
+    ($this->review)(($this->file)("CUS-0021,Odd Dealer,dealer,,,,,DEALER,,,,,,,forty\n", $header))
+        ->assertSessionHas('customerImportPlan', fn ($plan) => count($plan['errors']) === 1 && str_contains($plan['errors'][0], 'credit_days'));
+});

@@ -58,6 +58,7 @@ class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmen
         'tin',
         'address',
         'payment_terms',
+        'credit_days',
         'credit_limit',
         // ⚠ A FK to price_groups, not free text - a typo can no longer create
         // a phantom group that silently prices a distributor at retail. Null
@@ -130,11 +131,40 @@ class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmen
         return $this->belongsTo(PriceGroup::class);
     }
 
+    /**
+     * ⭐ Joy, 26 Sep 2026 (Q6): payment terms are a number of days, 10 unless
+     * the customer has their own, and every invoice gets a due date from it.
+     */
+    public const DEFAULT_CREDIT_DAYS = 10;
+
+    /**
+     * How many days after its date an invoice for this customer falls due.
+     * The walk-in row is never sold on account, so its invoices are due the
+     * day they are raised.
+     */
+    /** Sent with every row, so a list can say "10 days (default)" without asking. */
+    protected $appends = ['credit_days_effective'];
+
+    public function getCreditDaysEffectiveAttribute(): int
+    {
+        return $this->creditDays();
+    }
+
+    public function creditDays(): int
+    {
+        if ($this->type === CustomerType::WalkIn) {
+            return 0;
+        }
+
+        return $this->credit_days ?? self::DEFAULT_CREDIT_DAYS;
+    }
+
     protected function casts(): array
     {
         return [
             'type' => CustomerType::class,
             'credit_limit' => 'decimal:4',
+            'credit_days' => 'integer',
             'is_system' => 'boolean',
             'is_active' => 'boolean',
         ];
@@ -143,7 +173,7 @@ class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmen
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'code', 'type', 'phone', 'payment_terms', 'credit_limit', 'price_group_id', 'is_active'])
+            ->logOnly(['name', 'code', 'type', 'phone', 'payment_terms', 'credit_days', 'credit_limit', 'price_group_id', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

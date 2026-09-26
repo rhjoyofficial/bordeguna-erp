@@ -416,3 +416,36 @@ it('keeps cost and revenue in the same month when the challan and invoice differ
         ->and((int) $cogsLine->amount_minor)->toBe(500000)
         ->and((int) $revenueLine->amount_minor)->toBe(-850000);
 });
+
+// ─── EVERY INVOICE FALLS DUE (Joy, 26 Sep 2026, Q6: terms are days, default 10) ─
+
+it('gives an invoice a due date from the customer credit days, 10 by default, and keeps a typed one', function () {
+    ($this->stockIn)('10', '100');
+    $lines = [['product' => $this->product, 'quantity' => '1', 'unitPrice' => '150']];
+
+    // No figure of their own: 10 days after the invoice date.
+    $defaulted = ($this->invoiceFor)($lines, '0', '2026-08-04');
+    expect($defaulted->due_date->toDateString())->toBe('2026-08-14');
+
+    // Their own figure wins.
+    $this->customer->update(['credit_days' => 45]);
+    $own = ($this->invoiceFor)($lines, '0', '2026-08-04');
+    expect($own->due_date->toDateString())->toBe('2026-09-18');
+
+    // A due date typed on the invoice wins over both.
+    $typed = app(RecordSalesInvoice::class)->handle(
+        customer: $this->customer->fresh(),
+        lines: $lines,
+        createdBy: $this->user,
+        invoiceDate: '2026-08-04',
+        dueDate: '2026-08-20',
+    );
+    expect($typed->due_date->toDateString())->toBe('2026-08-20');
+
+    // The walk-in row is never on account: due the day it is raised.
+    $walkIn = Customer::create(['business_id' => $this->business->id, 'name' => 'Walk-in', 'type' => CustomerType::WalkIn, 'credit_days' => 30]);
+    $cash = app(RecordSalesInvoice::class)->handle(customer: $walkIn, lines: $lines, createdBy: $this->user, invoiceDate: '2026-08-04');
+    expect($cash->due_date->toDateString())->toBe('2026-08-04')
+        ->and($walkIn->creditDays())->toBe(0)
+        ->and(Customer::DEFAULT_CREDIT_DAYS)->toBe(10);
+});

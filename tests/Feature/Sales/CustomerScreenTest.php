@@ -75,6 +75,7 @@ beforeEach(function () {
         'tin' => '123456789012',
         'address' => 'Savar, Dhaka',
         'payment_terms' => 'Net 30',
+        'credit_days' => '30',
         'credit_limit' => '500000',
         'price_group_id' => (string) $this->dealerGroup->id,
         'note' => 'Collects from the Savar warehouse.',
@@ -306,4 +307,30 @@ it('refuses to put a retail shop in the RETAIL group, and defaults it to SHOP wh
     ($this->asRole)('Owner')->from('/sales/customers')
         ->post('/sales/customers', ['name' => 'A Person', 'type' => 'retail', 'price_group_id' => $retail->id])
         ->assertSessionHasNoErrors();
+});
+
+it('saves credit days as a whole number of days and refuses nonsense', function () {
+    ($this->asRole)('Owner')->from('/sales/customers')
+        ->post('/sales/customers', ['name' => 'Rahim Traders', 'type' => 'dealer', 'credit_days' => '45', 'price_group_id' => (string) $this->dealerGroup->id])
+        ->assertSessionHasNoErrors();
+
+    $dealer = Customer::where('name', 'Rahim Traders')->firstOrFail();
+    expect($dealer->credit_days)->toBe(45)->and($dealer->creditDays())->toBe(45);
+
+    ($this->asRole)('Owner')->from('/sales/customers')
+        ->post('/sales/customers', ['name' => 'Odd Terms', 'type' => 'dealer', 'credit_days' => 'thirty'])
+        ->assertSessionHasErrors('credit_days');
+    ($this->asRole)('Owner')->from('/sales/customers')
+        ->post('/sales/customers', ['name' => 'Odd Terms', 'type' => 'dealer', 'credit_days' => '400'])
+        ->assertSessionHasErrors('credit_days');
+
+    // Blank is the default, 10, shown as such.
+    ($this->asRole)('Owner')->from('/sales/customers')
+        ->post('/sales/customers', ['name' => 'Plain Dealer', 'type' => 'dealer', 'credit_days' => ''])
+        ->assertSessionHasNoErrors();
+    $plain = Customer::where('name', 'Plain Dealer')->firstOrFail();
+    expect($plain->credit_days)->toBeNull()->and($plain->creditDays())->toBe(10);
+
+    $page = ($this->asRole)('Owner')->get('/sales/customers/'.$plain->id)->assertOk()->viewData('page')['props'];
+    expect($page['customer']['credit_days'])->toBeNull()->and($page['customer']['credit_days_effective'])->toBe(10);
 });

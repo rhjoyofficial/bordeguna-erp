@@ -71,6 +71,8 @@ class CustomerController extends Controller
                 'email' => $customer->email,
                 'address' => $customer->address,
                 'payment_terms' => $customer->payment_terms,
+                'credit_days' => $customer->credit_days,
+                'credit_days_effective' => $customer->creditDays(),
                 'price_group' => $customer->priceGroup?->name ?? (($customer->type?->defaultPriceGroupCode() ?? 'RETAIL').' (default)'),
                 'is_active' => $customer->is_active,
                 'note' => $customer->note,
@@ -243,6 +245,8 @@ class CustomerController extends Controller
             'tin' => ['nullable', 'string', 'max:50'],
             'address' => ['nullable', 'string'],
             'payment_terms' => ['nullable', 'string', 'max:255'],
+            // ⭐ Days, not words (26 Sep 2026). Blank means the default, 10.
+            'credit_days' => ['nullable', 'integer', 'min:0', 'max:365'],
             'credit_limit' => ['nullable', 'numeric', 'min:0'],
             // ⚠ Tenant-scoped: a price group from another business must be
             // unreachable (C-PRC-6). Null means RETAIL, the default group.

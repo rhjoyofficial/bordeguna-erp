@@ -44,7 +44,7 @@ class PlanCustomerImport
     /** Columns a person may set through the file. */
     private const WRITABLE = [
         'name', 'type', 'contact_name', 'phone', 'email', 'address',
-        'price_group_id', 'payment_terms', 'credit_limit', 'bin', 'tin',
+        'price_group_id', 'payment_terms', 'credit_days', 'credit_limit', 'bin', 'tin',
         'note', 'is_active',
     ];
 
@@ -140,6 +140,14 @@ class PlanCustomerImport
 
             if ($creditLimit === false) {
                 $plan->addError($line, $code, 'credit_limit must be an amount of zero or more, digits only. Leave it blank when no limit is agreed.');
+
+                continue;
+            }
+
+            $creditDays = trim($values['credit_days'] ?? '');
+
+            if ($creditDays !== '' && (! ctype_digit($creditDays) || (int) $creditDays > 365)) {
+                $plan->addError($line, $code, 'credit_days must be a whole number of days from 0 to 365. Leave it blank for the default, 10.');
 
                 continue;
             }
