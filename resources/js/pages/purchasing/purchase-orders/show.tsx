@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -175,6 +176,7 @@ const blankReceiveLine = (line: Line): ReceiveLine => ({
 });
 
 function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
+    const { t } = useTranslation();
     const receivableLines = order.lines.filter((line) => remaining(line) > 0);
     const { data, setData, post, errors, processing, reset, transform } = useForm<{
         supplier_challan_number: string;
@@ -228,23 +230,20 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
     return (
         <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
             <div>
-                <h3 className="font-medium">Record goods receipt</h3>
-                <p className="text-muted-foreground text-sm">
-                    Defaults to the full remaining quantity - reduce a line for a partial shipment, or set it to 0 if it did not come. Copy the batch
-                    number and dates from the label when it has them: stock with the earliest expiry is sold first.
-                </p>
+                <h3 className="font-medium">{t('grn.title')}</h3>
+                <p className="text-muted-foreground text-sm">{t('grn.intro')}</p>
             </div>
 
             <FormRow className="gap-3">
-                <Field label="Supplier challan no." htmlFor="supplier_challan_number" size="md" error={errors.supplier_challan_number}>
+                <Field label={t('grn.supplier_challan')} htmlFor="supplier_challan_number" size="md" error={errors.supplier_challan_number}>
                     <Input
                         id="supplier_challan_number"
                         value={data.supplier_challan_number}
-                        placeholder="From their delivery note"
+                        placeholder={t('grn.supplier_challan_placeholder')}
                         onChange={(e) => setData('supplier_challan_number', e.target.value)}
                     />
                 </Field>
-                <Field label="Note" htmlFor="receipt_note" size="grow" error={errors.note}>
+                <Field label={t('grn.note')} htmlFor="receipt_note" size="grow" error={errors.note}>
                     <Input id="receipt_note" value={data.note} onChange={(e) => setData('note', e.target.value)} />
                 </Field>
             </FormRow>
@@ -261,12 +260,12 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                             <span className="font-medium">{line.product.name}</span>{' '}
                             <span className="text-muted-foreground">({line.product.sku})</span>{' '}
                             <span className="text-muted-foreground text-xs">
-                                remaining {remaining(line)}
+                                {t('grn.remaining', { quantity: remaining(line) })}
                                 {unit ? ` ${unit}` : ''}
                             </span>
                         </p>
                         <FormRow className="gap-3">
-                            <Field label="Quantity" htmlFor={`receive-qty-${line.id}`} size="sm" required error={lineError(index, 'quantity')}>
+                            <Field label={t('grn.quantity')} htmlFor={`receive-qty-${line.id}`} size="sm" required error={lineError(index, 'quantity')}>
                                 <div className="flex items-center gap-2">
                                     <Input
                                         id={`receive-qty-${line.id}`}
@@ -280,15 +279,15 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                             </Field>
                             {stocked && (
                                 <>
-                                    <Field label="Batch no." htmlFor={`receive-batch-${line.id}`} size="sm" error={lineError(index, 'batch_number')}>
+                                    <Field label={t('grn.batch_no')} htmlFor={`receive-batch-${line.id}`} size="sm" error={lineError(index, 'batch_number')}>
                                         <Input
                                             id={`receive-batch-${line.id}`}
                                             value={entry.batch_number}
-                                            placeholder="As on the label"
+                                            placeholder={t('grn.batch_placeholder')}
                                             onChange={(e) => updateLine(line, { batch_number: e.target.value })}
                                         />
                                     </Field>
-                                    <Field label="Made on" htmlFor={`receive-mfg-${line.id}`} error={lineError(index, 'manufactured_date')}>
+                                    <Field label={t('grn.made_on')} htmlFor={`receive-mfg-${line.id}`} error={lineError(index, 'manufactured_date')}>
                                         <Input
                                             id={`receive-mfg-${line.id}`}
                                             type="date"
@@ -299,7 +298,7 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                                     </Field>
                                     {/* ⚠ `min` only saves a round trip. The server refuses an
                                         expiry before today whatever the browser allows. */}
-                                    <Field label="Expires on" htmlFor={`receive-exp-${line.id}`} error={lineError(index, 'expiry_date')}>
+                                    <Field label={t('grn.expires_on')} htmlFor={`receive-exp-${line.id}`} error={lineError(index, 'expiry_date')}>
                                         <Input
                                             id={`receive-exp-${line.id}`}
                                             type="date"
@@ -321,7 +320,7 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
             <InputError message={errors.lines} />
 
             <Button disabled={processing} className="w-fit">
-                Record receipt
+                {t('grn.record')}
             </Button>
         </form>
     );

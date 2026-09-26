@@ -435,6 +435,25 @@ const dictionary = {
     'orders.quick_address': { en: 'Address (optional)', bn: 'ঠিকানা (ইচ্ছা হলে)' },
     'orders.quick_cancel': { en: 'Cancel', bn: 'বাতিল' },
     'orders.quick_add': { en: 'Add customer', bn: 'ক্রেতা যোগ করুন' },
+    // ── Goods receipt on the purchase order (daily screen 6 of 6, 26 Sep 2026) ──
+    'grn.title': { en: 'Record goods receipt', bn: 'মাল বুঝে নেওয়া লিখুন' },
+    'grn.intro': {
+        en: 'Defaults to the full remaining quantity - reduce a line for a partial shipment, or set it to 0 if it did not come. Copy the batch number and dates from the label when it has them: stock with the earliest expiry is sold first.',
+        bn: 'শুরুতে পুরো বাকি পরিমাণটাই বসানো থাকে - আংশিক চালান হলে লাইনটা কমান, না এলে 0 করুন। লেবেলে থাকলে ব্যাচ নম্বর আর তারিখগুলো তুলে দিন: যার মেয়াদ আগে শেষ, সেই মাল আগে বিক্রি হয়।',
+    },
+    'grn.supplier_challan': { en: 'Supplier challan no.', bn: 'সরবরাহকারীর চালান নং' },
+    'grn.supplier_challan_placeholder': { en: 'From their delivery note', bn: 'তাদের ডেলিভারি নোট থেকে' },
+    'grn.note': { en: 'Note', bn: 'নোট' },
+    'grn.remaining': { en: 'remaining {quantity}', bn: 'বাকি {quantity}' },
+    'grn.quantity': { en: 'Quantity', bn: 'পরিমাণ' },
+    'grn.batch_no': { en: 'Batch no.', bn: 'ব্যাচ নং' },
+    'grn.batch_placeholder': { en: 'As on the label', bn: 'লেবেলে যেমন আছে' },
+    'grn.made_on': { en: 'Made on', bn: 'তৈরির তারিখ' },
+    'grn.expires_on': { en: 'Expires on', bn: 'মেয়াদ শেষ' },
+    'grn.record': { en: 'Record receipt', bn: 'বুঝে নেওয়া লিখে রাখুন' },
+    // Breadcrumbs shared by the sales daily screens
+    'nav.sales': { en: 'Sales', bn: 'সেলস' },
+    'nav.counter': { en: 'Counter', bn: 'কাউন্টার' },
     // ── The language picker ─────────────────────────────────────────────
     'language.heading': { en: 'Language', bn: 'ভাষা' },
     'language.description': {

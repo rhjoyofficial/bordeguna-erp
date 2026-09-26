@@ -101,10 +101,6 @@ interface LastSale {
     change: string | null;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales/invoices' },
-    { title: 'Counter', href: '/sales/counter' },
-];
 
 // ⚠ A value no money account id can take: the empty value means "not chosen
 // yet", which is NOT the same as "the customer owes it". Until 21 Sep 2026 the
@@ -175,6 +171,10 @@ export default function CounterSale({
     resumeCart: ResumeCart | null;
 }) {
     const { t } = useTranslation();
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: t('nav.sales'), href: '/sales/invoices' },
+        { title: t('nav.counter'), href: '/sales/counter' },
+    ];
 
     // ⚠⚠ The cashier's OWN till, from their open shift, or nothing. Never the
     // first account in the list: that put cash into whichever account sorted
