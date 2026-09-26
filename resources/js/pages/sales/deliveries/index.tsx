@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -20,11 +21,10 @@ interface Delivery {
     lines: { id: number; quantity: string; quantity_invoiced: string }[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales/invoices' },
-    { title: 'Delivery challans', href: '/sales/deliveries' },
-];
-
+/**
+ * ⭐ Daily screen 5 of 6 in plain words and Bangla (26 Sep 2026). Digits and
+ * dates never translate.
+ */
 export default function DeliveriesIndex({
     deliveries,
     filters: initialFilters,
@@ -32,26 +32,31 @@ export default function DeliveriesIndex({
     deliveries: Paginated<Delivery>;
     filters: { search: string; status: string };
 }) {
+    const { t } = useTranslation();
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: t('delivery.sales'), href: '/sales/invoices' },
+        { title: t('delivery.title'), href: '/sales/deliveries' },
+    ];
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/deliveries', initialFilters);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Delivery Challans" />
+            <Head title={t('delivery.title')} />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Delivery challans" />
+                <ReportHeading title={t('delivery.title')} />
                 {/* An uninvoiced challan is not an error. It is goods out that
                     nobody has billed yet, and its value is what sits in Goods
                     Delivered Not Invoiced. */}
                 <FilterBar showClear={hasActiveFilters} onClear={resetFilters}>
                     <Input
-                        placeholder="Search challan or customer"
+                        placeholder={t('delivery.search_placeholder')}
                         value={filters.search}
                         onChange={(e) => setFilter('search', e.target.value)}
                         className="max-w-xs"
                     />
                     <SearchSelect value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
-                        <option value="">All</option>
-                        <option value="uninvoiced">Not fully invoiced</option>
+                        <option value="">{t('delivery.all')}</option>
+                        <option value="uninvoiced">{t('delivery.not_fully_invoiced')}</option>
                     </SearchSelect>
                 </FilterBar>
 
@@ -59,13 +64,13 @@ export default function DeliveriesIndex({
                     <table className="w-full text-sm">
                         <thead className="bg-muted/50 text-left">
                             <tr>
-                                <th className="p-3">Challan</th>
-                                <th className="p-3">Date</th>
-                                <th className="p-3">Customer</th>
-                                <th className="p-3">From</th>
-                                <th className="p-3 text-right">Lines</th>
+                                <th className="p-3">{t('delivery.col_challan')}</th>
+                                <th className="p-3">{t('delivery.col_date')}</th>
+                                <th className="p-3">{t('delivery.col_customer')}</th>
+                                <th className="p-3">{t('delivery.col_from')}</th>
+                                <th className="p-3 text-right">{t('delivery.col_lines')}</th>
                                 <th className="p-3"></th>
-                                <th className="p-3 text-right">Print</th>
+                                <th className="p-3 text-right">{t('delivery.col_print')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -78,7 +83,7 @@ export default function DeliveriesIndex({
                                     <td className="p-3 text-right tabular-nums">{delivery.lines.length}</td>
                                     <td className="p-3">
                                         <Badge variant={delivery.fully_invoiced ? 'secondary' : 'outline'}>
-                                            {delivery.fully_invoiced ? 'Invoiced' : 'Awaiting invoice'}
+                                            {delivery.fully_invoiced ? t('delivery.invoiced') : t('delivery.awaiting_invoice')}
                                         </Badge>
                                     </td>
                                     <td className="p-3 text-right">
@@ -89,7 +94,7 @@ export default function DeliveriesIndex({
                                             href={`/sales/deliveries/${delivery.id}/print`}
                                             className="text-sm font-medium underline underline-offset-4"
                                         >
-                                            Challan
+                                            {t('delivery.challan_link')}
                                         </Link>
                                     </td>
                                 </tr>
@@ -97,7 +102,7 @@ export default function DeliveriesIndex({
                             {deliveries.data.length === 0 && (
                                 <tr>
                                     <td colSpan={7} className="text-muted-foreground p-6 text-center">
-                                        No delivery challans yet.
+                                        {t('delivery.none_yet')}
                                     </td>
                                 </tr>
                             )}

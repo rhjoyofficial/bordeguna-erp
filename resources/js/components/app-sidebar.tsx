@@ -1,4 +1,5 @@
 import { NavGroups, type NavGroup } from '@/components/nav-groups';
+import { useTranslation } from '@/lib/i18n';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
@@ -82,6 +83,7 @@ import {
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
+    const { t } = useTranslation();
     // Clicking a link in the sidebar used to throw it back to the top,
     // because this app has no persistent layout and the whole tree remounts
     // on every visit. See the hook for why it is fixed there.
@@ -267,20 +269,20 @@ export function AppSidebar() {
                   {
                       label: 'Sales',
                       items: [
-                          ...(canSell ? [{ title: 'Counter sale', url: '/sales/counter', icon: Store }] : []),
-                          ...(canSell ? [{ title: 'Cashier shifts', url: '/sales/shifts', icon: Store }] : []),
+                          ...(canSell ? [{ title: t('menu.counter_sale'), url: '/sales/counter', icon: Store }] : []),
+                          ...(canSell ? [{ title: t('menu.cashier_shifts'), url: '/sales/shifts', icon: Store }] : []),
                           // ⚠ The order book: what is promised, to whom, and how
                           // much of it has left. Shipped WITH its screens in one
                           // commit - the reachability lesson this file records.
-                          ...(canViewSales || canRecordOrders ? [{ title: 'Sales orders', url: '/sales/orders', icon: ClipboardList }] : []),
+                          ...(canViewSales || canRecordOrders ? [{ title: t('menu.sales_orders'), url: '/sales/orders', icon: ClipboardList }] : []),
                           ...(canRecordOrders ? [{ title: 'Quotations', url: '/sales/quotations', icon: FileText }] : []),
-                          ...(canViewSales ? [{ title: 'Deliveries', url: '/sales/deliveries', icon: PackageCheck }] : []),
+                          ...(canViewSales ? [{ title: t('menu.deliveries'), url: '/sales/deliveries', icon: PackageCheck }] : []),
                           // Parcels out with couriers: where their answers are entered.
                           ...(canViewSales ? [{ title: 'Parcels', url: '/sales/consignments', icon: Truck }] : []),
                           ...(canViewSales ? [{ title: 'Invoices', url: '/sales/invoices', icon: FileText }] : []),
                           // ⭐ Money in, and the list of it (21 Sep 2026): before this a receipt
                           // could only be taken from one invoice's page, and never listed.
-                          ...(canRecordReceipts ? [{ title: 'Receive payment', url: '/sales/receipts/new', icon: HandCoins }] : []),
+                          ...(canRecordReceipts ? [{ title: t('menu.receive_payment'), url: '/sales/receipts/new', icon: HandCoins }] : []),
                           ...(canViewSales ? [{ title: 'Receipts', url: '/sales/receipts', icon: HandCoins }] : []),
                           ...(canViewSales ? [{ title: 'Courier payouts', url: '/sales/courier-statements', icon: Wallet }] : []),
                           // Goods coming back - shipped WITH its screens in one
@@ -335,7 +337,7 @@ export function AppSidebar() {
                       label: 'Purchases',
                       items: [
                           { title: 'Suppliers', url: '/purchasing/suppliers', icon: Truck },
-                          { title: 'Purchase orders', url: '/purchasing/purchase-orders', icon: ShoppingCart },
+                          { title: t('menu.purchase_orders'), url: '/purchasing/purchase-orders', icon: ShoppingCart },
                           { title: 'Bills', url: '/purchasing/bills', icon: ReceiptText },
                           { title: 'Payments', url: '/purchasing/payments', icon: Banknote },
                           { title: 'Credit notes', url: '/purchasing/credit-notes', icon: FileText },

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useState } from 'react';
@@ -113,6 +114,7 @@ const phoneKey = (phone: string | null | undefined) => (phone ?? '').replace(/\D
  * 21 Sep 2026 approval refuses an order over the limit, so the box says so.
  */
 function ExposureBox({ customerId }: { customerId: string }) {
+    const { t } = useTranslation();
     const [exposure, setExposure] = useState<Exposure | null>(null);
 
     useEffect(() => {
@@ -152,13 +154,13 @@ function ExposureBox({ customerId }: { customerId: string }) {
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-md border p-3 text-sm">
             <p className="text-muted-foreground">
-                Already owed and promised: open invoices {exposure.open_invoices} + undelivered orders {exposure.undelivered_orders} ={' '}
+                {t('orders.exposure', { invoices: exposure.open_invoices, orders: exposure.undelivered_orders })}{' '}
                 <span className="text-foreground font-medium">{exposure.total}</span>
-                {exposure.credit_limit !== null && <> against a credit limit of {exposure.credit_limit}</>}
+                {exposure.credit_limit !== null && <> {t('orders.against_limit', { limit: exposure.credit_limit })}</>}
             </p>
             {overLimit && (
                 <p className="text-destructive mt-1 font-medium">
-                    Over the credit limit. The order can be recorded, but approval is refused unless an Owner approves it with a reason.
+                    {t('orders.over_limit')}
                 </p>
             )}
         </div>
@@ -196,6 +198,7 @@ function OrderLineRow({
     onPriced: (price: LinePrice | undefined) => void;
     onRemove: () => void;
 }) {
+    const { t } = useTranslation();
     useEffect(() => {
         if (!customerId || !line.product_id) {
             onPriced(undefined);
@@ -248,14 +251,14 @@ function OrderLineRow({
                     value={line.product_id}
                     onChange={(v) => onChange({ product_id: v, unit_price: '' })}
                     options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} - ${p.name}` : p.name }))}
-                    placeholder="Select product"
-                    searchPlaceholder="Search products…"
+                    placeholder={t('orders.select_product')}
+                    searchPlaceholder={t('orders.search_products')}
                 />
                 <InputError message={errors[`lines.${index}.product_id`]} />
             </div>
             <div className="grid gap-1">
                 <Input
-                    placeholder={product?.unit ? `Quantity (${product.unit})` : 'Quantity'}
+                    placeholder={product?.unit ? t('orders.quantity_in', { unit: product.unit }) : t('orders.quantity')}
                     inputMode="decimal"
                     value={line.quantity}
                     onChange={(e) => onChange({ quantity: e.target.value })}
@@ -265,18 +268,18 @@ function OrderLineRow({
             <div className="grid gap-1">
                 {canOverride ? (
                     <Input
-                        placeholder="Price"
+                        placeholder={t('orders.price')}
                         inputMode="decimal"
                         value={unitPrice}
                         onChange={(e) => onChange({ unit_price: e.target.value })}
-                        aria-label="Unit price"
+                        aria-label={t('orders.unit_price')}
                     />
                 ) : (
                     <p className="flex h-9 items-center text-sm tabular-nums">{price?.loading ? '…' : unitPrice || '-'}</p>
                 )}
                 {canOverride && line.unit_price !== '' && price?.unit_price && !samePrice(line.unit_price, price.unit_price) && (
                     <button type="button" className="text-muted-foreground w-fit text-xs underline" onClick={() => onChange({ unit_price: '' })}>
-                        Changed from {listed}: undo
+                        {t('orders.changed_from', { price: listed })}
                     </button>
                 )}
                 <InputError message={errors[`lines.${index}.unit_price`]} />
@@ -285,7 +288,7 @@ function OrderLineRow({
                 {lineTotal !== null && !isNaN(lineTotal) ? money(lineTotal) : ''}
             </p>
             <Button type="button" variant="ghost" size="sm" onClick={onRemove} disabled={!canRemove}>
-                Remove
+                {t('orders.remove')}
             </Button>
             {(price?.refusal || price?.explanation) && (
                 <p className={`col-span-2 text-xs sm:col-span-5 ${price.refusal ? 'text-destructive' : 'text-muted-foreground'}`}>
@@ -320,6 +323,7 @@ function QuickCustomerDialog({
     priceGroups: PriceGroupOption[];
     onCreated: (customerId: string) => void;
 }) {
+    const { t } = useTranslation();
     const groupFor = (type: string) => priceGroups.find((group) => group.code === type.toUpperCase())?.id;
     const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
         name: '',
@@ -368,22 +372,22 @@ function QuickCustomerDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>New customer</DialogTitle>
-                    <DialogDescription>Added to Customers and picked for this order. Everything else can be filled in later.</DialogDescription>
+                    <DialogTitle>{t('orders.quick_title')}</DialogTitle>
+                    <DialogDescription>{t('orders.quick_intro')}</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={submit} className="grid gap-3">
                     <div className="grid gap-1">
-                        <Label htmlFor="quick-name">Name</Label>
+                        <Label htmlFor="quick-name">{t('orders.quick_name')}</Label>
                         <Input id="quick-name" value={data.name} onChange={(e) => setData('name', e.target.value)} autoFocus />
                         <InputError message={errors.name} />
                     </div>
                     <div className="grid gap-1">
-                        <Label htmlFor="quick-phone">Phone</Label>
+                        <Label htmlFor="quick-phone">{t('orders.quick_phone')}</Label>
                         <Input id="quick-phone" value={data.phone} onChange={(e) => setData('phone', e.target.value)} inputMode="tel" />
                         <InputError message={errors.phone} />
                         {samePhone && (
                             <p className="text-destructive text-xs">
-                                {samePhone.name} already has this phone.{' '}
+                                {t('orders.quick_same_phone', { name: samePhone.name })}{' '}
                                 <button
                                     type="button"
                                     className="underline"
@@ -392,14 +396,14 @@ function QuickCustomerDialog({
                                         onOpenChange(false);
                                     }}
                                 >
-                                    Use {samePhone.name}
+                                    {t('orders.quick_use', { name: samePhone.name })}
                                 </button>
                             </p>
                         )}
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="grid gap-1">
-                            <Label>Who they are</Label>
+                            <Label>{t('orders.quick_who')}</Label>
                             <SearchableSelect
                                 value={data.type}
                                 onChange={(v) => setData({ ...data, type: v, price_group_id: String(groupFor(v) ?? data.price_group_id) })}
@@ -408,7 +412,7 @@ function QuickCustomerDialog({
                             <InputError message={errors.type} />
                         </div>
                         <div className="grid gap-1">
-                            <Label>Prices they pay</Label>
+                            <Label>{t('orders.quick_prices')}</Label>
                             <SearchableSelect
                                 value={data.price_group_id}
                                 onChange={(v) => setData('price_group_id', v)}
@@ -419,14 +423,14 @@ function QuickCustomerDialog({
                         </div>
                     </div>
                     <div className="grid gap-1">
-                        <Label htmlFor="quick-address">Address (optional)</Label>
+                        <Label htmlFor="quick-address">{t('orders.quick_address')}</Label>
                         <Input id="quick-address" value={data.address} onChange={(e) => setData('address', e.target.value)} />
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-                            Cancel
+                            {t('orders.quick_cancel')}
                         </Button>
-                        <Button disabled={processing}>Add customer</Button>
+                        <Button disabled={processing}>{t('orders.quick_add')}</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>
@@ -455,6 +459,7 @@ function CreateOrderForm({
     onClose: () => void;
     initialCustomerId?: number | null;
 }) {
+    const { t } = useTranslation();
     const { data, setData, post, errors, processing, transform } = useForm<{
         customer_id: string;
         warehouse_id: string;
@@ -527,14 +532,14 @@ function CreateOrderForm({
             )}
             <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
                 <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-medium">New sales order</h3>
+                    <h3 className="font-medium">{t('orders.new')}</h3>
                     <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-                        Close
+                        {t('orders.close')}
                     </Button>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                     <div className="grid gap-2 sm:col-span-2">
-                        <Label>Customer</Label>
+                        <Label>{t('orders.form_customer')}</Label>
                         <SearchableSelect
                             value={data.customer_id}
                             onChange={(v) => setData('customer_id', v)}
@@ -543,34 +548,34 @@ function CreateOrderForm({
                                 label: c.phone ? `${c.name} - ${c.phone}` : c.name,
                                 keywords: c.phone ?? '',
                             }))}
-                            placeholder="Select customer"
-                            searchPlaceholder="Name or phone…"
+                            placeholder={t('orders.select_customer')}
+                            searchPlaceholder={t('orders.name_or_phone')}
                             {...(canAddCustomer
                                 ? {
                                       onCreate: (typed: string) => {
                                           setTypedCustomer(typed);
                                           setQuickOpen(true);
                                       },
-                                      createLabel: 'New customer',
+                                      createLabel: t('orders.new_customer'),
                                   }
                                 : {})}
                         />
                         <InputError message={errors.customer_id} />
                     </div>
                     <div className="grid gap-2">
-                        <Label>Warehouse</Label>
+                        <Label>{t('orders.warehouse')}</Label>
                         <SearchableSelect
                             value={data.warehouse_id}
                             onChange={(v) => setData('warehouse_id', v)}
                             options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
-                            placeholder="Decided at delivery"
+                            placeholder={t('orders.decided_at_delivery')}
                             clearable
-                            searchPlaceholder="Search warehouses…"
+                            searchPlaceholder={t('orders.search_warehouses')}
                         />
                         <InputError message={errors.warehouse_id} />
                     </div>
                     <div className="grid gap-2">
-                        <Label>Expected date (optional)</Label>
+                        <Label>{t('orders.expected_date')}</Label>
                         <Input type="date" value={data.expected_date} onChange={(e) => setData('expected_date', e.target.value)} />
                     </div>
                 </div>
@@ -579,14 +584,14 @@ function CreateOrderForm({
 
                 <div className="flex flex-col gap-2">
                     <div className="text-muted-foreground hidden grid-cols-[3fr_1fr_1fr_1fr_auto] gap-2 text-xs sm:grid">
-                        <span>Product</span>
-                        <span>Quantity</span>
-                        <span>Price</span>
-                        <span className="text-right">Line total</span>
+                        <span>{t('orders.product')}</span>
+                        <span>{t('orders.quantity')}</span>
+                        <span>{t('orders.price')}</span>
+                        <span className="text-right">{t('orders.line_total')}</span>
                         <span className="w-16" />
                     </div>
                     {!data.customer_id && (
-                        <p className="text-muted-foreground text-sm">Pick the customer first: the price depends on who is buying.</p>
+                        <p className="text-muted-foreground text-sm">{t('orders.pick_customer_first')}</p>
                     )}
                     {data.lines.map((line, index) => (
                         <OrderLineRow
@@ -612,10 +617,10 @@ function CreateOrderForm({
                             className="w-fit"
                             onClick={() => setData('lines', [...data.lines, newLine()])}
                         >
-                            + Add line
+                            {t('orders.add_line')}
                         </Button>
                         <p className="text-sm">
-                            Order total <span className="font-medium tabular-nums">{money(total)}</span>
+                            {t('orders.order_total')} <span className="font-medium tabular-nums">{money(total)}</span>
                         </p>
                     </div>
                 </div>
@@ -623,16 +628,16 @@ function CreateOrderForm({
                 <InputError message={errors.lines} />
 
                 <div className="grid gap-2">
-                    <Label>Note (optional)</Label>
+                    <Label>{t('orders.note_optional')}</Label>
                     <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
                 </div>
 
                 <p className="text-muted-foreground text-xs">
-                    The price is fixed on the order when it is recorded: a later price change does not move it, and the invoice bills this price.
+                    {t('orders.price_fixed_note')}
                 </p>
 
                 <Button disabled={processing || unpriced} className="w-fit">
-                    Record sales order
+                    {t('orders.record')}
                 </Button>
             </form>
         </>
@@ -668,6 +673,7 @@ export default function SalesOrdersIndex({
     preselect_customer?: number | null;
     filters: { search: string; status: string };
 }) {
+    const { t } = useTranslation();
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/orders', initialFilters);
     // ⭐ The form is at the top, one click away (21 Sep 2026): it used to sit
     // under the whole order list and the stock table.
@@ -677,11 +683,11 @@ export default function SalesOrdersIndex({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Sales orders" />
+            <Head title={t('orders.title')} />
             <div className="flex flex-col gap-6 p-4">
                 {can_create && !creating && (
                     <Button className="w-fit" onClick={() => setCreating(true)}>
-                        New sales order
+                        {t('orders.new')}
                     </Button>
                 )}
                 {can_create && creating && (
@@ -699,26 +705,26 @@ export default function SalesOrdersIndex({
                 )}
 
                 {own_only && (
-                    <p className="text-muted-foreground text-sm">You see the orders you took. Each one waits for a Manager's approval before it is delivered.</p>
+                    <p className="text-muted-foreground text-sm">{t('orders.own_only')}</p>
                 )}
 
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
-                    <FilterField label="Search" htmlFor="filter-search" className="min-w-56 flex-1">
+                    <FilterField label={t('orders.search')} htmlFor="filter-search" className="min-w-56 flex-1">
                         <Input
                             id="filter-search"
                             value={filters.search}
                             onChange={(e) => setFilter('search', e.target.value)}
-                            placeholder="Order number, website reference or customer…"
+                            placeholder={t('orders.search_placeholder')}
                         />
                     </FilterField>
-                    <FilterField label="Status" htmlFor="filter-status">
+                    <FilterField label={t('orders.status')} htmlFor="filter-status">
                         <SearchSelect id="filter-status" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
-                            <option value="">All statuses</option>
-                            <option value="open">Open</option>
-                            <option value="partially_delivered">Partially delivered</option>
-                            <option value="delivered">Delivered</option>
-                            <option value="closed">Closed short</option>
-                            <option value="cancelled">Cancelled</option>
+                            <option value="">{t('orders.all_statuses')}</option>
+                            <option value="open">{t('orders.status_open')}</option>
+                            <option value="partially_delivered">{t('orders.status_partially_delivered')}</option>
+                            <option value="delivered">{t('orders.status_delivered')}</option>
+                            <option value="closed">{t('orders.status_closed')}</option>
+                            <option value="cancelled">{t('orders.status_cancelled')}</option>
                         </SearchSelect>
                     </FilterField>
                 </FilterBar>
@@ -726,13 +732,13 @@ export default function SalesOrdersIndex({
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
-                            <th className="py-2">Order #</th>
-                            <th className="py-2">Customer</th>
-                            <th className="py-2">Ordered</th>
-                            <th className="py-2">Delivered</th>
-                            <th className="py-2">Expected</th>
-                            <th className="py-2">Approval</th>
-                            <th className="py-2">Status</th>
+                            <th className="py-2">{t('orders.col_number')}</th>
+                            <th className="py-2">{t('orders.col_customer')}</th>
+                            <th className="py-2">{t('orders.col_ordered')}</th>
+                            <th className="py-2">{t('orders.col_delivered')}</th>
+                            <th className="py-2">{t('orders.col_expected')}</th>
+                            <th className="py-2">{t('orders.col_approval')}</th>
+                            <th className="py-2">{t('orders.col_status')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -747,7 +753,7 @@ export default function SalesOrdersIndex({
                                         confirmation call - and the reference
                                         shown is the one the CUSTOMER quotes. */}
                                     {order.channel === 'website' && (
-                                        <p className="text-muted-foreground text-xs">Website {order.shop_reference ?? ''}</p>
+                                        <p className="text-muted-foreground text-xs">{t('orders.website')} {order.shop_reference ?? ''}</p>
                                     )}
                                 </td>
                                 <td className="text-muted-foreground py-2">{order.customer.name}</td>
@@ -760,7 +766,7 @@ export default function SalesOrdersIndex({
                                             {order.approval_request.status}
                                         </Badge>
                                     ) : (
-                                        <Badge variant="outline">Awaiting payment</Badge>
+                                        <Badge variant="outline">{t('orders.awaiting_payment')}</Badge>
                                     )}
                                 </td>
                                 <td className="py-2">
@@ -773,7 +779,7 @@ export default function SalesOrdersIndex({
                         {orders.data.length === 0 && (
                             <tr>
                                 <td colSpan={7} className="text-muted-foreground py-4 text-center">
-                                    {hasActiveFilters ? 'No sales orders match these filters.' : 'No sales orders yet.'}
+                                    {hasActiveFilters ? t('orders.none_match') : t('orders.none_yet')}
                                 </td>
                             </tr>
                         )}
@@ -784,7 +790,7 @@ export default function SalesOrdersIndex({
 
                 {committed.length > 0 && (
                     <div className="flex flex-col gap-2">
-                        <h3 className="font-medium">Committed vs on hand</h3>
+                        <h3 className="font-medium">{t('orders.committed_heading')}</h3>
                         {/* ⚠ C-SO-2: no reservation. This is the honest substitute -
                             the promise per product against the shelf, for a human
                             deciding whether to take the next order. Nothing blocks. */}
@@ -792,9 +798,9 @@ export default function SalesOrdersIndex({
                             <table className="w-full text-sm">
                                 <thead className="bg-muted/50 text-left">
                                     <tr>
-                                        <th className="p-3">Product</th>
-                                        <th className="p-3 text-right">Committed on open orders</th>
-                                        <th className="p-3 text-right">On hand</th>
+                                        <th className="p-3">{t('orders.col_product')}</th>
+                                        <th className="p-3 text-right">{t('orders.col_committed')}</th>
+                                        <th className="p-3 text-right">{t('orders.col_on_hand')}</th>
                                         <th className="p-3"></th>
                                     </tr>
                                 </thead>
@@ -806,7 +812,7 @@ export default function SalesOrdersIndex({
                                             </td>
                                             <td className="p-3 text-right tabular-nums">{row.committed}</td>
                                             <td className="p-3 text-right tabular-nums">{row.on_hand}</td>
-                                            <td className="p-3">{row.short && <Badge variant="destructive">Short</Badge>}</td>
+                                            <td className="p-3">{row.short && <Badge variant="destructive">{t('orders.short')}</Badge>}</td>
                                         </tr>
                                     ))}
                                 </tbody>
