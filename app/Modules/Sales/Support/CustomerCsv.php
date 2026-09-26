@@ -39,7 +39,7 @@ class CustomerCsv
     public const DESCRIPTIONS = [
         'code' => 'PERMANENT identifier you choose, uppercase. e.g. CUS-0001',
         'name' => 'The customer as you refer to them. Bangla is fine.',
-        'type' => 'retail, dealer, distributor or corporate. Blank means retail.',
+        'type' => 'retail, shop, dealer, distributor or corporate. Blank means retail (a consumer); a shop needs shop prices.',
         'contact_name' => 'Person to speak to. Leave blank when the customer IS a person.',
         'phone' => 'Bangladesh mobile, with the leading zero. e.g. 01712345678',
         'email' => 'Optional. Must be a real address if given.',

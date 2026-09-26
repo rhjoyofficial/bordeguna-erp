@@ -47,7 +47,7 @@ beforeEach(function () {
     // ⚠ Groups are ROWS now (C-PRC-1), created here the way the seeder would.
     // The free-text version of these tests could not fail on a case mismatch,
     // which is exactly the defect the FK exists to make unrepresentable.
-    $this->groups = collect(['RETAIL', 'DEALER', 'DISTRIBUTOR'])
+    $this->groups = collect(['RETAIL', 'DEALER', 'DISTRIBUTOR', 'SHOP'])
         ->mapWithKeys(fn (string $code) => [$code => PriceGroup::create([
             'business_id' => $this->business->id,
             'code' => $code,
@@ -417,4 +417,45 @@ it('answers findMany exactly as find, product by product, absences included', fu
     // so the agreement above compared something capable of disagreeing.
     expect($this->resolver->findMany($products)[$this->product->id]->unitPrice)->toBe('850.0000')
         ->and($this->resolver->findMany($products, $retailCustomer)[$this->product->id]->unitPrice)->toBe('800.0000');
+});
+
+// ─── A SHOP IS NOT A CONSUMER (Joy, 26 Sep 2026, Q15) ───────────────────────
+
+it('prices a shop with no group in SHOP, and gives it no price when SHOP has none', function () {
+    $this->product->update(['mrp' => '900']);
+    $shop = Customer::create(['business_id' => $this->business->id, 'name' => 'Corner Store', 'type' => CustomerType::Shop]);
+    $person = Customer::create(['business_id' => $this->business->id, 'name' => 'A Person', 'type' => CustomerType::Retail]);
+
+    // A standard price and a RETAIL price exist; neither is a SHOP price.
+    ($this->price)(['unit_price' => '850']);
+    ($this->price)(['unit_price' => '820', 'price_group_id' => $this->groups['RETAIL']->id]);
+
+    expect($this->resolver->find($this->product->fresh(), $shop))->toBeNull()
+        ->and($this->resolver->resolve($this->product->fresh(), $person)->unitPrice)->toBe('820.0000');
+
+    ($this->price)(['unit_price' => '790', 'price_group_id' => $this->groups['SHOP']->id]);
+
+    $resolved = $this->resolver->resolve($this->product->fresh(), $shop);
+
+    expect($resolved->unitPrice)->toBe('790.0000')
+        ->and($resolved->tier())->toBe('price_group')
+        ->and($resolved->rule->price_group_id)->toBe($this->groups['SHOP']->id);
+});
+
+it('keeps pricing a shop as RETAIL in a business that has no SHOP group yet', function () {
+    $this->groups['SHOP']->delete();
+    $shop = Customer::create(['business_id' => $this->business->id, 'name' => 'Old Business Shop', 'type' => CustomerType::Shop]);
+
+    ($this->price)(['unit_price' => '820', 'price_group_id' => $this->groups['RETAIL']->id]);
+
+    expect(app(ResolveSellingPrice::class)->resolve($this->product, $shop)->unitPrice)->toBe('820.0000');
+});
+
+it('lets every customer type name its default group, consumers on RETAIL and nobody else', function () {
+    expect(CustomerType::WalkIn->defaultPriceGroupCode())->toBe('RETAIL')
+        ->and(CustomerType::Retail->defaultPriceGroupCode())->toBe('RETAIL')
+        ->and(CustomerType::Shop->defaultPriceGroupCode())->toBe('SHOP')
+        ->and(CustomerType::Dealer->defaultPriceGroupCode())->toBe('DEALER')
+        ->and(CustomerType::Distributor->defaultPriceGroupCode())->toBe('DISTRIBUTOR')
+        ->and(CustomerType::Corporate->defaultPriceGroupCode())->toBe('CORPORATE');
 });

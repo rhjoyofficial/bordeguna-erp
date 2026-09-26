@@ -286,3 +286,24 @@ it('derives phone_normalized on a customer without touching the entered phone', 
     expect($customer->phone)->toBe('+8801711000000')
         ->and($customer->phone_normalized)->toBe('01711000000');
 });
+
+it('refuses to put a retail shop in the RETAIL group, and defaults it to SHOP when blank', function () {
+    $retail = PriceGroup::create(['business_id' => $this->business->id, 'code' => 'RETAIL', 'name' => 'Retail', 'falls_back_to_mrp' => true]);
+    PriceGroup::create(['business_id' => $this->business->id, 'code' => 'SHOP', 'name' => 'Retail shop']);
+    ($this->asRole)('Owner')->from('/sales/customers')
+        ->post('/sales/customers', ['name' => 'Corner Store', 'type' => 'shop', 'price_group_id' => $retail->id])
+        ->assertSessionHasErrors('price_group_id');
+    expect(Customer::where('name', 'Corner Store')->exists())->toBeFalse();
+
+    ($this->asRole)('Owner')->from('/sales/customers')
+        ->post('/sales/customers', ['name' => 'Corner Store', 'type' => 'shop', 'price_group_id' => ''])
+        ->assertSessionHasNoErrors();
+
+    $shop = Customer::where('name', 'Corner Store')->firstOrFail();
+    expect($shop->type->value)->toBe('shop')->and($shop->price_group_id)->toBeNull();
+
+    // A consumer may still sit in RETAIL by hand.
+    ($this->asRole)('Owner')->from('/sales/customers')
+        ->post('/sales/customers', ['name' => 'A Person', 'type' => 'retail', 'price_group_id' => $retail->id])
+        ->assertSessionHasNoErrors();
+});

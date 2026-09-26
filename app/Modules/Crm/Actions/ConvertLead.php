@@ -46,7 +46,7 @@ class ConvertLead
      *
      * @var list<CustomerType>
      */
-    public const CREDIT_TYPES = [CustomerType::Retail, CustomerType::Corporate];
+    public const CREDIT_TYPES = [CustomerType::Retail, CustomerType::Shop, CustomerType::Corporate];
 
     /**
      * @param  array<string, mixed>  $newCustomer  Used only when $existing is null.

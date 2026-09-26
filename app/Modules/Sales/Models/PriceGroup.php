@@ -30,6 +30,9 @@ class PriceGroup extends Model
     /** The code of the group a customer with no group belongs to. D-PRC-2. */
     public const DEFAULT_CODE = 'RETAIL';
 
+    /** Retail shops: below MRP, never MRP (26 Sep 2026). */
+    public const SHOP_CODE = 'SHOP';
+
     protected $fillable = [
         'business_id',
         'code',

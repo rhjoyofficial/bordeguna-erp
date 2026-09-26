@@ -219,12 +219,12 @@ it('refuses a file whose columns it does not understand', function () {
 
 // ── What it warns about, without stopping ───────────────────────────────────
 
-it('warns when a dealer has no price group, because they will bill at retail', function () {
+it('warns when a dealer has no price group, because they are priced in DEALER and refused without a DEALER price', function () {
     // This is exactly the F2 finding the cutover preflight reports.
     ($this->review)(($this->file)("CUS-0009,Quiet Dealer,dealer,,,,,,,,,,,\n"))
         ->assertSessionHas('customerImportPlan', fn ($plan) => $plan['errors'] === []
             && count($plan['warnings']) === 1
-            && str_contains($plan['warnings'][0], 'bills at RETAIL prices'));
+            && str_contains($plan['warnings'][0], 'priced in DEALER'));
 });
 
 it('does not warn about a retail customer with no price group', function () {

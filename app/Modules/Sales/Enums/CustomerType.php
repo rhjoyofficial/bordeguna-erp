@@ -23,6 +23,13 @@ enum CustomerType: string
 {
     case WalkIn = 'walk_in';
     case Retail = 'retail';
+    /**
+     * ⭐ A retail SHOP, added 26 Sep 2026 (Joy, Q15): a shop never pays MRP, it
+     * needs a shop price on every product, or it cannot be sold to. `retail`
+     * stays what website orders and CRM conversions make: a person buying for
+     * themselves, priced at MRP when nothing else is set.
+     */
+    case Shop = 'shop';
     case Dealer = 'dealer';
     case Distributor = 'distributor';
     case Corporate = 'corporate';
@@ -31,10 +38,31 @@ enum CustomerType: string
     {
         return match ($this) {
             self::WalkIn => 'Walk-in',
-            self::Retail => 'Retail',
+            self::Retail => 'Retail customer',
+            self::Shop => 'Retail shop',
             self::Dealer => 'Dealer',
             self::Distributor => 'Distributor',
             self::Corporate => 'Corporate',
+        };
+    }
+
+    /**
+     * The price group a customer of this type is priced in when none is chosen.
+     *
+     * ⚠ Classification for pricing, which is what this enum is for; the sales
+     * engine still does not branch on it. Consumers (walk-in, retail) pay
+     * RETAIL, the one group that falls back to MRP; everybody else is priced in
+     * the group of their own name and is refused when it has no price
+     * (ResolveSellingPrice). A business missing the group keeps RETAIL.
+     */
+    public function defaultPriceGroupCode(): string
+    {
+        return match ($this) {
+            self::WalkIn, self::Retail => 'RETAIL',
+            self::Shop => 'SHOP',
+            self::Dealer => 'DEALER',
+            self::Distributor => 'DISTRIBUTOR',
+            self::Corporate => 'CORPORATE',
         };
     }
 }

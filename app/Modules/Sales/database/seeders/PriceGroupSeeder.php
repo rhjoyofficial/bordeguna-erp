@@ -35,6 +35,8 @@ class PriceGroupSeeder extends Seeder
         ['code' => 'DEALER', 'name' => 'Dealer'],
         ['code' => 'DISTRIBUTOR', 'name' => 'Distributor'],
         ['code' => 'CORPORATE', 'name' => 'Corporate'],
+        // ⭐ 26 Sep 2026: shops are priced apart from consumers and never at MRP.
+        ['code' => PriceGroup::SHOP_CODE, 'name' => 'Retail shop'],
     ];
 
     public function run(): void

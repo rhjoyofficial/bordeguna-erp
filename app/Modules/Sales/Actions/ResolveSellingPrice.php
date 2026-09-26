@@ -235,7 +235,7 @@ class ResolveSellingPrice
      * simply falls through to the general tier - the pre-group behaviour,
      * degraded gracefully rather than an exception at the counter.
      *
-     * @var array<int, int|null>
+     * @var array<string, int|null> "business:CODE" => group id
      */
     private array $defaultGroupIds = [];
 
@@ -245,20 +245,29 @@ class ResolveSellingPrice
             return $customer->price_group_id;
         }
 
-        return $this->defaultGroupIdFor($customer->business_id);
+        // ⭐ 26 Sep 2026 (Joy, Q15): the default is chosen by TYPE, so a shop
+        // with no group is priced as a SHOP and refused when it has no shop
+        // price, never charged MRP. Consumers still default to RETAIL. A
+        // business without that group keeps RETAIL, as before.
+        $code = $customer->type?->defaultPriceGroupCode() ?? PriceGroup::DEFAULT_CODE;
+
+        return $this->defaultGroupIdFor($customer->business_id, $code)
+            ?? $this->defaultGroupIdFor($customer->business_id, PriceGroup::DEFAULT_CODE);
     }
 
-    private function defaultGroupIdFor(int $businessId): ?int
+    private function defaultGroupIdFor(int $businessId, string $code = PriceGroup::DEFAULT_CODE): ?int
     {
-        if (! array_key_exists($businessId, $this->defaultGroupIds)) {
-            $this->defaultGroupIds[$businessId] = PriceGroup::query()
+        $key = $businessId.':'.$code;
+
+        if (! array_key_exists($key, $this->defaultGroupIds)) {
+            $this->defaultGroupIds[$key] = PriceGroup::query()
                 ->withoutGlobalScopes()
                 ->where('business_id', $businessId)
-                ->where('code', PriceGroup::DEFAULT_CODE)
+                ->where('code', $code)
                 ->value('id');
         }
 
-        return $this->defaultGroupIds[$businessId];
+        return $this->defaultGroupIds[$key];
     }
 
     /**

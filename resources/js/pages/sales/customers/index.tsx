@@ -43,6 +43,10 @@ interface PriceGroup {
     name: string;
 }
 
+/* What "no group" means for each type (mirrors CustomerType::defaultPriceGroupCode):
+   consumers pay RETAIL, the MRP group; a shop is priced in SHOP and never at MRP. */
+const defaultGroupFor = (type: string) => (type === 'walk_in' || type === 'retail' ? 'RETAIL' : type.toUpperCase());
+
 const EMPTY = {
     name: '',
     code: '',
@@ -168,10 +172,10 @@ export default function CustomersIndex({
                             RETAIL, the default group. */}
                         <Field label="Price group" htmlFor="price_group_id" error={errors.price_group_id}>
                             <SearchSelect id="price_group_id" value={data.price_group_id} onChange={(e) => setData('price_group_id', e.target.value)}>
-                                <option value="">Default (RETAIL)</option>
+                                <option value="">Default ({defaultGroupFor(data.type)})</option>
                                 {priceGroups.map((g) => (
                                     <option key={g.id} value={g.id}>
-                                        {g.code}
+                                        {g.code} - {g.name}
                                     </option>
                                 ))}
                             </SearchSelect>

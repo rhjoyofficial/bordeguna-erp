@@ -60,7 +60,7 @@ beforeEach(function () {
     };
 });
 
-it('seeds the four official groups for every business', function () {
+it('seeds the five official groups for every business', function () {
     $other = Business::create(['name' => 'Second Co', 'slug' => 'second-co']);
 
     ($this->seedGroups)();
@@ -72,7 +72,7 @@ it('seeds the four official groups for every business', function () {
             ->pluck('code')
             ->all();
 
-        expect($codes)->toBe(['RETAIL', 'DEALER', 'DISTRIBUTOR', 'CORPORATE']);
+        expect($codes)->toBe(['RETAIL', 'DEALER', 'DISTRIBUTOR', 'CORPORATE', 'SHOP']);
     }
 });
 
@@ -87,7 +87,7 @@ it('seeds idempotently and leaves existing groups alone', function () {
 
     ($this->seedGroups)();
 
-    expect(PriceGroup::count())->toBe(4)
+    expect(PriceGroup::count())->toBe(5)
         ->and($retail->fresh()->name)->toBe('Walk-in Retail');
 });
 
@@ -180,4 +180,16 @@ it('still refuses a price aimed at a customer AND a group at once', function () 
             'price_group_id' => $group->id,
         ])
         ->assertSessionHasErrors('price_group_id');
+});
+
+// ⭐ 26 Sep 2026 (Joy, Q15): a shop never pays MRP. SHOP is seeded without the
+// fallback, and the migration plants it for a business that already existed.
+it('seeds Retail shop as a group that does not fall back to MRP', function () {
+    ($this->seedGroups)();
+
+    $shop = PriceGroup::where('code', 'SHOP')->firstOrFail();
+
+    expect($shop->name)->toBe('Retail shop')
+        ->and($shop->falls_back_to_mrp)->toBeFalse()
+        ->and(PriceGroup::where('code', 'RETAIL')->firstOrFail()->falls_back_to_mrp)->toBeTrue();
 });

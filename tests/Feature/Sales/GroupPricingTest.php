@@ -8,6 +8,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Actions\SetProductGroupPrices;
+use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
@@ -227,4 +228,14 @@ it('refuses a selling price for nobody in particular', function () {
         ->assertSessionHasErrors('price_group_id');
 
     expect(ProductPrice::count())->toBe(0);
+});
+
+it('refuses a retail shop with no shop price even though the product has an MRP', function () {
+    // 26 Sep 2026, Q15: "not MRP, will be below it but authority will add retail price".
+    PriceGroup::create(['business_id' => $this->business->id, 'code' => 'SHOP', 'name' => 'Retail shop']);
+    $shop = Customer::create(['business_id' => $this->business->id, 'name' => 'Corner Store', 'type' => CustomerType::Shop]);
+
+    expect($this->product->mrp)->toBe('500.0000')
+        ->and($this->resolver->find($this->product, $shop))->toBeNull()
+        ->and($this->resolver->resolve($this->product, $this->consumer)->unitPrice)->toBe('500.0000');
 });

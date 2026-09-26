@@ -71,7 +71,7 @@ class CustomerController extends Controller
                 'email' => $customer->email,
                 'address' => $customer->address,
                 'payment_terms' => $customer->payment_terms,
-                'price_group' => $customer->priceGroup?->name ?? 'Retail (default)',
+                'price_group' => $customer->priceGroup?->name ?? (($customer->type?->defaultPriceGroupCode() ?? 'RETAIL').' (default)'),
                 'is_active' => $customer->is_active,
                 'note' => $customer->note,
             ],
@@ -249,6 +249,20 @@ class CustomerController extends Controller
             'price_group_id' => [
                 'nullable', 'integer',
                 Rule::exists('price_groups', 'id')->where('business_id', $businessId),
+                // ⭐ 26 Sep 2026: a retail SHOP is never priced in RETAIL, the
+                // consumer group that falls back to MRP. Blank is fine (it
+                // defaults to SHOP); RETAIL by hand is refused in plain words.
+                function (string $attribute, mixed $value, \Closure $fail) use ($request, $businessId) {
+                    if ($request->input('type') !== CustomerType::Shop->value || $value === null || $value === '') {
+                        return;
+                    }
+
+                    $code = PriceGroup::query()->withoutGlobalScopes()->where('business_id', $businessId)->whereKey((int) $value)->value('code');
+
+                    if ($code === PriceGroup::DEFAULT_CODE) {
+                        $fail('A retail shop never pays MRP. Leave the price group blank for Retail shop, or choose another group; RETAIL is for consumers.');
+                    }
+                },
             ],
             'note' => ['nullable', 'string'],
         ]);

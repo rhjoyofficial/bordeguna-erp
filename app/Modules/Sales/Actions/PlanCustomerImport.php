@@ -162,7 +162,7 @@ class PlanCustomerImport
 
             // C-CUS-6. Warned once per row, and only where it costs money.
             if ($groupCode === '' && $type !== CustomerType::Retail) {
-                $plan->addWarning($line, $code, "A {$type->label()} customer with no price group bills at RETAIL prices on every line.");
+                $plan->addWarning($line, $code, "A {$type->label()} with no price group is priced in {$type->defaultPriceGroupCode()}; a product with no {$type->defaultPriceGroupCode()} price cannot be sold to them.");
             }
 
             $this->warnAboutPhone($plan, $line, $code, trim($values['phone'] ?? ''), $phoneOwners, $seenPhones);

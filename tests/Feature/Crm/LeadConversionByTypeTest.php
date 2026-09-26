@@ -150,6 +150,6 @@ it('gives the conversion form the active price groups and the types that take cr
         ->get('/crm/leads')->assertOk()->viewData('page')['props'];
 
     expect(collect($props['price_groups'])->pluck('code')->sort()->values()->all())->toBe(['DEALER', 'DISTRIBUTOR', 'RETAIL'])
-        ->and($props['credit_types'])->toBe(['retail', 'corporate'])
+        ->and($props['credit_types'])->toBe(['retail', 'shop', 'corporate'])
         ->and($props['leads']['data'][0]['full_address'])->toBe('Holding 14, Road 2, Kaptan Bazar, Sutrapur, Dhaka');
 });

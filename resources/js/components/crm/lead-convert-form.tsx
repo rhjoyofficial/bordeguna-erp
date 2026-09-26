@@ -12,7 +12,8 @@ import { FormEventHandler, useState } from 'react';
  * distributor lead is a Distributor; a shop or a consumer is Retail (answer 8).
  * Both stay changeable - Shoykod picks Dealer or Distributor (answer 10).
  */
-const TYPE_FOR_LEAD: Record<string, string> = { distributor: 'distributor', retailer: 'retail', customer: 'retail' };
+// A retailer lead is a SHOP (26 Sep 2026): it needs shop prices and never pays MRP.
+const TYPE_FOR_LEAD: Record<string, string> = { distributor: 'distributor', retailer: 'shop', customer: 'retail' };
 
 /** The price group whose code matches a customer type, if the business has one. */
 const groupFor = (type: string, groups: PriceGroupOption[]) => groups.find((g) => g.code.toUpperCase() === type.toUpperCase());
