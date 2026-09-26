@@ -2,7 +2,8 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { type Lead, placeLine } from '@/components/crm/lead-types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Link, router } from '@inertiajs/react';
+import { type SharedData } from '@/types';
+import { Link, router, usePage } from '@inertiajs/react';
 import { MapPin } from 'lucide-react';
 
 /**
@@ -207,6 +208,8 @@ function ProfileLine({ lead }: { lead: Lead }) {
 }
 
 function LeadStateNotes({ lead }: { lead: Lead }) {
+    const { canRecordOrders } = usePage<SharedData>().props;
+
     return (
         <>
             {lead.is_verified && lead.verified_by && (
@@ -215,7 +218,20 @@ function LeadStateNotes({ lead }: { lead: Lead }) {
                     {lead.verified_on ? ` on ${lead.verified_on}` : ''}
                 </div>
             )}
-            {lead.converted_customer && <div className="text-muted-foreground mt-1 text-xs">→ {lead.converted_customer}</div>}
+            {lead.converted_customer && (
+                <div className="text-muted-foreground mt-1 text-xs">
+                    → {lead.converted_customer}
+                    {/* ⭐ 26 Sep 2026 (Q21): the officer takes the order from here, customer already chosen. */}
+                    {lead.converted_customer_id && canRecordOrders && (
+                        <>
+                            {' · '}
+                            <Link href={`/sales/orders?new&customer=${lead.converted_customer_id}`} className="underline">
+                                New order
+                            </Link>
+                        </>
+                    )}
+                </div>
+            )}
             {lead.converted_supplier && lead.converted_supplier_id && (
                 <Link href={`/purchasing/suppliers/${lead.converted_supplier_id}`} className="text-muted-foreground mt-1 block text-xs underline">
                     → supplier {lead.converted_supplier}

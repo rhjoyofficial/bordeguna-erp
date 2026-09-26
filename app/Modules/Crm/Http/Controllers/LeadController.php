@@ -162,6 +162,7 @@ class LeadController extends Controller
                 // ⚠ Shown so a converted lead is obviously not editable back into
                 // the pipeline, and so the link is visible rather than implied.
                 'converted_customer' => $lead->convertedCustomer?->name,
+                'converted_customer_id' => $lead->converted_customer_id,
                 // ⭐ Plan D12: the supplier a supplier lead became.
                 'converted_supplier' => $lead->convertedSupplier?->name,
                 'converted_supplier_id' => $lead->converted_supplier_id,

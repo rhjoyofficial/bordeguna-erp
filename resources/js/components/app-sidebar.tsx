@@ -262,7 +262,7 @@ export function AppSidebar() {
         //
         // The order follows a sale: sell or take the order, deliver, bill,
         // collect, and what comes back.
-        ...(canViewSales || canSell
+        ...(canViewSales || canSell || canRecordOrders
             ? [
                   {
                       label: 'Sales',
@@ -272,7 +272,7 @@ export function AppSidebar() {
                           // ⚠ The order book: what is promised, to whom, and how
                           // much of it has left. Shipped WITH its screens in one
                           // commit - the reachability lesson this file records.
-                          ...(canViewSales ? [{ title: 'Sales orders', url: '/sales/orders', icon: ClipboardList }] : []),
+                          ...(canViewSales || canRecordOrders ? [{ title: 'Sales orders', url: '/sales/orders', icon: ClipboardList }] : []),
                           ...(canRecordOrders ? [{ title: 'Quotations', url: '/sales/quotations', icon: FileText }] : []),
                           ...(canViewSales ? [{ title: 'Deliveries', url: '/sales/deliveries', icon: PackageCheck }] : []),
                           // Parcels out with couriers: where their answers are entered.

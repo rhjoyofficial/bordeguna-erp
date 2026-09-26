@@ -74,11 +74,14 @@ class CrmPermissionsSeeder extends Seeder
 
         // ⭐ Field sales (14 Sep 2026). The officer captures shops, visits them,
         // records notes and follow-ups, and corrects what he got wrong.
-        'Sales Officer' => ['crm.leads.view', 'crm.leads.manage'],
+        // ⭐ 26 Sep 2026 (Q21): the officer takes the retailer's order too; it
+        // waits for a Manager (CreateSalesOrder leaves it pending for anyone
+        // without sales.orders.approve) and he sees only the orders he took.
+        'Sales Officer' => ['crm.leads.view', 'crm.leads.manage', 'sales.orders.record'],
         // ⭐ The ASM adds everything Joy reserved for him: verify, reassign,
         // merge (duplicate linking rides on verify), convert and archive. He
         // sees his team's leads through the org chart, not through a permission.
-        'Sales Lead' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.leads.verify', 'crm.leads.convert'],
+        'Sales Lead' => ['crm.leads.view', 'crm.leads.manage', 'crm.leads.assign', 'crm.leads.verify', 'crm.leads.convert', 'sales.orders.record'],
     ];
 
     /**

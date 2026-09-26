@@ -125,8 +125,9 @@ it('creates the two field-sales roles with exactly the permissions Joy decided',
     $permissions = fn (string $role) => Role::where('business_id', $this->business->id)->where('name', $role)->sole()
         ->permissions->pluck('name')->sort()->values()->all();
 
-    expect($permissions('Sales Officer'))->toBe(['crm.leads.manage', 'crm.leads.view'])
-        ->and($permissions('Sales Lead'))->toBe(['crm.leads.assign', 'crm.leads.convert', 'crm.leads.manage', 'crm.leads.verify', 'crm.leads.view']);
+    // ⭐ 26 Sep 2026 (Q21): both may also take a sales order, which waits for a Manager.
+    expect($permissions('Sales Officer'))->toBe(['crm.leads.manage', 'crm.leads.view', 'sales.orders.record'])
+        ->and($permissions('Sales Lead'))->toBe(['crm.leads.assign', 'crm.leads.convert', 'crm.leads.manage', 'crm.leads.verify', 'crm.leads.view', 'sales.orders.record']);
 });
 
 it('gives view-all to the Owner and to nobody else', function () {
