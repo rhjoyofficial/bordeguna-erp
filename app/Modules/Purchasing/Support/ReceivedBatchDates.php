@@ -55,6 +55,55 @@ final class ReceivedBatchDates
         return $problems;
     }
 
+    /**
+     * ⭐ 26 Sep 2026 (Joy, Q8): a product that tracks expiry is not received
+     * without its batch number and expiry date. Refusals by field, empty when
+     * the product does not track expiry or both are present.
+     *
+     * @return array<'batch_number'|'expiry_date', string>
+     */
+    public static function required(bool $tracksExpiry, ?string $batchNumber, ?string $expiryDate): array
+    {
+        if (! $tracksExpiry) {
+            return [];
+        }
+
+        $problems = [];
+
+        if ($batchNumber === null || trim($batchNumber) === '') {
+            $problems['batch_number'] = 'This product tracks expiry: type the batch number from the label.';
+        }
+
+        if (self::normalise($expiryDate) === null) {
+            $problems['expiry_date'] = 'This product tracks expiry: type the expiry date from the label.';
+        }
+
+        return $problems;
+    }
+
+    /**
+     * ⭐ 26 Sep 2026 (Joy, Q9): a WARNING, never a refusal, when the batch has
+     * fewer days of shelf life left than the product's threshold (90 by default).
+     * Null when there is nothing to say.
+     */
+    public static function shelfLifeWarning(?string $expiryDate, int $warnBelowDays, ?Carbon $today = null): ?string
+    {
+        $expires = self::normalise($expiryDate);
+
+        if ($expires === null || $warnBelowDays <= 0) {
+            return null;
+        }
+
+        $todayDate = ($today ?? Carbon::now())->startOfDay();
+        $daysLeft = (int) $todayDate->diffInDays(Carbon::parse($expires)->startOfDay(), false);
+
+        if ($daysLeft >= $warnBelowDays) {
+            return null;
+        }
+
+        return "Only {$daysLeft} day(s) of shelf life left (expires ".self::human($expires)."); the product warns below {$warnBelowDays}. Received all the same: sell it first.";
+    }
+
     private static function normalise(?string $date): ?string
     {
         if ($date === null || trim($date) === '') {

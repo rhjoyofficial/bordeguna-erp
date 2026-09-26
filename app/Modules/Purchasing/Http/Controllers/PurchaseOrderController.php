@@ -351,7 +351,9 @@ class PurchaseOrderController extends Controller
         // bottom. The SAME class runs again inside RecordGoodsReceipt, which is
         // what actually protects the stock; this pass is for the person typing.
         // A line left at 0 is "not in this delivery" and is not checked.
+        $purchaseOrder->load('lines.product');
         $dateProblems = [];
+        $warnings = [];
 
         foreach ($data['lines'] as $index => $entry) {
             if ((float) $entry['quantity'] <= 0) {
@@ -360,6 +362,21 @@ class PurchaseOrderController extends Controller
 
             foreach (ReceivedBatchDates::problems($entry['manufactured_date'] ?? null, $entry['expiry_date'] ?? null) as $field => $problem) {
                 $dateProblems["lines.{$index}.{$field}"] = $problem;
+            }
+
+            // ⭐ 26 Sep 2026 (Joy, Q8/Q9): required where the product tracks
+            // expiry; a short shelf life only warns. The action checks the
+            // requirement again, because the screen is only one way in.
+            $product = $purchaseOrder->lines->firstWhere('id', $entry['purchase_order_line_id'])?->product;
+
+            if ($product !== null) {
+                foreach (ReceivedBatchDates::required((bool) $product->tracks_expiry, $entry['batch_number'] ?? null, $entry['expiry_date'] ?? null) as $field => $problem) {
+                    $dateProblems["lines.{$index}.{$field}"] ??= $problem;
+                }
+
+                if ($product->tracks_expiry && ($warning = ReceivedBatchDates::shelfLifeWarning($entry['expiry_date'] ?? null, $product->shelfLifeWarningDays())) !== null) {
+                    $warnings[] = "{$product->name}: {$warning}";
+                }
             }
         }
 
@@ -398,7 +415,9 @@ class PurchaseOrderController extends Controller
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
         }
 
-        return back()->with('success', 'Goods receipt recorded.');
+        $response = back()->with('success', 'Goods receipt recorded.');
+
+        return $warnings === [] ? $response : $response->with('warning', implode(' ', $warnings));
     }
 
     public function returnGoods(Request $request, PurchaseOrder $purchaseOrder, RecordPurchaseReturn $action): RedirectResponse

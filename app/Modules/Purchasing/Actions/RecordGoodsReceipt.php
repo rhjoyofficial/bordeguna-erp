@@ -104,6 +104,12 @@ class RecordGoodsReceipt
                         throw new InvalidArgumentException("{$line->product->name} ({$line->product->sku}): {$problem}");
                     }
 
+                    // ⭐ 26 Sep 2026 (Joy, Q8): a product that tracks expiry is not
+                    // received without its batch and expiry, whichever way in.
+                    foreach (ReceivedBatchDates::required((bool) $line->product->tracks_expiry, $this->textOrNull($entry['batch_number'] ?? null), $expiryDate) as $problem) {
+                        throw new InvalidArgumentException("{$line->product->name} ({$line->product->sku}): {$problem}");
+                    }
+
                     // ⚠⚠ THE ONE POINT WHERE THE PURCHASE UNIT BECOMES THE STOCK
                     // UNIT. Everything upstream of here - order, receipt line,
                     // supplier bill, purchase return - stays in the unit the

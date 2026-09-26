@@ -52,7 +52,19 @@ class Product extends Model
         // The promised lead time for a made-to-order sale. ⚠ Null promises
         // nothing, and a page with nothing to promise says nothing (Q7 open).
         'lead_time_days',
+        // ⭐ 26 Sep 2026 (Joy, Q8/Q9): a receipt of this product MUST carry a
+        // batch and an expiry; and warns when fewer days than this are left.
+        'tracks_expiry',
+        'shelf_life_warning_days',
     ];
+
+    /** Joy, 26 Sep 2026 (Q9): warn below 90 days unless the product says otherwise. */
+    public const DEFAULT_SHELF_LIFE_WARNING_DAYS = 90;
+
+    public function shelfLifeWarningDays(): int
+    {
+        return $this->shelf_life_warning_days ?? self::DEFAULT_SHELF_LIFE_WARNING_DAYS;
+    }
 
     protected function casts(): array
     {
@@ -64,6 +76,8 @@ class Product extends Model
             'is_active' => 'boolean',
             'availability_override' => AvailabilityPolicy::class,
             'lead_time_days' => 'integer',
+            'tracks_expiry' => 'boolean',
+            'shelf_life_warning_days' => 'integer',
         ];
     }
 
