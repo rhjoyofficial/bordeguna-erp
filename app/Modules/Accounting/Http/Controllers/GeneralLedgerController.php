@@ -5,9 +5,11 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Support\AccountLedger;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\LedgerEntry;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\Request;
@@ -63,6 +65,33 @@ class GeneralLedgerController extends Controller
                 'entries' => [],
                 'summary' => null,
                 'pagination' => null,
+                'ledger_empty' => Journal::count() === 0,
+            ]);
+        }
+
+        // ⭐ 26 Sep 2026: a HEADING chosen here rolls up every head beneath it
+        // for the window, one row per head with a link to its own ledger, and
+        // a total. Headings can now be made by the accountant from a voucher
+        // (ledger-heads plan D2), so "what did Field Costs come to" needs an
+        // answer on this screen rather than a hunt through the heads.
+        if (! $account->is_postable) {
+            return Inertia::render('accounting/general-ledger/index', [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'accounts' => $accounts,
+                'account' => [
+                    'id' => $account->id,
+                    'code' => $account->code,
+                    'name' => $account->name,
+                    'label' => $account->label(),
+                    'type_label' => $account->type->label(),
+                ],
+                'parties' => [],
+                'party' => null,
+                'entries' => [],
+                'summary' => null,
+                'pagination' => null,
+                'rollup' => $this->rollup($account, $from, $to),
                 'ledger_empty' => Journal::count() === 0,
             ]);
         }
@@ -131,6 +160,87 @@ class GeneralLedgerController extends Controller
             ],
             'ledger_empty' => Journal::count() === 0,
         ]);
+    }
+
+    /**
+     * Every postable head under a heading, at any depth, with its movement in
+     * the window and its balance at each end, plus the total. Read straight
+     * from journal_lines like the trial balance, so the two always agree.
+     *
+     * @return array{rows: list<array<string, mixed>>, total: array<string, mixed>}
+     */
+    private function rollup(Account $heading, Carbon $from, Carbon $to): array
+    {
+        $all = Account::query()->get(['id', 'code', 'name', 'parent_id', 'is_postable']);
+        $under = [$heading->id => true];
+
+        do {
+            $before = count($under);
+            foreach ($all as $row) {
+                if ($row->parent_id !== null && isset($under[$row->parent_id])) {
+                    $under[$row->id] = true;
+                }
+            }
+        } while (count($under) > $before);
+
+        unset($under[$heading->id]);
+        $heads = $all->filter(fn ($row) => isset($under[$row->id]) && $row->is_postable)->sortBy('code')->values();
+        $ids = $heads->pluck('id')->all();
+
+        $sum = fn (callable $where) => JournalLine::query()
+            ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
+            ->whereIn('journal_lines.account_id', $ids)
+            ->where($where)
+            ->groupBy('journal_lines.account_id')
+            ->selectRaw('journal_lines.account_id, sum(journal_lines.amount_minor) as minor')
+            ->pluck('minor', 'journal_lines.account_id');
+
+        $opening = $sum(fn ($q) => $q->where('journals.journal_date', '<', $from->toDateString()));
+        $debits = $sum(fn ($q) => $q->whereBetween('journals.journal_date', [$from->toDateString(), $to->toDateString()])->where('journal_lines.amount_minor', '>', 0));
+        $credits = $sum(fn ($q) => $q->whereBetween('journals.journal_date', [$from->toDateString(), $to->toDateString()])->where('journal_lines.amount_minor', '<', 0));
+
+        $totals = ['opening' => 0, 'debits' => 0, 'credits' => 0, 'closing' => 0];
+        $rows = [];
+
+        foreach ($heads as $head) {
+            $o = (int) ($opening[$head->id] ?? 0);
+            $d = (int) ($debits[$head->id] ?? 0);
+            $c = (int) ($credits[$head->id] ?? 0);
+            $close = $o + $d + $c;
+
+            $totals['opening'] += $o;
+            $totals['debits'] += $d;
+            $totals['credits'] += $c;
+            $totals['closing'] += $close;
+
+            $rows[] = [
+                'id' => $head->id,
+                'label' => $head->code.' - '.$head->name,
+                'opening' => $this->signed($o),
+                'debits' => Money::ofMinor($d)->format(),
+                'credits' => Money::ofMinor($c)->absolute()->format(),
+                'closing' => $this->signed($close),
+                'moved' => $d !== 0 || $c !== 0 || $o !== 0,
+            ];
+        }
+
+        return [
+            'rows' => $rows,
+            'total' => [
+                'opening' => $this->signed($totals['opening']),
+                'debits' => Money::ofMinor($totals['debits'])->format(),
+                'credits' => Money::ofMinor($totals['credits'])->absolute()->format(),
+                'closing' => $this->signed($totals['closing']),
+            ],
+        ];
+    }
+
+    /** "1,200.00 Dr" or "300.00 Cr", never a bare negative. */
+    private function signed(int $minor): string
+    {
+        $money = Money::ofMinor($minor);
+
+        return $money->absolute()->format().($money->isCredit() && ! $money->isZero() ? ' Cr' : ($money->isZero() ? '' : ' Dr'));
     }
 
     /**

@@ -288,3 +288,49 @@ it('shows the chosen account s postings with a running balance', function () {
 it('keeps the general ledger away from a user who cannot view accounting', function () {
     $this->actingAs($this->outsider)->get('/accounting/general-ledger')->assertForbidden();
 });
+
+it('rolls a heading up into one row per head beneath it, with the total the statements show', function () {
+    // 26 Sep 2026: headings can be made from a voucher now, so the ledger
+    // answers "what did this heading come to" instead of refusing a heading.
+    $rent = Account::where('code', '6051')->sole();
+    $office = Account::where('code', '6050')->sole();
+    $operating = Account::where('code', '6000')->sole();
+    $spend = function (Account $head, string $amount, string $date) {
+        app(PostJournal::class)->handle(new JournalDraft(
+            date: Carbon::parse($date),
+            lines: [
+                JournalLineDraft::debit($head->id, Money::ofTaka($amount)),
+                JournalLineDraft::credit($this->capital->id, Money::ofTaka($amount)),
+            ],
+            memo: 'spend',
+        ), $this->reader);
+    };
+
+    $spend($rent, '1000', '2026-07-05');   // before the window: opening
+    $spend($rent, '250', '2026-08-01');    // in the window
+    $spend(Account::where('code', '6052')->sole(), '75', '2026-08-02');
+
+    $page = $this->actingAs($this->reader)
+        ->get('/accounting/general-ledger?account='.$office->id.'&from=2026-07-15&to=2026-08-13')
+        ->assertOk()
+        ->viewData('page')['props'];
+
+    $rows = collect($page['rollup']['rows'])->keyBy('label');
+
+    expect($page['summary'])->toBeNull()
+        ->and($page['entries'])->toBe([])
+        ->and($rows['6051 - '.$rent->name]['opening'])->toBe('1,000.00 Dr')
+        ->and($rows['6051 - '.$rent->name]['debits'])->toBe('250.00')
+        ->and($rows['6051 - '.$rent->name]['closing'])->toBe('1,250.00 Dr')
+        ->and($page['rollup']['total']['closing'])->toBe('1,325.00 Dr')
+        ->and($page['rollup']['total']['debits'])->toBe('325.00');
+
+    // The root heading rolls the whole branch up, grandchildren included.
+    $root = $this->actingAs($this->reader)
+        ->get('/accounting/general-ledger?account='.$operating->id.'&from=2026-07-15&to=2026-08-13')
+        ->assertOk()
+        ->viewData('page')['props'];
+
+    expect($root['rollup']['total']['closing'])->toBe('1,325.00 Dr')
+        ->and(collect($root['rollup']['rows'])->where('moved', true)->count())->toBe(2);
+});

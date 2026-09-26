@@ -46,6 +46,21 @@ interface Summary {
     party_filtered: boolean;
 }
 
+interface RollupRow {
+    id: number;
+    label: string;
+    opening: string;
+    debits: string;
+    credits: string;
+    closing: string;
+    moved: boolean;
+}
+
+interface Rollup {
+    rows: RollupRow[];
+    total: { opening: string; debits: string; credits: string; closing: string };
+}
+
 interface Pagination {
     page: number;
     pages: number;
@@ -67,6 +82,7 @@ export default function GeneralLedgerIndex({
     entries,
     summary,
     pagination,
+    rollup = null,
     ledger_empty,
 }: {
     from: string;
@@ -78,6 +94,7 @@ export default function GeneralLedgerIndex({
     entries: Entry[];
     summary: Summary | null;
     pagination: Pagination | null;
+    rollup?: Rollup | null;
     ledger_empty: boolean;
 }) {
     const [filters, setFilters] = useState({
@@ -156,6 +173,60 @@ export default function GeneralLedgerIndex({
                             ? 'Nothing has been posted to the ledger yet.'
                             : 'Choose an account above. A general ledger is one account at a time; for everything in date order, use Journals.'}
                     </div>
+                )}
+
+                {/* A heading: one row per head beneath it, each a link to its own ledger, and the total (26 Sep 2026). */}
+                {account && rollup && (
+                    <>
+                        <div className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border rounded-md border px-4 py-3 text-sm">
+                            {account.label} is a heading, so nothing is posted to it directly. Below is every head under it for the period, with the
+                            total the statements show against the heading. Open a head for its own postings.
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full min-w-[42rem] text-sm">
+                                <thead>
+                                    <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
+                                        <th className="py-2">Head</th>
+                                        <th className="py-2 text-right">Opening</th>
+                                        <th className="py-2 text-right">Debits</th>
+                                        <th className="py-2 text-right">Credits</th>
+                                        <th className="py-2 text-right">Closing</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rollup.rows.map((row) => (
+                                        <tr key={row.id} className={`border-sidebar-border/70 dark:border-sidebar-border border-b ${row.moved ? '' : 'text-muted-foreground'}`}>
+                                            <td className="py-2">
+                                                <button type="button" className="underline-offset-2 hover:underline" onClick={() => show({ account: row.id, party: '' })}>
+                                                    {row.label}
+                                                </button>
+                                            </td>
+                                            <td className="py-2 text-right tabular-nums">{row.opening}</td>
+                                            <td className="py-2 text-right tabular-nums">{row.debits}</td>
+                                            <td className="py-2 text-right tabular-nums">{row.credits}</td>
+                                            <td className="py-2 text-right tabular-nums">{row.closing}</td>
+                                        </tr>
+                                    ))}
+                                    {rollup.rows.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} className="text-muted-foreground py-6 text-center">
+                                                No head sits under {account.label} yet.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                                <tfoot>
+                                    <tr className="font-medium">
+                                        <td className="py-2">Total for {account.label}</td>
+                                        <td className="py-2 text-right tabular-nums">{rollup.total.opening}</td>
+                                        <td className="py-2 text-right tabular-nums">{rollup.total.debits}</td>
+                                        <td className="py-2 text-right tabular-nums">{rollup.total.credits}</td>
+                                        <td className="py-2 text-right tabular-nums">{rollup.total.closing}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </>
                 )}
 
                 {account && summary && (
