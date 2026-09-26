@@ -332,6 +332,22 @@ const dictionary = {
     'receipt.receive_amount': { en: 'Receive {amount}', bn: '{amount} আদায় করুন' },
     'receipt.receive_button': { en: 'Receive payment', bn: 'টাকা আদায় করুন' },
     'receipt.cancel': { en: 'Cancel', bn: 'বাতিল' },
+    // ── Deliveries (daily screen 5 of 6, 26 Sep 2026) ────────────────────
+    'delivery.title': { en: 'Delivery challans', bn: 'ডেলিভারি চালান' },
+    'delivery.sales': { en: 'Sales', bn: 'সেলস' },
+    'delivery.search_placeholder': { en: 'Search challan or customer', bn: 'চালান বা ক্রেতা খুঁজুন' },
+    'delivery.all': { en: 'All', bn: 'সব' },
+    'delivery.not_fully_invoiced': { en: 'Not fully invoiced', bn: 'পুরো ইনভয়েস হয়নি' },
+    'delivery.col_challan': { en: 'Challan', bn: 'চালান' },
+    'delivery.col_date': { en: 'Date', bn: 'তারিখ' },
+    'delivery.col_customer': { en: 'Customer', bn: 'ক্রেতা' },
+    'delivery.col_from': { en: 'From', bn: 'যে গুদাম থেকে' },
+    'delivery.col_lines': { en: 'Lines', bn: 'লাইন' },
+    'delivery.col_print': { en: 'Print', bn: 'প্রিন্ট' },
+    'delivery.invoiced': { en: 'Invoiced', bn: 'ইনভয়েস হয়েছে' },
+    'delivery.awaiting_invoice': { en: 'Awaiting invoice', bn: 'ইনভয়েস বাকি' },
+    'delivery.challan_link': { en: 'Challan', bn: 'চালান' },
+    'delivery.none_yet': { en: 'No delivery challans yet.', bn: 'এখনও কোনো ডেলিভারি চালান নেই।' },
     // ── The language picker ─────────────────────────────────────────────
     'language.heading': { en: 'Language', bn: 'ভাষা' },
     'language.description': {
