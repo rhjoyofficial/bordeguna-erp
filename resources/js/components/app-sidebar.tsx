@@ -287,6 +287,8 @@ export function AppSidebar() {
                           // commit, same reachability rule as the order book.
                           ...(canViewSales ? [{ title: 'Returns', url: '/sales/returns', icon: Undo2 }] : []),
                           ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
+                          // Credit limits and days, by file, applied after approval (26 Sep 2026).
+                          ...(canViewSales ? [{ title: 'Credit terms', url: '/sales/credit-terms', icon: Contact }] : []),
                       ],
                   },
                   {

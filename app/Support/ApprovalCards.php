@@ -21,6 +21,7 @@ use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Sales\Models\CreditTermsRequest;
 use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -438,6 +439,36 @@ class ApprovalCards
                 viewUrl: route('sales.orders.show', $approvable),
                 approveUrl: route('sales.orders.approve', $approvable),
                 rejectUrl: route('sales.orders.reject', $approvable),
+            );
+        }
+
+        if ($approvable instanceof CreditTermsRequest) {
+            $before = $approvable->lines->sum(fn ($line) => (float) ($line->current_credit_limit ?? 0));
+            $after = $approvable->lines->sum(fn ($line) => (float) ($line->proposed_credit_limit ?? 0));
+            $largest = $approvable->lines->max(fn ($line) => (float) ($line->proposed_credit_limit ?? 0) - (float) ($line->current_credit_limit ?? 0));
+
+            return $this->card(
+                $approvalRequest,
+                type: 'Credit terms',
+                summary: "{$approvable->request_number} — {$approvable->line_count} customer(s) — limits {$this->money($before)} to {$this->money($after)}",
+                details: array_filter([
+                    ['label' => 'Asked by', 'value' => $approvable->requestedBy?->name],
+                    ['label' => 'Customers', 'value' => (string) $approvable->line_count],
+                    ['label' => 'Total limits before', 'value' => $this->money($before)],
+                    ['label' => 'Total limits after', 'value' => $this->money($after)],
+                    $largest !== null && $largest > 0 ? ['label' => 'Largest single increase', 'value' => $this->money($largest)] : null,
+                    $approvable->source_file ? ['label' => 'File', 'value' => $approvable->source_file] : null,
+                ]),
+                reason: $approvable->note,
+                lines: $approvable->lines->map(fn ($line) => [
+                    'description' => trim(($line->customer?->code ? $line->customer->code.' ' : '').($line->customer?->name ?? 'Customer')),
+                    'quantity' => 'limit '.($line->current_credit_limit === null ? 'none' : $this->money($line->current_credit_limit)).' -> '.($line->proposed_credit_limit === null ? 'none' : $this->money($line->proposed_credit_limit))
+                        .', days '.($line->current_credit_days ?? 'default').' -> '.($line->proposed_credit_days ?? 'default'),
+                    'amount' => $line->proposed_credit_limit === null ? '' : $this->money($line->proposed_credit_limit),
+                ])->values()->all(),
+                viewUrl: route('sales.credit-terms.show', $approvable),
+                approveUrl: route('sales.credit-terms.approve', $approvable),
+                rejectUrl: route('sales.credit-terms.reject', $approvable),
             );
         }
 

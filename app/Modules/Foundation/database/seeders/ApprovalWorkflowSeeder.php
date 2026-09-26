@@ -51,6 +51,14 @@ class ApprovalWorkflowSeeder extends Seeder
                 ['name' => 'Approval', 'roles' => [], 'permissions' => ['sales.orders.approve']],
             ],
         ],
+        // ⭐ Credit limits and days come as a file and take effect only on the
+        // authority's yes (Joy, 26 Sep 2026, Q16).
+        'credit_terms_request' => [
+            'name' => 'Credit terms approval',
+            'stages' => [
+                ['name' => 'Approval', 'roles' => [], 'permissions' => ['sales.credit.approve']],
+            ],
+        ],
     ];
 
     public function run(): void

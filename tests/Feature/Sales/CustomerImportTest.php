@@ -90,7 +90,7 @@ it('refuses to write anything until a file has been reviewed', function () {
 
 // ── The write itself ────────────────────────────────────────────────────────
 
-it('creates customers with their type, price group and credit limit', function () {
+it('creates customers with their type and price group, and leaves the credit limit to a Credit terms request', function () {
     ($this->review)(($this->file)(
         "CUS-0001,Rahim Store,dealer,Rahim Uddin,01711000000,rahim@example.com,Mirpur,DEALER,30 days,50000,,,First dealer,active\n"
     ));
@@ -106,7 +106,9 @@ it('creates customers with their type, price group and credit limit', function (
         ->and($customer->type)->toBe(CustomerType::Dealer)
         ->and($customer->contact_name)->toBe('Rahim Uddin')
         ->and($customer->price_group_id)->toBe(PriceGroup::where('code', 'DEALER')->value('id'))
-        ->and((float) $customer->credit_limit)->toBe(50000.0)
+        // ⭐ 26 Sep 2026 (Q16): the plain import no longer writes a limit;
+        // credit terms are granted through Sales > Credit terms, with approval.
+        ->and($customer->credit_limit)->toBeNull()
         ->and($customer->payment_terms)->toBe('30 days')
         ->and($customer->is_active)->toBeTrue()
         // Derived, never taken from the file: it is what finds the same person

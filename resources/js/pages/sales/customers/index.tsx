@@ -77,12 +77,14 @@ export default function CustomersIndex({
     types,
     priceGroups,
     mayManage,
+    mayGrantCredit,
 }: {
     customers: Paginated<Customer>;
     filters: { search: string; type: string; status: string };
     types: { value: string; label: string }[];
     priceGroups: PriceGroup[];
     mayManage: boolean;
+    mayGrantCredit: boolean;
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/customers', initialFilters);
 
@@ -191,6 +193,8 @@ export default function CustomersIndex({
                                 id="credit_days"
                                 inputMode="numeric"
                                 value={data.credit_days}
+                                disabled={!mayGrantCredit}
+                                title={mayGrantCredit ? undefined : 'Credit terms change through a Credit terms request.'}
                                 onChange={(e) => setData('credit_days', e.target.value)}
                                 placeholder={data.type === 'walk_in' ? '0' : '10'}
                             />
@@ -204,8 +208,23 @@ export default function CustomersIndex({
                             />
                         </Field>
                         <Field label="Credit limit" htmlFor="credit_limit" size="sm" error={errors.credit_limit}>
-                            <Input id="credit_limit" value={data.credit_limit} onChange={(e) => setData('credit_limit', e.target.value)} />
+                            <Input
+                                id="credit_limit"
+                                value={data.credit_limit}
+                                disabled={!mayGrantCredit}
+                                title={mayGrantCredit ? undefined : 'Credit terms change through a Credit terms request.'}
+                                onChange={(e) => setData('credit_limit', e.target.value)}
+                            />
                         </Field>
+                        {!mayGrantCredit && (
+                            <p className="text-muted-foreground w-full text-xs">
+                                Credit limit and days are granted by the authority through a{' '}
+                                <Link href="/sales/credit-terms" className="underline">
+                                    Credit terms request
+                                </Link>
+                                .
+                            </p>
+                        )}
                     </FormGroup>
 
                     <FormGroup title="Contact">

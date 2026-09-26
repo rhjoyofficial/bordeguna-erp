@@ -42,6 +42,10 @@ class SalesPermissionsSeeder extends Seeder
             // Approve an order over the credit limit, or a distributor's
             // before payment, with a written reason (21 Sep 2026). Owner only.
             'sales.credit.override',
+            // ⭐ Grant credit limits and days: the authority's yes on a credit
+            // terms request (26 Sep 2026, Q16). Owner only by default; a
+            // Manager can be given it in Settings > Roles.
+            'sales.credit.approve',
             // Change a price, or give a discount, at the counter, with a
             // reason kept on the invoice (21 Sep 2026). No cap yet: the owner
             // has not set one.

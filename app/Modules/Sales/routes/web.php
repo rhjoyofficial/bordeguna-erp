@@ -4,6 +4,7 @@ use App\Modules\Commerce\Http\Controllers\GatewayRefundController;
 use App\Modules\Sales\Http\Controllers\ConsignmentController;
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\CourierStatementController;
+use App\Modules\Sales\Http\Controllers\CreditTermsController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
 use App\Modules\Sales\Http\Controllers\CustomerDocumentController;
 use App\Modules\Sales\Http\Controllers\CustomerImportController;
@@ -28,6 +29,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     // anything is gated per operation, the same split Purchasing uses.
     Route::middleware('can:sales.reports.view')->group(function () {
         Route::get('customers', [CustomerController::class, 'index'])->name('customers.index');
+        Route::get('credit-terms', [CreditTermsController::class, 'index'])->name('credit-terms.index');
+        Route::get('credit-terms/{creditTerms}', [CreditTermsController::class, 'show'])->whereNumber('creditTerms')->name('credit-terms.show');
         // C-360: the customer profile. ⚠ whereNumber, because
         // customers/template and customers/export are real routes below that a
         // bare {customer} would swallow.
@@ -66,6 +69,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     });
 
     // ⚠ C-SO-1: goods leave against an APPROVED order only. Owner and Manager.
+    Route::middleware('can:sales.credit.approve')->group(function () {
+        Route::post('credit-terms/{creditTerms}/approve', [CreditTermsController::class, 'approve'])->whereNumber('creditTerms')->name('credit-terms.approve');
+        Route::post('credit-terms/{creditTerms}/reject', [CreditTermsController::class, 'reject'])->whereNumber('creditTerms')->name('credit-terms.reject');
+    });
+
     Route::middleware('can:sales.orders.approve')->group(function () {
         Route::post('orders/{order}/approve', [SalesOrderController::class, 'approve'])->name('orders.approve');
         Route::post('orders/{order}/reject', [SalesOrderController::class, 'reject'])->name('orders.reject');
@@ -99,6 +107,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::get('customers/export', [CustomerImportController::class, 'export'])->name('customers.export');
         Route::post('customers/import/review', [CustomerImportController::class, 'review'])->name('customers.import.review');
         Route::post('customers/import/apply', [CustomerImportController::class, 'apply'])->name('customers.import.apply');
+        // ⭐ Credit terms by file, applied only after approval (26 Sep 2026).
+        Route::get('credit-terms/template', [CreditTermsController::class, 'template'])->name('credit-terms.template');
+        Route::post('credit-terms/review', [CreditTermsController::class, 'review'])->name('credit-terms.review');
+        Route::post('credit-terms', [CreditTermsController::class, 'submit'])->name('credit-terms.submit');
     });
 
     // ⚠⚠ Setting a price is a margin decision. Deliberately NOT given to Staff.

@@ -88,8 +88,12 @@ beforeEach(function () {
  * the same guard Product and Supplier already carry, and its absence here is
  * why four fields drifted out of reach unnoticed.
  */
+// ⚠ 26 Sep 2026 (Q16): credit_limit and credit_days are granted by the
+// authority (sales.credit.approve, the Owner) or through a Credit terms
+// request; a Manager's typed figures are ignored. The two whole-form tests
+// below therefore act as the Owner, for whom every field is still settable.
 it('lets the screen set every field the model can hold', function () {
-    ($this->asRole)('Manager')->post('/sales/customers', $this->full);
+    ($this->asRole)('Owner')->post('/sales/customers', $this->full);
 
     $customer = Customer::where('code', 'KARIM')->firstOrFail();
 
@@ -122,7 +126,7 @@ it('creates a customer with the four fields that were previously unreachable', f
 });
 
 it('updates every field through the screen', function () {
-    ($this->asRole)('Manager')->post('/sales/customers', $this->full);
+    ($this->asRole)('Owner')->post('/sales/customers', $this->full);
     $customer = Customer::where('code', 'KARIM')->firstOrFail();
 
     $changed = array_merge($this->full, [
@@ -134,7 +138,7 @@ it('updates every field through the screen', function () {
         'credit_limit' => '750000',
     ]);
 
-    ($this->asRole)('Manager')
+    ($this->asRole)('Owner')
         ->put("/sales/customers/{$customer->id}", $changed)
         ->assertRedirect();
 

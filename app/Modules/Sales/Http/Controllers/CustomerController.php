@@ -148,6 +148,9 @@ class CustomerController extends Controller
             // in bulk is not, so the import panel is hidden rather than left to
             // 403 on press.
             'mayManage' => request()->user()?->can('sales.customers.manage') ?? false,
+            // ⭐ Credit limit and days are granted through a Credit terms request
+            // (26 Sep 2026, Q16); only the authority types them straight in.
+            'mayGrantCredit' => request()->user()?->can('sales.credit.approve') ?? false,
         ]);
     }
 
@@ -222,7 +225,7 @@ class CustomerController extends Controller
     {
         $businessId = $customer?->business_id ?? app(BusinessContext::class)->id();
 
-        return $request->validate([
+        $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             // ⚠ Scoped to the business. A distributor code is unique to us, not
             // globally, and two businesses may both have a DIST-001.
@@ -270,5 +273,15 @@ class CustomerController extends Controller
             ],
             'note' => ['nullable', 'string'],
         ]);
+
+        // ⭐ Credit terms are granted, not typed (26 Sep 2026, Q16). Without
+        // sales.credit.approve the two fields are ignored on create and kept
+        // as they are on edit, and the form says so; a Credit terms request
+        // is the way to change them.
+        if (! $request->user()->can('sales.credit.approve')) {
+            unset($validated['credit_limit'], $validated['credit_days']);
+        }
+
+        return $validated;
     }
 }

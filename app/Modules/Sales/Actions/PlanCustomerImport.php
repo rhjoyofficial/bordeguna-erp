@@ -185,13 +185,17 @@ class PlanCustomerImport
                 $attributes['price_group_id'] = $groupId;
             }
 
-            if ($creditLimit !== null) {
-                $attributes['credit_limit'] = $creditLimit;
+            // ⭐ 26 Sep 2026 (Q16): credit limit and days are granted through a
+            // Credit terms request with approval; this file no longer writes them.
+            // The columns stay in the template for round-tripping and are ignored.
+            if ($creditLimit !== null || trim($values['credit_days'] ?? '') !== '') {
+                $plan->addWarning($line, $code, 'credit_limit and credit_days are ignored here: credit terms are granted through Sales > Credit terms, with approval.');
             }
 
             foreach (self::WRITABLE as $column) {
-                // Already decided above, each with its own rules.
-                if (in_array($column, ['is_active', 'type', 'name', 'price_group_id', 'credit_limit'], true)) {
+                // Already decided above, each with its own rules; the two credit
+                // columns are granted elsewhere and never written from here.
+                if (in_array($column, ['is_active', 'type', 'name', 'price_group_id', 'credit_limit', 'credit_days'], true)) {
                     continue;
                 }
 
