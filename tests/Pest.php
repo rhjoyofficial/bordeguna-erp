@@ -5,6 +5,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\MoneyAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /*
@@ -88,6 +89,35 @@ function approveIfPending(
  * 11201 as "the bank" therefore gives its business a money account on it first,
  * which is exactly what a real installation has.
  */
+/**
+ * Opens a shift for `$user` on `$till`, or returns the one already open.
+ *
+ * ⭐ 26 Sep 2026 (Joy, Q3): cash at the counter goes into the cashier's OWN
+ * open till or the sale is refused. A test that sells for cash therefore opens
+ * a shift first, the way a real cashier does at the start of the day.
+ */
+function openTill(User $user, MoneyAccount $till): int
+{
+    $existing = DB::table('pos_shifts')
+        ->where('money_account_id', $till->id)->where('opened_by', $user->id)->where('status', 'open')
+        ->value('id');
+
+    if ($existing !== null) {
+        return (int) $existing;
+    }
+
+    return (int) DB::table('pos_shifts')->insertGetId([
+        'business_id' => $till->business_id,
+        'money_account_id' => $till->id,
+        'opened_by' => $user->id,
+        'opened_at' => now(),
+        'opening_float' => '0.00',
+        'status' => 'open',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+}
+
 function moneyHead(string $slug): Account
 {
     $account = Account::bySlug($slug);

@@ -67,6 +67,7 @@ beforeEach(function () {
         'business_id' => $this->business->id, 'name' => 'Till', 'type' => 'cash',
         'account_id' => Account::bySlug('cash_in_hand')->id,
     ]);
+    openTill($this->cashier, $this->cash);
 
     app(RecordStockIn::class)->handle($this->product, $this->warehouse, '10', '500', $this->cashier, occurredAt: '2026-08-01 09:00:00');
 

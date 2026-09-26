@@ -99,6 +99,11 @@ beforeEach(function () {
         setPermissionsTeamId($this->business->id);
         $user->assignRole($role);
 
+        // Cash at the counter needs the seller's own open shift (26 Sep 2026).
+        if (isset($this->cash)) {
+            openTill($user, $this->cash);
+        }
+
         return $this->actingAs($user);
     };
 

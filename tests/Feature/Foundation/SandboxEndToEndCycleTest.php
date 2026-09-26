@@ -136,6 +136,7 @@ it('sells at the counter and posts revenue, COGS and cash', function () {
     ]);
 
     $till = MoneyAccount::where('name', 'DUMMY Cash in Hand')->sole();
+    openTill($this->user, $till);
     $walkIn = Customer::where('code', Customer::WALK_IN_CODE)->sole();
 
     $this->actingAs($this->user)->post('/sales/counter', [
@@ -172,6 +173,7 @@ it('runs the complete cycle on a KILOGRAM product and keeps the books straight',
     ]);
 
     $till = MoneyAccount::where('name', 'DUMMY Cash in Hand')->sole();
+    openTill($this->user, $till);
     $walkIn = Customer::where('code', Customer::WALK_IN_CODE)->sole();
 
     // ⚠⚠ A FRACTIONAL SALE - 1.25 kg. This is the case the whole by-weight
@@ -208,6 +210,7 @@ it('leaves the trial balance at zero after the entire cycle', function () {
     }
 
     $till = MoneyAccount::where('name', 'DUMMY Cash in Hand')->sole();
+    openTill($this->user, $till);
     $walkIn = Customer::where('code', Customer::WALK_IN_CODE)->sole();
 
     $this->actingAs($this->user)->post('/sales/counter', [
@@ -242,6 +245,7 @@ it('records what the business spent on running itself and still balances', funct
     ]);
 
     $till = MoneyAccount::where('name', 'DUMMY Cash in Hand')->sole();
+    openTill($this->user, $till);
     $walkIn = Customer::where('code', Customer::WALK_IN_CODE)->sole();
 
     $this->actingAs($this->user)->post('/sales/counter', [

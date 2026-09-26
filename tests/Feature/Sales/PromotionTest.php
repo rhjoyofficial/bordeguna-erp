@@ -17,6 +17,7 @@ use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
 use App\Modules\Sales\Models\ProductPrice;
 use Illuminate\Support\Carbon;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -70,6 +71,7 @@ beforeEach(function () {
         'business_id' => $this->business->id, 'name' => 'Till', 'type' => 'cash',
         'account_id' => Account::bySlug('cash_in_hand')->id,
     ]);
+    openTill($this->owner, $this->cash);
 
     app(RecordStockIn::class)->handle($this->honey, $this->warehouse, '20', '500', $this->owner, occurredAt: '2026-08-01 09:00:00');
     app(RecordStockIn::class)->handle($this->shutki, $this->warehouse, '20', '100', $this->owner, occurredAt: '2026-08-01 09:00:00');
@@ -167,7 +169,7 @@ it('sleeps outside its dates and when paused', function () {
 it('manages promotions from a gated screen', function () {
     ($this->asOwner)()->get(route('sales.promotions'))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('sales/promotions'));
 
     ($this->asOwner)()->post(route('sales.promotions.store'), [
