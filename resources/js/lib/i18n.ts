@@ -322,7 +322,7 @@ const dictionary = {
     'receipt.pay_now_on': { en: 'Pay now on {number}', bn: '{number}-এ এখন দিচ্ছেন' },
     'receipt.owed_in_all': { en: 'Owed in all', bn: 'মোট বাকি' },
     'receipt.owe_only': {
-        en: "They owe only {owed}. Record {owed} here; money paid ahead of an order is taken on that order's page.",
+        en: 'They owe only {owed}. Record {owed} here; money paid ahead of an order is taken on that order's page.',
         bn: 'তাঁর বাকি মাত্র {owed}। এখানে {owed} লিখুন; অর্ডারের আগাম টাকা সেই অর্ডারের পাতায় নেওয়া হয়।',
     },
     'receipt.split_mismatch': {
@@ -353,7 +353,7 @@ const dictionary = {
     'orders.new': { en: 'New sales order', bn: 'নতুন বিক্রয় অর্ডার' },
     'orders.close': { en: 'Close', bn: 'বন্ধ করুন' },
     'orders.own_only': {
-        en: "You see the orders you took. Each one waits for a Manager's approval before it is delivered.",
+        en: 'You see the orders you took. Each one waits for a Manager's approval before it is delivered.',
         bn: 'আপনি শুধু নিজের নেওয়া অর্ডারগুলো দেখছেন। প্রতিটি ডেলিভারির আগে ম্যানেজারের অনুমোদনের অপেক্ষায় থাকে।',
     },
     'orders.search': { en: 'Search', bn: 'খুঁজুন' },
