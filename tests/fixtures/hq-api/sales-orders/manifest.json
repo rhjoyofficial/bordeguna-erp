@@ -1,0 +1,23 @@
+{
+    "contract": "hq-sales-orders.v1",
+    "origin": "bordeguna-erp tests/Feature/HqApi/HqSalesOrderTest.php",
+    "canonical": "sha256 of json_encode(json_decode(file), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION)",
+    "files": {
+        "already-cancelled": "b3dbef2d4b11190b9cb675167a61d262cda2d3dc78891e1bead65ed4a96b06fd",
+        "already-confirmed": "3f54de6b435cb0722ef03254d1bbccade15e7a146752c04e093a43629f6a8677",
+        "by-key": "c96a8042ce0a4ed6b3650c91d332e99c75030524a2fccd0fe1db00d48cd66d18",
+        "cancel-replayed": "2c63bdf907fab4300ec10d7ad76a77ec3277ac1237ca1d71b295c04678e15502",
+        "cancelled": "16d6f4fcac192bd1fc64a4129874ea9f89e4c844126cf354b5ddb85205391f87",
+        "created": "fdb002ac028efdd38f1ef2c7a76618c6a9d0e5426451d3d2e25866f680a79477",
+        "draft-repriced": "aaf914864f83dc85daf74620d5633cdebf1b06b73603ae15635c4c0a837f3cd8",
+        "forbidden": "cd8443f82184f93e655a481727b38bc42e8308fc58ce0cac08cbae7e36d18ca4",
+        "has-deliveries": "ce0762f6afd4e80996793d24e4f055838c352c3ece3afa7fc2806de901874793",
+        "key-reused": "020a383eaffa6834c7189e922afed79d1063d45d8c39d2f7f5ddcccea898c1c0",
+        "not-found": "aa56f03bae7cb120d04547c277667f07aa38cb84977f445ebfdb1aef10484b3f",
+        "quote": "1596fd7f1521d8f825e1ed0a5cf39a7b1d81c81d73e64e39ddfdc06ef1309077",
+        "quote-refused": "bb5ae9201394529da3a36d01ffa426deb33d3e284603667d38b13991509a6834",
+        "read": "c96a8042ce0a4ed6b3650c91d332e99c75030524a2fccd0fe1db00d48cd66d18",
+        "replayed": "600a5148f5e6812e46391b4d908cdb7b949126243a229760b238dcf2bbf9003f"
+    },
+    "contract_digest": "b3aaf4087f03a2bd669cc5693108f853a6772aaa0a81f0c04728cdbafcfa21b6"
+}

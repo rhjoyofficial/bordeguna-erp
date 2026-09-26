@@ -18,7 +18,8 @@ use Illuminate\Validation\Rule;
  * ⛔ A DRAFT AND NOTHING AFTER IT. `POST sales-order-drafts` writes a `SalesOrderDraft`: no sales
  * order, no order number, no approval request, no customer, no stock, no journal, no notification.
  * `GET sales-order-drafts/{key}` reads one back by the caller's key, which is how HQ checks that what
- * it proposed is what the ERP holds. There is no route that confirms, changes or cancels a draft.
+ * it proposed is what the ERP holds. No route changes or cancels a draft; an order is made FROM one only
+ * by `POST sales-orders` (`HqSalesOrderController`, HQ docs/88 A point 3), and the draft stays as written.
  *
  * ⛔ A NEW ABILITY, `sales.orders.draft`, that no token holds until one is issued for it by name with
  * `hq:api:token --write`. Every body is an explicit field list, and states its own effects.
@@ -164,7 +165,7 @@ final class HqSalesOrderDraftController extends Controller
                 'journal_posted' => false,
                 'notification_sent' => false,
             ],
-            'next_step' => 'None. A draft becomes an order only through a later capability that does not exist yet.',
+            'next_step' => 'None by itself. Only POST sales-orders naming this draft makes an order, and that order waits for approval in the ERP.',
             'replayed' => $replayed,
         ], fn ($value) => $value !== null);
     }

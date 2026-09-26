@@ -1,0 +1,6 @@
+{
+    "error": {
+        "code": "draft_already_confirmed",
+        "message": "This draft is already order SO-2026-27-0001; a draft becomes one order, once. Nothing was written."
+    }
+}

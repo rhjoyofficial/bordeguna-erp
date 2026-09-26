@@ -4,38 +4,30 @@ namespace App\Modules\Sales\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
-use App\Modules\Commerce\Enums\StoreStatus;
-use App\Modules\Commerce\Models\Store;
-use App\Modules\Commerce\Support\Availability;
-use App\Modules\Commerce\Support\CartRules;
-use App\Modules\Commerce\Support\DeliveryQuote;
-use App\Modules\Crm\Support\PhoneIdentity;
-use App\Modules\Inventory\Models\Product;
 use App\Modules\Sales\Exceptions\SalesOrderDraftRefused;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrderDraft;
-use App\Modules\Sales\Support\SalesOrderDestination;
+use App\Modules\Sales\Support\HqOrderPricing;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Writes a draft sales order for HQ, and nothing else (HQ docs/83 C.3, docs/79).
  *
  * ⚠⚠ NOT `CreateSalesOrder`, ON PURPOSE. That action takes the next order number, opens an approval
  * request, notifies the approvers, and (through the website) may create a customer. A draft does none
- * of those: it is its own immutable record (`SalesOrderDraft`), and turning it into an order is a
- * later capability with its own gate. Nothing here reaches stock, a journal, a coupon, a customer
+ * of those: it is its own immutable record (`SalesOrderDraft`). Turning it into an order is
+ * `ConfirmHqSalesOrderDraft` (HQ docs/88 A point 3), a separate request behind its own ability, whose
+ * order waits in the ERP's approval inbox. Nothing here reaches stock, a journal, a coupon, a customer
  * row, a notification or a queue.
  *
- * ⚠⚠ THE ERP ASKS ITS OWN QUESTIONS AND NEVER TRUSTS THE CALLER'S ANSWERS. The store must be live;
- * every product is re-read by SKU and asked the website's questions (`CartRules`: published, priced,
- * sellable); every price is the one engine at this store and this quantity; the delivery charge is
- * `DeliveryQuote`; the destination is `SalesOrderDestination`; the customer is the one the website's
- * `identify` would pick. Then every figure HQ proposed must equal the ERP's to the paisa, or the
- * request is REFUSED with each field named. Nothing is ever rewritten to make it match: a proposal a
- * person approved at one price is not quietly written at another.
+ * ⚠⚠ THE ERP ASKS ITS OWN QUESTIONS AND NEVER TRUSTS THE CALLER'S ANSWERS (`HqOrderPricing`: the store
+ * live, the website's questions per SKU, the one engine per price, `DeliveryQuote`,
+ * `SalesOrderDestination`); the customer is the one the website's `identify` would pick. Then every
+ * figure HQ proposed must equal the ERP's to the paisa, or the request is REFUSED with each field
+ * named. Nothing is ever rewritten to make it match: a proposal a person approved at one price is not
+ * quietly written at another.
  *
  * ⭐ IDEMPOTENT ON THE CALLER'S KEY. The same key with the same request answers the stored draft
  * (without pricing it again: a draft records what was agreed then); the same key with a different
@@ -43,10 +35,7 @@ use Illuminate\Validation\ValidationException;
  */
 final class CreateSalesOrderDraft
 {
-    /** docs/79 C.7: a Bangladesh mobile number, as HQ's PhoneCanonical and the ERP's PhoneIdentity write it. */
-    private const MOBILE = '/^01[3-9]\d{8}$/';
-
-    public function __construct(private readonly ResolveSellingPrice $prices) {}
+    public function __construct(private readonly HqOrderPricing $pricing) {}
 
     /**
      * @param  array<string, mixed>  $input  the validated request
@@ -64,96 +53,20 @@ final class CreateSalesOrderDraft
         }
 
         $now = Carbon::now();
-        $refusals = [];
+        $asked = array_values((array) $input['lines']);
+        $priced = $this->pricing->price($businessId, (string) $input['store_key'], (array) $input['destination'], $asked, $now);
+
         $mismatches = [];
-
-        $store = Store::query()->where('business_id', $businessId)->where('key', (string) $input['store_key'])->first();
-        if ($store === null) {
-            throw SalesOrderDraftRefused::refused(['store_key' => ["No store with key {$input['store_key']} in this business."]]);
-        }
-        if ($store->status !== StoreStatus::Live) {
-            // ⚠ A store that is not open does not take orders, drafts included.
-            throw SalesOrderDraftRefused::refused(['store_key' => ["The store {$store->key} is not live, so it takes no orders."]]);
-        }
-
-        try {
-            $destination = SalesOrderDestination::fromInput((array) $input['destination']);
-        } catch (ValidationException $e) {
-            throw SalesOrderDraftRefused::refused(collect($e->errors())->mapWithKeys(fn ($messages, $field) => ["destination.{$field}" => array_values($messages)])->all());
-        }
-
-        $phone = PhoneIdentity::normalize($destination->recipientPhone);
-        if ($phone === null || preg_match(self::MOBILE, $phone) !== 1) {
-            $refusals['destination.phone'][] = 'That is not a Bangladesh mobile number (eleven digits starting 013 to 019).';
-        }
-
-        $lines = [];
-        $goods = Money::zero();
-        $seen = [];
-        foreach (array_values((array) $input['lines']) as $i => $line) {
-            $sku = (string) $line['sku'];
-            if (isset($seen[$sku])) {
-                $refusals["lines.{$i}.sku"][] = "SKU {$sku} appears twice; name each product once with its whole quantity.";
-
-                continue;
+        foreach ($priced->lines as $line) {
+            $proposed = (string) $asked[$line['index']]['unit_price'];
+            if (! HqOrderPricing::sameDecimal($proposed, $line['unit_price'])) {
+                $mismatches["lines.{$line['index']}.unit_price"][] = "Proposed {$proposed}, the ERP's price is ".HqOrderPricing::plain($line['unit_price']).'.';
             }
-            $seen[$sku] = true;
-
-            /** @var Product|null $product */
-            $product = Product::query()->where('business_id', $businessId)->where('sku', $sku)->first();
-            if ($product === null) {
-                $refusals["lines.{$i}.sku"][] = "No product with SKU {$sku} in this business.";
-
-                continue;
-            }
-            if (! $product->type->isStocked()) {
-                $refusals["lines.{$i}.sku"][] = "{$product->name} is a service and cannot be ordered.";
-
-                continue;
-            }
-            if (($refusal = CartRules::refusalFor($store, $product)) !== null) {
-                $refusals["lines.{$i}.sku"][] = "{$product->name}: {$refusal}";
-
-                continue;
-            }
-
-            $quantity = (int) $line['quantity'];
-            $resolved = $this->prices->find(product: $product, customer: null, quantity: (string) $quantity, on: $now, priceGroupId: $store->price_group_id);
-            if ($resolved === null) {
-                $refusals["lines.{$i}.sku"][] = "{$product->name} has no price in force at this store for {$quantity}.";
-
-                continue;
-            }
-
-            if (! self::sameDecimal((string) $line['unit_price'], (string) $resolved->unitPrice)) {
-                $mismatches["lines.{$i}.unit_price"][] = "Proposed {$line['unit_price']}, the ERP's price is ".self::plain((string) $resolved->unitPrice).'.';
-            }
-
-            $lineTotal = Money::ofProduct((string) $quantity, (string) $resolved->unitPrice);
-            $goods = $goods->plus($lineTotal);
-            $lines[] = [
-                'product_id' => $product->id,
-                'sku' => $product->sku,
-                'quantity' => $quantity,
-                'unit_price' => (string) $resolved->unitPrice,
-                'line_total' => $lineTotal->toTaka(),
-                'price_note' => mb_substr($resolved->explain(), 0, 255),
-                'made_to_order' => Availability::decide($store, $product)->madeToOrder,
-            ];
         }
 
-        $quote = DeliveryQuote::for($store, $destination->district);
-        $charge = $quote->cannotQuote() ? null : $quote->charge();
-        if ($charge === null) {
-            $refusals['destination.district'][] = "The store cannot work out a delivery charge for {$destination->district}.";
-        }
-
-        if ($refusals !== []) {
-            throw SalesOrderDraftRefused::refused($refusals);
-        }
-
-        $delivery = Money::ofTaka((string) $charge);
-        $agreed = $goods->plus($delivery);
+        $goods = $priced->goods;
+        $delivery = $priced->delivery;
+        $agreed = $priced->agreed();
         foreach (['goods_total' => $goods, 'delivery_charge' => $delivery, 'agreed_total' => $agreed] as $field => $erp) {
             $proposed = (string) $input['proposed'][$field];
             if (Money::ofTaka($proposed)->minor !== $erp->minor) {
@@ -164,6 +77,10 @@ final class CreateSalesOrderDraft
             throw SalesOrderDraftRefused::quoteMismatch($mismatches);
         }
 
+        $store = $priced->store;
+        $destination = $priced->destination;
+        $phone = $priced->phone;
+
         // The customer the website would pick for this phone: active, not the seeded walk-in row, the
         // first by id. ⛔ Nobody is created: a new buyer stays "new" until an order exists.
         $customer = Customer::query()
@@ -173,6 +90,16 @@ final class CreateSalesOrderDraft
             ->where('is_system', false)
             ->orderBy('id')
             ->first();
+
+        $lines = array_map(fn (array $line) => [
+            'product_id' => $line['product_id'],
+            'sku' => $line['sku'],
+            'quantity' => $line['quantity'],
+            'unit_price' => $line['unit_price'],
+            'line_total' => $line['line_total'],
+            'price_note' => $line['price_note'],
+            'made_to_order' => $line['made_to_order'],
+        ], $priced->lines);
 
         try {
             $draft = DB::transaction(function () use ($businessId, $store, $key, $digest, $input, $customer, $destination, $phone, $goods, $delivery, $agreed, $now, $correlationId, $tokenId, $by, $lines) {
@@ -187,7 +114,7 @@ final class CreateSalesOrderDraft
                     'customer_resolution' => $customer === null ? 'new' : 'existing',
                     'recipient_name' => $destination->recipientName,
                     'recipient_phone' => $destination->recipientPhone,
-                    'recipient_phone_normalized' => (string) $phone,
+                    'recipient_phone_normalized' => $phone,
                     'district' => $destination->district,
                     'thana' => $destination->thana,
                     'area' => $destination->area,
@@ -262,27 +189,5 @@ final class CreateSalesOrderDraft
         };
 
         return hash('sha256', (string) json_encode($sort($input), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION));
-    }
-
-    /** Two decimals equal to four places, compared as integers (no floating point, no bcmath). */
-    private static function sameDecimal(string $a, string $b): bool
-    {
-        return self::scaled($a) === self::scaled($b);
-    }
-
-    private static function scaled(string $decimal): string
-    {
-        [$whole, $fraction] = array_pad(explode('.', trim($decimal), 2), 2, '');
-
-        return ltrim($whole, '0').'.'.str_pad(substr($fraction, 0, 4), 4, '0');
-    }
-
-    /** "850.0000" as "850.00", the way a person reads a price. */
-    private static function plain(string $decimal): string
-    {
-        [$whole, $fraction] = array_pad(explode('.', $decimal, 2), 2, '');
-        $fraction = rtrim($fraction, '0');
-
-        return $whole.'.'.str_pad($fraction, 2, '0');
     }
 }

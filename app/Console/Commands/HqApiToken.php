@@ -29,10 +29,14 @@ final class HqApiToken extends Command
     /**
      * Abilities that let HQ WRITE something in the ERP (HQ docs/83 C.3). ⛔ Never issued by default and
      * never by accident: each must be named in `--abilities` AND the command must be given `--write`,
-     * so a read token copied from a runbook cannot pick one up. Today there is one, and what it writes
-     * is a draft with nothing after it.
+     * so a read token copied from a runbook cannot pick one up. Three today (HQ docs/83 C.3, docs/88 A
+     * point 3): a draft with nothing after it; an order made from an approved draft, which WAITS in the
+     * approval inbox; and the cancellation of an order HQ placed, while nothing has left.
+     *
+     * ⛔ `sales.orders.approve` is not here and never will be: approving an order is a person's act in
+     * the ERP, and HQ asking for an order must never be able to decide it.
      */
-    public const WRITE_ABILITIES = ['sales.orders.draft'];
+    public const WRITE_ABILITIES = ['sales.orders.draft', 'sales.orders.record', 'sales.orders.cancel'];
 
     public function handle(): int
     {

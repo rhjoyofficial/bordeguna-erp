@@ -5,12 +5,15 @@ namespace App\Modules\Sales\Exceptions;
 use RuntimeException;
 
 /**
- * Why a draft sales order was not written, as the ERP says it (HQ docs/83 C.3).
+ * Why an HQ request about an order was not taken, as the ERP says it (HQ docs/83 C.3, docs/88 A point 3).
  *
- * Three kinds, each with its own status: a request the ERP will not take as it stands (422
- * `refused`), figures HQ proposed that no longer match the ERP's own (422 `quote_mismatch`, every
- * field named with both figures), and a key already used for a different request (409
- * `idempotency_key_reused`). None of them writes anything.
+ * The name is the draft's because the draft came first; quotes, the order made from a draft and HQ's
+ * cancellation use the same refusals so HQ reads one shape. The kinds, each with its own status: a
+ * request the ERP will not take as it stands (422 `refused`), figures HQ proposed that no longer match
+ * the ERP's own (422 `quote_mismatch`, every field named with both figures), a key already used for a
+ * different request (409 `idempotency_key_reused`), nothing to act on (404 `not_found`), and a state
+ * that forbids the act (409 `draft_already_confirmed`, `already_cancelled`, `has_deliveries`). None
+ * of them writes anything.
  */
 final class SalesOrderDraftRefused extends RuntimeException
 {
@@ -41,5 +44,31 @@ final class SalesOrderDraftRefused extends RuntimeException
     public static function keyReused(): self
     {
         return new self('idempotency_key_reused', 'This idempotency key was already used for a different draft. Nothing was written.', 409);
+    }
+
+    /** The same key, a different request, for an order or a cancellation rather than a draft. */
+    public static function keyReusedFor(string $what): self
+    {
+        return new self('idempotency_key_reused', "This idempotency key was already used for a different {$what}. Nothing was written.", 409);
+    }
+
+    public static function notFound(string $sentence): self
+    {
+        return new self('not_found', $sentence, 404);
+    }
+
+    public static function draftAlreadyConfirmed(string $orderNumber): self
+    {
+        return new self('draft_already_confirmed', "This draft is already order {$orderNumber}; a draft becomes one order, once. Nothing was written.", 409);
+    }
+
+    public static function alreadyCancelled(string $orderNumber): self
+    {
+        return new self('already_cancelled', "Order {$orderNumber} is already cancelled. Nothing was written.", 409);
+    }
+
+    public static function hasDeliveries(string $sentence): self
+    {
+        return new self('has_deliveries', $sentence, 409);
     }
 }
