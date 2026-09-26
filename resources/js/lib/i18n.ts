@@ -454,6 +454,13 @@ const dictionary = {
     // Breadcrumbs shared by the sales daily screens
     'nav.sales': { en: 'Sales', bn: 'সেলস' },
     'nav.counter': { en: 'Counter', bn: 'কাউন্টার' },
+    // ── The six daily menu entries (26 Sep 2026) ─────────────────────────
+    'menu.counter_sale': { en: 'Counter sale', bn: 'কাউন্টার বিক্রি' },
+    'menu.cashier_shifts': { en: 'Cashier shifts', bn: 'ক্যাশিয়ার শিফট' },
+    'menu.sales_orders': { en: 'Sales orders', bn: 'বিক্রয় অর্ডার' },
+    'menu.deliveries': { en: 'Deliveries', bn: 'ডেলিভারি' },
+    'menu.receive_payment': { en: 'Receive payment', bn: 'টাকা আদায়' },
+    'menu.purchase_orders': { en: 'Purchase orders', bn: 'ক্রয় অর্ডার' },
     // ── The language picker ─────────────────────────────────────────────
     'language.heading': { en: 'Language', bn: 'ভাষা' },
     'language.description': {
