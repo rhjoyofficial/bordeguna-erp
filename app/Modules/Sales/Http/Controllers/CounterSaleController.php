@@ -258,6 +258,28 @@ class CounterSaleController extends Controller
             ]);
         }
 
+        // ⭐⭐ CASH GOES INTO THE CASHIER'S OWN OPEN TILL, OR IT IS REFUSED
+        // (Joy, 26 Sep 2026, Q3: "follow recommendation": refuse). Until now the
+        // screen only warned. Cash that is not in a counted till can never be
+        // reconciled at shift close, and cash put into somebody else's till
+        // makes THEIR count wrong. Bank and mobile money are not tills and
+        // still work without a shift.
+        if ($moneyAccount?->type === MoneyAccountType::Cash) {
+            $till = $this->openTillOf($request);
+
+            if ($till === null) {
+                throw ValidationException::withMessages([
+                    'money_account_id' => 'Open your shift first: cash is counted into a till, and you have none open. Bank or mobile money still works.',
+                ]);
+            }
+
+            if ($till['money_account_id'] !== $moneyAccount->id) {
+                throw ValidationException::withMessages([
+                    'money_account_id' => "Cash goes into the till of your own open shift, {$till['name']}, not into {$moneyAccount->name}. Choose your till, or bank or mobile money.",
+                ]);
+            }
+        }
+
         // Cash tendered means something only for cash going into a cash till.
         $cashGiven = $moneyAccount?->type === MoneyAccountType::Cash && isset($data['cash_given'])
             ? Money::ofTaka((string) $data['cash_given'])
