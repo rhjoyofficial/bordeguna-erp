@@ -681,8 +681,8 @@ export default function CounterSale({
                     )}
 
                     <div className="flex flex-col gap-3 p-4">
-                        {/* ⚠ No open shift: cash has no till to default to, and the
-                            screen says so instead of guessing one. */}
+                        {/* ⚠ No open shift: cash has no till to go into, and the server
+                            refuses a cash sale until one is open (26 Sep 2026). */}
                         {myTill === null && (
                             <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs dark:border-amber-800 dark:bg-amber-950/30">
                                 {t('pos.no_open_till')}{' '}

@@ -106,12 +106,14 @@ beforeEach(function () {
         return $user;
     };
 
-    // One sale at the counter, as the screen sends it.
+    // One sale at the counter, as the screen sends it. ⚠ Paid into the BANK by
+    // default since 26 Sep 2026: cash needs the cashier's own open shift, and
+    // most of these cases are not about the till.
     $this->sell = function (User $user, array $overrides = []): TestResponse {
         return $this->actingAs($user)->post('/sales/counter', array_merge([
             'customer_id' => Customer::walkIn()->id,
             'warehouse_id' => $this->warehouse->id,
-            'money_account_id' => $this->frontTill->id,
+            'money_account_id' => $this->bank->id,
             'lines' => [['product_id' => $this->honey->id, 'quantity' => '2']],
         ], $overrides));
     };
@@ -424,8 +426,9 @@ describe('credit at the counter', function () {
 describe('after the sale', function () {
     it('comes back to a fresh counter handing it the slip and the change, once', function () {
         $cashier = ($this->userAs)('Staff');
+        ($this->openShift)($cashier, $this->backTill);
 
-        ($this->sell)($cashier, ['cash_given' => '2000'])
+        ($this->sell)($cashier, ['money_account_id' => $this->backTill->id, 'cash_given' => '2000'])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('sales.counter.create'));
 
@@ -450,7 +453,10 @@ describe('after the sale', function () {
     });
 
     it('refuses cash given below the total, and records nothing', function () {
-        ($this->sell)(($this->userAs)('Staff'), ['cash_given' => '1000'])
+        $cashier = ($this->userAs)('Staff');
+        ($this->openShift)($cashier, $this->backTill);
+
+        ($this->sell)($cashier, ['money_account_id' => $this->backTill->id, 'cash_given' => '1000'])
             ->assertSessionHasErrors('cash_given');
 
         expect(session('errors')->first('cash_given'))->toContain('less than the total of 1,700.00')
@@ -479,4 +485,31 @@ describe('after the sale', function () {
 
         expect($payload['lines'][0]['override_reason'])->toBe('Dented tin');
     });
+});
+
+// ─── CASH NEEDS THE CASHIER'S OWN OPEN TILL (Joy, 26 Sep 2026, Q3) ──────────
+
+it('refuses a cash sale when the cashier has no open shift, and bank still works', function () {
+    $cashier = ($this->userAs)('Staff');
+
+    ($this->sell)($cashier, ['money_account_id' => $this->backTill->id, 'cash_given' => '2000'])
+        ->assertSessionHasErrors('money_account_id');
+    expect(session('errors')->first('money_account_id'))->toContain('Open your shift first')
+        ->and(SalesInvoice::count())->toBe(0);
+
+    ($this->sell)($cashier, ['money_account_id' => $this->bank->id])->assertSessionHasNoErrors();
+    expect(SalesInvoice::count())->toBe(1);
+});
+
+it('refuses cash into a till that is not the one this cashier opened', function () {
+    $cashier = ($this->userAs)('Staff');
+    ($this->openShift)($cashier, $this->backTill);
+
+    ($this->sell)($cashier, ['money_account_id' => $this->frontTill->id, 'cash_given' => '2000'])
+        ->assertSessionHasErrors('money_account_id');
+    expect(session('errors')->first('money_account_id'))->toContain('your own open shift')
+        ->and(SalesInvoice::count())->toBe(0);
+
+    ($this->sell)($cashier, ['money_account_id' => $this->backTill->id, 'cash_given' => '2000'])->assertSessionHasNoErrors();
+    expect(SalesInvoice::count())->toBe(1);
 });
