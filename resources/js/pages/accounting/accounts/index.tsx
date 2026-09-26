@@ -54,8 +54,14 @@ function depthOf(account: Account, byId: Map<number, Account>): number {
 
 const EMPTY = { code: '', name: '', type: 'asset', parent_id: '', is_postable: true, is_active: true, note: '' };
 
-export default function ChartOfAccounts({ accounts, types }: { accounts: Account[]; types: AccountType[] }) {
-    const { canManageChartOfAccounts } = usePage<SharedData>().props;
+export default function ChartOfAccounts({ accounts, types, money_group_ids }: { accounts: Account[]; types: AccountType[]; money_group_ids: number[] }) {
+    // 26 Sep 2026: the chart key is split. Creating, renaming and deleting are
+    // three keys; anything STRUCTURAL (a top-level heading, a move, a re-type,
+    // head to heading or back, retiring a heading) needs a fourth, so the form
+    // only offers those controls to somebody who holds it. The server checks
+    // the same rule, so this is courtesy, not the guard.
+    const { canManageChartOfAccounts, canCreateLedgerHeads, canUpdateLedgerHeads, canDeleteLedgerHeads, canManageChartStructure } =
+        usePage<SharedData>().props;
     const [editing, setEditing] = useState<Account | null>(null);
 
     const { data, setData, post, put, errors, processing, reset, clearErrors } = useForm(EMPTY);
@@ -65,7 +71,20 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
     // Only accounts of the same type can be a parent, because a child must match
     // its parent's type. Offering the rest and rejecting the choice afterwards
     // teaches the rule one failed save at a time.
-    const parentOptions = useMemo(() => accounts.filter((a) => a.type === data.type && a.id !== editing?.id), [accounts, data.type, editing]);
+    const parentOptions = useMemo(
+        () =>
+            accounts.filter(
+                (a) =>
+                    a.type === data.type &&
+                    a.id !== editing?.id &&
+                    // A head cannot sit under a head, nor under the cash, bank
+                    // and wallet groups (Bank & cash makes those ledgers).
+                    (canManageChartStructure || (!a.is_postable && !money_group_ids.includes(a.id))),
+            ),
+        [accounts, data.type, editing, canManageChartStructure, money_group_ids],
+    );
+    const structureLocked = editing !== null && !canManageChartStructure;
+
 
     const startEdit = (account: Account) => {
         clearErrors();
@@ -152,7 +171,13 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="type">Type</Label>
-                            <SearchSelect fit id="type" value={data.type} onChange={(e) => setData({ ...data, type: e.target.value, parent_id: '' })}>
+                            <SearchSelect
+                                fit
+                                id="type"
+                                value={data.type}
+                                disabled={structureLocked}
+                                onChange={(e) => setData({ ...data, type: e.target.value, parent_id: '' })}
+                            >
                                 {types.map((type) => (
                                     <option key={type.value} value={type.value}>
                                         {type.label}
@@ -163,8 +188,8 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="parent_id">Sits under</Label>
-                            <SearchSelect fit id="parent_id" value={data.parent_id} onChange={(e) => setData('parent_id', e.target.value)}>
-                                <option value="">Top level</option>
+                            <SearchSelect fit id="parent_id" value={data.parent_id} disabled={structureLocked} onChange={(e) => setData('parent_id', e.target.value)}>
+                                {canManageChartStructure ? <option value="">Top level</option> : <option value="">Choose a heading</option>}
                                 {parentOptions.map((account) => (
                                     <option key={account.id} value={account.id}>
                                         {account.code} - {account.name}
@@ -174,16 +199,28 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                             <InputError message={errors.parent_id} />
                         </div>
                         <label className="flex h-10 items-center gap-2 text-sm">
-                            <input type="checkbox" checked={data.is_postable} onChange={(e) => setData('is_postable', e.target.checked)} />
+                            <input
+                                type="checkbox"
+                                checked={data.is_postable}
+                                disabled={structureLocked}
+                                onChange={(e) => setData('is_postable', e.target.checked)}
+                            />
                             Can be posted to
                         </label>
                         {editing && (
                             <label className="flex h-10 items-center gap-2 text-sm">
-                                <input type="checkbox" checked={data.is_active} onChange={(e) => setData('is_active', e.target.checked)} />
+                                <input
+                                    type="checkbox"
+                                    checked={data.is_active}
+                                    disabled={structureLocked && !editing.is_postable}
+                                    onChange={(e) => setData('is_active', e.target.checked)}
+                                />
                                 Active
                             </label>
                         )}
-                        <Button disabled={processing}>{editing ? `Save ${editing.code}` : 'Add account'}</Button>
+                        <Button disabled={processing || (editing ? !canUpdateLedgerHeads : !canCreateLedgerHeads)}>
+                            {editing ? `Save ${editing.code}` : 'Add account'}
+                        </Button>
                         {editing && (
                             <Button type="button" variant="ghost" onClick={cancelEdit}>
                                 Cancel
@@ -224,13 +261,13 @@ export default function ChartOfAccounts({ accounts, types }: { accounts: Account
                                 <td className="py-2 text-right">
                                     {canManageChartOfAccounts && (
                                         <>
-                                            <Button variant="ghost" size="sm" onClick={() => startEdit(account)}>
+                                            <Button variant="ghost" size="sm" disabled={!canUpdateLedgerHeads} onClick={() => startEdit(account)}>
                                                 Edit
                                             </Button>
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                disabled={account.is_system}
+                                                disabled={account.is_system || !canDeleteLedgerHeads}
                                                 onClick={() => destroy(account)}
                                                 title={
                                                     account.is_system

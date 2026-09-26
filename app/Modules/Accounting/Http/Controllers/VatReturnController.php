@@ -48,7 +48,7 @@ class VatReturnController extends Controller
                 'credit_carried_forward' => Money::ofMinor((int) $filed->credit_carried_forward_minor)->toTaka(),
                 'journal_id' => $filed->journal_id,
             ],
-            'can_file' => $request->user()->can('accounting.chart.manage')
+            'can_file' => $request->user()->can('accounting.vat.manage')
                 && $filed === null
                 && $figures['regime'] !== 'not_registered'
                 && $end->lessThan(Carbon::today()),

@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\ChartPermissions;
 use App\Modules\Accounting\Support\MoneyLedgers;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,9 +18,13 @@ use Inertia\Response;
 /**
  * The Chart of Accounts screen.
  *
- * ⚠ Reading is `accounting.view`; every write is `accounting.chart.manage`,
- * applied on the routes. The split matters because renaming or re-parenting an
- * account changes what every report ever run against it meant.
+ * ⚠ Reading is `accounting.view`. Since 26 Sep 2026 the writes are split
+ * (Support\ChartPermissions): create needs `chart.head.create`, update
+ * `chart.head.update`, delete `chart.head.delete`, on the routes; and anything
+ * STRUCTURAL - a root heading, a re-parent, a re-type, head to heading or back,
+ * deactivating a heading, a system head's code - additionally needs
+ * `chart.structure.manage`, checked here, because re-parenting an account
+ * changes what every report ever run against it meant.
  */
 class AccountController extends Controller
 {
@@ -47,6 +52,7 @@ class AccountController extends Controller
                 'label' => $type->label(),
                 'normal_balance' => $type->normalBalance()->value,
             ]),
+            'money_group_ids' => MoneyLedgers::groupIds(),
         ]);
     }
 
@@ -55,6 +61,12 @@ class AccountController extends Controller
         $data = $this->validated($request);
 
         $account = new Account($data);
+
+        // ⚠ A root heading changes the shape of the statements: Owner only.
+        if ($account->parent_id === null) {
+            $this->authorizeStructure('A top-level heading changes the layout of every statement. Ask the Owner, or choose a heading to sit under.');
+        }
+
         $account->assertConsistentWithParent();
         $this->assertTreeStaysSound($account);
         $account->save();
@@ -67,6 +79,10 @@ class AccountController extends Controller
         $data = $this->validated($request, $account);
 
         $account->fill($data);
+
+        if ($this->isStructural($account)) {
+            $this->authorizeStructure('Moving, re-typing or regrouping an account, or retiring a heading, needs the chart structure permission. Ask the Owner.');
+        }
 
         // ⚠⚠ Re-typing a parent orphans the meaning of everything beneath it:
         // the children keep their own type, the group no longer matches them,
@@ -113,6 +129,36 @@ class AccountController extends Controller
         $account->delete();
 
         return back()->with('success', 'Account deleted.');
+    }
+
+    /**
+     * What counts as STRUCTURE on an edit: everything except a rename, a note,
+     * and switching a plain head on or off. Root, parent, type and postability
+     * decide where a balance lands on a statement; a heading's active flag hides
+     * a whole branch; a system head's code is what seeders and exports key on.
+     */
+    private function isStructural(Account $account): bool
+    {
+        if ($account->isDirty(['parent_id', 'type', 'is_postable'])) {
+            return true;
+        }
+
+        if ($account->isDirty('is_active') && ! $account->is_postable) {
+            return true;
+        }
+
+        if ($account->isDirty('code') && $account->system_slug !== null) {
+            return true;
+        }
+
+        return $account->getOriginal('parent_id') === null && $account->isDirty();
+    }
+
+    private function authorizeStructure(string $message): void
+    {
+        if (! request()->user()->can(ChartPermissions::STRUCTURE)) {
+            throw ValidationException::withMessages(['parent_id' => $message]);
+        }
     }
 
     /**

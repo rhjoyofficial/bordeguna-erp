@@ -125,7 +125,7 @@ class HandleInertiaRequests extends Middleware
                 ->values()
                 ->all() ?? [],
             // The "New ledger head" button inside every ledger picker.
-            'canManageChart' => fn () => (bool) $request->user()?->can('accounting.chart.manage'),
+            'canManageChart' => fn () => (bool) $request->user()?->can('accounting.chart.head.create'),
             'canManageUsers' => fn () => (bool) $request->user()?->can('foundation.users.manage'),
             // ⚠⚠ TWO CONDITIONS, BOTH REQUIRED (Joy, 30 Aug 2026): the business
             // has the assistant switched on AND this person holds the
@@ -182,7 +182,12 @@ class HandleInertiaRequests extends Middleware
             // once salary journals exist, so it follows the same ACL-02 shape:
             // Owner, Finance and Payroll, nobody else by default.
             'canViewAccounting' => fn () => (bool) $request->user()?->can('accounting.view'),
-            'canManageChartOfAccounts' => fn () => (bool) $request->user()?->can('accounting.chart.manage'),
+            'canManageChartOfAccounts' => fn () => (bool) $request->user()?->canAny(['accounting.chart.head.create', 'accounting.chart.head.update', 'accounting.chart.head.delete']),
+            'canCreateLedgerHeads' => fn () => (bool) $request->user()?->can('accounting.chart.head.create'),
+            'canUpdateLedgerHeads' => fn () => (bool) $request->user()?->can('accounting.chart.head.update'),
+            'canDeleteLedgerHeads' => fn () => (bool) $request->user()?->can('accounting.chart.head.delete'),
+            'canManageChartStructure' => fn () => (bool) $request->user()?->can('accounting.chart.structure.manage'),
+            'canManageMoneyAccounts' => fn () => (bool) $request->user()?->can('accounting.money_account.manage'),
             // C-GL-6: the highest-risk permission in the system. Owner only.
             'canPrepareVouchers' => fn () => (bool) $request->user()?->can('accounting.voucher.prepare'),
             'canPostVouchers' => fn () => (bool) $request->user()?->can('accounting.voucher.post'),

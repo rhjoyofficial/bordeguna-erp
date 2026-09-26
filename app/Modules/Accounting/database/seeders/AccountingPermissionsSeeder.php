@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\database\seeders;
 
+use App\Modules\Accounting\Support\ChartPermissions;
 use App\Modules\Foundation\Models\Business;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
@@ -39,6 +40,12 @@ use Spatie\Permission\Models\Role;
  * ℹ The accountant, when they arrive, goes on the `Finance` role through the
  * Roles UI. That is one grant, not a code change, which is the point of having
  * kept the roles configurable.
+ *
+ * 26 Sep 2026: `accounting.chart.manage` is split (Support\ChartPermissions):
+ * head create / update / delete, chart structure, money accounts, VAT. Finance
+ * gets head create + update so the accountant can add a ledger head from a
+ * voucher without being able to re-parent the chart or switch VAT on. The old
+ * key stays on Owner and still implies all six through a gate hook.
  */
 class AccountingPermissionsSeeder extends Seeder
 {
@@ -50,6 +57,12 @@ class AccountingPermissionsSeeder extends Seeder
             'accounting.income.record',
             'accounting.voucher.prepare',
             'accounting.voucher.post',
+            ChartPermissions::HEAD_CREATE,
+            ChartPermissions::HEAD_UPDATE,
+            ChartPermissions::HEAD_DELETE,
+            ChartPermissions::STRUCTURE,
+            ChartPermissions::MONEY_ACCOUNTS,
+            ChartPermissions::VAT,
         ],
         'Finance' => [
             'accounting.view',
@@ -61,6 +74,11 @@ class AccountingPermissionsSeeder extends Seeder
             // starts with the Owner. Handing it to the accountant is one tick
             // in Settings > Roles, not a code change (voucher plan, decision 9).
             'accounting.voucher.prepare',
+            // ⚠ A head or a sub-heading under an existing heading, and a rename:
+            // the accountant's daily need (26 Sep 2026). Not delete, not the
+            // structure, not Bank & cash, not VAT.
+            ChartPermissions::HEAD_CREATE,
+            ChartPermissions::HEAD_UPDATE,
         ],
         // Musa's role. He prepares and pays; reading a trial balance is part of
         // that, writing to it is not - the same separation that already keeps

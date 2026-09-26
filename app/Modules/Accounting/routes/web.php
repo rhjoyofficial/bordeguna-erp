@@ -131,23 +131,30 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::get('balance-sheet', [BalanceSheetController::class, 'index'])->name('balance-sheet');
     });
 
-    Route::middleware('can:accounting.chart.manage')->group(function () {
+    // 26 Sep 2026: the chart key is split (Support\ChartPermissions). Creating
+    // sits on head.create, and the controller asks for structure.manage when the
+    // request is structural (a root heading, a re-parent, a re-type).
+    Route::middleware('can:accounting.chart.head.create')->group(function () {
         Route::post('accounts', [AccountController::class, 'store'])->name('accounts.store');
         // A ledger head added from inside another form's picker (JSON).
         Route::get('accounts/quick/options', [QuickAccountController::class, 'options'])->name('accounts.quick.options');
         Route::post('accounts/quick', [QuickAccountController::class, 'store'])->name('accounts.quick.store');
-        Route::put('accounts/{account}', [AccountController::class, 'update'])->name('accounts.update');
-        Route::delete('accounts/{account}', [AccountController::class, 'destroy'])->name('accounts.destroy');
+    });
+    Route::put('accounts/{account}', [AccountController::class, 'update'])->middleware('can:accounting.chart.head.update')->name('accounts.update');
+    Route::delete('accounts/{account}', [AccountController::class, 'destroy'])->middleware('can:accounting.chart.head.delete')->name('accounts.destroy');
 
-        // ⚠ No delete route. A money account is deactivated, never removed:
-        // a payment made in August must still be nameable in December.
-        // ⭐ VAT settings: the switch, the BIN, the rates (VAT plan T1).
-        // Owner only, like the chart: it changes what every invoice charges.
+    // ⭐ VAT settings: the switch, the BIN, the rates (VAT plan T1), and filing
+    // a return. It changes what every invoice charges, so it has its own key.
+    Route::middleware('can:accounting.vat.manage')->group(function () {
         Route::post('vat-return', [VatReturnController::class, 'store'])->name('vat-return.store');
         Route::get('vat-settings', [VatSettingsController::class, 'index'])->name('vat-settings.index');
         Route::put('vat-settings', [VatSettingsController::class, 'update'])->name('vat-settings.update');
         Route::post('vat-settings/rates', [VatSettingsController::class, 'storeRate'])->name('vat-settings.rates.store');
+    });
 
+    // ⚠ No delete route. A money account is deactivated, never removed:
+    // a payment made in August must still be nameable in December.
+    Route::middleware('can:accounting.money_account.manage')->group(function () {
         Route::post('money-accounts', [MoneyAccountController::class, 'store'])->name('money-accounts.store');
         Route::put('money-accounts/{moneyAccount}', [MoneyAccountController::class, 'update'])->name('money-accounts.update');
     });

@@ -65,7 +65,7 @@ export default function MoneyAccountsIndex({
     courierLedgerAccountId: number | null;
     gatewayLedgerAccountId: number | null;
 }) {
-    const { canManageChartOfAccounts } = usePage<SharedData>().props;
+    const { canManageMoneyAccounts } = usePage<SharedData>().props;
     const [editing, setEditing] = useState<MoneyAccount | null>(null);
     const { data, setData, post, put, errors, processing, reset, clearErrors } = useForm(EMPTY);
 
@@ -151,7 +151,7 @@ export default function MoneyAccountsIndex({
                     </p>
                 </div>
 
-                {canManageChartOfAccounts && (
+                {canManageMoneyAccounts && (
                     <form
                         onSubmit={submit}
                         className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
@@ -314,7 +314,7 @@ export default function MoneyAccountsIndex({
                                         )}
                                     </td>
                                     <td className="py-2 text-right">
-                                        {canManageChartOfAccounts && (
+                                        {canManageMoneyAccounts && (
                                             <Button variant="ghost" size="sm" onClick={() => startEdit(account)}>
                                                 Edit
                                             </Button>

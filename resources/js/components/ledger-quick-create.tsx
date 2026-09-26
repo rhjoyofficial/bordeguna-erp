@@ -8,7 +8,9 @@ import { useEffect, useState } from 'react';
 
 export type LedgerType = 'asset' | 'liability' | 'equity' | 'income' | 'expense';
 
-type Heading = { id: number; label: string; suggested_code: string | null };
+type Heading = { id: number; label: string; suggested_code: string | null; suggested_heading_code: string | null };
+
+const NEW_HEADING = '__new__';
 
 function xsrfToken(): string {
     const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
@@ -32,6 +34,12 @@ const TYPE_LABEL: Record<LedgerType, string> = {
  *
  * ⚠ `types` with more than one entry (the journal form posts to any account)
  * shows a type picker; with one entry the type is fixed and not asked.
+ *
+ * 26 Sep 2026 (Joy, the accountant): "Under which heading" also offers
+ * "+ New heading". It asks which EXISTING heading the new one sits under, its
+ * code (a free band of ten is suggested) and its name, and the server makes
+ * heading and head together. Never a top-level heading from here: those shape
+ * the statements and stay on the Chart of accounts screen.
  */
 export function LedgerQuickCreate({
     open,
@@ -49,6 +57,9 @@ export function LedgerQuickCreate({
     const [type, setType] = useState<LedgerType>(types[0]);
     const [headings, setHeadings] = useState<Heading[]>([]);
     const [parentId, setParentId] = useState('');
+    const [headingParentId, setHeadingParentId] = useState('');
+    const [headingCode, setHeadingCode] = useState('');
+    const [headingName, setHeadingName] = useState('');
     const [code, setCode] = useState('');
     const [name, setName] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -68,6 +79,9 @@ export function LedgerQuickCreate({
 
         let cancelled = false;
         setParentId('');
+        setHeadingParentId('');
+        setHeadingCode('');
+        setHeadingName('');
         setCode('');
 
         fetch(`/accounting/accounts/quick/options?type=${type}`, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
@@ -84,6 +98,8 @@ export function LedgerQuickCreate({
         };
     }, [open, type]);
 
+    const makingHeading = parentId === NEW_HEADING;
+
     function chooseParent(next: string) {
         setParentId(next);
         const heading = headings.find((h) => String(h.id) === next);
@@ -91,7 +107,22 @@ export function LedgerQuickCreate({
         if (heading?.suggested_code) {
             setCode(heading.suggested_code);
         }
+
+        if (next === NEW_HEADING) {
+            setCode('');
+        }
     }
+
+    function chooseHeadingParent(next: string) {
+        setHeadingParentId(next);
+        const heading = headings.find((h) => String(h.id) === next);
+        const suggested = heading?.suggested_heading_code ?? '';
+        setHeadingCode(suggested);
+        // The first head under a new heading takes the heading's code plus one.
+        setCode(suggested && /^\d+$/.test(suggested) ? String(Number(suggested) + 1).padStart(suggested.length, '0') : '');
+    }
+
+    const ready = code !== '' && name !== '' && (makingHeading ? headingParentId !== '' && headingCode !== '' && headingName !== '' : parentId !== '');
 
     async function save() {
         setSaving(true);
@@ -102,7 +133,11 @@ export function LedgerQuickCreate({
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': xsrfToken() },
-                body: JSON.stringify({ code, name, type, parent_id: parentId === '' ? null : Number(parentId) }),
+                body: JSON.stringify(
+                    makingHeading
+                        ? { code, name, type, new_heading: { parent_id: Number(headingParentId), code: headingCode, name: headingName } }
+                        : { code, name, type, parent_id: parentId === '' ? null : Number(parentId) },
+                ),
             });
 
             if (response.status === 422) {
@@ -161,12 +196,56 @@ export function LedgerQuickCreate({
                             id="ledger_quick_parent"
                             value={parentId}
                             onChange={chooseParent}
-                            options={headings.map((h) => ({ value: String(h.id), label: h.label }))}
+                            options={[{ value: NEW_HEADING, label: '+ New heading\u2026' }, ...headings.map((h) => ({ value: String(h.id), label: h.label }))]}
                             placeholder="Choose a heading"
                             invalid={Boolean(errors.parent_id)}
                         />
                         <InputError message={errors.parent_id} />
                     </div>
+                    {makingHeading ? (
+                        <div className="grid gap-3 rounded-md border border-dashed p-3">
+                            <div className="grid gap-2">
+                                <Label htmlFor="ledger_quick_heading_parent" required>
+                                    New heading sits under
+                                </Label>
+                                <SearchableSelect
+                                    id="ledger_quick_heading_parent"
+                                    value={headingParentId}
+                                    onChange={chooseHeadingParent}
+                                    options={headings.map((h) => ({ value: String(h.id), label: h.label }))}
+                                    placeholder="Choose an existing heading"
+                                    invalid={Boolean(errors['new_heading.parent_id'])}
+                                />
+                                <InputError message={errors['new_heading.parent_id']} />
+                            </div>
+                            <div className="grid grid-cols-[8rem_1fr] gap-3">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="ledger_quick_heading_code" required>
+                                        Heading code
+                                    </Label>
+                                    <Input
+                                        id="ledger_quick_heading_code"
+                                        value={headingCode}
+                                        onChange={(e) => setHeadingCode(e.target.value)}
+                                        placeholder="e.g. 6820"
+                                    />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="ledger_quick_heading_name" required>
+                                        Heading name
+                                    </Label>
+                                    <Input
+                                        id="ledger_quick_heading_name"
+                                        value={headingName}
+                                        onChange={(e) => setHeadingName(e.target.value)}
+                                        placeholder="e.g. Field Costs"
+                                    />
+                                </div>
+                            </div>
+                            <InputError message={errors['new_heading.code'] ?? errors['new_heading.name']} />
+                            <p className="text-muted-foreground text-xs">A heading groups heads on the statements and is never posted to itself.</p>
+                        </div>
+                    ) : null}
                     <div className="grid grid-cols-[8rem_1fr] gap-3">
                         <div className="grid gap-2">
                             <Label htmlFor="ledger_quick_code" required>
@@ -187,8 +266,8 @@ export function LedgerQuickCreate({
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>
-                    <Button type="button" disabled={saving || parentId === '' || code === '' || name === ''} onClick={save}>
-                        Add ledger head
+                    <Button type="button" disabled={saving || !ready} onClick={save}>
+                        {makingHeading ? 'Add heading and ledger head' : 'Add ledger head'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

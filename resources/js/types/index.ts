@@ -97,6 +97,11 @@ export interface SharedData {
     canViewAssetItems: boolean;
     canRunDepreciation: boolean;
     canManageChartOfAccounts: boolean;
+    canCreateLedgerHeads: boolean;
+    canUpdateLedgerHeads: boolean;
+    canDeleteLedgerHeads: boolean;
+    canManageChartStructure: boolean;
+    canManageMoneyAccounts: boolean;
     canPrepareVouchers: boolean;
     canPostVouchers: boolean;
     canPostJournal: boolean;
