@@ -44,7 +44,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Employee statement', href: '/accounting/employee-statement' },
 ];
 
-const side = (amount: string, sideOf: 'debit' | 'credit') => (sideOf === 'credit' ? `${amount} Cr` : `${amount} Dr`);
+const side = (amount: string, sideOf: 'debit' | 'credit') => (amount === '0.00' ? amount : sideOf === 'credit' ? `${amount} Cr` : `${amount} Dr`);
 
 /* What each head's closing balance MEANS for this person, in plain words. */
 const MEANING: Record<string, { tile: string; debit: string; credit: string }> = {
