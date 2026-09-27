@@ -11,6 +11,7 @@ use App\Modules\Purchasing\Http\Controllers\SupplierCreditNoteController;
 use App\Modules\Purchasing\Http\Controllers\SupplierDocumentController;
 use App\Modules\Purchasing\Http\Controllers\SupplierImportController;
 use App\Modules\Purchasing\Http\Controllers\SupplierPaymentController;
+use App\Modules\Purchasing\Http\Controllers\SupplierQuickCreateController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purchasing.')->group(function () {
@@ -40,6 +41,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         Route::post('suppliers/import/apply', [SupplierImportController::class, 'apply'])->name('suppliers.import.apply');
 
         Route::post('suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
+        // ⭐ 27 Sep 2026 (Joy): create a supplier from inside a purchase order or
+        // any supplier picker (JSON, name is enough, code auto-generated).
+        Route::post('suppliers/quick', [SupplierQuickCreateController::class, 'store'])->name('suppliers.quick');
         Route::put('suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
         Route::delete('suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
         // ⭐ Plan D11: trade licence and NID scans. Adding needs the same trust as

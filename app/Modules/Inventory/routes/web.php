@@ -6,6 +6,7 @@ use App\Modules\Inventory\Http\Controllers\BrandController;
 use App\Modules\Inventory\Http\Controllers\CategoryController;
 use App\Modules\Inventory\Http\Controllers\ExpiryController;
 use App\Modules\Inventory\Http\Controllers\InventoryDashboardController;
+use App\Modules\Inventory\Http\Controllers\InventoryQuickCreateController;
 use App\Modules\Inventory\Http\Controllers\InventorySettingController;
 use App\Modules\Inventory\Http\Controllers\LabelSheetController;
 use App\Modules\Inventory\Http\Controllers\LowStockController;
@@ -120,6 +121,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::post('units', [UnitOfMeasureController::class, 'store'])->name('units.store');
         Route::put('units/{unit}', [UnitOfMeasureController::class, 'update'])->name('units.update');
         Route::delete('units/{unit}', [UnitOfMeasureController::class, 'destroy'])->name('units.destroy');
+
+        // ⭐ 27 Sep 2026 (Joy): create a unit / category / brand from inside the
+        // product form (JSON, like accounting's quick ledger head). Same
+        // permission as the settings screens above.
+        Route::post('quick/units', [InventoryQuickCreateController::class, 'unit'])->name('quick.units');
+        Route::post('quick/categories', [InventoryQuickCreateController::class, 'category'])->name('quick.categories');
+        Route::post('quick/brands', [InventoryQuickCreateController::class, 'brand'])->name('quick.brands');
 
         Route::post('warehouses', [WarehouseController::class, 'store'])->name('warehouses.store');
         Route::put('warehouses/{warehouse}', [WarehouseController::class, 'update'])->name('warehouses.update');
