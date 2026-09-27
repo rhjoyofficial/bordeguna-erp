@@ -410,18 +410,36 @@ class ExpenseClaimController extends Controller
             'declines.*.reason.required' => 'Say why the line is being declined. The employee has to know what to fix.',
         ]);
 
-        $this->applyDeclines($claim, $data['declines'] ?? []);
+        // ⭐ 27 Sep 2026 (HRM audit): declines, the approval, and the journal are
+        // ONE transaction. Before, declines were committed before the approval
+        // was even checked, so if a second approver had already decided, the
+        // line declines stuck to a claim someone else approved; and a failed
+        // journal left an approved claim with no posting. Now any failure rolls
+        // the whole thing back. Notifications are sent AFTER the commit.
+        $result = DB::transaction(function () use ($request, $claim, $approval, $data) {
+            $this->applyDeclines($claim, $data['declines'] ?? []);
 
-        if (! $approval->approve($request->user(), $data['note'] ?? null)) {
+            $isFinal = $approval->approve($request->user(), $data['note'] ?? null);
+
+            $journal = null;
+
+            if ($isFinal) {
+                // FINAL approval: the expense becomes real NOW - Dr the category's
+                // account, Cr Employee Reimbursements Payable. Cash moves later.
+                $journal = app(PostExpenseClaimApproval::class)
+                    ->handle($claim->fresh()->load('lines'), $request->user());
+            }
+
+            return ['final' => $isFinal, 'journal' => $journal];
+        });
+
+        if (! $result['final']) {
             $notify->handle($approval->fresh(), "Expense claim {$claim->claim_number}");
 
             return back()->with('success', 'Approved. Sent to the next stage.');
         }
 
-        // FINAL approval: the expense becomes real NOW - Dr the category's
-        // account, Cr Employee Reimbursements Payable. Cash moves later.
-        $journal = app(PostExpenseClaimApproval::class)
-            ->handle($claim->fresh()->load('lines'), $request->user());
+        $journal = $result['journal'];
 
         // ⚠ The posting is skipped for a legacy claim with no category, and
         // when accounting is off. Saying "booked" either way would be a lie

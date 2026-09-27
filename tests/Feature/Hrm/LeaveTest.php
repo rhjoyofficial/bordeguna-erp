@@ -238,6 +238,32 @@ it('never drives a balance negative', function () {
     expect(app(LeaveBalance::class)->for($this->employee->id, $this->earned->id, 2026))->toBe(0.0);
 });
 
+it('does not let two separate requests each draw the same balance below zero', function () {
+    grantDays($this->earned, 2);
+
+    // Both requests are made while the balance still reads 2, so each computes
+    // 2 paid days at request time.
+    $first = app(RequestLeave::class)->handle(
+        $this->employee, $this->earned, '2026-08-03', '2026-08-04',
+        LeaveDayPortion::FullDay, 'First', $this->staffUser,
+    );
+    $second = app(RequestLeave::class)->handle(
+        $this->employee, $this->earned, '2026-08-10', '2026-08-11',
+        LeaveDayPortion::FullDay, 'Second', $this->staffUser,
+    );
+
+    expect((float) $first->unpaid_days)->toBe(0.0)
+        ->and((float) $second->unpaid_days)->toBe(0.0);
+
+    app(ApplyLeave::class)->handle($first);
+    app(ApplyLeave::class)->handle($second);
+
+    // The second request re-checks the balance at approval: it is now empty, so
+    // its days become unpaid and the balance never goes negative.
+    expect(app(LeaveBalance::class)->for($this->employee->id, $this->earned->id, 2026))->toBe(0.0)
+        ->and((float) $second->fresh()->unpaid_days)->toBe(2.0);
+});
+
 it('treats a type that draws on no balance as entirely unpaid', function () {
     $unpaid = LeaveType::where('code', 'unpaid')->sole();
 

@@ -5,6 +5,7 @@ namespace App\Modules\Hrm\Actions;
 use App\Modules\Hrm\Enums\LeaveLedgerEntryType;
 use App\Modules\Hrm\Models\LeaveLedgerEntry;
 use App\Modules\Hrm\Models\LeaveRequest;
+use App\Modules\Hrm\Support\LeaveBalance;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -38,9 +39,30 @@ class ApplyLeave
 
     private function charge(LeaveRequest $request): void
     {
-        $paidDays = round((float) $request->days - (float) $request->unpaid_days, 2);
+        if (! $request->leaveType?->deducts_balance) {
+            return;
+        }
 
-        if ($paidDays <= 0 || ! $request->leaveType?->deducts_balance) {
+        // ⭐ 27 Sep 2026 (HRM audit): re-check the balance AT APPROVAL, not only
+        // when the request was made. Another request may have drawn the balance
+        // down since, so the paid portion is capped at what is available now and
+        // the rest becomes unpaid - exactly the split the request itself uses.
+        // Without this, two separate requests could each draw the same balance
+        // and drive it negative.
+        $intendedPaid = round((float) $request->days - (float) $request->unpaid_days, 2);
+        $available = max(0.0, app(LeaveBalance::class)->for(
+            $request->employee_id,
+            $request->leave_type_id,
+            (int) Carbon::parse($request->start_date)->year,
+        ));
+        $paidDays = round(min($intendedPaid, $available), 2);
+        $newUnpaid = round((float) $request->days - $paidDays, 2);
+
+        if (abs($newUnpaid - (float) $request->unpaid_days) > 0.001) {
+            $request->update(['unpaid_days' => $newUnpaid]);
+        }
+
+        if ($paidDays <= 0) {
             return;
         }
 
