@@ -2,9 +2,11 @@
 
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\database\seeders\HrmPermissionsSeeder;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\SalaryComponent;
 use App\Modules\Hrm\Models\SalaryStructure;
 use Illuminate\Support\Carbon;
@@ -47,6 +49,14 @@ beforeEach(function () {
         'status' => 'active',
         'employment_type' => 'probation',
         'probation_months' => 3,
+    ]);
+
+    $office = Office::create(['name' => 'HQ', 'is_active' => true]);
+    EmployeeAssignment::create([
+        'employee_id' => $this->employee->id,
+        'office_id' => $office->id,
+        'is_primary' => true,
+        'effective_from' => '2026-07-01',
     ]);
 
     $basic = SalaryComponent::firstOrCreate(
@@ -118,4 +128,37 @@ it('writes an experience letter that respects the leaving date, and gates issuin
     $this->actingAs($bystander)->withSession(['current_business_id' => $this->business->id])
         ->post(route('hrm.employees.letters.store', $this->employee), ['type' => 'experience'])
         ->assertForbidden();
+});
+
+it('refuses the letter print page to a user without the HR permission, so salary cannot leak', function () {
+    ($this->asHr)()->post(route('hrm.employees.letters.store', $this->employee), ['type' => 'appointment'])->assertSessionHasNoErrors();
+    $letter = DB::table('hr_letters')->first();
+
+    $bystander = User::factory()->create();
+    $bystander->businesses()->attach($this->business->id);
+
+    $this->actingAs($bystander)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('hrm.letters.print', $letter->id))
+        ->assertForbidden();
+});
+
+it('will not let an HR user in one business reach an employee who belongs only to another', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    $stranger = Employee::create([
+        'business_id' => $other->id,
+        'employee_code' => 'OTH-000001',
+        'first_name' => 'Far', 'last_name' => 'Away',
+        'joining_date' => '2026-07-01', 'status' => 'active', 'employment_type' => 'permanent',
+    ]);
+    $otherOffice = Office::create(['name' => 'Other HQ', 'is_active' => true]);
+    EmployeeAssignment::withoutGlobalScopes()->create([
+        'business_id' => $other->id,
+        'employee_id' => $stranger->id,
+        'office_id' => $otherOffice->id,
+        'is_primary' => true,
+        'effective_from' => '2026-07-01',
+    ]);
+
+    // The HR user is acting in Letter Co; the stranger belongs only to Other Co.
+    ($this->asHr)()->get(route('hrm.employees.letters', $stranger))->assertNotFound();
 });

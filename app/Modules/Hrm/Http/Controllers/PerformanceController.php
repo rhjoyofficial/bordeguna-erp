@@ -25,6 +25,9 @@ class PerformanceController extends Controller
     {
         $this->authorize('hrm.employees.manage');
 
+        // ⭐ 27 Sep 2026 (HRM audit): confine to the current business.
+        abort_unless($employee->assignments()->exists(), 404);
+
         $businessId = app(BusinessContext::class)->id();
 
         $userNames = fn ($ids) => DB::table('users')->whereIn('id', $ids)->pluck('name', 'id');
@@ -75,6 +78,9 @@ class PerformanceController extends Controller
     {
         $this->authorize('hrm.employees.manage');
 
+        // ⭐ 27 Sep 2026 (HRM audit): confine to the current business.
+        abort_unless($employee->assignments()->exists(), 404);
+
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'description' => ['nullable', 'string'],
@@ -120,6 +126,9 @@ class PerformanceController extends Controller
     public function storeReview(Request $request, Employee $employee): RedirectResponse
     {
         $this->authorize('hrm.employees.manage');
+
+        // ⭐ 27 Sep 2026 (HRM audit): confine to the current business.
+        abort_unless($employee->assignments()->exists(), 404);
 
         $data = $request->validate([
             'period' => ['required', 'string', 'max:20'],

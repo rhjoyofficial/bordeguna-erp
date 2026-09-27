@@ -5,6 +5,7 @@ namespace App\Modules\Hrm\Console\Commands;
 use App\Modules\Foundation\Scopes\BusinessScope;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Support\RevokeErpAccess;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
@@ -59,7 +60,7 @@ class DisableDueSeparations extends Command
             ));
 
             if (! $dryRun) {
-                $employee->user->update(['is_active' => false]);
+                RevokeErpAccess::for($employee->user);
             }
 
             $count++;

@@ -5,11 +5,13 @@ use App\Modules\Foundation\Models\ActivityLogEntry;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\CreateEmployee;
+use App\Modules\Hrm\Actions\SeparateEmployee;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Models\Employee;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -18,11 +20,13 @@ beforeEach(function () {
     $this->business = Business::create(['name' => 'Life Co', 'slug' => 'life-co']);
     app(BusinessContext::class)->set($this->business->id);
 
-    Permission::firstOrCreate(['name' => 'hrm.employees.manage', 'guard_name' => 'web']);
+    foreach (['hrm.employees.manage', 'foundation.users.manage'] as $perm) {
+        Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
+    }
     foreach (['Owner', 'Staff'] as $roleName) {
         Role::firstOrCreate(['name' => $roleName, 'business_id' => $this->business->id, 'guard_name' => 'web']);
     }
-    Role::where('business_id', $this->business->id)->where('name', 'Owner')->first()->givePermissionTo('hrm.employees.manage');
+    Role::where('business_id', $this->business->id)->where('name', 'Owner')->first()->givePermissionTo(['hrm.employees.manage', 'foundation.users.manage']);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
 
     $this->owner = User::factory()->create();
@@ -172,4 +176,103 @@ it('ends access at once when the resignation is dated before today', function ()
 
     expect($user->fresh()->is_active)->toBeFalse();
     Carbon::setTestNow();
+});
+
+it('fully revokes access on separation: deactivates, drops live sessions, and revokes API tokens', function () {
+    Carbon::setTestNow('2026-05-10 09:00:00');
+    $user = User::factory()->create(['is_active' => true]);
+    $employee = makeEmployee(['user_id' => $user->id]);
+    $employee->update(['status' => EmployeeStatus::Active]);
+
+    // A live browser session and an API token, as a working account would have.
+    DB::table('sessions')->insert([
+        'id' => 'sess-'.$user->id, 'user_id' => $user->id,
+        'ip_address' => '127.0.0.1', 'user_agent' => 'test',
+        'payload' => 'x', 'last_activity' => time(),
+    ]);
+    $user->createToken('mobile');
+
+    expect(DB::table('sessions')->where('user_id', $user->id)->count())->toBe(1)
+        ->and($user->tokens()->count())->toBe(1);
+
+    lifeOwner()->post(route('hrm.employees.separate', $employee), [
+        'separation_type' => 'resignation',
+        'separation_date' => '2026-05-08',
+    ])->assertRedirect();
+
+    expect($user->fresh()->is_active)->toBeFalse()
+        ->and(DB::table('sessions')->where('user_id', $user->id)->count())->toBe(0)
+        ->and($user->tokens()->count())->toBe(0);
+
+    Carbon::setTestNow();
+});
+
+it('revokes sessions and tokens when the daily job ends access for a future-dated leaver', function () {
+    Carbon::setTestNow('2026-06-01 09:00:00');
+    $user = User::factory()->create(['is_active' => true]);
+    $employee = makeEmployee(['user_id' => $user->id]);
+    $employee->update(['status' => EmployeeStatus::Active]);
+
+    lifeOwner()->post(route('hrm.employees.separate', $employee), [
+        'separation_type' => 'resignation',
+        'separation_date' => '2026-06-30',
+    ])->assertRedirect();
+
+    // Still working: access, a session and a token all live until the last day.
+    DB::table('sessions')->insert([
+        'id' => 'sess2-'.$user->id, 'user_id' => $user->id,
+        'ip_address' => '127.0.0.1', 'user_agent' => 'test',
+        'payload' => 'x', 'last_activity' => time(),
+    ]);
+    $user->createToken('mobile');
+    expect($user->fresh()->is_active)->toBeTrue();
+
+    Carbon::setTestNow('2026-07-01 00:30:00');
+    Artisan::call('hrm:disable-due-separations');
+
+    expect($user->fresh()->is_active)->toBeFalse()
+        ->and(DB::table('sessions')->where('user_id', $user->id)->count())->toBe(0)
+        ->and($user->tokens()->count())->toBe(0);
+
+    Carbon::setTestNow();
+});
+
+it('changes an employee login email from the UI and leaves the password alone', function () {
+    $user = User::factory()->create(['email' => 'old@bdg.test', 'is_active' => true]);
+    $employee = makeEmployee(['user_id' => $user->id]);
+    $employee->update(['status' => EmployeeStatus::Active]);
+
+    lifeOwner()->patch(route('hrm.employees.login-email', $employee), [
+        'email' => 'bdg.coordinator@gmail.com',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect($user->fresh()->email)->toBe('bdg.coordinator@gmail.com');
+});
+
+it('refuses a login email that another account already uses', function () {
+    User::factory()->create(['email' => 'taken@bdg.test']);
+    $user = User::factory()->create(['email' => 'mine@bdg.test']);
+    $employee = makeEmployee(['user_id' => $user->id]);
+    $employee->update(['status' => EmployeeStatus::Active]);
+
+    lifeOwner()->patch(route('hrm.employees.login-email', $employee), ['email' => 'taken@bdg.test'])
+        ->assertSessionHasErrors('email');
+
+    expect($user->fresh()->email)->toBe('mine@bdg.test');
+});
+
+it('keeps separated staff reachable under the former-employees scope', function () {
+    $emp = makeEmployee(['first_name' => 'Gone', 'last_name' => 'Person']);
+    $emp->update(['status' => EmployeeStatus::Active]);
+    app(SeparateEmployee::class)
+        ->handle($emp, SeparationType::Resignation, '2026-04-01', 'left');
+
+    lifeOwner()->get(route('hrm.employees.index'))
+        ->assertInertia(fn ($page) => $page->where('scope', 'current')->where('formerCount', 1)->where('employees', []));
+
+    lifeOwner()->get(route('hrm.employees.index', ['scope' => 'former']))
+        ->assertInertia(fn ($page) => $page->where('scope', 'former')->where('formerCount', 1)
+            ->has('employees', 1)
+            ->where('employees.0.employee_code', $emp->employee_code)
+            ->where('employees.0.separation_date', '2026-04-01'));
 });

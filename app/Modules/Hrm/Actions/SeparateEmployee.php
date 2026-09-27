@@ -7,6 +7,7 @@ use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
+use App\Modules\Hrm\Support\RevokeErpAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -18,9 +19,10 @@ use Illuminate\Support\Facades\DB;
  * Separation is a central event (the person leaves Bor de Guna), so assignments
  * are closed across all businesses, not just the current one.
  *
- * EMP-08 lists more automations — attendance cutoff, final salary, leave
- * settlement, asset clearance. Those plug in as Phase 2/3 land; disabling
- * access is the piece available today.
+ * Removing access = RevokeErpAccess: deactivate the account, drop its live
+ * sessions, revoke its API tokens (27 Sep 2026). Final salary, leave
+ * settlement and asset clearance are the remaining EMP-08 automations, still
+ * to land as their own pieces.
  */
 class SeparateEmployee
 {
@@ -46,7 +48,7 @@ class SeparateEmployee
             // passed only once it is BEFORE today, so a resignation dated today
             // leaves them the rest of their last day.
             if (Carbon::parse($date)->startOfDay()->lt(Carbon::today())) {
-                $employee->user?->update(['is_active' => false]);
+                RevokeErpAccess::for($employee->user);
             }
 
             return $employee;

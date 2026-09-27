@@ -736,7 +736,18 @@ function RemoteClockInCard({ employee }: { employee: EmployeeDetail }) {
 
 function LoginAccountCard({ employee, lifetime }: { employee: EmployeeDetail; lifetime: string }) {
     const [email, setEmail] = useState('');
+    const [newEmail, setNewEmail] = useState(employee.user?.email ?? '');
     const [sending, setSending] = useState(false);
+
+    const changeLoginEmail = () => {
+        if (employee.user === null) return;
+        setSending(true);
+        router.patch(
+            route('hrm.employees.login-email', employee.id),
+            { email: newEmail.trim().toLowerCase() },
+            { onFinish: () => setSending(false) },
+        );
+    };
 
     const createLogin = () => {
         setSending(true);
@@ -803,6 +814,36 @@ function LoginAccountCard({ employee, lifetime }: { employee: EmployeeDetail; li
                     <Button size="sm" variant="outline" disabled={sending} onClick={resend}>
                         {employee.user.password_link_sent_at === null ? 'Send password link' : 'Resend password link'}
                     </Button>
+
+                    {/* ⭐ 27 Sep 2026 (Joy): change the address they sign in with. Password stays the same. */}
+                    <div className="mt-4 border-t pt-4">
+                        <Label htmlFor="change-login-email">Change login email</Label>
+                        <div className="mt-1.5 flex flex-wrap items-end gap-3">
+                            <Input
+                                id="change-login-email"
+                                type="email"
+                                className="sm:w-80"
+                                placeholder="name@example.com"
+                                value={newEmail}
+                                onChange={(e) => setNewEmail(e.target.value)}
+                            />
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={
+                                    sending ||
+                                    newEmail.trim() === '' ||
+                                    newEmail.trim().toLowerCase() === employee.user.email.toLowerCase()
+                                }
+                                onClick={changeLoginEmail}
+                            >
+                                Change login email
+                            </Button>
+                        </div>
+                        <p className="text-muted-foreground mt-1 text-xs">
+                            They will sign in with the new address. Their password stays the same.
+                        </p>
+                    </div>
                 </>
             )}
         </div>

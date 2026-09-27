@@ -27,6 +27,7 @@ use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Support\DateOfBirthRule;
+use App\Support\RecordTimeline;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,13 +37,22 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Inertia\Inertia;
 use Inertia\Response;
-use App\Support\RecordTimeline;
 
 class EmployeeController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $this->authorize('hrm.employees.manage');
+
+        // ⭐ 27 Sep 2026 (Joy): separated staff stay in the ERP for good and must
+        // be viewable in future. The default list is who works here now; the
+        // "former" scope lists people who have left, reachable from a tab so
+        // nobody has to know a URL.
+        $scope = $request->string('scope')->toString() === 'former' ? 'former' : 'current';
+
+        $formerCount = Employee::where('status', EmployeeStatus::Separated)
+            ->whereHas('assignments', fn ($query) => $query->where('is_primary', true))
+            ->count();
 
         // Employees are central; "who works here" is the set with a currently
         // active primary assignment in this business (the assignments relation
@@ -76,6 +86,40 @@ class EmployeeController extends Controller
             ])
             ->values();
 
+        if ($scope === 'former') {
+            $former = Employee::where('status', EmployeeStatus::Separated)
+                ->whereHas('assignments', fn ($query) => $query->where('is_primary', true))
+                ->with([
+                    'assignments' => fn ($query) => $query->where('is_primary', true)
+                        ->orderByDesc('effective_from')->with(['office:id,name', 'designation:id,name']),
+                    'attachments' => fn ($query) => $query->where('collection', 'photo'),
+                ])
+                ->orderBy('employee_code')->get()
+                ->map(function (Employee $employee) {
+                    $assignment = $employee->assignments->first();
+
+                    return [
+                        'id' => $employee->id,
+                        'employee_code' => $employee->employee_code,
+                        'name' => $employee->fullName(),
+                        'photo_url' => $employee->attachments->first()?->url(),
+                        'employment_type' => $employee->employment_type->label(),
+                        'status' => $employee->status->value,
+                        'office' => $assignment?->office?->name,
+                        'designation' => $assignment?->designation?->name,
+                        'separation_type' => $employee->separation_type?->label(),
+                        'separation_date' => $employee->separation_date?->toDateString(),
+                    ];
+                });
+
+            return Inertia::render('hrm/employees/index', [
+                'employees' => $former,
+                'probationOverdue' => [],
+                'scope' => 'former',
+                'formerCount' => $formerCount,
+            ]);
+        }
+
         $employees = Employee::whereHas('assignments', fn ($query) => $query->active()->where('is_primary', true))
             ->with([
                 'assignments' => fn ($query) => $query->active()->where('is_primary', true)->with(['office:id,name', 'designation:id,name']),
@@ -104,6 +148,8 @@ class EmployeeController extends Controller
         return Inertia::render('hrm/employees/index', [
             'employees' => $employees,
             'probationOverdue' => $probationOverdue,
+            'scope' => 'current',
+            'formerCount' => $formerCount,
         ]);
     }
 
@@ -348,6 +394,35 @@ class EmployeeController extends Controller
             $value instanceof \DateTimeInterface => $value->format('Y-m-d'),
             default => $value,
         };
+    }
+
+    /**
+     * ⭐ 27 Sep 2026 (Joy): change the email an employee signs in with. The
+     * login IS the email, so this changes how they get in; the password is
+     * untouched, so they keep the one they set. Owner/HR only, the same gate as
+     * creating the login in the first place.
+     */
+    public function updateLoginEmail(Request $request, Employee $employee): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        $this->authorize('foundation.users.manage');
+
+        abort_unless($employee->assignments()->exists(), 404);
+
+        if ($employee->user === null) {
+            return back()->with('error', "{$employee->fullName()} has no login yet. Create one first.");
+        }
+
+        $data = $request->validate([
+            'email' => [
+                'required', 'string', 'lowercase', 'email', 'max:255',
+                Rule::unique('users', 'email')->ignore($employee->user->id),
+            ],
+        ]);
+
+        $employee->user->update(['email' => $data['email']]);
+
+        return back()->with('success', "Login email changed to {$data['email']}. {$employee->fullName()} now signs in with it; their password is unchanged.");
     }
 
     public function status(Request $request, Employee $employee): RedirectResponse
@@ -656,6 +731,9 @@ class EmployeeController extends Controller
     public function destroySignature(Employee $employee, DeleteAttachment $action): RedirectResponse
     {
         $this->authorize('hrm.employees.manage');
+
+        // ⭐ 27 Sep 2026 (HRM audit): confine to the current business.
+        abort_unless($employee->assignments()->exists(), 404);
 
         $signature = $employee->attachments()->where('collection', 'signature')->first();
         abort_if($signature === null, 404);

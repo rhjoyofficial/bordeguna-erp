@@ -50,6 +50,9 @@ class ChecklistController extends Controller
     {
         $this->authorize('hrm.employees.manage');
 
+        // ⭐ 27 Sep 2026 (HRM audit): confine to the current business.
+        abort_unless($employee->assignments()->exists(), 404);
+
         $businessId = app(BusinessContext::class)->id();
 
         // First visit plants the defaults, idempotently. Items are data:
@@ -108,6 +111,9 @@ class ChecklistController extends Controller
     public function toggle(Request $request, Employee $employee, int $item): RedirectResponse
     {
         $this->authorize('hrm.employees.manage');
+
+        // ⭐ 27 Sep 2026 (HRM audit): confine to the current business.
+        abort_unless($employee->assignments()->exists(), 404);
 
         $businessId = app(BusinessContext::class)->id();
 

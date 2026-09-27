@@ -9,6 +9,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\SalaryRevision;
+use App\Modules\Hrm\Models\SalaryStructure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -30,6 +31,9 @@ class HrLetterController extends Controller
     public function store(Request $request, Employee $employee): RedirectResponse
     {
         $this->authorize('hrm.employees.manage');
+
+        // ⭐ 27 Sep 2026 (HRM audit): confine to the current business.
+        abort_unless($employee->assignments()->exists(), 404);
 
         $data = $request->validate([
             'type' => ['required', Rule::in(['appointment', 'confirmation', 'increment', 'experience'])],
@@ -57,6 +61,11 @@ class HrLetterController extends Controller
 
     public function print(int $letter): Response
     {
+        // ⭐ 27 Sep 2026 (HRM audit, HIGH): the letter snapshot carries gross
+        // salary. Every other letter action checks this; print did not, leaking
+        // any employee's salary to any signed-in user. Now gated like the rest.
+        $this->authorize('hrm.employees.manage');
+
         $row = DB::table('hr_letters')
             ->where('business_id', app(BusinessContext::class)->id())
             ->where('id', $letter)->first();
@@ -77,6 +86,9 @@ class HrLetterController extends Controller
     public function index(Employee $employee): Response
     {
         $this->authorize('hrm.employees.manage');
+
+        // ⭐ 27 Sep 2026 (HRM audit): confine to the current business.
+        abort_unless($employee->assignments()->exists(), 404);
 
         return Inertia::render('hrm/letters/index', [
             'employee' => $employee->only(['id', 'employee_code', 'first_name', 'last_name']),
@@ -113,7 +125,7 @@ class HrLetterController extends Controller
 
         return match ($type) {
             'appointment' => $base + [
-                'gross_salary' => \App\Modules\Hrm\Models\SalaryStructure::activeFor($employee->id)?->breakdown()->gross,
+                'gross_salary' => SalaryStructure::activeFor($employee->id)?->breakdown()->gross,
                 'employment_type' => $employee->employment_type?->value ?? (string) $employee->employment_type,
                 'probation_months' => $employee->probation_months,
             ],
@@ -150,7 +162,7 @@ class HrLetterController extends Controller
 
         return [
             'effective_from' => $revision->effective_from?->toDateString() ?? (string) $revision->effective_from,
-            'new_gross' => \App\Modules\Hrm\Models\SalaryStructure::activeFor($employee->id)?->breakdown()->gross,
+            'new_gross' => SalaryStructure::activeFor($employee->id)?->breakdown()->gross,
         ];
     }
 

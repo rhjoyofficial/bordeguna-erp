@@ -16,6 +16,8 @@ interface EmployeeRow {
     status: string;
     office: string | null;
     designation: string | null;
+    separation_type?: string | null;
+    separation_date?: string | null;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Employees', href: '/hrm/employees' }];
@@ -59,6 +61,7 @@ function EmployeeCard({ employee }: { employee: EmployeeRow }) {
             <Badge variant={statusVariant[employee.status] ?? 'secondary'} className="capitalize">
                 {employee.status.replace('_', ' ')}
             </Badge>
+            {employee.separation_date && <p className="text-muted-foreground text-xs">Left {employee.separation_date}</p>}
         </Link>
     );
 }
@@ -72,7 +75,17 @@ interface ProbationOverdueRow {
     probation_ended_on: string;
 }
 
-export default function EmployeesIndex({ employees, probationOverdue = [] }: { employees: EmployeeRow[]; probationOverdue: ProbationOverdueRow[] }) {
+export default function EmployeesIndex({
+    employees,
+    probationOverdue = [],
+    scope = 'current',
+    formerCount = 0,
+}: {
+    employees: EmployeeRow[];
+    probationOverdue: ProbationOverdueRow[];
+    scope?: 'current' | 'former';
+    formerCount?: number;
+}) {
     const [view, setView] = useState<'table' | 'cards'>(() => {
         if (typeof window === 'undefined') return 'table';
         return window.localStorage.getItem('employees:view') === 'cards' ? 'cards' : 'table';
@@ -111,8 +124,30 @@ export default function EmployeesIndex({ employees, probationOverdue = [] }: { e
                         </div>
                     </div>
                 )}
+                <div className="flex items-center gap-2 border-b">
+                    <Link
+                        href="/hrm/employees"
+                        className={cn(
+                            '-mb-px border-b-2 px-3 py-2 text-sm font-medium',
+                            scope === 'current' ? 'border-primary text-foreground' : 'text-muted-foreground border-transparent hover:text-foreground',
+                        )}
+                    >
+                        Current employees
+                    </Link>
+                    <Link
+                        href="/hrm/employees?scope=former"
+                        className={cn(
+                            '-mb-px border-b-2 px-3 py-2 text-sm font-medium',
+                            scope === 'former' ? 'border-primary text-foreground' : 'text-muted-foreground border-transparent hover:text-foreground',
+                        )}
+                    >
+                        Former employees{formerCount > 0 ? ` (${formerCount})` : ''}
+                    </Link>
+                </div>
                 <div className="flex items-center justify-between">
-                    <p className="text-muted-foreground text-sm">{employees.length} in this business</p>
+                    <p className="text-muted-foreground text-sm">
+                        {scope === 'former' ? `${employees.length} former` : `${employees.length} in this business`}
+                    </p>
                     <div className="flex items-center gap-2">
                         <div className="border-border flex rounded-md border p-0.5">
                             <button

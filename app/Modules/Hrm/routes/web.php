@@ -61,6 +61,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::patch('employees/{employee}', [EmployeeController::class, 'update'])->name('employees.update');
     Route::patch('employees/{employee}/status', [EmployeeController::class, 'status'])->name('employees.status');
     Route::post('employees/{employee}/login-account', [EmployeeController::class, 'createLoginAccount'])->name('employees.login-account');
+    Route::patch('employees/{employee}/login-email', [EmployeeController::class, 'updateLoginEmail'])->name('employees.login-email');
     Route::patch('employees/{employee}/remote-clock-in', [EmployeeController::class, 'setRemoteClockIn'])->name('employees.remote-clock-in');
 
     // The final settlement statement. Pay data, so it sits behind the payroll
