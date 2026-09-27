@@ -9,6 +9,7 @@ use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -293,4 +294,44 @@ it('refuses to let staff without the catalogue permission create a product', fun
     ($this->asRole)('Staff')->post('/inventory/products', $this->full)->assertForbidden();
 
     expect(Product::count())->toBe(0);
+});
+
+// --- Raw materials kept separate from products (Joy, 27 Sep 2026) -------------
+
+it('lists finished goods on the products screen and hides raw materials', function () {
+    Product::create([
+        'business_id' => $this->business->id, 'sku' => 'FG-1', 'name' => 'Finished Honey',
+        'type' => 'finished_good', 'unit_of_measure_id' => $this->unit->id,
+    ]);
+    Product::create([
+        'business_id' => $this->business->id, 'sku' => 'RM-1', 'name' => 'Raw Beeswax',
+        'type' => 'raw_material', 'unit_of_measure_id' => $this->unit->id,
+    ]);
+
+    ($this->asRole)('Manager')->get('/inventory/products')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('inventory/products/index')
+            ->where('kind', 'products')
+            ->has('products.data', 1)
+            ->where('products.data.0.name', 'Finished Honey'));
+});
+
+it('lists only raw materials on the raw-materials screen', function () {
+    Product::create([
+        'business_id' => $this->business->id, 'sku' => 'FG-2', 'name' => 'Finished Honey',
+        'type' => 'finished_good', 'unit_of_measure_id' => $this->unit->id,
+    ]);
+    Product::create([
+        'business_id' => $this->business->id, 'sku' => 'RM-2', 'name' => 'Raw Beeswax',
+        'type' => 'raw_material', 'unit_of_measure_id' => $this->unit->id,
+    ]);
+
+    ($this->asRole)('Manager')->get('/inventory/products?kind=raw')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('inventory/products/index')
+            ->where('kind', 'raw')
+            ->has('products.data', 1)
+            ->where('products.data.0.name', 'Raw Beeswax'));
 });

@@ -24,6 +24,13 @@ class ProductController extends Controller
 {
     public function index(Request $request): Response
     {
+        // ⭐ 27 Sep 2026 (Joy): raw materials and products are kept SEPARATE. One
+        // Product model still holds both (a `type` enum), but the screen shows
+        // one or the other: `kind=raw` lists raw materials, anything else lists
+        // what the shop sells (finished goods and services). Two nav entries and
+        // two headings, one list underneath.
+        $kind = $request->string('kind')->toString() === 'raw' ? 'raw' : 'products';
+
         $filters = [
             'search' => $request->string('search')->toString(),
             'type' => $request->string('type')->toString(),
@@ -33,6 +40,11 @@ class ProductController extends Controller
 
         $products = Product::query()
             ->with(['category', 'brand', 'unitOfMeasure', 'purchaseUnit'])
+            ->when(
+                $kind === 'raw',
+                fn ($query) => $query->where('type', 'raw_material'),
+                fn ($query) => $query->whereIn('type', ['finished_good', 'service']),
+            )
             ->when($filters['search'], fn ($query, $search) => $query->where(
                 fn ($q) => $q->where('name', 'like', "%{$search}%")
                     ->orWhere('sku', 'like', "%{$search}%")
@@ -99,6 +111,7 @@ class ProductController extends Controller
             // switch. Choosing one changes nothing today; the engine is dormant.
             'taxClasses' => TaxClass::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
             'filters' => $filters,
+            'kind' => $kind,
         ]);
     }
 

@@ -224,6 +224,9 @@ export function AppSidebar() {
                       defaultOpen: false,
                       items: [
                           { title: 'Products', url: '/inventory/products', icon: PackageSearch },
+                          // ⭐ 27 Sep 2026 (Joy): raw materials kept separate from the
+                          // finished goods above; same screen, filtered to raw.
+                          { title: 'Raw materials', url: '/inventory/products?kind=raw', icon: Boxes },
                           // C-IMP-7. The whole point of the import screen is that Joy
                           // stops sending files to be loaded for him, so it has to be
                           // findable without being told where it is.

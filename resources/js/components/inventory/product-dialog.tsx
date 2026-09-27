@@ -138,6 +138,7 @@ export function ProductDialog({
     brands,
     units,
     taxClasses,
+    defaultType = 'finished_good',
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -146,6 +147,9 @@ export function ProductDialog({
     brands: (Option & { code: string })[];
     units: UnitOption[];
     taxClasses: Option[];
+    // ⭐ 27 Sep 2026 (Joy): a new product opened from the Raw materials screen
+    // starts as a raw material; from the Products screen, a finished good.
+    defaultType?: string;
 }) {
     const { current_business_id } = usePage<SharedData>().props;
     const [form, setForm] = useState<Form>(EMPTY);
@@ -169,7 +173,7 @@ export function ProductDialog({
         setShowMore(false);
         setForm(
             product === null
-                ? EMPTY
+                ? { ...EMPTY, type: defaultType }
                 : {
                       sku: product.sku,
                       barcode: product.barcode ?? '',

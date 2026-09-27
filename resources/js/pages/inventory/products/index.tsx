@@ -69,6 +69,7 @@ export default function ProductsIndex({
     units,
     taxClasses,
     filters: initialFilters,
+    kind = 'products',
 }: {
     products: Paginated<Product>;
     categories: Option[];
@@ -76,8 +77,17 @@ export default function ProductsIndex({
     units: UnitOption[];
     taxClasses: Option[];
     filters: { search: string; type: string; category_id: string; brand_id: string };
+    kind?: string;
 }) {
-    const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/inventory/products', initialFilters);
+    // ⭐ 27 Sep 2026 (Joy): raw materials and products are separate screens over
+    // one model. `kind=raw` is the raw-materials view; everything else is what
+    // the shop sells. The kind rides in the base URL so it survives every filter
+    // change and the Clear button.
+    const isRaw = kind === 'raw';
+    const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters(
+        isRaw ? '/inventory/products?kind=raw' : '/inventory/products',
+        initialFilters,
+    );
     // ⭐ One dialog for the product and its prices (21 Sep 2026); the form that
     // used to sit open above the list, with fourteen fields, is gone.
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -99,16 +109,18 @@ export default function ProductsIndex({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Products" />
+            <Head title={isRaw ? 'Raw materials' : 'Products'} />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h1 className="text-lg font-semibold">Products</h1>
+                        <h1 className="text-lg font-semibold">{isRaw ? 'Raw materials' : 'Products'}</h1>
                         <p className="text-muted-foreground text-sm">
-                            Everything you buy, make or sell. Prices for each kind of buyer are set in the same place.
+                            {isRaw
+                                ? 'What you buy to make your products. Kept separate from the finished goods you sell.'
+                                : 'The finished goods and services you sell. Prices for each kind of buyer are set in the same place.'}
                         </p>
                     </div>
-                    <Button onClick={openNew}>New product</Button>
+                    <Button onClick={openNew}>{isRaw ? 'New raw material' : 'New product'}</Button>
                 </div>
 
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
@@ -120,16 +132,20 @@ export default function ProductsIndex({
                             placeholder="Search SKU, barcode or name…"
                         />
                     </FilterField>
-                    <FilterField label="Type" htmlFor="filter-type">
-                        <SearchSelect id="filter-type" value={filters.type} onChange={(e) => setFilter('type', e.target.value)}>
-                            <option value="">All types</option>
-                            {PRODUCT_TYPES.map((t) => (
-                                <option key={t.value} value={t.value}>
-                                    {t.label}
-                                </option>
-                            ))}
-                        </SearchSelect>
-                    </FilterField>
+                    {/* The raw-materials view is all one type, so it needs no type
+                        filter; the products view offers only what it sells. */}
+                    {!isRaw && (
+                        <FilterField label="Type" htmlFor="filter-type">
+                            <SearchSelect id="filter-type" value={filters.type} onChange={(e) => setFilter('type', e.target.value)}>
+                                <option value="">All types</option>
+                                {PRODUCT_TYPES.filter((t) => t.value !== 'raw_material').map((t) => (
+                                    <option key={t.value} value={t.value}>
+                                        {t.label}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                        </FilterField>
+                    )}
                     <FilterField label="Category" htmlFor="filter-category">
                         <SearchSelect id="filter-category" value={filters.category_id} onChange={(e) => setFilter('category_id', e.target.value)}>
                             <option value="">All categories</option>
@@ -220,8 +236,8 @@ export default function ProductsIndex({
                                 <tr>
                                     <td colSpan={10} className="text-muted-foreground py-6 text-center">
                                         {hasActiveFilters
-                                            ? 'No products match these filters.'
-                                            : 'No products yet. Press New product to add the first one.'}
+                                            ? `No ${isRaw ? 'raw materials' : 'products'} match these filters.`
+                                            : `No ${isRaw ? 'raw materials' : 'products'} yet. Press ${isRaw ? 'New raw material' : 'New product'} to add the first one.`}
                                     </td>
                                 </tr>
                             )}
@@ -239,6 +255,7 @@ export default function ProductsIndex({
                     brands={brands}
                     units={units}
                     taxClasses={taxClasses}
+                    defaultType={isRaw ? 'raw_material' : 'finished_good'}
                 />
             </div>
         </AppLayout>
