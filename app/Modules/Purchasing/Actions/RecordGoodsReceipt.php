@@ -5,11 +5,13 @@ namespace App\Modules\Purchasing\Actions;
 use App\Models\User;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Actions\ResolveReceiptConversion;
+use App\Modules\Inventory\Support\EffectiveDate;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
+use App\Modules\Purchasing\Support\SupplierChallans;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -40,6 +42,10 @@ class RecordGoodsReceipt
         User $receivedBy,
         ?string $note = null,
         ?string $supplierChallanNumber = null,
+        // ⭐ 26 Sep 2026 (Joy, Q11): an earlier "received on" date, within the
+        // open period, with a reason. Null means now.
+        mixed $receivedOn = null,
+        ?string $backdateReason = null,
     ): GoodsReceipt {
         if (! $order->isReceivable()) {
             throw new RuntimeException("Purchase order #{$order->id} is not open for receiving.");
@@ -51,12 +57,33 @@ class RecordGoodsReceipt
             throw new InvalidArgumentException('At least one line must have a received quantity greater than zero.');
         }
 
-        return DB::transaction(function () use ($order, $lineReceipts, $receivedBy, $note, $supplierChallanNumber) {
+        // ⭐ 26 Sep 2026 (Joy, Q10): the same challan number from the same
+        // supplier is a double entry, refused at the door. Checked here as well
+        // as on the screen, because this is the chokepoint every receipt passes.
+        $order->loadMissing('supplier');
+
+        if (($refusal = SupplierChallans::refusal((int) $order->supplier_id, $supplierChallanNumber, $order->supplier?->name ?? 'this supplier')) !== null) {
+            throw new InvalidArgumentException($refusal);
+        }
+
+        // ⚠ The same resolver every stock movement uses: refuses a future date
+        // and a closed period, and stamps the time of day on a bare date. A
+        // date before today is a back-dated receipt and needs its reason.
+        $receivedAt = EffectiveDate::resolve($receivedOn, 'received_at');
+
+        if ($receivedAt->toDateString() < now()->toDateString() && trim((string) $backdateReason) === '') {
+            throw new InvalidArgumentException('A receipt dated earlier than today needs a reason: why is it being entered now?');
+        }
+
+        $backdateReason = $receivedAt->toDateString() < now()->toDateString() ? trim((string) $backdateReason) : null;
+
+        return DB::transaction(function () use ($order, $lineReceipts, $receivedBy, $note, $supplierChallanNumber, $receivedAt, $backdateReason) {
             $receipt = GoodsReceipt::create([
                 'purchase_order_id' => $order->id,
                 'received_by' => $receivedBy->id,
-                'received_at' => now(),
+                'received_at' => $receivedAt,
                 'supplier_challan_number' => $supplierChallanNumber,
+                'backdate_reason' => $backdateReason,
                 'note' => $note,
             ]);
 
@@ -129,6 +156,8 @@ class RecordGoodsReceipt
                         quantity: $converted['quantity'],
                         unitCost: $converted['unitCost'],
                         performedBy: $receivedBy,
+                        // The stock and its GRNI journal carry the receipt's date (Q11).
+                        occurredAt: $receipt->received_at,
                         // ⚠⚠ The label data reaches the BATCH, which is the only
                         // place FEFO, the Expiry screen and the nightly expired-
                         // stock proposals look. Until 21 Sep 2026 a receipt passed
