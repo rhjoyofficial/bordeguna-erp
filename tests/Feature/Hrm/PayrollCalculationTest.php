@@ -21,6 +21,8 @@ use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\SalaryComponent;
 use App\Modules\Hrm\Models\Shift;
+use App\Modules\Hrm\Payroll\PayrollConfig;
+use App\Modules\Hrm\Payroll\PayrollContextBuilder;
 use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -353,4 +355,30 @@ it('puts a mid-cycle leaver on the run and leaves out someone who left before it
     expect($codes)->toContain('BDG-000001')
         ->and($codes)->toContain('BDG-000002')
         ->and($codes)->not->toContain('BDG-000003');
+});
+
+it('ignores attendance after an employee left: it neither docks pay nor blocks the run', function () {
+    // The person left mid-period; the nightly job had already written Absent days
+    // for the rest of the cycle before the separation was recorded.
+    $this->employee->update([
+        'status' => 'separated',
+        'separation_date' => $this->period->start_date->copy()->addDays(4)->toDateString(),
+    ]);
+    $this->employee->assignments()->update(['effective_to' => $this->period->start_date->copy()->addDays(4)->toDateString()]);
+
+    // A present day inside employment, and a provisional Absent AFTER the last day.
+    attendanceDay($this->period->start_date->copy()->addDays(1)->toDateString(), AttendanceStatus::Present);
+    attendanceDay($this->period->start_date->copy()->addDays(10)->toDateString(), AttendanceStatus::Absent, [
+        'worked_minutes' => 0, 'payable_minutes' => 0, 'is_provisional' => true,
+    ]);
+
+    // The post-separation absent day is not counted.
+    $facts = app(PayrollContextBuilder::class)
+        ->build($this->employee->fresh(), $this->period, PayrollConfig::defaults())
+        ->attendance;
+    expect($facts->absentDays)->toBe(0.0);
+
+    // And it does not block the run with an "awaits HR review" issue.
+    $issues = app(ValidatePayrollRun::class)->issuesForEmployee($this->employee->fresh(), $this->period);
+    expect(collect($issues)->contains(fn ($i) => str_contains($i, 'HR review')))->toBeFalse();
 });

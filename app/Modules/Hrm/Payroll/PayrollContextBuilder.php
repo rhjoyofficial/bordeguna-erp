@@ -82,6 +82,24 @@ class PayrollContextBuilder
      */
     private function attendanceFacts(Employee $employee, Carbon $start, Carbon $end): AttendanceFacts
     {
+        // ⭐ 27 Sep 2026 (Joy): count only days the person was actually employed.
+        // A leaver's days after their last working day (and a joiner's before
+        // their first) must not be counted - proration already limits their pay,
+        // and counting a leaver's later "Absent" days would dock someone who had
+        // already been paid off. The nightly job may have written those days
+        // before the separation was recorded.
+        if ($employee->separation_date !== null && $employee->separation_date->lt($end)) {
+            $end = $employee->separation_date->copy()->startOfDay();
+        }
+
+        if ($employee->joining_date !== null && $employee->joining_date->gt($start)) {
+            $start = $employee->joining_date->copy()->startOfDay();
+        }
+
+        if ($end->lt($start)) {
+            return AttendanceFacts::none();
+        }
+
         $days = DailyAttendance::where('employee_id', $employee->id)
             ->whereDate('attendance_date', '>=', $start->toDateString())
             ->whereDate('attendance_date', '<=', $end->toDateString())

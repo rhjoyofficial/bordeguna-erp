@@ -256,6 +256,12 @@ class ValidatePayrollRun
     /**
      * @return array<int, string>
      */
+    /** Public accessor: the blocking issues for one employee's payslip. */
+    public function issuesForEmployee(Employee $employee, PayrollPeriod $period): array
+    {
+        return $this->issuesFor($employee, $period);
+    }
+
     private function issuesFor(Employee $employee, PayrollPeriod $period): array
     {
         $issues = [];
@@ -270,9 +276,20 @@ class ValidatePayrollRun
             $issues[] = 'No shift or holiday calendar is assigned.';
         }
 
+        // ⭐ 27 Sep 2026 (Joy): a payslip is judged only over the days the person
+        // was employed in the period, so a leaver's days after their last working
+        // day (which the nightly job may have written before the separation was
+        // recorded) neither hold payroll nor block the run.
+        $from = ($employee->joining_date !== null && $employee->joining_date->gt($period->start_date))
+            ? $employee->joining_date->toDateString()
+            : $period->start_date->toDateString();
+        $to = ($employee->separation_date !== null && $employee->separation_date->lt($period->end_date))
+            ? $employee->separation_date->toDateString()
+            : $period->end_date->toDateString();
+
         $unresolved = DailyAttendance::where('employee_id', $employee->id)
-            ->whereDate('attendance_date', '>=', $period->start_date->toDateString())
-            ->whereDate('attendance_date', '<=', $period->end_date->toDateString())
+            ->whereDate('attendance_date', '>=', $from)
+            ->whereDate('attendance_date', '<=', $to)
             ->where('holds_payroll', true)
             ->count();
 
@@ -294,8 +311,8 @@ class ValidatePayrollRun
         }
 
         $provisional = DailyAttendance::where('employee_id', $employee->id)
-            ->whereDate('attendance_date', '>=', $period->start_date->toDateString())
-            ->whereDate('attendance_date', '<=', $period->end_date->toDateString())
+            ->whereDate('attendance_date', '>=', $from)
+            ->whereDate('attendance_date', '<=', $to)
             ->where('is_provisional', true)
             ->count();
 
