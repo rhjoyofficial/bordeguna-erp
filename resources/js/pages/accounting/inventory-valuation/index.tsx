@@ -2,8 +2,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, router, usePage } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface Row {
@@ -49,8 +49,10 @@ export default function InventoryValuationIndex({
 }) {
     const [date, setDate] = useState(as_at);
 
+    // A Manager reaches this screen from Inventory and cannot open the ledger (Q19).
+    const { canViewAccounting } = usePage<SharedData>().props;
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Accounting', href: '/accounting/journals' },
+        canViewAccounting ? { title: 'Accounting', href: '/accounting/journals' } : { title: 'Inventory', href: '/inventory/stock' },
         { title: 'Inventory valuation', href: route('accounting.inventory-valuation') },
     ];
 

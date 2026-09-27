@@ -182,6 +182,10 @@ class HandleInertiaRequests extends Middleware
             // once salary journals exist, so it follows the same ACL-02 shape:
             // Owner, Finance and Payroll, nobody else by default.
             'canViewAccounting' => fn () => (bool) $request->user()?->can('accounting.view'),
+            // ⭐ 26 Sep 2026 (Q19): the three operating reports (receivables ageing,
+            // customer statement, stock value) for the Manager, who does not
+            // read the ledger. The gate is composed, so accounting readers pass too.
+            'canViewOperatingReports' => fn () => (bool) $request->user()?->can('accounting.operations.view'),
             'canManageChartOfAccounts' => fn () => (bool) $request->user()?->canAny(['accounting.chart.head.create', 'accounting.chart.head.update', 'accounting.chart.head.delete']),
             'canCreateLedgerHeads' => fn () => (bool) $request->user()?->can('accounting.chart.head.create'),
             'canUpdateLedgerHeads' => fn () => (bool) $request->user()?->can('accounting.chart.head.update'),

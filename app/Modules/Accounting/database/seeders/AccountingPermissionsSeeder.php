@@ -49,9 +49,18 @@ use Spatie\Permission\Models\Role;
  */
 class AccountingPermissionsSeeder extends Seeder
 {
+    /**
+     * The operating reports: receivables ageing, customer statement, inventory
+     * valuation. Anyone with `accounting.view` reads them too (the provider
+     * composes the gate), so this key exists for roles that may read those
+     * three and not the ledger behind them.
+     */
+    public const OPERATIONS_VIEW = 'accounting.operations.view';
+
     private const ROLE_PERMISSIONS = [
         'Owner' => [
             'accounting.view',
+            self::OPERATIONS_VIEW,
             'accounting.chart.manage',
             'accounting.journal.post',
             'accounting.income.record',
@@ -66,6 +75,7 @@ class AccountingPermissionsSeeder extends Seeder
         ],
         'Finance' => [
             'accounting.view',
+            self::OPERATIONS_VIEW,
             // ⚠ Receiving money is a different act from reading the books, and
             // a smaller one than writing a journal by hand. Finance can record
             // scrap, interest or a refund without being handed the ledger key.
@@ -79,6 +89,14 @@ class AccountingPermissionsSeeder extends Seeder
             // structure, not Bank & cash, not VAT.
             ChartPermissions::HEAD_CREATE,
             ChartPermissions::HEAD_UPDATE,
+        ],
+        // ⭐ 26 Sep 2026 (Joy, Q19): the Manager reads the receivables ageing,
+        // a customer's statement and the stock value, and nothing else of the
+        // ledger. These three answer "who owes us, what does this customer owe,
+        // what is on the shelf worth", which is the Manager's daily work; the
+        // trial balance, P&L and vouchers stay with Owner, Finance and Payroll.
+        'Manager' => [
+            self::OPERATIONS_VIEW,
         ],
         // Musa's role. He prepares and pays; reading a trial balance is part of
         // that, writing to it is not - the same separation that already keeps

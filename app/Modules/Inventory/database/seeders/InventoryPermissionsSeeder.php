@@ -45,6 +45,11 @@ class InventoryPermissionsSeeder extends Seeder
             'inventory.catalogue.import',
             'inventory.bom.manage',
         ],
+        // ⭐ 26 Sep 2026 (Joy, Q18): the accountant READS the stock book, so a
+        // valuation can be checked against the shelf. No recording, no adjusting.
+        'Finance' => [
+            'inventory.reports.view',
+        ],
         // ⚠ Staff deliberately does NOT get the import. Staff records stock and
         // raises requests; rewriting the catalogue is a manager's act.
         'Staff' => [

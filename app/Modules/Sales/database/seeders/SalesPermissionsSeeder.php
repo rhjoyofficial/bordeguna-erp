@@ -75,6 +75,14 @@ class SalesPermissionsSeeder extends Seeder
             // discount is a margin decision, like setting the price itself.
             'sales.price.override',
         ],
+        // ⭐ 26 Sep 2026 (Joy, Q18): the accountant READS the sales side, and
+        // records a customer's payment, because the money that arrives at the
+        // bank is matched by whoever keeps the books. Not selling, not prices,
+        // not credit: those are the trade's decisions.
+        'Finance' => [
+            'sales.reports.view',
+            'sales.receipt.record',
+        ],
         // ⚠ Staff TAKE orders (order-book data entry, the same trust level as
         // sales.sell) but cannot approve them - a staff-created order sits
         // pending until Owner/Manager review (C-SO-1) - and cannot cancel or

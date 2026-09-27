@@ -98,21 +98,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // account's postings, in order, with a running balance.
         Route::get('general-ledger', [GeneralLedgerController::class, 'index'])->name('general-ledger');
 
-        // ⚠ Same permission as the ledger they summarise, which is what keeps
-        // this slice free of any seeder change. C-GLA-A asks whether sales and
-        // collections staff should reach the receivables ageing without seeing
-        // the whole ledger; the answer costs a permission and a role
-        // assignment, and nothing in the code depends on it.
-        Route::get('receivables-ageing', [AgeingController::class, 'receivables'])->name('receivables-ageing');
+        // ⚠ Payables ageing stays with the ledger. The receivables ageing moved
+        // to the operating-reports gate below on 26 Sep 2026 (C-GLA-A answered:
+        // Joy, Q19).
         Route::get('payables-ageing', [AgeingController::class, 'payables'])->name('payables-ageing');
 
         // Where the money is and how it moved. Same `accounting.view` as the
         // ledger its figures come from (C-CBB-2), so no seeder change.
         Route::get('cash-and-bank', [CashAndBankBookController::class, 'index'])->name('cash-and-bank');
 
-        // One customer's account, told in documents and checked by the ledger
-        // (C-CST-1). C-GLA-A now covers this screen too.
-        Route::get('customer-statement', [CustomerStatementController::class, 'index'])->name('customer-statement');
         // One employee's ledgers (26 Sep 2026): the accountant's "head per employee".
         Route::get('employee-statement', [EmployeeStatementController::class, 'index'])->name('employee-statement');
 
@@ -120,11 +114,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // (C-RSC-1), for the business the user is standing in.
         Route::get('reconciliation', [ReconciliationController::class, 'index'])->name('reconciliation');
 
-        // ⚠ Same `accounting.view` permission as every other report here, which
-        // is what keeps this slice free of any seeder change. Both tie out to a
-        // control account on screen, so whoever may read the ledger may read
-        // these - and nobody else can see stock value or margin.
-        Route::get('inventory-valuation', [InventoryValuationController::class, 'index'])->name('inventory-valuation');
+        // ⚠ Cost of goods sold shows margin: it stays with the ledger. Stock
+        // value moved to the operating-reports gate below (26 Sep 2026, Q19).
         Route::get('cost-of-goods-sold', [CostOfGoodsSoldController::class, 'index'])->name('cost-of-goods-sold');
 
         // The two statements a business actually runs on. Reading them is the
@@ -132,6 +123,20 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // more sensitive for being totalled.
         Route::get('income-statement', [IncomeStatementController::class, 'index'])->name('income-statement');
         Route::get('balance-sheet', [BalanceSheetController::class, 'index'])->name('balance-sheet');
+    });
+
+    // ⭐ 26 Sep 2026 (Joy, Q19): the three OPERATING reports. Who owes us and
+    // for how long, what one customer's account says, and what the stock on
+    // the shelf is worth. The Manager reads these and nothing else of the
+    // ledger; everyone with `accounting.view` reads them too, because the
+    // provider composes the gate. Payables ageing and cost of goods sold stay
+    // above: the first is the accountant's, the second shows margin.
+    Route::middleware('can:accounting.operations.view')->group(function () {
+        Route::get('receivables-ageing', [AgeingController::class, 'receivables'])->name('receivables-ageing');
+        // One customer's account, told in documents and checked by the ledger (C-CST-1).
+        Route::get('customer-statement', [CustomerStatementController::class, 'index'])->name('customer-statement');
+        // Ties out to the stock control account on screen.
+        Route::get('inventory-valuation', [InventoryValuationController::class, 'index'])->name('inventory-valuation');
     });
 
     // 26 Sep 2026: the chart key is split (Support\ChartPermissions). Creating

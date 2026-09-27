@@ -69,6 +69,11 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.bill.record',
             'purchasing.reports.view',
         ],
+        // ⭐ 26 Sep 2026 (Joy, Q18): the accountant READS purchases, bills and
+        // payments. Recording a bill or a payment stays a manager's act.
+        'Finance' => [
+            'purchasing.reports.view',
+        ],
         'Staff' => [
             'purchasing.po.create',
             'purchasing.receipt.record',

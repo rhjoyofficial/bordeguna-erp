@@ -100,6 +100,7 @@ export function AppSidebar() {
         canAccessSalary,
         canManagePayroll,
         canViewAccounting,
+        canViewOperatingReports,
         canViewInventory,
         canViewPurchasing,
         canViewSales,
@@ -211,6 +212,11 @@ export function AppSidebar() {
                           // commit, the reachability rule this file records.
                           ...(inventory.manageProduction ? [{ title: 'Production', url: '/inventory/production-runs', icon: Factory }] : []),
                           { title: 'Production yield', url: '/inventory/production-yield', icon: FileBarChart },
+                          // ⭐ 26 Sep 2026 (Q19): what the shelf is worth, for the Manager.
+                          // The Finance & Accounts section lists it too, so once only.
+                          ...(canViewOperatingReports && !canViewAccounting
+                              ? [{ title: 'Stock value', url: '/accounting/inventory-valuation', icon: Coins }]
+                              : []),
                       ],
                   },
                   {
@@ -291,6 +297,15 @@ export function AppSidebar() {
                           ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
                           // Credit limits and days, by file, applied after approval (26 Sep 2026).
                           ...(canViewSales ? [{ title: 'Credit terms', url: '/sales/credit-terms', icon: Contact }] : []),
+                          // ⭐ 26 Sep 2026 (Q19): the Manager reads who owes us and one
+                          // customer's account. Listed here only when the Finance &
+                          // Accounts section (which lists them too) is not shown.
+                          ...(canViewOperatingReports && !canViewAccounting
+                              ? [
+                                    { title: 'Receivables ageing', url: '/accounting/receivables-ageing', icon: HandCoins },
+                                    { title: 'Customer statement', url: '/accounting/customer-statement', icon: Contact },
+                                ]
+                              : []),
                       ],
                   },
                   {

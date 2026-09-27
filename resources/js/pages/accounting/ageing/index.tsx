@@ -2,8 +2,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, router, usePage } from '@inertiajs/react';
 import { FormEventHandler, Fragment, useState } from 'react';
 
 interface Bucket {
@@ -59,8 +59,10 @@ export default function AgeingIndex({
 
     const routeName = kind === 'receivables' ? 'accounting.receivables-ageing' : 'accounting.payables-ageing';
 
+    // A Manager reaches this screen from Sales and cannot open the ledger (Q19).
+    const { canViewAccounting } = usePage<SharedData>().props;
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Accounting', href: '/accounting/journals' },
+        canViewAccounting ? { title: 'Accounting', href: '/accounting/journals' } : { title: 'Sales', href: '/sales/customers' },
         { title: `${label} ageing`, href: route(routeName) },
     ];
 

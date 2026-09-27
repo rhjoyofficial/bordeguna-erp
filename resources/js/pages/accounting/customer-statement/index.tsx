@@ -3,8 +3,8 @@ import { SearchSelect } from '@/components/search-select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, router, usePage } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface CustomerOption {
@@ -36,8 +36,9 @@ interface Summary {
     ledger_closing: string | null;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Accounting', href: '/accounting/journals' },
+// A Manager reaches this screen from Sales and cannot open the ledger (Q19).
+const breadcrumbsFor = (canViewAccounting: boolean): BreadcrumbItem[] => [
+    canViewAccounting ? { title: 'Accounting', href: '/accounting/journals' } : { title: 'Sales', href: '/sales/customers' },
     { title: 'Customer statement', href: '/accounting/customer-statement' },
 ];
 
@@ -61,6 +62,7 @@ export default function CustomerStatementIndex({
     summary: Summary | null;
 }) {
     const [filters, setFilters] = useState({ customer: customer ? String(customer.id) : '', from, to });
+    const { canViewAccounting } = usePage<SharedData>().props;
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -68,7 +70,7 @@ export default function CustomerStatementIndex({
     };
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
+        <AppLayout breadcrumbs={breadcrumbsFor(canViewAccounting)}>
             <Head title="Customer statement" />
             <ReportPage>
                 <ReportHeading
