@@ -151,8 +151,8 @@ class BorDeGunaAttendanceSeeder extends Seeder
                     'to_minutes' => 15,    // inclusive: 09:15:00 is still this band
                     'tiers' => [
                         ['from_occurrence' => 1, 'consequence' => 'none'],
-                        // Three free days; the fourth costs a day's salary.
-                        ['from_occurrence' => 4, 'consequence' => 'deduction'],
+                        // Four free days; the fifth costs a day's salary (Joy, 27 Sep 2026).
+                        ['from_occurrence' => 5, 'consequence' => 'deduction'],
                     ],
                 ],
                 [

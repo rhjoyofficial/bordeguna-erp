@@ -7,6 +7,7 @@ use App\Modules\Hrm\Console\Commands\AccrueEarnedLeave;
 use App\Modules\Hrm\Console\Commands\DisableDueSeparations;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
 use App\Modules\Hrm\Console\Commands\RunLeaveYearEnd;
+use App\Modules\Hrm\Console\Commands\SetLatenessFreeDays;
 use App\Modules\Hrm\Dashboard\DashboardRegistry;
 use App\Modules\Hrm\Dashboard\Widgets\AbsentTodayWidget;
 use App\Modules\Hrm\Dashboard\Widgets\EmployeesOnLeaveWidget;
@@ -132,7 +133,7 @@ class HrmServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([RunLeaveYearEnd::class, ProcessAttendanceDaily::class, AccrueEarnedLeave::class, DisableDueSeparations::class]);
+            $this->commands([RunLeaveYearEnd::class, ProcessAttendanceDaily::class, AccrueEarnedLeave::class, DisableDueSeparations::class, SetLatenessFreeDays::class]);
         }
     }
 }

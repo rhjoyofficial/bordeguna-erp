@@ -47,11 +47,20 @@ class PairPunches implements AttendanceStage
             // One morning punch is the whole record for this schedule, so there
             // is nothing to pair and nothing later in the day to read.
             $context->countsFirstPunchOnly() => [new PunchPair($punches[0]->at, null)],
-            $this->hasUsableDirections($punches) => $this->pairByDirection($punches),
-            // Without directions the device cannot say which scan was a leaving
-            // and which a returning, so an unpaid break cannot be measured from
-            // punches; only where the shift asks for that is alternating right.
-            $context->shift?->breakPolicy === BreakPolicy::ActualPunches => $this->pairByAlternating($punches),
+            // ⭐ 27 Sep 2026 (HRM audit): ONLY the ActualPunches policy measures the
+            // break from the punches themselves, so only there do the middle scans
+            // define separate spans. A device direction (if present) tells leaving
+            // from returning; without it, alternate in time order.
+            $context->shift?->breakPolicy === BreakPolicy::ActualPunches => $this->hasUsableDirections($punches)
+                    ? $this->pairByDirection($punches)
+                    : $this->pairByAlternating($punches),
+            // Every other policy — Paid, FixedDeduction, MealWindow — is bookends:
+            // first in, last out. The break, if any, is applied once by
+            // ResolveMealBreak / CalculateWorkedTime from that single span.
+            // ⚠⚠ Pairing by direction here (the old behaviour when the device
+            // tagged In/Out) excluded the meal gap from the spans AND then the
+            // meal was subtracted again — lunch deducted twice, underpaying the
+            // day and sometimes forcing a false half-day.
             default => $this->pairByBookends($punches),
         };
 

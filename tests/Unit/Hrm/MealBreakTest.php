@@ -8,6 +8,7 @@ use App\Modules\Hrm\Attendance\Policy\PolicyConfig;
 use App\Modules\Hrm\database\seeders\AttendancePolicySeeder;
 use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Enums\BreakPolicy;
+use App\Modules\Hrm\Enums\PunchDirection;
 use App\Modules\Hrm\Enums\PunchSource;
 use App\Modules\Hrm\Enums\ScheduleType;
 use App\Modules\Hrm\Models\DailyAttendance;
@@ -312,4 +313,40 @@ it('flags an incomplete meal configuration instead of silently resolving nothing
     expect($outcome->flags)->toContain('meal_config_incomplete');
     expect($outcome->breakMinutes)->toBe(0);
     expect($outcome->isProvisional)->toBeFalse();
+});
+
+it('deducts lunch once on a meal-window shift even when the device tags punches In/Out', function () {
+    $date = Carbon::parse('2026-09-02');
+    $mk = fn (string $t, PunchDirection $d, int $id) => new PunchRecord($id, $date->copy()->setTimeFromTimeString($t), $d, PunchSource::Biometric);
+    $context = new DayContext(
+        employeeId: 1,
+        date: $date,
+        punches: [
+            $mk('09:00:00', PunchDirection::In, 1),
+            $mk('12:35:00', PunchDirection::Out, 2),
+            $mk('13:35:00', PunchDirection::In, 3),
+            $mk('18:00:00', PunchDirection::Out, 4),
+        ],
+        shift: mealShift(),
+        scheduleType: ScheduleType::Fixed,
+        isWeeklyOff: false,
+        isHoliday: false,
+        holidayName: null,
+        policy: PolicyConfig::fromArray(AttendancePolicySeeder::defaultConfig()),
+        priorOccurrences: [],
+    );
+
+    $outcome = (new AttendanceEngine)->process($context);
+
+    // The 60-minute lunch (12:35-13:35) is deducted ONCE: 540-minute span - 60.
+    // Before the fix, direction-pairing excluded the gap AND the meal was
+    // subtracted again, giving 420.
+    expect($outcome->breakMinutes)->toBe(60)
+        ->and($outcome->payableMinutes)->toBe(480)
+        ->and($outcome->status)->toBe(AttendanceStatus::Present)
+        ->and($outcome->holdsPayroll)->toBeFalse();
+
+    // And it matches the directionless equivalent exactly.
+    $plain = mealRun(['2026-09-02 09:00:00', '2026-09-02 12:35:00', '2026-09-02 13:35:00', '2026-09-02 18:00:00']);
+    expect($outcome->payableMinutes)->toBe($plain->payableMinutes);
 });
