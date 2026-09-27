@@ -1,3 +1,4 @@
+import { CustomerQuickCreate } from '@/components/customer-quick-create';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
@@ -156,6 +157,7 @@ export default function CounterSale({
     walkInId,
     heldCarts = [],
     resumeCart = null,
+    canAddCustomer = false,
 }: {
     warehouses: Option[];
     products: ProductCard[];
@@ -169,6 +171,7 @@ export default function CounterSale({
     walkInId: number | null;
     heldCarts: HeldCart[];
     resumeCart: ResumeCart | null;
+    canAddCustomer?: boolean;
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
@@ -208,6 +211,9 @@ export default function CounterSale({
     });
 
     const [search, setSearch] = useState('');
+    // ⭐ 27 Sep 2026 (Joy): add a customer mid-sale from the picker.
+    const [addingCustomer, setAddingCustomer] = useState(false);
+    const [typedCustomer, setTypedCustomer] = useState('');
     const [scanMessage, setScanMessage] = useState<string | null>(null);
     const [categoryId, setCategoryId] = useState<number | null>(null);
     const [dismissedSale, setDismissedSale] = useState<number | null>(null);
@@ -703,7 +709,29 @@ export default function CounterSale({
                                 <Label htmlFor="customer" className="text-xs">
                                     {t('pos.customer')}
                                 </Label>
-                                <SearchableSelect id="customer" value={data.customer_id} onChange={changeCustomer} options={customerOptions} />
+                                <SearchableSelect
+                                    id="customer"
+                                    value={data.customer_id}
+                                    onChange={changeCustomer}
+                                    options={customerOptions}
+                                    onCreate={
+                                        canAddCustomer
+                                            ? (typed) => {
+                                                  setTypedCustomer(typed);
+                                                  setAddingCustomer(true);
+                                              }
+                                            : undefined
+                                    }
+                                    createLabel="New customer"
+                                />
+                                {canAddCustomer && (
+                                    <CustomerQuickCreate
+                                        open={addingCustomer}
+                                        onOpenChange={setAddingCustomer}
+                                        initialName={typedCustomer}
+                                        onCreated={(row) => router.reload({ only: ['customers'], onSuccess: () => changeCustomer(String(row.id)) })}
+                                    />
+                                )}
                                 <InputError message={errors.customer_id} />
                             </div>
                             <div className="grid gap-1">

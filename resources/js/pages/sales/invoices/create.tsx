@@ -1,3 +1,4 @@
+import { CustomerQuickCreate } from '@/components/customer-quick-create';
 import InputError from '@/components/input-error';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useState } from 'react';
 
 interface BillableLine {
     delivery_line_id: number;
@@ -91,6 +92,9 @@ export default function InvoiceCreate({
         })),
     });
 
+    const [addingCustomer, setAddingCustomer] = useState(false);
+    const [typedCustomer, setTypedCustomer] = useState('');
+
     const pickCustomer = (id: string) => {
         // The billable list is server-built per customer; changing customer
         // reloads the page with the new list.
@@ -149,6 +153,17 @@ export default function InvoiceCreate({
                         options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
                         placeholder="Select customer"
                         searchPlaceholder="Search customers…"
+                        onCreate={(typed) => {
+                            setTypedCustomer(typed);
+                            setAddingCustomer(true);
+                        }}
+                        createLabel="New customer"
+                    />
+                    <CustomerQuickCreate
+                        open={addingCustomer}
+                        onOpenChange={setAddingCustomer}
+                        initialName={typedCustomer}
+                        onCreated={(row) => pickCustomer(String(row.id))}
                     />
                     <InputError message={errors.customer_id} />
                 </div>

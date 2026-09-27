@@ -78,6 +78,10 @@ class CounterSaleController extends Controller
                 ->orderBy('name')->get(['id', 'name', 'type']),
             'myTill' => $this->openTillOf($request),
             'canOverridePrice' => $request->user()->can('sales.price.override'),
+            // ⭐ 27 Sep 2026 (Joy): a cashier who may manage customers can add one
+            // mid-sale from the customer picker; a plain cashier cannot and the
+            // "+ New customer" row stays hidden (the walk-in default is theirs).
+            'canAddCustomer' => $request->user()->can('sales.customers.manage'),
             // The sale just finished, once: its slip opens in a new tab and the
             // change is shown. ⚠ A flashed key is not a prop until it is passed
             // here (dead engine #9), so it is passed here.

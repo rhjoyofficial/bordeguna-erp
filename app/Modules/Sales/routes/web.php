@@ -8,6 +8,7 @@ use App\Modules\Sales\Http\Controllers\CreditTermsController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
 use App\Modules\Sales\Http\Controllers\CustomerDocumentController;
 use App\Modules\Sales\Http\Controllers\CustomerImportController;
+use App\Modules\Sales\Http\Controllers\CustomerQuickCreateController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
 use App\Modules\Sales\Http\Controllers\DiscountController;
 use App\Modules\Sales\Http\Controllers\PosShiftController;
@@ -94,6 +95,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     // editing it is a financial decision rather than an operational one.
     Route::middleware('can:sales.customers.manage')->group(function () {
         Route::post('customers', [CustomerController::class, 'store'])->name('customers.store');
+        // ⭐ 27 Sep 2026 (Joy): create a customer from inside a sale (JSON, name
+        // is enough). Same permission as managing customers.
+        Route::post('customers/quick', [CustomerQuickCreateController::class, 'store'])->name('customers.quick');
         Route::put('customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
         Route::delete('customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
         // ⭐ Plan D11: trade licence and NID scans. Adding needs the same trust as

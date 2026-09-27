@@ -1,3 +1,4 @@
+import { CustomerQuickCreate } from '@/components/customer-quick-create';
 import InputError from '@/components/input-error';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 
 /**
  * Quotations (Module 4, Slice 2): a promise of a price with an expiry.
@@ -66,6 +68,9 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
         lines: [{ product_id: '', quantity: '', unit_price: '' }],
     });
 
+    const [addingCustomer, setAddingCustomer] = useState(false);
+    const [typedCustomer, setTypedCustomer] = useState('');
+
     const patch = (index: number, key: keyof DraftLine, value: string) =>
         form.setData(
             'lines',
@@ -120,13 +125,26 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                 <div className="space-y-1 sm:col-span-2">
                     <Label className="text-xs">{form.data.party_kind === 'customer' ? 'Customer' : 'Lead'}</Label>
                     {form.data.party_kind === 'customer' ? (
-                        <SearchableSelect
-                            value={form.data.customer_id}
-                            onChange={(value) => form.setData('customer_id', value)}
-                            options={customers.map((customer) => ({ value: String(customer.id), label: customer.name }))}
-                            placeholder="Pick the customer"
-                            searchPlaceholder="Search customers…"
-                        />
+                        <>
+                            <SearchableSelect
+                                value={form.data.customer_id}
+                                onChange={(value) => form.setData('customer_id', value)}
+                                options={customers.map((customer) => ({ value: String(customer.id), label: customer.name }))}
+                                placeholder="Pick the customer"
+                                searchPlaceholder="Search customers…"
+                                onCreate={(typed) => {
+                                    setTypedCustomer(typed);
+                                    setAddingCustomer(true);
+                                }}
+                                createLabel="New customer"
+                            />
+                            <CustomerQuickCreate
+                                open={addingCustomer}
+                                onOpenChange={setAddingCustomer}
+                                initialName={typedCustomer}
+                                onCreated={(row) => router.reload({ only: ['customers'], onSuccess: () => form.setData('customer_id', String(row.id)) })}
+                            />
+                        </>
                     ) : (
                         <SearchableSelect
                             value={form.data.lead_id}
