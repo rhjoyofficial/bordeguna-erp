@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Enums\ProductType;
@@ -11,7 +12,9 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use Spatie\Permission\PermissionRegistrar;
 
 beforeEach(function () {
@@ -40,7 +43,7 @@ beforeEach(function () {
     $this->manager->businesses()->attach($this->business->id);
 });
 
-function approvedPurchaseOrder(Business $business, Supplier $supplier, Warehouse $warehouse, User $createdBy, array $lines): \App\Modules\Purchasing\Models\PurchaseOrder
+function approvedPurchaseOrder(Business $business, Supplier $supplier, Warehouse $warehouse, User $createdBy, array $lines): PurchaseOrder
 {
     $order = app(CreatePurchaseOrder::class)->handle(
         supplier: $supplier,
@@ -108,7 +111,7 @@ it('refuses to receive against a purchase order that is still pending approval',
         createdBy: $this->manager,
     );
     // Force it back to pending — simulates a Staff-created order nobody approved yet.
-    $order->approvalRequest->update(['status' => \App\Modules\Foundation\Enums\ApprovalStatus::Pending]);
+    $order->approvalRequest->update(['status' => ApprovalStatus::Pending]);
 
     app(RecordGoodsReceipt::class)->handle($order->fresh(['lines', 'approvalRequest']), [
         ['line' => $order->lines->first(), 'quantity' => '20'],
@@ -137,4 +140,48 @@ it('marks a service line received without creating any stock movement', function
     expect($receipt->lines->first()->stock_movement_id)->toBeNull();
     expect(StockBatch::count())->toBe(0);
     expect($order->fresh()->status)->toBe(PurchaseOrderStatus::Received);
+});
+
+// ─── A PRODUCT THAT TRACKS EXPIRY (Joy, 26 Sep 2026, Q8 and Q9) ─────────────
+
+it('refuses to receive a product that tracks expiry without its batch and expiry, and takes it with them', function () {
+    $this->stockedProduct->update(['tracks_expiry' => true]);
+    $order = approvedPurchaseOrder($this->business, $this->supplier, $this->warehouse, $this->manager, [
+        ['product' => $this->stockedProduct, 'quantity' => '20', 'unit_cost' => '15'],
+    ]);
+    $line = $order->lines->first();
+
+    expect(fn () => app(RecordGoodsReceipt::class)->handle(order: $order, lineReceipts: [['line' => $line, 'quantity' => '20']], receivedBy: $this->manager))
+        ->toThrow(InvalidArgumentException::class, 'tracks expiry');
+    expect(StockBatch::where('product_id', $this->stockedProduct->id)->count())->toBe(0);
+
+    $receipt = app(RecordGoodsReceipt::class)->handle(
+        order: $order->fresh(['lines']),
+        lineReceipts: [['line' => $line->fresh(), 'quantity' => '20', 'batch_number' => 'B-7', 'expiry_date' => now()->addYear()->toDateString()]],
+        receivedBy: $this->manager,
+    );
+
+    expect($receipt->lines)->toHaveCount(1)
+        ->and(StockBatch::where('product_id', $this->stockedProduct->id)->sole()->batch_number)->toBe('B-7');
+});
+
+it('still takes a product that does not track expiry with no batch or date at all', function () {
+    $order = approvedPurchaseOrder($this->business, $this->supplier, $this->warehouse, $this->manager, [
+        ['product' => $this->stockedProduct, 'quantity' => '5', 'unit_cost' => '15'],
+    ]);
+
+    $receipt = app(RecordGoodsReceipt::class)->handle(order: $order, lineReceipts: [['line' => $order->lines->first(), 'quantity' => '5']], receivedBy: $this->manager);
+
+    expect($receipt->lines)->toHaveCount(1);
+});
+
+it('warns, and never refuses, when a tracked batch has less shelf life than the product wants', function () {
+    expect(ReceivedBatchDates::shelfLifeWarning(now()->addDays(30)->toDateString(), 90))->toContain('30 day(s)', 'below 90')
+        ->and(ReceivedBatchDates::shelfLifeWarning(now()->addDays(120)->toDateString(), 90))->toBeNull()
+        ->and(ReceivedBatchDates::shelfLifeWarning(null, 90))->toBeNull()
+        ->and($this->stockedProduct->shelfLifeWarningDays())->toBe(90);
+
+    $this->stockedProduct->update(['shelf_life_warning_days' => 10]);
+    expect($this->stockedProduct->fresh()->shelfLifeWarningDays())->toBe(10)
+        ->and(ReceivedBatchDates::shelfLifeWarning(now()->addDays(30)->toDateString(), 10))->toBeNull();
 });

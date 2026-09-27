@@ -43,6 +43,8 @@ export interface DialogProduct {
     is_active: boolean;
     availability_override: string | null;
     lead_time_days: number | null;
+    tracks_expiry?: boolean;
+    shelf_life_warning_days?: number | null;
 }
 
 interface Option {
@@ -93,6 +95,8 @@ const EMPTY = {
     content_unit_id: '',
     availability_override: '',
     lead_time_days: '',
+    tracks_expiry: false,
+    shelf_life_warning_days: '',
     is_active: true,
 };
 
@@ -182,6 +186,9 @@ export function ProductDialog({
                       content_unit_id: product.content_unit_id === null ? '' : String(product.content_unit_id),
                       availability_override: product.availability_override ?? '',
                       lead_time_days: product.lead_time_days === null ? '' : String(product.lead_time_days),
+                      tracks_expiry: product.tracks_expiry ?? false,
+                      shelf_life_warning_days:
+                          product.shelf_life_warning_days === null || product.shelf_life_warning_days === undefined ? '' : String(product.shelf_life_warning_days),
                       is_active: product.is_active,
                   },
         );
@@ -300,6 +307,8 @@ export function ProductDialog({
                             'content_unit_id',
                             'lead_time_days',
                             'availability_override',
+                            'tracks_expiry',
+                            'shelf_life_warning_days',
                         ].includes(key),
                     )
                 ) {
@@ -651,6 +660,31 @@ export function ProductDialog({
                                     />
                                     <InputError message={errors.lead_time_days} />
                                 </div>
+                                {/* ⭐ 26 Sep 2026 (Joy, Q8/Q9): which products must carry a batch and
+                                    an expiry when received, and when to warn about short shelf life. */}
+                                <div className="grid gap-2 sm:col-span-2">
+                                    <label className="flex items-center gap-2 text-sm">
+                                        <input type="checkbox" checked={form.tracks_expiry} onChange={(e) => set('tracks_expiry', e.target.checked)} />
+                                        Tracks expiry: a goods receipt must carry the batch number and expiry date
+                                    </label>
+                                    <InputError message={errors.tracks_expiry} />
+                                </div>
+                                {form.tracks_expiry && (
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="pd-shelf">Warn when fewer days of shelf life are left</Label>
+                                        <Input
+                                            id="pd-shelf"
+                                            type="number"
+                                            min={0}
+                                            max={3650}
+                                            value={form.shelf_life_warning_days}
+                                            onChange={(e) => set('shelf_life_warning_days', e.target.value)}
+                                            placeholder="90"
+                                        />
+                                        <p className="text-muted-foreground text-xs">A warning, never a refusal. Blank means 90 days.</p>
+                                        <InputError message={errors.shelf_life_warning_days} />
+                                    </div>
+                                )}
                             </div>
                         )}
                     </section>

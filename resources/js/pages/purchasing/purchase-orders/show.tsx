@@ -59,6 +59,7 @@ interface Line {
         name: string;
         sku: string;
         type: 'raw_material' | 'finished_good' | 'service';
+        tracks_expiry?: boolean;
         unit_of_measure?: { abbreviation: string } | null;
         purchase_unit?: { abbreviation: string } | null;
     };
@@ -279,7 +280,7 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                             </Field>
                             {stocked && (
                                 <>
-                                    <Field label={t('grn.batch_no')} htmlFor={`receive-batch-${line.id}`} size="sm" error={lineError(index, 'batch_number')}>
+                                    <Field label={t('grn.batch_no')} htmlFor={`receive-batch-${line.id}`} size="sm" required={Boolean(line.product.tracks_expiry)} error={lineError(index, 'batch_number')}>
                                         <Input
                                             id={`receive-batch-${line.id}`}
                                             value={entry.batch_number}
@@ -298,7 +299,7 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                                     </Field>
                                     {/* ⚠ `min` only saves a round trip. The server refuses an
                                         expiry before today whatever the browser allows. */}
-                                    <Field label={t('grn.expires_on')} htmlFor={`receive-exp-${line.id}`} error={lineError(index, 'expiry_date')}>
+                                    <Field label={t('grn.expires_on')} htmlFor={`receive-exp-${line.id}`} required={Boolean(line.product.tracks_expiry)} error={lineError(index, 'expiry_date')}>
                                         <Input
                                             id={`receive-exp-${line.id}`}
                                             type="date"

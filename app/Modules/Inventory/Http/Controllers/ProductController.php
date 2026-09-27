@@ -80,6 +80,8 @@ class ProductController extends Controller
                 'is_active' => $product->is_active,
                 'availability_override' => $product->availability_override?->value,
                 'lead_time_days' => $product->lead_time_days,
+                'tracks_expiry' => (bool) $product->tracks_expiry,
+                'shelf_life_warning_days' => $product->shelf_life_warning_days,
                 'current_quantity' => $product->type->isStocked() ? $product->currentStockQuantity() : null,
                 'average_unit_cost' => $product->type->isStocked() ? $product->averageUnitCost() : null,
                 'is_below_threshold' => $product->isBelowLowStockThreshold(),
@@ -282,6 +284,10 @@ class ProductController extends Controller
             'availability_override' => ['nullable', Rule::in([AvailabilityPolicy::Strict->value])],
             // ⚠ Null promises nothing. A zero would promise same-day.
             'lead_time_days' => ['nullable', 'integer', 'min:1', 'max:365'],
+            // ⭐ 26 Sep 2026 (Q8/Q9): batch + expiry required on receipt when on;
+            // the shelf-life warning threshold, blank = 90 days.
+            'tracks_expiry' => ['sometimes', 'boolean'],
+            'shelf_life_warning_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
             // ⚠ Sometimes, so an older form that never sends it cannot switch a
             // product off by omission; the dialog sends it to bring one back.
             'is_active' => ['sometimes', 'boolean'],
