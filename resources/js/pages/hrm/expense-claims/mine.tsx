@@ -3,6 +3,7 @@ import { Field, FormRow } from '@/components/form/field';
 import HeadingSmall from '@/components/heading-small';
 import { SearchSelect } from '@/components/search-select';
 import SelfServiceTabs from '@/components/self-service-tabs';
+import { RequestStatusBadge } from '@/components/request-status-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
@@ -262,7 +263,7 @@ export default function MyExpenseClaims({
                                     </td>
                                     <td className="p-3 text-right tabular-nums">{money(claim.amount)}</td>
                                     <td className="p-3">
-                                        {claim.state}
+                                        <RequestStatusBadge status={claim.was_sent_back ? 'sent back' : claim.state} label={claim.state} />
                                         {claim.settled_by && <span className="text-muted-foreground block text-xs">by {claim.settled_by}</span>}
                                     </td>
                                 </tr>

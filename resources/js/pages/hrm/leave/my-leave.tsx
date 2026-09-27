@@ -1,6 +1,7 @@
 import { SearchSelect } from '@/components/search-select';
 import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
+import { RequestStatusBadge } from '@/components/request-status-badge';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -349,7 +350,7 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                                             {r.unpaid_days > 0 && <span className="text-destructive ml-1">({r.unpaid_days} unpaid)</span>}
                                         </td>
                                         <td className="py-2">
-                                            <Badge variant={r.status === 'approved' ? 'default' : 'secondary'}>{r.status}</Badge>
+                                            <RequestStatusBadge status={r.status} />
                                             {r.stage && <span className="text-muted-foreground ml-2 text-xs">at {r.stage}</span>}
                                         </td>
                                     </tr>
@@ -368,7 +369,7 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                                     <tr key={m.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                         <td className="text-muted-foreground py-2">{m.summary}</td>
                                         <td className="py-2">
-                                            <Badge variant={m.status === 'approved' ? 'default' : 'secondary'}>{m.status}</Badge>
+                                            <RequestStatusBadge status={m.status} />
                                         </td>
                                     </tr>
                                 ))}

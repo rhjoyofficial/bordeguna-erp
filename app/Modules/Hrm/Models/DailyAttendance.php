@@ -192,6 +192,17 @@ class DailyAttendance extends Model
         return static::query()
             ->where('employee_id', $employeeId)
             ->whereNotNull('grace_window_key')
+            // ⭐ 27 Sep 2026 (Joy): a forgiven day (rain, office lock) leaves the
+            // ladder entirely. It costs no money AND consumes no free day, so it
+            // cannot push a later day toward a deduction. An active waiver on the
+            // (employee, date) is what marks it forgiven.
+            ->whereNotExists(function ($waiver) {
+                $waiver->selectRaw('1')
+                    ->from('attendance_waivers as w')
+                    ->whereColumn('w.employee_id', 'daily_attendances.employee_id')
+                    ->whereColumn('w.attendance_date', 'daily_attendances.attendance_date')
+                    ->whereNull('w.revoked_at');
+            })
             // whereDate on both bounds, not whereBetween: `attendance_date` is a
             // date cast stored as "Y-m-d 00:00:00", so a plain string upper
             // bound of "Y-m-d" compares as less than the stored value and

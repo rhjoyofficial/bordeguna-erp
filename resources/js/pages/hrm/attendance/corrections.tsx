@@ -1,5 +1,6 @@
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
+import { RequestStatusBadge } from '@/components/request-status-badge';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -458,7 +459,7 @@ export default function Corrections({ corrections, locks, types, directions, emp
                                         <td className="text-muted-foreground py-2 text-xs">{c.reason}</td>
                                         <td className="text-muted-foreground py-2">{c.requested_by ?? '-'}</td>
                                         <td className="py-2">
-                                            {c.is_applied ? <Badge variant="default">Applied</Badge> : <Badge variant="secondary">{c.status}</Badge>}
+                                            {c.is_applied ? <RequestStatusBadge status="approved" label="Applied" /> : <RequestStatusBadge status={c.status} />}
                                             {c.stage && !c.is_applied && <span className="text-muted-foreground ml-2 text-xs">at {c.stage}</span>}
                                         </td>
                                     </tr>

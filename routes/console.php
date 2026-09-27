@@ -8,6 +8,7 @@ use App\Modules\Crm\Console\Commands\NotifyFollowUpsDue;
 use App\Modules\Crm\Console\Commands\SweepDormantCustomersCommand;
 use App\Modules\Foundation\Console\Commands\SendMorningBriefing;
 use App\Modules\Hrm\Console\Commands\AccrueEarnedLeave;
+use App\Modules\Hrm\Console\Commands\DisableDueSeparations;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
 use App\Modules\Inventory\Actions\ProposeExpiredStockWriteOffs;
 use App\Modules\Purchasing\Console\Commands\RollAndRemindRecurringExpenses;
@@ -55,6 +56,14 @@ Schedule::command(ProcessAttendanceDaily::class)
     ->dailyAt('23:00')
     ->withoutOverlapping()
     ->runInBackground();
+
+// ⭐ 27 Sep 2026 (Joy): access ends on the last working day. A resignation
+// dated today or in the future keeps the login live; this switches it off the
+// morning after the last day has passed. 00:30 Dhaka, early enough that a
+// person who left yesterday cannot sign in today.
+Schedule::command(DisableDueSeparations::class)
+    ->dailyAt('00:30')
+    ->withoutOverlapping();
 
 // The monthly earned-leave accrual (Joy, 24 Aug 2026). Runs on the 1st for the
 // month that just ended, at 01:00 - comfortably after the 23:00 attendance

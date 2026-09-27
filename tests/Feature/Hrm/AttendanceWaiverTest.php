@@ -20,6 +20,8 @@ use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\Shift;
 use App\Modules\Hrm\Payroll\PayrollConfig;
 use App\Modules\Hrm\Payroll\PayrollContextBuilder;
+use Illuminate\Support\Carbon;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -265,7 +267,7 @@ it('tells the daily screen who may forgive and which rows are forgiven', functio
 
     waiverOwner()->get(route('hrm.attendance.daily.index', ['on' => '2026-08-03']))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/attendance/daily')
             ->where('can_waive', true)
             ->where('days.0.costs_money', true)
@@ -273,6 +275,40 @@ it('tells the daily screen who may forgive and which rows are forgiven', functio
 
     waiverRecorder()->get(route('hrm.attendance.daily.index', ['on' => '2026-08-03']))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('can_waive', false));
+});
+
+it('drops a forgiven day from the lateness ladder so it no longer pushes later days toward a deduction', function () {
+    $band = 'slightly_late';
+    foreach (['2026-08-04' => 1, '2026-08-05' => 2, '2026-08-06' => 3] as $day => $occ) {
+        DailyAttendance::create([
+            'business_id' => $this->business->id,
+            'employee_id' => $this->employee->id,
+            'attendance_date' => $day,
+            'status' => AttendanceStatus::Late,
+            'consequence' => AttendanceConsequence::None,
+            'worked_minutes' => 480, 'late_minutes' => 10,
+            'grace_window_key' => $band, 'occurrence_number' => $occ,
+            'is_provisional' => false, 'holds_payroll' => false,
+        ]);
+    }
+
+    $on = Carbon::parse('2026-08-07');
+    expect(DailyAttendance::priorOccurrences($this->employee->id, $on))->toBe([$band => 3]);
+
+    // Forgiving 2026-08-04 takes it out of the ladder entirely (Joy, 27 Sep 2026).
+    $waiver = AttendanceWaiver::create([
+        'business_id' => $this->business->id,
+        'employee_id' => $this->employee->id,
+        'attendance_date' => '2026-08-04',
+        'waived_status' => 'late', 'waived_consequence' => 'none',
+        'reason' => 'Heavy rain, forgiven for everyone.', 'waived_by' => $this->owner->id,
+    ]);
+
+    expect(DailyAttendance::priorOccurrences($this->employee->id, $on))->toBe([$band => 2]);
+
+    // Undoing forgiveness makes the day count again.
+    $waiver->update(['revoked_at' => now(), 'revoked_by' => $this->owner->id]);
+    expect(DailyAttendance::priorOccurrences($this->employee->id, $on))->toBe([$band => 3]);
 });

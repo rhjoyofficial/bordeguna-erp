@@ -8,6 +8,8 @@ use App\Modules\Hrm\Actions\CreateEmployee;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Models\Employee;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -127,4 +129,47 @@ it('blocks a non-admin from changing employee status or separating', function ()
 
     $this->actingAs($this->staff)->withSession(['current_business_id' => $this->business->id])
         ->post(route('hrm.employees.separate', $employee), ['separation_type' => 'resignation', 'separation_date' => '2026-01-01'])->assertForbidden();
+});
+
+it('keeps a future-dated resignation login live until the day after the last working day', function () {
+    Carbon::setTestNow('2026-03-01 09:00:00');
+    $user = User::factory()->create(['is_active' => true]);
+    $employee = makeEmployee(['user_id' => $user->id]);
+    $employee->update(['status' => EmployeeStatus::Active]);
+
+    lifeOwner()->post(route('hrm.employees.separate', $employee), [
+        'separation_type' => 'resignation',
+        'separation_date' => '2026-03-31',
+        'separation_reason' => 'One month notice',
+    ])->assertRedirect();
+
+    // Recorded a month early: access stays until the last working day (Joy, 27 Sep 2026).
+    expect($user->fresh()->is_active)->toBeTrue();
+
+    // Still live on the last working day itself.
+    Carbon::setTestNow('2026-03-31 10:00:00');
+    Artisan::call('hrm:disable-due-separations');
+    expect($user->fresh()->is_active)->toBeTrue();
+
+    // The morning after, the daily job ends access.
+    Carbon::setTestNow('2026-04-01 00:30:00');
+    Artisan::call('hrm:disable-due-separations');
+    expect($user->fresh()->is_active)->toBeFalse();
+
+    Carbon::setTestNow();
+});
+
+it('ends access at once when the resignation is dated before today', function () {
+    Carbon::setTestNow('2026-04-15 09:00:00');
+    $user = User::factory()->create(['is_active' => true]);
+    $employee = makeEmployee(['user_id' => $user->id]);
+    $employee->update(['status' => EmployeeStatus::Active]);
+
+    lifeOwner()->post(route('hrm.employees.separate', $employee), [
+        'separation_type' => 'resignation',
+        'separation_date' => '2026-04-10',
+    ])->assertRedirect();
+
+    expect($user->fresh()->is_active)->toBeFalse();
+    Carbon::setTestNow();
 });
