@@ -12,6 +12,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
@@ -184,4 +185,42 @@ it('warns, and never refuses, when a tracked batch has less shelf life than the 
     $this->stockedProduct->update(['shelf_life_warning_days' => 10]);
     expect($this->stockedProduct->fresh()->shelfLifeWarningDays())->toBe(10)
         ->and(ReceivedBatchDates::shelfLifeWarning(now()->addDays(30)->toDateString(), 10))->toBeNull();
+});
+
+// ─── THE SAME CHALLAN TWICE FROM ONE SUPPLIER (Joy, 26 Sep 2026, Q10) ───────
+
+it('refuses a second receipt with the same supplier challan number, whatever the case or spaces', function () {
+    $first = approvedPurchaseOrder($this->business, $this->supplier, $this->warehouse, $this->manager, [
+        ['product' => $this->stockedProduct, 'quantity' => '5', 'unit_cost' => '15'],
+    ]);
+    app(RecordGoodsReceipt::class)->handle(order: $first, lineReceipts: [['line' => $first->lines->first(), 'quantity' => '5']], receivedBy: $this->manager, supplierChallanNumber: 'CH-0021');
+
+    $second = approvedPurchaseOrder($this->business, $this->supplier, $this->warehouse, $this->manager, [
+        ['product' => $this->stockedProduct, 'quantity' => '5', 'unit_cost' => '15'],
+    ]);
+
+    expect(fn () => app(RecordGoodsReceipt::class)->handle(order: $second, lineReceipts: [['line' => $second->lines->first(), 'quantity' => '5']], receivedBy: $this->manager, supplierChallanNumber: ' ch-0021 '))
+        ->toThrow(InvalidArgumentException::class, 'already received');
+    expect(GoodsReceipt::where('purchase_order_id', $second->id)->count())->toBe(0);
+
+    // A different number from the same supplier, and the same number from another supplier, are fine.
+    app(RecordGoodsReceipt::class)->handle(order: $second->fresh(['lines']), lineReceipts: [['line' => $second->lines->first()->fresh(), 'quantity' => '5']], receivedBy: $this->manager, supplierChallanNumber: 'CH-0022');
+
+    $other = Supplier::create(['business_id' => $this->business->id, 'name' => 'Other Supplies']);
+    $third = approvedPurchaseOrder($this->business, $other, $this->warehouse, $this->manager, [
+        ['product' => $this->stockedProduct, 'quantity' => '5', 'unit_cost' => '15'],
+    ]);
+    $receipt = app(RecordGoodsReceipt::class)->handle(order: $third, lineReceipts: [['line' => $third->lines->first(), 'quantity' => '5']], receivedBy: $this->manager, supplierChallanNumber: 'CH-0021');
+    expect($receipt->supplier_challan_number)->toBe('CH-0021');
+});
+
+it('never treats two receipts with no challan number as duplicates', function () {
+    foreach ([1, 2] as $n) {
+        $order = approvedPurchaseOrder($this->business, $this->supplier, $this->warehouse, $this->manager, [
+            ['product' => $this->stockedProduct, 'quantity' => '1', 'unit_cost' => '15'],
+        ]);
+        app(RecordGoodsReceipt::class)->handle(order: $order, lineReceipts: [['line' => $order->lines->first(), 'quantity' => '1']], receivedBy: $this->manager);
+    }
+
+    expect(GoodsReceipt::count())->toBe(2);
 });

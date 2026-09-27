@@ -21,6 +21,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Support\LastReceivedCost;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
+use App\Modules\Purchasing\Support\SupplierChallans;
 use App\Support\RecordTimeline;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
@@ -378,6 +379,15 @@ class PurchaseOrderController extends Controller
                     $warnings[] = "{$product->name}: {$warning}";
                 }
             }
+        }
+
+        // ⭐ 26 Sep 2026 (Joy, Q10): a challan number this supplier already sent
+        // is refused under its own box. The action refuses it again.
+        $purchaseOrder->loadMissing('supplier');
+        $challanRefusal = SupplierChallans::refusal((int) $purchaseOrder->supplier_id, $data['supplier_challan_number'] ?? null, $purchaseOrder->supplier?->name ?? 'this supplier');
+
+        if ($challanRefusal !== null) {
+            $dateProblems['supplier_challan_number'] = $challanRefusal;
         }
 
         if ($dateProblems !== []) {

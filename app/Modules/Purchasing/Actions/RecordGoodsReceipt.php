@@ -10,6 +10,7 @@ use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
+use App\Modules\Purchasing\Support\SupplierChallans;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -49,6 +50,15 @@ class RecordGoodsReceipt
 
         if ($lineReceipts === []) {
             throw new InvalidArgumentException('At least one line must have a received quantity greater than zero.');
+        }
+
+        // ⭐ 26 Sep 2026 (Joy, Q10): the same challan number from the same
+        // supplier is a double entry, refused at the door. Checked here as well
+        // as on the screen, because this is the chokepoint every receipt passes.
+        $order->loadMissing('supplier');
+
+        if (($refusal = SupplierChallans::refusal((int) $order->supplier_id, $supplierChallanNumber, $order->supplier?->name ?? 'this supplier')) !== null) {
+            throw new InvalidArgumentException($refusal);
         }
 
         return DB::transaction(function () use ($order, $lineReceipts, $receivedBy, $note, $supplierChallanNumber) {
