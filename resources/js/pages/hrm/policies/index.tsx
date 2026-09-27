@@ -445,7 +445,9 @@ export default function PolicyIndex({ scopes, consequences }: { scopes: Scope[];
                 <div>
                     <h2 className="text-lg font-medium">Attendance policy</h2>
                     <p className="text-muted-foreground text-sm">
-                        The lateness ladders and day rules, per scope. A department's policy replaces the company default whole - never merged.
+                        This is where you set how many late arrivals are free before a day's salary is deducted, and the day rules. Press
+                        <span className="font-medium"> Revise</span> on a scope to change the numbers. A department's policy replaces the company
+                        default whole, never merged.
                     </p>
                 </div>
 
@@ -480,6 +482,13 @@ export default function PolicyIndex({ scopes, consequences }: { scopes: Scope[];
                                         : 'holiday work needs approval'}
                                 </p>
                                 <table className="mt-3 w-full text-sm">
+                                    <thead>
+                                        <tr className="text-muted-foreground border-sidebar-border/70 dark:border-sidebar-border border-b text-left">
+                                            <th className="py-1.5 pr-3 font-medium">Lateness band</th>
+                                            <th className="py-1.5 pr-3 font-medium">How late</th>
+                                            <th className="py-1.5 font-medium">Free days, then what happens</th>
+                                        </tr>
+                                    </thead>
                                     <tbody>
                                         {scope.current.config.grace_windows.map((w) => (
                                             <tr key={w.key} className="border-sidebar-border/70 dark:border-sidebar-border border-b last:border-0">

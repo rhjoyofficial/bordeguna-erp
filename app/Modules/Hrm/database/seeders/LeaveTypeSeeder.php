@@ -39,7 +39,9 @@ class LeaveTypeSeeder extends Seeder
                 // The only type C6c allows to accumulate and be paid out.
                 'code' => 'earned', 'name' => 'Earned / Annual Leave',
                 'annual_quota' => 20, 'is_paid' => true, 'deducts_balance' => true,
-                'allows_half_day' => true, 'can_carry_forward' => true, 'can_encash' => true,
+                // ⭐ 27 Sep 2026: encashment OFF until a rate is set (policy is
+                // dormant); an encashable type blocks the settlement total.
+                'allows_half_day' => true, 'can_carry_forward' => true, 'can_encash' => false,
                 // Null means twice the annual quota (C6b's configurable default).
                 'carry_forward_cap' => null,
             ],

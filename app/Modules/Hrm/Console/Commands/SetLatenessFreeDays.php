@@ -37,6 +37,7 @@ class SetLatenessFreeDays extends Command
         {--band=slightly_late : the grace-window key to change}
         {--business= : limit to one business id (default: all)}
         {--reprocess-cycle : re-run the current payroll cycle after the change}
+        {--reprocess-cycle-of= : re-run the payroll cycle that CONTAINS this date (Y-m-d), for back-dating a past cycle}
         {--dry-run : show what would change without saving}';
 
     protected $description = 'Set the free-day allowance for a lateness band across all policy versions, and optionally reprocess the current cycle';
@@ -101,8 +102,10 @@ class SetLatenessFreeDays extends Command
                 $business->name, $changed, $days, $band,
             ));
 
-            if ($this->option('reprocess-cycle') && $changed > 0 && ! $dryRun) {
-                $this->reprocessCurrentCycle($business->id);
+            $cycleOf = $this->option('reprocess-cycle-of');
+
+            if (($this->option('reprocess-cycle') || $cycleOf !== null) && $changed > 0 && ! $dryRun) {
+                $this->reprocessCycle($business->id, $cycleOf === null ? Carbon::today() : Carbon::parse($cycleOf));
             }
         }
 
@@ -111,9 +114,9 @@ class SetLatenessFreeDays extends Command
         return self::SUCCESS;
     }
 
-    private function reprocessCurrentCycle(int $businessId): void
+    private function reprocessCycle(int $businessId, Carbon $withinCycle): void
     {
-        $cycle = PayrollCycle::containing(Carbon::today());
+        $cycle = PayrollCycle::containing($withinCycle);
         $from = $cycle['start'];
         $today = Carbon::today();
         $to = $cycle['end']->greaterThan($today) ? $today : $cycle['end'];
