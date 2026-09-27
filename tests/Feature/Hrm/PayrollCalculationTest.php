@@ -380,5 +380,9 @@ it('ignores attendance after an employee left: it neither docks pay nor blocks t
 
     // And it does not block the run with an "awaits HR review" issue.
     $issues = app(ValidatePayrollRun::class)->issuesForEmployee($this->employee->fresh(), $this->period);
-    expect(collect($issues)->contains(fn ($i) => str_contains($i, 'HR review')))->toBeFalse();
+    expect(collect($issues)->contains(fn ($i) => str_contains($i, 'HR review')))->toBeFalse()
+        // The leaver's schedule ended on their last day, but the check reads as
+        // of that day, so it is not mistaken for "no schedule assigned".
+        ->and(collect($issues)->contains(fn ($i) => str_contains($i, 'shift or holiday calendar')))->toBeFalse()
+        ->and(collect($issues)->contains(fn ($i) => str_contains($i, 'salary structure')))->toBeFalse();
 });
