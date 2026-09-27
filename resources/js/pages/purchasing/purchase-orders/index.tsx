@@ -1,5 +1,6 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { EntityQuickCreate } from '@/components/entity-quick-create';
 import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
 import { ReportHeading } from '@/components/report/report-shell';
@@ -11,8 +12,8 @@ import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, Link, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { FormEventHandler, useState } from 'react';
 
 interface Option {
     id: number;
@@ -74,6 +75,10 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
         lines: [{ product_id: '', quantity: '', unit_cost: '' }],
     });
 
+    // ⭐ 27 Sep 2026 (Joy): add a supplier without leaving the order.
+    const [creatingSupplier, setCreatingSupplier] = useState(false);
+    const [typedSupplier, setTypedSupplier] = useState('');
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         post(route('purchasing.purchase-orders.store'), {
@@ -109,6 +114,18 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
                         options={suppliers.map((s) => ({ value: String(s.id), label: s.name }))}
                         placeholder="Select supplier"
                         searchPlaceholder="Search suppliers…"
+                        onCreate={(typed) => {
+                            setTypedSupplier(typed);
+                            setCreatingSupplier(true);
+                        }}
+                        createLabel="New supplier"
+                    />
+                    <EntityQuickCreate
+                        kind="supplier"
+                        open={creatingSupplier}
+                        onOpenChange={setCreatingSupplier}
+                        initialName={typedSupplier}
+                        onCreated={(row) => router.reload({ only: ['suppliers'], onSuccess: () => setData('supplier_id', String(row.id)) })}
                     />
                 </Field>
                 <Field label="Receiving warehouse" required error={errors.warehouse_id}>

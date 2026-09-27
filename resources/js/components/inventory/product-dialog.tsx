@@ -379,7 +379,12 @@ export function ProductDialog({
                             <Label htmlFor="pd-unit" required>
                                 Unit
                             </Label>
-                            <SearchSelect id="pd-unit" value={form.unit_of_measure_id} onChange={(e) => set('unit_of_measure_id', e.target.value)}>
+                            <SearchSelect
+                                id="pd-unit"
+                                value={form.unit_of_measure_id}
+                                onChange={(e) => set('unit_of_measure_id', e.target.value)}
+                                quickCreate={{ kind: 'unit', reload: ['units'] }}
+                            >
                                 <option value="">Select unit</option>
                                 {units.map((unit) => (
                                     <option key={unit.id} value={unit.id}>
@@ -388,9 +393,7 @@ export function ProductDialog({
                                 ))}
                             </SearchSelect>
                             {units.length === 0 && (
-                                <p className="text-xs text-amber-600 dark:text-amber-500">
-                                    No units yet. Add them under Inventory &gt; Units of measure first.
-                                </p>
+                                <p className="text-muted-foreground text-xs">No units yet. Open this list and choose &ldquo;New unit&rdquo; to add one.</p>
                             )}
                             <InputError message={errors.unit_of_measure_id} />
                         </div>
@@ -424,7 +427,12 @@ export function ProductDialog({
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="pd-brand">Brand</Label>
-                            <SearchSelect id="pd-brand" value={form.brand_id} onChange={(e) => set('brand_id', e.target.value)}>
+                            <SearchSelect
+                                id="pd-brand"
+                                value={form.brand_id}
+                                onChange={(e) => set('brand_id', e.target.value)}
+                                quickCreate={{ kind: 'brand', reload: ['brands'] }}
+                            >
                                 <option value="">None</option>
                                 {brands.map((brand) => (
                                     <option key={brand.id} value={brand.id}>
@@ -436,7 +444,12 @@ export function ProductDialog({
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="pd-category">Category</Label>
-                            <SearchSelect id="pd-category" value={form.category_id} onChange={(e) => set('category_id', e.target.value)}>
+                            <SearchSelect
+                                id="pd-category"
+                                value={form.category_id}
+                                onChange={(e) => set('category_id', e.target.value)}
+                                quickCreate={{ kind: 'category', reload: ['categories'] }}
+                            >
                                 <option value="">None</option>
                                 {categories.map((category) => (
                                     <option key={category.id} value={category.id}>
@@ -635,6 +648,7 @@ export function ProductDialog({
                                             id="pd-content-unit"
                                             value={form.content_unit_id}
                                             onChange={(e) => set('content_unit_id', e.target.value)}
+                                            quickCreate={{ kind: 'unit', reload: ['units'] }}
                                         >
                                             <option value="">unit</option>
                                             {units.map((unit) => (

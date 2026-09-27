@@ -1,3 +1,4 @@
+import { EntityQuickCreate, type QuickCreateKind } from '@/components/entity-quick-create';
 import { LedgerQuickCreate, type LedgerType } from '@/components/ledger-quick-create';
 import { SearchableSelect, type SelectOption } from '@/components/searchable-select';
 import { type SharedData } from '@/types';
@@ -106,6 +107,7 @@ export function SearchSelect({
     emptyText,
     fit,
     newLedger,
+    quickCreate,
 }: {
     children: ReactNode;
     value: string | number;
@@ -127,6 +129,14 @@ export function SearchSelect({
      * the page prop(s) that feed it, re-fetched after a head is added.
      */
     newLedger?: { types: LedgerType[]; reload: string[] };
+    /**
+     * ⭐ 27 Sep 2026 (Joy): marks this as a picker that can create its own kind
+     * on the fly (unit, category, brand, supplier). A "+ New …" row appears;
+     * `reload` names the page prop(s) that feed the list, re-fetched after one is
+     * added. The server enforces the permission, so a user who lacks it gets a
+     * clear message rather than a silently missing row.
+     */
+    quickCreate?: { kind: QuickCreateKind; reload: string[]; createLabel?: string };
 }) {
     const canManageChart = usePage<SharedData>().props.canManageChart;
     const [creating, setCreating] = useState(false);
@@ -134,7 +144,10 @@ export function SearchSelect({
     const collected: { options: SelectOption[]; placeholder?: string } = { options: [] };
     collect(children, collected);
 
-    const offersCreate = newLedger !== undefined && canManageChart && !disabled;
+    const offersLedger = newLedger !== undefined && canManageChart && !disabled;
+    const offersEntity = quickCreate !== undefined && !disabled;
+    const offersCreate = offersLedger || offersEntity;
+    const createLabel = offersLedger ? 'New ledger head' : (quickCreate?.createLabel ?? `New ${quickCreate?.kind ?? ''}`);
 
     return (
         <>
@@ -160,9 +173,9 @@ export function SearchSelect({
                           }
                         : undefined
                 }
-                createLabel="New ledger head"
+                createLabel={createLabel}
             />
-            {offersCreate ? (
+            {offersLedger ? (
                 <LedgerQuickCreate
                     open={creating}
                     onOpenChange={setCreating}
@@ -174,6 +187,20 @@ export function SearchSelect({
                         router.reload({
                             only: newLedger.reload,
                             onSuccess: () => onChange({ target: { value: String(account.id), name: name ?? '', id: id ?? '' } }),
+                        });
+                    }}
+                />
+            ) : null}
+            {offersEntity ? (
+                <EntityQuickCreate
+                    kind={quickCreate.kind}
+                    open={creating}
+                    onOpenChange={setCreating}
+                    initialName={typedName}
+                    onCreated={(row) => {
+                        router.reload({
+                            only: quickCreate.reload,
+                            onSuccess: () => onChange({ target: { value: String(row.id), name: name ?? '', id: id ?? '' } }),
                         });
                     }}
                 />
