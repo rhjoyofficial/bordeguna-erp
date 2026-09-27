@@ -8,6 +8,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ApplyLeave;
 use App\Modules\Hrm\Actions\AssignSchedule;
 use App\Modules\Hrm\Actions\GrantAnnualLeaveQuota;
+use App\Modules\Hrm\Actions\GrantPaidLeaveOverride;
 use App\Modules\Hrm\Actions\ProcessAttendance;
 use App\Modules\Hrm\Actions\RecordPunch;
 use App\Modules\Hrm\Actions\RequestLeave;
@@ -678,4 +679,70 @@ it('shows the approver plain dates, never a timestamp', function () {
         ->firstWhere('label', 'Dates')['value'];
 
     expect($dates)->toBe('3 Aug 2026 → 4 Aug 2026');
+});
+
+// --- Authority pays unpaid leave (Joy, 27 Sep 2026) ---------------------------
+
+it('lets the authority pay the unpaid days of an approved leave, drawing on no balance', function () {
+    // No casual balance, so a 2-day casual leave is entirely unpaid (LEV-07).
+    $request = app(RequestLeave::class)->handle(
+        $this->employee, $this->casual, '2026-09-21', '2026-09-22',
+        LeaveDayPortion::FullDay, 'Tour', $this->staffUser,
+    );
+    app(ApplyLeave::class)->handle($request);
+    expect((float) $request->fresh()->unpaid_days)->toBe(2.0);
+
+    $balanceBefore = app(LeaveBalance::class)->for($this->employee->id, $this->casual->id, 2026);
+
+    $paid = app(GrantPaidLeaveOverride::class)->handle($request->fresh(), $this->hr, 'Owner granted');
+
+    expect((float) $paid->unpaid_days)->toBe(0.0)
+        ->and($paid->isPaidByAuthority())->toBeTrue()
+        ->and($paid->paid_override_by)->toBe($this->hr->id)
+        ->and($paid->paid_override_reason)->toBe('Owner granted')
+        // No quota is drawn: the balance is exactly what it was, never negative.
+        ->and(app(LeaveBalance::class)->for($this->employee->id, $this->casual->id, 2026))->toBe($balanceBefore);
+});
+
+it('refuses to pay a leave that has no unpaid days', function () {
+    grantDays($this->casual, 5);
+    $request = app(RequestLeave::class)->handle(
+        $this->employee, $this->casual, '2026-09-21', '2026-09-22',
+        LeaveDayPortion::FullDay, 'Covered by balance', $this->staffUser,
+    );
+    app(ApplyLeave::class)->handle($request);
+    expect((float) $request->fresh()->unpaid_days)->toBe(0.0);
+
+    expect(fn () => app(GrantPaidLeaveOverride::class)->handle($request->fresh(), $this->hr, 'nothing to pay'))
+        ->toThrow(ValidationException::class);
+});
+
+it('lets a leave manager pay the days over HTTP and refuses everyone else', function () {
+    $request = app(RequestLeave::class)->handle(
+        $this->employee, $this->casual, '2026-09-21', '2026-09-22',
+        LeaveDayPortion::FullDay, 'Tour', $this->staffUser,
+    );
+    app(ApplyLeave::class)->handle($request);
+
+    leaveStaff()->post(route('hrm.leave.grant-paid', $request->id), ['reason' => 'nope'])
+        ->assertForbidden();
+
+    leaveHr()->post(route('hrm.leave.grant-paid', $request->id), ['reason' => 'Owner granted'])
+        ->assertRedirect();
+
+    expect((float) $request->fresh()->unpaid_days)->toBe(0.0)
+        ->and($request->fresh()->isPaidByAuthority())->toBeTrue();
+});
+
+it('requires a reason to pay the days', function () {
+    $request = app(RequestLeave::class)->handle(
+        $this->employee, $this->casual, '2026-09-21', '2026-09-22',
+        LeaveDayPortion::FullDay, 'Tour', $this->staffUser,
+    );
+    app(ApplyLeave::class)->handle($request);
+
+    leaveHr()->post(route('hrm.leave.grant-paid', $request->id), ['reason' => ''])
+        ->assertSessionHasErrors('reason');
+
+    expect((float) $request->fresh()->unpaid_days)->toBe(2.0);
 });

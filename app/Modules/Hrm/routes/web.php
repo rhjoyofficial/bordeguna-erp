@@ -235,6 +235,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('leave', [LeaveController::class, 'store'])->name('leave.store');
     Route::post('leave/{leaveRequest}/approve', [LeaveController::class, 'approve'])->name('leave.approve');
     Route::post('leave/{leaveRequest}/reject', [LeaveController::class, 'reject'])->name('leave.reject');
+    // The authority pays the unpaid days of an approved leave (Joy, 27 Sep 2026).
+    Route::post('leave/{leaveRequest}/grant-paid', [LeaveController::class, 'grantPaid'])->name('leave.grant-paid');
     Route::post('leave/quota', [LeaveController::class, 'grantQuota'])->name('leave.quota');
 
     // Leave-type rules (SmartHR gap G19) — edited from the Leave types tab.

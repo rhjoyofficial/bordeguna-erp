@@ -32,6 +32,8 @@ interface LeaveRow {
     status: string;
     stage: string | null;
     is_applied: boolean;
+    paid_by_authority: boolean;
+    paid_override_reason: string | null;
 }
 
 interface MovementRow {
@@ -523,6 +525,69 @@ function LeaveTypeDialog({ type }: { type?: TypeSetting }) {
     );
 }
 
+/**
+ * The authority pays the unpaid days of an approved leave, even when the
+ * employee had no paid balance (Joy, 27 Sep 2026). A reason is required, so the
+ * grant is always accountable.
+ */
+function GrantPaidDialog({ leave }: { leave: LeaveRow }) {
+    const [open, setOpen] = useState(false);
+    const [reason, setReason] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                    Pay these days
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Pay this leave</DialogTitle>
+                    <DialogDescription>
+                        {leave.unpaid_days} unpaid day{leave.unpaid_days === 1 ? '' : 's'} will be paid as a company grant. No leave balance is used,
+                        and the Leave Without Pay deduction is removed from the salary. Recalculate payroll afterwards.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-2">
+                    <Label htmlFor={`paid-reason-${leave.id}`} required>
+                        Reason
+                    </Label>
+                    <Input id={`paid-reason-${leave.id}`} value={reason} onChange={(e) => setReason(e.target.value)} />
+                    {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
+                    {errors.status && <p className="text-destructive text-xs">{errors.status}</p>}
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button
+                        disabled={reason.trim() === ''}
+                        onClick={() =>
+                            router.post(
+                                route('hrm.leave.grant-paid', leave.id),
+                                { reason },
+                                {
+                                    preserveScroll: true,
+                                    onError: (e: Record<string, string>) => setErrors(e),
+                                    onSuccess: () => {
+                                        setOpen(false);
+                                        setErrors({});
+                                        setReason('');
+                                    },
+                                },
+                            )
+                        }
+                    >
+                        Pay these days
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function LeaveIndex({
     year,
     filters,
@@ -639,6 +704,7 @@ export default function LeaveIndex({
                                             <th className="py-1.5">Days</th>
                                             <th className="py-1.5">Reason</th>
                                             <th className="py-1.5">Status</th>
+                                            <th className="py-1.5 text-right">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -658,6 +724,9 @@ export default function LeaveIndex({
                                                     {r.unpaid_days > 0 && (
                                                         <span className="text-destructive ml-1 text-xs">({r.unpaid_days} unpaid)</span>
                                                     )}
+                                                    {r.paid_by_authority && (
+                                                        <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">(paid by authority)</span>
+                                                    )}
                                                 </td>
                                                 <td className="text-muted-foreground py-1.5 text-xs">{r.reason}</td>
                                                 <td className="py-1.5">
@@ -667,6 +736,9 @@ export default function LeaveIndex({
                                                     {r.stage && !r.is_applied && (
                                                         <span className="text-muted-foreground ml-2 text-xs">at {r.stage}</span>
                                                     )}
+                                                </td>
+                                                <td className="py-1.5 text-right">
+                                                    {r.is_applied && r.unpaid_days > 0 && <GrantPaidDialog leave={r} />}
                                                 </td>
                                             </tr>
                                         ))}

@@ -4,9 +4,11 @@ namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ApplyLeave;
 use App\Modules\Hrm\Actions\ApplyMovement;
 use App\Modules\Hrm\Actions\GrantAnnualLeaveQuota;
+use App\Modules\Hrm\Actions\GrantPaidLeaveOverride;
 use App\Modules\Hrm\Actions\RequestLeave;
 use App\Modules\Hrm\Actions\RequestMovement;
 use App\Modules\Hrm\Actions\YearEndLeaveProcessor;
@@ -155,6 +157,25 @@ class LeaveController extends Controller
         return back()->with('success', 'Leave rejected.');
     }
 
+    /**
+     * ⭐ 27 Sep 2026 (Joy): the authority pays the unpaid days of an approved
+     * leave, even when the employee had no paid balance for them. A
+     * company-financed grant, so no quota moves; only the salary deduction
+     * stops. The reason is mandatory, as with every money-affecting act.
+     */
+    public function grantPaid(Request $request, LeaveRequest $leaveRequest, GrantPaidLeaveOverride $action): RedirectResponse
+    {
+        $this->authorize('hrm.leave.manage');
+
+        $reason = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ])['reason'];
+
+        $action->handle($leaveRequest, $request->user(), $reason);
+
+        return back()->with('success', 'The leave is now paid by the authority; the salary deduction is removed.');
+    }
+
     public function storeMovement(Request $request, RequestMovement $action): RedirectResponse
     {
         $this->authorize('hrm.leave.manage');
@@ -281,7 +302,7 @@ class LeaveController extends Controller
 
     private function businessId(): int
     {
-        return app(\App\Modules\Foundation\Support\BusinessContext::class)->id();
+        return app(BusinessContext::class)->id();
     }
 
     /**
@@ -304,6 +325,8 @@ class LeaveController extends Controller
             'status' => $approval?->status->value ?? 'pending',
             'stage' => $approval && $approval->totalStages() > 1 ? $approval->currentStage()?->name : null,
             'is_applied' => $r->isApplied(),
+            'paid_by_authority' => $r->isPaidByAuthority(),
+            'paid_override_reason' => $r->paid_override_reason,
         ];
     }
 

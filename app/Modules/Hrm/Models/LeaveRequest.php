@@ -40,6 +40,9 @@ class LeaveRequest extends Model
         'covered_dates',
         'requested_by',
         'applied_at',
+        'paid_override_by',
+        'paid_override_at',
+        'paid_override_reason',
     ];
 
     protected function casts(): array
@@ -52,13 +55,14 @@ class LeaveRequest extends Model
             'unpaid_days' => 'decimal:2',
             'covered_dates' => 'array',
             'applied_at' => 'datetime',
+            'paid_override_at' => 'datetime',
         ];
     }
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['employee_id', 'leave_type_id', 'start_date', 'end_date', 'day_portion', 'days', 'unpaid_days', 'reason', 'applied_at'])
+            ->logOnly(['employee_id', 'leave_type_id', 'start_date', 'end_date', 'day_portion', 'days', 'unpaid_days', 'reason', 'applied_at', 'paid_override_by', 'paid_override_at', 'paid_override_reason'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -76,6 +80,20 @@ class LeaveRequest extends Model
     public function requester(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requested_by');
+    }
+
+    public function paidOverrideBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'paid_override_by');
+    }
+
+    /**
+     * Whether the authority has paid the unpaid days of this request as a
+     * company-financed grant (Joy, 27 Sep 2026).
+     */
+    public function isPaidByAuthority(): bool
+    {
+        return $this->paid_override_at !== null;
     }
 
     public function isApproved(): bool
