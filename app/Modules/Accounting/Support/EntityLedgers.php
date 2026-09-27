@@ -9,7 +9,6 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * ⭐ EVERY CUSTOMER, SUPPLIER AND EMPLOYEE HAS ITS OWN NAMED LEDGER HEAD (Joy,
@@ -67,7 +66,10 @@ final class EntityLedgers
             $group = Account::bySlug($slug);
 
             if ($group === null) {
-                throw new RuntimeException("The chart has no '{$slug}' account. Run the chart of accounts seeder.");
+                // No chart yet (a fresh install, or a test that never seeded it):
+                // there is nowhere to hang the head, so do nothing. The backfill
+                // command and the next save will create it once the chart exists.
+                return null;
             }
 
             $name = self::headName($entity);

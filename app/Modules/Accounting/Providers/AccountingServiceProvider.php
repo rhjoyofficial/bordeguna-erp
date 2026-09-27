@@ -6,9 +6,13 @@ use App\Modules\Accounting\Console\Commands\BackfillEntityLedgers;
 use App\Modules\Accounting\Console\Commands\ReconcileSubledgers;
 use App\Modules\Accounting\Console\Commands\ReleaseDueAmortizations;
 use App\Modules\Accounting\Console\Commands\VerifyAccountingLedger;
+use App\Modules\Accounting\Observers\EntityLedgerObserver;
 use App\Modules\Accounting\Reporting\Definitions\BudgetVsActualReport;
 use App\Modules\Accounting\Support\ChartPermissions;
+use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Reporting\ReportRegistry;
+use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Sales\Models\Customer;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -22,6 +26,12 @@ class AccountingServiceProvider extends ServiceProvider
 
         // The old all-in-one chart key keeps every split power (ChartPermissions).
         ChartPermissions::register();
+
+        // ⭐ 27 Sep 2026 (Joy): every customer, supplier and employee carries its
+        // own ledger head, created the moment the entity is (EntityLedgers).
+        Customer::observe(EntityLedgerObserver::class);
+        Supplier::observe(EntityLedgerObserver::class);
+        Employee::observe(EntityLedgerObserver::class);
 
         // ⭐ 26 Sep 2026 (Q19): the three operating reports open for whoever
         // holds the narrow key (the Manager) OR reads the whole ledger. Spatie's

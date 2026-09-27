@@ -25,7 +25,10 @@ beforeEach(function () {
 it('gives a customer a head under Accounts Receivable, uniquely keyed', function () {
     $customer = Customer::create(['business_id' => $this->business->id, 'name' => 'Rahim', 'code' => 'RAHIM']);
 
-    $head = EntityLedgers::ensureOwnLedger($customer);
+    // The observer gives it a head the moment it is created.
+    expect($customer->fresh()->account_id)->not->toBeNull();
+
+    $head = EntityLedgers::ensureOwnLedger($customer->fresh());
 
     expect($head)->not->toBeNull()
         ->and($customer->fresh()->account_id)->toBe($head->id)
@@ -82,11 +85,31 @@ it('back-fills every existing entity that has no head', function () {
         'employment_type' => 'permanent', 'status' => 'active',
     ]);
 
-    expect($customer->account_id)->toBeNull();
+    // Simulate rows from before the feature: drop their auto-created heads so
+    // the entity has none, exactly what a pre-feature customer looks like.
+    foreach ([$customer, $supplier, $employee] as $entity) {
+        $head = $entity->fresh()->account_id;
+        $entity->forceFill(['account_id' => null])->saveQuietly();
+        Account::whereKey($head)->delete();
+    }
+
+    expect($customer->fresh()->account_id)->toBeNull();
 
     Artisan::call('accounting:backfill-entity-ledgers');
 
     expect($customer->fresh()->account_id)->not->toBeNull()
         ->and($supplier->fresh()->account_id)->not->toBeNull()
+        ->and($employee->fresh()->account_id)->not->toBeNull();
+});
+
+it('auto-creates a head when a supplier or employee is created, via the observer', function () {
+    $supplier = Supplier::create(['business_id' => $this->business->id, 'name' => 'Fresh Supplier']);
+    $employee = Employee::create([
+        'business_id' => $this->business->id, 'employee_code' => 'BDG-000200',
+        'first_name' => 'New', 'last_name' => 'Hire',
+        'employment_type' => 'permanent', 'status' => 'active',
+    ]);
+
+    expect($supplier->fresh()->account_id)->not->toBeNull()
         ->and($employee->fresh()->account_id)->not->toBeNull();
 });
