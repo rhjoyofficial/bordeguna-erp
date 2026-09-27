@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Providers;
 
+use App\Modules\Accounting\Console\Commands\BackfillEntityLedgers;
 use App\Modules\Accounting\Console\Commands\ReconcileSubledgers;
 use App\Modules\Accounting\Console\Commands\ReleaseDueAmortizations;
 use App\Modules\Accounting\Console\Commands\VerifyAccountingLedger;
@@ -16,7 +17,7 @@ class AccountingServiceProvider extends ServiceProvider
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
-            $this->commands([VerifyAccountingLedger::class, ReconcileSubledgers::class, ReleaseDueAmortizations::class]);
+            $this->commands([VerifyAccountingLedger::class, ReconcileSubledgers::class, ReleaseDueAmortizations::class, BackfillEntityLedgers::class]);
         }
 
         // The old all-in-one chart key keeps every split power (ChartPermissions).
