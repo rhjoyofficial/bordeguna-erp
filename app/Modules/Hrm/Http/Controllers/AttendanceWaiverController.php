@@ -50,13 +50,20 @@ class AttendanceWaiverController extends Controller
             return back()->with('error', 'That day has not been processed, so there is nothing to forgive yet.');
         }
 
-        // Only a day that costs money can be forgiven. A present day, a paid
-        // leave day or a plain warning has no deduction to remove, and a
-        // waiver on it would be a record of nothing.
-        $costsMoney = $day->status->value === 'absent' || $day->consequence->deducts();
+        // ⭐ 27 Sep 2026 (Joy): forgiveness is not only about a day that costs
+        // money today. A late arrival the boss excused on a paper application
+        // may sit inside the free allowance now, yet it still counts toward the
+        // monthly ladder and pushes a LATER day into a deduction. So any day
+        // that is absent, that already deducts, or that carries a lateness
+        // occurrence can be forgiven; forgiving it takes it out of the ladder
+        // (priorOccurrences) and the later days recompute with one fewer count.
+        // Only a plain present day with no lateness has nothing to forgive.
+        $canForgive = $day->status->value === 'absent'
+            || $day->consequence->deducts()
+            || $day->grace_window_key !== null;
 
-        if (! $costsMoney) {
-            return back()->with('error', 'That day carries no salary deduction - there is nothing to forgive.');
+        if (! $canForgive) {
+            return back()->with('error', 'That day was on time and costs nothing - there is nothing to forgive.');
         }
 
         if (AttendanceWaiver::activeFor($employee->id, $validated['attendance_date']) !== null) {

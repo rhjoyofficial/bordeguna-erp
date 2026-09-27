@@ -312,3 +312,48 @@ it('drops a forgiven day from the lateness ladder so it no longer pushes later d
     $waiver->update(['revoked_at' => now(), 'revoked_by' => $this->owner->id]);
     expect(DailyAttendance::priorOccurrences($this->employee->id, $on))->toBe([$band => 3]);
 });
+
+it('forgives a late day that costs nothing yet, so a boss-approved late no longer counts toward the ladder', function () {
+    // A late arrival inside the free allowance: no deduction today, but it still
+    // counts. Before 27 Sep 2026 the screen refused to forgive it.
+    DailyAttendance::create([
+        'business_id' => $this->business->id,
+        'employee_id' => $this->employee->id,
+        'attendance_date' => '2026-08-05',
+        'status' => AttendanceStatus::Late,
+        'consequence' => AttendanceConsequence::None,
+        'worked_minutes' => 480, 'late_minutes' => 10,
+        'grace_window_key' => 'slightly_late', 'occurrence_number' => 2,
+        'is_provisional' => false, 'holds_payroll' => false,
+    ]);
+
+    waiverOwner()->post(route('hrm.attendance.waivers.store'), [
+        'employee_id' => $this->employee->id,
+        'attendance_date' => '2026-08-05',
+        'reason' => 'Boss approved the written late application.',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect(AttendanceWaiver::activeFor($this->employee->id, '2026-08-05'))->not->toBeNull()
+        ->and(DailyAttendance::priorOccurrences($this->employee->id, Carbon::parse('2026-08-06')))
+        ->toBe([]);
+});
+
+it('still refuses to forgive a plain on-time present day', function () {
+    DailyAttendance::create([
+        'business_id' => $this->business->id,
+        'employee_id' => $this->employee->id,
+        'attendance_date' => '2026-08-07',
+        'status' => AttendanceStatus::Present,
+        'consequence' => AttendanceConsequence::None,
+        'worked_minutes' => 480, 'late_minutes' => 0,
+        'is_provisional' => false, 'holds_payroll' => false,
+    ]);
+
+    waiverOwner()->post(route('hrm.attendance.waivers.store'), [
+        'employee_id' => $this->employee->id,
+        'attendance_date' => '2026-08-07',
+        'reason' => 'nothing to forgive',
+    ])->assertRedirect()->assertSessionHas('error');
+
+    expect(AttendanceWaiver::activeFor($this->employee->id, '2026-08-07'))->toBeNull();
+});

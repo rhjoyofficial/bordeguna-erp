@@ -44,6 +44,7 @@ interface Day {
     fixes: Fix[];
     waiver: Waiver | null;
     costs_money: boolean;
+    can_forgive: boolean;
     id: number;
     date: string;
     weekday: string;
@@ -300,8 +301,9 @@ function ForgiveDialog({ day }: { day: Day }) {
                         Forgive {day.date} for {day.employee}
                     </DialogTitle>
                     <DialogDescription>
-                        Removes this day&apos;s salary deduction from payroll. The attendance record itself does not change - the day still reads{' '}
-                        {day.status.toLowerCase()} everywhere - and your name and reason stay on permanent record. It can be undone.
+                        Forgives this day: any salary deduction is removed and the day stops counting toward the monthly lateness
+                        allowance, so a later day is not pushed into a deduction by it. The attendance record itself does not change - the
+                        day still reads {day.status.toLowerCase()} everywhere - and your name and reason stay on record. It can be undone.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-2">
@@ -736,7 +738,7 @@ export default function DailyAttendance({
                                                 {day.late_minutes > 0 && <ShowCauseDialog day={day} on={day.date} />}
                                                 {/* Money actions, only for hrm.attendance.waive holders:
                                                     forgive a costing day, or undo a forgiveness. */}
-                                                {can_waive && day.costs_money && !day.waiver && <ForgiveDialog day={day} />}
+                                                {can_waive && day.can_forgive && !day.waiver && <ForgiveDialog day={day} />}
                                                 {can_waive && day.waiver && (
                                                     <Button
                                                         variant="ghost"

@@ -243,8 +243,12 @@ class ValidatePayrollRun
      */
     public function population(PayrollPeriod $period): Collection
     {
+        // ⭐ 27 Sep 2026 (Joy): everyone who worked ANY part of the cycle is on the
+        // run, including a mid-cycle joiner or leaver. Proration then pays them
+        // for the days they were employed. `activeOn(end)` alone dropped anyone
+        // who left before the 23rd, so a leaver's final month was never paid.
         return Employee::whereHas('assignments', fn ($query) => $query
-            ->activeOn($period->end_date)
+            ->activeDuring($period->start_date, $period->end_date)
             ->where('is_primary', true))
             ->orderBy('employee_code')->get();
     }

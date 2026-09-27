@@ -15,6 +15,7 @@ use App\Modules\Hrm\Models\Employee;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -236,7 +237,7 @@ class DailyAttendanceController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function present(DailyAttendance $day, \Illuminate\Support\Collection $fixes, \Illuminate\Support\Collection $waivers): array
+    private function present(DailyAttendance $day, Collection $fixes, Collection $waivers): array
     {
         $key = $day->employee_id.'|'.$day->attendance_date->toDateString();
         $waiver = $waivers->get($key);
@@ -253,6 +254,9 @@ class DailyAttendanceController extends Controller
             // Whether this day's verdict costs money (an absent day, or a
             // deducting consequence) - what the Forgive button keys on.
             'costs_money' => $day->status->value === 'absent' || $day->consequence->deducts(),
+            // ⭐ 27 Sep 2026 (Joy): a late arrival can be forgiven even when it
+            // costs nothing yet, so it stops counting toward the monthly ladder.
+            'can_forgive' => $day->status->value === 'absent' || $day->consequence->deducts() || $day->grace_window_key !== null,
             // What has already been done to this day, and by whom - shown on
             // the row and, through the clock page, to the employee themselves.
             'fixes' => ($fixes->get($key) ?? collect())->map(fn (AttendanceCorrection $c) => [

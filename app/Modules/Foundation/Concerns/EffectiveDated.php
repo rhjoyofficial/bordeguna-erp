@@ -31,6 +31,23 @@ trait EffectiveDated
     }
 
     /**
+     * Rows in effect at ANY point in a period [from, to] (inclusive). Used to
+     * find everyone who worked part of a payroll cycle, including someone who
+     * joined or left in the middle of it (Joy, 27 Sep 2026: a mid-cycle leaver
+     * is still paid for the days worked).
+     */
+    public function scopeActiveDuring(Builder $query, Carbon|string $from, Carbon|string $to): Builder
+    {
+        $from = $from instanceof Carbon ? $from->toDateString() : $from;
+        $to = $to instanceof Carbon ? $to->toDateString() : $to;
+
+        return $query->whereDate('effective_from', '<=', $to)
+            ->where(function (Builder $inner) use ($from) {
+                $inner->whereNull('effective_to')->orWhereDate('effective_to', '>=', $from);
+            });
+    }
+
+    /**
      * Rows in effect today.
      */
     public function scopeActive(Builder $query): Builder

@@ -7,9 +7,11 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\AssignSchedule;
 use App\Modules\Hrm\Actions\CalculatePayroll;
 use App\Modules\Hrm\Actions\SaveSalaryStructure;
+use App\Modules\Hrm\Actions\ValidatePayrollRun;
 use App\Modules\Hrm\database\seeders\SalaryComponentSeeder;
 use App\Modules\Hrm\Enums\AttendanceConsequence;
 use App\Modules\Hrm\Enums\AttendanceStatus;
+use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Enums\ScheduleScope;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
@@ -285,7 +287,7 @@ it('totals the run across its payslips', function () {
     expect((float) $run->total_earnings)->toBe(50000.00);
     expect((float) $run->total_deductions)->toBe(1666.67);
     expect((float) $run->total_net)->toBe(48333.33);
-    expect($run->status)->toBe(\App\Modules\Hrm\Enums\PayrollStatus::Calculated);
+    expect($run->status)->toBe(PayrollStatus::Calculated);
 });
 
 it('refuses to calculate anyone while one employee has no salary structure', function () {
@@ -319,4 +321,36 @@ it('does not leak payroll across businesses', function () {
 
     expect(PayrollRun::count())->toBe(0);
     expect(PayrollPeriod::count())->toBe(0);
+});
+
+it('puts a mid-cycle leaver on the run and leaves out someone who left before it', function () {
+    // Left partway through the cycle: still paid for the days worked.
+    $leaver = Employee::create([
+        'employee_code' => 'BDG-000002', 'first_name' => 'Left', 'last_name' => 'Midway',
+        'employment_type' => 'permanent', 'status' => 'separated',
+        'joining_date' => '2025-01-01', 'separation_date' => $this->period->start_date->copy()->addDays(4)->toDateString(),
+        'bank_account_number' => '2222222222',
+    ]);
+    EmployeeAssignment::create([
+        'employee_id' => $leaver->id, 'office_id' => $this->office->id, 'is_primary' => true,
+        'effective_from' => '2025-01-01', 'effective_to' => $this->period->start_date->copy()->addDays(4)->toDateString(),
+    ]);
+
+    // Left before this cycle began: not on the run at all.
+    $gone = Employee::create([
+        'employee_code' => 'BDG-000003', 'first_name' => 'Long', 'last_name' => 'Gone',
+        'employment_type' => 'permanent', 'status' => 'separated',
+        'joining_date' => '2025-01-01', 'separation_date' => $this->period->start_date->copy()->subDay()->toDateString(),
+        'bank_account_number' => '3333333333',
+    ]);
+    EmployeeAssignment::create([
+        'employee_id' => $gone->id, 'office_id' => $this->office->id, 'is_primary' => true,
+        'effective_from' => '2025-01-01', 'effective_to' => $this->period->start_date->copy()->subDay()->toDateString(),
+    ]);
+
+    $codes = app(ValidatePayrollRun::class)->population($this->period)->pluck('employee_code');
+
+    expect($codes)->toContain('BDG-000001')
+        ->and($codes)->toContain('BDG-000002')
+        ->and($codes)->not->toContain('BDG-000003');
 });
