@@ -11,12 +11,14 @@ use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
+use App\Modules\Hrm\Reporting\ReportDataset;
 use App\Modules\Hrm\Reporting\ReportParameter;
 use App\Modules\Hrm\Reporting\ReportParameters;
 use App\Modules\Hrm\Reporting\ReportParameterType;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Hrm\Reporting\ReportRunner;
 use App\Modules\Hrm\Reporting\ReportScope;
+use App\Modules\Hrm\Reporting\SignatureImages;
 use App\Modules\Hrm\Reporting\WriterRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -149,14 +151,22 @@ class ReportController extends Controller
 
         // Signatures ride the direct path only; a queued render has no box to
         // have ticked. Missing images leave lines blank - never an error.
-        if ($request->boolean('with_signatures')) {
-            $dataset = new \App\Modules\Hrm\Reporting\ReportDataset(
-                columns: $dataset->columns,
-                rows: $dataset->rows,
-                meta: $dataset->meta->withSignatures(\App\Modules\Hrm\Reporting\SignatureImages::forMeta($dataset->meta)),
-                totals: $dataset->totals,
-            );
-        }
+        //
+        // ⭐ 27 Sep 2026 (Joy): the checkbox governs the NAMES as well, not only
+        // the images. Ticked = the recorded name AND its signature; unticked =
+        // three blank lines for wet ink, no name at all. A printed name with no
+        // signature reads as if that person had already signed, which is exactly
+        // what the unticked state must not say.
+        $meta = $request->boolean('with_signatures')
+            ? $dataset->meta->withSignatures(SignatureImages::forMeta($dataset->meta))
+            : $dataset->meta->withoutSignatories();
+
+        $dataset = new ReportDataset(
+            columns: $dataset->columns,
+            rows: $dataset->rows,
+            meta: $meta,
+            totals: $dataset->totals,
+        );
 
         $path = $writer->write($dataset);
 

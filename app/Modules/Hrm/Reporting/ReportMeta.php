@@ -84,6 +84,33 @@ final class ReportMeta
         public readonly ?array $signatures = null,
     ) {}
 
+    /**
+     * A copy with NO signatory names and no images: the Prepared/Checked/Approved
+     * block prints as three blank lines for wet ink (Joy, 27 Sep 2026). Used
+     * when the export did not ask for digital signatures — then a name must not
+     * appear at all, because a printed name with no signature reads as if that
+     * person had already signed.
+     */
+    public function withoutSignatories(): self
+    {
+        return new self(
+            title: $this->title,
+            subtitle: $this->subtitle,
+            filters: $this->filters,
+            businessName: $this->businessName,
+            generatedBy: $this->generatedBy,
+            generatedAt: $this->generatedAt,
+            periodLocked: $this->periodLocked,
+            lockNote: $this->lockNote,
+            note: $this->note,
+            logo: $this->logo,
+            preparedBy: null,
+            checkedBy: null,
+            approvedBy: null,
+            signatures: null,
+        );
+    }
+
     /** A copy of this meta carrying signature images; the original stays as it is. */
     public function withSignatures(?array $signatures): self
     {

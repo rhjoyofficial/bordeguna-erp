@@ -21,19 +21,20 @@
         font-family: "DejaVu Sans", sans-serif;
         font-size: 9px;
         color: #1f2937;
+        line-height: 1.4;
         margin: 0;
     }
 
-    h1 { font-size: 15px; margin: 0 0 2px; }
+    h1 { font-size: 15px; margin: 0 0 2px; letter-spacing: 0.4px; text-transform: uppercase; color: #0f172a; }
 
-    .subtitle { font-size: 10px; color: #4b5563; margin: 0 0 8px; }
+    .subtitle { font-size: 10px; color: #475569; margin: 0 0 8px; }
 
-    .business { font-size: 11px; font-weight: bold; color: #111827; margin: 0 0 1px; }
+    .business { font-size: 12px; font-weight: bold; color: #0f172a; margin: 0 0 1px; letter-spacing: 0.2px; }
 
     /* The letterhead. Centred because that is where a company's mark belongs on
        a document that leaves the building, and because three signatories at the
        foot expect a masthead at the head. */
-    .letterhead { text-align: center; margin: 0 0 6px; }
+    .letterhead { text-align: center; margin: 0 0 4px; }
 
     /* ⚠ Sized in mm, not px: this block is drawn by dompdf at print scale, and a
        logo measured in screen pixels comes out either postage-stamp or half the
@@ -41,9 +42,14 @@
        aspect ratio, so a wide wordmark and a square mark both behave. */
     .letterhead img { max-height: 18mm; max-width: 70mm; }
 
+    /* A hairline rule closes the masthead and opens the document body, so the
+       logo, business name and title read as one header rather than three
+       stacked lines. */
+    .letterhead-rule { border-bottom: 1.5px solid #0f172a; margin: 0 0 8px; }
+
     .doc-title { text-align: center; }
-    .doc-title h1 { margin: 4px 0 2px; }
-    .doc-title .subtitle { margin: 0 0 8px; }
+    .doc-title h1 { margin: 6px 0 2px; }
+    .doc-title .subtitle { margin: 0 0 10px; }
 
     /* ⚠⚠ NORMAL FLOW, NEVER `position: fixed`. The provenance stamp below is
        fixed precisely so it repeats on every page - and that is exactly what
@@ -71,26 +77,28 @@
     .signatures .space.sig img { max-height: 14mm; max-width: 90%; }
 
     .signatures .rule {
-        border-top: 1px solid #374151;
+        border-top: 1px solid #334155;
         padding-top: 3px;
         font-size: 9px;
         font-weight: bold;
-        color: #111827;
+        color: #0f172a;
     }
 
     .signatures .who {
-        font-size: 7.5px;
-        color: #6b7280;
-        padding-top: 1px;
+        font-size: 8px;
+        color: #475569;
+        padding-top: 2px;
+        min-height: 10px;
     }
 
     .filters {
         margin: 0 0 10px;
-        padding: 5px 7px;
-        background: #f3f4f6;
-        border: 1px solid #e5e7eb;
+        padding: 6px 9px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-left: 3px solid #334155;
         font-size: 8.5px;
-        color: #374151;
+        color: #334155;
     }
 
     .filters span { margin-right: 14px; white-space: nowrap; }
@@ -99,28 +107,34 @@
     table { width: 100%; border-collapse: collapse; }
 
     thead th {
-        background: #eef2f7;
-        border: 1px solid #d1d5db;
-        padding: 4px 5px;
-        font-size: 8.5px;
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        border-bottom: 1.5px solid #334155;
+        padding: 5px 6px;
+        font-size: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
         text-align: left;
         font-weight: bold;
+        color: #0f172a;
     }
 
     tbody td {
         border: 1px solid #e5e7eb;
-        padding: 3px 5px;
+        padding: 4px 6px;
         font-size: 8.5px;
     }
 
-    tbody tr:nth-child(even) td { background: #fafafa; }
+    tbody tr:nth-child(even) td { background: #f8fafc; }
 
     tfoot td {
-        border: 1px solid #d1d5db;
-        padding: 4px 5px;
+        border: 1px solid #cbd5e1;
+        border-top: 1.5px solid #334155;
+        padding: 5px 6px;
         font-size: 8.5px;
         font-weight: bold;
-        background: #eef2f7;
+        background: #f1f5f9;
+        color: #0f172a;
     }
 
     .right { text-align: right; }
@@ -208,6 +222,8 @@
     @endif
 </div>
 
+<div class="letterhead-rule"></div>
+
 @if (count($dataset->meta->filters) > 0)
     <div class="filters">
         @foreach ($dataset->meta->filters as $label => $value)
@@ -273,17 +289,18 @@
      2026). In normal flow on purpose - see the .signatures comment above for
      why this must not be fixed like the stamp is.
 
-     ⚠ A name prints under a line ONLY when the source document records that
-     the act happened - a payroll run knows who calculated, reviewed and
-     approved it (Joy, 2 Sep 2026). Anything unrecorded keeps the blank line
-     and the generic hint, because printing a name above an unsigned line
-     would otherwise be the document asserting who approved it before anybody
-     had. The space above the rule stays for the wet signature either way. --}}
+     ⚠ Names and signature images appear together, and ONLY when the export
+     asked for digital signatures (Joy, 27 Sep 2026): ticked prints the recorded
+     name with its signature; unticked prints three blank lines for wet ink and
+     no name at all. Even when ticked, a name still prints only where the source
+     document recorded the act (a payroll run knows who calculated, reviewed and
+     approved it) - never a prediction of who WILL sign. The space above the rule
+     stays for the wet signature either way. --}}
 <table class="signatures">
     <tr>
-        <td>@if($dataset->meta->signatures['prepared'] ?? null)<div class="space sig"><img src="{{ $dataset->meta->signatures['prepared'] }}" alt=""></div>@else<div class="space"></div>@endif<div class="rule">Prepared by</div><div class="who">{{ $dataset->meta->preparedBy ?? 'Name & designation' }}</div></td>
-        <td>@if($dataset->meta->signatures['checked'] ?? null)<div class="space sig"><img src="{{ $dataset->meta->signatures['checked'] }}" alt=""></div>@else<div class="space"></div>@endif<div class="rule">Checked by</div><div class="who">{{ $dataset->meta->checkedBy ?? 'Name & designation' }}</div></td>
-        <td>@if($dataset->meta->signatures['approved'] ?? null)<div class="space sig"><img src="{{ $dataset->meta->signatures['approved'] }}" alt=""></div>@else<div class="space"></div>@endif<div class="rule">Approved by</div><div class="who">{{ $dataset->meta->approvedBy ?? 'Name & designation' }}</div></td>
+        <td>@if($dataset->meta->signatures['prepared'] ?? null)<div class="space sig"><img src="{{ $dataset->meta->signatures['prepared'] }}" alt=""></div>@else<div class="space"></div>@endif<div class="rule">Prepared by</div><div class="who">{{ $dataset->meta->preparedBy }}</div></td>
+        <td>@if($dataset->meta->signatures['checked'] ?? null)<div class="space sig"><img src="{{ $dataset->meta->signatures['checked'] }}" alt=""></div>@else<div class="space"></div>@endif<div class="rule">Checked by</div><div class="who">{{ $dataset->meta->checkedBy }}</div></td>
+        <td>@if($dataset->meta->signatures['approved'] ?? null)<div class="space sig"><img src="{{ $dataset->meta->signatures['approved'] }}" alt=""></div>@else<div class="space"></div>@endif<div class="rule">Approved by</div><div class="who">{{ $dataset->meta->approvedBy }}</div></td>
     </tr>
 </table>
 

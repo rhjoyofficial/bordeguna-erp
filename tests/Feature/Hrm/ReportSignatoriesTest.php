@@ -58,11 +58,15 @@ it('prints the three names when the meta knows them', function () {
         ->and($html)->toContain('Chowdhury Mohammad Moin');
 });
 
-it('keeps the blank line where a name is not on record', function () {
+it('keeps the line blank, with no placeholder text, where a name is not on record', function () {
     $html = renderReport(new ReportMeta(title: 'Trial balance', businessName: 'Signs Co'));
 
-    // The generic hint, three times - exactly the pre-existing behaviour.
-    expect(substr_count($html, 'Name &amp; designation'))->toBe(3);
+    // ⭐ 27 Sep 2026 (Joy): no name and no "Name & designation" hint - just the
+    // three labels and blank lines for wet ink.
+    expect($html)->not->toContain('Name &amp; designation')
+        ->and($html)->toContain('Prepared by')
+        ->and($html)->toContain('Checked by')
+        ->and($html)->toContain('Approved by');
 });
 
 it('mixes: a known preparer prints, an unrecorded approver stays blank', function () {
@@ -73,7 +77,33 @@ it('mixes: a known preparer prints, an unrecorded approver stays blank', functio
     ));
 
     expect($html)->toContain('Musa Islam')
-        ->and(substr_count($html, 'Name &amp; designation'))->toBe(2);
+        ->and($html)->not->toContain('Name &amp; designation');
+});
+
+it('withoutSignatories clears the three names and images but nothing else', function () {
+    $meta = new ReportMeta(
+        title: 'Salary sheet',
+        businessName: 'Signs Co',
+        preparedBy: 'Musa Islam',
+        checkedBy: 'Shuborna Mostafa',
+        approvedBy: 'Chowdhury Mohammad Moin',
+        signatures: ['prepared' => 'data:image/png;base64,AAA='],
+    );
+
+    $bare = $meta->withoutSignatories();
+
+    expect($bare->preparedBy)->toBeNull()
+        ->and($bare->checkedBy)->toBeNull()
+        ->and($bare->approvedBy)->toBeNull()
+        ->and($bare->signatures)->toBeNull()
+        ->and($bare->title)->toBe('Salary sheet')
+        ->and($bare->businessName)->toBe('Signs Co');
+
+    // Rendered, the block is three labelled blank lines, no names.
+    $html = renderReport($bare);
+    expect($html)->toContain('Prepared by')
+        ->and($html)->not->toContain('Musa Islam')
+        ->and($html)->not->toContain('Chowdhury Mohammad Moin');
 });
 
 it('fills the salary sheet from the run: calculator prepared, reviewer checked, approver approved', function () {
