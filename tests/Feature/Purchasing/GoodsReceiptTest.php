@@ -224,3 +224,35 @@ it('never treats two receipts with no challan number as duplicates', function ()
 
     expect(GoodsReceipt::count())->toBe(2);
 });
+
+// ─── AN EARLIER RECEIVED-ON DATE, WITH A REASON (Joy, 26 Sep 2026, Q11) ─────
+
+it('dates the stock and the receipt to an earlier day when a reason is given, and refuses the future and a missing reason', function () {
+    $order = approvedPurchaseOrder($this->business, $this->supplier, $this->warehouse, $this->manager, [
+        ['product' => $this->stockedProduct, 'quantity' => '9', 'unit_cost' => '15'],
+    ]);
+    $line = $order->lines->first();
+    $lastWeek = now()->subDays(6)->toDateString();
+
+    expect(fn () => app(RecordGoodsReceipt::class)->handle(order: $order, lineReceipts: [['line' => $line, 'quantity' => '3']], receivedBy: $this->manager, receivedOn: $lastWeek))
+        ->toThrow(InvalidArgumentException::class, 'needs a reason');
+    expect(fn () => app(RecordGoodsReceipt::class)->handle(order: $order, lineReceipts: [['line' => $line, 'quantity' => '3']], receivedBy: $this->manager, receivedOn: now()->addDay()->toDateString(), backdateReason: 'x'))
+        ->toThrow(InvalidArgumentException::class, 'in the future');
+    expect(StockBatch::where('product_id', $this->stockedProduct->id)->count())->toBe(0);
+
+    $receipt = app(RecordGoodsReceipt::class)->handle(
+        order: $order->fresh(['lines']),
+        lineReceipts: [['line' => $line->fresh(), 'quantity' => '3']],
+        receivedBy: $this->manager,
+        receivedOn: $lastWeek,
+        backdateReason: 'The challan reached the office on Monday.',
+    );
+
+    expect($receipt->received_at->toDateString())->toBe($lastWeek)
+        ->and($receipt->backdate_reason)->toBe('The challan reached the office on Monday.')
+        ->and(StockBatch::where('product_id', $this->stockedProduct->id)->sole()->received_at->toDateString())->toBe($lastWeek);
+
+    // Today needs no reason, and none is kept.
+    $todayReceipt = app(RecordGoodsReceipt::class)->handle(order: $order->fresh(['lines']), lineReceipts: [['line' => $line->fresh(), 'quantity' => '3']], receivedBy: $this->manager, receivedOn: now()->toDateString(), backdateReason: 'ignored');
+    expect($todayReceipt->backdate_reason)->toBeNull()->and($todayReceipt->received_at->toDateString())->toBe(now()->toDateString());
+});

@@ -181,10 +181,14 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
     const receivableLines = order.lines.filter((line) => remaining(line) > 0);
     const { data, setData, post, errors, processing, reset, transform } = useForm<{
         supplier_challan_number: string;
+        received_on: string;
+        backdate_reason: string;
         note: string;
         lines: ReceiveLine[];
     }>({
         supplier_challan_number: '',
+        received_on: today,
+        backdate_reason: '',
         note: '',
         lines: [],
     });
@@ -244,10 +248,24 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                         onChange={(e) => setData('supplier_challan_number', e.target.value)}
                     />
                 </Field>
+                <Field label={t('grn.received_on')} htmlFor="received_on" size="sm" error={errors.received_on}>
+                    <Input id="received_on" type="date" max={today} value={data.received_on} onChange={(e) => setData('received_on', e.target.value)} />
+                </Field>
                 <Field label={t('grn.note')} htmlFor="receipt_note" size="grow" error={errors.note}>
                     <Input id="receipt_note" value={data.note} onChange={(e) => setData('note', e.target.value)} />
                 </Field>
             </FormRow>
+            {/* ⭐ 26 Sep 2026 (Joy, Q11): an earlier date needs its reason, kept on the receipt. */}
+            {data.received_on !== '' && data.received_on < today && (
+                <Field label={t('grn.backdate_reason')} htmlFor="backdate_reason" size="grow" required error={errors.backdate_reason}>
+                    <Input
+                        id="backdate_reason"
+                        value={data.backdate_reason}
+                        placeholder={t('grn.backdate_reason_placeholder')}
+                        onChange={(e) => setData('backdate_reason', e.target.value)}
+                    />
+                </Field>
+            )}
 
             {receivableLines.map((line, index) => {
                 const entry = entryFor(line);

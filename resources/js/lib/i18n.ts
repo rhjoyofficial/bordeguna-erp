@@ -451,6 +451,9 @@ const dictionary = {
     'grn.made_on': { en: 'Made on', bn: 'তৈরির তারিখ' },
     'grn.expires_on': { en: 'Expires on', bn: 'মেয়াদ শেষ' },
     'grn.record': { en: 'Record receipt', bn: 'বুঝে নেওয়া লিখে রাখুন' },
+    'grn.received_on': { en: 'Received on', bn: 'যে তারিখে এসেছে' },
+    'grn.backdate_reason': { en: 'Why is it entered now, not that day?', bn: 'সেদিন না লিখে এখন কেন লেখা হচ্ছে?' },
+    'grn.backdate_reason_placeholder': { en: 'e.g. the challan reached the office on Monday', bn: 'যেমন: চালান সোমবার অফিসে পৌঁছেছে' },
     // Breadcrumbs shared by the sales daily screens
     'nav.sales': { en: 'Sales', bn: 'সেলস' },
     'nav.counter': { en: 'Counter', bn: 'কাউন্টার' },

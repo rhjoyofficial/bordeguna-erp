@@ -20,6 +20,7 @@ class GoodsReceipt extends Model
         'received_at',
         // The supplier's delivery note number, as printed on their paper.
         'supplier_challan_number',
+        'backdate_reason',
         'note',
     ];
 

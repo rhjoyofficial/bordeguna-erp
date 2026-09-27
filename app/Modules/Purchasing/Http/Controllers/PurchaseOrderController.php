@@ -328,6 +328,11 @@ class PurchaseOrderController extends Controller
         $data = $request->validate([
             'note' => ['nullable', 'string'],
             'supplier_challan_number' => ['nullable', 'string', 'max:100'],
+            // ⭐ 26 Sep 2026 (Joy, Q11): an earlier received-on date, never the
+            // future, with a reason when it is before today. The action re-checks
+            // both and the period lock.
+            'received_on' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'backdate_reason' => ['nullable', 'string', 'max:500'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.purchase_order_line_id' => ['required', 'exists:purchase_order_lines,id'],
             'lines.*.quantity' => ['required', 'numeric', 'min:0'],
@@ -341,6 +346,8 @@ class PurchaseOrderController extends Controller
             // ⚠ Named for a person. Without these the refusal reads
             // "The lines.2.expiry_date field must match the format Y-m-d."
             'supplier_challan_number' => 'supplier challan number',
+            'received_on' => 'received on',
+            'backdate_reason' => 'reason for the earlier date',
             'lines.*.quantity' => 'quantity',
             'lines.*.batch_number' => 'batch number',
             'lines.*.manufactured_date' => 'manufacture date',
@@ -355,6 +362,10 @@ class PurchaseOrderController extends Controller
         $purchaseOrder->load('lines.product');
         $dateProblems = [];
         $warnings = [];
+
+        if (! empty($data['received_on']) && $data['received_on'] < now()->toDateString() && trim((string) ($data['backdate_reason'] ?? '')) === '') {
+            $dateProblems['backdate_reason'] = 'This receipt is dated earlier than today: say why it is being entered now.';
+        }
 
         foreach ($data['lines'] as $index => $entry) {
             if ((float) $entry['quantity'] <= 0) {
@@ -420,6 +431,8 @@ class PurchaseOrderController extends Controller
                 $request->user(),
                 $data['note'] ?? null,
                 $data['supplier_challan_number'] ?? null,
+                $data['received_on'] ?? null,
+                $data['backdate_reason'] ?? null,
             );
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
