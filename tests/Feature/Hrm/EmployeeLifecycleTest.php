@@ -6,8 +6,10 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\CreateEmployee;
 use App\Modules\Hrm\Actions\SeparateEmployee;
+use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\SeparationType;
+use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -275,4 +277,33 @@ it('keeps separated staff reachable under the former-employees scope', function 
             ->has('employees', 1)
             ->where('employees.0.employee_code', $emp->employee_code)
             ->where('employees.0.separation_date', '2026-04-01'));
+});
+
+it('drops attendance dated after the last working day when an employee is separated', function () {
+    Carbon::setTestNow('2026-09-05 09:00:00');
+    $employee = makeEmployee();
+    $employee->update(['status' => EmployeeStatus::Active]);
+
+    // Days on both sides of the last working day (28 Aug).
+    foreach (['2026-08-27', '2026-08-28', '2026-08-30', '2026-09-04'] as $d) {
+        DailyAttendance::create([
+            'business_id' => $this->business->id,
+            'employee_id' => $employee->id,
+            'attendance_date' => $d,
+            'status' => AttendanceStatus::Absent,
+            'worked_minutes' => 0, 'is_provisional' => true, 'holds_payroll' => false,
+        ]);
+    }
+
+    lifeOwner()->post(route('hrm.employees.separate', $employee), [
+        'separation_type' => 'resignation', 'separation_date' => '2026-08-28',
+    ])->assertRedirect();
+
+    $left = DailyAttendance::where('employee_id', $employee->id)
+        ->pluck('attendance_date')->map(fn ($d) => $d->toDateString())->sort()->values()->all();
+
+    // Kept up to and including the last day; the two later days are gone.
+    expect($left)->toBe(['2026-08-27', '2026-08-28']);
+
+    Carbon::setTestNow();
 });
