@@ -93,6 +93,9 @@ beforeEach(function () {
         // time it has done exactly its job.
         'availability_override' => 'strict',
         'lead_time_days' => 3,
+        // 26 Sep 2026 (Q8/Q9): which products must carry a batch and expiry on receipt.
+        'tracks_expiry' => true,
+        'shelf_life_warning_days' => 60,
         // ⚠ The printed MRP (21 Sep 2026), caught by the guard below the moment
         // it joined Product::$fillable - the fifth time it has done its job.
         'mrp' => '520',
