@@ -256,6 +256,44 @@ it('demands a reason, refuses a costless day, and refuses forgiving twice', func
     expect(AttendanceWaiver::count())->toBe(1);
 });
 
+it('lets the daily picker reach a resigned employee who has days in the window', function () {
+    // A leaver (Joy, 28 Sep 2026: a resigned employee "is ... not available so
+    // that i can forgive"): the assignment ended before today and the status is
+    // resigned, but a settlement is being corrected on a day inside the window.
+    // Their rows already render on the grid; before this the picker could not
+    // select them, so a forgiveness for a leaver was unreachable.
+    $leaver = Employee::create([
+        'employee_code' => 'BDG-000010',
+        'first_name' => 'Iftekharul', 'last_name' => 'Alam',
+        'employment_type' => 'permanent', 'status' => 'separated',
+    ]);
+    EmployeeAssignment::create([
+        'employee_id' => $leaver->id,
+        'office_id' => $this->office->id,
+        'is_primary' => true,
+        'effective_from' => '2025-01-01',
+        'effective_to' => '2026-08-10',
+    ]);
+    DailyAttendance::create([
+        'business_id' => $this->business->id,
+        'employee_id' => $leaver->id,
+        'attendance_date' => '2026-08-04',
+        'status' => AttendanceStatus::Absent,
+        'consequence' => AttendanceConsequence::Deduction,
+        'worked_minutes' => 0,
+        'is_provisional' => false, 'holds_payroll' => false,
+    ]);
+
+    $response = waiverOwner()->get(route('hrm.attendance.daily.index', ['on' => '2026-08-04']))->assertOk();
+
+    $ids = collect($response->viewData('page')['props']['employees'])->pluck('id');
+
+    // The leaver is now selectable (via the window), and the still-employed
+    // person is there too (via the live roster) - one path must not drop the other.
+    expect($ids)->toContain($leaver->id)
+        ->and($ids)->toContain($this->employee->id);
+});
+
 it('tells the daily screen who may forgive and which rows are forgiven', function () {
     ($this->absentDay)();
 

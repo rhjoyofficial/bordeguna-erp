@@ -110,7 +110,23 @@ class DailyAttendanceController extends Controller
                 'holds' => $onlyHolds,
                 'meals' => $request->boolean('meals'),
             ],
-            'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
+            // The picker must reach a LEAVER, not only the currently-active
+            // roster (Joy, 28 Sep 2026: a resigned employee "is ... not
+            // available so that i can forgive"). A settlement, a late waiver or
+            // an absence forgiveness for someone who has since left is a real
+            // need, and their days already render on this grid - the picker just
+            // could not select them. So it lists everyone active now PLUS anyone
+            // with an attendance day inside the window being viewed, which is
+            // exactly who a Forgive here could ever apply to. Taken from the FULL
+            // window, never the filtered $days, so choosing one person does not
+            // empty the list of everyone else.
+            'employees' => Employee::where(fn ($query) => $query
+                ->whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
+                ->orWhereIn('id', DailyAttendance::query()
+                    ->whereDate('attendance_date', '>=', $from->toDateString())
+                    ->whereDate('attendance_date', '<=', $to->toDateString())
+                    ->distinct()
+                    ->pluck('employee_id')))
                 ->orderBy('employee_code')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName().' ('.$e->employee_code.')']),
             'days' => $days->map(fn (DailyAttendance $day) => $this->present($day, $fixes, $waivers)),

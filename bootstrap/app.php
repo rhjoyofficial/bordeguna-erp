@@ -6,6 +6,7 @@ use App\Http\Middleware\HandleInertiaRequests;
 use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
 use App\Modules\Foundation\Exceptions\ApprovalAlreadyDecidedException;
 use App\Modules\Foundation\Http\Middleware\EnsurePageBusinessMatches;
+use App\Modules\Foundation\Http\Middleware\PreventDuplicateSubmission;
 use App\Modules\Foundation\Http\Middleware\ResolveCurrentBusiness;
 use Illuminate\Auth\Middleware\Authorize;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
@@ -97,6 +98,11 @@ return Application::configure(basePath: dirname(__DIR__))
             // new route is a guard that will be missing from exactly the route
             // nobody thought about. It no-ops when no business is resolved.
             EnsurePageBusinessMatches::class,
+            // Refuses an identical write from the same user while the first is
+            // still in flight - the server-side twin of the app.tsx double-submit
+            // guard, for the double-tap that a slow network or a second tab slips
+            // past the browser. Global for the same reason as W3 above.
+            PreventDuplicateSubmission::class,
         ]);
 
         $middleware->alias([
@@ -132,6 +138,9 @@ return Application::configure(basePath: dirname(__DIR__))
             // W3: must run AFTER the business is resolved, or it compares the
             // page's stamp against nothing and lets every write through.
             EnsurePageBusinessMatches::class,
+            // After authentication (it keys on the user) and next to W3, its
+            // sibling global write-guard.
+            PreventDuplicateSubmission::class,
             ThrottleRequests::class,
             ThrottleRequestsWithRedis::class,
             AuthenticatesSessions::class,
