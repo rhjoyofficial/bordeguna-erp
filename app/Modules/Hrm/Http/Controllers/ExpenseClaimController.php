@@ -128,7 +128,9 @@ class ExpenseClaimController extends Controller
             $this->lineMessages(),
         );
 
-        $claim = $this->openDraft($employee->id);
+        // consolidate, not openDraft: if a stray second open draft ever exists
+        // (see the method), fold it in first so a spend never lands on a hidden one.
+        $claim = $this->consolidateOpenDrafts($employee->id);
 
         return DB::transaction(function () use ($claim, $data, $request, $store, $employee, $businessId) {
             if ($claim === null) {
@@ -468,10 +470,22 @@ class ExpenseClaimController extends Controller
             'note.required' => 'Say what needs correcting. The employee has to know what to change before they resubmit.',
         ]);
 
-        $approval->sendBack($request->user(), $data['note']);
+        DB::transaction(function () use ($approval, $claim, $request, $data) {
+            $approval->sendBack($request->user(), $data['note']);
 
-        // Back to the employee's hands: a draft again, same number, same lines.
-        $claim->forceFill(['submitted_at' => null])->save();
+            // Back to the employee's hands: a draft again, same number, same lines.
+            $claim->forceFill(['submitted_at' => null])->save();
+
+            // ⚠⚠ Restore the one-open-claim invariant. While this claim was under
+            // review the employee may have kept spending, which started a second
+            // draft (store had no open claim to use). Now both would be open and
+            // the screen shows only one, so a returned claim or the new spends
+            // would silently hide. Fold any such scratch draft onto THIS claim -
+            // the one that carries the number and the decision history.
+            $this->consolidateOpenDrafts($claim->employee_id, $claim);
+        });
+
+        $claim->refresh();
 
         $claim->employee?->user?->notify(new ExpenseClaimReturnedNotification(
             "Claim {$claim->claim_number} was sent back: {$data['note']}",
@@ -672,6 +686,64 @@ class ExpenseClaimController extends Controller
             ->whereNull('settled_at')
             ->orderBy('id')
             ->first();
+    }
+
+    /**
+     * Fold every OTHER open draft this employee has into a single surviving one,
+     * returning it (or null if they have none). "Open" = not yet submitted and
+     * not settled, which includes a claim just handed back for correction.
+     *
+     * ⚠⚠ ONE OPEN CLAIM IS THE INVARIANT (10 Sep 2026) and this is what defends
+     * it. store() opens a fresh draft when the employee has no OPEN claim, so a
+     * person who keeps spending while a claim is under review starts a second one;
+     * when the first comes back, both are open at once. The screen shows only one
+     * open draft, so without this the returned claim or the new spends would
+     * silently hide, and "Add expense" could write to the hidden one. Moving the
+     * extra drafts' lines onto the survivor (attachments hang off the line, so
+     * they come with it) and deleting the emptied shells restores the single slot.
+     *
+     * ⚠ `$preferred` picks the survivor when it matters WHICH claim lives: on a
+     * send-back the returned claim must survive, because it alone carries the
+     * claim number and the recorded decisions. A scratch draft was never
+     * submitted, so it has no approval request to preserve. With no preference,
+     * the oldest wins (the returned claim is older than anything started since).
+     */
+    private function consolidateOpenDrafts(int $employeeId, ?ExpenseClaim $preferred = null): ?ExpenseClaim
+    {
+        $open = ExpenseClaim::query()
+            ->where('employee_id', $employeeId)
+            ->whereNull('submitted_at')
+            ->whereNull('settled_at')
+            ->orderBy('id')
+            ->get();
+
+        $survivor = $preferred !== null
+            ? ($open->firstWhere('id', $preferred->getKey()) ?? $preferred)
+            : $open->first();
+
+        if ($survivor === null) {
+            return null;
+        }
+
+        $extras = $open->reject(fn (ExpenseClaim $claim) => $claim->getKey() === $survivor->getKey());
+
+        if ($extras->isEmpty()) {
+            return $survivor;
+        }
+
+        return DB::transaction(function () use ($extras, $survivor) {
+            foreach ($extras as $extra) {
+                ExpenseClaimLine::where('expense_claim_id', $extra->getKey())
+                    ->update(['expense_claim_id' => $survivor->getKey()]);
+                $extra->approvalRequest?->delete();
+                $extra->delete();
+            }
+
+            $survivor->load('lines');
+            $survivor->syncFromLines();
+
+            return $survivor->fresh();
+        });
     }
 
     private function sendForApproval(ExpenseClaim $claim, Request $request, NotifyStageApprovers $notify): RedirectResponse

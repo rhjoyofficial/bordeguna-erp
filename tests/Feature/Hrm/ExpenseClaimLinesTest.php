@@ -801,3 +801,36 @@ it('will not reach a spend on an approved claim through the address of the open 
     expect((float) $approvedLine->fresh()->amount)->toBe(500.0)
         ->and((float) $approved->fresh()->amount)->toBe(500.0);
 });
+
+it('folds a mid-review spend back into a returned claim, keeping exactly one open claim', function () {
+    // The two-draft trap: submit a claim, keep spending while it is under review
+    // (which opens a second draft), then have the first sent back. Before the fix
+    // there were two open drafts; the screen shows one, so a returned claim or the
+    // new spends hid, and "Add expense" could write to the hidden one.
+    addSpend(['amount' => '250'])->assertSessionHasNoErrors();
+    $first = ExpenseClaim::sole();
+    ($this->asStaff)()->post(route('hrm.my-expenses.submit', $first))->assertSessionHasNoErrors();
+
+    addSpend(['amount' => '90', 'description' => 'Rickshaw the next morning'])->assertSessionHasNoErrors();
+    $second = ExpenseClaim::query()->latest('id')->firstOrFail();
+    expect(ExpenseClaim::count())->toBe(2);
+
+    ($this->asApprover)()->post(route('hrm.expense-claims.send-back', $first), ['note' => 'The taxi fare needs a receipt.'])
+        ->assertSessionHasNoErrors();
+
+    // One open claim again: the returned one, now carrying the spend that had gone
+    // onto the scratch draft. The empty scratch shell is gone.
+    expect(ExpenseClaim::whereNull('submitted_at')->whereNull('settled_at')->count())->toBe(1)
+        ->and(ExpenseClaim::find($second->getKey()))->toBeNull();
+
+    $survivor = $first->fresh()->load('lines');
+    expect($survivor->lines)->toHaveCount(2)
+        ->and((float) $survivor->amount)->toBe(340.0)
+        ->and($survivor->approvalRequest->status)->toBe(ApprovalStatus::Returned);
+
+    // The screen shows that single claim as THE open draft; nothing is hidden.
+    ($this->asStaff)()->get(route('hrm.my-expenses'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('draft.id', $survivor->id)
+            ->where('claims', fn ($claims) => collect($claims)->isEmpty()));
+});
