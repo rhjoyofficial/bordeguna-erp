@@ -169,3 +169,61 @@ it('shares the pending count and visibility flag only for users who can review a
         ->where('canReviewApprovals', false)
     );
 });
+
+it('shows settled requests in the history and filters them by outcome', function () {
+    submitPendingRequests($this);
+    $stockRequest = StockRequest::sole();
+    $order = PurchaseOrder::sole();
+
+    // One approved, one rejected.
+    $this->actingAs($this->owner)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('inventory.stock-requests.approve', $stockRequest))->assertRedirect();
+    $this->actingAs($this->owner)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('purchasing.purchase-orders.reject', $order), ['review_note' => 'Budget exceeded'])->assertRedirect();
+
+    // The pending inbox is now empty...
+    $this->actingAs($this->owner)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('approvals.index'))
+        ->assertInertia(fn ($page) => $page->component('approvals/index')->has('requests', 0));
+
+    // ...and both appear in the history with their outcomes.
+    $this->actingAs($this->owner)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('approvals.history'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('approvals/history')
+            ->where('active', 'all')
+            ->has('requests', 2));
+
+    // Filtered to approved: only the stock request, marked approved with a reviewer.
+    $this->actingAs($this->owner)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('approvals.history', ['status' => 'approved']))
+        ->assertInertia(fn ($page) => $page
+            ->where('active', 'approved')
+            ->has('requests', 1)
+            ->where('requests.0.status', 'approved')
+            ->where('requests.0.type', 'Stock request')
+            ->where('requests.0.reviewed_by', $this->owner->name)
+            ->where('requests.0.approve_url', null));
+});
+
+it('lets the requester see their own settled requests, an unrelated user none', function () {
+    submitPendingRequests($this);
+    $this->actingAs($this->owner)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('inventory.stock-requests.approve', StockRequest::sole()))->assertRedirect();
+    $this->actingAs($this->owner)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('purchasing.purchase-orders.reject', PurchaseOrder::sole()), ['review_note' => 'No'])->assertRedirect();
+
+    // Staff raised both, so staff sees both in history even without approve rights.
+    $this->actingAs($this->staff)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('approvals.history'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('requests', 2));
+
+    // A user who neither raised nor may review them sees an empty (403-gated) page.
+    $outsider = User::factory()->create();
+    $outsider->businesses()->attach($this->business->id);
+    $this->actingAs($outsider)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('approvals.history'))
+        ->assertForbidden();
+});

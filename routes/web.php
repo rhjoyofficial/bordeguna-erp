@@ -65,6 +65,9 @@ Route::middleware(['auth', 'business'])->group(function () {
     // Module 7: the morning walk around the shop, done by the system.
     Route::get('health', [BusinessHealthController::class, 'index'])->name('health');
     Route::get('approvals', [ApprovalInboxController::class, 'index'])->name('approvals.index');
+    // The read-only record of settled approvals, so an authority can see where a
+    // request went after it left the inbox (28 Sep 2026).
+    Route::get('approvals/history', [ApprovalInboxController::class, 'history'])->name('approvals.history');
 
     // The header search. A GET on purpose (the hand-written-fetch trap: a GET
     // needs no CSRF ceremony), JSON in and out, permission-filtered inside.

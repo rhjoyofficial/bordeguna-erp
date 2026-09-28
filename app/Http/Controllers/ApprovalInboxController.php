@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Support\ApprovalCards;
 use App\Support\ApprovalInbox;
@@ -35,6 +36,66 @@ class ApprovalInboxController extends Controller
             'counts' => $requests->groupBy('type')
                 ->map(fn ($rows, $type) => ['label' => $type, 'count' => $rows->count()])
                 ->values(),
+        ]);
+    }
+
+    /**
+     * Where a decided request goes (Joy, 28 Sep 2026: "after the approval where
+     * the[y go], so the authority can see them"). The inbox only holds what is
+     * still pending; this is the read-only record of what has been settled -
+     * approved, rejected or handed back - and who settled it, for anyone entitled
+     * to review that kind of request.
+     */
+    public function history(Request $request, ApprovalInbox $inbox, ApprovalCards $cards): Response
+    {
+        $user = $request->user();
+
+        // The tabs, and what each one means in ApprovalStatus terms.
+        $filters = [
+            'all' => [ApprovalStatus::Approved, ApprovalStatus::Rejected, ApprovalStatus::Returned],
+            'approved' => [ApprovalStatus::Approved],
+            'rejected' => [ApprovalStatus::Rejected],
+            'returned' => [ApprovalStatus::Returned],
+        ];
+
+        $active = in_array($request->query('status'), ['approved', 'rejected', 'returned'], true)
+            ? $request->query('status')
+            : 'all';
+
+        $canReviewLegacy = $user->can('inventory.stock.approve') || $user->can('purchasing.po.approve');
+
+        $decided = $inbox->decidedVisibleFor($user, $filters[$active]);
+
+        // ⚠ Not the pending inbox's gate: someone may have decisions to look back
+        // on without anything pending right now. Show the page to anyone who can
+        // see at least one decided request, or who is a legacy approver.
+        abort_unless($decided->isNotEmpty() || $canReviewLegacy || $active !== 'all', 403);
+
+        $requests = $decided->map(function (ApprovalRequest $approvalRequest) use ($cards) {
+            $card = $cards->present($approvalRequest);
+
+            // History is read-only: strip the action affordances the inbox card
+            // carries, and state the outcome instead.
+            return array_merge($card, [
+                'approve_url' => null,
+                'reject_url' => null,
+                'send_back_url' => null,
+                'status' => $approvalRequest->status->value,
+                'reviewed_by' => $approvalRequest->reviewedBy?->name,
+                'reviewed_at' => $approvalRequest->reviewed_at?->format('j M Y, g:i a'),
+                'review_note' => $approvalRequest->review_note,
+            ]);
+        });
+
+        return Inertia::render('approvals/history', [
+            'requests' => $requests->values(),
+            'active' => $active,
+            'tabs' => [
+                ['key' => 'all', 'label' => 'All'],
+                ['key' => 'approved', 'label' => 'Approved'],
+                ['key' => 'rejected', 'label' => 'Rejected'],
+                ['key' => 'returned', 'label' => 'Sent back'],
+            ],
         ]);
     }
 }

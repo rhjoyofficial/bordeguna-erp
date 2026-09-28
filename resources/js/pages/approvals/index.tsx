@@ -216,17 +216,24 @@ export default function ApprovalsIndex({ requests, counts }: ApprovalsIndexProps
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Approvals" />
             <div className="flex flex-col gap-4 p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                    {counts.length === 0 ? (
-                        <Badge variant="secondary">0 pending</Badge>
-                    ) : (
-                        counts.map((entry) => (
-                            <Badge key={entry.label} variant="secondary">
-                                {entry.count} {entry.label.toLowerCase()}
-                                {entry.count === 1 ? '' : 's'}
-                            </Badge>
-                        ))
-                    )}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        {counts.length === 0 ? (
+                            <Badge variant="secondary">0 pending</Badge>
+                        ) : (
+                            counts.map((entry) => (
+                                <Badge key={entry.label} variant="secondary">
+                                    {entry.count} {entry.label.toLowerCase()}
+                                    {entry.count === 1 ? '' : 's'}
+                                </Badge>
+                            ))
+                        )}
+                    </div>
+                    {/* Where a decided request goes: the read-only record of what
+                        has been settled and by whom. */}
+                    <Button variant="outline" size="sm" asChild>
+                        <Link href="/approvals/history">History</Link>
+                    </Button>
                 </div>
 
                 {requests.map((card) => (

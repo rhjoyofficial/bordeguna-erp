@@ -45,29 +45,7 @@ class ApprovalInbox
     {
         return ApprovalRequest::query()
             ->where('status', ApprovalStatus::Pending)
-            ->with([
-                'workflow.stages',
-                'requestedBy:id,name',
-                'approvable' => fn ($morphTo) => $morphTo->morphWith([
-                    StockRequest::class => ['product:id,name,sku', 'warehouse:id,name', 'targetWarehouse:id,name', 'reason:id,name'],
-                    PurchaseOrder::class => ['supplier:id,name', 'lines.product:id,name,sku'],
-                    SalesOrder::class => ['customer:id,name', 'warehouse:id,name', 'lines.product:id,name,sku'],
-                    CreditTermsRequest::class => ['lines.customer:id,code,name', 'requestedBy:id,name'],
-                    InventoryAdjustment::class => ['product:id,name,sku', 'warehouse:id,name', 'reason:id,name'],
-                    ChangeRequest::class => ['subject', 'requestedBy:id,name'],
-                    AttendanceCorrection::class => ['employee:id,employee_code,first_name,last_name', 'punch:id,punched_at'],
-                    LeaveRequest::class => ['employee:id,employee_code,first_name,last_name', 'leaveType:id,name'],
-                    Movement::class => ['employee:id,employee_code,first_name,last_name'],
-                    PayrollRun::class => ['period'],
-                    PayrollUnlockRequest::class => ['run.period'],
-                    Loan::class => ['employee:id,employee_code,first_name,last_name'],
-                    OvertimeAssignment::class => ['employee:id,employee_code,first_name,last_name'],
-                    BonusAward::class => ['employee:id,employee_code,first_name,last_name', 'event:id,name'],
-                    PayrollAdjustment::class => ['employee:id,employee_code,first_name,last_name', 'period'],
-                    SalaryRevision::class => ['employee:id,employee_code,first_name,last_name'],
-                    ExpenseClaim::class => ['employee:id,employee_code,first_name,last_name', 'lines.attachments'],
-                ]),
-            ])
+            ->with($this->approvableGraph())
             ->latest()
             ->get()
             ->filter(fn (ApprovalRequest $request) => $this->actionable($request, $user))
@@ -77,6 +55,87 @@ class ApprovalInbox
     public function countFor(User $user): int
     {
         return $this->pendingActionableFor($user)->count();
+    }
+
+    /**
+     * The DECIDED requests this user is entitled to see (Joy, 28 Sep 2026: "after
+     * the approval where the[y go], so the authority can see them"). The inbox
+     * only ever shows what is still pending; once a request is approved, rejected
+     * or handed back it leaves every inbox, and there was nowhere to look it up.
+     *
+     * Visibility mirrors the inbox rather than showing everything: a person sees a
+     * decided request when they are one of its eligible approvers (any stage of
+     * its workflow admits them, or the legacy per-type permission), or when they
+     * are the one who raised it. That keeps a salary decision from surfacing to an
+     * inventory approver just because it is now history.
+     *
+     * @param  array<int, ApprovalStatus>  $statuses  the states to include
+     * @return Collection<int, ApprovalRequest>
+     */
+    public function decidedVisibleFor(User $user, array $statuses): Collection
+    {
+        return ApprovalRequest::query()
+            ->whereIn('status', $statuses)
+            ->with($this->approvableGraph() + ['reviewedBy:id,name'])
+            ->orderByDesc('reviewed_at')
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn (ApprovalRequest $request) => $this->reviewable($request, $user))
+            ->values();
+    }
+
+    /**
+     * The eager-load graph every approvable needs to render as a card, shared by
+     * the pending inbox and the decided history so they can never drift apart.
+     *
+     * @return array<int|string, mixed>
+     */
+    private function approvableGraph(): array
+    {
+        return [
+            'workflow.stages',
+            'requestedBy:id,name',
+            'approvable' => fn ($morphTo) => $morphTo->morphWith([
+                StockRequest::class => ['product:id,name,sku', 'warehouse:id,name', 'targetWarehouse:id,name', 'reason:id,name'],
+                PurchaseOrder::class => ['supplier:id,name', 'lines.product:id,name,sku'],
+                SalesOrder::class => ['customer:id,name', 'warehouse:id,name', 'lines.product:id,name,sku'],
+                CreditTermsRequest::class => ['lines.customer:id,code,name', 'requestedBy:id,name'],
+                InventoryAdjustment::class => ['product:id,name,sku', 'warehouse:id,name', 'reason:id,name'],
+                ChangeRequest::class => ['subject', 'requestedBy:id,name'],
+                AttendanceCorrection::class => ['employee:id,employee_code,first_name,last_name', 'punch:id,punched_at'],
+                LeaveRequest::class => ['employee:id,employee_code,first_name,last_name', 'leaveType:id,name'],
+                Movement::class => ['employee:id,employee_code,first_name,last_name'],
+                PayrollRun::class => ['period'],
+                PayrollUnlockRequest::class => ['run.period'],
+                Loan::class => ['employee:id,employee_code,first_name,last_name'],
+                OvertimeAssignment::class => ['employee:id,employee_code,first_name,last_name'],
+                BonusAward::class => ['employee:id,employee_code,first_name,last_name', 'event:id,name'],
+                PayrollAdjustment::class => ['employee:id,employee_code,first_name,last_name', 'period'],
+                SalaryRevision::class => ['employee:id,employee_code,first_name,last_name'],
+                ExpenseClaim::class => ['employee:id,employee_code,first_name,last_name', 'lines.attachments'],
+            ]),
+        ];
+    }
+
+    /**
+     * May this user SEE this decided request? An eligible approver of its type
+     * (any workflow stage admits them, or the legacy permission), or its author.
+     */
+    private function reviewable(ApprovalRequest $request, User $user): bool
+    {
+        if ($request->requested_by === $user->id) {
+            return true;
+        }
+
+        if ($request->workflow_id !== null) {
+            return $request->workflow->stages->contains(fn ($stage) => $stage->allows($user));
+        }
+
+        return match ($request->approvable_type) {
+            (new StockRequest)->getMorphClass() => $user->can('inventory.stock.approve'),
+            (new PurchaseOrder)->getMorphClass() => $user->can('purchasing.po.approve'),
+            default => false,
+        };
     }
 
     private function actionable(ApprovalRequest $request, User $user): bool
