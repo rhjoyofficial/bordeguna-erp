@@ -8,6 +8,7 @@ use App\Modules\Foundation\Http\Controllers\ChangeRequestController;
 use App\Modules\Foundation\Http\Controllers\ChatController;
 use App\Modules\Foundation\Http\Controllers\DocumentPdfController;
 use App\Modules\Foundation\Http\Controllers\FileManagerController;
+use App\Modules\Foundation\Http\Controllers\FolderController;
 use App\Modules\Foundation\Http\Controllers\NoteController;
 use App\Modules\Foundation\Http\Controllers\OrganizationController;
 use App\Modules\Foundation\Http\Controllers\PrinterProfileController;
@@ -59,9 +60,20 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
         // somebody needs a new kind of document is the moment they are
         // filing one that fits nothing existing.
         Route::post('files/categories', [FileManagerController::class, 'storeCategory'])->name('files.categories.store');
+
+        // ── Folders: the Google-Drive-style tree over the library (28 Sep 2026).
+        // ⚠ Registered BEFORE the {attachment} routes and numeric-constrained so
+        // "folders" is never mistaken for an attachment id.
+        Route::post('files/folders', [FolderController::class, 'store'])->name('files.folders.store');
+        Route::patch('files/folders/{folder}', [FolderController::class, 'update'])->name('files.folders.update')->whereNumber('folder');
+        Route::delete('files/folders/{folder}', [FolderController::class, 'destroy'])->name('files.folders.destroy')->whereNumber('folder');
+
+        // Rename / re-file / move a library file (title, description, reference,
+        // category, document date, expiry, and which folder it sits in).
+        Route::patch('files/{attachment}', [FileManagerController::class, 'update'])->name('files.update')->whereNumber('attachment');
         // ⚠ Refuses anything that is not a LIBRARY file. Evidence attached to a
         // record is removed from that record, where the loss is visible.
-        Route::delete('files/{attachment}', [FileManagerController::class, 'destroy'])->name('files.destroy');
+        Route::delete('files/{attachment}', [FileManagerController::class, 'destroy'])->name('files.destroy')->whereNumber('attachment');
     });
 
     // ── Notes (Joy, 29 Aug 2026) ────────────────────────────────────────────

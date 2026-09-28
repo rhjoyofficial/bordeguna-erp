@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\DocumentFolder;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\FileVisibility;
 use App\Modules\Hrm\Models\ExpenseClaim;
@@ -231,4 +232,110 @@ it('refuses the page to a login that holds no files permission', function () {
     $nobody->businesses()->attach($this->business->id);
 
     $this->actingAs($nobody)->get('/files')->assertForbidden();
+});
+
+/*
+|--------------------------------------------------------------------------
+| Folders — the Google-Drive-style tree over the library (28 Sep 2026)
+|--------------------------------------------------------------------------
+| ⚠ Folders organise; they never decide who may see a file. That stays with
+| FileVisibility, exercised by the leak tests above.
+*/
+function asFileOwner()
+{
+    return test()->actingAs(test()->owner)->withSession(['current_business_id' => test()->business->id]);
+}
+
+it('creates folders and shows the ones at the level being browsed', function () {
+    asFileOwner()->post(route('files.folders.store'), ['name' => 'Licences'])->assertSessionHasNoErrors();
+    $licences = DocumentFolder::sole();
+    asFileOwner()->post(route('files.folders.store'), ['name' => '2026', 'parent_id' => $licences->id])->assertSessionHasNoErrors();
+
+    // The root shows the top-level folder, not the nested one.
+    asFileOwner()->get(route('files.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where('browsing', true)
+            ->where('current_folder', null)
+            ->has('folders', 1)
+            ->where('folders.0.name', 'Licences')
+            ->where('folders.0.subfolder_count', 1));
+
+    // Opening it shows the nested folder and the breadcrumb.
+    asFileOwner()->get(route('files.index', ['folder' => $licences->id]))
+        ->assertInertia(fn ($page) => $page
+            ->where('current_folder.name', 'Licences')
+            ->has('folders', 1)
+            ->where('folders.0.name', '2026')
+            ->has('breadcrumb', 1)
+            ->where('breadcrumb.0.name', 'Licences'));
+});
+
+it('refuses a duplicate folder name under the same parent', function () {
+    asFileOwner()->post(route('files.folders.store'), ['name' => 'Contracts'])->assertSessionHasNoErrors();
+    asFileOwner()->post(route('files.folders.store'), ['name' => 'Contracts'])->assertSessionHasErrors('name');
+    expect(DocumentFolder::where('name', 'Contracts')->count())->toBe(1);
+});
+
+it('moves a library file into a folder, and it leaves the root for that folder', function () {
+    $folder = DocumentFolder::create(['business_id' => $this->business->id, 'name' => 'Licences']);
+    $file = libraryFile($this->business->id, $this->owner->id);
+
+    asFileOwner()->patch(route('files.update', $file), ['folder_id' => $folder->id])->assertSessionHasNoErrors();
+    expect($file->fresh()->folder_id)->toBe($folder->id);
+
+    // Gone from the root...
+    asFileOwner()->get(route('files.index'))
+        ->assertInertia(fn ($page) => $page->where('files.data', fn ($files) => collect($files)->isEmpty()));
+
+    // ...and present in the folder.
+    asFileOwner()->get(route('files.index', ['folder' => $folder->id]))
+        ->assertInertia(fn ($page) => $page
+            ->where('files.data', fn ($files) => collect($files)->pluck('id')->contains($file->id)));
+});
+
+it('renames a file without disturbing fields the request did not send', function () {
+    $file = libraryFile($this->business->id, $this->owner->id);
+    $file->update(['title' => 'Trade licence 2026', 'reference' => 'TL-99']);
+
+    // A move sends only folder_id; the title and reference must survive.
+    $folder = DocumentFolder::create(['business_id' => $this->business->id, 'name' => 'Licences']);
+    asFileOwner()->patch(route('files.update', $file), ['folder_id' => $folder->id])->assertSessionHasNoErrors();
+
+    expect($file->fresh()->title)->toBe('Trade licence 2026')
+        ->and($file->fresh()->reference)->toBe('TL-99')
+        ->and($file->fresh()->folder_id)->toBe($folder->id);
+});
+
+it('deletes an empty folder but refuses one that still holds a file', function () {
+    $folder = DocumentFolder::create(['business_id' => $this->business->id, 'name' => 'Licences']);
+    $file = libraryFile($this->business->id, $this->owner->id);
+    $file->update(['folder_id' => $folder->id]);
+
+    asFileOwner()->delete(route('files.folders.destroy', $folder))->assertSessionHas('error');
+    expect(DocumentFolder::find($folder->id))->not->toBeNull();
+
+    // Empty it, then it deletes.
+    $file->update(['folder_id' => null]);
+    asFileOwner()->delete(route('files.folders.destroy', $folder))->assertSessionHas('success');
+    expect(DocumentFolder::find($folder->id))->toBeNull();
+});
+
+it('will not move a folder inside its own subtree', function () {
+    $parent = DocumentFolder::create(['business_id' => $this->business->id, 'name' => 'Parent']);
+    $child = DocumentFolder::create(['business_id' => $this->business->id, 'name' => 'Child', 'parent_id' => $parent->id]);
+
+    asFileOwner()->patch(route('files.folders.update', $parent), ['parent_id' => $child->id])
+        ->assertSessionHasErrors('parent_id');
+    expect($parent->fresh()->parent_id)->toBeNull();
+});
+
+it('keeps folders out of the reach of files.view only', function () {
+    $folder = DocumentFolder::create(['business_id' => $this->business->id, 'name' => 'Licences']);
+
+    test()->actingAs($this->staff)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('files.folders.store'), ['name' => 'Nope'])->assertForbidden();
+    test()->actingAs($this->staff)->withSession(['current_business_id' => $this->business->id])
+        ->delete(route('files.folders.destroy', $folder))->assertForbidden();
+    test()->actingAs($this->staff)->withSession(['current_business_id' => $this->business->id])
+        ->patch(route('files.update', libraryFile($this->business->id, $this->owner->id)), ['title' => 'x'])->assertForbidden();
 });

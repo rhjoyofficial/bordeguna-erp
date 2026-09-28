@@ -2,8 +2,8 @@
 
 namespace App\Modules\Foundation\Models;
 
-use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Models\User;
+use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -39,6 +39,9 @@ class Attachment extends Model
         'document_date',
         'reference',
         'document_category_id',
+        // Which archive folder this file sits in (library files only; null = the
+        // root). Organisation only - never widens who may see the file.
+        'folder_id',
         'version',
         'superseded_by_id',
     ];
@@ -95,6 +98,11 @@ class Attachment extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(DocumentCategory::class, 'document_category_id');
+    }
+
+    public function folder(): BelongsTo
+    {
+        return $this->belongsTo(DocumentFolder::class, 'folder_id');
     }
 
     public function attachable(): MorphTo

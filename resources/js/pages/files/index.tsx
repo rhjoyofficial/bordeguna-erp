@@ -4,13 +4,32 @@ import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import {
+    ChevronRight,
+    Download,
+    File as FileIcon,
+    FileText,
+    Folder as FolderIcon,
+    FolderInput,
+    FolderPlus,
+    Home,
+    Image as ImageIcon,
+    LayoutGrid,
+    List as ListIcon,
+    Music,
+    Pencil,
+    Trash2,
+    Upload,
+    Video,
+} from 'lucide-react';
+import { DragEvent, FormEventHandler, useState } from 'react';
 
 interface StoredFile {
     id: number;
@@ -21,6 +40,8 @@ interface StoredFile {
     document_date: string | null;
     category: string | null;
     category_id: number | null;
+    folder_id: number | null;
+    can_manage: boolean;
     version: number;
     superseded: boolean;
     previewable: 'image' | 'pdf' | 'video' | 'audio' | null;
@@ -36,6 +57,19 @@ interface StoredFile {
     can_delete: boolean;
 }
 
+interface Folder {
+    id: number;
+    name: string;
+    file_count: number;
+    subfolder_count: number;
+}
+
+interface FolderRef {
+    id: number;
+    name: string;
+    parent_id: number | null;
+}
+
 interface Category {
     value: string;
     label: string;
@@ -44,15 +78,30 @@ interface Category {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Documents', href: '/files' }];
 
+const VIEW_KEY = 'files.view';
+
+function readView(): 'grid' | 'list' {
+    try {
+        return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid';
+    } catch {
+        return 'grid';
+    }
+}
+
+// The icon that stands in for a file, by what it is. A tile people can scan.
+function FileGlyph({ file }: { file: StoredFile }) {
+    const kind = file.previewable;
+    const cls = 'size-8';
+    if (kind === 'image') return <ImageIcon className={cls} />;
+    if (kind === 'video') return <Video className={cls} />;
+    if (kind === 'audio') return <Music className={cls} />;
+    if (kind === 'pdf') return <FileText className={cls} />;
+    return <FileIcon className={cls} />;
+}
+
 /**
- * The preview panel.
- *
- * ⚠⚠ Every kind is served from the SAME authenticated attachments route the
- * download uses. There is no second endpoint and no public URL: a preview that
- * needed one would be a way to read a payslip without logging in.
- *
- * ⚠ `controls` on video and audio rather than autoplay. An archive opening a
- * document should not start making noise in an office.
+ * The preview panel. Every kind is served from the SAME authenticated
+ * attachments route the download uses - no second endpoint, no public URL.
  */
 function Preview({ file, onClose }: { file: StoredFile; onClose: () => void }) {
     return (
@@ -67,9 +116,6 @@ function Preview({ file, onClose }: { file: StoredFile; onClose: () => void }) {
                 </div>
                 <div className="flex gap-2">
                     <Button variant="outline" size="sm" asChild>
-                        {/* ⚠ ?download=1 flips the disposition server-side. Without
-                            it the browser renders in place, which is what the
-                            preview wants and not what a download button means. */}
                         <a href={`${file.url}?download=1`}>Download</a>
                     </Button>
                     <Button variant="ghost" size="sm" onClick={onClose}>
@@ -81,19 +127,185 @@ function Preview({ file, onClose }: { file: StoredFile; onClose: () => void }) {
             {file.description && <p className="text-muted-foreground max-w-2xl text-sm">{file.description}</p>}
 
             {file.previewable === 'image' && <img src={file.url} alt={file.name} className="max-h-[70vh] w-auto rounded-md border" />}
-
             {file.previewable === 'pdf' && <iframe src={file.url} title={file.name} className="h-[70vh] w-full rounded-md border" />}
-
             {file.previewable === 'video' && <video src={file.url} controls className="max-h-[70vh] w-full rounded-md border" />}
-
             {file.previewable === 'audio' && <audio src={file.url} controls className="w-full" />}
-
             {file.previewable === null && (
                 <p className="text-muted-foreground text-sm">
                     This kind of file cannot be shown in the page. Download it to open it in whatever program reads it.
                 </p>
             )}
         </div>
+    );
+}
+
+// An indented option per folder, so the picker reads as a tree.
+function folderOptions(folders: FolderRef[], parent: number | null, depth: number): { id: number; label: string }[] {
+    return folders
+        .filter((f) => f.parent_id === parent)
+        .flatMap((f) => [{ id: f.id, label: `${'  '.repeat(depth)}${f.name}` }, ...folderOptions(folders, f.id, depth + 1)]);
+}
+
+/** Rename / re-file / move a library file. Only fields it shows are sent. */
+function EditFileDialog({
+    file,
+    folders,
+    categories,
+    onClose,
+}: {
+    file: StoredFile;
+    folders: FolderRef[];
+    categories: Category[];
+    onClose: () => void;
+}) {
+    const form = useForm({
+        title: file.name,
+        reference: file.reference ?? '',
+        description: file.description ?? '',
+        document_date: file.document_date ?? '',
+        expires_on: file.expires_on ?? '',
+        document_category_id: file.category_id ? String(file.category_id) : '',
+        folder_id: file.folder_id ? String(file.folder_id) : '',
+    });
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        form.transform((data) => ({
+            ...data,
+            document_category_id: data.document_category_id === '' ? null : data.document_category_id,
+            folder_id: data.folder_id === '' ? null : data.folder_id,
+        }));
+        form.patch(route('files.update', file.id), { preserveScroll: true, onSuccess: onClose });
+    };
+
+    const options = folderOptions(folders, null, 0);
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Edit document</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={submit} className="grid gap-3">
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="edit-title">Title</Label>
+                        <Input id="edit-title" value={form.data.title} onChange={(e) => form.setData('title', e.target.value)} />
+                        <InputError message={form.errors.title} />
+                    </div>
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="edit-folder">Folder</Label>
+                        <SearchSelect fit id="edit-folder" value={form.data.folder_id} onChange={(e) => form.setData('folder_id', e.target.value)}>
+                            <option value="">Home (no folder)</option>
+                            {options.map((o) => (
+                                <option key={o.id} value={String(o.id)}>
+                                    {o.label}
+                                </option>
+                            ))}
+                        </SearchSelect>
+                    </div>
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="edit-kind">Kind</Label>
+                        <SearchSelect
+                            fit
+                            id="edit-kind"
+                            value={form.data.document_category_id}
+                            onChange={(e) => form.setData('document_category_id', e.target.value)}
+                        >
+                            <option value="">Not filed</option>
+                            {categories.map((c) => (
+                                <option key={c.value} value={c.value}>
+                                    {c.label}
+                                </option>
+                            ))}
+                        </SearchSelect>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="edit-ref">Reference</Label>
+                            <Input id="edit-ref" value={form.data.reference} onChange={(e) => form.setData('reference', e.target.value)} />
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="edit-date">Date on document</Label>
+                            <Input
+                                id="edit-date"
+                                type="date"
+                                value={form.data.document_date}
+                                onChange={(e) => form.setData('document_date', e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="edit-expires">Good until</Label>
+                        <Input
+                            id="edit-expires"
+                            type="date"
+                            value={form.data.expires_on}
+                            onChange={(e) => form.setData('expires_on', e.target.value)}
+                        />
+                    </div>
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="edit-desc">What it is</Label>
+                        <Input id="edit-desc" value={form.data.description} onChange={(e) => form.setData('description', e.target.value)} />
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={onClose}>
+                            Cancel
+                        </Button>
+                        <Button type="submit" disabled={form.processing}>
+                            {form.processing ? 'Saving…' : 'Save'}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** Rename an existing folder, or create one under the current folder. */
+function FolderDialog({ folder, parentId, onClose }: { folder: Folder | null; parentId: number | null; onClose: () => void }) {
+    // Rename sends the name alone (so it never moves the folder); create sends the
+    // name plus the parent it is being made under.
+    const form = useForm({ name: folder?.name ?? '' });
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        if (folder) {
+            form.patch(route('files.folders.update', folder.id), { preserveScroll: true, onSuccess: onClose });
+        } else {
+            form.transform((data) => ({ ...data, parent_id: parentId }));
+            form.post(route('files.folders.store'), { preserveScroll: true, onSuccess: onClose });
+        }
+    };
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{folder ? 'Rename folder' : 'New folder'}</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={submit} className="grid gap-3">
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="folder-name">Folder name</Label>
+                        <Input
+                            id="folder-name"
+                            autoFocus
+                            value={form.data.name}
+                            onChange={(e) => form.setData('name', e.target.value)}
+                            placeholder="Licences"
+                        />
+                        <InputError message={form.errors.name} />
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={onClose}>
+                            Cancel
+                        </Button>
+                        <Button type="submit" disabled={form.processing || form.data.name.trim() === ''}>
+                            {folder ? 'Rename' : 'Create'}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -105,6 +317,11 @@ export default function FilesIndex({
     expiring_count,
     expired_count,
     can,
+    browsing,
+    current_folder,
+    breadcrumb,
+    folders,
+    all_folders,
 }: {
     files: Paginated<StoredFile>;
     filters: { search: string; type: string; from: string; to: string; category: string; superseded: string };
@@ -113,10 +330,34 @@ export default function FilesIndex({
     expiring_count: number;
     expired_count: number;
     can: { manage: boolean };
+    browsing: boolean;
+    current_folder: { id: number; name: string } | null;
+    breadcrumb: { id: number; name: string }[];
+    folders: Folder[];
+    all_folders: FolderRef[];
 }) {
     const { filters, setFilter, reset, hasActiveFilters } = useFilters('/files', initialFilters);
     const [previewing, setPreviewing] = useState<StoredFile | null>(null);
+    const [editing, setEditing] = useState<StoredFile | null>(null);
+    const [renamingFolder, setRenamingFolder] = useState<Folder | null>(null);
+    const [creatingFolder, setCreatingFolder] = useState(false);
     const [addingCategory, setAddingCategory] = useState(false);
+    const [showUpload, setShowUpload] = useState(false);
+    const [view, setView] = useState<'grid' | 'list'>(readView);
+    const [dragging, setDragging] = useState(false);
+
+    const currentFolderId = current_folder?.id ?? null;
+
+    const setViewMode = (mode: 'grid' | 'list') => {
+        setView(mode);
+        try {
+            localStorage.setItem(VIEW_KEY, mode);
+        } catch {
+            /* a remembered view is a convenience, not a requirement */
+        }
+    };
+
+    const openFolder = (id: number | null) => router.get('/files', id === null ? {} : { folder: id }, { preserveScroll: true, preserveState: false });
 
     const upload = useForm<{
         file: File | null;
@@ -126,6 +367,7 @@ export default function FilesIndex({
         document_date: string;
         document_category_id: string;
         expires_on: string;
+        folder_id: string;
     }>({
         file: null,
         title: '',
@@ -134,16 +376,18 @@ export default function FilesIndex({
         document_date: '',
         document_category_id: '',
         expires_on: '',
+        folder_id: currentFolderId === null ? '' : String(currentFolderId),
     });
 
     const category = useForm({ name: '', retention_months: '', description: '' });
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+        upload.transform((data) => ({ ...data, folder_id: currentFolderId === null ? null : String(currentFolderId) }));
         upload.post(route('files.store'), {
             forceFormData: true,
             preserveScroll: true,
-            onSuccess: () => upload.reset(),
+            onSuccess: () => upload.reset('file', 'title', 'description', 'reference', 'document_date', 'expires_on'),
         });
     };
 
@@ -158,13 +402,49 @@ export default function FilesIndex({
         });
     };
 
+    // Drag files anywhere onto the archive to file them into the folder open now.
+    // Each dropped file is one upload; the server lands it in the current folder.
+    const onDrop = (e: DragEvent) => {
+        e.preventDefault();
+        setDragging(false);
+        if (!can.manage) return;
+        const dropped = Array.from(e.dataTransfer.files);
+        dropped.forEach((file) => {
+            router.post(
+                route('files.store'),
+                { file, folder_id: currentFolderId === null ? null : String(currentFolderId) },
+                { forceFormData: true, preserveScroll: true },
+            );
+        });
+    };
+
+    const deleteFile = (file: StoredFile) => {
+        if (confirm(`Delete "${file.name}"? This cannot be undone.`)) {
+            router.delete(route('files.destroy', file.id), { preserveScroll: true });
+        }
+    };
+
+    const deleteFolder = (folder: Folder) => {
+        router.delete(route('files.folders.destroy', folder.id), { preserveScroll: true });
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Documents" />
-            <div className="flex flex-col gap-6 p-4">
+            <div
+                className="flex flex-col gap-4 p-4"
+                onDragOver={(e) => {
+                    if (can.manage) {
+                        e.preventDefault();
+                        setDragging(true);
+                    }
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={onDrop}
+            >
                 <ReportHeading
                     title="Document archive"
-                    description="Everything the business has stored, including the documents attached to records elsewhere. You only see files belonging to records you could already open, so this list is not the same length for everybody."
+                    description="Every document the business keeps, organised into folders. You only see files belonging to records you could already open, so this is not the same for everybody."
                 />
 
                 {(expired_count > 0 || expiring_count > 0) && (
@@ -183,7 +463,122 @@ export default function FilesIndex({
                     </div>
                 )}
 
-                {can.manage && (
+                {/* Toolbar: breadcrumb, and the actions Drive keeps at the top. */}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <nav className="flex flex-wrap items-center gap-1 text-sm">
+                        <button type="button" onClick={() => openFolder(null)} className="hover:bg-muted flex items-center gap-1 rounded px-2 py-1">
+                            <Home className="size-4" /> Home
+                        </button>
+                        {breadcrumb.map((crumb) => (
+                            <span key={crumb.id} className="flex items-center gap-1">
+                                <ChevronRight className="text-muted-foreground size-3" />
+                                <button type="button" onClick={() => openFolder(crumb.id)} className="hover:bg-muted rounded px-2 py-1">
+                                    {crumb.name}
+                                </button>
+                            </span>
+                        ))}
+                    </nav>
+                    <div className="flex flex-wrap items-center gap-1">
+                        <div className="mr-1 flex items-center rounded-md border">
+                            <Button
+                                variant={view === 'grid' ? 'secondary' : 'ghost'}
+                                size="sm"
+                                onClick={() => setViewMode('grid')}
+                                aria-label="Grid view"
+                            >
+                                <LayoutGrid className="size-4" />
+                            </Button>
+                            <Button
+                                variant={view === 'list' ? 'secondary' : 'ghost'}
+                                size="sm"
+                                onClick={() => setViewMode('list')}
+                                aria-label="List view"
+                            >
+                                <ListIcon className="size-4" />
+                            </Button>
+                        </div>
+                        {can.manage && (
+                            <>
+                                <Button variant="outline" size="sm" onClick={() => setCreatingFolder(true)}>
+                                    <FolderPlus className="size-4" /> New folder
+                                </Button>
+                                <Button size="sm" onClick={() => setShowUpload((v) => !v)}>
+                                    <Upload className="size-4" /> Upload
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {dragging && can.manage && (
+                    <div className="border-primary bg-primary/5 text-primary rounded-lg border-2 border-dashed p-6 text-center text-sm">
+                        Drop files here to add them to {current_folder ? `"${current_folder.name}"` : 'the archive'}.
+                    </div>
+                )}
+
+                {/* Search / filters. When any is set, the view goes flat across every folder. */}
+                <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-5">
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="file-search">Search</Label>
+                        <Input
+                            id="file-search"
+                            placeholder="Title, reference or file name"
+                            value={filters.search}
+                            onChange={(e) => setFilter('search', e.target.value)}
+                        />
+                    </div>
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="file-category">Kind</Label>
+                        <SearchSelect fit id="file-category" value={filters.category} onChange={(e) => setFilter('category', e.target.value)}>
+                            <option value="">Any kind</option>
+                            {categories.map((c) => (
+                                <option key={c.value} value={c.value}>
+                                    {c.label}
+                                </option>
+                            ))}
+                        </SearchSelect>
+                    </div>
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="file-type">Belongs to</Label>
+                        <SearchSelect fit id="file-type" value={filters.type} onChange={(e) => setFilter('type', e.target.value)}>
+                            <option value="">Anything</option>
+                            {types.map((type) => (
+                                <option key={type.value} value={type.value}>
+                                    {type.label}
+                                </option>
+                            ))}
+                        </SearchSelect>
+                    </div>
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="file-from">From</Label>
+                        <Input id="file-from" type="date" value={filters.from} onChange={(e) => setFilter('from', e.target.value)} />
+                    </div>
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="file-to">To</Label>
+                        <Input id="file-to" type="date" value={filters.to} onChange={(e) => setFilter('to', e.target.value)} />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 md:col-span-5">
+                        <span className="text-muted-foreground text-sm">
+                            {files.total} document{files.total === 1 ? '' : 's'}
+                            {browsing ? '' : ' match'}
+                        </span>
+                        <label className="flex items-center gap-2 text-sm">
+                            <input
+                                type="checkbox"
+                                checked={filters.superseded === '1'}
+                                onChange={(e) => setFilter('superseded', e.target.checked ? '1' : '')}
+                            />
+                            Include replaced versions
+                        </label>
+                        {hasActiveFilters && (
+                            <Button variant="ghost" size="sm" onClick={reset}>
+                                Clear filters
+                            </Button>
+                        )}
+                    </div>
+                </div>
+
+                {can.manage && showUpload && (
                     <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 md:grid-cols-3">
                         <div className="grid gap-2">
                             <Label htmlFor="file" required>
@@ -258,20 +653,19 @@ export default function FilesIndex({
                         </div>
                         <div className="flex flex-wrap items-center gap-2 md:col-span-3">
                             <Button type="submit" disabled={upload.processing || !upload.data.file}>
-                                {upload.processing ? 'Filing...' : 'File it'}
+                                {upload.processing ? 'Filing…' : current_folder ? `File into "${current_folder.name}"` : 'File it'}
                             </Button>
                             <Button type="button" variant="ghost" size="sm" onClick={() => setAddingCategory(!addingCategory)}>
                                 {addingCategory ? 'Cancel' : 'Add a kind'}
                             </Button>
                             <p className="text-muted-foreground text-xs">
-                                Documents, images, spreadsheets, archives, video and audio, up to 256 MB. A date under Good until makes the document
-                                show as out of date once it passes, which is what a trade licence or a certificate needs.
+                                Or just drag files onto the page. Documents, images, spreadsheets, archives, video and audio, up to 256 MB.
                             </p>
                         </div>
                     </form>
                 )}
 
-                {can.manage && addingCategory && (
+                {can.manage && showUpload && addingCategory && (
                     <form onSubmit={submitCategory} className="flex flex-wrap items-end gap-3 rounded-lg border border-dashed p-4">
                         <div className="grid gap-2">
                             <Label htmlFor="cat-name">Kind of document</Label>
@@ -298,157 +692,198 @@ export default function FilesIndex({
                         <Button type="submit" variant="secondary" disabled={category.processing}>
                             Add
                         </Button>
-                        <p className="text-muted-foreground w-full text-xs">
-                            Leaving the months empty means keep it indefinitely. Nothing is ever deleted automatically; this only records how long a
-                            document of this kind is meant to be kept.
-                        </p>
                     </form>
                 )}
 
                 {previewing && <Preview file={previewing} onClose={() => setPreviewing(null)} />}
 
-                <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-5">
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="file-search" required>
-                            Search
-                        </Label>
-                        <Input
-                            id="file-search"
-                            placeholder="Title, reference or file name"
-                            value={filters.search}
-                            onChange={(e) => setFilter('search', e.target.value)}
-                        />
-                    </div>
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="file-category" required>
-                            Kind
-                        </Label>
-                        <SearchSelect fit id="file-category" value={filters.category} onChange={(e) => setFilter('category', e.target.value)}>
-                            <option value="">Any kind</option>
-                            {categories.map((c) => (
-                                <option key={c.value} value={c.value}>
-                                    {c.label}
-                                </option>
-                            ))}
-                        </SearchSelect>
-                    </div>
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="file-type" required>
-                            Belongs to
-                        </Label>
-                        <SearchSelect fit id="file-type" value={filters.type} onChange={(e) => setFilter('type', e.target.value)}>
-                            <option value="">Anything</option>
-                            {types.map((type) => (
-                                <option key={type.value} value={type.value}>
-                                    {type.label}
-                                </option>
-                            ))}
-                        </SearchSelect>
-                    </div>
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="file-from" required>
-                            From
-                        </Label>
-                        <Input id="file-from" type="date" value={filters.from} onChange={(e) => setFilter('from', e.target.value)} />
-                    </div>
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="file-to" required>
-                            To
-                        </Label>
-                        <Input id="file-to" type="date" value={filters.to} onChange={(e) => setFilter('to', e.target.value)} />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 md:col-span-5">
-                        <span className="text-muted-foreground text-sm">
-                            {files.total} document{files.total === 1 ? '' : 's'}
-                        </span>
-                        <label className="flex items-center gap-2 text-sm">
-                            <input
-                                type="checkbox"
-                                checked={filters.superseded === '1'}
-                                onChange={(e) => setFilter('superseded', e.target.checked ? '1' : '')}
-                            />
-                            Include replaced versions
-                        </label>
-                        {hasActiveFilters && (
-                            <Button variant="ghost" size="sm" onClick={reset}>
-                                Clear filters
-                            </Button>
+                {/* Folders at this level (browsing only). */}
+                {browsing && folders.length > 0 && (
+                    <div className={view === 'grid' ? 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4' : 'flex flex-col gap-1'}>
+                        {folders.map((folder) =>
+                            view === 'grid' ? (
+                                <div key={folder.id} className="hover:bg-muted/50 group flex items-center gap-3 rounded-lg border p-3">
+                                    <button
+                                        type="button"
+                                        className="flex flex-1 items-center gap-3 text-left"
+                                        onDoubleClick={() => openFolder(folder.id)}
+                                        onClick={() => openFolder(folder.id)}
+                                    >
+                                        <FolderIcon className="size-8 shrink-0 text-sky-500" />
+                                        <div className="min-w-0">
+                                            <p className="truncate font-medium">{folder.name}</p>
+                                            <p className="text-muted-foreground text-xs">
+                                                {folder.file_count} file{folder.file_count === 1 ? '' : 's'}
+                                                {folder.subfolder_count > 0 &&
+                                                    `, ${folder.subfolder_count} folder${folder.subfolder_count === 1 ? '' : 's'}`}
+                                            </p>
+                                        </div>
+                                    </button>
+                                    {can.manage && (
+                                        <div className="flex shrink-0 opacity-0 group-hover:opacity-100">
+                                            <Button variant="ghost" size="sm" onClick={() => setRenamingFolder(folder)} aria-label="Rename folder">
+                                                <Pencil className="size-4" />
+                                            </Button>
+                                            <Button variant="ghost" size="sm" onClick={() => deleteFolder(folder)} aria-label="Delete folder">
+                                                <Trash2 className="size-4" />
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div key={folder.id} className="hover:bg-muted/50 group flex items-center gap-3 rounded-md border px-3 py-2">
+                                    <button type="button" className="flex flex-1 items-center gap-2 text-left" onClick={() => openFolder(folder.id)}>
+                                        <FolderIcon className="size-5 text-sky-500" />
+                                        <span className="font-medium">{folder.name}</span>
+                                        <span className="text-muted-foreground text-xs">
+                                            {folder.file_count} file{folder.file_count === 1 ? '' : 's'}
+                                        </span>
+                                    </button>
+                                    {can.manage && (
+                                        <div className="flex shrink-0 opacity-0 group-hover:opacity-100">
+                                            <Button variant="ghost" size="sm" onClick={() => setRenamingFolder(folder)} aria-label="Rename folder">
+                                                <Pencil className="size-4" />
+                                            </Button>
+                                            <Button variant="ghost" size="sm" onClick={() => deleteFolder(folder)} aria-label="Delete folder">
+                                                <Trash2 className="size-4" />
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            ),
                         )}
                     </div>
-                </div>
+                )}
 
-                <div className="overflow-x-auto rounded-lg border">
-                    <table className="w-full text-sm">
-                        <thead className="bg-muted/50 text-left">
-                            <tr>
-                                <th className="p-3">Document</th>
-                                <th className="p-3">Kind</th>
-                                <th className="p-3">Belongs to</th>
-                                <th className="p-3">Date</th>
-                                <th className="p-3">Size</th>
-                                <th className="p-3">Added by</th>
-                                <th className="p-3"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {files.data.map((file) => (
-                                <tr key={file.id} className="border-t align-top">
-                                    <td className="p-3">
-                                        <button
-                                            type="button"
-                                            className="text-left font-medium underline-offset-2 hover:underline"
-                                            onClick={() => setPreviewing(file)}
-                                        >
-                                            {file.name}
-                                        </button>
-                                        {file.reference && <div className="text-muted-foreground text-xs">{file.reference}</div>}
-                                        <div className="mt-1 flex flex-wrap gap-1">
-                                            {file.expires_on && (
-                                                <Badge variant={file.expired ? 'destructive' : file.expiring ? 'secondary' : 'outline'}>
-                                                    {file.expired ? 'Out of date' : 'Good until'} {file.expires_on}
-                                                </Badge>
-                                            )}
-                                            {file.superseded && <Badge variant="outline">Replaced</Badge>}
-                                            {file.version > 1 && <Badge variant="outline">v{file.version}</Badge>}
-                                        </div>
-                                    </td>
-                                    <td className="p-3 whitespace-nowrap">{file.category ?? <span className="text-muted-foreground">-</span>}</td>
-                                    <td className="p-3 whitespace-nowrap">{file.kind}</td>
-                                    <td className="p-3 whitespace-nowrap">{file.document_date ?? file.uploaded_at}</td>
-                                    <td className="p-3 whitespace-nowrap">{file.size}</td>
-                                    <td className="p-3 whitespace-nowrap">{file.uploaded_by}</td>
-                                    <td className="p-3 text-right whitespace-nowrap">
-                                        <Button variant="ghost" size="sm" onClick={() => setPreviewing(file)}>
-                                            Preview
-                                        </Button>
-                                        <Button variant="ghost" size="sm" asChild>
-                                            <a href={`${file.url}?download=1`}>Download</a>
-                                        </Button>
-                                        {file.can_delete && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => router.delete(route('files.destroy', file.id), { preserveScroll: true })}
-                                            >
-                                                Delete
-                                            </Button>
+                {/* Files. */}
+                {view === 'grid' ? (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                        {files.data.map((file) => (
+                            <div key={file.id} className="hover:bg-muted/50 group flex flex-col rounded-lg border p-3">
+                                <button
+                                    type="button"
+                                    className="flex flex-1 flex-col items-start gap-2 text-left"
+                                    onClick={() => setPreviewing(file)}
+                                >
+                                    <div className="text-muted-foreground">
+                                        <FileGlyph file={file} />
+                                    </div>
+                                    <p className="line-clamp-2 text-sm font-medium">{file.name}</p>
+                                    <p className="text-muted-foreground text-xs">
+                                        {file.kind} · {file.size}
+                                    </p>
+                                    <div className="flex flex-wrap gap-1">
+                                        {file.expires_on && (
+                                            <Badge variant={file.expired ? 'destructive' : file.expiring ? 'secondary' : 'outline'}>
+                                                {file.expired ? 'Out of date' : 'Good until'} {file.expires_on}
+                                            </Badge>
                                         )}
-                                    </td>
-                                </tr>
-                            ))}
-                            {files.data.length === 0 && (
+                                        {file.superseded && <Badge variant="outline">Replaced</Badge>}
+                                        {file.version > 1 && <Badge variant="outline">v{file.version}</Badge>}
+                                    </div>
+                                </button>
+                                <div className="mt-2 flex flex-wrap gap-1 opacity-0 group-hover:opacity-100">
+                                    <Button variant="ghost" size="sm" asChild aria-label="Download">
+                                        <a href={`${file.url}?download=1`}>
+                                            <Download className="size-4" />
+                                        </a>
+                                    </Button>
+                                    {file.can_manage && (
+                                        <>
+                                            <Button variant="ghost" size="sm" onClick={() => setEditing(file)} aria-label="Edit or move">
+                                                <FolderInput className="size-4" />
+                                            </Button>
+                                            <Button variant="ghost" size="sm" onClick={() => deleteFile(file)} aria-label="Delete">
+                                                <Trash2 className="size-4" />
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto rounded-lg border">
+                        <table className="w-full text-sm">
+                            <thead className="bg-muted/50 text-left">
                                 <tr>
-                                    <td colSpan={7} className="text-muted-foreground p-6 text-center">
-                                        {hasActiveFilters ? 'No documents match these filters.' : 'Nothing filed yet.'}
-                                    </td>
+                                    <th className="p-3">Document</th>
+                                    <th className="p-3">Kind</th>
+                                    <th className="p-3">Belongs to</th>
+                                    <th className="p-3">Date</th>
+                                    <th className="p-3">Size</th>
+                                    <th className="p-3">Added by</th>
+                                    <th className="p-3"></th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {files.data.map((file) => (
+                                    <tr key={file.id} className="border-t align-top">
+                                        <td className="p-3">
+                                            <button
+                                                type="button"
+                                                className="text-left font-medium underline-offset-2 hover:underline"
+                                                onClick={() => setPreviewing(file)}
+                                            >
+                                                {file.name}
+                                            </button>
+                                            {file.reference && <div className="text-muted-foreground text-xs">{file.reference}</div>}
+                                            <div className="mt-1 flex flex-wrap gap-1">
+                                                {file.expires_on && (
+                                                    <Badge variant={file.expired ? 'destructive' : file.expiring ? 'secondary' : 'outline'}>
+                                                        {file.expired ? 'Out of date' : 'Good until'} {file.expires_on}
+                                                    </Badge>
+                                                )}
+                                                {file.superseded && <Badge variant="outline">Replaced</Badge>}
+                                                {file.version > 1 && <Badge variant="outline">v{file.version}</Badge>}
+                                            </div>
+                                        </td>
+                                        <td className="p-3 whitespace-nowrap">{file.category ?? <span className="text-muted-foreground">-</span>}</td>
+                                        <td className="p-3 whitespace-nowrap">{file.kind}</td>
+                                        <td className="p-3 whitespace-nowrap">{file.document_date ?? file.uploaded_at}</td>
+                                        <td className="p-3 whitespace-nowrap">{file.size}</td>
+                                        <td className="p-3 whitespace-nowrap">{file.uploaded_by}</td>
+                                        <td className="p-3 text-right whitespace-nowrap">
+                                            <Button variant="ghost" size="sm" onClick={() => setPreviewing(file)}>
+                                                Preview
+                                            </Button>
+                                            <Button variant="ghost" size="sm" asChild>
+                                                <a href={`${file.url}?download=1`}>Download</a>
+                                            </Button>
+                                            {file.can_manage && (
+                                                <Button variant="ghost" size="sm" onClick={() => setEditing(file)}>
+                                                    Edit
+                                                </Button>
+                                            )}
+                                            {file.can_delete && (
+                                                <Button variant="ghost" size="sm" onClick={() => deleteFile(file)}>
+                                                    Delete
+                                                </Button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {folders.length === 0 && files.data.length === 0 && (
+                    <p className="text-muted-foreground py-8 text-center text-sm">
+                        {hasActiveFilters
+                            ? 'No documents match these filters.'
+                            : browsing && current_folder
+                              ? 'This folder is empty.'
+                              : 'Nothing filed yet.'}
+                    </p>
+                )}
 
                 <Pagination meta={files} />
             </div>
+
+            {editing && <EditFileDialog file={editing} folders={all_folders} categories={categories} onClose={() => setEditing(null)} />}
+            {creatingFolder && <FolderDialog folder={null} parentId={currentFolderId} onClose={() => setCreatingFolder(false)} />}
+            {renamingFolder && <FolderDialog folder={renamingFolder} parentId={null} onClose={() => setRenamingFolder(null)} />}
         </AppLayout>
     );
 }

@@ -8,6 +8,7 @@ use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\DocumentCategory;
+use App\Modules\Foundation\Models\DocumentFolder;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\FileVisibility;
 use Illuminate\Database\Eloquent\Builder;
@@ -38,9 +39,17 @@ class FileManagerController extends Controller
         $request->validate([
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
+            'folder' => ['nullable', 'integer'],
         ]);
 
         $user = $request->user();
+
+        // The folder currently open (null = the archive root). Business-scoped
+        // through the model's global scope, so a folder id from another business
+        // simply resolves to null (the root) rather than leaking anything.
+        $currentFolder = $request->filled('folder')
+            ? DocumentFolder::find((int) $request->query('folder'))
+            : null;
 
         $filters = [
             'search' => trim((string) $request->query('search', '')),
@@ -56,6 +65,15 @@ class FileManagerController extends Controller
             // breaks the shared type for all of them.
             'superseded' => $request->boolean('superseded') ? '1' : '',
         ];
+
+        // ⚠ Browsing vs searching. With no search or filter active, the archive
+        // behaves like a drive: it shows the folders and files AT THE CURRENT
+        // LEVEL. The moment any filter is set, folders step aside and the search
+        // runs FLAT across every folder - because somebody looking for "licence"
+        // wants it found wherever it was filed, not only in the folder they happen
+        // to be standing in.
+        $browsing = $filters['search'] === '' && $filters['type'] === '' && $filters['category'] === ''
+            && $filters['from'] === '' && $filters['to'] === '' && $filters['superseded'] === '';
 
         $allowedTypes = $visibility->typesVisibleTo($user);
         $mapped = $visibility->mappedTypes();
@@ -86,6 +104,11 @@ class FileManagerController extends Controller
                     $q->orWhereNotIn('attachable_type', $mapped);
                 }
             })
+            // Browsing shows only what sits in the folder being viewed (null = the
+            // root, where unfiled library files and every record's evidence live).
+            ->when($browsing, fn (Builder $q) => $currentFolder === null
+                ? $q->whereNull('folder_id')
+                : $q->where('folder_id', $currentFolder->id))
             ->when($filters['type'] !== '' && in_array($filters['type'], $allowedTypes, true),
                 fn (Builder $q) => $q->where('attachable_type', $filters['type']))
             ->when($filters['category'] !== '', fn (Builder $q) => $q->where('document_category_id', $filters['category']))
@@ -115,6 +138,10 @@ class FileManagerController extends Controller
                 'document_date' => $file->document_date?->toDateString(),
                 'category' => $file->category?->name,
                 'category_id' => $file->document_category_id,
+                'folder_id' => $file->folder_id,
+                // Only a library file can be renamed, re-filed or moved here;
+                // record evidence is managed where it is evidence.
+                'can_manage' => $visibility->mayDelete($user, $file->attachable_type, $file->collection),
                 'version' => $file->version,
                 'superseded' => $file->isSuperseded(),
                 // Which player the screen should draw. See previewKind: the
@@ -132,9 +159,34 @@ class FileManagerController extends Controller
                 'can_delete' => $visibility->mayDelete($user, $file->attachable_type, $file->collection),
             ]);
 
+        // The folders at this level, each with what it holds, shown only while
+        // browsing (a search runs flat across every folder, so folders step aside).
+        $subfolders = $browsing
+            ? DocumentFolder::query()
+                ->where('parent_id', $currentFolder?->id)
+                ->withCount(['children', 'files'])
+                ->orderBy('name')
+                ->get()
+                ->map(fn (DocumentFolder $folder) => [
+                    'id' => $folder->id,
+                    'name' => $folder->name,
+                    'file_count' => $folder->files_count,
+                    'subfolder_count' => $folder->children_count,
+                ])
+            : collect();
+
         return Inertia::render('files/index', [
             'files' => $files,
             'filters' => $filters,
+            'browsing' => $browsing,
+            'current_folder' => $currentFolder ? ['id' => $currentFolder->id, 'name' => $currentFolder->name] : null,
+            'breadcrumb' => $currentFolder
+                ? $currentFolder->trail()->map(fn (DocumentFolder $folder) => ['id' => $folder->id, 'name' => $folder->name])->values()
+                : [],
+            'folders' => $subfolders,
+            // Every folder in the business, flat, for the "move to" picker to build
+            // its tree. Small (a person's filing), so one query is fine.
+            'all_folders' => DocumentFolder::query()->orderBy('name')->get(['id', 'name', 'parent_id']),
             // ⚠ Only the types this reader may actually see, so the filter can
             // never name a record kind they are not allowed to know exists.
             'types' => collect($allowedTypes)
@@ -247,6 +299,9 @@ class FileManagerController extends Controller
             'document_date' => ['nullable', 'date'],
             'reference' => ['nullable', 'string', 'max:120'],
             'document_category_id' => ['nullable', Rule::exists('document_categories', 'id')],
+            // Land the upload in the folder currently open, if any.
+            'folder_id' => ['nullable', Rule::exists('document_folders', 'id')
+                ->where('business_id', app(BusinessContext::class)->id())],
         ]);
 
         $business = Business::findOrFail(app(BusinessContext::class)->id());
@@ -265,10 +320,56 @@ class FileManagerController extends Controller
         // every module that attaches a file to a record, so it has no business
         // knowing about archive fields; this is the right place for them.
         $attachment->update($request->only([
-            'title', 'description', 'document_date', 'reference', 'document_category_id',
+            'title', 'description', 'document_date', 'reference', 'document_category_id', 'folder_id',
         ]));
 
         return back()->with('success', 'Filed in the archive.');
+    }
+
+    /**
+     * Rename, re-file or move a library file: its title, description, reference,
+     * category, document date, expiry, and which folder it sits in.
+     *
+     * ⚠⚠ LIBRARY FILES ONLY - the same line drawn for deletion (FileVisibility::
+     * mayDelete). Evidence attached to a record is renamed and re-filed where it
+     * is evidence, never from this generic browser.
+     *
+     * ⚠ Only the fields the request actually sends are written, so a "move to
+     * folder" (which sends folder_id alone) cannot blank a title the caller never
+     * touched, and an edit form that clears a field still clears it.
+     */
+    public function update(Request $request, Attachment $attachment, FileVisibility $visibility): RedirectResponse
+    {
+        abort_unless(
+            $visibility->mayDelete($request->user(), $attachment->attachable_type, $attachment->collection),
+            403,
+            'That file belongs to a record and is managed where it is evidence.',
+        );
+
+        $data = $request->validate([
+            'title' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'document_date' => ['nullable', 'date'],
+            'reference' => ['nullable', 'string', 'max:120'],
+            'document_category_id' => ['nullable', Rule::exists('document_categories', 'id')],
+            'expires_on' => ['nullable', 'date'],
+            'folder_id' => ['nullable', Rule::exists('document_folders', 'id')
+                ->where('business_id', app(BusinessContext::class)->id())],
+        ]);
+
+        $changes = [];
+        foreach (['title', 'description', 'document_date', 'reference', 'document_category_id', 'folder_id'] as $field) {
+            if ($request->has($field)) {
+                $changes[$field] = $data[$field] ?? null;
+            }
+        }
+        if ($request->has('expires_on')) {
+            $changes['expires_at'] = $data['expires_on'] ?? null;
+        }
+
+        $attachment->update($changes);
+
+        return back()->with('success', 'Updated.');
     }
 
     /**
