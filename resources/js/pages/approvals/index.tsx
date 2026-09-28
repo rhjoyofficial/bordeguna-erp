@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 
 interface Detail {
     label: string;
@@ -47,15 +48,31 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Approvals', href: '/approvals' 
  * all sit on the card, so the decision can be taken right here.
  */
 function RequestCard({ card }: { card: ApprovalCard }) {
+    // ⚠ Once a decision is on its way, every button on THIS card is disabled and
+    // shows it is working (Joy, 28 Sep 2026: "everywhere the loding statce ...
+    // until request complete, resubmit not be possible"). The global guard in
+    // app.tsx already drops the duplicate network call; this is the visible half
+    // of the same promise, so the approver can see their tap landed and does not
+    // reach for the button again. It stays disabled until the page reloads with
+    // this row gone (or the "already decided" flash brings it back with the note
+    // recorded), so there is no window in which a second decision can be sent.
+    const [processing, setProcessing] = useState(false);
+
+    const options = {
+        preserveScroll: true,
+        onStart: () => setProcessing(true),
+        onFinish: () => setProcessing(false),
+    };
+
     const approve = () => {
         if (card.approve_url) {
-            router.post(card.approve_url, {}, { preserveScroll: true });
+            router.post(card.approve_url, {}, options);
         }
     };
 
     const reject = (review_note: string) => {
         if (card.reject_url) {
-            router.post(card.reject_url, { review_note }, { preserveScroll: true });
+            router.post(card.reject_url, { review_note }, options);
         }
     };
 
@@ -63,7 +80,7 @@ function RequestCard({ card }: { card: ApprovalCard }) {
     // validates the field by that name so a silent send-back is impossible.
     const sendBack = (note: string) => {
         if (card.send_back_url) {
-            router.post(card.send_back_url, { note }, { preserveScroll: true });
+            router.post(card.send_back_url, { note }, options);
         }
     };
 
@@ -88,7 +105,11 @@ function RequestCard({ card }: { card: ApprovalCard }) {
                     )}
                     {card.approve_url && (
                         <ConfirmDialog
-                            trigger={<Button size="sm">Approve</Button>}
+                            trigger={
+                                <Button size="sm" disabled={processing}>
+                                    {processing ? 'Working…' : 'Approve'}
+                                </Button>
+                            }
                             title={`Approve ${card.type.toLowerCase()}`}
                             description={card.summary}
                             confirmLabel="Approve"
@@ -98,7 +119,7 @@ function RequestCard({ card }: { card: ApprovalCard }) {
                     {card.send_back_url && (
                         <ConfirmDialog
                             trigger={
-                                <Button variant="outline" size="sm">
+                                <Button variant="outline" size="sm" disabled={processing}>
                                     Send back
                                 </Button>
                             }
@@ -115,7 +136,7 @@ function RequestCard({ card }: { card: ApprovalCard }) {
                     {card.reject_url && (
                         <ConfirmDialog
                             trigger={
-                                <Button variant="ghost" size="sm">
+                                <Button variant="ghost" size="sm" disabled={processing}>
                                     Reject
                                 </Button>
                             }
@@ -176,6 +197,21 @@ function RequestCard({ card }: { card: ApprovalCard }) {
 }
 
 export default function ApprovalsIndex({ requests, counts }: ApprovalsIndexProps) {
+    // A request settled by one approver should leave EVERY open inbox, not just
+    // the one that acted (Joy, 28 Sep 2026: "remove it from every user so no one
+    // else can do it"). There is no realtime channel in this ERP, so the inbox
+    // quietly re-reads itself every 20s: a row someone else decided drops out on
+    // its own, without anyone refreshing. `router.reload` is a GET that preserves
+    // scroll and local state by default, so an open confirm dialog and a
+    // half-typed reason survive a tick untouched; `only` keeps the poll cheap.
+    useEffect(() => {
+        const id = window.setInterval(() => {
+            router.reload({ only: ['requests', 'counts'] });
+        }, 20000);
+
+        return () => window.clearInterval(id);
+    }, []);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Approvals" />

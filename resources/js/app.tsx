@@ -31,9 +31,59 @@ const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
  */
 let pageBusinessId: number | null = null;
 
+/**
+ * The double-submit guard (Joy, 28 Sep 2026: "sometimes they press one button
+ * multiple time, then the request come multiple time ... until request complete,
+ * resubmit not be possible").
+ *
+ * ⚠⚠ THE CAUSE IS A HUMAN ONE, NOT A SLOW SERVER. An approver taps Approve, sees
+ * nothing move for a moment, taps again, and a leave, a payment or a stock
+ * movement is written twice. The backend guards its own races (see
+ * ApprovalRequest::assertStillPending), but a duplicate CREATE - two identical
+ * requests raised by one impatient double-tap - has no such guard, so it is
+ * stopped here, at the one hook every visit passes through.
+ *
+ * Only mutating methods are held: a second POST/PUT/PATCH/DELETE to the same URL
+ * is dropped while the first is still in flight. GETs (navigation, the approval
+ * inbox's own auto-refresh, downloads, reports) are never blocked - blocking a
+ * read would break the interface for no gain. The key clears on `finish`, which
+ * Inertia fires for a completed, failed OR cancelled visit, so a legitimate
+ * retry after the first settles is always allowed.
+ */
+const inFlightMutations = new Set<string>();
+
+const mutationKey = (visit: { method: string; url: URL | string }): string | null => {
+    const method = String(visit.method).toLowerCase();
+    if (method === 'get') {
+        return null;
+    }
+
+    return `${method} ${visit.url.toString()}`;
+};
+
 router.on('before', (event) => {
     if (pageBusinessId !== null) {
         event.detail.visit.headers['X-Business-Id'] = String(pageBusinessId);
+    }
+
+    const key = mutationKey(event.detail.visit);
+    if (key === null) {
+        return;
+    }
+
+    if (inFlightMutations.has(key)) {
+        // Returning false cancels the visit: the identical write is already on
+        // its way, and this tap is the duplicate we exist to swallow.
+        return false;
+    }
+
+    inFlightMutations.add(key);
+});
+
+router.on('finish', (event) => {
+    const key = mutationKey(event.detail.visit);
+    if (key !== null) {
+        inFlightMutations.delete(key);
     }
 });
 
