@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 interface Detail {
     label: string;
@@ -197,21 +197,10 @@ function RequestCard({ card }: { card: ApprovalCard }) {
 }
 
 export default function ApprovalsIndex({ requests, counts }: ApprovalsIndexProps) {
-    // A request settled by one approver should leave EVERY open inbox, not just
-    // the one that acted (Joy, 28 Sep 2026: "remove it from every user so no one
-    // else can do it"). There is no realtime channel in this ERP, so the inbox
-    // quietly re-reads itself every 20s: a row someone else decided drops out on
-    // its own, without anyone refreshing. `router.reload` is a GET that preserves
-    // scroll and local state by default, so an open confirm dialog and a
-    // half-typed reason survive a tick untouched; `only` keeps the poll cheap.
-    useEffect(() => {
-        const id = window.setInterval(() => {
-            router.reload({ only: ['requests', 'counts'] });
-        }, 20000);
-
-        return () => window.clearInterval(id);
-    }, []);
-
+    // A request settled by one approver leaves EVERY open inbox on its own (Joy,
+    // 28 Sep 2026: "remove it from every user"). The app-wide auto-refresh in
+    // app.tsx re-reads every page on an interval, so a decided row drops out here
+    // without anyone refreshing - no per-page poll needed.
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Approvals" />

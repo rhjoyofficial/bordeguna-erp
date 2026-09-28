@@ -91,6 +91,40 @@ router.on('success', (event) => {
     pageBusinessId = (event.detail.page.props.current_business_id as number | null) ?? null;
 });
 
+/**
+ * Near-real-time without a manual refresh (Joy, 28 Sep 2026: "updating your user
+ * interface instantly as new data arrives ... without requiring a manual page
+ * refresh"). Every open page quietly re-reads itself on an interval, so a figure
+ * someone else changed appears on its own.
+ *
+ * ⚠ router.reload preserves scroll AND local component state by default, so an
+ * open dialog, a half-typed field and a useForm in progress all survive a tick
+ * untouched - only the server props refresh underneath. Two guards keep it from
+ * ever getting in the way: it does nothing while the tab is hidden (a background
+ * tab has no reason to poll), and nothing while a write is in flight (never pull
+ * the page out from under a submit - the inFlightMutations set the double-submit
+ * guard already maintains tells us). This is polling, deliberately: it needs no
+ * websocket server and no per-page wiring. A push channel (Laravel Reverb) would
+ * make it instant rather than within-the-interval, and can layer on later without
+ * changing any page.
+ *
+ * ⚠ 30s: brisk enough that a shared screen feels live, slow enough that it is not
+ * a load on a two-core box shared with other stacks.
+ */
+const AUTO_REFRESH_MS = 30000;
+
+window.setInterval(() => {
+    if (document.visibilityState !== 'visible') {
+        return;
+    }
+
+    if (inFlightMutations.size > 0) {
+        return;
+    }
+
+    router.reload();
+}, AUTO_REFRESH_MS);
+
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
     resolve: (name) => resolvePageComponent(`./pages/${name}.tsx`, import.meta.glob('./pages/**/*.tsx')),
