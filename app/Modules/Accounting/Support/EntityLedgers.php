@@ -20,12 +20,25 @@ use Illuminate\Support\Facades\DB;
  * SYSTEM when the entity is saved, never hand-picked, so it cannot be named
  * generically or reused.
  *
- * ⚠ Interpretation B (his choice): the head is what a person SEES and PICKS, but
- * the money still posts to the control account with the entity as the party
- * (PostJournal resolves the head back to control + party, exactly as it resolves
- * a money head to its money account). So the head carries no balance of its own
- * and reconciliation is untouched; the per-entity view already comes from the
- * party ledger. This service only ensures the head exists and stays named right.
+ * ⚠⚠ THE HEAD IS A NON-POSTABLE DISPLAY GROUPING, NOT A LEDGER (revised 28 Sep
+ * 2026). Money for an entity posts to its CONTROL account with the entity as the
+ * party, exactly as it did before this feature - that is what the customer
+ * statement, receivables/payables ageing, employee statement and the R7
+ * subledger reconciliation all read. The named head only makes the chart read
+ * grouped ("1140-317 Rahim" under Accounts Receivable); it holds no balance.
+ *
+ * ⚠⚠ IT IS DELIBERATELY `is_postable = false`. The original design meant it to
+ * be pickable, with PostJournal redirecting the pick to control + party the way
+ * a money head redirects to its money account - but that redirect was never
+ * built, so a posting landed DIRECTLY on the head and vanished from every
+ * party-based report and from reconciliation. Non-postable closes that hole with
+ * no ambiguity (a heading cannot receive a posting, and the pickers already omit
+ * it), and it does so regardless of which control account the head sits under -
+ * a mapping the entity/party slugs currently disagree on (heads group under
+ * accounts_receivable/accounts_payable, while the party-kept slugs are
+ * customer_advances/supplier_advances). Making the head pickable-and-redirected
+ * is a separate feature that must first settle that mapping; until then, pick the
+ * control account and choose the party, which has always worked.
  *
  * ⚠ Names repeat (two customers "Rahim", the same name in two businesses), so
  * the KEY is the entity's `account_id`, never the name. The code embeds the
@@ -88,9 +101,11 @@ final class EntityLedgers
                 'name' => $name,
                 'type' => $type,
                 'parent_id' => $group->id,
-                // Pickable on a voucher, like a money head; PostJournal redirects
-                // it to the control account + party, so nothing lands on it.
-                'is_postable' => true,
+                // ⚠⚠ A DISPLAY HEADING, NOT A LEDGER. Non-postable so nothing can
+                // land on it and bypass the party-based subledger; see the class
+                // docblock. The per-entity balance comes from the control account
+                // filtered by party, not from this head.
+                'is_postable' => false,
             ]);
             $head->is_active = true;
             $head->save();

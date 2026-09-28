@@ -2,10 +2,11 @@
 
 namespace App\Modules\Hrm\Reporting\Definitions;
 
-use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\PayslipLine;
 use App\Modules\Hrm\Reporting\Concerns\ResolvesAssignments;
+use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportMeta;
@@ -41,9 +42,12 @@ use Illuminate\Support\LazyCollection;
  */
 class CostAllocationReport implements ReportDefinition
 {
+    use ResolvesAssignments;
     use SignsFromPayrollRun;
 
-    use ResolvesAssignments;
+    // ⚠⚠ TENANT ISOLATION — see PayrollLineDetailReport. A join('payslips') does
+    // not inherit the payslip's business scope, and run_id is unchecked input.
+    public function __construct(private readonly BusinessContext $context) {}
 
     public function key(): string
     {
@@ -226,6 +230,7 @@ class CostAllocationReport implements ReportDefinition
 
         $query = PayslipLine::query()
             ->join('payslips', 'payslips.id', '=', 'payslip_lines.payslip_id')
+            ->where('payslips.business_id', $this->context->id())
             ->join('employees', 'employees.id', '=', 'payslips.employee_id');
 
         $query = $this->joinAssignmentAsAt($query, 'payslips.employee_id', $asAt);

@@ -569,3 +569,50 @@ it('registers fourteen of the fifteen reports, with only the bank advice missing
         ->and($keys)->toContain('sales_by_brand')
         ->and($keys)->toHaveCount(23);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Tenant isolation — the payslip-line reports must never cross businesses
+|--------------------------------------------------------------------------
+| PayslipLine has no business global scope (it inherits it through its
+| payslip), so a report that join()s payslips loses that scope. run_id is a
+| caller-supplied parameter and was never ownership-checked, so a payroll
+| manager in one business could read another business's payslip lines by
+| passing that run's id. These three reports now filter payslips.business_id
+| explicitly; this proves it.
+*/
+it('refuses another business\'s payslip lines even when its run_id is passed', function () {
+    // A foreign business, with its own run, employee and payslip line. Note the
+    // current BusinessContext is still "Payroll Co" (set in beforeEach).
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+
+    $otherPeriod = PayrollPeriod::create([
+        'business_id' => $other->id, 'year' => 2026, 'month' => 7,
+        'start_date' => '2026-06-24', 'end_date' => '2026-07-23', 'divisor_days' => 30,
+    ]);
+    $otherRun = PayrollRun::create([
+        'business_id' => $other->id, 'payroll_period_id' => $otherPeriod->id,
+        'version' => 1, 'status' => 'disbursed', 'employee_count' => 1,
+    ]);
+    $otherEmployee = Employee::create([
+        'employee_code' => 'OTH-000001', 'first_name' => 'Foreign', 'last_name' => 'Person',
+        'employment_type' => 'permanent', 'status' => 'active',
+    ]);
+    $otherPayslip = Payslip::create([
+        'business_id' => $other->id, 'payroll_run_id' => $otherRun->id,
+        'employee_id' => $otherEmployee->id,
+        'gross_salary' => 99000, 'total_earnings' => 99000,
+        'total_deductions' => 0, 'net' => 99000, 'is_blocked' => false,
+    ]);
+    PayslipLine::create([
+        'payslip_id' => $otherPayslip->id, 'code' => 'BASIC', 'label' => 'Basic',
+        'type' => 'earning', 'amount' => 99000, 'formula' => 'Fixed',
+        'source' => 'structure', 'sequence' => 0,
+    ]);
+
+    // Every payslip-line report, asked for the FOREIGN run, returns nothing:
+    // the business filter excludes the other tenant's lines.
+    expect(($this->rows)(app(PayrollLineDetailReport::class), ['run_id' => $otherRun->id]))->toBe([])
+        ->and(($this->rows)(app(CostAllocationReport::class), ['run_id' => $otherRun->id]))->toBe([])
+        ->and(($this->rows)(app(EarningsDeductionsBreakdownReport::class), ['run_id' => $otherRun->id]))->toBe([]);
+});

@@ -60,7 +60,13 @@ class InventoryQuickCreateController extends Controller
         $this->authorize('inventory.catalog.manage');
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            // ⚠ Unique on the derived slug per business, like the settings screen:
+            // a duplicate name otherwise hit the unique index as a blank 500.
+            'name' => ['required', 'string', 'max:255', function (string $attribute, mixed $value, callable $fail) {
+                if (Category::where('slug', Str::slug((string) $value))->exists()) {
+                    $fail('A category with this name already exists.');
+                }
+            }],
             // Optional SKU segment; the same shape the settings screen accepts.
             'code' => ['nullable', 'string', 'max:16', 'regex:/^[A-Za-z0-9]{2,8}(-[A-Za-z0-9]{2,8})*$/'],
         ]);

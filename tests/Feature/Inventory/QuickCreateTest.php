@@ -62,6 +62,18 @@ it('creates a category, code optional and upper-cased', function () {
     expect(Category::where('name', 'Oils')->value('code'))->toBe('OIL');
 });
 
+it('rejects a duplicate category name with a field error, not a 500', function () {
+    // The slug is unique per business; a second "Spices" used to reach the unique
+    // index as a blank server error instead of a sentence under the box.
+    ($this->asRole)('Owner')->postJson(route('inventory.quick.categories'), ['name' => 'Spices'])
+        ->assertCreated();
+
+    ($this->asRole)('Owner')->postJson(route('inventory.quick.categories'), ['name' => 'Spices'])
+        ->assertStatus(422)->assertJsonValidationErrors('name');
+
+    expect(Category::where('slug', 'spices')->count())->toBe(1);
+});
+
 it('creates a brand, code upper-cased', function () {
     ($this->asRole)('Owner')->postJson(route('inventory.quick.brands'), ['name' => 'Bor de Guna Fresh', 'code' => 'bdf'])
         ->assertCreated()->assertJson(['label' => 'Bor de Guna Fresh']);

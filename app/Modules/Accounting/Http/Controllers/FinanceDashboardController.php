@@ -10,8 +10,8 @@ use App\Modules\Accounting\Support\IncomeStatement;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\MoneyAccount;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Carbon as LaravelCarbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon as LaravelCarbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -47,7 +47,11 @@ class FinanceDashboardController extends Controller
         $months = [];
 
         for ($i = self::MONTHS - 1; $i >= 0; $i--) {
-            $start = $today->subMonths($i)->startOfMonth();
+            // ⚠ startOfMonth FIRST, then subMonths. The other order overflows on
+            // days 29-31 (subtracting a month from the 31st lands in the wrong
+            // month), which silently duplicated and skipped months in the trend
+            // for a few days each month. Same trap the VAT return already avoids.
+            $start = $today->startOfMonth()->subMonths($i);
             $end = $start->endOfMonth();
 
             // ⚠ The SAME class the income statement screen uses. If the two ever

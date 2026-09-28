@@ -2,17 +2,19 @@
 
 namespace App\Modules\Hrm\Reporting\Definitions;
 
-use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\PayslipLine;
 use App\Modules\Hrm\Reporting\Concerns\CountsRows;
 use App\Modules\Hrm\Reporting\Concerns\ResolvesAssignments;
+use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportMeta;
 use App\Modules\Hrm\Reporting\ReportParameter;
 use App\Modules\Hrm\Reporting\ReportParameters;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\LazyCollection;
 
 /**
@@ -46,9 +48,13 @@ use Illuminate\Support\LazyCollection;
  */
 class EarningsDeductionsBreakdownReport implements ReportDefinition
 {
+    use CountsRows, ResolvesAssignments;
     use SignsFromPayrollRun;
 
-    use CountsRows, ResolvesAssignments;
+    // ⚠⚠ TENANT ISOLATION — see PayrollLineDetailReport. Both queries below join
+    // payslips (losing the payslip's business scope) and key on an unchecked
+    // run_id, so each must filter business_id explicitly.
+    public function __construct(private readonly BusinessContext $context) {}
 
     public function key(): string
     {
@@ -124,7 +130,7 @@ class EarningsDeductionsBreakdownReport implements ReportDefinition
      * different order from the document they summarise is read wrongly by
      * everybody once.
      *
-     * @return \Illuminate\Support\Collection<int, object>
+     * @return Collection<int, object>
      */
     private function components(?ReportParameters $parameters)
     {
@@ -136,6 +142,7 @@ class EarningsDeductionsBreakdownReport implements ReportDefinition
 
         return PayslipLine::query()
             ->join('payslips', 'payslips.id', '=', 'payslip_lines.payslip_id')
+            ->where('payslips.business_id', $this->context->id())
             ->where('payslips.payroll_run_id', $runId)
             ->groupBy('payslip_lines.code', 'payslip_lines.label', 'payslip_lines.type')
             ->orderByRaw('min(payslip_lines.sequence)')
@@ -251,6 +258,7 @@ class EarningsDeductionsBreakdownReport implements ReportDefinition
 
         $query = PayslipLine::query()
             ->join('payslips', 'payslips.id', '=', 'payslip_lines.payslip_id')
+            ->where('payslips.business_id', $this->context->id())
             ->join('employees', 'employees.id', '=', 'payslips.employee_id');
 
         $query = $this->joinAssignmentAsAt($query, 'payslips.employee_id', $asAt);
@@ -279,5 +287,4 @@ class EarningsDeductionsBreakdownReport implements ReportDefinition
                 ...$this->assignmentColumns(),
             ]);
     }
-
 }

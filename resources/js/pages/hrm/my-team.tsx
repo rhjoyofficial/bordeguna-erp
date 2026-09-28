@@ -1,5 +1,5 @@
-import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
+import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -48,8 +48,8 @@ export default function MyTeam({ team }: { team: TeamMember[] }) {
                     <div>
                         <h1 className="text-xl font-semibold">My team</h1>
                         <p className="text-muted-foreground text-sm">
-                            Your direct reports, today at a glance. Anything waiting for a decision is approved from the Approvals inbox,
-                            not here - one place decides.
+                            Your direct reports, today at a glance. Anything waiting for a decision is approved from the Approvals inbox, not here -
+                            one place decides.
                         </p>
                     </div>
                     <Button variant="outline" size="sm" asChild>
@@ -104,7 +104,7 @@ export default function MyTeam({ team }: { team: TeamMember[] }) {
                                         <Link href={`/hrm/employees/${member.id}`}>Profile</Link>
                                     </Button>
                                     <Button variant="ghost" size="sm" asChild>
-                                        <Link href={`/hrm/employees/${member.id}/attendance`}>Attendance</Link>
+                                        <Link href={`/hrm/attendance/employees/${member.id}`}>Attendance</Link>
                                     </Button>
                                 </div>
                             </div>

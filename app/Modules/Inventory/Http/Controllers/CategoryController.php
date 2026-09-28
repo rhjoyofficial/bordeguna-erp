@@ -28,10 +28,26 @@ class CategoryController extends Controller
      * `PK-JAR` does. Each segment is checked on its own, so a stray hyphen
      * cannot produce an empty segment in the middle of a SKU.
      */
-    private function rules(): array
+    private function rules(?Category $ignore = null): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
+            // ⚠ The slug is derived from the name and is unique per business in
+            // the database. Nothing said so, so a second "Nuts" (or two names that
+            // slug the same) reached the unique index and came back as a blank 500
+            // instead of a sentence under the box - the same defect already fixed
+            // for units and brands. Validated on the DERIVED slug, business-scoped
+            // through the model's global scope, ignoring the row being edited.
+            'name' => ['required', 'string', 'max:255', function (string $attribute, mixed $value, callable $fail) use ($ignore) {
+                $query = Category::where('slug', Str::slug((string) $value));
+
+                if ($ignore !== null) {
+                    $query->whereKeyNot($ignore->getKey());
+                }
+
+                if ($query->exists()) {
+                    $fail('A category with this name already exists.');
+                }
+            }],
             'code' => ['nullable', 'string', 'max:16', 'regex:/^[A-Za-z0-9]{2,8}(-[A-Za-z0-9]{2,8})*$/'],
         ];
     }
@@ -51,7 +67,7 @@ class CategoryController extends Controller
 
     public function update(Request $request, Category $category): RedirectResponse
     {
-        $data = $request->validate($this->rules());
+        $data = $request->validate($this->rules($category));
 
         $category->update([
             'name' => $data['name'],

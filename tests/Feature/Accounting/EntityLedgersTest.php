@@ -12,8 +12,9 @@ use Illuminate\Support\Facades\Artisan;
 
 /**
  * Every customer, supplier and employee gets its own named ledger head under
- * its control account (Joy, 27 Sep 2026). The head is what a person sees and
- * picks; money still rolls up through the control account (Interpretation B).
+ * its control account (Joy, 27 Sep 2026). ⚠ The head is a NON-POSTABLE display
+ * grouping (revised 28 Sep 2026): money posts to the control account with the
+ * entity as party, never to the head, so it cannot bypass the party subledger.
  */
 beforeEach(function () {
     $this->business = Business::create(['name' => 'Heads Co', 'slug' => 'heads-co']);
@@ -112,4 +113,35 @@ it('auto-creates a head when a supplier or employee is created, via the observer
 
     expect($supplier->fresh()->account_id)->not->toBeNull()
         ->and($employee->fresh()->account_id)->not->toBeNull();
+});
+
+it('makes every entity head non-postable, so nothing can land on it and bypass the subledger', function () {
+    // ⚠⚠ The hole this closes: the 27 Sep feature created these heads postable on
+    // the promise of a PostJournal redirect that was never built, so a posting
+    // landed on the head and vanished from the customer statement, ageing,
+    // employee statement and R7 reconciliation. Non-postable removes the hole.
+    $customer = Customer::create(['business_id' => $this->business->id, 'name' => 'Karim', 'code' => 'KARIM']);
+    $supplier = Supplier::create(['business_id' => $this->business->id, 'name' => 'Padma Traders', 'code' => 'PADMA']);
+    $employee = Employee::create([
+        'employee_code' => 'BDG-000077', 'first_name' => 'Musa', 'last_name' => 'Islam',
+        'employment_type' => 'permanent', 'status' => 'active',
+    ]);
+    EntityLedgers::ensureOwnLedger($employee);
+
+    $headIds = [
+        $customer->fresh()->account_id,
+        $supplier->fresh()->account_id,
+        $employee->fresh()->account_id,
+    ];
+
+    // Each head exists but is a heading, not a ledger.
+    foreach ($headIds as $id) {
+        expect(Account::find($id)->is_postable)->toBeFalse();
+    }
+
+    // And the pickers, which offer only postable accounts, omit every one of them.
+    $postableIds = Account::query()->postable()->pluck('id')->all();
+    foreach ($headIds as $id) {
+        expect($postableIds)->not->toContain($id);
+    }
 });

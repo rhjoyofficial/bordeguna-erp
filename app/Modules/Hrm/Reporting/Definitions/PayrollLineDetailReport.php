@@ -2,11 +2,12 @@
 
 namespace App\Modules\Hrm\Reporting\Definitions;
 
-use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\PayslipLine;
 use App\Modules\Hrm\Reporting\Concerns\CountsRows;
 use App\Modules\Hrm\Reporting\Concerns\ResolvesAssignments;
+use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportMeta;
@@ -40,9 +41,17 @@ use Illuminate\Support\LazyCollection;
  */
 class PayrollLineDetailReport implements ReportDefinition
 {
+    use CountsRows, ResolvesAssignments;
     use SignsFromPayrollRun;
 
-    use CountsRows, ResolvesAssignments;
+    // ⚠⚠ TENANT ISOLATION. PayslipLine has no business global scope (it inherits
+    // it through its payslip), but a `join('payslips')` does NOT inherit that
+    // scope, and `run_id` is a caller-supplied parameter that is never checked
+    // for ownership. Without the explicit business filter below, a payroll
+    // manager scoped to one business could read another business's payslip lines
+    // by passing that run's id. See SettlementWorksheetReport, which was already
+    // correct.
+    public function __construct(private readonly BusinessContext $context) {}
 
     public function key(): string
     {
@@ -164,6 +173,7 @@ class PayrollLineDetailReport implements ReportDefinition
 
         $query = PayslipLine::query()
             ->join('payslips', 'payslips.id', '=', 'payslip_lines.payslip_id')
+            ->where('payslips.business_id', $this->context->id())
             ->join('employees', 'employees.id', '=', 'payslips.employee_id');
 
         $query = $this->joinAssignmentAsAt($query, 'payslips.employee_id', $asAt);
