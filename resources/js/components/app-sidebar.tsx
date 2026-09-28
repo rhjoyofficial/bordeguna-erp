@@ -1,9 +1,9 @@
 import { NavGroups, type NavGroup } from '@/components/nav-groups';
-import { useTranslation } from '@/lib/i18n';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import { useSidebarScrollMemory } from '@/hooks/use-sidebar-scroll-memory';
+import { useTranslation } from '@/lib/i18n';
 import { settingsNavItems } from '@/lib/settings-nav';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
@@ -309,6 +309,11 @@ export function AppSidebar() {
                                     { title: 'Customer statement', url: '/accounting/customer-statement', icon: Contact },
                                 ]
                               : []),
+                          // The sales-by-brand report. Its route group is open to any
+                          // signed-in user and the registry enforces sales.reports.view,
+                          // so the report was reachable but had no way in from the
+                          // sidebar for a sales user (the reports index link is HRM-gated).
+                          ...(canViewSales ? [{ title: 'Sales by brand', url: '/hrm/reports/sales_by_brand', icon: FileBarChart }] : []),
                       ],
                   },
                   {
