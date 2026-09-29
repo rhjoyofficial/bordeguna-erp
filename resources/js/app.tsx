@@ -62,6 +62,8 @@ const mutationKey = (visit: { method: string; url: URL | string }): string | nul
 };
 
 router.on('before', (event) => {
+    lastVisit = { method: String(event.detail.visit.method).toLowerCase(), path: event.detail.visit.url.pathname };
+
     if (pageBusinessId !== null) {
         event.detail.visit.headers['X-Business-Id'] = String(pageBusinessId);
     }
@@ -87,8 +89,25 @@ router.on('finish', (event) => {
     }
 });
 
+/**
+ * Whether the page on screen can be read again with a GET.
+ *
+ * ⚠⚠ An import preview is the RESPONSE to a POST (upload the file, show what it
+ * would do) and its URL has no GET route. Auto-refresh re-read that URL, got a
+ * 405, and dropped the user on the dashboard with the preview - and its Apply
+ * button - gone (29 Sep 2026: every import screen was unusable). A page reached
+ * by a write that did not redirect elsewhere is therefore never auto-refreshed.
+ */
+let pageIsReloadable = true;
+let lastVisit: { method: string; path: string } | null = null;
+
 router.on('success', (event) => {
     pageBusinessId = (event.detail.page.props.current_business_id as number | null) ?? null;
+
+    if (lastVisit !== null) {
+        const landedOn = new URL(event.detail.page.url, window.location.origin).pathname;
+        pageIsReloadable = lastVisit.method === 'get' || landedOn !== lastVisit.path;
+    }
 });
 
 /**
@@ -118,7 +137,7 @@ window.setInterval(() => {
         return;
     }
 
-    if (inFlightMutations.size > 0) {
+    if (inFlightMutations.size > 0 || !pageIsReloadable) {
         return;
     }
 
