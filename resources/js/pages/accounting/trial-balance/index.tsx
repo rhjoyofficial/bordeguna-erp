@@ -1,14 +1,4 @@
-import {
-    DateRangeBar,
-    EmptyRow,
-    Footnote,
-    ReportHeading,
-    ReportPage,
-    ReportTable,
-    StatRow,
-    StatTile,
-    Verdict,
-} from '@/components/report/report-shell';
+import { DateRangeBar, EmptyRow, ReportHeading, ReportPage, ReportTable, StatRow, StatTile, Verdict } from '@/components/report/report-shell';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -70,10 +60,7 @@ export default function TrialBalanceIndex({
             <Head title="Trial balance" />
 
             <ReportPage>
-                <ReportHeading
-                    title="Trial balance"
-                    description="Every account with a balance or any movement in the period. In a correct ledger the two columns are equal, because every debit was posted with a matching credit."
-                />
+                <ReportHeading title="Trial balance" />
 
                 <DateRangeBar
                     from={range.from}
@@ -156,11 +143,6 @@ export default function TrialBalanceIndex({
                         </EmptyRow>
                     )}
                 </ReportTable>
-
-                <Footnote>
-                    A trial balance that balances proves the entries were recorded in pairs. It does not prove they were recorded against the right
-                    accounts, and it cannot tell you about something nobody entered at all.
-                </Footnote>
             </ReportPage>
         </AppLayout>
     );

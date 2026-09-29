@@ -106,14 +106,15 @@ export default function VatSettings({ settings, regimes, classes, documents }: P
                             <Badge variant="outline">VAT is off</Badge>
                         )}
                     </div>
-                    <p className="text-muted-foreground mt-1 max-w-3xl text-sm">
-                        One switch for the whole business. It starts from a date you choose and never reaches back: an invoice or a bill
-                        dated before that day keeps the figures it has for ever. So far {documents.taxed_invoices} invoice(s) and{' '}
-                        {documents.taxed_bills} bill(s) carry VAT.
+                    <p className="text-muted-foreground mt-1 text-sm">
+                        {documents.taxed_invoices} invoice(s) and {documents.taxed_bills} bill(s) carry VAT so far.
                     </p>
                 </div>
 
-                <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card flex flex-col gap-5 rounded-xl border p-4">
+                <form
+                    onSubmit={submit}
+                    className="border-sidebar-border/70 dark:border-sidebar-border bg-card flex flex-col gap-5 rounded-xl border p-4"
+                >
                     <div className="flex flex-col gap-2">
                         <Label required>Registration</Label>
                         <div className="flex flex-col gap-2">
@@ -153,9 +154,7 @@ export default function VatSettings({ settings, regimes, classes, documents }: P
                                 <InputError message={form.errors.vat_effective_from} />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <Label htmlFor="vat_bin" required>
-                                    BIN
-                                </Label>
+                                <Label htmlFor="vat_bin">BIN</Label>
                                 <Input
                                     id="vat_bin"
                                     className="w-56"
@@ -180,9 +179,6 @@ export default function VatSettings({ settings, regimes, classes, documents }: P
                                 />
                                 <span>
                                     <span className="font-medium">already includes VAT</span>
-                                    <span className="text-muted-foreground block text-xs">
-                                        The customer pays exactly the price. VAT is taken out of it. Usual for retail and the websites.
-                                    </span>
                                 </span>
                             </label>
                             <label className="flex cursor-pointer items-start gap-3">
@@ -194,16 +190,9 @@ export default function VatSettings({ settings, regimes, classes, documents }: P
                                 />
                                 <span>
                                     <span className="font-medium">has VAT added on top</span>
-                                    <span className="text-muted-foreground block text-xs">
-                                        The customer pays the price plus VAT. Usual for dealer and distributor price lists.
-                                    </span>
                                 </span>
                             </label>
                         </div>
-                        <p className="text-muted-foreground max-w-3xl text-xs">
-                            A customer&apos;s price group can say differently, and the person raising an invoice can change it for that one
-                            invoice before it is saved. Both ways always work; this is only the starting answer.
-                        </p>
                     </div>
 
                     <div className="flex flex-col gap-1">
@@ -234,10 +223,6 @@ export default function VatSettings({ settings, regimes, classes, documents }: P
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
                     <h2 className="text-base font-semibold">Rates</h2>
-                    <p className="text-muted-foreground mt-1 max-w-3xl text-sm">
-                        A rate is never changed. A new rate is added with the day it starts, and every document keeps the rate it was
-                        taxed at. Ask the accountant for the figure: none is built in.
-                    </p>
 
                     <div className="mt-4 overflow-x-auto">
                         <table className="w-full text-sm">

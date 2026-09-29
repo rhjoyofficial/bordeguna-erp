@@ -207,7 +207,7 @@ export default function CrmTimeline({
                             </div>
                             <div className="flex flex-wrap items-end gap-3">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="due_at">Due</Label>
+                                    <Label htmlFor="due_at" required>Due</Label>
                                     <Input
                                         id="due_at"
                                         type="datetime-local"
@@ -257,7 +257,7 @@ export default function CrmTimeline({
                             </SearchSelect>
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="interest_target">Which</Label>
+                            <Label htmlFor="interest_target" required>Which</Label>
                             <SearchSelect
                                 fit
                                 id="interest_target"

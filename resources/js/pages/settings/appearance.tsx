@@ -45,7 +45,7 @@ export default function Appearance() {
 
             <SettingsLayout narrow>
                 <div key={resetKey} className="space-y-6">
-                    <HeadingSmall title={t('language.heading')} description={t('language.description')} />
+                    <HeadingSmall title={t('language.heading')} />
                     <div className="flex gap-2">
                         <Button variant={locale === 'en' ? 'default' : 'outline'} size="sm" onClick={() => setLocale('en')}>
                             English
@@ -55,16 +55,16 @@ export default function Appearance() {
                         </Button>
                     </div>
 
-                    <HeadingSmall title="Appearance settings" description="Personal to your account, saved to this browser" />
+                    <HeadingSmall title="Appearance settings" />
                     <AppearanceTabs />
 
-                    <HeadingSmall title="Accent color" description="Pick the highlight color used for buttons, links and active menus" />
+                    <HeadingSmall title="Accent color" />
                     <AccentPicker />
 
-                    <HeadingSmall title="Sidebar color" description="The navigation panel's background" />
+                    <HeadingSmall title="Sidebar color" />
                     <SidebarColorPicker />
 
-                    <HeadingSmall title="Topbar color" description="The header bar's background" />
+                    <HeadingSmall title="Topbar color" />
                     <TopbarColorPicker />
 
                     <div className="border-t pt-6">

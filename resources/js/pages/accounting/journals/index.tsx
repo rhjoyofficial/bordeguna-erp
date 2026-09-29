@@ -37,10 +37,6 @@ export default function JournalsIndex({ journals }: { journals: Paginated<Journa
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <h1 className="text-lg font-semibold">Journals</h1>
-                        <p className="text-muted-foreground text-sm">
-                            Every entry in the general ledger. Nothing here can be edited or deleted; a mistake is corrected by reversing it, which
-                            leaves both the error and the correction on the record.
-                        </p>
                     </div>
                     {/* 26 Sep 2026: a hand-written entry is a Journal voucher (draft, print,
                         reverse-and-copy, prepare/post split). The Owner-only manual screen

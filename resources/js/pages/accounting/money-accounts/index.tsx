@@ -145,10 +145,6 @@ export default function MoneyAccountsIndex({
                 )}
                 <div>
                     <h1 className="text-lg font-semibold">Bank &amp; cash accounts</h1>
-                    <p className="text-muted-foreground max-w-2xl text-sm">
-                        Where money actually sits. These record which account paid or received, not how much is in it: the balance comes from the
-                        ledger, so nothing here is ever typed as a number.
-                    </p>
                 </div>
 
                 {canManageMoneyAccounts && (
@@ -247,20 +243,6 @@ export default function MoneyAccountsIndex({
                             <InputError message={errors.account_id} />
                         </div>
 
-                        {isCourier && (
-                            <p className="text-muted-foreground w-full text-xs">
-                                Cash on delivery a courier has collected and not yet paid out. It fills when a parcel is recorded as delivered on its
-                                order, and nothing can be paid from it by hand.
-                            </p>
-                        )}
-
-                        {isGateway && (
-                            <p className="text-muted-foreground w-full text-xs">
-                                Money customers paid online that the gateway has not yet settled to the bank. It fills when the gateway confirms a
-                                payment, its fee comes off as it does, and nothing can be paid from it by hand.
-                            </p>
-                        )}
-
                         {editing && (
                             <label className="flex h-10 items-center gap-2 text-sm">
                                 <input type="checkbox" checked={data.is_active} onChange={(e) => setData('is_active', e.target.checked)} />
@@ -332,11 +314,6 @@ export default function MoneyAccountsIndex({
                         </tbody>
                     </table>
                 </div>
-
-                <p className="text-muted-foreground max-w-2xl text-sm">
-                    An account that has been used to move money is deactivated rather than removed, so a payment made in August can still be named in
-                    December.
-                </p>
             </div>
         </AppLayout>
     );

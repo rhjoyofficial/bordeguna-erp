@@ -56,8 +56,6 @@ function Count({ label, value, tone }: { label: string; value: number; tone?: 'b
 
 export default function ProductImport({
     preview,
-    limits,
-    columns,
 }: {
     preview: Preview | null;
     limits: { max_rows: number; max_mb: number };
@@ -89,27 +87,18 @@ export default function ProductImport({
             <div className="flex flex-col gap-6 p-4">
                 <div className="max-w-3xl">
                     <h1 className="text-lg font-semibold">Import products</h1>
-                    <p className="text-muted-foreground mt-1 text-sm">
-                        Upload a CSV and you will be shown exactly what it would do before anything is written. Nothing is imported until you press
-                        Apply.
-                    </p>
-                    <p className="text-muted-foreground mt-2 text-sm">
-                        Columns needed: <code className="font-mono text-xs">{columns.mandatory.join(', ')}</code>. Optional:{' '}
-                        <code className="font-mono text-xs">{columns.optional.join(', ')}</code>. Up to {limits.max_rows.toLocaleString()} rows and{' '}
-                        {limits.max_mb} MB.
-                    </p>
-                    <p className="text-muted-foreground mt-2 text-sm">
-                        The quickest start is to{' '}
+                    <p className="mt-1 text-sm">
                         <a className="underline underline-offset-2" href={route('inventory.products.export')}>
-                            export what is already here
+                            Export current products
                         </a>
-                        , edit it, and upload it back. The export is in exactly the shape this importer reads.
                     </p>
                 </div>
 
                 <form onSubmit={submitFile} className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
-                        <Label htmlFor="file">CSV file</Label>
+                        <Label htmlFor="file" required>
+                            CSV file
+                        </Label>
                         <input
                             id="file"
                             type="file"
@@ -236,8 +225,7 @@ export default function ProductImport({
                         */}
                         {preview.absent_from_file.length > 0 && (
                             <p className="text-muted-foreground text-sm">
-                                {preview.absent_from_file.length} product(s) already here are not mentioned in this file. They are left exactly as
-                                they are - nothing is deactivated or deleted by an import.
+                                {preview.absent_from_file.length} product(s) already here are not mentioned in this file.
                             </p>
                         )}
 
@@ -249,9 +237,6 @@ export default function ProductImport({
                             <Button disabled={apply.processing || blocked}>
                                 {apply.processing ? 'Importing' : `Apply - create ${preview.creates.length}, update ${preview.updates.length}`}
                             </Button>
-                            <span className="text-muted-foreground text-xs">
-                                Applies this exact file. If it changed since the preview, the import is refused.
-                            </span>
                             <InputError message={applyError} />
                         </form>
                     </div>

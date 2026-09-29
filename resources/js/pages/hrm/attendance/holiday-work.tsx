@@ -55,7 +55,6 @@ export default function HolidayWork({ date, is_non_working_day, rows }: { date: 
             <div className="space-y-6 p-4">
                 <ReportHeading
                     title="Holiday work"
-                    description="Record who worked on a holiday or weekly off. Approved days count as normal present days."
                     actions={
                         <Button variant="outline" size="sm" asChild>
                             <Link href="/hrm/holiday-work/report">Year report</Link>
@@ -164,9 +163,6 @@ export default function HolidayWork({ date, is_non_working_day, rows }: { date: 
                     >
                         Record for {form.data.employee_ids.length} {form.data.employee_ids.length === 1 ? 'person' : 'people'}
                     </Button>
-                    <p className="text-muted-foreground text-sm">
-                        Their day is recalculated straight away. Nobody is paid extra: an approved holiday day counts as a normal present day.
-                    </p>
                 </div>
             </div>
         </AppLayout>

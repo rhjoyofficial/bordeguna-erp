@@ -76,10 +76,7 @@ export default function CashAndBankIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cash & bank book" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Cash & bank book"
-                    description="Where the money sits and how it moved in the period. One row per ledger account that a bank account, cash box or wallet reports under; the figures are the trial balance's own."
-                />
+                <ReportHeading title="Cash & bank book" />
 
                 <DateRangeBar
                     from={range.from}
@@ -177,11 +174,6 @@ export default function CashAndBankIndex({
                         )}
                     </table>
                 </div>
-
-                <p className="text-muted-foreground max-w-2xl text-sm">
-                    A row is a ledger account, so several bank accounts that report under one ledger account appear as one figure: the books do not
-                    record a split between them. Click an account to see every posting behind its balance.
-                </p>
             </div>
         </AppLayout>
     );

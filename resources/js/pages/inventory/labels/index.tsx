@@ -66,10 +66,6 @@ export default function LabelsIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-medium">Barcode labels</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Choose how many labels each product needs, then print. The barcode is the code a scanner reads and belongs to the pack - it is
-                        not the SKU, which never changes.
-                    </p>
                 </div>
 
                 {without_barcode > 0 && (

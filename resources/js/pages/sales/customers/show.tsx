@@ -90,10 +90,7 @@ export default function CustomerShow({
             <Head title={customer.name} />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                    <ReportHeading
-                        title={customer.name}
-                        description="Everything this customer's documents say, in one place. The numbers derive from the same invoices, receipts, returns and refunds the statement reads."
-                    />
+                    <ReportHeading title={customer.name} />
                     <div className="flex items-center gap-2">
                         {!customer.is_active && <Badge variant="secondary">Inactive</Badge>}
                         {/* ⭐ Money in from here, across every unpaid invoice (21 Sep 2026). */}

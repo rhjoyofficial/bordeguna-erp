@@ -269,10 +269,7 @@ export default function MessagingSettings({
 
             <SettingsLayout wide>
                 <div className="space-y-6">
-                    <HeadingSmall
-                        title="Messaging"
-                        description="How the business sends SMS and email. Add as many gateways as you like, and switch them on and off."
-                    />
+                    <HeadingSmall title="Messaging" />
 
                     {mailer === 'log' && (
                         <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950">
@@ -295,6 +292,7 @@ export default function MessagingSettings({
                                 type="number"
                                 min={0}
                                 className="w-40"
+                                placeholder="Empty: every send"
                                 value={thresholdForm.data.approval_above}
                                 onChange={(e) => thresholdForm.setData('approval_above', e.target.value)}
                             />
@@ -303,10 +301,6 @@ export default function MessagingSettings({
                         <Button type="submit" variant="secondary" disabled={thresholdForm.processing}>
                             Save threshold
                         </Button>
-                        <p className="text-muted-foreground max-w-md text-xs">
-                            Recipients, not messages. Leaving it empty does <strong>not</strong> switch approvals off - it means every send needs one,
-                            whatever its size.
-                        </p>
                     </form>
 
                     {/* ── Add or edit a provider ─────────────────────────── */}
@@ -524,9 +518,6 @@ export default function MessagingSettings({
                                             value={pairsToText(config.unicode_params)}
                                             onChange={(e) => setConfig({ unicode_params: textToPairs(e.target.value) })}
                                         />
-                                        <p className="text-muted-foreground text-xs">
-                                            Added automatically whenever the message leaves the plain English alphabet.
-                                        </p>
                                     </div>
                                 </div>
 
@@ -613,10 +604,6 @@ export default function MessagingSettings({
                             </div>
                         )}
 
-                        <p className="text-muted-foreground text-xs">
-                            Keys are stored encrypted and are never shown again, only their last four characters. Leaving one blank when editing keeps
-                            whatever is already saved.
-                        </p>
                         <div className="flex gap-2">
                             <Button type="submit" disabled={form.processing}>
                                 {editing ? 'Save provider' : 'Add provider'}
@@ -709,10 +696,10 @@ export default function MessagingSettings({
                         <div className="space-y-3 rounded-lg border p-4">
                             <HeadingSmall
                                 title="Send one test message"
-                                description="This goes to a real handset through the real account and costs one message. That is the point: a wrong field name found here costs one SMS instead of a whole campaign."
+                                description="Goes to a real handset and costs one message."
                             />
                             <FormRow>
-                                <Field label="To" htmlFor="test_to" size="md" error={testForm.errors.to}>
+                                <Field label="To" htmlFor="test_to" size="md" error={testForm.errors.to} required>
                                     <Input
                                         id="test_to"
                                         placeholder="01711000000"
@@ -720,7 +707,7 @@ export default function MessagingSettings({
                                         onChange={(e) => testForm.setData('to', e.target.value)}
                                     />
                                 </Field>
-                                <Field label="Message" htmlFor="test_body" size="grow">
+                                <Field label="Message" htmlFor="test_body" size="grow" required>
                                     <Input id="test_body" value={testForm.data.body} onChange={(e) => testForm.setData('body', e.target.value)} />
                                 </Field>
                             </FormRow>
@@ -759,9 +746,6 @@ export default function MessagingSettings({
                                             </pre>
                                         </div>
                                     )}
-                                    <p className="text-muted-foreground text-xs">
-                                        Read the reply, then set "It worked when" above to the field and value this gateway uses.
-                                    </p>
                                 </div>
                             )}
                         </div>

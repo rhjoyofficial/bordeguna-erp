@@ -71,11 +71,6 @@ export default function PayrollHistory({ filters, employee, years, grand_total_p
             <ReportPage>
                 <ReportHeading
                     title={perPerson ? `Salary history: ${employee?.name}` : 'Salary history'}
-                    description={
-                        perPerson
-                            ? `Every payroll month ${employee?.name} (${employee?.employee_code}) appears in, newest first. Figures are the payslips as they were paid, never recalculated.`
-                            : 'Every payroll month this business has run, newest first. Figures are the finished runs as they were paid, never recalculated.'
-                    }
                     actions={
                         <div className="grid gap-1">
                             <Label htmlFor="employee" className="text-muted-foreground text-xs">

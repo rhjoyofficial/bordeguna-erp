@@ -64,10 +64,6 @@ export default function FinanceDashboard({
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h2 className="text-lg font-medium">Finance overview</h2>
-                    <p className="text-muted-foreground text-sm">
-                        Every figure here is read from the same report that produces the statement of the same name, so this screen and the statements
-                        can never disagree.
-                    </p>
                 </div>
 
                 {!hasPostings && (
@@ -75,8 +71,7 @@ export default function FinanceDashboard({
                        not started trading looks exactly like a broken dashboard,
                        and somebody would report it as a bug. */
                     <div className="rounded-lg border border-sky-300 bg-sky-50 p-4 text-sm dark:border-sky-900 dark:bg-sky-950">
-                        Nothing has been posted to the ledger yet, so every figure below is zero. That is correct rather than broken: the numbers
-                        appear as soon as the first invoice, bill or opening balance is entered.
+                        Nothing has been posted to the ledger yet, so every figure below is zero.
                     </div>
                 )}
 
@@ -88,12 +83,7 @@ export default function FinanceDashboard({
                         hint={thisMonth.grossMargin !== null ? `${thisMonth.grossMargin.toFixed(1)}% margin` : 'No sales yet'}
                     />
                     <Tile label="Running costs" value={money(thisMonth.expenses)} />
-                    <Tile
-                        label="Net profit"
-                        value={money(thisMonth.netProfit)}
-                        tone={thisMonth.netProfit >= 0 ? 'good' : 'bad'}
-                        hint="After cost of sales and running costs"
-                    />
+                    <Tile label="Net profit" value={money(thisMonth.netProfit)} tone={thisMonth.netProfit >= 0 ? 'good' : 'bad'} />
                 </section>
 
                 <section className="grid gap-4 lg:grid-cols-2">
@@ -162,10 +152,6 @@ export default function FinanceDashboard({
                         ))}
                         {moneyAccounts.length === 0 && <p className="text-muted-foreground text-sm">No money accounts set up.</p>}
                     </div>
-                    <p className="text-muted-foreground text-xs">
-                        Balances live in the cash book, which reads them from the ledger. This is the list of places money is held, not a second
-                        opinion about how much is in them.
-                    </p>
                 </section>
             </div>
         </AppLayout>

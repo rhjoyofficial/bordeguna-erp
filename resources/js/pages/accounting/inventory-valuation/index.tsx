@@ -69,9 +69,6 @@ export default function InventoryValuationIndex({
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
                         <h1 className="text-xl font-semibold">Inventory valuation</h1>
-                        <p className="text-muted-foreground text-sm">
-                            What the stock was worth on {as_at}, derived from stock movements rather than from the batch cache.
-                        </p>
                     </div>
 
                     <form onSubmit={submit} className="flex items-end gap-2">
@@ -125,9 +122,7 @@ export default function InventoryValuationIndex({
                     <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm dark:border-red-900 dark:bg-red-950">
                         <strong>
                             {anomaly_count} layer{anomaly_count === 1 ? '' : 's'} need attention.
-                        </strong>{' '}
-                        Negative stock, value stranded on an empty layer, or goods the books treat as free. They are marked in the table and are never
-                        hidden to make the total look tidy.
+                        </strong>
                     </div>
                 )}
 

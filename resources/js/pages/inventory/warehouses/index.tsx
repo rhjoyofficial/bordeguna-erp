@@ -60,10 +60,10 @@ function WarehouseRow({ warehouse, canManage }: { warehouse: Warehouse; canManag
                 <td className="p-2" colSpan={2}>
                     <form id={`warehouse-${warehouse.id}`} onSubmit={save}>
                         <FormRow className="gap-3">
-                            <Field label="Name" htmlFor={`name-${warehouse.id}`} size="md" error={errors.name}>
+                            <Field label="Name" htmlFor={`name-${warehouse.id}`} size="md" error={errors.name} required>
                                 <Input id={`name-${warehouse.id}`} value={data.name} onChange={(e) => setData('name', e.target.value)} autoFocus />
                             </Field>
-                            <Field label="Code" htmlFor={`code-${warehouse.id}`} size="xs" error={errors.code}>
+                            <Field label="Code" htmlFor={`code-${warehouse.id}`} size="xs" error={errors.code} required>
                                 <Input id={`code-${warehouse.id}`} value={data.code} onChange={(e) => setData('code', e.target.value)} />
                             </Field>
                         </FormRow>
@@ -156,10 +156,7 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Warehouses" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Warehouses"
-                    description="Where stock is kept. Switch a warehouse off rather than deleting it once it has held stock; the default warehouse receives every document that does not name one, and the stock screens open on it."
-                />
+                <ReportHeading title="Warehouses" />
 
                 {manageCatalog && (
                     <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">
@@ -179,9 +176,6 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
                                 Add
                             </Button>
                         </FormRow>
-                        {warehouses.length === 0 && (
-                            <p className="text-muted-foreground mt-2 text-xs">The first warehouse you add becomes the default.</p>
-                        )}
                     </form>
                 )}
 

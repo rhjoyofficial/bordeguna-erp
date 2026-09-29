@@ -97,8 +97,7 @@ export default function AssetItemsIndex({
                     <div>
                         <h1 className="text-lg font-semibold">Things we keep</h1>
                         <p className="text-muted-foreground max-w-3xl text-sm">
-                            Every laptop, camera, chair and tool the business keeps, with its tag, where it is and what shape it is in. {counts.kept}{' '}
-                            kept
+                            {counts.kept} kept
                             {counts.damaged > 0 && `, ${counts.damaged} damaged`}
                             {counts.under_repair > 0 && `, ${counts.under_repair} under repair`}.
                         </p>

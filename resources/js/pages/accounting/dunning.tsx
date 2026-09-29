@@ -46,10 +46,6 @@ export default function Dunning({ customers, can_send }: DunningProps) {
             <div className="space-y-4 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Payment reminders</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Everyone with an overdue invoice, oldest first - the same figures as the receivables ageing. A reminder is
-                        always your click, never automatic.
-                    </p>
                 </div>
 
                 {customers.length === 0 ? (

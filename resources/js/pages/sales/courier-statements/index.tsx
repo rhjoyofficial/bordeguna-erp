@@ -70,7 +70,7 @@ export default function CourierStatementsIndex({
                         className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
                     >
                         <div className="grid gap-1">
-                            <Label>Courier</Label>
+                            <Label required>Courier</Label>
                             <SearchableSelect
                                 value={data.money_account_id}
                                 onChange={(v) => setData('money_account_id', v)}
@@ -81,7 +81,7 @@ export default function CourierStatementsIndex({
                             <InputError message={errors.money_account_id} />
                         </div>
                         <div className="grid gap-1">
-                            <Label>Invoice id</Label>
+                            <Label required>Invoice id</Label>
                             <Input
                                 className="w-44"
                                 value={data.statement_reference}
@@ -91,7 +91,7 @@ export default function CourierStatementsIndex({
                             <InputError message={errors.statement_reference} />
                         </div>
                         <div className="grid gap-1">
-                            <Label>Invoice date</Label>
+                            <Label required>Invoice date</Label>
                             <Input
                                 type="date"
                                 className="w-40"
@@ -101,15 +101,11 @@ export default function CourierStatementsIndex({
                             <InputError message={errors.statement_date} />
                         </div>
                         <div className="grid gap-1">
-                            <Label>The courier&apos;s CSV</Label>
+                            <Label required>The courier&apos;s CSV</Label>
                             <Input type="file" accept=".csv,text/csv" onChange={(e) => setData('file', e.target.files?.[0] ?? null)} />
                             <InputError message={errors.file} />
                         </div>
                         <Button disabled={processing}>Read statement</Button>
-                        <p className="text-muted-foreground w-full text-xs">
-                            The courier&apos;s file has no invoice id or date, so copy them from its invoices screen. Reading it changes nothing: you
-                            review the parcels and enter the money that arrived before posting. Names and phone numbers in the file are not kept.
-                        </p>
                     </form>
                 )}
 

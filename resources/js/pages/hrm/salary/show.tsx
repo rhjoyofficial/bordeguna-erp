@@ -113,9 +113,8 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
 
     const field = (c: Component) => (
         <div key={c.id} className="grid gap-2">
-            <Label htmlFor={`c-${c.id}`}>
+            <Label htmlFor={`c-${c.id}`} required={c.is_basic}>
                 {c.name}
-                {c.is_basic && ' (required)'}
                 {(c.is_percentage || c.is_priced_by_attendance) && <span className="text-muted-foreground ml-1 text-xs">- {c.basis_label}</span>}
             </Label>
             <Input
@@ -129,12 +128,7 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
             />
             {/* C14: this field is a daily rate, and it looks exactly like a
                 monthly amount unless it says otherwise. */}
-            {c.is_priced_by_attendance && (
-                <p className="text-muted-foreground text-xs">
-                    Rate for each day reported for work. Paid on any day with a check-in, including a half day and approved holiday work. Not part of
-                    gross, so it does not affect absence, proration or overtime.
-                </p>
-            )}
+            {c.is_priced_by_attendance && <p className="text-muted-foreground text-xs">Rate for each day reported for work.</p>}
         </div>
     );
 
@@ -174,21 +168,11 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
                     <div>
                         <h4 className="mb-2 text-sm font-medium">Deductions</h4>
                         <div className="grid gap-4 sm:grid-cols-2">{deductions.map(field)}</div>
-                        <p className="text-muted-foreground mt-2 text-xs">
-                            Leave a deduction blank unless it is a standing contractual amount. Absence, unpaid leave, late and loan deductions are
-                            calculated by payroll each month.
-                        </p>
                     </div>
 
                     <label className="flex items-start gap-2 text-sm">
                         <input type="checkbox" className="mt-1" checked={overtimeEligible} onChange={(e) => setOvertimeEligible(e.target.checked)} />
-                        <span>
-                            Eligible for overtime
-                            <span className="text-muted-foreground block text-xs">
-                                Overtime may only be assigned to an eligible employee. Held here rather than on the employee record so it is
-                                effective-dated with the rest of their salary.
-                            </span>
-                        </span>
+                        <span>Eligible for overtime</span>
                     </label>
 
                     {errors.lines && <p className="text-destructive text-xs">{errors.lines}</p>}
@@ -311,11 +295,6 @@ export default function SalaryShow({ can_manage, employee, current, history, com
                         ))}
                     </div>
                 )}
-
-                <p className="text-muted-foreground text-xs">
-                    These are contractual figures. Absence, unpaid leave, late consequences, overtime, loans and adjustments are applied by payroll
-                    each month and appear on the payslip, not here.
-                </p>
             </div>
         </AppLayout>
     );

@@ -101,11 +101,6 @@ export default function ShowJournal({ journal }: { journal: Journal }) {
                         </tfoot>
                     </table>
                 </div>
-
-                <p className="text-muted-foreground max-w-2xl text-sm">
-                    Posted journals cannot be edited or deleted. To correct one, reverse it and post a new entry: both stay on the record, which is
-                    what makes the books explainable later.
-                </p>
             </div>
         </AppLayout>
     );

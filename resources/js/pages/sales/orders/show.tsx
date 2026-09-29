@@ -192,7 +192,7 @@ function BookParcelForm({ challan, couriers }: { challan: Challan; couriers: { i
     return (
         <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3">
             <div className="grid gap-1">
-                <Label>Courier</Label>
+                <Label required>Courier</Label>
                 <SearchableSelect
                     value={data.money_account_id}
                     onChange={(v) => setData('money_account_id', v)}
@@ -203,24 +203,23 @@ function BookParcelForm({ challan, couriers }: { challan: Challan; couriers: { i
                 <InputError message={errors.money_account_id} />
             </div>
             <div className="grid gap-1">
-                <Label>Consignment number</Label>
+                <Label required>Consignment number</Label>
                 <Input className="w-48" value={data.consignment_number} onChange={(e) => setData('consignment_number', e.target.value)} />
                 <InputError message={errors.consignment_number} />
             </div>
             <div className="grid gap-1">
-                <Label>Amount to collect</Label>
-                <Input className="w-32" value={data.cod_amount} onChange={(e) => setData('cod_amount', e.target.value)} />
+                <Label required>Amount to collect</Label>
+                <Input className="w-32" placeholder="0 if already paid" value={data.cod_amount} onChange={(e) => setData('cod_amount', e.target.value)} />
                 <InputError message={errors.cod_amount} />
             </div>
             <Button size="sm" disabled={processing}>
                 Hand to courier
             </Button>
-            <p className="text-muted-foreground w-full text-xs">
-                {challan.cod_preview !== null
-                    ? `${challan.cod_preview} is what is still to collect for this whole challan: its invoice today, delivery charge and any discount included, less anything paid in advance. `
-                    : 'A line on this challan has no price to bill at, so the amount could not be worked out. '}
-                Enter 0 for a parcel already paid for. The invoice is raised when the courier confirms delivery.
-            </p>
+            {challan.cod_preview === null && (
+                <p className="text-muted-foreground w-full text-xs">
+                    A line on this challan has no price to bill at, so the amount could not be worked out.
+                </p>
+            )}
         </form>
     );
 }
@@ -271,7 +270,7 @@ function ParcelOutcomeForm({ challan }: { challan: Challan }) {
         <form onSubmit={submit} className="mt-3 flex flex-col gap-3">
             <div className="flex flex-wrap items-end gap-3">
                 <div className="grid gap-1">
-                    <Label>What the courier reported</Label>
+                    <Label required>What the courier reported</Label>
                     <select
                         className="border-input bg-background h-9 rounded-md border px-2 text-sm"
                         value={data.outcome}
@@ -284,12 +283,12 @@ function ParcelOutcomeForm({ challan }: { challan: Challan }) {
                     <InputError message={errors.outcome} />
                 </div>
                 <div className="grid gap-1">
-                    <Label>On</Label>
+                    <Label required>On</Label>
                     <Input type="date" className="w-40" value={data.outcome_on} onChange={(e) => setData('outcome_on', e.target.value)} />
                     <InputError message={errors.outcome_on} />
                 </div>
                 <div className="grid gap-1">
-                    <Label>Collected</Label>
+                    <Label required>Collected</Label>
                     <Input
                         className="w-32"
                         value={data.collected_amount}
@@ -345,15 +344,6 @@ function ParcelOutcomeForm({ challan }: { challan: Challan }) {
                 </table>
             )}
             <InputError message={errors.lines} />
-
-            <p className="text-muted-foreground text-xs">
-                {data.outcome === 'delivered' &&
-                    'Raises the invoice for this challan and records what the courier collected as the customer’s payment, held by the courier until its payout.'}
-                {data.outcome === 'partially_delivered' &&
-                    'Invoices what the customer took. Everything else comes back to the warehouse, except what you mark as damaged, which is written off.'}
-                {data.outcome === 'returned' &&
-                    'No invoice. The goods come back to the warehouse, except what you mark as damaged, which is written off.'}
-            </p>
             <div className="flex items-center gap-2">
                 <Input className="max-w-sm" placeholder="Note (optional)" value={data.note} onChange={(e) => setData('note', e.target.value)} />
                 <Button size="sm" disabled={processing}>
@@ -475,7 +465,7 @@ function RecordPaymentForm({ order, accounts, stillToPay }: { order: Order; acco
     return (
         <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3">
             <div className="grid gap-1">
-                <Label>Received into</Label>
+                <Label required>Received into</Label>
                 <SearchableSelect
                     value={data.money_account_id}
                     onChange={(v) => setData('money_account_id', v)}
@@ -486,12 +476,12 @@ function RecordPaymentForm({ order, accounts, stillToPay }: { order: Order; acco
                 <InputError message={errors.money_account_id} />
             </div>
             <div className="grid gap-1">
-                <Label>Amount</Label>
+                <Label required>Amount</Label>
                 <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
                 <InputError message={errors.amount} />
             </div>
             <div className="grid gap-1">
-                <Label>Received on</Label>
+                <Label required>Received on</Label>
                 <Input type="date" className="w-40" value={data.received_on} onChange={(e) => setData('received_on', e.target.value)} />
                 <InputError message={errors.received_on} />
             </div>
@@ -508,9 +498,6 @@ function RecordPaymentForm({ order, accounts, stillToPay }: { order: Order; acco
             <Button size="sm" disabled={processing}>
                 Record payment
             </Button>
-            <p className="text-muted-foreground w-full text-xs">
-                Settles any invoice of this order that is still open; the rest is held for the order and its next invoice takes it.
-            </p>
         </form>
     );
 }
@@ -532,7 +519,7 @@ function RefundForm({ order, accounts, held, titled = false }: { order: Order; a
         <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3">
             {titled && <p className="w-full font-medium">Or record money you sent back by bank, cash or bKash</p>}
             <div className="grid gap-1">
-                <Label>Paid back from</Label>
+                <Label required>Paid back from</Label>
                 <SearchableSelect
                     value={data.money_account_id}
                     onChange={(v) => setData('money_account_id', v)}
@@ -543,12 +530,12 @@ function RefundForm({ order, accounts, held, titled = false }: { order: Order; a
                 <InputError message={errors.money_account_id} />
             </div>
             <div className="grid gap-1">
-                <Label>Amount</Label>
+                <Label required>Amount</Label>
                 <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
                 <InputError message={errors.amount} />
             </div>
             <div className="grid gap-1">
-                <Label>Refunded on</Label>
+                <Label required>Refunded on</Label>
                 <Input type="date" className="w-40" value={data.refunded_on} onChange={(e) => setData('refunded_on', e.target.value)} />
                 <InputError message={errors.refunded_on} />
             </div>
@@ -595,7 +582,7 @@ function GatewayRefundForm({ order, owed, payments }: { order: Order; owed: stri
             <div className="flex flex-wrap items-end gap-3">
                 {refundable.length > 1 && (
                     <div className="grid gap-1">
-                        <Label>Payment</Label>
+                        <Label required>Payment</Label>
                         <SearchableSelect
                             value={data.gateway_payment_id}
                             onChange={choose}
@@ -609,14 +596,14 @@ function GatewayRefundForm({ order, owed, payments }: { order: Order; owed: stri
                     </div>
                 )}
                 <div className="grid gap-1">
-                    <Label>Amount</Label>
+                    <Label required>Amount</Label>
                     <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
                     <InputError message={errors.amount} />
                 </div>
                 {/* ⚠ Its own full row on a phone: beside the amount it pushed the
                     button over the field (found on the 390px walk). */}
                 <div className="grid w-full gap-1 sm:w-auto sm:min-w-64 sm:flex-1">
-                    <Label>Reason</Label>
+                    <Label required>Reason</Label>
                     <Input
                         className="w-full"
                         maxLength={255}
@@ -631,10 +618,6 @@ function GatewayRefundForm({ order, owed, payments }: { order: Order; owed: stri
                 </Button>
             </div>
             <InputError message={errors.gateway_payment_id} />
-            <p className="text-muted-foreground text-xs">
-                SSLCommerz sends the money back to the card or wallet it came from, usually within a few working days. The amount is set aside on this
-                order at once, and booked when SSLCommerz says it is back with the customer.
-            </p>
         </form>
     );
 }
@@ -882,12 +865,8 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
     return (
         <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-xl border p-4">
             <h3 className="font-medium">Record delivery against this order</h3>
-            <p className="text-muted-foreground text-sm">
-                Defaults to the full remaining quantity - reduce a line for a partial challan. Set a line to 0 to skip it. More than the remaining
-                quantity is refused; record any extra as a direct delivery line on the Deliveries screen.
-            </p>
             <div className="grid max-w-sm gap-2">
-                <Label>Warehouse</Label>
+                <Label required>Warehouse</Label>
                 <SearchableSelect
                     value={data.warehouse_id}
                     onChange={(v) => setData('warehouse_id', v)}

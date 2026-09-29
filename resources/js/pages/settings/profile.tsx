@@ -76,7 +76,6 @@ function ProfilePicture({ photoUrl, hasEmployee, name }: { photoUrl: string | nu
                                 Remove
                             </Button>
                         )}
-                        <p className="text-muted-foreground text-xs">JPG, PNG or WebP, up to 2 MB. Shown beside your name everywhere.</p>
                     </div>
                 ) : (
                     <p className="text-muted-foreground text-sm">
@@ -119,13 +118,13 @@ export default function Profile({
 
             <SettingsLayout narrow>
                 <div className="space-y-6">
-                    <HeadingSmall title="Profile information" description="Your picture, name and email address" />
+                    <HeadingSmall title="Profile information" />
 
                     <ProfilePicture photoUrl={photo_url} hasEmployee={hasEmployee} name={auth.user.name} />
 
                     <form onSubmit={submit} className="space-y-6">
                         <div className="grid gap-2">
-                            <Label htmlFor="name">Name</Label>
+                            <Label htmlFor="name" required>Name</Label>
 
                             <Input
                                 id="name"
@@ -141,7 +140,7 @@ export default function Profile({
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="email">Email address</Label>
+                            <Label htmlFor="email" required>Email address</Label>
 
                             <Input
                                 id="email"

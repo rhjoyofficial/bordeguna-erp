@@ -1,11 +1,11 @@
-import { FilterBar, Footnote, ReportHeading, ReportPage, ReportTable, StatRow, StatTile, Verdict } from '@/components/report/report-shell';
+import { FilterBar, ReportHeading, ReportPage, ReportTable, StatRow, StatTile, Verdict } from '@/components/report/report-shell';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { ChevronRight } from 'lucide-react';
-import { Fragment, FormEventHandler, useState } from 'react';
+import { FormEventHandler, Fragment, useState } from 'react';
 
 interface Line {
     code: string;
@@ -168,15 +168,7 @@ export default function BalanceSheetIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Balance sheet" />
             <ReportPage>
-                <ReportHeading
-                    title="Balance sheet"
-                    description={
-                        <>
-                            What the business owns and owes on one day. Everything recorded up to and including the date shown.
-                            {fiscal_year && <> Fiscal year {fiscal_year}.</>}
-                        </>
-                    }
-                />
+                <ReportHeading title="Balance sheet" description={fiscal_year ? `Fiscal year ${fiscal_year}` : undefined} />
 
                 <FilterBar onSubmit={submit}>
                     <div className="grid gap-2">
@@ -293,11 +285,6 @@ export default function BalanceSheetIndex({
                         </tr>
                     )}
                 </ReportTable>
-
-                <Footnote>
-                    No year end has ever been closed on this ledger, so profit is not folded into retained earnings. It is shown inside equity as the
-                    result brought forward and the result for the year, which is what makes the two sides agree.
-                </Footnote>
             </ReportPage>
         </AppLayout>
     );

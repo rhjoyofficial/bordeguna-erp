@@ -105,7 +105,7 @@ export default function PricesIndex({
                         <InputError message={errors.effective_to} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="customer_id">For one customer</Label>
+                        <Label htmlFor="customer_id" required={!data.price_group_id}>For one customer</Label>
                         <SearchSelect id="customer_id" value={data.customer_id} onChange={(e) => setData('customer_id', e.target.value)}>
                             <option value="">No particular customer</option>
                             {customers.map((c) => (
@@ -116,7 +116,7 @@ export default function PricesIndex({
                         </SearchSelect>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="price_group_id">Or a price group</Label>
+                        <Label htmlFor="price_group_id" required={!data.customer_id}>Or a price group</Label>
                         {/* ⚠ Rows, never typed: the free-text version of this field
                             is how a distributor gets silently charged retail. */}
                         <SearchSelect id="price_group_id" value={data.price_group_id} onChange={(e) => setData('price_group_id', e.target.value)}>

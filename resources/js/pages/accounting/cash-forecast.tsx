@@ -38,10 +38,6 @@ export default function CashForecast({ opening_cash, weeks }: CashForecastProps)
             <div className="space-y-4 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Cash forecast</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Eight weeks ahead, from documents that already exist: invoices due in, bills and standing costs due out, and the
-                        last real payroll as an estimate on the 1st. Nothing is smoothed and nothing is guessed.
-                    </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-4">
@@ -54,7 +50,6 @@ export default function CashForecast({ opening_cash, weeks }: CashForecastProps)
                             <p className="text-destructive text-sm font-semibold">
                                 ⚠ Cash goes negative in the week of {weeks[firstNegative].week_start}
                             </p>
-                            <p className="text-muted-foreground text-xs">Collect sooner, or move a payment later.</p>
                         </div>
                     )}
                 </div>
@@ -85,18 +80,16 @@ export default function CashForecast({ opening_cash, weeks }: CashForecastProps)
                                     </td>
                                     <td className="px-3 py-2 text-right tabular-nums">{week.in_invoices !== 0 ? money(week.in_invoices) : '-'}</td>
                                     <td className="px-3 py-2 text-right tabular-nums">{week.out_bills !== 0 ? money(week.out_bills) : '-'}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums">{week.out_recurring !== 0 ? money(week.out_recurring) : '-'}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums">
+                                        {week.out_recurring !== 0 ? money(week.out_recurring) : '-'}
+                                    </td>
                                     <td className="px-3 py-2 text-right tabular-nums">
                                         {week.out_payroll_estimate !== 0 ? money(week.out_payroll_estimate) : '-'}
                                     </td>
                                     <td className={'px-3 py-2 text-right tabular-nums ' + (week.net < 0 ? 'text-destructive' : '')}>
                                         {money(week.net)}
                                     </td>
-                                    <td
-                                        className={
-                                            'px-3 py-2 text-right font-semibold tabular-nums ' + (week.running < 0 ? 'text-destructive' : '')
-                                        }
-                                    >
+                                    <td className={'px-3 py-2 text-right font-semibold tabular-nums ' + (week.running < 0 ? 'text-destructive' : '')}>
                                         {money(week.running)}
                                     </td>
                                 </tr>
@@ -104,11 +97,6 @@ export default function CashForecast({ opening_cash, weeks }: CashForecastProps)
                         </tbody>
                     </table>
                 </div>
-
-                <p className="text-muted-foreground text-xs">
-                    Payroll appears as the last approved run's net, placed on the 1st - an estimate, labelled as one. Overdue
-                    receivables land in week one: money late is money expected now, not never.
-                </p>
             </div>
         </AppLayout>
     );

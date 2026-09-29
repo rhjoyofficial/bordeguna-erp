@@ -285,7 +285,7 @@ function FolderDialog({ folder, parentId, onClose }: { folder: Folder | null; pa
                 </DialogHeader>
                 <form onSubmit={submit} className="grid gap-3">
                     <div className="grid gap-1.5">
-                        <Label htmlFor="folder-name">Folder name</Label>
+                        <Label htmlFor="folder-name" required>Folder name</Label>
                         <Input
                             id="folder-name"
                             autoFocus
@@ -442,10 +442,7 @@ export default function FilesIndex({
                 onDragLeave={() => setDragging(false)}
                 onDrop={onDrop}
             >
-                <ReportHeading
-                    title="Document archive"
-                    description="Every document the business keeps, organised into folders. You only see files belonging to records you could already open, so this is not the same for everybody."
-                />
+                <ReportHeading title="Document archive" />
 
                 {(expired_count > 0 || expiring_count > 0) && (
                     <div className="flex flex-wrap gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
@@ -658,9 +655,6 @@ export default function FilesIndex({
                             <Button type="button" variant="ghost" size="sm" onClick={() => setAddingCategory(!addingCategory)}>
                                 {addingCategory ? 'Cancel' : 'Add a kind'}
                             </Button>
-                            <p className="text-muted-foreground text-xs">
-                                Or just drag files onto the page. Documents, images, spreadsheets, archives, video and audio, up to 256 MB.
-                            </p>
                         </div>
                     </form>
                 )}
@@ -668,7 +662,7 @@ export default function FilesIndex({
                 {can.manage && showUpload && addingCategory && (
                     <form onSubmit={submitCategory} className="flex flex-wrap items-end gap-3 rounded-lg border border-dashed p-4">
                         <div className="grid gap-2">
-                            <Label htmlFor="cat-name">Kind of document</Label>
+                            <Label htmlFor="cat-name" required>Kind of document</Label>
                             <Input
                                 id="cat-name"
                                 placeholder="Contracts"

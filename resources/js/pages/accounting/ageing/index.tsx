@@ -77,11 +77,6 @@ export default function AgeingIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">{label} ageing</h1>
-                    <p className="text-muted-foreground max-w-2xl text-sm">
-                        {kind === 'receivables'
-                            ? 'What each customer owes, and how long it has been owed. The balance sheet gives one figure for everyone combined, which is the one form in which it cannot be acted on.'
-                            : 'What the business owes each supplier, and how long it has been owed.'}
-                    </p>
                 </div>
 
                 <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
@@ -221,13 +216,6 @@ export default function AgeingIndex({
                             rows are marked "no terms".
                         </p>
                     )}
-                    <p>
-                        "On account" is money that changes what a {party_label.toLowerCase()} owes but belongs to no document: a
-                        {kind === 'receivables'
-                            ? ' receipt or credit note not yet applied to an invoice'
-                            : ' payment or credit note not yet applied to a bill'}
-                        . It can sit in no age bucket, and leaving it out would make this report disagree with the balance sheet.
-                    </p>
                     {parties_omitted > 0 && (
                         <p>
                             {parties_omitted} {parties_omitted === 1 ? 'party is' : 'parties are'} not shown, having nothing outstanding and nothing

@@ -187,7 +187,6 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
                 {doc.attendance && (
                     <div className={cardClass}>
                         <h3 className="mb-1 font-medium">Attendance</h3>
-                        <p className="text-muted-foreground mb-3 text-xs">Attendance decided every one of these; payroll only priced them.</p>
                         <div className="grid gap-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
                             {[
                                 ['Present', doc.attendance.present_days],

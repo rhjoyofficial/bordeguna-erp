@@ -27,10 +27,6 @@ export default function Health({ signals }: { signals: Signal[] }) {
             <div className="space-y-6 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Business health</h1>
-                    <p className="text-muted-foreground text-sm">
-                        The morning walk around the shop, done by the system. Every number is read fresh from its own module and links to
-                        where the fix lives - nothing here is stored, so nothing here can go stale.
-                    </p>
                 </div>
 
                 {attention.length === 0 ? (

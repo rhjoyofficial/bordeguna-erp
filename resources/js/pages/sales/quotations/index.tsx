@@ -111,7 +111,7 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
             <h2 className="font-semibold">New quotation</h2>
             <div className="grid gap-3 sm:grid-cols-4">
                 <div className="space-y-1">
-                    <Label className="text-xs">Quote for</Label>
+                    <Label className="text-xs" required>Quote for</Label>
                     <Select value={form.data.party_kind} onValueChange={(value) => form.setData('party_kind', value)}>
                         <SelectTrigger>
                             <SelectValue />
@@ -123,7 +123,7 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                     </Select>
                 </div>
                 <div className="space-y-1 sm:col-span-2">
-                    <Label className="text-xs">{form.data.party_kind === 'customer' ? 'Customer' : 'Lead'}</Label>
+                    <Label className="text-xs" required>{form.data.party_kind === 'customer' ? 'Customer' : 'Lead'}</Label>
                     {form.data.party_kind === 'customer' ? (
                         <>
                             <SearchableSelect
@@ -157,7 +157,7 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                     <InputError message={form.errors.customer_id ?? form.errors.lead_id} />
                 </div>
                 <div className="space-y-1">
-                    <Label className="text-xs">Valid until</Label>
+                    <Label className="text-xs" required>Valid until</Label>
                     <Input type="date" value={form.data.valid_until} onChange={(e) => form.setData('valid_until', e.target.value)} />
                     <InputError message={form.errors.valid_until} />
                 </div>
@@ -167,7 +167,7 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                 {form.data.lines.map((line, index) => (
                     <div key={index} className="flex flex-wrap items-end gap-2">
                         <div className="min-w-56 flex-1 space-y-1">
-                            <Label className="text-xs">Product</Label>
+                            <Label className="text-xs" required>Product</Label>
                             <SearchableSelect
                                 value={line.product_id}
                                 onChange={(value) => patch(index, 'product_id', value)}
@@ -177,7 +177,7 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                             />
                         </div>
                         <div className="space-y-1">
-                            <Label className="text-xs">Quantity</Label>
+                            <Label className="text-xs" required>Quantity</Label>
                             <Input
                                 className="w-24"
                                 type="number"
@@ -188,7 +188,7 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                             />
                         </div>
                         <div className="space-y-1">
-                            <Label className="text-xs">Quoted price (blank = list price)</Label>
+                            <Label className="text-xs">Quoted price</Label>
                             <Input
                                 className="w-40"
                                 type="number"
@@ -266,13 +266,7 @@ export default function Quotations({ quotations, customers, leads, products, war
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Quotations" />
             <div className="space-y-6 p-4">
-                <div>
-                    <h1 className="text-xl font-semibold">Quotations</h1>
-                    <p className="text-muted-foreground text-sm">
-                        A promise of a price with an expiry - nothing reserved, nothing posted. Accepting one creates the sales order at the quoted
-                        prices, exactly as written.
-                    </p>
-                </div>
+                <h1 className="text-xl font-semibold">Quotations</h1>
 
                 <NewQuoteForm customers={customers} leads={leads} products={products} />
 

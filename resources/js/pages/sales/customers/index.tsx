@@ -137,15 +137,7 @@ export default function CustomersIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Customers" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Customers"
-                    description={
-                        <>
-                            Everyone the business sells to. The price group decides what each of them is charged, so it is a commercial decision
-                            rather than a label. {customers.total} on file.
-                        </>
-                    }
-                />
+                <ReportHeading title="Customers" />
 
                 {mayManage && <CustomerImportPanel />}
 

@@ -163,7 +163,7 @@ function ProfileForm({
 
             <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
-                    <Label htmlFor="printer-name">Name</Label>
+                    <Label htmlFor="printer-name" required>Name</Label>
                     <Input
                         id="printer-name"
                         value={data.name}
@@ -200,7 +200,7 @@ function ProfileForm({
 
             <div className="grid gap-4 md:grid-cols-4">
                 <div className="grid gap-2">
-                    <Label htmlFor="paper-width">Paper width (mm)</Label>
+                    <Label htmlFor="paper-width" required>Paper width (mm)</Label>
                     <Input
                         id="paper-width"
                         type="number"
@@ -210,14 +210,13 @@ function ProfileForm({
                     <InputError message={errors.paper_width_mm} />
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="print-width">Printable width (mm)</Label>
+                    <Label htmlFor="print-width" required>Printable width (mm)</Label>
                     <Input
                         id="print-width"
                         type="number"
                         value={data.print_width_mm}
                         onChange={(e) => setData('print_width_mm', Number(e.target.value))}
                     />
-                    <p className="text-muted-foreground text-xs">An 80mm roll normally prints 72mm.</p>
                     <InputError message={errors.print_width_mm} />
                 </div>
                 <div className="grid gap-2">
@@ -225,11 +224,10 @@ function ProfileForm({
                         Head resolution (dpi)
                     </Label>
                     <Input id="dpi" type="number" value={data.dpi} onChange={(e) => setData('dpi', Number(e.target.value))} />
-                    <p className="text-muted-foreground text-xs">Almost always 203. This is what sizes the barcode.</p>
                     <InputError message={errors.dpi} />
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="font-pt">Text size (pt)</Label>
+                    <Label htmlFor="font-pt" required>Text size (pt)</Label>
                     <Input
                         id="font-pt"
                         type="number"
@@ -333,10 +331,7 @@ export default function Printers({
 
             <SettingsLayout>
                 <div className="grid gap-6">
-                    <HeadingSmall
-                        title="Printers"
-                        description="What the paper at each counter is. Receipts follow these numbers, so changing the machine is a change here and nothing else."
-                    />
+                    <HeadingSmall title="Printers" />
 
                     {!hasDefault && (
                         <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 text-sm">
@@ -359,31 +354,6 @@ export default function Printers({
                             <Button onClick={() => setAdding(true)}>Add a printer profile</Button>
                         </div>
                     )}
-
-                    {/*
-                      ⚠⚠ SAID HERE RATHER THAN STORED AS A SETTING. The ERP
-                      prints through the browser, so it cannot cut the paper and
-                      it cannot open the cash drawer - those are the printer
-                      DRIVER's own settings on the counter PC. A switch on this
-                      screen would be a switch that does nothing, which is worse
-                      than no switch at all.
-                    */}
-                    <div className="grid gap-2 rounded-lg border p-4 text-sm">
-                        <p className="font-medium">Two things this screen deliberately does not control</p>
-                        <p className="text-muted-foreground">
-                            <strong>Cutting the paper</strong> and <strong>opening the cash drawer</strong> are settings of the printer driver on the
-                            counter computer, not of this system. Open the printer in Windows, go to Printing Preferences, and set the cutter and the
-                            cash-drawer behaviour there. They are not offered here because a switch that changed nothing would be worse than none.
-                        </p>
-                        <p className="text-muted-foreground">
-                            If you set the drawer to open on every print, remember it will also open when somebody reprints an old receipt, and when a
-                            sale was paid by bKash or on account. The drawer cannot see who paid how.
-                        </p>
-                        <p className="text-muted-foreground">
-                            To stop the print dialog appearing on every sale, start the browser on the counter machine with{' '}
-                            <code className="bg-muted rounded px-1">--kiosk-printing</code> and make this printer the default.
-                        </p>
-                    </div>
                 </div>
             </SettingsLayout>
         </AppLayout>

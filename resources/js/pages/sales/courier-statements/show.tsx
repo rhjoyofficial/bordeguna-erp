@@ -127,7 +127,6 @@ export default function CourierStatementShow({
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3">
                         <p className="text-muted-foreground">The whole payout</p>
                         <p className="text-lg font-medium tabular-nums">{summary.file_total}</p>
-                        <p className="text-muted-foreground text-xs">Every parcel in the file, whichever business it belongs to.</p>
                     </div>
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3">
                         <p className="text-muted-foreground">This business&apos;s share</p>
@@ -140,11 +139,9 @@ export default function CourierStatementShow({
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3">
                         <p className="text-muted-foreground">Money</p>
                         {isDraft ? (
-                            <p className="text-xs">
-                                {summary.deposit_expected
-                                    ? 'Enter where the payout arrived below. It must equal the whole payout.'
-                                    : 'This statement pays nothing out, so nothing arrives; the share stays with the courier.'}
-                            </p>
+                            !summary.deposit_expected && (
+                                <p className="text-xs">This statement pays nothing out, so nothing arrives; the share stays with the courier.</p>
+                            )
                         ) : statement.received_into ? (
                             <p className="text-sm">
                                 {statement.deposit_amount} arrived in {statement.received_into} on {statement.received_on}
@@ -222,13 +219,6 @@ export default function CourierStatementShow({
                         </tbody>
                     </table>
                 </div>
-                {isDraft && (
-                    <p className="text-muted-foreground text-xs">
-                        A parcel not in the ERP was booked by hand in the courier&apos;s panel. Mark it ours only if it belongs to this business and
-                        collected nothing: its charge is then a cost here. One that collected money is a sale the ERP does not have, and has to be
-                        recorded first.
-                    </p>
-                )}
 
                 {isDraft && (
                     <form
@@ -238,7 +228,7 @@ export default function CourierStatementShow({
                         {summary.deposit_expected && (
                             <>
                                 <div className="grid gap-1">
-                                    <Label>Arrived in</Label>
+                                    <Label required>Arrived in</Label>
                                     <SearchableSelect
                                         value={data.received_money_account_id}
                                         onChange={(v) => setData('received_money_account_id', v)}
@@ -249,12 +239,12 @@ export default function CourierStatementShow({
                                     <InputError message={errors.received_money_account_id} />
                                 </div>
                                 <div className="grid gap-1">
-                                    <Label>Amount that arrived</Label>
+                                    <Label required>Amount that arrived</Label>
                                     <Input className="w-36" value={data.deposit_amount} onChange={(e) => setData('deposit_amount', e.target.value)} />
                                     <InputError message={errors.deposit_amount} />
                                 </div>
                                 <div className="grid gap-1">
-                                    <Label>On</Label>
+                                    <Label required>On</Label>
                                     <Input
                                         type="date"
                                         className="w-40"

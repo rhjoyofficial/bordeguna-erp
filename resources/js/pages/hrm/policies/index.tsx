@@ -210,14 +210,18 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
 
                 <div className="grid gap-4">
                     <div className="grid gap-2 sm:max-w-xs">
-                        <Label htmlFor="pol_from">Takes effect from</Label>
+                        <Label htmlFor="pol_from" required>
+                            Takes effect from
+                        </Label>
                         <Input id="pol_from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
                         <InputError message={errors.effective_from} />
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-3">
                         <div className="grid gap-1">
-                            <Label className="text-xs">Full day needs (hours)</Label>
+                            <Label className="text-xs" required>
+                                Full day needs (hours)
+                            </Label>
                             <Input
                                 value={general.full_day_minimum_hours}
                                 onChange={(e) => setGeneral({ ...general, full_day_minimum_hours: e.target.value })}
@@ -225,7 +229,9 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                             <InputError message={errors.full_day_minimum_hours} />
                         </div>
                         <div className="grid gap-1">
-                            <Label className="text-xs">Half day up to (hours)</Label>
+                            <Label className="text-xs" required>
+                                Half day up to (hours)
+                            </Label>
                             <Input
                                 value={general.half_day_maximum_hours}
                                 onChange={(e) => setGeneral({ ...general, half_day_maximum_hours: e.target.value })}
@@ -233,7 +239,9 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                             <InputError message={errors.half_day_maximum_hours} />
                         </div>
                         <div className="grid gap-1">
-                            <Label className="text-xs">Early-leave grace (minutes)</Label>
+                            <Label className="text-xs" required>
+                                Early-leave grace (minutes)
+                            </Label>
                             <Input
                                 value={general.early_leave_grace_minutes}
                                 onChange={(e) => setGeneral({ ...general, early_leave_grace_minutes: e.target.value })}
@@ -249,7 +257,9 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                             <InputError message={errors.half_day_arrival_after_minutes} />
                         </div>
                         <div className="grid gap-1">
-                            <Label className="text-xs">Duplicate scan window (seconds)</Label>
+                            <Label className="text-xs" required>
+                                Duplicate scan window (seconds)
+                            </Label>
                             <Input
                                 value={general.duplicate_scan_window_seconds}
                                 onChange={(e) => setGeneral({ ...general, duplicate_scan_window_seconds: e.target.value })}
@@ -271,13 +281,11 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                 <Checkbox checked={accrual.enabled} onCheckedChange={(v) => setAccrual({ ...accrual, enabled: v === true })} />
                                 Earn one leave day per month
                             </label>
-                            <p className="text-muted-foreground mt-1 text-xs">
-                                Credited to permanent employees on the 1st for the month just ended, and withheld when that month ran past either
-                                allowance. One rule for the whole business.
-                            </p>
                             <div className="mt-3 grid gap-2 sm:grid-cols-3">
                                 <div className="grid gap-1">
-                                    <Label className="text-xs">Days per month</Label>
+                                    <Label className="text-xs" required>
+                                        Days per month
+                                    </Label>
                                     <Input
                                         value={accrual.days_per_month}
                                         onChange={(e) => setAccrual({ ...accrual, days_per_month: e.target.value })}
@@ -285,7 +293,9 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                     <InputError message={errors['el_accrual.days_per_month']} />
                                 </div>
                                 <div className="grid gap-1">
-                                    <Label className="text-xs">Ordinary lates allowed</Label>
+                                    <Label className="text-xs" required>
+                                        Ordinary lates allowed
+                                    </Label>
                                     <Input
                                         value={accrual.max_ordinary_lates}
                                         onChange={(e) => setAccrual({ ...accrual, max_ordinary_lates: e.target.value })}
@@ -293,7 +303,9 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                     <InputError message={errors['el_accrual.max_ordinary_lates']} />
                                 </div>
                                 <div className="grid gap-1">
-                                    <Label className="text-xs">Serious lates allowed</Label>
+                                    <Label className="text-xs" required>
+                                        Serious lates allowed
+                                    </Label>
                                     <Input
                                         value={accrual.max_serious_lates}
                                         onChange={(e) => setAccrual({ ...accrual, max_serious_lates: e.target.value })}
@@ -334,11 +346,15 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                         <div key={wi} className="border-sidebar-border/70 dark:border-sidebar-border rounded-lg border p-3">
                             <div className="grid gap-2 sm:grid-cols-[1fr_7rem_7rem_auto]">
                                 <div className="grid gap-1">
-                                    <Label className="text-xs">Window label</Label>
+                                    <Label className="text-xs" required>
+                                        Window label
+                                    </Label>
                                     <Input value={w.label} onChange={(e) => patchWindow(wi, { label: e.target.value })} />
                                 </div>
                                 <div className="grid gap-1">
-                                    <Label className="text-xs">From (min)</Label>
+                                    <Label className="text-xs" required>
+                                        From (min)
+                                    </Label>
                                     <Input value={String(w.from_minutes)} onChange={(e) => patchWindow(wi, { from_minutes: e.target.value })} />
                                 </div>
                                 <div className="grid gap-1">
@@ -444,11 +460,6 @@ export default function PolicyIndex({ scopes, consequences }: { scopes: Scope[];
             <div className="flex flex-col gap-4 p-4">
                 <div>
                     <h2 className="text-lg font-medium">Attendance policy</h2>
-                    <p className="text-muted-foreground text-sm">
-                        This is where you set how many late arrivals are free before a day's salary is deducted, and the day rules. Press
-                        <span className="font-medium"> Revise</span> on a scope to change the numbers. A department's policy replaces the company
-                        default whole, never merged.
-                    </p>
                 </div>
 
                 {scopes.map((scope) => (

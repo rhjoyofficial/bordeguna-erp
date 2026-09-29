@@ -74,10 +74,6 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h2 className="text-lg font-medium">Import attendance</h2>
-                    <p className="text-muted-foreground text-sm">
-                        Upload a ZKTeco / ZKTime.Net CSV export. Re-uploading the same file is safe - rows already captured are reported as
-                        duplicates, never imported twice.
-                    </p>
                 </div>
 
                 {/* One folded line instead of a card of chips - the warning
@@ -109,9 +105,6 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                             accept=".csv,.txt,.xls,.xlsx,.ods,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                         />
-                        <p className="text-muted-foreground text-xs">
-                            Excel (.xls, .xlsx), OpenDocument (.ods) or CSV. Upload the device export as it comes.
-                        </p>
                         {errors.file && <p className="text-destructive text-xs">{errors.file}</p>}
                     </div>
                     <div className="grid gap-2">
@@ -136,14 +129,6 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                             {uploading ? 'Importing…' : 'Import'}
                         </Button>
                     </div>
-                    {/* The 23 Aug lesson is CLOSED (24 Aug): importing now
-                        recomputes the imported days itself, so the screens
-                        change immediately. The line stays to say so, and to
-                        keep the nightly run's sweep-up role on record. */}
-                    <p className="text-muted-foreground text-xs sm:col-span-4">
-                        Importing recomputes the affected days automatically, so Daily attendance shows the result right away. The nightly run still
-                        sweeps up anything else.
-                    </p>
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">

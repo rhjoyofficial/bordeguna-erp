@@ -80,7 +80,9 @@ function IssueNoticeDialog({ employees }: { employees: { id: number; name: strin
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="scn_employee">Employee</Label>
+                        <Label htmlFor="scn_employee" required>
+                            Employee
+                        </Label>
                         <SearchSelect id="scn_employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
@@ -92,12 +94,16 @@ function IssueNoticeDialog({ employees }: { employees: { id: number; name: strin
                         {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="scn_subject">Subject</Label>
+                        <Label htmlFor="scn_subject" required>
+                            Subject
+                        </Label>
                         <Input id="scn_subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Show cause notice" />
                         {errors.subject && <p className="text-destructive text-xs">{errors.subject}</p>}
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="scn_body">Notice text</Label>
+                        <Label htmlFor="scn_body" required>
+                            Notice text
+                        </Label>
                         <textarea
                             id="scn_body"
                             className="border-input bg-background min-h-40 w-full rounded-md border px-3 py-2 text-sm"

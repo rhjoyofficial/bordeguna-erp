@@ -216,9 +216,7 @@ export default function ProductionRunShow({
                                     {run.yield_check.deviation_percent}%
                                 </span>{' '}
                                 against a tolerance of {run.yield_check.tolerance_percent}%.{' '}
-                                {run.yield_check.flagged
-                                    ? 'Consumption the declared content and recorded waste do not explain. Worth a look, never a block.'
-                                    : 'Within tolerance.'}
+                                {run.yield_check.flagged ? 'Outside tolerance.' : 'Within tolerance.'}
                             </p>
                         ) : (
                             <p className="text-muted-foreground mt-1 text-sm">
@@ -356,9 +354,7 @@ export default function ProductionRunShow({
                         </p>
                     ) : (
                         <p className="text-muted-foreground mt-1">
-                            {run.status === 'draft'
-                                ? 'Nothing posts until the run is confirmed.'
-                                : 'No journal, correctly. A fully absorbed run moves value from inputs into the output batch without changing any account balance.'}
+                            {run.status === 'draft' ? 'Nothing posts until the run is confirmed.' : 'No journal posted.'}
                         </p>
                     )}
                 </div>

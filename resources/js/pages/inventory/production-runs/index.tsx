@@ -43,10 +43,6 @@ export default function ProductionRunsIndex({ runs, filters }: { runs: Paginated
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h1 className="text-xl font-semibold">Production runs</h1>
-                        <p className="text-muted-foreground text-sm">
-                            Consume inputs, produce one output batch at the consumed cost. Waste stays visible; the ledger only speaks when waste is
-                            expensed.
-                        </p>
                     </div>
                     <div className="flex items-center gap-2">
                         <SearchSelect

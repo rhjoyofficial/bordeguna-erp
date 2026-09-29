@@ -114,11 +114,6 @@ export default function ProductsIndex({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h1 className="text-lg font-semibold">{isRaw ? 'Raw materials' : 'Products'}</h1>
-                        <p className="text-muted-foreground text-sm">
-                            {isRaw
-                                ? 'What you buy to make your products. Kept separate from the finished goods you sell.'
-                                : 'The finished goods and services you sell. Prices for each kind of buyer are set in the same place.'}
-                        </p>
                     </div>
                     <Button onClick={openNew}>{isRaw ? 'New raw material' : 'New product'}</Button>
                 </div>

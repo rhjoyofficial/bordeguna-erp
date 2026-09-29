@@ -59,9 +59,6 @@ export default function CostOfGoodsSoldIndex({
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
                         <h1 className="text-xl font-semibold">Cost of goods sold</h1>
-                        <p className="text-muted-foreground text-sm">
-                            What the goods sold between {from} and {to} cost, net of returns, and what they earned.
-                        </p>
                     </div>
 
                     <form onSubmit={submit} className="flex items-end gap-2">

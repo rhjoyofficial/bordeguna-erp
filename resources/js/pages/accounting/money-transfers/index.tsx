@@ -40,15 +40,11 @@ export default function MoneyTransfersIndex({ transfers }: { transfers: Paginate
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Money transfers" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Money transfers"
-                    description="Transfers recorded before Contra vouchers existed. Nothing new is recorded here: a move between your own accounts, bank to the till or bKash to the bank, is a Contra voucher now."
-                />
+                <ReportHeading title="Money transfers" />
 
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-4 text-sm">
                     <span>
-                        Move money between accounts with a <strong>Contra voucher</strong>: it is drafted first, numbered when posted, printable, and
-                        reversed with a reason. A bank charge on the move is a separate Payment voucher.
+                        Move money between accounts with a <strong>Contra voucher</strong>.
                     </span>
                     {canPrepareVouchers ? (
                         <Button asChild>

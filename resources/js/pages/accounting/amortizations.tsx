@@ -80,9 +80,6 @@ export default function Amortizations({ schedules, accounts, can_act }: Amortiza
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
                         <h1 className="text-xl font-semibold">Accruals & prepayments</h1>
-                        <p className="text-muted-foreground text-sm">
-                            One amount, spread over its months - a real journal posts each month, automatically on the 1st.
-                        </p>
                     </div>
                     {can_act && (
                         <div className="flex gap-2">
@@ -130,7 +127,9 @@ export default function Amortizations({ schedules, accounts, can_act }: Amortiza
                             <InputError message={form.errors.name} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="source">Balance-sheet account (where it waits)</Label>
+                            <Label htmlFor="source" required>
+                                Balance-sheet account (where it waits)
+                            </Label>
                             <select
                                 id="source"
                                 className="border-input bg-background h-9 rounded-md border px-2 text-sm"
@@ -149,7 +148,9 @@ export default function Amortizations({ schedules, accounts, can_act }: Amortiza
                             <InputError message={form.errors.source_account_id} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="target">P&L account (where each month lands)</Label>
+                            <Label htmlFor="target" required>
+                                P&L account (where each month lands)
+                            </Label>
                             <select
                                 id="target"
                                 className="border-input bg-background h-9 rounded-md border px-2 text-sm"
@@ -216,7 +217,7 @@ export default function Amortizations({ schedules, accounts, can_act }: Amortiza
                 )}
 
                 {schedules.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">No schedules yet. The Nikola-style case - a year paid in advance - belongs here.</p>
+                    <p className="text-muted-foreground text-sm">No schedules yet.</p>
                 ) : (
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full text-sm">

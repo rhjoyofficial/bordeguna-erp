@@ -144,7 +144,6 @@ export default function ReportShow({ report, parameters, columns, formats, queue
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">{report.name}</h1>
-                    <p className="text-muted-foreground text-sm">{report.description}</p>
                 </div>
 
                 <div className="grid gap-6 lg:grid-cols-3">
@@ -221,8 +220,6 @@ export default function ReportShow({ report, parameters, columns, formats, queue
                                             ))}
                                         </SearchSelect>
                                     )}
-
-                                    {parameter.help && <p className="text-muted-foreground text-xs">{parameter.help}</p>}
                                 </div>
                             ))}
                         </div>

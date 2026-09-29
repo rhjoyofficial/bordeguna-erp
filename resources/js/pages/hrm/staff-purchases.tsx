@@ -45,11 +45,13 @@ function RequestCard({ row, moneyAccounts }: { row: RequestRow; moneyAccounts: S
                     {row.number} · {row.employee} ({row.employee_code})
                     <span className="text-muted-foreground font-normal"> · {row.applied_at?.slice(0, 10)}</span>
                 </p>
-                <span className="text-muted-foreground text-xs capitalize">{row.status} · {row.payment_mode.replace('_', ' ')}</span>
+                <span className="text-muted-foreground text-xs capitalize">
+                    {row.status} · {row.payment_mode.replace('_', ' ')}
+                </span>
             </div>
             <p className="text-muted-foreground">
-                {row.lines.map((line) => `${line.product} (${money(line.staff_price)}, MRP ${money(line.mrp)})`).join(' · ')}
-                {' '}= <strong>{money(row.total_staff_price)}</strong>
+                {row.lines.map((line) => `${line.product} (${money(line.staff_price)}, MRP ${money(line.mrp)})`).join(' · ')} ={' '}
+                <strong>{money(row.total_staff_price)}</strong>
             </p>
 
             {row.status === 'pending' && (
@@ -99,11 +101,9 @@ function RequestCard({ row, moneyAccounts }: { row: RequestRow; moneyAccounts: S
                         size="sm"
                         disabled={needsAccount && account === ''}
                         onClick={() =>
-                            router.post(
-                                `/hrm/staff-purchases/${row.id}/fulfill`,
-                                needsAccount ? { money_account_id: account } : {},
-                                { preserveScroll: true },
-                            )
+                            router.post(`/hrm/staff-purchases/${row.id}/fulfill`, needsAccount ? { money_account_id: account } : {}, {
+                                preserveScroll: true,
+                            })
                         }
                     >
                         Hand over
@@ -128,10 +128,6 @@ export default function StaffPurchases({ requests, moneyAccounts }: StaffPurchas
             <div className="space-y-4 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Staff purchases</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Approve, reject with a reason, and hand over. A handover creates the real sale at the approved staff price -
-                        nothing leaves the store without an approved application.
-                    </p>
                 </div>
 
                 {requests.length === 0 ? (

@@ -95,7 +95,7 @@ export default function AttendanceSummary() {
         <AppLayout>
             <Head title="Attendance summary" />
             <div className="px-4 py-6">
-                <Heading title="Attendance summary" description="How many days each person was present, late, absent or on leave, over any period." />
+                <Heading title="Attendance summary" />
 
                 <div className="border-border mb-6 flex flex-wrap items-end gap-3 rounded-lg border p-4">
                     <div className="grid gap-1.5">
@@ -221,11 +221,6 @@ export default function AttendanceSummary() {
                         </tbody>
                     </table>
                 </div>
-
-                <p className="text-muted-foreground mt-3 text-xs">
-                    Field duty and days with no punches are counted separately, so a person who was working away from the office is not shown as
-                    absent.
-                </p>
             </div>
         </AppLayout>
     );

@@ -138,35 +138,6 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
             <div className="flex flex-col gap-6 p-4">
                 <div className="max-w-3xl">
                     <h1 className="text-lg font-semibold">Recipes</h1>
-                    <p className="text-muted-foreground mt-1 text-sm">
-                        What goes into each packed product, and how much. A recipe is a template: it saves typing on a production run and does nothing
-                        else.
-                    </p>
-                </div>
-
-                {/*
-                    ⚠⚠ C-BOM-1. The single most important thing to understand about
-                    this screen, said on the screen. Nothing here moves stock or
-                    posts anything.
-                */}
-                <div className="max-w-3xl rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
-                    <p className="font-medium">Saving a recipe moves no stock and posts nothing.</p>
-                    <p className="text-muted-foreground mt-1">
-                        It only decides what a production run <span className="font-medium">suggests</span> consuming. Every suggested line stays
-                        editable on the run, and the run records what was actually used. Quantities are in each component's own unit and nothing is
-                        ever converted. If a unit looks wrong, fix it on the product.
-                    </p>
-                    {/*
-                        ⚠⚠ THE CONSUMABLES RULE. Anything in a recipe can stop a
-                        production run, because the run refuses on any short
-                        component. This is the sentence that keeps a two-taka
-                        sticker from stopping a shipment.
-                    */}
-                    <p className="text-muted-foreground mt-2">
-                        <span className="text-foreground font-medium">Only put something here if running out of it should stop the run.</span> Bulk
-                        product, jars, bottles, caps and boxes: yes. Shrink poly, inner poly, pouch film and labels: no, those are expensed when
-                        bought, never stocked, and a missing sticker must never hold up a shipment.
-                    </p>
                 </div>
 
                 <form onSubmit={submit} className="flex flex-col gap-4 rounded-lg border p-4">
@@ -189,7 +160,9 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
 
                     <div className="grid gap-4 md:grid-cols-4">
                         <div className="grid gap-2 md:col-span-2">
-                            <Label htmlFor="output_product_id">Product being made</Label>
+                            <Label htmlFor="output_product_id" required>
+                                Product being made
+                            </Label>
                             <SearchSelect
                                 id="output_product_id"
                                 value={data.output_product_id}
@@ -209,8 +182,12 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                             <Label htmlFor="output_quantity" required>
                                 Makes how many {outputUnit}
                             </Label>
-                            <Input id="output_quantity" value={data.output_quantity} onChange={(e) => setData('output_quantity', e.target.value)} />
-                            <p className="text-muted-foreground text-xs">Usually 1. Say 20 if the recipe was written over a 20 kg drum.</p>
+                            <Input
+                                id="output_quantity"
+                                value={data.output_quantity}
+                                onChange={(e) => setData('output_quantity', e.target.value)}
+                                placeholder="1"
+                            />
                             <InputError message={errors.output_quantity} />
                         </div>
                         <div className="grid gap-2">
@@ -223,9 +200,17 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                         <table className="w-full text-sm">
                             <thead className="bg-muted/50 text-left">
                                 <tr>
-                                    <th className="p-3">Component</th>
+                                    <th className="p-3">
+                                        Component
+                                        <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                            *
+                                        </span>
+                                    </th>
                                     <th className="w-40 p-3">
                                         Quantity per {data.output_quantity || '1'} {outputUnit}
+                                        <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                            *
+                                        </span>
                                     </th>
                                     <th className="w-32 p-3">Wastage %</th>
                                     <th className="p-3">Note</th>
@@ -297,11 +282,6 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                             </tbody>
                         </table>
                     </div>
-
-                    <p className="text-muted-foreground text-xs">
-                        Wastage inflates the suggested quantity and nothing else. It reaches no ledger and no stock movement: what actually left the
-                        warehouse is what the run says it did.
-                    </p>
 
                     <div className="flex flex-wrap items-end gap-3">
                         <Button type="button" variant="outline" onClick={() => setData('lines', [...data.lines, emptyLine()])}>

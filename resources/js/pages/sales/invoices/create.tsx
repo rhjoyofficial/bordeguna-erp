@@ -146,7 +146,7 @@ export default function InvoiceCreate({
             <Head title="New invoice" />
             <div className="flex flex-col gap-6 p-4">
                 <div className="grid max-w-sm gap-2">
-                    <Label>Customer</Label>
+                    <Label required>Customer</Label>
                     <SearchableSelect
                         value={data.customer_id}
                         onChange={pickCustomer}
@@ -225,11 +225,6 @@ export default function InvoiceCreate({
                                                         placeholder={line.agreed_discount !== null ? `Agreed ${line.agreed_discount}` : undefined}
                                                         onChange={(e) => updateLine(line.delivery_line_id, { discount: e.target.value })}
                                                     />
-                                                    {line.agreed_discount !== null && (
-                                                        <p className="text-muted-foreground mt-1 text-xs">
-                                                            Leave empty to bill the discount the order agreed.
-                                                        </p>
-                                                    )}
                                                     <InputError message={errors[`lines.${index}.discount` as keyof typeof errors]} />
                                                 </td>
                                                 <td className="text-muted-foreground p-3 text-xs">{line.price_source}</td>
@@ -261,11 +256,6 @@ export default function InvoiceCreate({
                                         <option value="inclusive">already include VAT</option>
                                         <option value="exclusive">have VAT added on top</option>
                                     </select>
-                                    <p className="text-muted-foreground text-xs">
-                                        {data.prices_include_tax
-                                            ? 'The customer pays exactly the total shown here. The VAT inside it is worked out when the invoice is saved.'
-                                            : 'VAT is added to the total shown here when the invoice is saved, and the customer pays the larger figure.'}
-                                    </p>
                                     <InputError message={errors.prices_include_tax} />
                                 </div>
                             )}
@@ -273,14 +263,6 @@ export default function InvoiceCreate({
                                 <Label>Whole-invoice discount (optional)</Label>
                                 <Input value={data.invoice_discount} onChange={(e) => setData('invoice_discount', e.target.value)} />
                                 <InputError message={errors.invoice_discount} />
-                                {/*
-                                    C-DSC-2. The two discounts are not the same thing and putting one
-                                    in the other's box makes every per-product margin report wrong
-                                    while every total still balances.
-                                */}
-                                <p className="text-muted-foreground text-xs">
-                                    Money off one product goes in that product's Discount box above. Use this one only for money off the whole bill.
-                                </p>
                                 {/* ⚠ Slice 2.5b. An order's agreed coupon discount is billed
                                     whatever is typed here; anything typed is added to it. */}
                                 {agreed_order_discounts.map((row) => (

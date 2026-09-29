@@ -63,9 +63,6 @@ export default function BankStatements({ accounts, money_account_id, statement_l
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
                         <h1 className="text-xl font-semibold">Bank statements</h1>
-                        <p className="text-muted-foreground text-sm">
-                            The bank's statement beside the book. Certain matches are made automatically; the rest are yours.
-                        </p>
                     </div>
                     <select
                         className="border-input bg-background h-9 rounded-md border px-2 text-sm"
@@ -91,9 +88,6 @@ export default function BankStatements({ accounts, money_account_id, statement_l
                         <Button type="submit" size="sm" disabled={importForm.processing || !importForm.data.file}>
                             Import statement (CSV)
                         </Button>
-                        <span className="text-muted-foreground text-xs">
-                            Needs a date column and either an amount column or a debit/credit pair. Save the bank's Excel as CSV first.
-                        </span>
                         <InputError message={importForm.errors.file} />
                     </form>
                 )}
@@ -120,7 +114,11 @@ export default function BankStatements({ accounts, money_account_id, statement_l
                                                 <span className="flex gap-1">
                                                     {line.match_status === 'unmatched' && (
                                                         <>
-                                                            <Button variant="ghost" size="sm" onClick={() => setSelecting(selecting === line.id ? null : line.id)}>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => setSelecting(selecting === line.id ? null : line.id)}
+                                                            >
                                                                 Match...
                                                             </Button>
                                                             <Button variant="ghost" size="sm" onClick={() => act(line.id, 'ignore')}>
@@ -166,9 +164,6 @@ export default function BankStatements({ accounts, money_account_id, statement_l
 
                     <section className="border-border bg-card rounded-lg border p-3">
                         <h2 className="mb-2 text-sm font-semibold">Book lines with no statement line ({unmatched_book_lines.length})</h2>
-                        <p className="text-muted-foreground mb-2 text-xs">
-                            Money the book says moved that the bank has not confirmed - the other half of the same truth.
-                        </p>
                         {unmatched_book_lines.length === 0 ? (
                             <p className="text-muted-foreground text-sm">Every book movement has its statement line.</p>
                         ) : (

@@ -132,7 +132,9 @@ function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; m
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="pay_amount">Amount</Label>
+                        <Label htmlFor="pay_amount" required>
+                            Amount
+                        </Label>
                         <Input id="pay_amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
                         {errors.amount && <p className="text-destructive text-xs">{errors.amount}</p>}
                         {errors.payslip && <p className="text-destructive text-xs">{errors.payslip}</p>}
@@ -155,7 +157,9 @@ function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; m
                         </div>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="pay_account">Paid from</Label>
+                        <Label htmlFor="pay_account" required>
+                            Paid from
+                        </Label>
                         <SearchSelect id="pay_account" value={account} onChange={(e) => setAccount(e.target.value)}>
                             <option value="">Select an account</option>
                             {moneyAccounts.map((a) => (
@@ -227,7 +231,9 @@ function FailDialog({ payslip }: { payslip: PayslipRow }) {
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-2">
-                    <Label htmlFor="fail_reason">What went wrong</Label>
+                    <Label htmlFor="fail_reason" required>
+                        What went wrong
+                    </Label>
                     <Input id="fail_reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Account closed" />
                     {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     {errors.payslip && <p className="text-destructive text-xs">{errors.payslip}</p>}
@@ -312,8 +318,6 @@ function BatchCard({ batch, formats, moneyAccounts }: { batch: BatchRow; formats
                 </div>
             </div>
 
-            <p className="text-muted-foreground mt-2 text-xs">{formats.find((f) => f.key === format)?.description}</p>
-
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <div className="grid gap-2">
                     <Label htmlFor={`advice_${batch.id}`}>Bank advice file &amp; reference</Label>
@@ -345,7 +349,9 @@ function BatchCard({ batch, formats, moneyAccounts }: { batch: BatchRow; formats
 
                 {!batch.confirmed_at && (
                     <div className="grid gap-2">
-                        <Label htmlFor={`account_${batch.id}`}>Paid from</Label>
+                        <Label htmlFor={`account_${batch.id}`} required>
+                            Paid from
+                        </Label>
                         <SearchSelect id={`account_${batch.id}`} value={account} onChange={(e) => setAccount(e.target.value)}>
                             <option value="">Select an account</option>
                             {moneyAccounts.map((a) => (
@@ -589,10 +595,6 @@ export default function Disbursement({ run, batches, payslips, methods, moneyAcc
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <h3 className="font-medium">Batches</h3>
-                            <p className="text-muted-foreground text-sm">
-                                One per payment method, so cash never mixes with a bank transfer. Confirming a batch records a payment for every
-                                payslip in it, exactly as confirming them one at a time would.
-                            </p>
                         </div>
                         {run.is_disbursed && (
                             <Button size="sm" onClick={() => router.post(route('hrm.payroll.batches.store', run.id), {}, { preserveScroll: true })}>

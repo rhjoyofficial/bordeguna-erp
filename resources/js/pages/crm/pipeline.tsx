@@ -90,7 +90,7 @@ function NewDealForm({ stages, leads, customers, users }: Pick<PipelineProps, 's
             }}
         >
             <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs">Deal</Label>
+                <Label className="text-xs" required>Deal</Label>
                 <Input placeholder="e.g. Dealer opening order" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
                 {form.errors.name && <p className="text-destructive text-xs">{form.errors.name}</p>}
             </div>
@@ -107,7 +107,7 @@ function NewDealForm({ stages, leads, customers, users }: Pick<PipelineProps, 's
                 </Select>
             </div>
             <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs">{form.data.party_kind === 'lead' ? 'Lead' : 'Customer'}</Label>
+                <Label className="text-xs" required>{form.data.party_kind === 'lead' ? 'Lead' : 'Customer'}</Label>
                 {form.data.party_kind === 'lead' ? (
                     <SearchableSelect
                         value={form.data.lead_id}
@@ -130,7 +130,7 @@ function NewDealForm({ stages, leads, customers, users }: Pick<PipelineProps, 's
                 )}
             </div>
             <div className="space-y-1">
-                <Label className="text-xs">Value (BDT)</Label>
+                <Label className="text-xs" required>Value (BDT)</Label>
                 <Input type="number" step="0.01" min="0" placeholder="0" value={form.data.value} onChange={(e) => form.setData('value', e.target.value)} />
                 {form.errors.value && <p className="text-destructive text-xs">{form.errors.value}</p>}
             </div>
@@ -254,10 +254,6 @@ export default function Pipeline({ stages, recentlyClosed, leads, customers, los
             <div className="space-y-4 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Sales pipeline</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Every deal being chased, one stage at a time. Won and lost are outcomes with a stamp - not columns - and losing
-                        always keeps its reason.
-                    </p>
                 </div>
 
                 <NewDealForm stages={stages} leads={leads} customers={customers} users={users} />

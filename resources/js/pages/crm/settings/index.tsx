@@ -137,17 +137,11 @@ export default function CrmSettingsIndex({
             <Head title="CRM settings" />
             <div className="flex flex-col gap-8 p-4">
                 <section className="flex flex-col gap-4">
-                    <div>
-                        <h2 className="text-lg font-medium">Lead sources</h2>
-                        <p className="text-muted-foreground text-sm">
-                            Where leads come from. The code is permanent - reporting groups by this row, not by the name, so a source can be renamed
-                            without splitting its history.
-                        </p>
-                    </div>
+                    <h2 className="text-lg font-medium">Lead sources</h2>
 
                     <form onSubmit={submitSource} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
                         <div className="grid gap-2">
-                            <Label htmlFor="source_code">Code</Label>
+                            <Label htmlFor="source_code" required>Code</Label>
                             <Input
                                 id="source_code"
                                 value={sourceForm.data.code}
@@ -157,7 +151,7 @@ export default function CrmSettingsIndex({
                             <InputError message={sourceForm.errors.code} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="source_name">Name</Label>
+                            <Label htmlFor="source_name" required>Name</Label>
                             <Input
                                 id="source_name"
                                 value={sourceForm.data.name}
@@ -229,17 +223,11 @@ export default function CrmSettingsIndex({
                 </section>
 
                 <section className="flex flex-col gap-4">
-                    <div>
-                        <h2 className="text-lg font-medium">Campaigns</h2>
-                        <p className="text-muted-foreground text-sm">
-                            A named acquisition effort. The external id is the platform's own - Meta's campaign id, for example - and is stored as
-                            supplied.
-                        </p>
-                    </div>
+                    <h2 className="text-lg font-medium">Campaigns</h2>
 
                     <form onSubmit={submitCampaign} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
                         <div className="grid gap-2">
-                            <Label htmlFor="campaign_source">Source</Label>
+                            <Label htmlFor="campaign_source" required>Source</Label>
                             <SearchSelect
                                 id="campaign_source"
                                 value={campaignForm.data.lead_source_id}
@@ -271,7 +259,7 @@ export default function CrmSettingsIndex({
                             <InputError message={campaignForm.errors.brand_id} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="campaign_code">Code</Label>
+                            <Label htmlFor="campaign_code" required>Code</Label>
                             <Input
                                 id="campaign_code"
                                 value={campaignForm.data.code}
@@ -281,7 +269,7 @@ export default function CrmSettingsIndex({
                             <InputError message={campaignForm.errors.code} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="campaign_name">Name</Label>
+                            <Label htmlFor="campaign_name" required>Name</Label>
                             <Input
                                 id="campaign_name"
                                 value={campaignForm.data.name}

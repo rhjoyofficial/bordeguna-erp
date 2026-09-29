@@ -89,7 +89,6 @@ function Cancel({ record }: { record: MaintenanceRecord }) {
     return (
         <form onSubmit={submit} className="grid gap-2 rounded-lg border p-3">
             <h2 className="font-medium">Cancel</h2>
-            <p className="text-muted-foreground text-xs">Not a fault, reported twice, or no longer needed.</p>
             <div className="flex flex-wrap items-center gap-2">
                 <Input
                     value={data.cancel_reason}

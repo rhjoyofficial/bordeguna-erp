@@ -2,16 +2,7 @@ import { SearchSelect } from '@/components/search-select';
 import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -170,9 +161,6 @@ function RequestUpdateDialog({ group, mfsProviders }: { group: RequestableGroup;
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Request update - {group.label}</DialogTitle>
-                    <DialogDescription>
-                        Your request is sent for approval; the change is applied only once approved. Nothing changes immediately.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid max-h-[60vh] gap-4 overflow-y-auto">
                     {group.fields.map((field) => (
@@ -305,10 +293,7 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                 {salary !== null && (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                         <h3 className="mb-1 text-sm font-medium">My salary</h3>
-                        <p className="text-muted-foreground mb-3 text-xs">
-                            In effect since {salary.effective_from}. These are your contractual figures - what a month actually pays also depends on
-                            attendance, leave and any adjustments, and appears on your payslip.
-                        </p>
+                        <p className="text-muted-foreground mb-3 text-xs">In effect since {salary.effective_from}.</p>
                         <table className="w-full min-w-[28rem] text-sm">
                             <tbody>
                                 {salary.lines

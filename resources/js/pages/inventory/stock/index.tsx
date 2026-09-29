@@ -7,16 +7,7 @@ import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
@@ -308,13 +299,9 @@ function RecordCorrectionDialog({
                     Record damage or loss
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-xl">
+            <DialogContent className="sm:max-w-xl" aria-describedby={undefined}>
                 <DialogHeader>
                     <DialogTitle>What happened to the stock?</DialogTitle>
-                    <DialogDescription>
-                        Damaged, expired or missing stock, stock that turned up, or a number typed wrong. The value written off or added goes to the
-                        books with it.
-                    </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={submit} className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
@@ -419,9 +406,7 @@ function RecordCorrectionDialog({
                                             Use it
                                         </button>
                                     </>
-                                ) : (
-                                    'What each unit is worth, including any tax paid. Found stock adds this value to the books.'
-                                )
+                                ) : undefined
                             }
                         >
                             <Input
@@ -433,6 +418,7 @@ function RecordCorrectionDialog({
                                 className="w-36"
                                 value={data.unit_cost}
                                 onChange={(e) => setData('unit_cost', e.target.value)}
+                                placeholder="incl. tax"
                             />
                         </Field>
                     )}
@@ -527,22 +513,9 @@ function MoveStockDialog({ context, reasons, direct }: { context: StockContext; 
                     {direct ? 'Move stock' : 'Ask to move stock'}
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-xl">
+            <DialogContent className="sm:max-w-xl" aria-describedby={undefined}>
                 <DialogHeader>
                     <DialogTitle>{direct ? 'Move stock to another warehouse' : 'Ask to move stock'}</DialogTitle>
-                    <DialogDescription>
-                        {direct ? (
-                            <>
-                                It leaves the first warehouse now and arrives once somebody marks it received on the{' '}
-                                <Link href={route('inventory.stock.transfers.index')} className="underline underline-offset-2">
-                                    in-transit transfers
-                                </Link>{' '}
-                                page.
-                            </>
-                        ) : (
-                            'A manager approves the move before anything leaves.'
-                        )}
-                    </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={submit} className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
@@ -687,7 +660,6 @@ export default function StockIndex({
                     under a twenty-row table, so on a phone nobody found them. */}
                 <ReportHeading
                     title="Current stock"
-                    description="What each warehouse holds now. Record damage, loss or found stock, or move stock between warehouses."
                     actions={
                         <>
                             {canRaise && ready && (

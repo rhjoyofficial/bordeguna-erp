@@ -2,16 +2,7 @@ import { SearchSelect } from '@/components/search-select';
 import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -106,11 +97,12 @@ function RequestCorrectionDialog({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{t('correction.title_for', { date: day.date })}</DialogTitle>
-                    <DialogDescription>{t('correction.description')}</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="ctype">{t('correction.what_is_wrong')}</Label>
+                        <Label htmlFor="ctype" required>
+                            {t('correction.what_is_wrong')}
+                        </Label>
                         <SearchSelect id="ctype" value={type} onChange={(e) => setType(e.target.value)}>
                             {types.map((option) => (
                                 <option key={option.value} value={option.value}>
@@ -122,7 +114,9 @@ function RequestCorrectionDialog({
                     {selected?.needs_time && (
                         <div className="grid gap-4 sm:grid-cols-2">
                             <div className="grid gap-2">
-                                <Label htmlFor="ctime">{t('correction.correct_time')}</Label>
+                                <Label htmlFor="ctime" required>
+                                    {t('correction.correct_time')}
+                                </Label>
                                 <Input id="ctime" type="datetime-local" value={correctedAt} onChange={(e) => setCorrectedAt(e.target.value)} />
                                 {errors.corrected_at && <p className="text-destructive text-xs">{errors.corrected_at}</p>}
                             </div>
@@ -141,7 +135,9 @@ function RequestCorrectionDialog({
                     )}
                     {selected?.needs_punch && <p className="text-muted-foreground text-xs">{t('correction.needs_hr')}</p>}
                     <div className="grid gap-2">
-                        <Label htmlFor="creason">{t('correction.reason')}</Label>
+                        <Label htmlFor="creason" required>
+                            {t('correction.reason')}
+                        </Label>
                         <Input id="creason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('correction.what_happened')} />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
@@ -310,13 +306,10 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                         </div>
 
                         {locationError && <p className="text-destructive text-sm">{locationError}</p>}
-
-                        <p className="text-muted-foreground text-xs">{t('clock.privacy_note')}</p>
                     </>
                 ) : (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
                         <p className="text-sm font-medium">{t('clock.not_switched_on')}</p>
-                        <p className="text-muted-foreground mt-1 text-sm">{t('clock.use_machine')}</p>
                     </div>
                 )}
 
@@ -433,7 +426,9 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                     </div>
 
                     {summary.holds_payroll > 0 && (
-                        <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">{t('clock.holds_payroll', { count: summary.holds_payroll })}</p>
+                        <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
+                            {t('clock.holds_payroll', { count: summary.holds_payroll })}
+                        </p>
                     )}
                 </div>
 
@@ -483,7 +478,9 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                                         >
                                             {t('common.date')}
                                             <span aria-hidden="true">{filters.sort === 'oldest' ? '↑' : '↓'}</span>
-                                            <span className="sr-only">{filters.sort === 'oldest' ? t('clock.oldest_first') : t('clock.newest_first')}</span>
+                                            <span className="sr-only">
+                                                {filters.sort === 'oldest' ? t('clock.oldest_first') : t('clock.newest_first')}
+                                            </span>
                                         </button>
                                     </th>
                                     <th className="py-2">{t('common.status')}</th>

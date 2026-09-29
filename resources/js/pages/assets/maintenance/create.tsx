@@ -92,9 +92,6 @@ export default function AssetMaintenanceCreate({
             <form onSubmit={submit} className="flex max-w-3xl flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">Record work or a fault</h1>
-                    <p className="text-muted-foreground text-sm">
-                        A fault stays open until it is fixed or cancelled. Work that is already finished can be recorded as done right away.
-                    </p>
                 </div>
 
                 <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -135,7 +132,6 @@ export default function AssetMaintenanceCreate({
                                 onChange={(v) => setData('plan_id', v)}
                                 options={[{ value: '', label: 'Not for a plan' }, ...itemPlans]}
                             />
-                            <p className="text-muted-foreground text-xs">Recording a plan's work as done moves its next due date on from that day.</p>
                             <InputError message={errors.plan_id} />
                         </div>
                     )}

@@ -65,10 +65,6 @@ export default function Checklist({ employee, onboarding, offboarding, still_hol
                     <h1 className="text-xl font-semibold">
                         Checklist: {employee.name} ({employee.employee_code})
                     </h1>
-                    <p className="text-muted-foreground text-sm">
-                        What must actually happen for a joiner and a leaver. Every tick records who and when; untick a mis-click and it is as if it
-                        never was.
-                    </p>
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-2">

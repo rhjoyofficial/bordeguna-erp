@@ -1,7 +1,6 @@
+import { RequestStatusBadge } from '@/components/request-status-badge';
 import { SearchSelect } from '@/components/search-select';
 import SelfServiceTabs from '@/components/self-service-tabs';
-import { Badge } from '@/components/ui/badge';
-import { RequestStatusBadge } from '@/components/request-status-badge';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -83,10 +82,7 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Request leave</DialogTitle>
-                    <DialogDescription>
-                        Holidays and weekly offs inside the dates are not charged. If your balance does not cover it, the remainder is recorded as
-                        unpaid rather than refused.
-                    </DialogDescription>
+                    <DialogDescription>If your balance does not cover it, the remainder is recorded as unpaid.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
@@ -208,16 +204,14 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
                 <DialogHeader>
                     <DialogTitle>Request a movement</DialogTitle>
                     <DialogDescription>
-                        For field duty, official work outside the office, working on a holiday, or a day worked from home. A movement draws on no
-                        leave balance.{' '}
-                        {/* ⚠⚠ C-WFH-2. The one thing a person requesting a day at
-                            home has to know before the day arrives. */}
                         <span className="font-medium">A day at home still needs your clock in and clock out.</span>
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="mtype">Type</Label>
+                        <Label htmlFor="mtype" required>
+                            Type
+                        </Label>
                         <SearchSelect id="mtype" value={type} onChange={(e) => chooseType(e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
@@ -249,7 +243,9 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
                         <Input id="place" value={place} onChange={(e) => setPlace(e.target.value)} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="mreason">Reason</Label>
+                        <Label htmlFor="mreason" required>
+                            Reason
+                        </Label>
                         <Input id="mreason" value={reason} onChange={(e) => setReason(e.target.value)} />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>

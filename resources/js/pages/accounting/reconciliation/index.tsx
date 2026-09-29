@@ -27,7 +27,6 @@ export default function ReconciliationIndex({
                 {/* C-RSC-5: fresh on every load; the button just reloads. */}
                 <ReportHeading
                     title="Reconciliation"
-                    description="Proves each subsidiary ledger agrees with its source documents: payables against supplier bills, receivables against invoices and receipts, stock against its movements. A balanced trial balance does not prove the accounting is correct; this is the check that gets closer."
                     actions={
                         <Button variant="outline" size="sm" onClick={() => router.reload()}>
                             Run again
@@ -66,11 +65,6 @@ export default function ReconciliationIndex({
                                 </li>
                             ))}
                         </ul>
-                        <p className="text-muted-foreground max-w-2xl text-sm">
-                            A break means a control account with postings disagrees with the documents behind it: a posting without a document, a
-                            document without a posting, or one of the two recorded at the wrong amount. Each one needs a human to look at it; nothing
-                            here self-heals on purpose.
-                        </p>
                     </div>
                 )}
 

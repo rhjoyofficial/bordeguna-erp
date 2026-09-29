@@ -84,10 +84,6 @@ export default function MyAssets({ items, pieces }: { items: MyItem[]; pieces: {
             <div className="flex flex-col gap-4 p-4">
                 <div>
                     <h2 className="text-lg font-medium">Things I hold</h2>
-                    <p className="text-muted-foreground text-sm">
-                        What the company has handed to you. When something arrives, press &quot;Yes, I have it&quot;. If something stops working,
-                        report it here. To give something back, hand it to whoever keeps the register; they record it.
-                    </p>
                 </div>
 
                 {items.length === 0 && pieces.length === 0 ? (

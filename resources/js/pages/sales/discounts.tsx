@@ -65,12 +65,7 @@ export default function Discounts() {
         <AppLayout>
             <Head title="Discounts" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Discounts" description="Sell something below its list price for a period, or from a quantity up." />
-
-                <div className="border-border bg-muted/40 text-muted-foreground rounded-md border p-4 text-sm">
-                    A discount is an ordinary price rule with a lower number on it, so nothing else in the system has to learn a new idea. To sell 500
-                    g of a 125 g pack, set a discount from <strong>4 packs</strong> up rather than creating a 500 g product.
-                </div>
+                <ReportHeading title="Discounts" />
 
                 {/* ⚠ "Each input field should be as wide as it needs" (Joy, 30 Aug
                     2026, on this page). The product picker takes the room, a price
@@ -78,7 +73,7 @@ export default function Discounts() {
                     themselves. */}
                 <form onSubmit={submit} className="border-border flex flex-col gap-4 rounded-lg border p-4">
                     <FormRow>
-                        <Field label="Product" htmlFor="product" size="grow" error={form.errors.product_id}>
+                        <Field label="Product" htmlFor="product" size="grow" required error={form.errors.product_id}>
                             <SearchSelect
                                 id="product"
                                 fit={false}
@@ -123,9 +118,10 @@ export default function Discounts() {
                                 onChange={(e) => form.setData('unit_price', e.target.value)}
                             />
                         </Field>
-                        <Field label="From qty" htmlFor="min_quantity" size="xs" hint="1 means every sale. 4 means four or more.">
+                        <Field label="From qty" htmlFor="min_quantity" size="xs">
                             <Input
                                 id="min_quantity"
+                                placeholder="1"
                                 type="number"
                                 step="1"
                                 min="1"
@@ -136,7 +132,7 @@ export default function Discounts() {
                     </FormRow>
 
                     <FormRow>
-                        <Field label="Customer group" htmlFor="group" error={form.errors.price_group_id}>
+                        <Field label="Customer group" htmlFor="group" required error={form.errors.price_group_id}>
                             <SearchSelect
                                 id="group"
                                 value={form.data.price_group_id}
@@ -149,7 +145,7 @@ export default function Discounts() {
                                 ))}
                             </SearchSelect>
                         </Field>
-                        <Field label="Starts" htmlFor="from" error={form.errors.effective_from}>
+                        <Field label="Starts" htmlFor="from" required error={form.errors.effective_from}>
                             <Input
                                 id="from"
                                 type="date"
@@ -157,7 +153,7 @@ export default function Discounts() {
                                 onChange={(e) => form.setData('effective_from', e.target.value)}
                             />
                         </Field>
-                        <Field label="Ends (optional)" htmlFor="to" hint="Leave empty to run until you end it.">
+                        <Field label="Ends (optional)" htmlFor="to">
                             <Input
                                 id="to"
                                 type="date"
@@ -243,11 +239,6 @@ export default function Discounts() {
                             </tbody>
                         </table>
                     </div>
-
-                    <p className="text-muted-foreground mt-3 text-xs">
-                        "Applying today" is answered by the pricing engine itself, not guessed here. A discount can be saved and still lose to another
-                        rule, which is why the column exists.
-                    </p>
                 </div>
             </div>
         </AppLayout>

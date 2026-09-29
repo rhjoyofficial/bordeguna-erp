@@ -53,11 +53,6 @@ export default function StockTransfersIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="In-transit transfers" />
             <div className="flex flex-col gap-4 p-4">
-                <p className="text-muted-foreground text-sm">
-                    Stock dispatched from a source warehouse sits here until someone confirms it arrived; it does not count as destination stock until
-                    received.
-                </p>
-
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
                     <FilterField label="Status" htmlFor="filter-status">
                         <SearchSelect id="filter-status" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>

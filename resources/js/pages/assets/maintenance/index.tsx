@@ -44,10 +44,6 @@ export default function AssetMaintenance({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                         <h1 className="text-lg font-semibold">Maintenance</h1>
-                        <p className="text-muted-foreground max-w-3xl text-sm">
-                            Routine care is planned on each thing's own page. Faults come from the keeper or from the person holding the thing (My
-                            assets). Nothing here pays anybody: a repair bill is paid by an expense voucher, and the record says which.
-                        </p>
                     </div>
                     {can_manage && (
                         <Button asChild>

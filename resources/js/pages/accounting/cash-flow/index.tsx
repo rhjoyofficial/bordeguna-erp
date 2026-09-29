@@ -16,12 +16,11 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Cash flow', href: '/accounting/cash-flow' },
 ];
 
-function Section({ title, blurb, lines, total }: { title: string; blurb: string; lines: Line[]; total: string }) {
+function Section({ title, lines, total }: { title: string; lines: Line[]; total: string }) {
     return (
         <div className="rounded-lg border">
             <div className="border-b p-3">
                 <h2 className="font-medium">{title}</h2>
-                <p className="text-muted-foreground text-xs">{blurb}</p>
             </div>
             <table className="w-full text-sm">
                 <tbody>
@@ -90,10 +89,7 @@ export default function CashFlowIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cash flow" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Statement of cash flows"
-                    description={`Where the money actually went${fiscal_year ? ` · fiscal year ${fiscal_year}` : ''}. Read from the cash itself rather than worked backwards from profit: every journal touching a cash account is a movement, and the accounts on the other side of it say what the movement was for.`}
-                />
+                <ReportHeading title="Statement of cash flows" description={fiscal_year ? `Fiscal year ${fiscal_year}` : undefined} />
 
                 {/* ⚠ This statement always reloads on a change, so the Show button
                     is only there for a date typed by hand. */}
@@ -115,24 +111,9 @@ export default function CashFlowIndex({
                     </div>
                 )}
 
-                <Section
-                    title="Operating"
-                    blurb="Running the business: what customers paid, what suppliers, staff and expenses took."
-                    lines={operating}
-                    total={totals.operating}
-                />
-                <Section
-                    title="Investing"
-                    blurb="Buying and selling the things the business keeps - equipment, vehicles, fixtures."
-                    lines={investing}
-                    total={totals.investing}
-                />
-                <Section
-                    title="Financing"
-                    blurb="Money from and to the owners and the lenders - capital, drawings, loans."
-                    lines={financing}
-                    total={totals.financing}
-                />
+                <Section title="Operating" lines={operating} total={totals.operating} />
+                <Section title="Investing" lines={investing} total={totals.investing} />
+                <Section title="Financing" lines={financing} total={totals.financing} />
 
                 <div className="rounded-lg border">
                     <table className="w-full text-sm">

@@ -68,7 +68,7 @@ function CategoryForm({ category, trackings, onDone }: { category: Category | nu
                 <InputError message={errors.code} />
             </div>
             <div className="grid gap-1">
-                <Label>New ones are</Label>
+                <Label required>New ones are</Label>
                 <SearchableSelect fit value={data.default_tracking} onChange={(v) => setData('default_tracking', v)} options={trackings} />
                 <InputError message={errors.default_tracking} />
             </div>
@@ -107,10 +107,6 @@ export default function AssetCategories({ categories, trackings, can_manage }: {
             <div className="flex flex-col gap-4 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">Asset categories</h1>
-                    <p className="text-muted-foreground max-w-3xl text-sm">
-                        The code is printed in every tag of the category, so it is fixed once a tag carries it. A category no longer needed is
-                        switched off, and its things keep it.
-                    </p>
                 </div>
 
                 {can_manage && (

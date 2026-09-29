@@ -157,14 +157,12 @@ function OvertimeDialog({ employees, rules }: { employees: EmployeeOption[]; rul
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Assign overtime</DialogTitle>
-                    <DialogDescription>
-                        Overtime is authorised, never inferred from punches. Normal overtime is paid; holiday or off-day work is compensated in leave
-                        instead, so the hours never reach a payslip.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="ot_employee">Employee</Label>
+                        <Label htmlFor="ot_employee" required>
+                            Employee
+                        </Label>
                         <SearchSelect id="ot_employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
@@ -184,12 +182,16 @@ function OvertimeDialog({ employees, rules }: { employees: EmployeeOption[]; rul
 
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="ot_date">Date worked</Label>
+                            <Label htmlFor="ot_date" required>
+                                Date worked
+                            </Label>
                             <Input id="ot_date" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
                             {errors.work_date && <p className="text-destructive text-xs">{errors.work_date}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="ot_hours">Hours</Label>
+                            <Label htmlFor="ot_hours" required>
+                                Hours
+                            </Label>
                             <Input id="ot_hours" type="number" step="0.25" min="0.25" value={hours} onChange={(e) => setHours(e.target.value)} />
                             {errors.hours && <p className="text-destructive text-xs">{errors.hours}</p>}
                         </div>
@@ -208,7 +210,9 @@ function OvertimeDialog({ employees, rules }: { employees: EmployeeOption[]; rul
                     </label>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="ot_reason">Reason</Label>
+                        <Label htmlFor="ot_reason" required>
+                            Reason
+                        </Label>
                         <Input id="ot_reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why this overtime was needed" />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
@@ -269,20 +273,20 @@ function BonusEventDialog({ periods, bases }: { periods: PeriodOption[]; bases: 
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Create a bonus event</DialogTitle>
-                    <DialogDescription>
-                        A bonus is an occasion carrying its own rule - Eid, a festival, a one-off - and the payroll month it lands on. Award it to
-                        employees afterwards.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="bonus_name">Name</Label>
+                        <Label htmlFor="bonus_name" required>
+                            Name
+                        </Label>
                         <Input id="bonus_name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Eid-ul-Fitr bonus" />
                         {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="bonus_basis">Basis</Label>
+                            <Label htmlFor="bonus_basis" required>
+                                Basis
+                            </Label>
                             <SearchSelect id="bonus_basis" value={basis} onChange={(e) => setBasis(e.target.value)}>
                                 {bases.map((b) => (
                                     <option key={b.value} value={b.value}>
@@ -292,13 +296,17 @@ function BonusEventDialog({ periods, bases }: { periods: PeriodOption[]; bases: 
                             </SearchSelect>
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="bonus_value">{basis === 'fixed' ? 'Amount' : 'Percentage'}</Label>
+                            <Label htmlFor="bonus_value" required>
+                                {basis === 'fixed' ? 'Amount' : 'Percentage'}
+                            </Label>
                             <Input id="bonus_value" type="number" step="0.01" min="0.01" value={value} onChange={(e) => setValue(e.target.value)} />
                             {errors.value && <p className="text-destructive text-xs">{errors.value}</p>}
                         </div>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="bonus_period">Payroll month</Label>
+                        <Label htmlFor="bonus_period" required>
+                            Payroll month
+                        </Label>
                         <SearchSelect id="bonus_period" value={periodId} onChange={(e) => setPeriodId(e.target.value)}>
                             <option value="">- Select -</option>
                             {periods.map((p) => (
@@ -437,14 +445,12 @@ function AdjustmentDialog({ employees, periods, types }: { employees: EmployeeOp
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Record a payroll adjustment</DialogTitle>
-                    <DialogDescription>
-                        Reason, evidence, approval and payroll month are all required - an adjustment is the one place an arbitrary sum can be moved
-                        by hand, so all four controls apply.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-2">
-                        <Label htmlFor="adj_employee">Employee</Label>
+                        <Label htmlFor="adj_employee" required>
+                            Employee
+                        </Label>
                         <SearchSelect id="adj_employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
@@ -457,7 +463,9 @@ function AdjustmentDialog({ employees, periods, types }: { employees: EmployeeOp
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="adj_type">Type</Label>
+                        <Label htmlFor="adj_type" required>
+                            Type
+                        </Label>
                         <SearchSelect id="adj_type" value={type} onChange={(e) => setType(e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
@@ -470,12 +478,16 @@ function AdjustmentDialog({ employees, periods, types }: { employees: EmployeeOp
 
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="adj_amount">Amount</Label>
+                            <Label htmlFor="adj_amount" required>
+                                Amount
+                            </Label>
                             <Input id="adj_amount" type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
                             {errors.amount && <p className="text-destructive text-xs">{errors.amount}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="adj_period">Payroll month</Label>
+                            <Label htmlFor="adj_period" required>
+                                Payroll month
+                            </Label>
                             <SearchSelect id="adj_period" value={periodId} onChange={(e) => setPeriodId(e.target.value)}>
                                 <option value="">- Select -</option>
                                 {periods.map((p) => (
@@ -490,13 +502,17 @@ function AdjustmentDialog({ employees, periods, types }: { employees: EmployeeOp
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="adj_reason">Reason</Label>
+                        <Label htmlFor="adj_reason" required>
+                            Reason
+                        </Label>
                         <Input id="adj_reason" value={reason} onChange={(e) => setReason(e.target.value)} />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="adj_evidence">Evidence (required)</Label>
+                        <Label htmlFor="adj_evidence" required>
+                            Evidence
+                        </Label>
                         <Input
                             id="adj_evidence"
                             type="file"
@@ -571,10 +587,6 @@ export default function PayrollInputs({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">Payroll inputs</h2>
-                        <p className="text-muted-foreground text-sm">
-                            Everything a payslip pays that the salary structure does not describe. Nothing here calculates - each entry is an
-                            authorisation the next payroll run picks up.
-                        </p>
                     </div>
                     <div className="flex flex-wrap gap-3">
                         <SearchSelect

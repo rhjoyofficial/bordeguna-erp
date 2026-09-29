@@ -1,6 +1,6 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 
 interface Row {
@@ -36,16 +36,6 @@ export default function ExpiryIndex({ expired, expiring, soon_days }: { expired:
             <div className="flex flex-col gap-4 p-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <h2 className="text-lg font-medium">Stock expiry</h2>
-                    <p className="text-muted-foreground text-xs">
-                        Expired stock is never sold (the FIFO picker refuses it by date), and the nightly job proposes a write-off for each expired
-                        batch. The proposals wait in{' '}
-                        {/* ⚠ This said "on the stock screen", where no proposal has ever
-                            appeared: they are ordinary corrections, reviewed in Approvals. */}
-                        <Link href="/approvals" className="text-primary hover:underline">
-                            Approvals
-                        </Link>
-                        .
-                    </p>
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border">

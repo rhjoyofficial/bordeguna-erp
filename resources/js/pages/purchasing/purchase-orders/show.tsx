@@ -234,10 +234,7 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
 
     return (
         <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
-            <div>
-                <h3 className="font-medium">{t('grn.title')}</h3>
-                <p className="text-muted-foreground text-sm">{t('grn.intro')}</p>
-            </div>
+            <h3 className="font-medium">{t('grn.title')}</h3>
 
             <FormRow className="gap-3">
                 <Field label={t('grn.supplier_challan')} htmlFor="supplier_challan_number" size="md" error={errors.supplier_challan_number}>
@@ -389,7 +386,6 @@ function ReturnGoodsForm({ order }: { order: Order }) {
     return (
         <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-xl border p-4">
             <h3 className="font-medium">Return goods</h3>
-            <p className="text-muted-foreground text-sm">Reverses stock for whatever quantity is entered - leave a line at 0 to skip it.</p>
             {returnableLines.map((line) => {
                 const entry = data.lines.find((e) => e.purchase_order_line_id === line.id);
 

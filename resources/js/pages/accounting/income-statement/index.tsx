@@ -1,4 +1,4 @@
-import { EmptyRow, FilterBar, Footnote, ReportHeading, ReportPage, ReportTable, StatRow, StatTile } from '@/components/report/report-shell';
+import { EmptyRow, FilterBar, ReportHeading, ReportPage, ReportTable, StatRow, StatTile } from '@/components/report/report-shell';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -93,16 +93,7 @@ export default function IncomeStatementIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Profit & loss" />
             <ReportPage>
-                <ReportHeading
-                    title="Profit &amp; loss"
-                    description={
-                        <>
-                            What was earned and what it cost, for the period shown. Figures are the movement in this period only, not the balance
-                            carried since the ledger began.
-                            {fiscal_year && <> Fiscal year {fiscal_year}.</>}
-                        </>
-                    }
-                />
+                <ReportHeading title="Profit &amp; loss" description={fiscal_year ? `Fiscal year ${fiscal_year}` : undefined} />
 
                 <FilterBar onSubmit={submit}>
                     <div className="grid gap-2">
@@ -119,11 +110,7 @@ export default function IncomeStatementIndex({
                     <StatRow>
                         <StatTile label="Income" value={totals.income} />
                         <StatTile label="Gross profit" value={totals.gross_profit} hint={`Cost of sales ${totals.cost_of_sales}`} />
-                        <StatTile
-                            label="Gross margin"
-                            value={totals.gross_margin_percent === null ? '--' : `${totals.gross_margin_percent}%`}
-                            hint="Gross profit as a share of income."
-                        />
+                        <StatTile label="Gross margin" value={totals.gross_margin_percent === null ? '--' : `${totals.gross_margin_percent}%`} />
                         <StatTile
                             label={totals.is_loss ? 'Net loss' : 'Net profit'}
                             value={totals.net_profit_absolute}
@@ -183,11 +170,6 @@ export default function IncomeStatementIndex({
                         </EmptyRow>
                     )}
                 </ReportTable>
-
-                <Footnote>
-                    Income and expense are never closed into equity by this system, so a period you choose that spans a year end will simply add the
-                    two years together rather than starting again from zero.
-                </Footnote>
             </ReportPage>
         </AppLayout>
     );

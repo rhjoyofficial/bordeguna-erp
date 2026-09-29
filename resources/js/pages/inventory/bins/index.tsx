@@ -155,10 +155,7 @@ export default function BinsIndex({ bins, warehouses }: { bins: Bin[]; warehouse
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Bins" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Bins"
-                    description="Named shelf locations inside each warehouse. Place batches on them from the Bin placement screen, and the pick list will print the shelf beside the batch. Switch a bin off rather than deleting it once stock has sat in it."
-                />
+                <ReportHeading title="Bins" />
 
                 {manageCatalog && (
                     <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">

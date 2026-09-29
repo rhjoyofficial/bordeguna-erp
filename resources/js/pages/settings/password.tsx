@@ -54,7 +54,7 @@ export default function Password() {
 
             <SettingsLayout narrow>
                 <div className="space-y-6">
-                    <HeadingSmall title="Update password" description="Ensure your account is using a long, random password to stay secure" />
+                    <HeadingSmall title="Update password" />
 
                     <form onSubmit={updatePassword} className="space-y-6">
                         <div className="grid gap-2">
@@ -96,7 +96,7 @@ export default function Password() {
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="password_confirmation">Confirm password</Label>
+                            <Label htmlFor="password_confirmation" required>Confirm password</Label>
 
                             <Input
                                 id="password_confirmation"

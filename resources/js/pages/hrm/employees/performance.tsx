@@ -54,9 +54,6 @@ export default function Performance({ employee, goals, reviews }: PerformancePro
                     <h1 className="text-xl font-semibold">
                         Performance: {employee.name} ({employee.employee_code})
                     </h1>
-                    <p className="text-muted-foreground text-sm">
-                        Goals with an owner and an outcome, and one review per period. Pay is decided in payroll, never here.
-                    </p>
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-2">
@@ -73,7 +70,9 @@ export default function Performance({ employee, goals, reviews }: PerformancePro
                             }}
                         >
                             <div className="min-w-56 flex-1 space-y-1">
-                                <Label className="text-xs">New goal</Label>
+                                <Label className="text-xs" required>
+                                    New goal
+                                </Label>
                                 <Input
                                     placeholder="e.g. Open five new dealer accounts"
                                     value={goalForm.data.title}
@@ -110,7 +109,13 @@ export default function Performance({ employee, goals, reviews }: PerformancePro
                                                         type="button"
                                                         size="sm"
                                                         className="h-7 bg-emerald-600 text-white hover:bg-emerald-700"
-                                                        onClick={() => router.post(`/hrm/goals/${goal.id}/outcome`, { status: 'achieved' }, { preserveScroll: true })}
+                                                        onClick={() =>
+                                                            router.post(
+                                                                `/hrm/goals/${goal.id}/outcome`,
+                                                                { status: 'achieved' },
+                                                                { preserveScroll: true },
+                                                            )
+                                                        }
                                                     >
                                                         Achieved
                                                     </Button>
@@ -119,7 +124,13 @@ export default function Performance({ employee, goals, reviews }: PerformancePro
                                                         variant="ghost"
                                                         size="sm"
                                                         className="text-destructive h-7"
-                                                        onClick={() => router.post(`/hrm/goals/${goal.id}/outcome`, { status: 'missed' }, { preserveScroll: true })}
+                                                        onClick={() =>
+                                                            router.post(
+                                                                `/hrm/goals/${goal.id}/outcome`,
+                                                                { status: 'missed' },
+                                                                { preserveScroll: true },
+                                                            )
+                                                        }
                                                     >
                                                         Missed
                                                     </Button>
@@ -128,7 +139,9 @@ export default function Performance({ employee, goals, reviews }: PerformancePro
                                                 <span
                                                     className={
                                                         'rounded-full px-2 py-0.5 text-xs font-medium ' +
-                                                        (goal.status === 'achieved' ? 'bg-emerald-500/10 text-emerald-700' : 'bg-destructive/10 text-destructive')
+                                                        (goal.status === 'achieved'
+                                                            ? 'bg-emerald-500/10 text-emerald-700'
+                                                            : 'bg-destructive/10 text-destructive')
                                                     }
                                                 >
                                                     {goal.status}
@@ -151,16 +164,20 @@ export default function Performance({ employee, goals, reviews }: PerformancePro
                             }}
                         >
                             <div className="space-y-1">
-                                <Label className="text-xs">Period</Label>
+                                <Label className="text-xs" required>
+                                    Period
+                                </Label>
                                 <Input
-                                    placeholder="e.g. 2026-Q3"
+                                    placeholder="e.g. 2026-Q3 (same period replaces)"
                                     value={reviewForm.data.period}
                                     onChange={(e) => reviewForm.setData('period', e.target.value)}
                                 />
                                 {reviewForm.errors.period && <p className="text-destructive text-xs">{reviewForm.errors.period}</p>}
                             </div>
                             <div className="space-y-1">
-                                <Label className="text-xs">Rating</Label>
+                                <Label className="text-xs" required>
+                                    Rating
+                                </Label>
                                 <Select value={reviewForm.data.rating} onValueChange={(value) => reviewForm.setData('rating', value)}>
                                     <SelectTrigger>
                                         <SelectValue />
@@ -186,7 +203,6 @@ export default function Performance({ employee, goals, reviews }: PerformancePro
                                 <Button type="submit" disabled={reviewForm.processing}>
                                     Save review
                                 </Button>
-                                <p className="text-muted-foreground mt-1 text-xs">Saving the same period again replaces it - one review per period.</p>
                             </div>
                         </form>
 

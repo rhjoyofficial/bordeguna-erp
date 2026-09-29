@@ -147,10 +147,6 @@ export default function ChatIndex({
             <div className="flex flex-col gap-4 p-4">
                 <div>
                     <h2 className="text-lg font-medium">Chat</h2>
-                    <p className="text-muted-foreground text-sm">
-                        For conversation about the business that should stay with the business. New messages arrive within a few seconds rather than
-                        instantly, and a removed message leaves a mark rather than disappearing.
-                    </p>
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
@@ -165,7 +161,7 @@ export default function ChatIndex({
                         {creating && (
                             <form onSubmit={submitChannel} className="flex flex-col gap-2 rounded-lg border p-3">
                                 <div className="grid gap-1.5">
-                                    <Label htmlFor="channel_name">Name</Label>
+                                    <Label htmlFor="channel_name" required>Name</Label>
                                     <Input
                                         id="channel_name"
                                         value={channelForm.data.name}

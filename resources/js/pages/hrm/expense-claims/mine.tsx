@@ -1,9 +1,9 @@
 import { BusyButton } from '@/components/busy-button';
 import { Field, FormRow } from '@/components/form/field';
 import HeadingSmall from '@/components/heading-small';
+import { RequestStatusBadge } from '@/components/request-status-badge';
 import { SearchSelect } from '@/components/search-select';
 import SelfServiceTabs from '@/components/self-service-tabs';
-import { RequestStatusBadge } from '@/components/request-status-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
@@ -142,10 +142,7 @@ export default function MyExpenseClaims({
             <div className="space-y-6 p-4">
                 <SelfServiceTabs active="/hrm/my-expenses" />
 
-                <HeadingSmall
-                    title="Money I spent for the office"
-                    description="Add what you paid out of your own pocket, attach the receipt, and send it to your manager. Several spends at once? Add each one, name them together, and send once for a single approval."
-                />
+                <HeadingSmall title="Money I spent for the office" />
 
                 {outstanding > 0 && (
                     <p className="text-sm">
@@ -216,6 +213,7 @@ export default function MyExpenseClaims({
                             htmlFor="receipt"
                             className="max-w-sm min-w-48 flex-[2]"
                             error={form.errors.receipt}
+                            required={receiptNeeded}
                         >
                             <Input
                                 id="receipt"
@@ -353,12 +351,7 @@ function OpenClaim({
                 WHAT they were. So the name is asked the moment a second spend
                 joins, and never before - one purchase describes itself. */}
             {draft.lines.length > 1 && (
-                <Field
-                    label="What were these spends for"
-                    htmlFor="trip_name"
-                    size="grow"
-                    hint="One line covering all of them - a visit, a job, a repair, a day of errands. It shows on the approval and on the voucher."
-                >
+                <Field label="What were these spends for" htmlFor="trip_name" size="grow" required>
                     <Input
                         id="trip_name"
                         value={name}
@@ -578,6 +571,7 @@ function EditSpend({
                     htmlFor={`edit_receipt_${line.id}`}
                     className="max-w-sm min-w-48 flex-[2]"
                     error={form.errors.receipt}
+                    required={receiptNeeded}
                 >
                     <Input
                         id={`edit_receipt_${line.id}`}

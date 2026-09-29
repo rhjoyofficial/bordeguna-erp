@@ -115,9 +115,9 @@ export default function SuppliersIndex({
         router.delete(route('purchasing.suppliers.destroy', supplier.id));
     };
 
-    const field = (name: keyof typeof EMPTY, label: string, extra?: { type?: string; placeholder?: string }) => (
+    const field = (name: keyof typeof EMPTY, label: string, extra?: { type?: string; placeholder?: string; required?: boolean }) => (
         <div className="grid gap-2">
-            <Label htmlFor={name} required>
+            <Label htmlFor={name} required={extra?.required}>
                 {label}
             </Label>
             <Input id={name} type={extra?.type} placeholder={extra?.placeholder} value={data[name]} onChange={(e) => setData(name, e.target.value)} />
@@ -138,8 +138,8 @@ export default function SuppliersIndex({
                         <p className="text-sm font-medium">{editing ? `Editing ${editing.name}` : 'Add a supplier'}</p>
 
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                            {field('code', 'Code *', { placeholder: 'e.g. ACME' })}
-                            {field('name', 'Name *')}
+                            {field('code', 'Code', { placeholder: 'e.g. ACME', required: true })}
+                            {field('name', 'Name', { required: true })}
                             {field('contact_name', 'Contact person')}
                             {field('phone', 'Phone')}
                             {field('email', 'Email', { type: 'email' })}

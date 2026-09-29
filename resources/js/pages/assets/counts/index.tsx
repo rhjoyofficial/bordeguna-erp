@@ -55,10 +55,6 @@ export default function AssetCounts({
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">Stock-takes</h1>
-                    <p className="text-muted-foreground max-w-3xl text-sm">
-                        Count one place at a time. Starting a count lists what the register expects there; mark each thing found or missing, add
-                        anything found that was not expected, then close the count. Every gap then needs somebody to settle it.
-                    </p>
                 </div>
 
                 {can_manage && (

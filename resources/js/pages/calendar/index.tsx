@@ -108,10 +108,6 @@ export default function CalendarIndex({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <h2 className="text-lg font-medium">{monthLabel}</h2>
-                        <p className="text-muted-foreground text-sm">
-                            Holidays, approved leave, follow-ups, deliveries expected and money falling due, gathered from the modules that own them.
-                            You only see what you could already open elsewhere.
-                        </p>
                     </div>
                     <div className="flex gap-2">
                         <Button variant="outline" asChild>

@@ -116,10 +116,7 @@ export default function UnitsIndex({ units }: { units: Unit[] }) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Units of measure" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Units of measure"
-                    description="How each product is counted and sold: pieces, kilograms, litres, jars. Every product needs one."
-                />
+                <ReportHeading title="Units of measure" />
 
                 {manageCatalog && (
                     <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">

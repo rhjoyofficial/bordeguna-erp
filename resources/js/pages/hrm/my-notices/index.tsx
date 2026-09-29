@@ -27,7 +27,6 @@ export default function MyNotices({ notices }: Props) {
             <div className="flex flex-col gap-4 p-4">
                 <div>
                     <h2 className="text-lg font-medium">My notices</h2>
-                    <p className="text-muted-foreground text-sm">Formal notices issued to you. Each can be opened and printed.</p>
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3">

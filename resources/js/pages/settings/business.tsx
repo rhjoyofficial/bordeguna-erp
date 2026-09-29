@@ -110,7 +110,6 @@ function LogoSection({ logoUrl }: { logoUrl: string | null }) {
                     )}
                 </div>
             </div>
-            <p className="text-muted-foreground text-xs">PNG, JPG or WEBP, up to 2 MB.</p>
             <InputError message={error} />
         </div>
     );
@@ -145,10 +144,7 @@ export default function Business({ business, logo_url, currencies, timezones, fo
 
             <SettingsLayout>
                 <div className="space-y-8">
-                    <HeadingSmall
-                        title="Business"
-                        description="Your company profile for this business. Currency and timezone are used by payroll and reporting later on."
-                    />
+                    <HeadingSmall title="Business" />
 
                     <LogoSection logoUrl={logo_url} />
 
@@ -225,7 +221,6 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                                     <p className="rounded-md border p-3 text-lg" style={{ fontFamily: chosenFont.stack }}>
                                         {PREVIEW}
                                     </p>
-                                    <p className="text-muted-foreground max-w-2xl text-xs">{chosenFont.note}</p>
                                 </>
                             )}
 
@@ -295,10 +290,6 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                                     </option>
                                 ))}
                             </SearchSelect>
-                            <p className="text-muted-foreground text-xs">
-                                With 24, the month named August runs 24 July to 23 August. This covers payroll, attendance and HR reports only. Bills,
-                                invoices and the accounts keep their own dates.
-                            </p>
                             <InputError message={errors.payroll_cycle_start_day} />
                         </div>
 
@@ -318,10 +309,6 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                                     </option>
                                 ))}
                             </SearchSelect>
-                            <p className="text-muted-foreground text-xs">
-                                The most any one person may work from home in a calendar month. Requests still awaiting approval count against it.
-                                Zero means work from home is not offered here. People at home still clock in and out as usual.
-                            </p>
                             <InputError message={errors.wfh_monthly_cap} />
                         </div>
 

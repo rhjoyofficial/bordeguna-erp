@@ -61,10 +61,6 @@ export default function ExpenseCategoriesPage({ categories, accounts }: Categori
             <div className="space-y-4 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Expense categories and their accounts</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Staff pick a category by name; this table decides which account it lands in at approval. Remapping changes future approvals
-                        only - posted journals are history.
-                    </p>
                 </div>
 
                 <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
@@ -79,17 +75,11 @@ export default function ExpenseCategoriesPage({ categories, accounts }: Categori
                             />
                         </Field>
 
-                        <Field
-                            label="Bangla name"
-                            htmlFor="name_bn"
-                            size="md"
-                            error={form.errors.name_bn}
-                            hint="Optional. Staff on the Bangla interface see this instead."
-                        >
+                        <Field label="Bangla name" htmlFor="name_bn" size="md" error={form.errors.name_bn}>
                             <Input id="name_bn" value={form.data.name_bn} onChange={(e) => form.setData('name_bn', e.target.value)} />
                         </Field>
 
-                        <Field label="Posts to" htmlFor="account_id" className="min-w-72 flex-1" error={form.errors.account_id}>
+                        <Field label="Posts to" htmlFor="account_id" className="min-w-72 flex-1" error={form.errors.account_id} required>
                             <SearchSelect
                                 newLedger={{ types: ['expense'], reload: ['accounts'] }}
                                 id="account_id"
@@ -200,12 +190,6 @@ export default function ExpenseCategoriesPage({ categories, accounts }: Categori
                         </tbody>
                     </table>
                 </div>
-
-                <p className="text-muted-foreground text-xs">
-                    The exception badge marks catch-all categories (Other, Materials) - the approver should look twice before approving those.
-                    Unticking "receipt required" is for spends that genuinely have no paper, like rickshaw fare; every other category refuses a claim
-                    line without a file.
-                </p>
             </div>
         </AppLayout>
     );

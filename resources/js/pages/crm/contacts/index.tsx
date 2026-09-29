@@ -180,19 +180,15 @@ export default function PhoneBookIndex({
             <Head title="Phone book" />
             <div className="flex flex-col gap-8 p-4">
                 <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <Tile label="In the book" value={totals.all} hint="Everyone, active or not" />
-                    <Tile label="Active" value={totals.active} hint="Included in a future send" />
-                    <Tile label="Has a phone" value={totals.reachable_by_sms} hint="Could receive an SMS" />
-                    <Tile label="Has an email" value={totals.reachable_by_email} hint="Could receive an email" />
+                    <Tile label="In the book" value={totals.all} />
+                    <Tile label="Active" value={totals.active} />
+                    <Tile label="Has a phone" value={totals.reachable_by_sms} />
+                    <Tile label="Has an email" value={totals.reachable_by_email} />
                 </section>
 
                 <section className="flex flex-col gap-4">
                     <div>
                         <h2 className="text-lg font-medium">Phone book</h2>
-                        <p className="text-muted-foreground text-sm">
-                            Everyone the business can reach, including people who are neither a lead nor a customer. Searching by number finds a
-                            person however their number was typed, so 01712345678 and +8801712345678 are the same search.
-                        </p>
                     </div>
 
                     <FormRow className="rounded-lg border p-4">
@@ -229,7 +225,7 @@ export default function PhoneBookIndex({
                             {/* Each field as wide as what it holds (30 Aug 2026 audit):
                                 a phone is a phone box, an address takes the room. */}
                             <FormRow>
-                                <Field label="Name" htmlFor="name" size="md" error={contactForm.errors.name}>
+                                <Field label="Name" htmlFor="name" size="md" required error={contactForm.errors.name}>
                                     <Input id="name" value={contactForm.data.name} onChange={(e) => contactForm.setData('name', e.target.value)} />
                                 </Field>
                                 <Field label="Company" htmlFor="company" size="md" error={contactForm.errors.company}>
@@ -417,16 +413,12 @@ export default function PhoneBookIndex({
                 <section className="flex flex-col gap-4">
                     <div>
                         <h2 className="text-lg font-medium">Groups</h2>
-                        <p className="text-muted-foreground text-sm">
-                            The named lists a send is aimed at. Membership is recorded person by person, so months later the group still says exactly
-                            who was on it.
-                        </p>
                     </div>
 
                     {can.manage && (
                         <form onSubmit={submitGroup}>
                             <FormRow className="rounded-lg border p-4">
-                                <Field label="Name" htmlFor="group_name" size="md" error={groupForm.errors.name}>
+                                <Field label="Name" htmlFor="group_name" size="md" required error={groupForm.errors.name}>
                                     <Input id="group_name" value={groupForm.data.name} onChange={(e) => groupForm.setData('name', e.target.value)} />
                                 </Field>
                                 <Field label="Description" htmlFor="group_description" size="grow">
@@ -513,9 +505,6 @@ export default function PhoneBookIndex({
                     <section className="flex flex-col gap-4">
                         <div>
                             <h2 className="text-lg font-medium">Import, export and CRM</h2>
-                            <p className="text-muted-foreground text-sm">
-                                Uploading a file shows what would happen and writes nothing. You apply it afterwards, once you have read it.
-                            </p>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
@@ -543,7 +532,7 @@ export default function PhoneBookIndex({
 
                         <form onSubmit={submitImport} className="flex flex-wrap items-end gap-2 rounded-lg border p-4">
                             <div className="grid gap-2">
-                                <Label htmlFor="file">Contact file (CSV)</Label>
+                                <Label htmlFor="file" required>Contact file (CSV)</Label>
                                 <Input
                                     id="file"
                                     type="file"
@@ -613,12 +602,11 @@ export default function PhoneBookIndex({
     );
 }
 
-function Tile({ label, value, hint }: { label: string; value: number; hint: string }) {
+function Tile({ label, value }: { label: string; value: number }) {
     return (
         <div className="rounded-lg border p-4">
             <div className="text-muted-foreground text-sm">{label}</div>
             <div className="text-2xl font-semibold">{value}</div>
-            <div className="text-muted-foreground text-xs">{hint}</div>
         </div>
     );
 }

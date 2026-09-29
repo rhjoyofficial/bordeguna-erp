@@ -51,8 +51,7 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
     const [selected, setSelected] = useState<number[]>([]);
     const form = useForm({ payment_mode: 'cash', lines: [] as { product_id: number }[] });
 
-    const toggle = (id: number) =>
-        setSelected((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+    const toggle = (id: number) => setSelected((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
 
     const mrpOfSelection = products.filter((p) => selected.includes(p.id)).reduce((sum, p) => sum + p.mrp, 0);
     const remaining = allowance.limit - allowance.used;
@@ -63,10 +62,6 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
             <div className="space-y-6 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Staff product purchase</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Your special staff prices, for you and your family. The monthly allowance is counted at MRP and does not roll
-                        over; one unit per product per month at the staff price. Collect from the store after approval.
-                    </p>
                 </div>
 
                 <div className="flex flex-wrap gap-4">

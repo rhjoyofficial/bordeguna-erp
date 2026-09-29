@@ -46,7 +46,7 @@ export default function MyPayslips({ employee, password_hint, password_unavailab
                 <div>
                     <h2 className="text-lg font-medium">{t('payslips.title')}</h2>
                     <p className="text-muted-foreground text-sm">
-                        {employee.name} - {employee.employee_code}. {t('payslips.appears_after_approval')}
+                        {employee.name} - {employee.employee_code}
                     </p>
                 </div>
 

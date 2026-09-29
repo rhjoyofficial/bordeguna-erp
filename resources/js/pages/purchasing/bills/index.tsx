@@ -52,9 +52,6 @@ export default function BillsIndex({
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
                         <h1 className="text-xl font-semibold">Supplier bills</h1>
-                        <p className="text-muted-foreground text-sm">
-                            What suppliers have invoiced. Recording a bill clears Goods Received Not Invoiced and creates the payable.
-                        </p>
                     </div>
 
                     <form onSubmit={submitSearch} className="flex gap-2">
@@ -69,14 +66,9 @@ export default function BillsIndex({
                     so there is no blank "new bill" button anywhere. */}
                 {can_record && (
                     <div className="rounded-lg border p-4">
-                        <h2 className="mb-1 text-sm font-semibold">Orders with goods still to bill</h2>
-                        <p className="text-muted-foreground mb-3 text-sm">
-                            A bill covers exactly one purchase order. Pick the order the supplier has invoiced.
-                        </p>
+                        <h2 className="mb-3 text-sm font-semibold">Orders with goods still to bill</h2>
                         {billable_orders.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">
-                                Nothing is waiting to be billed. Receive goods against an approved order first.
-                            </p>
+                            <p className="text-muted-foreground text-sm">Nothing is waiting to be billed.</p>
                         ) : (
                             <div className="flex flex-wrap gap-2">
                                 {billable_orders.map((order) => (

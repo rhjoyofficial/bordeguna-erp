@@ -31,7 +31,7 @@ export default function HolidayWorkReport({ year, rows, dates, total }: { year: 
 
             <div className="space-y-6 p-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
-                    <HeadingSmall title={`Holiday work in ${year}`} description="Days worked on holidays and weekly offs, once approved." />
+                    <HeadingSmall title={`Holiday work in ${year}`} />
                     <Link href="/hrm/holiday-work" className="text-sm underline">
                         Record holiday work
                     </Link>

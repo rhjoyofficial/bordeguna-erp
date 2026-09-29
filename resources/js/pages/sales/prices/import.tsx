@@ -37,13 +37,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 export default function PriceImport({
     preview,
     groups,
-    price_columns,
-    limits,
 }: {
     preview: Preview | null;
     groups: { code: string; name: string }[];
-    price_columns: string[];
-    limits: { max_rows: number; max_mb: number };
 }) {
     const upload = useForm<{ file: File | null; effective_from: string }>({
         file: null,
@@ -75,15 +71,6 @@ export default function PriceImport({
             <div className="flex flex-col gap-6 p-4">
                 <div className="max-w-3xl">
                     <h1 className="text-lg font-semibold">Import selling prices</h1>
-                    <p className="text-muted-foreground mt-1 text-sm">
-                        One row per product, one column per price group. Nothing is written until you press Apply.
-                    </p>
-                    <p className="text-muted-foreground mt-2 text-sm">
-                        Columns: <code className="font-mono text-xs">sku</code> is required, then any of{' '}
-                        <code className="font-mono text-xs">{price_columns.join(', ')}</code>. Optional:{' '}
-                        <code className="font-mono text-xs">min_quantity</code> for a volume break, and{' '}
-                        <code className="font-mono text-xs">note</code>. Up to {limits.max_rows.toLocaleString()} rows and {limits.max_mb} MB.
-                    </p>
                     <p className="text-muted-foreground mt-2 text-sm">
                         Price groups here: {groups.map((g) => g.code).join(', ')}. Start from{' '}
                         <a className="underline underline-offset-2" href={route('sales.prices.export')}>
@@ -91,21 +78,11 @@ export default function PriceImport({
                         </a>
                         .
                     </p>
-                    {/*
-                        ⚠⚠ Prices are stored PER GROUP with no fallback, and a green
-                        preflight has hidden this before: the readiness check asks only
-                        whether a product has ANY price, so a retail-only import turns it
-                        green while every dealer sale still refuses.
-                    */}
-                    <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
-                        A price belongs to one group. Pricing a product for RETAIL only still refuses every DEALER and DISTRIBUTOR sale of it - there
-                        is no fallback between groups.
-                    </p>
                 </div>
 
                 <form onSubmit={submitFile} className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
-                        <Label htmlFor="file">CSV file</Label>
+                        <Label htmlFor="file" required>CSV file</Label>
                         <input
                             id="file"
                             type="file"
@@ -116,7 +93,7 @@ export default function PriceImport({
                         <InputError message={upload.errors.file} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="effective_from">These prices start on</Label>
+                        <Label htmlFor="effective_from" required>These prices start on</Label>
                         <Input
                             id="effective_from"
                             type="date"
@@ -269,9 +246,6 @@ export default function PriceImport({
                                     ? 'Importing'
                                     : `Apply from ${preview.effective_from} - ${preview.creates.length} new, ${preview.supersedes.length} replaced`}
                             </Button>
-                            <span className="text-muted-foreground text-xs">
-                                Applies this exact file on this exact date. Change either and the preview must be run again.
-                            </span>
                             <InputError message={applyError} />
                         </form>
                     </div>

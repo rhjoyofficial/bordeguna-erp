@@ -62,10 +62,7 @@ export default function CrmReports({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="CRM reports" />
             <div className="flex flex-col gap-8 p-4">
-                <ReportHeading
-                    title="CRM reports"
-                    description="Every figure is worked out when you open this page, so nothing here can drift from the records it came from. Revenue and campaign return arrive with Sales - there are no invoices yet, and a column of zeros would be worse than an absent one."
-                />
+                <ReportHeading title="CRM reports" />
 
                 {/* ── Funnel ─────────────────────────────────────────────── */}
                 <section className="flex flex-col gap-3">
@@ -149,14 +146,7 @@ export default function CrmReports({
 
                 {/* ── Demand ─────────────────────────────────────────────── */}
                 <section className="flex flex-col gap-2">
-                    <div>
-                        <h2 className="text-sm font-medium">What people are asking for</h2>
-                        <p className="text-muted-foreground text-sm">
-                            {/* ⚠⚠ People, not requests. Six people wanting mango and one
-                                person asking six times are different businesses. */}
-                            Counted by how many <span className="font-medium">people</span> asked, not how many times.
-                        </p>
-                    </div>
+                    <h2 className="text-sm font-medium">What people are asking for</h2>
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full min-w-[34rem] text-sm">
                             <thead className="bg-muted/50 text-left">

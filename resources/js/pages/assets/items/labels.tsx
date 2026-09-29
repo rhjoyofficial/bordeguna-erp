@@ -80,10 +80,6 @@ export default function AssetLabels({
             <div className="flex flex-col gap-4 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">Asset tags</h1>
-                    <p className="text-muted-foreground max-w-3xl text-sm">
-                        Tick the things that need a sticker. Each carries a QR code that opens the thing in the ERP (after signing in) and its tag in
-                        words, for when no phone is at hand.
-                    </p>
                 </div>
 
                 <div className="flex flex-wrap items-end gap-3">

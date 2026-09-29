@@ -32,7 +32,6 @@ export default function ReportsIndex({ groups }: Props) {
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Reports</h1>
-                    <p className="text-muted-foreground text-sm">Every report can be exported to Excel, CSV or PDF, or opened as a print view.</p>
                 </div>
 
                 {names.length === 0 && (

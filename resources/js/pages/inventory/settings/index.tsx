@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -37,7 +37,7 @@ export default function InventorySettings({ adjustment_approval_threshold }: { a
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Inventory settings" />
             <div className="flex max-w-3xl flex-col gap-6 p-4">
-                <ReportHeading title="Inventory settings" description="Rules for this business's stock." />
+                <ReportHeading title="Inventory settings" />
 
                 <form
                     onSubmit={submit}
@@ -45,24 +45,10 @@ export default function InventorySettings({ adjustment_approval_threshold }: { a
                 >
                     <div>
                         <h2 className="font-medium">Approval limit for stock corrections</h2>
-                        <p className="text-muted-foreground mt-1 text-sm">
-                            A correction is damaged, expired or missing stock written off, or found stock added back, from the Stock screen or a stock
-                            count. This limit decides which of them need somebody to approve them in{' '}
-                            <Link href="/approvals" className="underline underline-offset-2">
-                                Approvals
-                            </Link>{' '}
-                            before the stock and the books change.
-                        </p>
                     </div>
 
                     <FormRow className="gap-3">
-                        <Field
-                            label="Limit (৳)"
-                            htmlFor="adjustment_approval_threshold"
-                            size="sm"
-                            error={errors.adjustment_approval_threshold}
-                            hint="Empty: every correction waits for approval."
-                        >
+                        <Field label="Limit (৳)" htmlFor="adjustment_approval_threshold" size="sm" error={errors.adjustment_approval_threshold}>
                             <Input
                                 id="adjustment_approval_threshold"
                                 type="number"
@@ -87,25 +73,6 @@ export default function InventorySettings({ adjustment_approval_threshold }: { a
                                 : `corrections worth up to ${money(adjustment_approval_threshold)} are saved at once.`}
                         </span>
                     </p>
-
-                    <ul className="text-muted-foreground list-disc space-y-1 pl-5 text-sm">
-                        <li>
-                            <span className="text-foreground font-medium">Empty:</span> every correction waits for approval, including the Owner's and
-                            the Manager's.
-                        </li>
-                        <li>
-                            <span className="text-foreground font-medium">An amount:</span> a correction worth up to that amount, recorded by the
-                            Owner or a Manager, is saved at once. Bigger ones still wait.
-                            {data.adjustment_approval_threshold !== '' && Number(data.adjustment_approval_threshold) >= 0 && (
-                                <> With {money(data.adjustment_approval_threshold)}, a write-off worth more than that waits.</>
-                            )}
-                        </li>
-                        <li>Corrections raised by Staff always wait for a manager, whatever the limit.</li>
-                        <li>
-                            The worth of a write-off is estimated from what the stock cost; found stock is the quantity times the cost per unit typed
-                            in.
-                        </li>
-                    </ul>
                 </form>
             </div>
         </AppLayout>

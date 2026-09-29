@@ -706,7 +706,7 @@ export default function CounterSale({
 
                         <div className="grid grid-cols-2 gap-2">
                             <div className="grid gap-1">
-                                <Label htmlFor="customer" className="text-xs">
+                                <Label htmlFor="customer" className="text-xs" required>
                                     {t('pos.customer')}
                                 </Label>
                                 <SearchableSelect
@@ -735,7 +735,7 @@ export default function CounterSale({
                                 <InputError message={errors.customer_id} />
                             </div>
                             <div className="grid gap-1">
-                                <Label htmlFor="warehouse" className="text-xs">
+                                <Label htmlFor="warehouse" className="text-xs" required>
                                     {t('pos.sold_from')}
                                 </Label>
                                 <SearchSelect id="warehouse" value={data.warehouse_id} onChange={(e) => setData('warehouse_id', e.target.value)}>
@@ -748,7 +748,7 @@ export default function CounterSale({
                                 <InputError message={errors.warehouse_id} />
                             </div>
                             <div className="grid gap-1">
-                                <Label htmlFor="money" className="text-xs">
+                                <Label htmlFor="money" className="text-xs" required>
                                     {t('pos.paid_into')}
                                 </Label>
                                 {/* ⚠ "On account" is a real choice, not a missing value: the

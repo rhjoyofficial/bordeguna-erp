@@ -192,10 +192,6 @@ export default function RecruitmentIndex({
                 <section className="flex flex-col gap-4">
                     <div>
                         <h2 className="text-lg font-medium">Openings</h2>
-                        <p className="text-muted-foreground text-sm">
-                            Roles the business is trying to fill. Two openings with one hire is still an open role, so the number wanted is tracked
-                            rather than assumed.
-                        </p>
                     </div>
 
                     {can.manage && (
@@ -373,10 +369,6 @@ export default function RecruitmentIndex({
                 <section className="flex flex-col gap-4">
                     <div>
                         <h2 className="text-lg font-medium">Applicants</h2>
-                        <p className="text-muted-foreground text-sm">
-                            Marking somebody hired records the decision. It does not create an employee: a joining date, an employment type and a
-                            salary structure are asked for in People, and guessing them would put a wrong number into their first payroll.
-                        </p>
                     </div>
 
                     {can.manage && (
@@ -396,7 +388,7 @@ export default function RecruitmentIndex({
                                         ))}
                                     </SearchSelect>
                                 </Field>
-                                <Field label="Name" htmlFor="applicant_name" size="md" error={applicantForm.errors.name}>
+                                <Field label="Name" htmlFor="applicant_name" size="md" error={applicantForm.errors.name} required>
                                     <Input
                                         id="applicant_name"
                                         value={applicantForm.data.name}
@@ -570,7 +562,7 @@ export default function RecruitmentIndex({
                         <div className="flex flex-col gap-3 rounded-lg border p-4">
                             <h3 className="font-medium">Move {moving.name}</h3>
                             <FormRow>
-                                <Field label="To" htmlFor="move_stage">
+                                <Field label="To" htmlFor="move_stage" required>
                                     <SearchSelect id="move_stage" value={moveStage} onChange={(e) => setMoveStage(e.target.value)}>
                                         {stages.map((s) => (
                                             <option key={s.value} value={s.value}>
@@ -580,7 +572,7 @@ export default function RecruitmentIndex({
                                     </SearchSelect>
                                 </Field>
                                 {needsReason && (
-                                    <Field label="Why" htmlFor="move_reason" size="grow">
+                                    <Field label="Why" htmlFor="move_reason" size="grow" required>
                                         <Input id="move_reason" value={moveReason} onChange={(e) => setMoveReason(e.target.value)} />
                                     </Field>
                                 )}

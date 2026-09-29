@@ -61,8 +61,7 @@ export default function AssetMovementsIndex({
                     <div>
                         <h1 className="text-lg font-semibold">Hand-overs</h1>
                         <p className="text-muted-foreground max-w-3xl text-sm">
-                            Who gave what to whom, and when. A hand-over is never edited: a mistake is put right by another one.
-                            {in_transit > 0 && ` ${in_transit} on the way, not yet received.`}
+                            {in_transit > 0 && `${in_transit} on the way, not yet received.`}
                         </p>
                     </div>
                     {can_manage && (

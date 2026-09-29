@@ -69,17 +69,8 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
             <Head title="Categories" />
             <div className="flex flex-col gap-6 p-4">
                 <div className="text-muted-foreground max-w-3xl text-sm">
-                    <p>
-                        The <strong>SKU code</strong> is the part of a product code that comes from its category, so{' '}
-                        <code className="font-mono">DAT</code> is what makes <code className="font-mono">BNC-DAT-AJW-1KG-LRG</code> a date. Fill it in
-                        and every new product in that category can have its SKU built for you.
-                    </p>
-                    <p className="mt-2">
-                        Packaging carries its own family in the code, so a jar category is <code className="font-mono">PK-JAR</code> and its products
-                        come out as <code className="font-mono">PK-JAR-500G</code>.
-                    </p>
                     {missingCodes > 0 && (
-                        <p className="mt-2">
+                        <p>
                             {missingCodes} {missingCodes === 1 ? 'category has' : 'categories have'} no code yet. Products in{' '}
                             {missingCodes === 1 ? 'it' : 'them'} need their SKU typed by hand until one is set.
                         </p>

@@ -118,14 +118,12 @@ function RequestDialog({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Request a loan or advance</DialogTitle>
-                    <DialogDescription>
-                        Nothing is disbursed until this is approved, and a pending loan owes nothing at all. Approval pays the money out and generates
-                        the repayment schedule; payroll then deducts one installment a month.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-2">
-                        <Label htmlFor="loan_employee">Employee</Label>
+                        <Label htmlFor="loan_employee" required>
+                            Employee
+                        </Label>
                         <SearchSelect id="loan_employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
@@ -139,7 +137,9 @@ function RequestDialog({
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="loan_type">Type</Label>
+                        <Label htmlFor="loan_type" required>
+                            Type
+                        </Label>
                         <SearchSelect id="loan_type" value={type} onChange={(e) => setType(e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
@@ -151,7 +151,9 @@ function RequestDialog({
 
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="loan_principal">Principal</Label>
+                            <Label htmlFor="loan_principal" required>
+                                Principal
+                            </Label>
                             <Input
                                 id="loan_principal"
                                 type="number"
@@ -163,7 +165,9 @@ function RequestDialog({
                             {errors.principal && <p className="text-destructive text-xs">{errors.principal}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="loan_installment">Monthly installment</Label>
+                            <Label htmlFor="loan_installment" required>
+                                Monthly installment
+                            </Label>
                             <Input
                                 id="loan_installment"
                                 type="number"
@@ -178,12 +182,16 @@ function RequestDialog({
 
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="loan_year">Start year</Label>
+                            <Label htmlFor="loan_year" required>
+                                Start year
+                            </Label>
                             <Input id="loan_year" type="number" value={year} onChange={(e) => setYear(e.target.value)} />
                             {errors.start_year && <p className="text-destructive text-xs">{errors.start_year}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="loan_month">Start month</Label>
+                            <Label htmlFor="loan_month" required>
+                                Start month
+                            </Label>
                             <MonthSelect id="loan_month" value={month} onChange={setMonth} />
                             {errors.start_month && <p className="text-destructive text-xs">{errors.start_month}</p>}
                             <p className="text-muted-foreground text-xs">
@@ -200,7 +208,9 @@ function RequestDialog({
                     )}
 
                     <div className="grid gap-2">
-                        <Label htmlFor="loan_reason">Reason</Label>
+                        <Label htmlFor="loan_reason" required>
+                            Reason
+                        </Label>
                         <Input id="loan_reason" value={reason} onChange={(e) => setReason(e.target.value)} />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
@@ -269,13 +279,17 @@ function SettleDialog({ loan }: { loan: LoanRow }) {
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="settle_amount">Amount received</Label>
+                        <Label htmlFor="settle_amount" required>
+                            Amount received
+                        </Label>
                         <Input id="settle_amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
                         {errors.amount_received && <p className="text-destructive text-xs">{errors.amount_received}</p>}
                         {errors.loan && <p className="text-destructive text-xs">{errors.loan}</p>}
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="settle_note">Note</Label>
+                        <Label htmlFor="settle_note" required>
+                            Note
+                        </Label>
                         <Input id="settle_note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Paid by bank transfer" />
                         {errors.note && <p className="text-destructive text-xs">{errors.note}</p>}
                     </div>
@@ -343,7 +357,9 @@ function ApproveDialog({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: 
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="approve_account">Paid from</Label>
+                        <Label htmlFor="approve_account" required>
+                            Paid from
+                        </Label>
                         <SearchSelect id="approve_account" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
                             <option value="">Select an account</option>
                             {moneyAccounts.map((a) => (
@@ -355,11 +371,10 @@ function ApproveDialog({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: 
                         {errors.money_account_id && <p className="text-destructive text-xs">{errors.money_account_id}</p>}
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="approve_date">Paid on</Label>
+                        <Label htmlFor="approve_date" required>
+                            Paid on
+                        </Label>
                         <Input id="approve_date" type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
-                        <p className="text-muted-foreground text-xs">
-                            The day the money actually left. An advance written up a fortnight later still belongs to the day it was handed over.
-                        </p>
                         {errors.disbursed_on && <p className="text-destructive text-xs">{errors.disbursed_on}</p>}
                     </div>
                     <div className="grid gap-2">
@@ -497,9 +512,6 @@ function LoanCard({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: Props
 
                     <div className="overflow-x-auto">
                         <h4 className="mb-2 text-sm font-medium">Ledger</h4>
-                        <p className="text-muted-foreground mb-2 text-xs">
-                            The outstanding balance is the sum of these rows - never a stored number.
-                        </p>
                         {loan.ledger.length === 0 ? (
                             <p className="text-muted-foreground text-sm">Nothing has moved yet.</p>
                         ) : (
@@ -535,7 +547,6 @@ export default function Loans({ filters, loans, employees, types, moneyAccounts,
             <div className="flex flex-col gap-6 p-4">
                 <ReportHeading
                     title="Loans & advances"
-                    description="Payroll deducts one scheduled installment a month. A repayment is recorded only once the payroll is disbursed, so recalculating an open run never moves a balance."
                     actions={
                         <>
                             <SearchSelect

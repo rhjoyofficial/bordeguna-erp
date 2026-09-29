@@ -47,10 +47,6 @@ export default function MyTeam({ team }: { team: TeamMember[] }) {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h1 className="text-xl font-semibold">My team</h1>
-                        <p className="text-muted-foreground text-sm">
-                            Your direct reports, today at a glance. Anything waiting for a decision is approved from the Approvals inbox, not here -
-                            one place decides.
-                        </p>
                     </div>
                     <Button variant="outline" size="sm" asChild>
                         <Link href="/approvals">Open approvals</Link>

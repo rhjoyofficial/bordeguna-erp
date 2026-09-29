@@ -567,9 +567,6 @@ function UploadDocumentDialog({ employeeId, documentTypes }: { employeeId: numbe
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Upload document</DialogTitle>
-                    <DialogDescription>
-                        Personal documents are private: only HR and the employee themselves can open them. Accepted: PDF or image, up to 5 MB.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
@@ -705,10 +702,6 @@ function RemoteClockInCard({ employee }: { employee: EmployeeDetail }) {
                 </>
             ) : (
                 <>
-                    <p className="text-muted-foreground mb-3 text-sm">
-                        {employee.name} uses the punch machine at the office and cannot clock in from a browser. Switch this on for people whose work
-                        takes them away from the office.
-                    </p>
                     <div className="flex flex-wrap items-end gap-3">
                         <div className="grid gap-2">
                             <Label htmlFor="remote-reason">Why (optional)</Label>
@@ -726,10 +719,6 @@ function RemoteClockInCard({ employee }: { employee: EmployeeDetail }) {
                     </div>
                 </>
             )}
-
-            <p className="text-muted-foreground mt-3 text-xs">
-                The punch machine always works and needs no permission. This setting only controls clocking in from a browser.
-            </p>
         </div>
     );
 }
@@ -766,13 +755,11 @@ function LoginAccountCard({ employee, lifetime }: { employee: EmployeeDetail; li
 
             {employee.user === null ? (
                 <>
-                    <p className="text-muted-foreground mb-3 text-sm">
-                        {employee.name} cannot sign in yet. Give an email address and they get a link where they choose their own password. You never
-                        type it.
-                    </p>
                     <div className="flex flex-wrap items-end gap-3">
                         <div className="grid gap-1.5">
-                            <Label htmlFor="login-email">Their email address</Label>
+                            <Label htmlFor="login-email" required>
+                                Their email address
+                            </Label>
                             <Input
                                 id="login-email"
                                 type="email"
@@ -817,7 +804,9 @@ function LoginAccountCard({ employee, lifetime }: { employee: EmployeeDetail; li
 
                     {/* ⭐ 27 Sep 2026 (Joy): change the address they sign in with. Password stays the same. */}
                     <div className="mt-4 border-t pt-4">
-                        <Label htmlFor="change-login-email">Change login email</Label>
+                        <Label htmlFor="change-login-email" required>
+                            Change login email
+                        </Label>
                         <div className="mt-1.5 flex flex-wrap items-end gap-3">
                             <Input
                                 id="change-login-email"
@@ -830,19 +819,12 @@ function LoginAccountCard({ employee, lifetime }: { employee: EmployeeDetail; li
                             <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={
-                                    sending ||
-                                    newEmail.trim() === '' ||
-                                    newEmail.trim().toLowerCase() === employee.user.email.toLowerCase()
-                                }
+                                disabled={sending || newEmail.trim() === '' || newEmail.trim().toLowerCase() === employee.user.email.toLowerCase()}
                                 onClick={changeLoginEmail}
                             >
                                 Change login email
                             </Button>
                         </div>
-                        <p className="text-muted-foreground mt-1 text-xs">
-                            They will sign in with the new address. Their password stays the same.
-                        </p>
                     </div>
                 </>
             )}

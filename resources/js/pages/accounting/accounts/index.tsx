@@ -54,7 +54,15 @@ function depthOf(account: Account, byId: Map<number, Account>): number {
 
 const EMPTY = { code: '', name: '', type: 'asset', parent_id: '', is_postable: true, is_active: true, note: '' };
 
-export default function ChartOfAccounts({ accounts, types, money_group_ids }: { accounts: Account[]; types: AccountType[]; money_group_ids: number[] }) {
+export default function ChartOfAccounts({
+    accounts,
+    types,
+    money_group_ids,
+}: {
+    accounts: Account[];
+    types: AccountType[];
+    money_group_ids: number[];
+}) {
     // 26 Sep 2026: the chart key is split. Creating, renaming and deleting are
     // three keys; anything STRUCTURAL (a top-level heading, a move, a re-type,
     // head to heading or back, retiring a heading) needs a fourth, so the form
@@ -84,7 +92,6 @@ export default function ChartOfAccounts({ accounts, types, money_group_ids }: { 
         [accounts, data.type, editing, canManageChartStructure, money_group_ids],
     );
     const structureLocked = editing !== null && !canManageChartStructure;
-
 
     const startEdit = (account: Account) => {
         clearErrors();
@@ -125,15 +132,12 @@ export default function ChartOfAccounts({ accounts, types, money_group_ids }: { 
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Chart of accounts" />
             <ReportPage>
-                <ReportHeading
-                    title="Chart of accounts"
-                    description="One chart, shared by every business. Balances are kept separately per business and come from the ledger, never from this screen."
-                />
+                <ReportHeading title="Chart of accounts" />
 
                 {/* Counts of the rows below, not ledger figures. */}
                 <StatRow>
                     <StatTile label="Accounts" value={accounts.length} />
-                    <StatTile label="Can be posted to" value={accounts.filter((a) => a.is_postable).length} hint="The rest are grouping headings." />
+                    <StatTile label="Can be posted to" value={accounts.filter((a) => a.is_postable).length} />
                     <StatTile label="Groups" value={accounts.filter((a) => !a.is_postable).length} />
                     <StatTile label="Inactive" value={accounts.filter((a) => !a.is_active).length} />
                 </StatRow>
@@ -170,7 +174,9 @@ export default function ChartOfAccounts({ accounts, types, money_group_ids }: { 
                             <InputError message={errors.name} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="type">Type</Label>
+                            <Label htmlFor="type" required>
+                                Type
+                            </Label>
                             <SearchSelect
                                 fit
                                 id="type"
@@ -187,8 +193,16 @@ export default function ChartOfAccounts({ accounts, types, money_group_ids }: { 
                             <InputError message={errors.type} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="parent_id">Sits under</Label>
-                            <SearchSelect fit id="parent_id" value={data.parent_id} disabled={structureLocked} onChange={(e) => setData('parent_id', e.target.value)}>
+                            <Label htmlFor="parent_id" required={!canManageChartStructure}>
+                                Sits under
+                            </Label>
+                            <SearchSelect
+                                fit
+                                id="parent_id"
+                                value={data.parent_id}
+                                disabled={structureLocked}
+                                onChange={(e) => setData('parent_id', e.target.value)}
+                            >
                                 {canManageChartStructure ? <option value="">Top level</option> : <option value="">Choose a heading</option>}
                                 {parentOptions.map((account) => (
                                     <option key={account.id} value={account.id}>

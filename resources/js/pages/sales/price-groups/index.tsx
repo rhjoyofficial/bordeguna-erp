@@ -70,13 +70,7 @@ export default function PriceGroupsIndex({ groups }: { groups: Group[] }) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Price groups" />
             <div className="flex flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-lg font-semibold">Price groups</h1>
-                    <p className="text-muted-foreground max-w-3xl text-sm">
-                        Who a price is for. Each product gets a price for each group in the product dialog. A group that does not pay MRP cannot buy a
-                        product until its price is set; a group that pays MRP (Retail) is charged the product's MRP when nothing else is set.
-                    </p>
-                </div>
+                <h1 className="text-lg font-semibold">Price groups</h1>
 
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[40rem] text-sm">
@@ -97,7 +91,7 @@ export default function PriceGroupsIndex({ groups }: { groups: Group[] }) {
                                         <td className="py-2" colSpan={6}>
                                             <form onSubmit={submitEdit} className="flex flex-wrap items-end gap-3">
                                                 <div className="grid gap-1">
-                                                    <Label htmlFor="edit-name">Name</Label>
+                                                    <Label htmlFor="edit-name" required>Name</Label>
                                                     <Input
                                                         id="edit-name"
                                                         value={edit.data.name}

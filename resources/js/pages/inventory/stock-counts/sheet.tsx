@@ -79,12 +79,6 @@ export default function StockCountSheet({ count, lines }: { count: Count; lines:
                         </tbody>
                     </table>
 
-                    <p className="mt-6 text-xs text-black/50">
-                        Count what is physically present, including anything damaged or past its date. Leave a line blank if it was not counted;
-                        a blank is never treated as zero. Items found that are not on this sheet: note them at the bottom and add them on the
-                        entry screen.
-                    </p>
-
                     <div className="mt-16 flex justify-between text-sm">
                         <div className="w-56 border-t border-black/40 pt-2 text-center text-black/60">Counted by, with date</div>
                         <div className="w-56 border-t border-black/40 pt-2 text-center text-black/60">Checked by</div>

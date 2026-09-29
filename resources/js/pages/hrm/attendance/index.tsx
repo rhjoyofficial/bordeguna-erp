@@ -1,16 +1,7 @@
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -110,10 +101,6 @@ function ManualPunchDialog({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Record a punch manually</DialogTitle>
-                    <DialogDescription>
-                        For the offline fallback - a manual register keyed in later. The punch is stored like any other and can never be edited
-                        afterwards, so the reason below is what explains it to an auditor.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
@@ -328,10 +315,6 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                         </div>
                     </div>
                 )}
-
-                <p className="text-muted-foreground text-xs">
-                    Raw punches are immutable and cannot be edited or deleted. Corrections are recorded separately.
-                </p>
             </div>
         </AppLayout>
     );

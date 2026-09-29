@@ -9,7 +9,7 @@ import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { cn } from '@/lib/utils';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Bot, ShieldCheck, Trash2 } from 'lucide-react';
+import { Bot, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 type Credential = {
@@ -131,13 +131,7 @@ export default function AiProviders() {
                     <div>
                         <p className="font-medium">Assistant panel</p>
                         <p className="text-muted-foreground max-w-xl text-sm">
-                            {assistantEnabled
-                                ? 'On. The floating button appears only for people who hold the AI assistant permission, which you grant under Settings, Roles. Everybody else sees nothing.'
-                                : 'Off. The floating button is hidden for everybody, including you, and the assistant refuses every message. A key can still be added and verified while it is off.'}
-                        </p>
-                        <p className="text-muted-foreground mt-1 max-w-xl text-xs">
-                            Every message spends money on the provider key, so this is off until somebody turns it on, and granted per person rather
-                            than by job title.
+                            {assistantEnabled ? 'On' : 'Off'}
                         </p>
                     </div>
                     <Button
@@ -149,22 +143,13 @@ export default function AiProviders() {
                 </div>
 
                 <div className="space-y-6">
-                    <HeadingSmall title="AI providers" description="Add an API key so the ERP guide and future AI features can work." />
+                    <HeadingSmall title="AI providers" />
 
                     <p className="text-muted-foreground text-sm">
                         {activeProvider
-                            ? `Messages are answered by ${providers[activeProvider] ?? activeProvider}. With keys for more than one provider saved, the first supported one answers.`
+                            ? `Messages are answered by ${providers[activeProvider] ?? activeProvider}.`
                             : 'No provider can answer yet. Add a key below and the assistant switches itself on.'}
                     </p>
-
-                    <div className="border-border bg-muted/40 flex items-start gap-3 rounded-md border p-4 text-sm">
-                        <ShieldCheck className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-                        <p className="text-muted-foreground">
-                            A key is encrypted before it is stored and is never sent back to the browser, written to a log, or shown again. Only the
-                            last four characters stay readable so you can tell two keys apart. To change a key, add the new one; it replaces the old
-                            without showing it.
-                        </p>
-                    </div>
 
                     {/* Which two languages the chat toggle offers, and the ceiling. */}
                     <form
@@ -177,8 +162,7 @@ export default function AiProviders() {
                         <div>
                             <p className="font-medium">Chat languages</p>
                             <p className="text-muted-foreground max-w-2xl text-sm">
-                                Choose exactly {requiredLanguages}. These two become the toggle on the chat box, and the assistant answers in
-                                whichever is selected, whatever language the question was typed in.
+                                Choose exactly {requiredLanguages}.
                             </p>
                         </div>
 
@@ -222,9 +206,7 @@ export default function AiProviders() {
                                 Save preferences
                             </Button>
                             <p className="text-muted-foreground max-w-md text-xs">
-                                <strong>{usedThisMonth}</strong> used so far this calendar month. Every message spends money on the provider key and
-                                nothing else in the ERP can stop it, so a ceiling here is the only thing between a mistake and an invoice. Empty means
-                                no limit.
+                                <strong>{usedThisMonth}</strong> used this month.
                             </p>
                         </div>
                     </form>
@@ -245,13 +227,7 @@ export default function AiProviders() {
                         }}
                         className="border-border space-y-4 rounded-md border p-4"
                     >
-                        <div>
-                            <p className="font-medium">Name and picture</p>
-                            <p className="text-muted-foreground max-w-2xl text-sm">
-                                What the assistant is called and what it looks like in the chat panel. This is a label only: renaming it grants it
-                                nothing and hides nothing. What it may read is decided by permissions, under Settings, Roles.
-                            </p>
-                        </div>
+                        <p className="font-medium">Name and picture</p>
 
                         <div className="flex flex-wrap items-end gap-4">
                             <div className="flex items-center gap-3">
@@ -304,7 +280,6 @@ export default function AiProviders() {
                                     onChange={(e) => identityForm.setData('name', e.target.value)}
                                 />
                                 <InputError message={identityForm.errors.name} />
-                                <p className="text-muted-foreground text-xs">Empty uses {identity.defaultName}.</p>
                             </div>
 
                             <div className="grid gap-2">
@@ -315,13 +290,11 @@ export default function AiProviders() {
                                     min={identity.minCharLimit}
                                     max={identity.maxCharLimit}
                                     className="w-44"
+                                    placeholder={`${identity.minCharLimit} to ${identity.maxCharLimit}`}
                                     value={identityForm.data.char_limit}
                                     onChange={(e) => identityForm.setData('char_limit', e.target.value)}
                                 />
                                 <InputError message={identityForm.errors.char_limit} />
-                                <p className="text-muted-foreground text-xs">
-                                    {identity.minCharLimit} to {identity.maxCharLimit} characters.
-                                </p>
                             </div>
 
                             <Button type="submit" variant="secondary" disabled={identityForm.processing}>
@@ -329,10 +302,6 @@ export default function AiProviders() {
                             </Button>
                         </div>
 
-                        <p className="text-muted-foreground max-w-2xl text-xs">
-                            The chat box stops typing at the limit and the server refuses anything longer, so a pasted document cannot become one very
-                            expensive question.
-                        </p>
                     </form>
 
                     <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
@@ -352,11 +321,6 @@ export default function AiProviders() {
                                 htmlFor="model"
                                 size="grow"
                                 error={form.errors.model}
-                                hint={
-                                    Object.keys(choices).length > 0
-                                        ? 'Chosen from what this provider says the key can run, so a model name cannot be mistyped.'
-                                        : 'Save the key first; the list of models it can run is then read from the provider.'
-                                }
                             >
                                 {Object.keys(choices).length > 0 ? (
                                     <SearchSelect

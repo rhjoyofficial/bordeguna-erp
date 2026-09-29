@@ -50,16 +50,12 @@ const tone: Record<RequestRow['status'], 'secondary' | 'default' | 'destructive'
  */
 export default function CreditTermsIndex({
     requests,
-    creditCustomers,
     mayPrepare,
     mayApprove,
-    descriptions,
 }: {
     requests: Paginated<RequestRow>;
-    creditCustomers: number;
     mayPrepare: boolean;
     mayApprove: boolean;
-    descriptions: Record<string, string>;
 }) {
     const page = usePage().props as unknown as { creditTermsPlan?: Plan; errors?: Record<string, string> };
     const plan = page.creditTermsPlan;
@@ -80,20 +76,13 @@ export default function CreditTermsIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Credit terms" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Credit terms"
-                    description="Credit limits and credit days for shops, dealers, distributors and corporate buyers. They come as a file from whoever brought the customer in, and take effect only when the authority approves the request."
-                />
+                <ReportHeading title="Credit terms" />
 
                 {mayPrepare && (
                     <section className="border-sidebar-border/70 dark:border-sidebar-border grid gap-4 rounded-md border p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <h2 className="text-base font-semibold">1. Download, fill the two new_ columns, upload</h2>
-                                <p className="text-muted-foreground text-sm">
-                                    The file lists the {creditCustomers} customer(s) who may carry terms, with what each has today. Type only{' '}
-                                    <code>new_limit</code> and <code>new_days</code>; leave a cell blank to keep it as it is.
-                                </p>
                             </div>
                             <Button asChild variant="outline" size="sm">
                                 {/* A plain link: this is a file download. */}
@@ -103,7 +92,7 @@ export default function CreditTermsIndex({
 
                         <form onSubmit={sendReview} className="flex flex-wrap items-end gap-3">
                             <div className="grid gap-2">
-                                <Label htmlFor="credit_terms_file">Filled file (CSV)</Label>
+                                <Label htmlFor="credit_terms_file" required>Filled file (CSV)</Label>
                                 <Input
                                     id="credit_terms_file"
                                     type="file"
@@ -116,17 +105,6 @@ export default function CreditTermsIndex({
                                 Review what would change
                             </Button>
                         </form>
-
-                        <details className="text-muted-foreground text-xs">
-                            <summary className="cursor-pointer">What each column means</summary>
-                            <ul className="mt-2 grid gap-1">
-                                {Object.entries(descriptions).map(([column, text]) => (
-                                    <li key={column}>
-                                        <code>{column}</code>: {text}
-                                    </li>
-                                ))}
-                            </ul>
-                        </details>
 
                         {plan && (
                             <div className="grid gap-3 rounded-md border border-dashed p-3">
@@ -180,11 +158,7 @@ export default function CreditTermsIndex({
                                         <Button type="submit" disabled={submit.processing}>
                                             3. Send for approval
                                         </Button>
-                                        <p className="text-muted-foreground w-full text-xs">Nothing changes on any customer until the request is approved.</p>
                                     </form>
-                                )}
-                                {plan.errors.length > 0 && (
-                                    <p className="text-muted-foreground text-xs">Fix the file and upload it again. A request is only made from a file with no errors.</p>
                                 )}
                             </div>
                         )}

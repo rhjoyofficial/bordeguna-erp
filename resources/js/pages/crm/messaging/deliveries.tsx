@@ -43,12 +43,7 @@ export default function Deliveries({
                     <p className="text-muted-foreground text-sm">
                         {campaign.status_label}
                         {campaign.sent_at && ` on ${campaign.sent_at}`}
-                        {campaign.estimated_cost && `, about ${campaign.estimated_cost}`}. One row per person, kept whatever happens to the phone book
-                        afterwards.
-                    </p>
-                    <p className="text-muted-foreground mt-1 text-xs">
-                        Sent means the provider accepted it. Delivered is only ever written when a provider actually says so, and several do not, so a
-                        message that stops at Sent has not necessarily failed.
+                        {campaign.estimated_cost && `, about ${campaign.estimated_cost}`}
                     </p>
                 </div>
 

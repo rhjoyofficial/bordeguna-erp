@@ -1,17 +1,8 @@
+import { RequestStatusBadge } from '@/components/request-status-badge';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
-import { RequestStatusBadge } from '@/components/request-status-badge';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -165,10 +156,6 @@ function CorrectionDialog({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Record a correction</DialogTitle>
-                    <DialogDescription>
-                        The original punches are never changed - a correction sits alongside them and the day is reprocessed against it. Recording one
-                        here applies it immediately, which is the privileged HR path.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -187,7 +174,9 @@ function CorrectionDialog({
                             {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="attendance_date">Date</Label>
+                            <Label htmlFor="attendance_date" required>
+                                Date
+                            </Label>
                             <Input id="attendance_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                             {errors.attendance_date && <p className="text-destructive text-xs">{errors.attendance_date}</p>}
                         </div>
@@ -208,7 +197,9 @@ function CorrectionDialog({
 
                     {selected?.needs_punch && (
                         <div className="grid gap-2">
-                            <Label htmlFor="punch_id">Which punch</Label>
+                            <Label htmlFor="punch_id" required>
+                                Which punch
+                            </Label>
                             <SearchSelect id="punch_id" value={punchId} onChange={(e) => setPunchId(e.target.value)}>
                                 <option value="">- Select -</option>
                                 {punches.map((p) => (
@@ -227,7 +218,9 @@ function CorrectionDialog({
                     {selected?.needs_time && (
                         <div className="grid gap-4 sm:grid-cols-2">
                             <div className="grid gap-2">
-                                <Label htmlFor="corrected_at">Correct time</Label>
+                                <Label htmlFor="corrected_at" required>
+                                    Correct time
+                                </Label>
                                 <Input
                                     id="corrected_at"
                                     type="datetime-local"
@@ -314,9 +307,6 @@ function LockDialog() {
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Lock an attendance period</DialogTitle>
-                    <DialogDescription>
-                        Employees can no longer request corrections inside a locked period, and HR needs a stated override reason to change it.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -383,7 +373,6 @@ function UnlockDialog({ lock }: { lock: Lock }) {
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Reopen this period</DialogTitle>
-                    <DialogDescription>The lock is kept as history - reopening records who did it and why.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-2">
                     <Label htmlFor="unlock_reason" required>
@@ -421,9 +410,6 @@ export default function Corrections({ corrections, locks, types, directions, emp
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">Attendance corrections</h2>
-                        <p className="text-muted-foreground text-sm">
-                            Raw punches are never edited. A correction is recorded next to them and the day is reprocessed.
-                        </p>
                     </div>
                     <div className="flex gap-3">
                         <LockDialog />
@@ -459,7 +445,11 @@ export default function Corrections({ corrections, locks, types, directions, emp
                                         <td className="text-muted-foreground py-2 text-xs">{c.reason}</td>
                                         <td className="text-muted-foreground py-2">{c.requested_by ?? '-'}</td>
                                         <td className="py-2">
-                                            {c.is_applied ? <RequestStatusBadge status="approved" label="Applied" /> : <RequestStatusBadge status={c.status} />}
+                                            {c.is_applied ? (
+                                                <RequestStatusBadge status="approved" label="Applied" />
+                                            ) : (
+                                                <RequestStatusBadge status={c.status} />
+                                            )}
                                             {c.stage && !c.is_applied && <span className="text-muted-foreground ml-2 text-xs">at {c.stage}</span>}
                                         </td>
                                     </tr>

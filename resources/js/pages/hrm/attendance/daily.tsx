@@ -201,14 +201,12 @@ function FixDayDialog({ day, types, directions }: { day: Day; types: CorrectionT
                     <DialogTitle>
                         Fix {day.date} for {day.employee}
                     </DialogTitle>
-                    <DialogDescription>
-                        Applies immediately and reprocesses the day. The change is recorded with your name, and the employee sees it on their own
-                        page.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="fix-type">What is wrong</Label>
+                        <Label htmlFor="fix-type" required>
+                            What is wrong
+                        </Label>
                         <SearchSelect id="fix-type" value={type} onChange={(e) => setType(e.target.value)}>
                             {types.map((t) => (
                                 <option key={t.value} value={t.value}>
@@ -219,7 +217,9 @@ function FixDayDialog({ day, types, directions }: { day: Day; types: CorrectionT
                     </div>
                     {selected?.needs_punch && (
                         <div className="grid gap-2">
-                            <Label htmlFor="fix-punch">Which punch</Label>
+                            <Label htmlFor="fix-punch" required>
+                                Which punch
+                            </Label>
                             <SearchSelect id="fix-punch" value={punchId} onChange={(e) => setPunchId(e.target.value)}>
                                 <option value="">- Choose -</option>
                                 {punches.map((punch) => (
@@ -233,7 +233,9 @@ function FixDayDialog({ day, types, directions }: { day: Day; types: CorrectionT
                     {selected?.needs_time && (
                         <div className="grid gap-4 sm:grid-cols-2">
                             <div className="grid gap-2">
-                                <Label htmlFor="fix-time">Correct time</Label>
+                                <Label htmlFor="fix-time" required>
+                                    Correct time
+                                </Label>
                                 <Input id="fix-time" type="datetime-local" value={correctedAt} onChange={(e) => setCorrectedAt(e.target.value)} />
                             </div>
                             <div className="grid gap-2">
@@ -250,7 +252,9 @@ function FixDayDialog({ day, types, directions }: { day: Day; types: CorrectionT
                         </div>
                     )}
                     <div className="grid gap-2">
-                        <Label htmlFor="fix-reason">Reason</Label>
+                        <Label htmlFor="fix-reason" required>
+                            Reason
+                        </Label>
                         <Input id="fix-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What happened" />
                     </div>
                 </div>
@@ -301,13 +305,15 @@ function ForgiveDialog({ day }: { day: Day }) {
                         Forgive {day.date} for {day.employee}
                     </DialogTitle>
                     <DialogDescription>
-                        Forgives this day: any salary deduction is removed and the day stops counting toward the monthly lateness
-                        allowance, so a later day is not pushed into a deduction by it. The attendance record itself does not change - the
-                        day still reads {day.status.toLowerCase()} everywhere - and your name and reason stay on record. It can be undone.
+                        Forgives this day: any salary deduction is removed and the day stops counting toward the monthly lateness allowance, so a
+                        later day is not pushed into a deduction by it. The attendance record itself does not change - the day still reads{' '}
+                        {day.status.toLowerCase()} everywhere - and your name and reason stay on record. It can be undone.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-2">
-                    <Label htmlFor="waive-reason">Reason</Label>
+                    <Label htmlFor="waive-reason" required>
+                        Reason
+                    </Label>
                     <Input id="waive-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why this day is forgiven" />
                 </div>
                 <DialogFooter>
@@ -396,12 +402,16 @@ function ShowCauseDialog({ day, on }: { day: Day; on: string }) {
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor={`sc_subject_${day.id}`}>Subject</Label>
+                        <Label htmlFor={`sc_subject_${day.id}`} required>
+                            Subject
+                        </Label>
                         <Input id={`sc_subject_${day.id}`} value={subject} onChange={(e) => setSubject(e.target.value)} />
                         {errors.subject && <p className="text-destructive text-xs">{errors.subject}</p>}
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor={`sc_body_${day.id}`}>Notice text</Label>
+                        <Label htmlFor={`sc_body_${day.id}`} required>
+                            Notice text
+                        </Label>
                         <textarea
                             id={`sc_body_${day.id}`}
                             className="border-input bg-background min-h-48 w-full rounded-md border px-3 py-2 text-sm"
@@ -502,10 +512,7 @@ export default function DailyAttendance({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Daily attendance" />
             <div className="flex flex-col gap-6 px-4 py-6">
-                <ReportHeading
-                    title="Daily attendance"
-                    description="What the engine made of each day, and the review step that turns a proposal into a payroll-eligible fact."
-                />
+                <ReportHeading title="Daily attendance" />
 
                 {/* Filters first, in labelled fields rather than a crowded toolbar.
                     Running the engine is a different kind of action and lives in
@@ -593,12 +600,7 @@ export default function DailyAttendance({
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                     <Tile label="Days processed" value={summary.total} hint={isRange ? `${filters.from} to ${filters.to}` : on} />
                     <Tile label="Awaiting review" value={summary.provisional} tone={summary.provisional > 0 ? 'warn' : undefined} />
-                    <Tile
-                        label="Holding payroll"
-                        value={summary.holds}
-                        tone={summary.holds > 0 ? 'bad' : undefined}
-                        hint="Needs an approved correction"
-                    />
+                    <Tile label="Holding payroll" value={summary.holds} tone={summary.holds > 0 ? 'bad' : undefined} />
                     <Tile label="With a consequence" value={summary.with_consequence} tone={summary.with_consequence > 0 ? 'warn' : undefined} />
                 </div>
 
@@ -811,11 +813,6 @@ export default function DailyAttendance({
                         </table>
                     )}
                 </div>
-
-                <p className="text-muted-foreground text-xs">
-                    Processed attendance is derived and can be recalculated at any time; the raw punches beneath it never change. Finalising is what
-                    makes a day payroll-eligible.
-                </p>
             </div>
         </AppLayout>
     );

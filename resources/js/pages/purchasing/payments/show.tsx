@@ -112,9 +112,6 @@ export default function PaymentShow({
                             </tbody>
                         </table>
                     </div>
-                    <p className="text-muted-foreground text-xs">
-                        Outstanding is shown as it stands today, not as it stood when this payment was made.
-                    </p>
                 </section>
 
                 {/* The journal is shown on the document on purpose. "Show me what this

@@ -166,10 +166,6 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Assign a schedule</DialogTitle>
-                    <DialogDescription>
-                        Assign at the broadest level that fits - an employee-level assignment overrides their section, department, office and the
-                        business-wide default. Set an end date for a temporary schedule (e.g. Ramadan) and the previous one resumes automatically.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -192,7 +188,9 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                         </div>
                         {scope?.needs_target && (
                             <div className="grid gap-2">
-                                <Label htmlFor="scope_id">{scope.label}</Label>
+                                <Label htmlFor="scope_id" required>
+                                    {scope.label}
+                                </Label>
                                 <SearchSelect id="scope_id" value={form.scope_id} onChange={(e) => set('scope_id', e.target.value)}>
                                     <option value="">- Select -</option>
                                     {targets.map((t) => (
@@ -221,7 +219,9 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                             {errors.schedule_type && <p className="text-destructive text-xs">{errors.schedule_type}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="shift_id">Shift{type?.requires_shift ? '' : ' (optional)'}</Label>
+                            <Label htmlFor="shift_id" required={type?.requires_shift}>
+                                Shift{type?.requires_shift ? '' : ' (optional)'}
+                            </Label>
                             <SearchSelect id="shift_id" value={form.shift_id} onChange={(e) => set('shift_id', e.target.value)}>
                                 <option value="">- None -</option>
                                 {options.shifts.map((s) => (
@@ -313,7 +313,9 @@ function EndDialog({ assignment }: { assignment: Assignment }) {
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-2">
-                    <Label htmlFor="end_on">Last day it applies</Label>
+                    <Label htmlFor="end_on" required>
+                        Last day it applies
+                    </Label>
                     <Input id="end_on" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                     {errors.effective_to && <p className="text-destructive text-xs">{errors.effective_to}</p>}
                 </div>

@@ -145,10 +145,6 @@ export default function AssetParties({
             <div className="flex flex-col gap-4 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">Outside parties</h1>
-                    <p className="text-muted-foreground max-w-3xl text-sm">
-                        People and shops outside the business that can hold a thing: a repair shop with the printer, a freelancer with the camera. A
-                        thing sent to a repair shop reads Under repair; to anyone else, With an outside party.
-                    </p>
                 </div>
 
                 {can_manage && (

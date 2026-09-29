@@ -89,10 +89,6 @@ export default function NotesIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h2 className="text-lg font-medium">Notes</h2>
-                    <p className="text-muted-foreground text-sm">
-                        Shared by default, private when you say so. Give a note a date and it comes back to you on the calendar that day, which is the
-                        difference between a board and a drawer. Nothing here deletes: archived notes stay searchable.
-                    </p>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-3">

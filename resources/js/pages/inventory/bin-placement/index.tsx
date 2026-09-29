@@ -65,10 +65,7 @@ export default function BinPlacementIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Bin placement" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Bin placement"
-                    description="Record which shelf each batch sits on. Placement changes no quantity and posts nothing; it only teaches the pick list where to send people."
-                />
+                <ReportHeading title="Bin placement" />
 
                 <FormRow className="gap-3">
                     <Field label="Warehouse" htmlFor="warehouse" size="md">

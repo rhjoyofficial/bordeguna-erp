@@ -3,16 +3,7 @@ import { ReportHeading, StatRow, StatTile } from '@/components/report/report-she
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -143,13 +134,9 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
             <DialogTrigger asChild>
                 <Button size="sm">Add a standing cost</Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-3xl">
+            <DialogContent className="sm:max-w-3xl" aria-describedby={undefined}>
                 <DialogHeader>
                     <DialogTitle>Add a standing cost</DialogTitle>
-                    <DialogDescription>
-                        A subscription or monthly bill. This only predicts what is due and reminds you; nothing is paid or posted until you record the
-                        expense yourself.
-                    </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={submit} className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
@@ -266,11 +253,8 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
                                 max={31}
                                 value={data.day_of_month}
                                 onChange={(e) => setData('day_of_month', e.target.value)}
+                                placeholder="31 = last day"
                             />
-                            {/* ⚠ Said in words because it is the thing people get wrong.
-                                Nikola Host is due on the last day, which is the 28th in
-                                February and the 31st in March. */}
-                            <p className="text-muted-foreground text-xs">Use 31 for “the last day of the month”. Short months are handled.</p>
                             <InputError message={errors.day_of_month} />
                         </div>
 
@@ -296,7 +280,6 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
                                 onChange={(e) => setData('reference_prefix', e.target.value)}
                                 placeholder="NIKOLA"
                             />
-                            <p className="text-muted-foreground text-xs">Each month becomes NIKOLA-2026-09. Your own reference, not the vendor's.</p>
                             <InputError message={errors.reference_prefix} />
                         </div>
 
@@ -351,15 +334,14 @@ function SkipDialog({ row }: { row: DueRow }) {
                     Skip
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
                 <DialogHeader>
                     <DialogTitle>Skip {row.period_label}</DialogTitle>
-                    <DialogDescription>
-                        Use this when the service was not taken this period. It stops the reminder without pretending anything was paid.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-2">
-                    <Label htmlFor={`skip_${row.id}`}>Why</Label>
+                    <Label htmlFor={`skip_${row.id}`} required>
+                        Why
+                    </Label>
                     <Input
                         id={`skip_${row.id}`}
                         value={reason}
@@ -405,7 +387,6 @@ export default function RecurringExpensesIndex({ canRecord, due, schedules, tota
             <div className="flex flex-col gap-6 p-4">
                 <ReportHeading
                     title="Recurring expenses"
-                    description="Subscriptions and monthly bills that arrive whether or not anybody remembers them. This predicts and reminds; the money is recorded on the expense screen, by you."
                     actions={
                         <>
                             {/* The engine's rendering of this same list: PDF, Excel,
@@ -427,16 +408,13 @@ export default function RecurringExpensesIndex({ canRecord, due, schedules, tota
                 />
 
                 <StatRow columns={3}>
-                    <StatTile label="Standing costs" value={totals.count} hint="Active schedules" />
-                    <StatTile label="Monthly run rate" value={money(totals.monthly)} hint="Every frequency levelled to a month" />
-                    <StatTile label="Annual commitment" value={money(totals.annual)} hint="At today's amounts" />
+                    <StatTile label="Standing costs" value={totals.count} />
+                    <StatTile label="Monthly run rate" value={money(totals.monthly)} />
+                    <StatTile label="Annual commitment" value={money(totals.annual)} />
                 </StatRow>
 
                 <div className={cardClass}>
                     <h2 className="text-base font-medium">Due</h2>
-                    <p className="text-muted-foreground mt-1 text-sm">
-                        Overdue first. Nothing here has been paid: recording the expense is what settles it.
-                    </p>
 
                     {due.length === 0 ? (
                         <p className="text-muted-foreground py-6 text-center text-sm">Nothing due in the next 30 days.</p>

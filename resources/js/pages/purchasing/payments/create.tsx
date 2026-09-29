@@ -188,7 +188,12 @@ export default function PaymentCreate({
                                     <th className="p-3">Due</th>
                                     <th className="p-3 text-right">Total</th>
                                     <th className="p-3 text-right">Outstanding</th>
-                                    <th className="p-3 text-right">Paying now</th>
+                                    <th className="p-3 text-right">
+                                        Paying now
+                                        <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                            *
+                                        </span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>

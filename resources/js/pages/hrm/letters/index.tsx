@@ -45,10 +45,6 @@ export default function Letters({ employee, letters }: LettersProps) {
                     <h1 className="text-xl font-semibold">
                         HR letters: {employee.first_name} {employee.last_name} ({employee.employee_code})
                     </h1>
-                    <p className="text-muted-foreground text-sm">
-                        The system drafts from the record as it stands today and freezes the words; the boss signs the paper. A later
-                        salary change never rewrites an issued letter.
-                    </p>
                 </div>
 
                 <form

@@ -49,13 +49,7 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Promotions" />
             <div className="space-y-6 p-4">
-                <div>
-                    <h1 className="text-xl font-semibold">Promotions: Buy X Get Y free</h1>
-                    <p className="text-muted-foreground text-sm">
-                        The counter adds the free item by itself when a cart qualifies, at a price of zero - the books still record the
-                        cost of what walked out. Cheaper-price deals belong on the Discounts screen; this one is only for free items.
-                    </p>
-                </div>
+                <h1 className="text-xl font-semibold">Promotions: Buy X Get Y free</h1>
 
                 <form
                     className="border-border bg-card grid max-w-3xl gap-3 rounded-lg border p-4 sm:grid-cols-2"
@@ -65,7 +59,7 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
                     }}
                 >
                     <div className="space-y-1 sm:col-span-2">
-                        <Label>Name of the deal</Label>
+                        <Label required>Name of the deal</Label>
                         <Input
                             placeholder="e.g. Eid honey deal"
                             value={form.data.name}
@@ -74,7 +68,7 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
                         {form.errors.name && <p className="text-destructive text-xs">{form.errors.name}</p>}
                     </div>
                     <div className="space-y-1">
-                        <Label>Customer buys</Label>
+                        <Label required>Customer buys</Label>
                         <SearchableSelect
                             value={form.data.buy_product_id}
                             onChange={(value) => form.setData('buy_product_id', value)}
@@ -85,7 +79,7 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
                         {form.errors.buy_product_id && <p className="text-destructive text-xs">{form.errors.buy_product_id}</p>}
                     </div>
                     <div className="space-y-1">
-                        <Label>This many</Label>
+                        <Label required>This many</Label>
                         <Input
                             type="number"
                             step="0.0001"
@@ -97,7 +91,7 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
                         {form.errors.buy_quantity && <p className="text-destructive text-xs">{form.errors.buy_quantity}</p>}
                     </div>
                     <div className="space-y-1">
-                        <Label>Gets free</Label>
+                        <Label required>Gets free</Label>
                         <SearchableSelect
                             value={form.data.get_product_id}
                             onChange={(value) => form.setData('get_product_id', value)}
@@ -108,7 +102,7 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
                         {form.errors.get_product_id && <p className="text-destructive text-xs">{form.errors.get_product_id}</p>}
                     </div>
                     <div className="space-y-1">
-                        <Label>Free quantity</Label>
+                        <Label required>Free quantity</Label>
                         <Input
                             type="number"
                             step="0.0001"
@@ -119,12 +113,12 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
                         {form.errors.get_quantity && <p className="text-destructive text-xs">{form.errors.get_quantity}</p>}
                     </div>
                     <div className="space-y-1">
-                        <Label>From</Label>
+                        <Label required>From</Label>
                         <Input type="date" value={form.data.starts_on} onChange={(event) => form.setData('starts_on', event.target.value)} />
                         {form.errors.starts_on && <p className="text-destructive text-xs">{form.errors.starts_on}</p>}
                     </div>
                     <div className="space-y-1">
-                        <Label>To (last day)</Label>
+                        <Label required>To (last day)</Label>
                         <Input type="date" value={form.data.ends_on} onChange={(event) => form.setData('ends_on', event.target.value)} />
                         {form.errors.ends_on && <p className="text-destructive text-xs">{form.errors.ends_on}</p>}
                     </div>

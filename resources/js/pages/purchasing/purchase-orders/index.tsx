@@ -146,7 +146,12 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
             </FormRow>
 
             <div className="flex flex-col gap-2">
-                <p className="text-sm font-medium">Line items</p>
+                <p className="text-sm font-medium">
+                    Line items
+                    <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                        *
+                    </span>
+                </p>
                 {data.lines.map((line, index) => {
                     const chosen = products.find((p) => String(p.id) === line.product_id);
 

@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface Problem {
@@ -64,9 +64,6 @@ export default function OpeningStockImport({
     preview,
     awaiting,
     alreadyRecorded,
-    stockedProducts,
-    columns,
-    limits,
 }: {
     preview: Preview | null;
     awaiting: Named[];
@@ -113,10 +110,6 @@ export default function OpeningStockImport({
             <div className="flex flex-col gap-6 p-4">
                 <div className="max-w-3xl">
                     <h1 className="text-lg font-semibold">Import the opening stock count</h1>
-                    <p className="text-muted-foreground mt-1 text-sm">
-                        Type the counted numbers into the count sheet CSV and upload it here. Nothing is written until you have read the preview and
-                        typed the total back.
-                    </p>
                 </div>
 
                 {/*
@@ -126,11 +119,6 @@ export default function OpeningStockImport({
                 */}
                 <div className="border-destructive/50 bg-destructive/5 max-w-3xl rounded-lg border p-4 text-sm">
                     <p className="text-destructive font-medium">This document is written once per warehouse, for the life of the business.</p>
-                    <p className="text-muted-foreground mt-1">
-                        It posts <span className="text-foreground font-medium">Dr Stock on Hand / Cr Opening Balance Equity</span>, and the unit costs
-                        in it become the cost layers FIFO consumes, so they decide the reported profit on every sale until this stock is sold through.
-                        There is no second import to fix a mistake, only an inventory adjustment against the real company's books.
-                    </p>
                 </div>
 
                 <div className="grid max-w-3xl gap-3 sm:grid-cols-2">
@@ -152,29 +140,11 @@ export default function OpeningStockImport({
                     </div>
                 </div>
 
-                <div className="text-muted-foreground max-w-3xl text-sm">
-                    <p>
-                        Columns: <code className="font-mono text-xs">{columns.mandatory.join(', ')}</code> are required, and{' '}
-                        <code className="font-mono text-xs">{columns.optional.join(', ')}</code> are optional. Any other column is refused outright.
-                        Up to {limits.max_rows.toLocaleString()} rows and {limits.max_mb} MB.
-                    </p>
-                    <p className="mt-2">
-                        Start from the{' '}
-                        <Link className="underline underline-offset-2" href={route('inventory.opening-stock.index')}>
-                            count sheet on the opening stock screen
-                        </Link>
-                        : it prints the SKUs and the warehouse code for you, which are the two things this import matches on. There are{' '}
-                        {stockedProducts} active stocked product(s) in the catalogue.
-                    </p>
-                    <p className="mt-2">
-                        Leave <span className="text-foreground font-medium">both</span> the quantity and the unit cost blank for anything not held:
-                        those rows count nothing and are listed back to you. A cost with no quantity is a half-filled row and is refused.
-                    </p>
-                </div>
-
                 <form onSubmit={submitFile} className="flex flex-wrap items-end gap-3 border-t pt-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="file">Counted CSV</Label>
+                        <Label htmlFor="file" required>
+                            Counted CSV
+                        </Label>
                         <input
                             id="file"
                             type="file"
@@ -185,7 +155,9 @@ export default function OpeningStockImport({
                         <InputError message={upload.errors.file} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="as_at">The day the shelves were counted</Label>
+                        <Label htmlFor="as_at" required>
+                            The day the shelves were counted
+                        </Label>
                         <Input id="as_at" type="date" value={upload.data.as_at} onChange={(e) => upload.setData('as_at', e.target.value)} />
                         <InputError message={upload.errors.as_at} />
                     </div>
@@ -269,8 +241,7 @@ export default function OpeningStockImport({
                             {preview.not_counted.length > 0 && (
                                 <>
                                     <p className="text-muted-foreground mt-1">
-                                        {preview.not_counted.length} row(s) were left blank, so they count nothing. Read the list if any shelf you
-                                        know is not empty could be among them.
+                                        {preview.not_counted.length} row(s) were left blank, so they count nothing.
                                     </p>
                                     <button
                                         type="button"
@@ -339,15 +310,13 @@ export default function OpeningStockImport({
                         <div className="border-foreground/20 rounded-lg border-2 p-4">
                             <p className="text-muted-foreground text-xs tracking-wide uppercase">Total debited to Stock on Hand</p>
                             <p className="mt-1 text-3xl font-semibold tabular-nums">{preview.total_value}</p>
-                            <p className="text-muted-foreground mt-1 text-sm">
-                                The same amount is credited to Opening Balance Equity. This figure must equal the stock line on the accountant's
-                                opening trial balance <span className="text-foreground font-medium">to the paisa</span>.
-                            </p>
                         </div>
 
                         <form onSubmit={submitApply} className="flex flex-col gap-3 border-t pt-4">
                             <div className="grid gap-2 sm:max-w-sm">
-                                <Label htmlFor="confirm_total">Type the total back to confirm you have checked it</Label>
+                                <Label htmlFor="confirm_total" required>
+                                    Type the total back to confirm you have checked it
+                                </Label>
                                 <Input
                                     id="confirm_total"
                                     inputMode="decimal"
@@ -376,9 +345,6 @@ export default function OpeningStockImport({
                                         ? 'Writing'
                                         : `Write ${preview.warehouses.length} document(s) as at ${preview.as_at}. This cannot be undone`}
                                 </Button>
-                                <span className="text-muted-foreground text-xs">
-                                    Applies this exact file on this exact date. Change either and the preview must be run again.
-                                </span>
                             </div>
                             <InputError message={applyError} />
                         </form>

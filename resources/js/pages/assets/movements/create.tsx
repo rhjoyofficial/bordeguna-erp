@@ -144,11 +144,6 @@ export default function AssetMovementCreate({
             <form onSubmit={submit} className="flex max-w-4xl flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">New hand-over</h1>
-                    <p className="text-muted-foreground text-sm">
-                        {kind === 'transfer'
-                            ? 'A move to another place is done in two steps: recorded here, then received by somebody at the other place.'
-                            : 'Recorded once, by the person who did the hand-over. It cannot be edited afterwards.'}
-                    </p>
                 </div>
 
                 <section className="grid gap-4 sm:grid-cols-2">

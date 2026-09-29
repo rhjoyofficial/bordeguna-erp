@@ -391,10 +391,7 @@ export default function ExpenseClaims({
             <Head title="Expense claims" />
 
             <div className="space-y-6 p-4">
-                <HeadingSmall
-                    title="Employee expense claims"
-                    description="What staff paid out of their own pocket, and how the company pays it back."
-                />
+                <HeadingSmall title="Employee expense claims" />
 
                 {owed > 0 && (
                     <p className="text-sm">

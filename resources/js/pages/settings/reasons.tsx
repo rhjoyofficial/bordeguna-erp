@@ -36,7 +36,7 @@ function AddReasonForm({ context }: { context: string }) {
         <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
             {/* A reason is a word or two; the box was the width of the page. */}
             <div className="grid w-64 gap-2">
-                <Label htmlFor={`new-reason-${context}`}>New reason</Label>
+                <Label htmlFor={`new-reason-${context}`} required>New reason</Label>
                 <Input id={`new-reason-${context}`} value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. Damaged" />
                 <InputError message={errors.name} />
             </div>
@@ -112,10 +112,7 @@ export default function Reasons({ reasons, contexts }: ReasonsProps) {
 
             <SettingsLayout>
                 <div className="space-y-10">
-                    <HeadingSmall
-                        title="Reasons"
-                        description="Manage the reason lists used for stock adjustments and transfers. Reasons are deactivated, never deleted, so past records stay intact."
-                    />
+                    <HeadingSmall title="Reasons" />
 
                     {Object.entries(contexts).map(([context, label]) => {
                         const contextReasons = reasons.filter((reason) => reason.context === context);

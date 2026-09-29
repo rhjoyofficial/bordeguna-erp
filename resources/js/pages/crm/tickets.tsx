@@ -83,7 +83,7 @@ function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'custo
             }}
         >
             <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs">What happened</Label>
+                <Label className="text-xs" required>What happened</Label>
                 <Input placeholder="e.g. Broken jar in the carton" value={form.data.subject} onChange={(e) => form.setData('subject', e.target.value)} />
                 {form.errors.subject && <p className="text-destructive text-xs">{form.errors.subject}</p>}
             </div>
@@ -101,7 +101,7 @@ function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'custo
             </div>
             {form.data.party_kind === 'customer' ? (
                 <div className="space-y-1">
-                    <Label className="text-xs">Customer</Label>
+                    <Label className="text-xs" required>Customer</Label>
                     <SearchableSelect
                         value={form.data.customer_id}
                         onChange={(value) => form.setData('customer_id', value)}
@@ -114,7 +114,7 @@ function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'custo
             ) : (
                 <div className="flex gap-2">
                     <div className="flex-1 space-y-1">
-                        <Label className="text-xs">Name</Label>
+                        <Label className="text-xs" required>Name</Label>
                         <Input value={form.data.caller_name} onChange={(e) => form.setData('caller_name', e.target.value)} />
                         {form.errors.caller_name && <p className="text-destructive text-xs">{form.errors.caller_name}</p>}
                     </div>
@@ -125,7 +125,7 @@ function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'custo
                 </div>
             )}
             <div className="space-y-1">
-                <Label className="text-xs">Category</Label>
+                <Label className="text-xs" required>Category</Label>
                 <Select value={form.data.category} onValueChange={(value) => form.setData('category', value)}>
                     <SelectTrigger>
                         <SelectValue />
@@ -140,7 +140,7 @@ function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'custo
                 </Select>
             </div>
             <div className="space-y-1">
-                <Label className="text-xs">Priority (sets the clock)</Label>
+                <Label className="text-xs" required>Priority</Label>
                 <Select value={form.data.priority} onValueChange={(value) => form.setData('priority', value)}>
                     <SelectTrigger>
                         <SelectValue />
@@ -286,10 +286,6 @@ export default function Tickets({ tickets, customers, users, slaHours }: Tickets
             <div className="space-y-6 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Customer service tickets</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Every complaint with a running clock: the resolve-by was stamped when the ticket was opened, and late is late -
-                        computed, never edited. Overdue tickets sort to the top.
-                    </p>
                 </div>
 
                 <NewTicketForm customers={customers} users={users} slaHours={slaHours} />

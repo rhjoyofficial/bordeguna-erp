@@ -96,10 +96,10 @@ const INSTRUMENT_LABEL: Record<string, string> = {
     other: 'Other',
 };
 
-const MONEY_LABEL: Record<string, [string, string]> = {
-    payment: ['Paid from', 'Which cash box, bank or wallet the money left.'],
-    receipt: ['Received into', 'Which cash box, bank or wallet the money came into.'],
-    contra: ['Moved from (ledger head)', 'The ledger head the money left.'],
+const MONEY_LABEL: Record<string, string> = {
+    payment: 'Paid from',
+    receipt: 'Received into',
+    contra: 'Moved from (ledger head)',
 };
 
 const MONEY_GROUPS = ['Cash in hand', 'Bank accounts', 'Mobile wallets', 'Payment gateways', 'Courier accounts'];
@@ -228,7 +228,7 @@ export default function VoucherFormPage({
     ];
 
     const lineError = (index: number, field: string) => (errors as Record<string, string>)[`lines.${index}.${field}`];
-    const [moneyLabel, moneyHint] = MONEY_LABEL[type.value] ?? ['', ''];
+    const moneyLabel = MONEY_LABEL[type.value] ?? '';
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -244,11 +244,6 @@ export default function VoucherFormPage({
                     <h1 className="text-lg font-semibold">
                         {voucher ? `Edit draft ${type.label.toLowerCase()}` : `New ${type.label.toLowerCase()}`}
                     </h1>
-                    <p className="text-muted-foreground text-sm">
-                        A draft changes nothing in the books and can be edited or deleted. Posting gives it a {type.prefix} number and writes it to
-                        the ledger; after that it can only be reversed.
-                        {voucher?.copied_from ? ` Copied from ${voucher.copied_from}.` : ''}
-                    </p>
                     <InputError message={(errors as Record<string, string>).voucher} />
                 </div>
 
@@ -274,25 +269,15 @@ export default function VoucherFormPage({
                                 <option value="">Choose a ledger head</option>
                                 {moneyHeadOptions({ accounts: moneyAccounts })}
                             </SearchSelect>
-                            <p className="text-muted-foreground text-xs">
-                                {moneyAccounts.every((account) => account.hint !== null) ? (
-                                    <>
-                                        No cash or bank account can be used yet. Add one in{' '}
-                                        <Link href="/accounting/money-accounts" className="underline">
-                                            Bank &amp; cash
-                                        </Link>
-                                        , with "Reports under" set.
-                                    </>
-                                ) : (
-                                    <>
-                                        {moneyHint} The list comes from{' '}
-                                        <Link href="/accounting/money-accounts" className="underline">
-                                            Bank &amp; cash
-                                        </Link>
-                                        .
-                                    </>
-                                )}
-                            </p>
+                            {moneyAccounts.every((account) => account.hint !== null) && (
+                                <p className="text-muted-foreground text-xs">
+                                    No cash or bank account can be used yet. Add one in{' '}
+                                    <Link href="/accounting/money-accounts" className="underline">
+                                        Bank &amp; cash
+                                    </Link>
+                                    , with "Reports under" set.
+                                </p>
+                            )}
                             <InputError message={errors.money_account_id} />
                         </div>
                     )}
@@ -316,13 +301,6 @@ export default function VoucherFormPage({
                                         (account.type === 'gateway' ? 'Online-sale money: it only leaves a gateway, never enters one.' : null),
                                 })}
                             </SearchSelect>
-                            <p className="text-muted-foreground text-xs">
-                                Cash deposited, cash withdrawn, or bank to bank, head to head. Each account is its own ledger head, made in{' '}
-                                <Link href="/accounting/money-accounts" className="underline">
-                                    Bank &amp; cash
-                                </Link>
-                                .
-                            </p>
                             <InputError message={errors.to_money_account_id} />
                         </div>
                     )}
@@ -364,7 +342,9 @@ export default function VoucherFormPage({
                             <table className="w-full min-w-[46rem] text-sm">
                                 <thead>
                                     <tr className="text-muted-foreground border-b text-left">
-                                        <th className="px-3 py-2 font-medium">Particulars (ledger head)</th>
+                                        <th className="px-3 py-2 font-medium">
+                                            Particulars (ledger head)<span className="text-destructive ml-0.5 font-semibold">*</span>
+                                        </th>
                                         <th className="px-3 py-2 font-medium">Narration</th>
                                         {type.value === 'journal' ? (
                                             <>
@@ -372,7 +352,9 @@ export default function VoucherFormPage({
                                                 <th className="w-36 px-3 py-2 text-right font-medium">Credit</th>
                                             </>
                                         ) : (
-                                            <th className="w-40 px-3 py-2 text-right font-medium">Amount</th>
+                                            <th className="w-40 px-3 py-2 text-right font-medium">
+                                                Amount<span className="text-destructive ml-0.5 font-semibold">*</span>
+                                            </th>
                                         )}
                                         <th className="w-10" />
                                     </tr>
@@ -416,9 +398,18 @@ export default function VoucherFormPage({
                                                                 invalid={Boolean(lineError(index, 'party_id'))}
                                                             >
                                                                 <option value="">
-                                                                    {party === 'supplier' ? 'Which supplier?' : party === 'employee' ? 'Which employee?' : 'Which customer?'}
+                                                                    {party === 'supplier'
+                                                                        ? 'Which supplier?'
+                                                                        : party === 'employee'
+                                                                          ? 'Which employee?'
+                                                                          : 'Which customer?'}
                                                                 </option>
-                                                                {(party === 'supplier' ? suppliers : party === 'employee' ? employees : customers).map((option) => (
+                                                                {(party === 'supplier'
+                                                                    ? suppliers
+                                                                    : party === 'employee'
+                                                                      ? employees
+                                                                      : customers
+                                                                ).map((option) => (
                                                                     <option key={option.id} value={option.id}>
                                                                         {option.label}
                                                                     </option>

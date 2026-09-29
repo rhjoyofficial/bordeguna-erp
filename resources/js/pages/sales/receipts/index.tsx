@@ -53,10 +53,7 @@ export default function ReceiptsIndex({
             <Head title="Receipts" />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <h1 className="text-lg font-semibold">Receipts</h1>
-                        <p className="text-muted-foreground text-sm">Money received from customers, and the invoices each payment settled.</p>
-                    </div>
+                    <h1 className="text-lg font-semibold">Receipts</h1>
                     {canReceive && (
                         <Button asChild>
                             <Link href="/sales/receipts/new">Receive payment</Link>

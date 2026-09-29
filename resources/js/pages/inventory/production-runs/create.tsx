@@ -168,16 +168,6 @@ export default function ProductionRunCreate({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="New Production Run" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
-                    <p className="font-medium">Record what physically happened, after it happened.</p>
-                    <p className="text-muted-foreground mt-1">
-                        Enter the quantities actually consumed and actually produced, each in its own unit; the system never converts between units.
-                        The output batch will cost exactly what the run consumed (FIFO), divided by the output quantity. Waste is recorded for
-                        visibility and absorbed into the cost unless you explicitly expense it. One run produces{' '}
-                        <span className="font-medium">one</span> output: filling two pack sizes from one drum is two runs.
-                    </p>
-                </div>
-
                 <form onSubmit={submit} className="flex flex-col gap-4">
                     <div className="grid gap-4 md:grid-cols-3">
                         <div className="grid gap-2">
@@ -191,9 +181,6 @@ export default function ProductionRunCreate({
                                     </option>
                                 ))}
                             </SearchSelect>
-                            <p className="text-muted-foreground text-xs">
-                                Inputs are consumed here and the output lands here. Move packs afterwards with a transfer.
-                            </p>
                             <InputError message={errors.warehouse_id} />
                         </div>
                         <div className="grid gap-2">
@@ -239,9 +226,19 @@ export default function ProductionRunCreate({
                         <table className="w-full text-sm">
                             <thead className="bg-muted/50 text-left">
                                 <tr>
-                                    <th className="p-3">Product</th>
+                                    <th className="p-3">
+                                        Product
+                                        <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                            *
+                                        </span>
+                                    </th>
                                     <th className="w-32 p-3">Available</th>
-                                    <th className="w-36 p-3">Consumed (incl. waste)</th>
+                                    <th className="w-36 p-3">
+                                        Consumed (incl. waste)
+                                        <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                            *
+                                        </span>
+                                    </th>
                                     <th className="w-32 p-3">Of which waste</th>
                                     <th className="w-16 p-3"></th>
                                 </tr>
@@ -356,7 +353,6 @@ export default function ProductionRunCreate({
                                 onChange={(e) => setData('output_mrp', e.target.value)}
                                 placeholder="optional"
                             />
-                            <p className="text-muted-foreground text-xs">Never used as the selling price.</p>
                             <InputError message={errors.output_mrp} />
                         </div>
                     </div>

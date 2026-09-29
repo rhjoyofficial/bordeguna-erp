@@ -136,11 +136,8 @@ export default function CreditNoteCreate({
                                 className="w-36"
                                 value={data.tax_amount}
                                 onChange={(e) => setData('tax_amount', e.target.value)}
+                                placeholder="0"
                             />
-                            <p className="text-muted-foreground text-xs">
-                                The VAT printed on the supplier&apos;s credit note. It is part of the amounts below, and comes back out of
-                                input VAT. Leave empty if the credit note shows none.
-                            </p>
                             <InputError message={errors.tax_amount} />
                         </div>
                     )}
@@ -162,7 +159,7 @@ export default function CreditNoteCreate({
                                 <th className="p-3">Bill</th>
                                 <th className="p-3">Date</th>
                                 <th className="p-3 text-right">Outstanding</th>
-                                <th className="p-3 text-right">Credit against this bill</th>
+                                <th className="p-3 text-right">Credit against this bill<span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">*</span></th>
                             </tr>
                         </thead>
                         <tbody>

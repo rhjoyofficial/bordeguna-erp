@@ -90,13 +90,6 @@ export default function VouchersIndex({
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <h1 className="text-lg font-semibold">{type.plural}</h1>
-                        <p className="text-muted-foreground max-w-2xl text-sm">
-                            {type.value === 'payment' && 'Money paid out: expenses, loan repayments, drawings, advances to suppliers, deposits.'}
-                            {type.value === 'receipt' &&
-                                'Money received that is not an invoice payment: capital, loans, other income, advances from customers.'}
-                            {type.value === 'contra' && 'Money moved between your own accounts: cash deposited, cash withdrawn, bank to bank.'}
-                            {type.value === 'journal' && 'Entries with no cash in them: accruals, corrections between heads, provisions.'}
-                        </p>
                     </div>
                     {canPrepareVouchers && (
                         <Button asChild>

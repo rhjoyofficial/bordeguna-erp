@@ -112,7 +112,7 @@ function AddMemberForm({ assignableRoles }: { assignableRoles: string[] }) {
                 </div>
             </div>
             <div className="grid gap-2">
-                <Label>Roles</Label>
+                <Label required>Roles</Label>
                 <RolePicker available={assignableRoles} selected={data.roles} onToggle={toggleRole} idPrefix="new" />
                 <InputError message={errors.roles} />
             </div>
@@ -246,10 +246,7 @@ export default function Team({ members, assignable_roles, password_link_lifetime
 
             <SettingsLayout>
                 <div className="space-y-8">
-                    <HeadingSmall
-                        title="Team"
-                        description="Add people to this business and control the roles they hold here. Removing someone keeps their account and history - it only revokes their access to this business."
-                    />
+                    <HeadingSmall title="Team" />
 
                     <AddMemberForm assignableRoles={assignable_roles} />
 

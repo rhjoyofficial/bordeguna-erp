@@ -163,7 +163,7 @@ export default function ReturnShow({
                 {can_refund && canStillRefund && (
                     <form onSubmit={submitRefund} className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
                         <div className="grid gap-2">
-                            <Label>Refund from</Label>
+                            <Label required>Refund from</Label>
                             <SearchSelect fit value={data.money_account_id} onChange={(e) => setData('money_account_id', e.target.value)}>
                                 <option value="">Select account</option>
                                 {moneyAccounts.map((account) => (
@@ -175,12 +175,12 @@ export default function ReturnShow({
                             <InputError message={errors.money_account_id} />
                         </div>
                         <div className="grid gap-2">
-                            <Label>Amount</Label>
+                            <Label required>Amount</Label>
                             <Input className="max-w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
                             <InputError message={errors.amount} />
                         </div>
                         <div className="grid gap-2">
-                            <Label>Date</Label>
+                            <Label required>Date</Label>
                             <Input type="date" value={data.refunded_on} onChange={(e) => setData('refunded_on', e.target.value)} />
                             <InputError message={errors.refunded_on} />
                         </div>

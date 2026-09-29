@@ -64,11 +64,10 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const money = (value: string) => Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function Register({ title, note, rows, withClaimed }: { title: string; note: string; rows: Row[]; withClaimed: boolean }) {
+function Register({ title, rows, withClaimed }: { title: string; rows: Row[]; withClaimed: boolean }) {
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
             <h2 className="text-base font-semibold">{title}</h2>
-            <p className="text-muted-foreground mt-1 text-xs">{note}</p>
             <div className="mt-3 overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead>
@@ -145,11 +144,6 @@ export default function VatReturn({ period, period_label, figures, filed, can_fi
                             <Badge variant="outline">{figures.regime_label}</Badge>
                             {filed && <Badge>Filed {filed.return_number}</Badge>}
                         </div>
-                        <p className="text-muted-foreground mt-1 max-w-3xl text-sm">
-                            Every sale and every purchase of the month, with the VAT that was fixed onto each document when it was saved.
-                            Filing freezes these figures and moves the month&apos;s VAT onto VAT Settlement. Paying it is a separate
-                            payment voucher against VAT Settlement, on the day the money leaves the bank.
-                        </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 print:hidden">
                         <Input
@@ -169,8 +163,8 @@ export default function VatReturn({ period, period_label, figures, filed, can_fi
 
                 {!registered && (
                     <div className="bg-muted/40 rounded-xl border p-4 text-sm">
-                        This business is not registered for VAT or turnover tax, so no VAT is charged and there is nothing to file. The
-                        registers below still list the month&apos;s sales and purchases. The switch is in Accounting, VAT settings.
+                        This business is not registered for VAT or turnover tax, so no VAT is charged and there is nothing to file. The registers
+                        below still list the month&apos;s sales and purchases. The switch is in Accounting, VAT settings.
                     </div>
                 )}
 
@@ -210,8 +204,7 @@ export default function VatReturn({ period, period_label, figures, filed, can_fi
                     {filed && (
                         <p className="text-muted-foreground mt-3 text-xs">
                             Filed on {filed.filed_at} by {filed.filed_by ?? 'unknown'}: output {money(filed.output_tax)}, input{' '}
-                            {money(filed.input_tax)}, payable {money(filed.net_payable)}. Those are the figures that were declared; anything
-                            different above was dated into this month afterwards.
+                            {money(filed.input_tax)}, payable {money(filed.net_payable)}.
                         </p>
                     )}
 
@@ -230,18 +223,8 @@ export default function VatReturn({ period, period_label, figures, filed, can_fi
                     )}
                 </div>
 
-                <Register
-                    title="Sales register"
-                    note="Every invoice and every sales return (credit note) dated in the month. The figures of Mushak 6.2."
-                    rows={figures.sales}
-                    withClaimed={false}
-                />
-                <Register
-                    title="Purchase register"
-                    note="Every supplier bill and supplier credit note dated in the month. The figures of Mushak 6.1. Claimed is the VAT taken to input VAT."
-                    rows={figures.purchases}
-                    withClaimed
-                />
+                <Register title="Sales register" rows={figures.sales} withClaimed={false} />
+                <Register title="Purchase register" rows={figures.purchases} withClaimed />
 
                 {history.length > 0 && (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4 print:hidden">

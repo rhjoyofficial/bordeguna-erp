@@ -114,11 +114,8 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                         <Link href="/accounting/vouchers/journal/create" className="underline">
                             Journal voucher
                         </Link>
-                        : drafted, numbered when posted, printable, reversed and copied, and it names the employee, customer or supplier on a
-                        party ledger. This screen posts straight to the ledger and is kept for the Owner.
-                    </p>
-                    <p className="text-muted-foreground text-sm">
-                        Every entry needs at least two lines, and the debits must equal the credits exactly before it can be posted.
+                        : drafted, numbered when posted, printable, reversed and copied, and it names the employee, customer or supplier on a party
+                        ledger. This screen posts straight to the ledger and is kept for the Owner.
                     </p>
                 </div>
 
@@ -159,7 +156,9 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                     <table className="w-full min-w-[46rem] text-sm">
                         <thead>
                             <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
-                                <th className="py-2">Account</th>
+                                <th className="py-2">
+                                    Account<span className="text-destructive ml-0.5 font-semibold">*</span>
+                                </th>
                                 <th className="py-2">Note</th>
                                 <th className="py-2 text-right">Debit</th>
                                 <th className="py-2 text-right">Credit</th>

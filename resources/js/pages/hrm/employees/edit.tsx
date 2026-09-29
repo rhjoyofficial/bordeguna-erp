@@ -107,9 +107,11 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
         patch(route('hrm.employees.update', employee.id));
     };
 
-    const Text = ({ field, label, type = 'text' }: { field: keyof FormData; label: string; type?: string }) => (
+    const Text = ({ field, label, type = 'text', required }: { field: keyof FormData; label: string; type?: string; required?: boolean }) => (
         <div className="grid gap-2">
-            <Label htmlFor={field}>{label}</Label>
+            <Label htmlFor={field} required={required}>
+                {label}
+            </Label>
             <Input id={field} type={type} value={data[field] ?? ''} onChange={(e) => setData(field, e.target.value)} />
             <InputError message={errors[field]} />
         </div>
@@ -127,8 +129,8 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                 <section className="grid gap-4">
                     <h3 className="text-sm font-medium">Identity & employment</h3>
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Text field="first_name" label="First name" />
-                        <Text field="last_name" label="Last name" />
+                        <Text field="first_name" label="First name" required />
+                        <Text field="last_name" label="Last name" required />
                         <div className="grid gap-2">
                             <Label htmlFor="employment_type" required>
                                 Employment type
@@ -239,10 +241,6 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                                 ))}
                             </SearchSelect>
                             <InputError message={errors.salary_payment_method} />
-                            <p className="text-muted-foreground text-xs">
-                                Payroll checks the account details this method actually needs, and disbursement groups the payslips by it - cash never
-                                mixes with a bank transfer.
-                            </p>
                         </div>
                     </div>
                 </section>

@@ -69,7 +69,6 @@ export default function MyWork({ approvals, followups, todos, my_requests, atten
             <div className="space-y-4 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">My work</h1>
-                    <p className="text-muted-foreground text-sm">Everything waiting on you, gathered from every module.</p>
                 </div>
 
                 {assets && assets.open_gaps > 0 && (

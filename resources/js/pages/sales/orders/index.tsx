@@ -5,7 +5,7 @@ import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
@@ -373,11 +373,10 @@ function QuickCustomerDialog({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{t('orders.quick_title')}</DialogTitle>
-                    <DialogDescription>{t('orders.quick_intro')}</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={submit} className="grid gap-3">
                     <div className="grid gap-1">
-                        <Label htmlFor="quick-name">{t('orders.quick_name')}</Label>
+                        <Label htmlFor="quick-name" required>{t('orders.quick_name')}</Label>
                         <Input id="quick-name" value={data.name} onChange={(e) => setData('name', e.target.value)} autoFocus />
                         <InputError message={errors.name} />
                     </div>
@@ -539,7 +538,7 @@ function CreateOrderForm({
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                     <div className="grid gap-2 sm:col-span-2">
-                        <Label>{t('orders.form_customer')}</Label>
+                        <Label required>{t('orders.form_customer')}</Label>
                         <SearchableSelect
                             value={data.customer_id}
                             onChange={(v) => setData('customer_id', v)}
@@ -631,10 +630,6 @@ function CreateOrderForm({
                     <Label>{t('orders.note_optional')}</Label>
                     <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
                 </div>
-
-                <p className="text-muted-foreground text-xs">
-                    {t('orders.price_fixed_note')}
-                </p>
 
                 <Button disabled={processing || unpriced} className="w-fit">
                     {t('orders.record')}

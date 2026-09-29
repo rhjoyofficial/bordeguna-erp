@@ -87,7 +87,7 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
             <form onSubmit={submit} className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Record supplier bill against {order.po_number}</h1>
-                    <p className="text-muted-foreground text-sm">{order.supplier.name}. A bill covers exactly one purchase order.</p>
+                    <p className="text-muted-foreground text-sm">{order.supplier.name}</p>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -125,7 +125,7 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                 {vat.applies && (
                     <div className="bg-muted/30 grid gap-4 rounded-lg border p-4 md:grid-cols-2">
                         <div className="grid gap-1">
-                            <Label required>The costs on the supplier&apos;s bill</Label>
+                            <Label>The costs on the supplier&apos;s bill</Label>
                             <select
                                 className="border-input bg-background h-9 w-auto rounded-md border px-3 text-sm"
                                 value={data.prices_include_tax ? 'inclusive' : 'exclusive'}
@@ -134,12 +134,9 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                                 <option value="exclusive">have VAT added on top</option>
                                 <option value="inclusive">already include VAT</option>
                             </select>
-                            <p className="text-muted-foreground text-xs">
-                                Type the unit cost exactly as the supplier printed it. VAT is worked out when the bill is saved.
-                            </p>
                         </div>
                         <div className="grid gap-1">
-                            <Label required>The VAT on this bill</Label>
+                            <Label>The VAT on this bill</Label>
                             <select
                                 className="border-input bg-background h-9 w-auto rounded-md border px-3 text-sm"
                                 value={data.tax_recoverable ? 'yes' : 'no'}
@@ -148,10 +145,6 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                                 <option value="yes">can be claimed back (a proper VAT invoice)</option>
                                 <option value="no">cannot be claimed back</option>
                             </select>
-                            <p className="text-muted-foreground text-xs">
-                                Claimed VAT goes to Input VAT and the goods are kept at their net cost. VAT that cannot be claimed becomes
-                                part of the cost of the goods.
-                            </p>
                         </div>
                     </div>
                 )}
@@ -166,8 +159,8 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                                 <th className="p-3 text-right">Billed</th>
                                 <th className="p-3 text-right">Billable</th>
                                 <th className="p-3 text-right">Order price</th>
-                                <th className="w-28 p-3">Quantity</th>
-                                <th className="w-28 p-3">Unit cost</th>
+                                <th className="w-28 p-3">Quantity<span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">*</span></th>
+                                <th className="w-28 p-3">Unit cost<span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">*</span></th>
                                 <th className="p-3 text-right">Line total</th>
                             </tr>
                         </thead>
@@ -231,10 +224,6 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                             <span className="font-semibold text-amber-600 tabular-nums">{money(variance)}</span>
                         </div>
                     )}
-                    <p className="text-muted-foreground text-xs">
-                        Goods Received Not Invoiced is cleared at the order price. Any difference between the order and this invoice is recorded as
-                        Purchase Price Variance. Stock costs are not changed.
-                    </p>
                 </div>
 
                 {/* C-PUR-E1: where a refused bill says why. */}

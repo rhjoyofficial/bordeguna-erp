@@ -3,16 +3,7 @@ import { SearchSelect } from '@/components/search-select';
 import ShiftScheduleTabs from '@/components/shift-schedule-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -169,7 +160,7 @@ function ShiftDialog({
 
     const NumberField = ({ field, label, required }: { field: keyof FormState; label: string; required?: boolean }) => (
         <div className="grid gap-2">
-            <Label htmlFor={field}>
+            <Label htmlFor={field} required={required}>
                 {label}
                 {required ? '' : ' (optional)'}
             </Label>
@@ -184,9 +175,6 @@ function ShiftDialog({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{shift ? 'Edit shift' : 'New shift'}</DialogTitle>
-                    <DialogDescription>
-                        Timing template used by employee schedules. The attendance engine derives late/early against it.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-2">
@@ -217,7 +205,9 @@ function ShiftDialog({
                         <NumberField field="late_threshold_minutes" label="Late threshold (min)" />
                         <NumberField field="early_leave_threshold_minutes" label="Early-leave threshold (min)" />
                         <div className="grid gap-2 sm:col-span-2">
-                            <Label htmlFor="break_policy">Break treatment</Label>
+                            <Label htmlFor="break_policy" required>
+                                Break treatment
+                            </Label>
                             <SearchSelect id="break_policy" value={form.break_policy} onChange={(e) => set('break_policy', e.target.value)}>
                                 {breakPolicies.map((policy) => (
                                     <option key={policy.value} value={policy.value}>
@@ -230,13 +220,11 @@ function ShiftDialog({
                     </div>
                     {form.break_policy === 'meal_window' && (
                         <div className="border-sidebar-border/70 dark:border-sidebar-border grid gap-4 rounded-lg border p-3">
-                            <p className="text-muted-foreground text-xs">
-                                Lunch is read from punches inside this window. Missing or unreadable lunch punches fall back to the standard break and
-                                raise a review flag. Lunch never blocks payroll.
-                            </p>
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="meal_window_start">Meal window start</Label>
+                                    <Label htmlFor="meal_window_start" required>
+                                        Meal window start
+                                    </Label>
                                     <Input
                                         id="meal_window_start"
                                         type="time"
@@ -246,7 +234,9 @@ function ShiftDialog({
                                     {errors.meal_window_start && <p className="text-destructive text-xs">{errors.meal_window_start}</p>}
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label htmlFor="meal_window_end">Meal window end</Label>
+                                    <Label htmlFor="meal_window_end" required>
+                                        Meal window end
+                                    </Label>
                                     <Input
                                         id="meal_window_end"
                                         type="time"

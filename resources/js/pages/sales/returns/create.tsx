@@ -133,7 +133,7 @@ export default function ReturnCreate({
                 </div>
 
                 <div className="grid max-w-md gap-2">
-                    <Label>Challan the goods came back from</Label>
+                    <Label required>Challan the goods came back from</Label>
                     <SearchableSelect
                         value={data.delivery_id}
                         onChange={pickDelivery}
@@ -200,12 +200,6 @@ export default function ReturnCreate({
                                 </tbody>
                             </table>
                         </div>
-
-                        <p className="text-muted-foreground text-sm">
-                            After inspection: sellable goods go back to stock onto the very batches they left from; destroyed goods are written off
-                            and never re-enter stock. A line can split between the two.
-                        </p>
-
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                             <div className="grid gap-2">
                                 <Label>Return date (optional, defaults to today)</Label>
@@ -231,7 +225,7 @@ export default function ReturnCreate({
                                         <InputError message={errors['refund.money_account_id' as keyof typeof errors]} />
                                     </div>
                                     <div className="grid gap-2">
-                                        <Label>Cash refund amount</Label>
+                                        <Label required={!!data.refund_account}>Cash refund amount</Label>
                                         <Input
                                             value={data.refund_amount}
                                             onChange={(e) => setData('refund_amount', e.target.value)}
@@ -248,8 +242,7 @@ export default function ReturnCreate({
                         <div className="flex items-center gap-4">
                             <Button disabled={processing || touched.length === 0}>Record return</Button>
                             <p className="text-muted-foreground text-sm">
-                                {touched.length} line{touched.length === 1 ? '' : 's'} with quantities. The credit amount is derived from the
-                                invoices, not typed.
+                                {touched.length} line{touched.length === 1 ? '' : 's'} with quantities.
                             </p>
                         </div>
                     </form>

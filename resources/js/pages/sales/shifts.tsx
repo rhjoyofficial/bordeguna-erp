@@ -71,9 +71,8 @@ function OpenForm({ tills }: { tills: ShiftsProps['tills'] }) {
             }}
         >
             <h2 className="font-semibold">{t('shift.open_heading')}</h2>
-            <p className="text-muted-foreground text-sm">{t('shift.open_intro')}</p>
             <div className="space-y-1">
-                <Label>{t('shift.till')}</Label>
+                <Label required>{t('shift.till')}</Label>
                 <Select value={form.data.money_account_id} onValueChange={(value) => form.setData('money_account_id', value)}>
                     <SelectTrigger>
                         <SelectValue placeholder={t('shift.which_till')} />
@@ -89,7 +88,7 @@ function OpenForm({ tills }: { tills: ShiftsProps['tills'] }) {
                 {form.errors.money_account_id && <p className="text-destructive text-xs">{form.errors.money_account_id}</p>}
             </div>
             <div className="space-y-1">
-                <Label>{t('shift.opening_float_counted')}</Label>
+                <Label required>{t('shift.opening_float_counted')}</Label>
                 <Input
                     type="number"
                     step="0.01"
@@ -123,7 +122,7 @@ function MovementForm({ shiftId }: { shiftId: number }) {
             }}
         >
             <div className="space-y-1">
-                <Label className="text-xs">{t('shift.direction')}</Label>
+                <Label className="text-xs" required>{t('shift.direction')}</Label>
                 <Select value={form.data.type} onValueChange={(value) => form.setData('type', value)}>
                     <SelectTrigger className="w-32">
                         <SelectValue />
@@ -135,7 +134,7 @@ function MovementForm({ shiftId }: { shiftId: number }) {
                 </Select>
             </div>
             <div className="space-y-1">
-                <Label className="text-xs">{t('shift.amount')}</Label>
+                <Label className="text-xs" required>{t('shift.amount')}</Label>
                 <Input
                     className="w-28"
                     type="number"
@@ -147,7 +146,7 @@ function MovementForm({ shiftId }: { shiftId: number }) {
                 />
             </div>
             <div className="min-w-56 flex-1 space-y-1">
-                <Label className="text-xs">{t('shift.reason_required')}</Label>
+                <Label className="text-xs" required>{t('shift.reason_required')}</Label>
                 <Input
                     placeholder={t('shift.reason_placeholder')}
                     value={form.data.reason}
@@ -178,10 +177,9 @@ function CloseForm({ shiftId, expected }: { shiftId: number; expected: number })
             }}
         >
             <h3 className="font-semibold">{t('shift.close_heading')}</h3>
-            <p className="text-muted-foreground text-sm">{t('shift.close_intro')}</p>
             <div className="flex flex-wrap items-end gap-3">
                 <div className="space-y-1">
-                    <Label>{t('shift.counted_cash')}</Label>
+                    <Label required>{t('shift.counted_cash')}</Label>
                     <Input
                         className="w-40"
                         type="number"
@@ -258,7 +256,6 @@ function ShiftCard({ shift }: { shift: OpenShift }) {
                     <p className="text-lg font-semibold tabular-nums">{money(shift.expected_cash)}</p>
                 </div>
             </div>
-            <p className="text-muted-foreground text-xs">{t('shift.books_note')}</p>
 
             <div className="space-y-3">
                 <h3 className="text-sm font-semibold">{t('shift.movements')}</h3>
@@ -296,10 +293,7 @@ export default function Shifts({ open_shifts, tills, closed_shifts }: ShiftsProp
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('shift.title')} />
             <div className="space-y-6 p-4">
-                <div>
-                    <h1 className="text-xl font-semibold">{t('shift.title')}</h1>
-                    <p className="text-muted-foreground text-sm">{t('shift.intro')}</p>
-                </div>
+                <h1 className="text-xl font-semibold">{t('shift.title')}</h1>
 
                 {ordered.map((shift) => (
                     <ShiftCard key={shift.id} shift={shift} />

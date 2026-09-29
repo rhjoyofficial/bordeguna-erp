@@ -156,14 +156,12 @@ function LeaveDialog({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Record a leave request</DialogTitle>
-                    <DialogDescription>
-                        Holidays and weekly offs inside the range are not charged, so applying across one costs only the working days it covers. This
-                        goes to the approval queue; the attendance days change once it is approved.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="leave_employee">Employee</Label>
+                        <Label htmlFor="leave_employee" required>
+                            Employee
+                        </Label>
                         <SearchSelect id="leave_employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
@@ -175,7 +173,9 @@ function LeaveDialog({
                         {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="leave_type">Leave type</Label>
+                        <Label htmlFor="leave_type" required>
+                            Leave type
+                        </Label>
                         <SearchSelect id="leave_type" value={leaveTypeId} onChange={(e) => setLeaveTypeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {leaveTypes.map((t) => (
@@ -194,17 +194,23 @@ function LeaveDialog({
                     </div>
                     <div className="grid gap-4 sm:grid-cols-3">
                         <div className="grid gap-2">
-                            <Label htmlFor="leave_start">From</Label>
+                            <Label htmlFor="leave_start" required>
+                                From
+                            </Label>
                             <Input id="leave_start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                             {errors.start_date && <p className="text-destructive text-xs">{errors.start_date}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="leave_end">To</Label>
+                            <Label htmlFor="leave_end" required>
+                                To
+                            </Label>
                             <Input id="leave_end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                             {errors.end_date && <p className="text-destructive text-xs">{errors.end_date}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="leave_portion">Portion</Label>
+                            <Label htmlFor="leave_portion" required>
+                                Portion
+                            </Label>
                             <SearchSelect id="leave_portion" value={portion} onChange={(e) => setPortion(e.target.value)}>
                                 {portions.map((p) => (
                                     <option key={p.value} value={p.value}>
@@ -215,7 +221,9 @@ function LeaveDialog({
                         </div>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="leave_reason">Reason</Label>
+                        <Label htmlFor="leave_reason" required>
+                            Reason
+                        </Label>
                         <Input
                             id="leave_reason"
                             value={reason}
@@ -302,15 +310,14 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                 <DialogHeader>
                     <DialogTitle>Record a movement</DialogTitle>
                     <DialogDescription>
-                        For a day worked away from the device: official work outside the office, field duty, work on a holiday or weekly off, or a day
-                        worked from home. One movement covers one date, so a trip of several days needs one per day.{' '}
-                        {/* ⚠⚠ C-WFH-2 said out loud on the screen that raises the request. */}
                         <span className="font-medium">Working from home still needs a clock in and clock out.</span>
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="mv_employee">Employee</Label>
+                        <Label htmlFor="mv_employee" required>
+                            Employee
+                        </Label>
                         <SearchSelect id="mv_employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
@@ -323,7 +330,9 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="mv_type">Type</Label>
+                            <Label htmlFor="mv_type" required>
+                                Type
+                            </Label>
                             <SearchSelect id="mv_type" value={type} onChange={(e) => chooseType(e.target.value)}>
                                 {types.map((t) => (
                                     <option key={t.value} value={t.value}>
@@ -333,7 +342,9 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                             </SearchSelect>
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="mv_date">Date</Label>
+                            <Label htmlFor="mv_date" required>
+                                Date
+                            </Label>
                             <Input id="mv_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                             {errors.movement_date && <p className="text-destructive text-xs">{errors.movement_date}</p>}
                         </div>
@@ -354,7 +365,9 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                         </div>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="mv_reason">Reason</Label>
+                        <Label htmlFor="mv_reason" required>
+                            Reason
+                        </Label>
                         <Input
                             id="mv_reason"
                             value={reason}
@@ -452,29 +465,35 @@ function LeaveTypeDialog({ type }: { type?: TypeSetting }) {
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{type ? `Edit ${type.name}` : 'New leave type'}</DialogTitle>
-                    <DialogDescription>
-                        These rules apply from the next request and the next quota grant; days already taken or granted keep the terms they were
-                        recorded under.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className={type ? 'grid gap-2' : 'grid gap-4 sm:grid-cols-2'}>
                         <div className="grid gap-2">
-                            <Label htmlFor="lt_name">Name</Label>
+                            <Label htmlFor="lt_name" required>
+                                Name
+                            </Label>
                             <Input id="lt_name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Study Leave" />
                             {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                         </div>
                         {!type && (
                             <div className="grid gap-2">
-                                <Label htmlFor="lt_code">Code</Label>
-                                <Input id="lt_code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. study" />
-                                <p className="text-muted-foreground text-xs">Lowercase, permanent once created.</p>
+                                <Label htmlFor="lt_code" required>
+                                    Code
+                                </Label>
+                                <Input
+                                    id="lt_code"
+                                    value={code}
+                                    onChange={(e) => setCode(e.target.value)}
+                                    placeholder="e.g. study (lowercase, permanent)"
+                                />
                                 {errors.code && <p className="text-destructive text-xs">{errors.code}</p>}
                             </div>
                         )}
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="lt_quota">Annual quota (days)</Label>
+                        <Label htmlFor="lt_quota" required>
+                            Annual quota (days)
+                        </Label>
                         <Input id="lt_quota" type="number" min="0" step="0.5" value={quota} onChange={(e) => setQuota(e.target.value)} />
                         {errors.annual_quota && <p className="text-destructive text-xs">{errors.annual_quota}</p>}
                     </div>
@@ -725,7 +744,9 @@ export default function LeaveIndex({
                                                         <span className="text-destructive ml-1 text-xs">({r.unpaid_days} unpaid)</span>
                                                     )}
                                                     {r.paid_by_authority && (
-                                                        <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">(paid by authority)</span>
+                                                        <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">
+                                                            (paid by authority)
+                                                        </span>
                                                     )}
                                                 </td>
                                                 <td className="text-muted-foreground py-1.5 text-xs">{r.reason}</td>

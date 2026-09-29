@@ -102,7 +102,6 @@ export default function DayBook({
             <div className="flex flex-col gap-6 p-4">
                 <ReportHeading
                     title="Day book"
-                    description="Every entry posted in the period, from every part of the system: sales, purchases, payroll, vouchers and journals, in the order they were posted."
                     actions={
                         <>
                             <Button type="button" variant="outline" onClick={() => window.print()}>

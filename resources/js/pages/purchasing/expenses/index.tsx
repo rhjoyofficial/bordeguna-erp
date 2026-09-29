@@ -3,16 +3,7 @@ import InputError from '@/components/input-error';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -212,14 +203,9 @@ function RecordExpenseDialog({ expenseAccounts, moneyAccounts, suppliers, today,
             <DialogTrigger asChild>
                 <Button size="sm">Record expense</Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-3xl">
+            <DialogContent className="sm:max-w-3xl" aria-describedby={undefined}>
                 <DialogHeader>
                     <DialogTitle>{prefill === null ? 'Record an expense' : `Record ${prefill.label}`}</DialogTitle>
-                    <DialogDescription>
-                        This is paid at the moment you record it, so enter it once the money has actually left. Something to be settled later is a
-                        supplier bill instead.
-                        {prefill !== null && ' Filled in from the standing cost; change anything that is not right.'}
-                    </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={submit} className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
@@ -296,7 +282,7 @@ function RecordExpenseDialog({ expenseAccounts, moneyAccounts, suppliers, today,
                     </div>
 
                     <div className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-md border p-3">
-                        <Label>What it was spent on</Label>
+                        <Label required>What it was spent on</Label>
 
                         {data.lines.map((line, index) => (
                             <div key={index} className="grid gap-2">
@@ -404,12 +390,9 @@ function ExportDialog() {
                     Export
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
                 <DialogHeader>
                     <DialogTitle>Export expenses</DialogTitle>
-                    <DialogDescription>
-                        One row per expense line, so the amounts add up. Leave both dates empty to export everything.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
@@ -463,7 +446,6 @@ export default function ExpensesIndex({ vouchers, filters, canRecord, expenseAcc
             <div className="flex flex-col gap-6 p-4">
                 <ReportHeading
                     title="Expenses"
-                    description="Rent, fuel, utilities, subscriptions - money spent on running the business rather than on stock. Each one is paid at the moment it is recorded; a bill to be settled later is a supplier bill instead."
                     actions={
                         <>
                             <input

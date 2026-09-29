@@ -83,10 +83,7 @@ export default function SupplierShow({
             <Head title={supplier.name} />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                    <ReportHeading
-                        title={supplier.name}
-                        description="Everything this supplier's documents say, in one place. The payable follows the same bills minus payments minus credit notes identity the ageing uses."
-                    />
+                    <ReportHeading title={supplier.name} />
                     {!supplier.is_active && <Badge variant="secondary">Inactive</Badge>}
                 </div>
 
@@ -126,9 +123,7 @@ export default function SupplierShow({
                                     ) : null,
                                 )}
                             </dl>
-                            <p className="text-muted-foreground mt-3 border-t pt-3 text-xs">
-                                Credited to date: {totals.credited}. Bank details live on the supplier list for those who manage suppliers.
-                            </p>
+                            <p className="text-muted-foreground mt-3 border-t pt-3 text-xs">Credited to date: {totals.credited}</p>
                         </div>
                         {/* ⭐ Plan D11: trade licence and NID scans. */}
                         <IdentityDocumentsPanel

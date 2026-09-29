@@ -82,8 +82,7 @@ export default function AssetMaintenancePlanForm({
                 <div>
                     <h1 className="text-lg font-semibold">{plan ? 'Change plan' : 'Plan care'}</h1>
                     <p className="text-muted-foreground text-sm">
-                        <span className="font-mono">{item.tag}</span> {item.name}. When the work is recorded as done, the next due date moves on from
-                        that day.
+                        <span className="font-mono">{item.tag}</span> {item.name}
                     </p>
                 </div>
 

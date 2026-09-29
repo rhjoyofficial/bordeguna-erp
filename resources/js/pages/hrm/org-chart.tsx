@@ -64,7 +64,6 @@ export default function OrgChart({ tree, unplaced }: OrgChartProps) {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <h1 className="text-xl font-semibold">Organization chart</h1>
-                        <p className="text-muted-foreground text-sm">Who reports to whom, from the reporting line on each employee.</p>
                     </div>
                     {unplaced > 0 && (
                         <p className="text-muted-foreground rounded-md border border-dashed px-3 py-1.5 text-xs">

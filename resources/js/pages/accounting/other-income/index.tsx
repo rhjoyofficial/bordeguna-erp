@@ -3,16 +3,7 @@ import InputError from '@/components/input-error';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -168,10 +159,6 @@ function RecordDialog({ incomeAccounts, moneyAccounts, customers, today }: Pick<
             <DialogContent className="sm:max-w-3xl">
                 <DialogHeader>
                     <DialogTitle>Record income</DialogTitle>
-                    <DialogDescription>
-                        For money that came in and was not a sale: scrap, bank interest, rent received, a supplier refund. A sale to a customer is an
-                        invoice or a counter sale instead, so that the stock and the cost go with it.
-                    </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={submit} className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
@@ -216,7 +203,7 @@ function RecordDialog({ incomeAccounts, moneyAccounts, customers, today }: Pick<
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="customer_id">Customer (optional)</Label>
+                            <Label htmlFor="customer_id">Customer</Label>
                             <SearchSelect id="customer_id" value={data.customer_id} onChange={(e) => setData('customer_id', e.target.value)}>
                                 <option value="">Not a customer</option>
                                 {customers.map((customer) => (
@@ -254,7 +241,7 @@ function RecordDialog({ incomeAccounts, moneyAccounts, customers, today }: Pick<
                     </div>
 
                     <div className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-md border p-3">
-                        <Label>What the money was for</Label>
+                        <Label required>What the money was for</Label>
 
                         {data.lines.map((line, index) => (
                             <div key={index} className="grid gap-2">
@@ -366,10 +353,7 @@ export default function OtherIncomeIndex({ vouchers, canRecord, incomeAccounts, 
 
             <div className="flex flex-col gap-4 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                    <ReportHeading
-                        title="Other income"
-                        description="Money that came in and was not a sale: scrap, interest, rent received, refunds. Each one is received the moment it is recorded."
-                    />
+                    <ReportHeading title="Other income" />
                     {canRecord && <RecordDialog incomeAccounts={incomeAccounts} moneyAccounts={moneyAccounts} customers={customers} today={today} />}
                 </div>
 

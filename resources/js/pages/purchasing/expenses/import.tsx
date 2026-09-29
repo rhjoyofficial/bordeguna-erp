@@ -43,13 +43,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const taka = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function ExpenseImport({
-    preview,
-    columns,
-    accounts,
-    moneyAccounts,
-    limits,
-}: {
+export default function ExpenseImport({ preview }: {
     preview: Preview | null;
     columns: string[];
     accounts: { code: string; label: string }[];
@@ -78,10 +72,6 @@ export default function ExpenseImport({
             <div className="flex flex-col gap-6 p-4">
                 <div className="max-w-3xl">
                     <h1 className="text-lg font-semibold">Import expenses</h1>
-                    <p className="text-muted-foreground mt-1 text-sm">
-                        One row is one expense. Nothing is recorded until you press Record, and you see every row first.
-                    </p>
-
                     {/*
                         ⚠⚠ Said BEFORE the upload, not after it. An expense voucher in
                         this ERP is paid the moment it is recorded, so an import is a
@@ -92,15 +82,6 @@ export default function ExpenseImport({
                         has actually gone.
                     </p>
 
-                    <p className="text-muted-foreground mt-3 text-sm">
-                        Columns: <code className="font-mono text-xs">{columns.join(', ')}</code>. The first four are required. Up to{' '}
-                        {limits.max_rows.toLocaleString()} rows and {limits.max_mb} MB.
-                    </p>
-                    <p className="text-muted-foreground mt-2 text-sm">
-                        <code className="font-mono text-xs">account_code</code> is a chart code such as {accounts[0]?.code ?? '6225'};{' '}
-                        <code className="font-mono text-xs">paid_from</code> is one of {moneyAccounts.join(', ')}. A{' '}
-                        <code className="font-mono text-xs">reference</code> is what stops the same bill being paid twice, so give every row one.
-                    </p>
                     <p className="mt-2 text-sm">
                         <a className="underline underline-offset-2" href={route('purchasing.expenses.import.template')}>
                             Download the template
@@ -115,7 +96,9 @@ export default function ExpenseImport({
 
                 <form onSubmit={submitFile} className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
-                        <Label htmlFor="file">CSV file</Label>
+                        <Label htmlFor="file" required>
+                            CSV file
+                        </Label>
                         <input
                             id="file"
                             type="file"
@@ -242,9 +225,6 @@ export default function ExpenseImport({
                             <Button disabled={blocked || apply.processing || preview.vouchers.length === 0}>
                                 {apply.processing ? 'Recording' : `Record ${preview.vouchers.length} expense(s), ${taka(preview.total)}`}
                             </Button>
-                            <span className="text-muted-foreground text-sm">
-                                This posts the payments. The file you reviewed is the file that applies, checked byte for byte.
-                            </span>
                             <InputError message={applyError} />
                         </form>
                     </div>

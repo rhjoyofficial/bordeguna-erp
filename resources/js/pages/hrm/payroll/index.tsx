@@ -553,11 +553,6 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
                         </table>
                     )}
                 </div>
-
-                <p className="text-muted-foreground text-xs">
-                    Payroll reads attendance, leave and salary as they were decided - it never recalculates them. Review, approval, disbursement and
-                    locking arrive in the next slice.
-                </p>
             </div>
         </AppLayout>
     );

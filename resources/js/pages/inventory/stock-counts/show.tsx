@@ -418,7 +418,6 @@ export default function StockCountShow({
                                         required
                                         size="lg"
                                         error={addForm.errors.product_id}
-                                        hint="Adds a line with a book quantity of whatever the system holds (usually zero), so the find becomes a counted variance."
                                     >
                                         <SearchSelect
                                             id="product_id"

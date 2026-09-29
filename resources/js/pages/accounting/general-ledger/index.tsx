@@ -119,10 +119,6 @@ export default function GeneralLedgerIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">General ledger</h1>
-                    <p className="text-muted-foreground max-w-2xl text-sm">
-                        Every posting against one account, in the order it happened, with the balance after each one. This is the detail behind a line
-                        on the trial balance or either statement.
-                    </p>
                 </div>
 
                 <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
@@ -169,9 +165,7 @@ export default function GeneralLedgerIndex({
                 {/* C-GLA-5. An account has to be chosen, and the page says so rather than showing an empty table. */}
                 {!account && (
                     <div className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border rounded-md border px-4 py-8 text-center text-sm">
-                        {ledger_empty
-                            ? 'Nothing has been posted to the ledger yet.'
-                            : 'Choose an account above. A general ledger is one account at a time; for everything in date order, use Journals.'}
+                        {ledger_empty ? 'Nothing has been posted to the ledger yet.' : 'Choose an account above.'}
                     </div>
                 )}
 
@@ -179,8 +173,7 @@ export default function GeneralLedgerIndex({
                 {account && rollup && (
                     <>
                         <div className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border rounded-md border px-4 py-3 text-sm">
-                            {account.label} is a heading, so nothing is posted to it directly. Below is every head under it for the period, with the
-                            total the statements show against the heading. Open a head for its own postings.
+                            {account.label} is a heading, so nothing is posted to it directly.
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full min-w-[42rem] text-sm">
@@ -195,9 +188,16 @@ export default function GeneralLedgerIndex({
                                 </thead>
                                 <tbody>
                                     {rollup.rows.map((row) => (
-                                        <tr key={row.id} className={`border-sidebar-border/70 dark:border-sidebar-border border-b ${row.moved ? '' : 'text-muted-foreground'}`}>
+                                        <tr
+                                            key={row.id}
+                                            className={`border-sidebar-border/70 dark:border-sidebar-border border-b ${row.moved ? '' : 'text-muted-foreground'}`}
+                                        >
                                             <td className="py-2">
-                                                <button type="button" className="underline-offset-2 hover:underline" onClick={() => show({ account: row.id, party: '' })}>
+                                                <button
+                                                    type="button"
+                                                    className="underline-offset-2 hover:underline"
+                                                    onClick={() => show({ account: row.id, party: '' })}
+                                                >
                                                     {row.label}
                                                 </button>
                                             </td>

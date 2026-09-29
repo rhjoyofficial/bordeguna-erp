@@ -44,13 +44,7 @@ export default function Targets({ month, rows, users }: TargetsProps) {
             <Head title="Sales targets" />
             <div className="space-y-6 p-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
-                    <div>
-                        <h1 className="text-xl font-semibold">Sales targets and commission</h1>
-                        <p className="text-muted-foreground text-sm">
-                            Target vs the invoices each person actually wrote, and what the commission would be. The number is advice for
-                            payroll - nothing here pays anyone.
-                        </p>
-                    </div>
+                    <h1 className="text-xl font-semibold">Sales targets and commission</h1>
                     <div className="space-y-1">
                         <Label className="text-xs">Month</Label>
                         <Input
@@ -69,7 +63,7 @@ export default function Targets({ month, rows, users }: TargetsProps) {
                     }}
                 >
                     <div className="min-w-48 space-y-1">
-                        <Label className="text-xs">Salesperson</Label>
+                        <Label className="text-xs" required>Salesperson</Label>
                         <Select value={form.data.user_id} onValueChange={(value) => form.setData('user_id', value)}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Pick" />
@@ -85,11 +79,11 @@ export default function Targets({ month, rows, users }: TargetsProps) {
                         {form.errors.user_id && <p className="text-destructive text-xs">{form.errors.user_id}</p>}
                     </div>
                     <div className="space-y-1">
-                        <Label className="text-xs">Month</Label>
+                        <Label className="text-xs" required>Month</Label>
                         <Input type="month" value={form.data.month} onChange={(e) => form.setData('month', e.target.value)} />
                     </div>
                     <div className="space-y-1">
-                        <Label className="text-xs">Target (BDT)</Label>
+                        <Label className="text-xs" required>Target (BDT)</Label>
                         <Input
                             className="w-36"
                             type="number"
@@ -116,7 +110,6 @@ export default function Targets({ month, rows, users }: TargetsProps) {
                     <Button type="submit" disabled={form.processing}>
                         Set target
                     </Button>
-                    <p className="text-muted-foreground w-full text-xs">Setting a target again for the same person and month replaces it.</p>
                 </form>
 
                 <div className="overflow-x-auto rounded-lg border">
@@ -160,11 +153,6 @@ export default function Targets({ month, rows, users }: TargetsProps) {
                         </tbody>
                     </table>
                 </div>
-
-                <p className="text-muted-foreground text-xs">
-                    To actually pay a commission, add it in the payroll month as an allowance or bonus - this table is the calculation, the
-                    payroll run is the payment.
-                </p>
             </div>
         </AppLayout>
     );

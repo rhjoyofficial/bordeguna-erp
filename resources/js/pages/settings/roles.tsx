@@ -109,7 +109,7 @@ function CreateRoleForm({ availablePermissions }: { availablePermissions: string
         <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
             <h3 className="font-medium">Create a role</h3>
             <div className="grid max-w-sm gap-2">
-                <Label htmlFor="role-name">Name</Label>
+                <Label htmlFor="role-name" required>Name</Label>
                 <Input id="role-name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. HR Admin" />
                 <InputError message={errors.name} />
             </div>
@@ -214,7 +214,7 @@ function RoleRow({ role, availablePermissions, landingOptions }: { role: Role; a
                 <div className="bg-muted/40 flex flex-col gap-4 rounded-lg p-4">
                     {!role.is_system && (
                         <div className="grid max-w-sm gap-2">
-                            <Label htmlFor={`role-name-${role.id}`}>Name</Label>
+                            <Label htmlFor={`role-name-${role.id}`} required>Name</Label>
                             <Input id={`role-name-${role.id}`} value={name} onChange={(e) => setName(e.target.value)} />
                         </div>
                     )}
@@ -267,10 +267,7 @@ export default function Roles({ roles, available_permissions, landing_options }:
 
             <SettingsLayout>
                 <div className="space-y-8">
-                    <HeadingSmall
-                        title="Roles"
-                        description="Define roles and choose what each can do. Create roles like HR Admin or Payroll Officer as your team grows - the built-in Owner, Manager, and Staff roles cannot be renamed or deleted."
-                    />
+                    <HeadingSmall title="Roles" />
 
                     <CreateRoleForm availablePermissions={available_permissions} />
 

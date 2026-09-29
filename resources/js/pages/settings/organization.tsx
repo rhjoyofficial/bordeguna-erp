@@ -315,10 +315,7 @@ export default function Organization({ offices, designations }: OrganizationProp
 
             <SettingsLayout>
                 <div className="space-y-10">
-                    <HeadingSmall
-                        title="Organization"
-                        description="Set up your Offices, the Departments and Sections within them, and the Designations people hold. Units deactivate rather than delete once they carry history."
-                    />
+                    <HeadingSmall title="Organization" />
 
                     <section className="space-y-3">
                         <div className="flex items-center justify-between">
@@ -400,13 +397,7 @@ export default function Organization({ offices, designations }: OrganizationProp
 
                     {offices.length > 0 && (
                         <section className="space-y-3">
-                            <div>
-                                <h3 className="text-sm font-medium">Clock-in geofence</h3>
-                                <p className="text-muted-foreground text-sm">
-                                    Optional. When enforced, a self-service clock-in from outside the radius is still accepted and flagged for review
-                                    - it is never rejected.
-                                </p>
-                            </div>
+                            <h3 className="text-sm font-medium">Clock-in geofence</h3>
                             <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border px-3">
                                 {offices.map((office) => (
                                     <GeofenceRow key={office.id} office={office} />

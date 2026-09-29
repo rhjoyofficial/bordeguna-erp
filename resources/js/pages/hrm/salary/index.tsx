@@ -1,16 +1,7 @@
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -100,9 +91,6 @@ function ComponentDialog({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{component ? 'Edit component' : 'New salary component'}</DialogTitle>
-                    <DialogDescription>
-                        Components are defined once and reused across every employee, so a payslip line always traces back to a definition.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -156,7 +144,9 @@ function ComponentDialog({
                             </SearchSelect>
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="basis">Calculated as</Label>
+                            <Label htmlFor="basis" required>
+                                Calculated as
+                            </Label>
                             <SearchSelect id="basis" value={basis} disabled={component?.is_basic} onChange={(e) => setBasis(e.target.value)}>
                                 {available.map((b) => (
                                     <option key={b.value} value={b.value}>
@@ -202,8 +192,7 @@ export default function SalaryIndex({ can_manage, employees, components, types, 
                     <div>
                         <h2 className="text-lg font-medium">Salary structures</h2>
                         <p className="text-muted-foreground text-sm">
-                            {withStructure} of {employees.length} employees have a structure. These are contractual figures - what a month actually
-                            pays is calculated by payroll.
+                            {withStructure} of {employees.length} employees have a structure.
                         </p>
                     </div>
                     {can_manage && <ComponentDialog bases={bases} types={types} trigger={<Button size="sm">New component</Button>} />}

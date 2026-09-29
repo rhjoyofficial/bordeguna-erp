@@ -2,16 +2,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -88,17 +79,20 @@ function CalendarDialog({ calendar, weekdays, trigger }: { calendar?: Calendar; 
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{calendar ? 'Edit calendar' : 'New calendar'}</DialogTitle>
-                    <DialogDescription>Named per year. Weekly off-days plus the holidays below define non-working days.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="cal-name">Name</Label>
+                            <Label htmlFor="cal-name" required>
+                                Name
+                            </Label>
                             <Input id="cal-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Bangladesh, Head Office" />
                             {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="cal-year">Year</Label>
+                            <Label htmlFor="cal-year" required>
+                                Year
+                            </Label>
                             <Input id="cal-year" type="number" className="w-24" value={year} onChange={(e) => setYear(e.target.value)} />
                             {errors.year && <p className="text-destructive text-xs">{errors.year}</p>}
                         </div>
@@ -156,13 +150,13 @@ function AddHoliday({ calendarId }: { calendarId: number }) {
     return (
         <div className="flex flex-wrap items-end gap-2">
             <div className="grid gap-1">
-                <Label htmlFor={`date-${calendarId}`} className="text-xs">
+                <Label htmlFor={`date-${calendarId}`} className="text-xs" required>
                     Date
                 </Label>
                 <Input id={`date-${calendarId}`} type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9" />
             </div>
             <div className="grid gap-1">
-                <Label htmlFor={`name-${calendarId}`} className="text-xs">
+                <Label htmlFor={`name-${calendarId}`} className="text-xs" required>
                     Holiday name
                 </Label>
                 <Input
@@ -205,13 +199,13 @@ function AddWorkingDay({ calendarId }: { calendarId: number }) {
     return (
         <div className="flex flex-wrap items-end gap-2">
             <div className="grid gap-1">
-                <Label htmlFor={`wd-date-${calendarId}`} className="text-xs">
+                <Label htmlFor={`wd-date-${calendarId}`} className="text-xs" required>
                     Date
                 </Label>
                 <Input id={`wd-date-${calendarId}`} type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9" />
             </div>
             <div className="grid gap-1">
-                <Label htmlFor={`wd-reason-${calendarId}`} className="text-xs">
+                <Label htmlFor={`wd-reason-${calendarId}`} className="text-xs" required>
                     Reason
                 </Label>
                 <Input
@@ -237,7 +231,6 @@ export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
             <div className="flex flex-col gap-4 p-4">
                 <ReportHeading
                     title="Holiday calendars"
-                    description="Named per year. The weekly off-days and the holidays listed under each one are what make a day non-working, and attendance and payroll both read them."
                     actions={<CalendarDialog weekdays={weekdays} trigger={<Button size="sm">New calendar</Button>} />}
                 />
 
@@ -329,9 +322,7 @@ export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
                             <AddHoliday calendarId={calendar.id} />
 
                             <div className="border-sidebar-border/70 dark:border-sidebar-border border-t pt-3">
-                                <p className="text-muted-foreground mb-2 text-xs font-medium">
-                                    Working-day overrides - dates that ARE working days despite a weekly off or holiday
-                                </p>
+                                <p className="text-muted-foreground mb-2 text-xs font-medium">Working-day overrides</p>
                                 {calendar.working_day_overrides.length > 0 && (
                                     <table className="w-full min-w-[28rem] text-sm">
                                         <tbody>

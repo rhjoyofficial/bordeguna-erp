@@ -85,10 +85,6 @@ export default function GroupProducts({ links, suggestions }: { links: LinkRow[]
             <div className="space-y-6 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Group products</h1>
-                    <p className="text-muted-foreground text-sm">
-                        One product, several company rows - stock and today's list price side by side. Linking renames nothing and moves
-                        nothing.
-                    </p>
                 </div>
 
                 {suggestions.length > 0 && (

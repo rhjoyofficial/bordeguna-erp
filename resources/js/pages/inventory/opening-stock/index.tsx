@@ -95,27 +95,14 @@ export default function OpeningStockIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Opening Stock" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
-                    <p className="font-medium">What the business already held on the day the books start.</p>
-                    <p className="text-muted-foreground mt-1">
-                        This posts <span className="font-medium">Stock on Hand</span> against{' '}
-                        <span className="font-medium">Opening Balance Equity</span>. The unit costs entered here become the cost layers FIFO consumes,
-                        so they decide the profit on every sale until this stock is sold through. It can be entered{' '}
-                        <span className="font-medium">once per warehouse</span>; afterwards, corrections go through an inventory adjustment.
-                    </p>
-                </div>
-
                 {countSheetWarehouses.length > 0 && (
                     <div className="rounded-lg border p-4">
                         <p className="text-sm font-medium">Count sheet</p>
-                        <p className="text-muted-foreground mt-1 text-sm">
-                            Print a blank sheet to carry around the warehouse, then type the counted numbers back into the matching CSV. Nothing is
-                            pre-filled: no quantity and no cost, not even a zero. The SKUs and the warehouse code are printed for you because the
-                            import matches on exactly those, and a hand-typed SKU is the mistake this sheet exists to prevent.
-                        </p>
-                        <div className="mt-3 flex flex-wrap items-end gap-3">
+                        <div className="mt-2 flex flex-wrap items-end gap-3">
                             <div className="grid gap-2">
-                                <Label htmlFor="sheet_warehouse">Warehouse</Label>
+                                <Label htmlFor="sheet_warehouse" required>
+                                    Warehouse
+                                </Label>
                                 <SearchSelect fit id="sheet_warehouse" value={sheetWarehouse} onChange={(e) => setSheetWarehouse(e.target.value)}>
                                     {countSheetWarehouses.map((w) => (
                                         <option key={w.id} value={w.id}>
@@ -146,8 +133,7 @@ export default function OpeningStockIndex({
                             Counted it already?{' '}
                             <Link className="underline underline-offset-2" href={route('inventory.opening-stock.import')}>
                                 Upload the filled CSV
-                            </Link>{' '}
-                            instead of typing it in below. Same document, same rules, with the whole file previewed before anything is written.
+                            </Link>
                         </p>
                     </div>
                 )}

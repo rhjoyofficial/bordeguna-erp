@@ -1,4 +1,4 @@
-import { EmptyRow, FilterBar, Footnote, ReportHeading, ReportPage, ReportTable, StatRow, StatTile, Verdict } from '@/components/report/report-shell';
+import { EmptyRow, FilterBar, ReportHeading, ReportPage, ReportTable, StatRow, StatTile, Verdict } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -73,10 +73,7 @@ export default function SupplierStatementIndex({
         <AppLayout breadcrumbs={breadcrumbsFor(canViewAccounting)}>
             <Head title="Supplier statement" />
             <ReportPage>
-                <ReportHeading
-                    title="Supplier statement"
-                    description="One supplier's account for the period: every bill, credit note and payment in the order it happened, with the balance after each one."
-                />
+                <ReportHeading title="Supplier statement" />
 
                 <FilterBar onSubmit={submit}>
                     <div className="grid gap-2">
@@ -124,8 +121,8 @@ export default function SupplierStatementIndex({
 
                         <StatRow>
                             <StatTile label="Opening balance" value={side(summary.opening, summary.opening_side)} hint={`As at ${from}`} />
-                            <StatTile label="Bills" value={summary.charges} hint="Bills received in the period." />
-                            <StatTile label="Payments and credits" value={summary.settlements} hint="Paid or credited to the supplier." />
+                            <StatTile label="Bills" value={summary.charges} />
+                            <StatTile label="Payments and credits" value={summary.settlements} />
                             <StatTile
                                 label="Closing balance"
                                 value={side(summary.closing, summary.closing_side)}
@@ -175,13 +172,6 @@ export default function SupplierStatementIndex({
                             ))}
                             {lines.length === 0 && <EmptyRow colSpan={6}>No transactions in this period.</EmptyRow>}
                         </ReportTable>
-
-                        <Footnote>
-                            {summary.closing_side === 'credit'
-                                ? 'A balance marked Cr means this supplier owes the business, usually an advance or an over-payment.'
-                                : 'The closing balance is what the business owes this supplier as at the end of the period.'}{' '}
-                            Which individual bills remain unpaid is the payables ageing&apos;s question.
-                        </Footnote>
                     </>
                 )}
             </ReportPage>

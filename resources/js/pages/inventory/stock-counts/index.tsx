@@ -67,10 +67,7 @@ export default function StockCountsIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Stock counts" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Stock counts"
-                    description="Walk a warehouse (or one category or brand of it), write down what is actually on the shelf, and every difference becomes an ordinary stock correction through the same approval flow as a hand-typed one."
-                />
+                <ReportHeading title="Stock counts" />
 
                 {canWrite && warehouses.length === 0 && (
                     <div className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">

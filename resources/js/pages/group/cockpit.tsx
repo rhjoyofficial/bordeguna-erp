@@ -35,10 +35,6 @@ export default function GroupCockpit({ companies, totals, month }: CockpitProps)
             <div className="space-y-4 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Group cockpit</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Each company from its own books, read fresh - nothing consolidated is stored. Totals are plain sums; when
-                        intercompany transfers are paired, they will be eliminated here.
-                    </p>
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
@@ -81,11 +77,6 @@ export default function GroupCockpit({ companies, totals, month }: CockpitProps)
                         </tfoot>
                     </table>
                 </div>
-
-                <p className="text-muted-foreground text-xs">
-                    You see only the companies you belong to. Cash is every money account's ledger balance; owed figures follow the same
-                    arithmetic as the ageing reports.
-                </p>
             </div>
         </AppLayout>
     );

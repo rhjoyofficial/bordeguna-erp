@@ -1,4 +1,4 @@
-import { EmptyRow, FilterBar, Footnote, ReportHeading, ReportPage, ReportTable, StatRow, StatTile } from '@/components/report/report-shell';
+import { EmptyRow, FilterBar, ReportHeading, ReportPage, ReportTable, StatRow, StatTile } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -84,15 +84,17 @@ export default function EmployeeStatementIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Employee statement" />
             <ReportPage>
-                <ReportHeading
-                    title="Employee statement"
-                    description="One employee's ledgers for the period: advances and repayments, salary accrued and paid, deductions held, expense claims owed. Every line comes from the books and names this person."
-                />
+                <ReportHeading title="Employee statement" />
 
                 <FilterBar onSubmit={submit}>
                     <div className="grid gap-2">
                         <Label htmlFor="employee">Employee</Label>
-                        <SearchSelect fit id="employee" value={filters.employee} onChange={(e) => setFilters({ ...filters, employee: e.target.value })}>
+                        <SearchSelect
+                            fit
+                            id="employee"
+                            value={filters.employee}
+                            onChange={(e) => setFilters({ ...filters, employee: e.target.value })}
+                        >
                             <option value="">Choose an employee</option>
                             {employees.map((option) => (
                                 <option key={option.id} value={option.id}>
@@ -137,7 +139,9 @@ export default function EmployeeStatementIndex({
                                         {head.account}
                                         <span className="text-muted-foreground ml-2 text-sm font-normal">
                                             {employee.name}
-                                            {head.closing !== '0.00' && meaning ? ` ${isDebit ? meaning.debit : meaning.credit} ${head.closing}` : ' has nothing outstanding'}
+                                            {head.closing !== '0.00' && meaning
+                                                ? ` ${isDebit ? meaning.debit : meaning.credit} ${head.closing}`
+                                                : ' has nothing outstanding'}
                                         </span>
                                     </h2>
                                     <ReportTable
@@ -175,7 +179,10 @@ export default function EmployeeStatementIndex({
                                             <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                                 <td className="text-muted-foreground py-2">{line.date}</td>
                                                 <td className="py-2 font-mono text-xs">
-                                                    <Link href={`/accounting/journals/${line.journal_id}`} className="underline-offset-2 hover:underline">
+                                                    <Link
+                                                        href={`/accounting/journals/${line.journal_id}`}
+                                                        className="underline-offset-2 hover:underline"
+                                                    >
                                                         {line.journal_number}
                                                     </Link>
                                                 </td>
@@ -191,11 +198,6 @@ export default function EmployeeStatementIndex({
                                 </section>
                             );
                         })}
-
-                        <Footnote>
-                            Each head is its own ledger with its own running balance. Adding every employee&apos;s statement for a head gives that head&apos;s
-                            balance in the trial balance exactly, because no line on these heads is ever posted without naming the employee.
-                        </Footnote>
                     </>
                 )}
             </ReportPage>

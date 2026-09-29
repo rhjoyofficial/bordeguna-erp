@@ -52,9 +52,6 @@ export default function PeriodClose({ boundary, closed_by, note, is_unlocked, un
             <div className="max-w-3xl space-y-6 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Period close</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Everything on or before the boundary is sealed: no posting of any kind can land there until it is unlocked.
-                    </p>
                 </div>
 
                 <section className="border-border bg-card rounded-lg border p-4">
@@ -91,9 +88,6 @@ export default function PeriodClose({ boundary, closed_by, note, is_unlocked, un
                             </li>
                         ))}
                     </ul>
-                    <p className="text-muted-foreground mt-2 text-xs">
-                        These inform, they never block - whether a warning matters for this close is the accountant's call.
-                    </p>
                 </section>
 
                 {can_close && (
@@ -131,7 +125,7 @@ export default function PeriodClose({ boundary, closed_by, note, is_unlocked, un
                             <h2 className="text-sm font-semibold">Unlock for a correction</h2>
                             <div className="grid gap-2">
                                 <Label htmlFor="reason" required>
-                                    Reason (required, kept on record)
+                                    Reason
                                 </Label>
                                 <Input
                                     id="reason"
@@ -144,7 +138,6 @@ export default function PeriodClose({ boundary, closed_by, note, is_unlocked, un
                             <Button type="submit" variant="outline" disabled={unlockForm.processing || boundary === null}>
                                 Unlock
                             </Button>
-                            <p className="text-muted-foreground text-xs">Temporary by design. The unlock is logged with your name and reason.</p>
                         </form>
                     </div>
                 )}

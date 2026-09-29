@@ -69,14 +69,6 @@ export default function BrandsIndex({ brands }: { brands: Brand[] }) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Brands" />
             <div className="flex flex-col gap-6 p-4">
-                <div className="text-muted-foreground max-w-3xl text-sm">
-                    <p>
-                        A brand is what the profit report groups by, and its <strong>code</strong> is the SKU segment it contributes, so{' '}
-                        <code className="font-mono">LLD</code> is what makes <code className="font-mono">LLD-DRY-CHU-125G</code> a LaLaDia product.
-                        The code is permanent once created. Raw materials and packaging carry no brand on purpose.
-                    </p>
-                </div>
-
                 {manageCatalog && (
                     <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
                         <div className="grid gap-2">

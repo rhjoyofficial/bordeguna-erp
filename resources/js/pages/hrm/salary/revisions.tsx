@@ -124,7 +124,9 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                 </DialogHeader>
                 <div className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
                     <div className="grid gap-2">
-                        <Label htmlFor="rev_employee">Employee</Label>
+                        <Label htmlFor="rev_employee" required>
+                            Employee
+                        </Label>
                         <SearchSelect id="rev_employee" value={employeeId} onChange={(e) => chooseEmployee(e.target.value)}>
                             <option value="">- Select -</option>
                             {employees.map((e) => (
@@ -143,7 +145,9 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="rev_from">Effective from</Label>
+                        <Label htmlFor="rev_from" required>
+                            Effective from
+                        </Label>
                         <Input id="rev_from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
                         {isBackdated && (
                             <p className="text-muted-foreground text-xs">
@@ -155,7 +159,7 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
 
                     {employeeId !== '' && (
                         <div className="grid gap-2">
-                            <Label>Proposed figures</Label>
+                            <Label required>Proposed figures</Label>
                             {components.map((c) => (
                                 <div key={c.id} className="flex items-center gap-3">
                                     <span className="w-48 text-sm">
@@ -185,7 +189,9 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                     </label>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="rev_reason">Reason</Label>
+                        <Label htmlFor="rev_reason" required>
+                            Reason
+                        </Label>
                         <Input id="rev_reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Annual increment 2026" />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
@@ -239,10 +245,6 @@ export default function SalaryRevisions({ can_manage, filters, revisions, employ
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">Increments</h2>
-                        <p className="text-muted-foreground text-sm">
-                            A raise is a proposal before it is a fact. Approving one opens a new effective-dated structure and, if it reaches
-                            backwards, posts the difference forward as an arrear.
-                        </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                         <SearchSelect

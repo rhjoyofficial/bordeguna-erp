@@ -144,12 +144,6 @@ export default function MessagingIndex({
             <div className="flex flex-col gap-8 p-4">
                 <ReportHeading
                     title={isSms ? 'SMS' : 'Email'}
-                    description={
-                        <>
-                            Uploading nothing sends nothing. A campaign is drafted, previewed, and only then sent. Anything above {approvalAbove}{' '}
-                            recipients goes for approval first, because a send is the one thing here that spends money by itself.
-                        </>
-                    }
                     actions={
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/crm/messages/${isSms ? 'email' : 'sms'}`}>{isSms ? 'Email instead' : 'SMS instead'}</Link>
@@ -202,7 +196,7 @@ export default function MessagingIndex({
                         </FormRow>
                         {!isSms && (
                             <div className="grid gap-2">
-                                <Label htmlFor="subject">Subject</Label>
+                                <Label htmlFor="subject" required>Subject</Label>
                                 <Input id="subject" value={form.data.subject} onChange={(e) => form.setData('subject', e.target.value)} />
                                 <InputError message={form.errors.subject} />
                             </div>
@@ -379,13 +373,7 @@ export default function MessagingIndex({
                 </section>
 
                 <section className="flex flex-col gap-3">
-                    <div>
-                        <h3 className="font-medium">Do not contact</h3>
-                        <p className="text-muted-foreground text-sm">
-                            Recorded against the {isSms ? 'number' : 'address'} itself, not the contact, so deleting somebody from the phone book and
-                            importing them again does not start messaging them once more.
-                        </p>
-                    </div>
+                    <h3 className="font-medium">Do not contact</h3>
 
                     {can.send && (
                         <form
@@ -399,7 +387,7 @@ export default function MessagingIndex({
                             className="flex flex-wrap items-end gap-2 rounded-lg border p-4"
                         >
                             <div className="grid gap-2">
-                                <Label htmlFor="opt_address">{isSms ? 'Number' : 'Email'}</Label>
+                                <Label htmlFor="opt_address" required>{isSms ? 'Number' : 'Email'}</Label>
                                 <Input
                                     id="opt_address"
                                     value={optOutForm.data.address}

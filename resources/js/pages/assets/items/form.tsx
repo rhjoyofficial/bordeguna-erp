@@ -171,16 +171,11 @@ export default function AssetItemForm({
             <form onSubmit={submit} className="flex max-w-4xl flex-col gap-6 p-4">
                 <div>
                     <h1 className="text-lg font-semibold">{editing ? `Edit ${item.tag}` : 'Add a thing'}</h1>
-                    <p className="text-muted-foreground text-sm">
-                        {editing
-                            ? 'Correct what the register says. The tag, category and way of counting stay as they are.'
-                            : 'Each tagged thing gets its own sticker. Several identical things (ten chairs) can be added at once, one tag each.'}
-                    </p>
                 </div>
 
                 <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
-                        <Label required>Category</Label>
+                        <Label required={!editing}>Category</Label>
                         {editing ? (
                             <p className="text-sm">{categories.find((c) => c.id === item.asset_category_id)?.name ?? 'Switched off'}</p>
                         ) : (
@@ -195,7 +190,7 @@ export default function AssetItemForm({
                     </div>
 
                     <div className="grid gap-2">
-                        <Label required>How it is counted</Label>
+                        <Label required={!editing}>How it is counted</Label>
                         {editing ? (
                             <p className="text-sm">{trackings.find((t) => t.value === item.tracking)?.label}</p>
                         ) : (
@@ -229,7 +224,6 @@ export default function AssetItemForm({
                                 onChange={(e) => setData('copies', e.target.value)}
                                 className="w-28"
                             />
-                            <p className="text-muted-foreground text-xs">Each gets its own tag. Leave 1 for a thing with a serial number.</p>
                             <InputError message={errors.copies} />
                         </div>
                     )}
@@ -318,7 +312,6 @@ export default function AssetItemForm({
                                 ]}
                                 placeholder="Not part of anything"
                             />
-                            <p className="text-muted-foreground text-xs">A desktop&apos;s monitor, a camera&apos;s charger.</p>
                             <InputError message={errors.parent_id} />
                         </div>
                     )}
@@ -352,7 +345,6 @@ export default function AssetItemForm({
                                 className="w-40 text-right"
                                 placeholder="0.00"
                             />
-                            <p className="text-muted-foreground text-xs">For reference only. It posts nothing.</p>
                             <InputError message={errors.purchase_price} />
                         </div>
                     )}
@@ -405,7 +397,6 @@ export default function AssetItemForm({
                                 className="w-full min-w-0 text-sm"
                                 onChange={(e) => setData('photos', Array.from(e.target.files ?? []).slice(0, 6))}
                             />
-                            <p className="text-muted-foreground text-xs">Up to six. More, and a photo of the serial plate, can be added later.</p>
                             <InputError message={errors.photos ?? (errors as Record<string, string | undefined>)['photos.0']} />
                         </div>
                     )}

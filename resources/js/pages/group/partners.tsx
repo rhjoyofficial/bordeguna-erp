@@ -92,10 +92,6 @@ export default function GroupPartners({ links, suggestions }: PartnersProps) {
             <div className="space-y-6 p-4">
                 <div>
                     <h1 className="text-xl font-semibold">Group partners</h1>
-                    <p className="text-muted-foreground text-sm">
-                        One real-world party, several company rows. Linking is a reversible statement of identity - it never touches a
-                        document, and you see only the companies you belong to.
-                    </p>
                 </div>
 
                 {suggestions.length > 0 && (
