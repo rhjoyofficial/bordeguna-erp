@@ -32,6 +32,9 @@ class MoneyAccount extends Model
         'bank_name',
         'branch',
         'routing_number',
+        // A bank's sanctioned overdraft, in paisa (finance policy B14). Ignored
+        // for cash and wallets: they cannot pay money they do not hold.
+        'overdraft_limit_minor',
         'provider',
         'currency',
         'note',
@@ -57,6 +60,7 @@ class MoneyAccount extends Model
         return [
             'type' => MoneyAccountType::class,
             'is_active' => 'boolean',
+            'overdraft_limit_minor' => 'integer',
         ];
     }
 

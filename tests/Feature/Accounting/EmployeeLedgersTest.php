@@ -8,6 +8,7 @@ use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Exceptions\JournalException;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
@@ -34,6 +35,9 @@ beforeEach(function () {
 
     $this->business = Business::create(['name' => 'Staff Co', 'slug' => 'staff-co', 'fiscal_year_start_month' => 7]);
     TenantScope::enter($this->business->id);
+    // These tests pay from empty test accounts to check the posting shape;
+    // the balance guard has its own tests in FinancePolicyTest.
+    FinancePolicy::create(['business_id' => $this->business->id, 'refuse_negative_money' => false]);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
 
     $this->seed(ChartOfAccountsSeeder::class);

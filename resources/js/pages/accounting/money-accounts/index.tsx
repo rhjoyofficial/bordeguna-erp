@@ -18,6 +18,7 @@ interface MoneyAccount {
     bank_name: string | null;
     branch: string | null;
     routing_number: string | null;
+    overdraft_limit: string;
     provider: string | null;
     note: string | null;
     is_active: boolean;
@@ -44,6 +45,7 @@ const EMPTY = {
     bank_name: '',
     branch: '',
     routing_number: '',
+    overdraft_limit: '0',
     provider: '',
     account_id: '',
     is_active: true,
@@ -79,6 +81,7 @@ export default function MoneyAccountsIndex({
             bank_name: account.bank_name ?? '',
             branch: account.branch ?? '',
             routing_number: account.routing_number ?? '',
+            overdraft_limit: account.overdraft_limit ?? '0',
             provider: account.provider ?? '',
             account_id: account.account_id === null ? '' : String(account.account_id),
             is_active: account.is_active,
@@ -231,6 +234,19 @@ export default function MoneyAccountsIndex({
                                         onChange={(e) => setData('routing_number', e.target.value)}
                                         className="w-36"
                                     />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="overdraft_limit">Overdraft limit</Label>
+                                    <Input
+                                        id="overdraft_limit"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={data.overdraft_limit}
+                                        onChange={(e) => setData('overdraft_limit', e.target.value)}
+                                        className="w-36"
+                                    />
+                                    <InputError message={errors.overdraft_limit} />
                                 </div>
                             </>
                         )}

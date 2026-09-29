@@ -127,6 +127,8 @@ class HandleInertiaRequests extends Middleware
             // The "New ledger head" button inside every ledger picker.
             'canManageChart' => fn () => (bool) $request->user()?->can('accounting.chart.head.create'),
             'canManageUsers' => fn () => (bool) $request->user()?->can('foundation.users.manage'),
+            // Finance policy link (29 Sep 2026): shown only to whoever may open it.
+            'canManageFinancePolicy' => fn () => (bool) $request->user()?->can('accounting.policy.manage'),
             // ⚠⚠ TWO CONDITIONS, BOTH REQUIRED (Joy, 30 Aug 2026): the business
             // has the assistant switched on AND this person holds the
             // permission. Off, and the floating button is not rendered for

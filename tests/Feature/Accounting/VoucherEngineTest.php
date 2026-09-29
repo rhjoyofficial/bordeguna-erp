@@ -9,6 +9,7 @@ use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
+use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\AmountInWords;
@@ -33,6 +34,9 @@ beforeEach(function () {
 
     $this->business = Business::create(['name' => 'Voucher Co', 'slug' => 'voucher-co', 'fiscal_year_start_month' => 7]);
     TenantScope::enter($this->business->id);
+    // These tests pay from empty test accounts to check the posting shape;
+    // the balance guard has its own tests in FinancePolicyTest.
+    FinancePolicy::create(['business_id' => $this->business->id, 'refuse_negative_money' => false]);
     $this->seed(ChartOfAccountsSeeder::class);
 
     $this->user = User::factory()->create();
@@ -210,6 +214,7 @@ it('restarts the sequence in a new fiscal year and keeps businesses apart', func
     expect($old->voucher_number)->toBe('PV-2025-26-0001')->and($new->voucher_number)->toBe('PV-2026-27-0001');
 
     $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co', 'fiscal_year_start_month' => 7]);
+    FinancePolicy::create(['business_id' => $other->id, 'refuse_negative_money' => false]);
     TenantScope::enter($other->id);
     $theirBank = MoneyAccount::create(['business_id' => $other->id, 'name' => 'Their Bank', 'type' => 'bank', 'is_active' => true, 'account_id' => Account::bySlug('cash_at_bank')->id]);
     $theirs = ($this->post)(($this->draft)(VoucherType::Payment, ['money_account_id' => $theirBank->id, 'lines' => $line]));
@@ -241,6 +246,7 @@ it('refuses accounts a subsystem owns, cash and bank heads, and system heads', f
 
 it('refuses another business\'s bank account', function () {
     $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co', 'fiscal_year_start_month' => 7]);
+    FinancePolicy::create(['business_id' => $other->id, 'refuse_negative_money' => false]);
     $theirBank = MoneyAccount::withoutGlobalScopes()->create(['business_id' => $other->id, 'name' => 'Their Bank', 'type' => 'bank', 'is_active' => true, 'account_id' => Account::bySlug('cash_at_bank')->id]);
 
     expect(fn () => ($this->draft)(VoucherType::Payment, [

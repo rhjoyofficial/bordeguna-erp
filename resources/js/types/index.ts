@@ -60,6 +60,7 @@ export interface SharedData {
     }[];
     canManageChart: boolean;
     canManageUsers: boolean;
+    canManageFinancePolicy: boolean;
     canManageOrganization: boolean;
     canManageEmployees: boolean;
     canManageScheduling: boolean;

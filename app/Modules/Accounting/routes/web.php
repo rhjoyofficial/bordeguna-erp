@@ -16,6 +16,7 @@ use App\Modules\Accounting\Http\Controllers\DayBookController;
 use App\Modules\Accounting\Http\Controllers\DunningController;
 use App\Modules\Accounting\Http\Controllers\EmployeeStatementController;
 use App\Modules\Accounting\Http\Controllers\FinanceDashboardController;
+use App\Modules\Accounting\Http\Controllers\FinancePolicyController;
 use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
 use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
 use App\Modules\Accounting\Http\Controllers\IncomeVoucherController;
@@ -161,6 +162,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::get('vat-settings', [VatSettingsController::class, 'index'])->name('vat-settings.index');
         Route::put('vat-settings', [VatSettingsController::class, 'update'])->name('vat-settings.update');
         Route::post('vat-settings/rates', [VatSettingsController::class, 'storeRate'])->name('vat-settings.rates.store');
+    });
+
+    // ⭐ Finance policy (29 Sep 2026): the limits, caps and thresholds the
+    // books obey. The Owner's key; grantable in Settings > Roles.
+    Route::middleware('can:accounting.policy.manage')->group(function () {
+        Route::get('finance-policy', [FinancePolicyController::class, 'edit'])->name('finance-policy.edit');
+        Route::put('finance-policy', [FinancePolicyController::class, 'update'])->name('finance-policy.update');
     });
 
     // ⚠ No delete route. A money account is deactivated, never removed:

@@ -127,6 +127,7 @@ export function AppSidebar() {
         canManageUsers,
         canManageOrganization,
         canManageReasons,
+        canManageFinancePolicy,
     } = usePage<SharedData>().props;
 
     // ⚠ Inventory's write permissions, shared by the module itself. Staff were
@@ -605,6 +606,7 @@ export function AppSidebar() {
                           // the route refuses anyone else).
                           { title: 'VAT return', url: '/accounting/vat-return', icon: Percent },
                           { title: 'VAT settings', url: '/accounting/vat-settings', icon: Percent },
+                          ...(canManageFinancePolicy ? [{ title: 'Finance policy', url: '/accounting/finance-policy', icon: Percent }] : []),
                           // ⚠⚠ Directly under the screen that NAMES the accounts,
                           // because this is the only way to move money between
                           // them. Five accounts existed with no transfer document

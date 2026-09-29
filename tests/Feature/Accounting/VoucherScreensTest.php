@@ -5,6 +5,7 @@ use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
+use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Foundation\Models\Business;
@@ -27,6 +28,8 @@ beforeEach(function () {
     Carbon::setTestNow('2026-09-19 10:00:00');
 
     $this->business = Business::create(['name' => 'Voucher Co', 'slug' => 'voucher-co', 'fiscal_year_start_month' => 7]);
+    // Posting-shape tests; the balance guard is tested in FinancePolicyTest.
+    FinancePolicy::create(['business_id' => $this->business->id, 'refuse_negative_money' => false]);
     TenantScope::enter($this->business->id);
     $this->seed(ChartOfAccountsSeeder::class);
 
@@ -299,6 +302,7 @@ it('never opens another business\'s voucher', function () {
     $voucher = Voucher::sole();
 
     $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co', 'fiscal_year_start_month' => 7]);
+    FinancePolicy::create(['business_id' => $other->id, 'refuse_negative_money' => false]);
     TenantScope::enter($other->id);
     $role = Role::firstOrCreate(['name' => 'Owner', 'business_id' => $other->id, 'guard_name' => 'web']);
     $role->givePermissionTo(['accounting.view', 'accounting.voucher.prepare', 'accounting.voucher.post']);

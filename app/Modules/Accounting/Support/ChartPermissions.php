@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Gate;
  *                                    deactivating a heading, a system head's code
  *   accounting.money_account.manage  Bank & cash accounts (each makes its own ledger)
  *   accounting.vat.manage            VAT settings, rates, filing a return
+ *   accounting.policy.manage         Finance policy: limits, caps, thresholds (29 Sep 2026)
  *
  * ⚠ `accounting.chart.manage` is NOT deleted. Every role that holds it keeps
  * every power above through the gate hook in {@see self::register()}, so nothing
@@ -41,13 +42,15 @@ final class ChartPermissions
 
     public const VAT = 'accounting.vat.manage';
 
+    public const POLICY = 'accounting.policy.manage';
+
     /** The old all-in-one key, kept as an alias for everything below. */
     public const LEGACY = 'accounting.chart.manage';
 
     /** @return list<string> */
     public static function all(): array
     {
-        return [self::HEAD_CREATE, self::HEAD_UPDATE, self::HEAD_DELETE, self::STRUCTURE, self::MONEY_ACCOUNTS, self::VAT];
+        return [self::HEAD_CREATE, self::HEAD_UPDATE, self::HEAD_DELETE, self::STRUCTURE, self::MONEY_ACCOUNTS, self::VAT, self::POLICY];
     }
 
     /** The three that show the chart form at all. @return list<string> */

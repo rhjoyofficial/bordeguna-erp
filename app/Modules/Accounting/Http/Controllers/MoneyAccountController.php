@@ -58,6 +58,7 @@ class MoneyAccountController extends Controller
                     'bank_name' => $account->bank_name,
                     'branch' => $account->branch,
                     'routing_number' => $account->routing_number,
+                    'overdraft_limit' => number_format(((int) $account->overdraft_limit_minor) / 100, 2, '.', ''),
                     'provider' => $account->provider,
                     'note' => $account->note,
                     'is_active' => $account->is_active,
@@ -182,6 +183,8 @@ class MoneyAccountController extends Controller
             'bank_name' => ['nullable', 'string', 'max:255'],
             'branch' => ['nullable', 'string', 'max:255'],
             'routing_number' => ['nullable', 'string', 'max:255'],
+            // Taka on the wire, paisa in the row (finance policy B14).
+            'overdraft_limit' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
             'provider' => ['nullable', 'string', 'max:255'],
             // ⚠⚠ DELIBERATELY STILL NULLABLE, and this was nearly changed in
             // error on 9 August.
@@ -209,6 +212,13 @@ class MoneyAccountController extends Controller
         if (MoneyLedgers::hasOwnLedger(MoneyAccountType::from($validated['type']))) {
             unset($validated['account_id']);
         }
+
+        // ⚠ Only a bank can hold an overdraft. A cash box or wallet cannot pay
+        // money it does not have, whatever the form sent.
+        $validated['overdraft_limit_minor'] = $validated['type'] === MoneyAccountType::Bank->value
+            ? (int) round(((float) ($validated['overdraft_limit'] ?? 0)) * 100)
+            : 0;
+        unset($validated['overdraft_limit']);
 
         return $validated;
     }

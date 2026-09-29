@@ -6,13 +6,16 @@ use App\Models\User;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
+use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\VoucherAccounts;
+use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -113,6 +116,8 @@ class PostVoucher
                 throw ValidationException::withMessages(['amount' => 'Enter the amount that was moved.']);
             }
 
+            MoneyAvailability::assertCanPay($from, $amount, $date, 'money_account_id');
+
             return [
                 JournalLineDraft::debit($to->account_id, $amount, $voucher->narration ?? "From {$from->label()}", null, $to),
                 JournalLineDraft::credit($from->account_id, $amount, $voucher->narration ?? "To {$to->label()}", null, $from),
@@ -167,6 +172,11 @@ class PostVoucher
         $total = Money::ofMinor((int) $rows->sum('amount_minor'));
         $label = trim($money->label().($voucher->counterparty ? " - {$voucher->counterparty}" : ''));
 
+        if ($type === VoucherType::Payment) {
+            $this->assertCashLimit($voucher, $money, $total);
+            MoneyAvailability::assertCanPay($money, $total, $date, 'money_account_id');
+        }
+
         $lines[] = $type === VoucherType::Payment
             ? JournalLineDraft::credit($money->account_id, $total, $label, null, $money)
             : JournalLineDraft::debit($money->account_id, $total, $label, null, $money);
@@ -197,6 +207,26 @@ class PostVoucher
         }
 
         return $account;
+    }
+
+    /**
+     * Income Tax Act 2023 s.55: a payment above the limit made other than by
+     * bank transfer is disallowed as a tax expense. Refused here; the limit is
+     * the Owner's, in Finance policy (finance policy B13, 29 Sep 2026).
+     */
+    private function assertCashLimit(Voucher $voucher, MoneyAccount $money, Money $total): void
+    {
+        if ($money->type !== MoneyAccountType::Cash) {
+            return;
+        }
+
+        $limit = FinancePolicy::for((int) $voucher->business_id)->money('cash_payment_limit_minor');
+
+        if ($limit->minor > 0 && $total->minor > $limit->minor) {
+            throw ValidationException::withMessages([
+                'money_account_id' => "A payment above {$limit->format()} must go through a bank (Income Tax Act 2023, s.55). Pay it from a bank account, or split it only if these are genuinely separate payments.",
+            ]);
+        }
     }
 
     private function memo(Voucher $voucher, ?string $number): string

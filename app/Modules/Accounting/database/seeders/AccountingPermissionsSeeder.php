@@ -72,6 +72,7 @@ class AccountingPermissionsSeeder extends Seeder
             ChartPermissions::STRUCTURE,
             ChartPermissions::MONEY_ACCOUNTS,
             ChartPermissions::VAT,
+            ChartPermissions::POLICY,
         ],
         'Finance' => [
             'accounting.view',
