@@ -41,6 +41,10 @@ class RecordSupplierPayment
         User $createdBy,
         ?string $reference = null,
         ?string $note = null,
+        // ⭐ A Payment voucher line on a supplier (finance decision C3): the
+        // payment belongs to the voucher, whose own journal carries the debit
+        // to Accounts Payable, so no second journal is posted here.
+        ?int $voucherId = null,
     ): SupplierPayment {
         $date = Carbon::parse($paidOn)->startOfDay();
 
@@ -71,7 +75,7 @@ class RecordSupplierPayment
             ]);
         }
 
-        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note) {
+        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId) {
             $total = Money::zero();
 
             foreach ($allocations as $index => $entry) {
@@ -113,6 +117,7 @@ class RecordSupplierPayment
             $payment = SupplierPayment::create([
                 'supplier_id' => $supplier->id,
                 'money_account_id' => $moneyAccount->id,
+                'voucher_id' => $voucherId,
                 'paid_on' => $date,
                 'amount' => $total->toTaka(),
                 'reference' => $reference,
@@ -131,7 +136,9 @@ class RecordSupplierPayment
             // ⚠⚠ Dr Accounts Payable, Cr the money account - posted in the same
             // transaction as the document, so a payment the cash book cannot see
             // is not a state this can reach.
-            $this->posting->forPayment($payment->fresh(['allocations', 'supplier', 'moneyAccount']), $createdBy);
+            if ($voucherId === null) {
+                $this->posting->forPayment($payment->fresh(['allocations', 'supplier', 'moneyAccount']), $createdBy);
+            }
 
             return $payment->fresh(['allocations', 'supplier']);
         });

@@ -94,8 +94,17 @@ final class VoucherAccounts
     public static function catalogue(Carbon $on, VoucherType $type): Collection
     {
         $refused = self::refusedRows($on, $type);
+        // ⭐ Each customer, supplier and employee head, pickable by name where the
+        // voucher type allows it (finance decision C3, 29 Sep 2026).
+        $people = PartyHeads::map();
 
-        return Account::query()->inChartOrder()->get()->map(function (Account $account) use ($refused) {
+        return Account::query()->inChartOrder()->get()->map(function (Account $account) use ($refused, $people, $type) {
+            if (isset($people[$account->id])) {
+                $hint = PartyHeads::refusal($people[$account->id], $type);
+
+                return ['account' => $account, 'heading' => false, 'usable' => $hint === null, 'hint' => $hint];
+            }
+
             $hint = match (true) {
                 ! $account->is_postable => 'Group heading. Choose a head under it.',
                 ! $account->is_active => 'Switched off in the Chart of accounts.',
@@ -107,8 +116,14 @@ final class VoucherAccounts
     }
 
     /** Why this account cannot sit on a voucher line, or null when it can. */
-    public static function refusal(Account $account, Carbon $on): ?string
+    public static function refusal(Account $account, Carbon $on, ?VoucherType $type = null): ?string
     {
+        // A person's own head: never posted to, but pickable, and PostVoucher
+        // turns it into the document and control account (PartyHeads).
+        if (! $account->is_postable && $type !== null && ($person = PartyHeads::entityFor($account)) !== null) {
+            return $account->is_active ? PartyHeads::refusal($person::class, $type) : "{$account->label()} is switched off.";
+        }
+
         if (! $account->is_postable || ! $account->is_active) {
             return "{$account->label()} cannot be posted to.";
         }

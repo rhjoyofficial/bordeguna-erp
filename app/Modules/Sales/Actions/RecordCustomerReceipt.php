@@ -54,6 +54,10 @@ class RecordCustomerReceipt
         ?SalesOrder $forOrder = null,
         ?string $heldForOrder = null,
         bool $provenByGateway = false,
+        // ⭐ A Receive voucher line on a customer (finance decision C3): the
+        // receipt belongs to the voucher, whose own journal carries the credit
+        // to Accounts Receivable, so no second journal is posted here.
+        ?int $voucherId = null,
     ): CustomerReceipt {
         $date = Carbon::parse($receivedOn)->startOfDay();
         $held = Money::ofTaka($heldForOrder ?? '0');
@@ -123,7 +127,7 @@ class RecordCustomerReceipt
             ]);
         }
 
-        return DB::transaction(function () use ($customer, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $forOrder, $held) {
+        return DB::transaction(function () use ($customer, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $forOrder, $held, $voucherId) {
             $total = $held;
 
             foreach ($allocations as $index => $entry) {
@@ -162,6 +166,7 @@ class RecordCustomerReceipt
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
                 'sales_order_id' => $forOrder?->id,
+                'voucher_id' => $voucherId,
                 'money_account_id' => $moneyAccount->id,
                 'received_on' => $date,
                 'amount' => $total->toTaka(),
@@ -181,7 +186,9 @@ class RecordCustomerReceipt
             // ⚠⚠ Dr the money account, Cr Accounts Receivable - in the same
             // transaction as the document, so money received that the cash book
             // cannot see is not a state this can reach.
-            $this->posting->forReceipt($receipt->fresh(['allocations', 'customer', 'moneyAccount']), $createdBy);
+            if ($voucherId === null) {
+                $this->posting->forReceipt($receipt->fresh(['allocations', 'customer', 'moneyAccount']), $createdBy);
+            }
 
             return $receipt->fresh(['allocations', 'customer']);
         });

@@ -11,6 +11,7 @@ use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\AmountInWords;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Actions\DeleteAttachment;
@@ -23,7 +24,9 @@ use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerReceipt;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -375,6 +378,30 @@ class VoucherController extends Controller
         ]);
     }
 
+    /**
+     * The receipts and payments this voucher created, and what each paid.
+     *
+     * @return list<array{party: string, amount: string, against: list<string>}>
+     */
+    private function settles(Voucher $voucher): array
+    {
+        $receipts = CustomerReceipt::query()->where('voucher_id', $voucher->id)->with(['customer:id,name', 'allocations.invoice:id,invoice_number'])->get()
+            ->map(fn (CustomerReceipt $receipt) => [
+                'party' => (string) $receipt->customer?->name,
+                'amount' => Money::ofTaka((string) $receipt->amount)->format(),
+                'against' => $receipt->allocations->map(fn ($a) => $a->invoice?->invoice_number.' '.Money::ofTaka((string) $a->amount)->format())->values()->all(),
+            ]);
+
+        $payments = SupplierPayment::query()->where('voucher_id', $voucher->id)->with(['supplier:id,name', 'allocations.bill:id,bill_number'])->get()
+            ->map(fn (SupplierPayment $payment) => [
+                'party' => (string) $payment->supplier?->name,
+                'amount' => Money::ofTaka((string) $payment->amount)->format(),
+                'against' => $payment->allocations->map(fn ($a) => $a->bill?->bill_number.' '.Money::ofTaka((string) $a->amount)->format())->values()->all(),
+            ]);
+
+        return $receipts->concat($payments)->values()->all();
+    }
+
     /** Why this money account cannot be chosen on this voucher type, or null when it can. */
     private function moneyAccountHint(VoucherType $type, MoneyAccount $account): ?string
     {
@@ -426,6 +453,8 @@ class VoucherController extends Controller
                 'credit' => $line->isDebit() ? '' : $line->amount()->format(),
             ]),
             'journal' => $voucher->journal === null ? null : ['id' => $voucher->journal->id, 'number' => $voucher->journal->journal_number],
+            // What a customer or supplier line settled (finance decision C3).
+            'settles' => $this->settles($voucher),
             'reversal' => $voucher->reversalJournal === null ? null : [
                 'id' => $voucher->reversalJournal->id,
                 'number' => $voucher->reversalJournal->journal_number,

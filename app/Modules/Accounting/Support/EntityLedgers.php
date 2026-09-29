@@ -40,6 +40,11 @@ use Illuminate\Support\Facades\DB;
  * is a separate feature that must first settle that mapping; until then, pick the
  * control account and choose the party, which has always worked.
  *
+ * ⭐ SETTLED 29 Sep 2026 (finance decision C3, option c): the head IS pickable on
+ * a voucher and stays non-postable. {@see PartyHeads} and PostVoucher turn the
+ * pick into a real customer receipt / supplier payment (AR/AP + party) plus an
+ * advance (2150/1160) for any rest; an employee pick is 1170 + employee.
+ *
  * ⚠ Names repeat (two customers "Rahim", the same name in two businesses), so
  * the KEY is the entity's `account_id`, never the name. The code embeds the
  * entity id/code because the chart has thousands of these and the 99-slot money

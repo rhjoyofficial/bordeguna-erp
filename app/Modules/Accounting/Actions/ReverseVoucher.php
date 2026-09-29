@@ -5,6 +5,8 @@ namespace App\Modules\Accounting\Actions;
 use App\Models\User;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Models\Voucher;
+use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Sales\Models\CustomerReceipt;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -60,6 +62,14 @@ class ReverseVoucher
                 $on,
                 "Reversal of {$voucher->type->label()} {$voucher->voucher_number}: {$reason}",
             );
+
+            // ⭐ The receipts and payments this voucher created for a customer or
+            // supplier (finance decision C3) go with it: their journal line was
+            // the voucher's, now reversed, so leaving the documents would make
+            // the statement and ageing disagree with the ledger. Their
+            // allocations cascade, so the invoices and bills are open again.
+            CustomerReceipt::query()->where('voucher_id', $voucher->id)->get()->each->delete();
+            SupplierPayment::query()->where('voucher_id', $voucher->id)->get()->each->delete();
 
             $voucher->update([
                 'status' => VoucherStatus::Reversed,

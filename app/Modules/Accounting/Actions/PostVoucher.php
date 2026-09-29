@@ -6,19 +6,32 @@ use App\Models\User;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Models\Voucher;
+use App\Modules\Accounting\Models\VoucherLine;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAvailability;
+use App\Modules\Accounting\Support\PartyHeads;
 use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Hrm\Models\Employee;
+use App\Modules\Purchasing\Actions\RecordSupplierPayment;
+use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Sales\Actions\RecordCustomerReceipt;
+use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\SalesInvoice;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -38,7 +51,22 @@ use Illuminate\Validation\ValidationException;
  */
 class PostVoucher
 {
-    public function __construct(private readonly PostJournal $postJournal) {}
+    /**
+     * What each customer or supplier line settles, planned while the lines are
+     * laid out and created once the voucher is posted.
+     *
+     * @var list<array{kind: string, party: Customer|Supplier, allocations: list<array<string, mixed>>}>
+     */
+    private array $settlements = [];
+
+    /** @var array<string, int> paisa already planned against an invoice or bill in this voucher, keyed "kind:id" */
+    private array $planned = [];
+
+    public function __construct(
+        private readonly PostJournal $postJournal,
+        private readonly RecordCustomerReceipt $recordReceipt,
+        private readonly RecordSupplierPayment $recordPayment,
+    ) {}
 
     /**
      * @throws ValidationException
@@ -63,6 +91,7 @@ class PostVoucher
                 throw ValidationException::withMessages(['voucher_date' => 'A voucher cannot be posted with a future date.']);
             }
 
+            $this->settlements = [];
             $lines = $this->journalLines($voucher);
 
             // ⚠ The number is taken only now, after every refusal above, so a
@@ -86,6 +115,10 @@ class PostVoucher
                 'posted_by' => $by->id,
                 'posted_at' => now(),
             ]);
+
+            // The receipts and payments a customer or supplier line stands for,
+            // created now the voucher has its number (finance decision C3).
+            $this->settle($voucher, $by);
 
             return $voucher->fresh(['lines', 'journal']);
         });
@@ -132,9 +165,19 @@ class PostVoucher
 
         $lines = [];
 
+        $this->planned = [];
+
         foreach ($rows as $index => $row) {
-            if (($refusal = VoucherAccounts::refusal($row->account, $date)) !== null) {
+            if (($refusal = VoucherAccounts::refusal($row->account, $date, $type)) !== null) {
                 throw ValidationException::withMessages(["lines.{$index}.account_id" => $refusal]);
+            }
+
+            $person = $row->account->is_postable ? null : PartyHeads::entityFor($row->account);
+
+            if ($person !== null) {
+                array_push($lines, ...$this->personLines($person, $row, $voucher, $date));
+
+                continue;
             }
 
             $partyClass = VoucherAccounts::partyClassFor($row->account);
@@ -207,6 +250,106 @@ class PostVoucher
         }
 
         return $account;
+    }
+
+    /**
+     * A line picked by a person's own head, as it reaches the ledger.
+     *
+     * ⚠⚠ AR and AP stay document-backed: a customer's money is a real receipt
+     * against open invoices, oldest first, and only what no invoice is waiting
+     * for becomes an advance (2150). Suppliers mirror it (bills, then 1160). An
+     * employee is simply their advances ledger, 1170.
+     *
+     * @return list<JournalLineDraft>
+     */
+    private function personLines(Model $person, VoucherLine $row, Voucher $voucher, Carbon $date): array
+    {
+        $narration = $row->narration ?? $voucher->narration;
+        $amount = $row->amount();
+
+        if ($person instanceof Employee) {
+            $advances = Account::bySlug('employee_advances')->id;
+
+            return [$row->isDebit()
+                ? JournalLineDraft::debit($advances, $amount, $narration, $person)
+                : JournalLineDraft::credit($advances, $amount, $narration, $person)];
+        }
+
+        $isCustomer = $person instanceof Customer;
+        $documents = $isCustomer
+            ? SalesInvoice::query()->where('customer_id', $person->id)->orderBy('invoice_date')->orderBy('id')->get()
+            : SupplierBill::query()->where('supplier_id', $person->id)->orderBy('bill_date')->orderBy('id')->get();
+
+        $left = $amount->minor;
+        $allocations = [];
+
+        foreach ($documents as $document) {
+            if ($left === 0) {
+                break;
+            }
+
+            $key = ($isCustomer ? 'invoice:' : 'bill:').$document->id;
+            $open = $document->outstanding()->minor - ($this->planned[$key] ?? 0);
+
+            if ($open <= 0) {
+                continue;
+            }
+
+            $take = min($open, $left);
+            $this->planned[$key] = ($this->planned[$key] ?? 0) + $take;
+            $left -= $take;
+            $allocations[] = [$isCustomer ? 'invoice' : 'bill' => $document, 'amount' => Money::ofMinor($take)->toTaka()];
+        }
+
+        $settled = Money::ofMinor($amount->minor - $left);
+        $rest = Money::ofMinor($left);
+        $lines = [];
+
+        if ($isCustomer) {
+            if ($settled->minor > 0) {
+                $lines[] = JournalLineDraft::credit(AccountMapping::resolve('sales.accounts_receivable', $date)->id, $settled, $narration, $person);
+                $this->settlements[] = ['kind' => 'receipt', 'party' => $person, 'allocations' => $allocations];
+            }
+
+            if ($rest->minor > 0) {
+                $lines[] = JournalLineDraft::credit(Account::bySlug('customer_advances')->id, $rest, $narration ?? 'Advance received', $person);
+            }
+
+            return $lines;
+        }
+
+        if ($settled->minor > 0) {
+            $lines[] = JournalLineDraft::debit(AccountMapping::resolve('purchasing.accounts_payable', $date)->id, $settled, $narration, $person);
+            $this->settlements[] = ['kind' => 'payment', 'party' => $person, 'allocations' => $allocations];
+        }
+
+        if ($rest->minor > 0) {
+            $lines[] = JournalLineDraft::debit(Account::bySlug('supplier_advances')->id, $rest, $narration ?? 'Advance paid', $person);
+        }
+
+        return $lines;
+    }
+
+    /** Creates the receipts and payments planned by personLines(), owned by the voucher. */
+    private function settle(Voucher $voucher, User $by): void
+    {
+        $voucher->loadMissing('moneyAccount');
+
+        foreach ($this->settlements as $settlement) {
+            if ($settlement['kind'] === 'receipt') {
+                $this->recordReceipt->handle(
+                    $settlement['party'], $voucher->moneyAccount, $voucher->voucher_date, $settlement['allocations'], $by,
+                    reference: $voucher->voucher_number, note: $voucher->narration, voucherId: $voucher->id,
+                );
+            } else {
+                $this->recordPayment->handle(
+                    $settlement['party'], $voucher->moneyAccount, $voucher->voucher_date, $settlement['allocations'], $by,
+                    reference: $voucher->voucher_number, note: $voucher->narration, voucherId: $voucher->id,
+                );
+            }
+        }
+
+        $this->settlements = [];
     }
 
     /**

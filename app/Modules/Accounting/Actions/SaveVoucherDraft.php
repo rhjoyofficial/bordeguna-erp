@@ -8,6 +8,7 @@ use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\PartyHeads;
 use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Enums\MoneyAccountType;
@@ -154,7 +155,7 @@ class SaveVoucherDraft
                 throw ValidationException::withMessages(["lines.{$index}.account_id" => 'Choose an account for this line.']);
             }
 
-            if (($refusal = VoucherAccounts::refusal($account, $date)) !== null) {
+            if (($refusal = VoucherAccounts::refusal($account, $date, $type)) !== null) {
                 throw ValidationException::withMessages(["lines.{$index}.account_id" => $refusal]);
             }
 
@@ -168,7 +169,12 @@ class SaveVoucherDraft
                 throw ValidationException::withMessages(["lines.{$index}.side" => 'Say whether this line is a debit or a credit.']);
             }
 
-            [$partyType, $partyId] = $this->party($account, $row['party_id'] ?? null, $index);
+            // A person's own head names its person: no second picker to agree with.
+            $person = $account->is_postable ? null : PartyHeads::entityFor($account);
+
+            [$partyType, $partyId] = $person !== null
+                ? [$person->getMorphClass(), $person->getKey()]
+                : $this->party($account, $row['party_id'] ?? null, $index);
 
             $lines[] = [
                 'account_id' => $account->id,

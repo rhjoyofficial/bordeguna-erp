@@ -29,6 +29,8 @@ class CustomerReceipt extends Model
         'business_id',
         'customer_id',
         'sales_order_id',
+        // The voucher that created this receipt (finance decision C3), if any.
+        'voucher_id',
         'money_account_id',
         'received_on',
         'amount',

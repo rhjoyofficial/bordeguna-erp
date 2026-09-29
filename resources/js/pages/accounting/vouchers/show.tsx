@@ -23,6 +23,7 @@ export interface VoucherDocument {
     total_in_words: string;
     lines: { account: string | null; party: string | null; narration: string | null; debit: string; credit: string }[];
     journal: { id: number; number: string } | null;
+    settles?: { party: string; amount: string; against: string[] }[];
     reversal: { id: number; number: string; date: string; reason: string | null; by: string | null } | null;
     copied_from: { id: number; number: string | null } | null;
     copies: { id: number; title: string; status: string }[];
@@ -244,6 +245,20 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                )}
+
+                {voucher.settles && voucher.settles.length > 0 && (
+                    <div className="text-sm">
+                        <h2 className="mb-1 font-medium">Settled</h2>
+                        <ul className="flex flex-col gap-1">
+                            {voucher.settles.map((settle, index) => (
+                                <li key={index}>
+                                    {settle.party}: {settle.amount}
+                                    <span className="text-muted-foreground"> ({settle.against.join(', ')})</span>
+                                </li>
+                            ))}
+                        </ul>
                     </div>
                 )}
 

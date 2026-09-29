@@ -26,6 +26,8 @@ class SupplierPayment extends Model
         'business_id',
         'supplier_id',
         'money_account_id',
+        // The voucher that created this payment (finance decision C3), if any.
+        'voucher_id',
         'paid_on',
         'amount',
         'reference',
