@@ -323,7 +323,7 @@ class SupplierPaymentController extends Controller
                 'bill_number' => $bill->bill_number,
                 'bill_date' => $bill->bill_date?->toDateString(),
                 'due_date' => $bill->due_date?->toDateString(),
-                'total' => $bill->total,
+                'total' => Money::ofTaka((string) $bill->total)->toTaka(),
                 'outstanding' => $bill->outstanding()->toTaka(),
             ])
             // ⚠ Settled bills are dropped AFTER the outstanding figure is
