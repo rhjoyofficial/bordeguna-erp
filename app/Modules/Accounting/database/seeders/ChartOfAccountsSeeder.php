@@ -103,6 +103,10 @@ class ChartOfAccountsSeeder extends Seeder
         ['1210', 'Furniture and Fixtures', AccountType::Asset, '1200', true, null],
         ['1220', 'Office Equipment', AccountType::Asset, '1200', true, null],
         ['1230', 'Vehicles', AccountType::Asset, '1200', true, null],
+        // Finance decision B4 (29 Sep 2026): the asset classes with no head of their own.
+        ['1240', 'Computers and IT Equipment', AccountType::Asset, '1200', true, null],
+        ['1250', 'Production Machinery', AccountType::Asset, '1200', true, null],
+        ['1260', 'Leasehold Improvements', AccountType::Asset, '1200', true, null],
         // ⚠ A contra-asset: it lives under Assets and normally carries a credit
         // balance. That needs no special account type because the ledger stores
         // signed amounts - the sign does the work a "contra" flag would.

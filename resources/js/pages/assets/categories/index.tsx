@@ -16,6 +16,7 @@ interface Category {
     code: string;
     default_tracking: string;
     default_tracking_label: string;
+    default_useful_life_months: number | null;
     is_active: boolean;
     items_count: number;
 }
@@ -35,6 +36,7 @@ function CategoryForm({ category, trackings, onDone }: { category: Category | nu
         name: category?.name ?? '',
         code: category?.code ?? '',
         default_tracking: category?.default_tracking ?? 'individual',
+        default_useful_life_months: category?.default_useful_life_months?.toString() ?? '',
         is_active: category?.is_active ?? true,
     });
 
@@ -71,6 +73,17 @@ function CategoryForm({ category, trackings, onDone }: { category: Category | nu
                 <Label required>New ones are</Label>
                 <SearchableSelect fit value={data.default_tracking} onChange={(v) => setData('default_tracking', v)} options={trackings} />
                 <InputError message={errors.default_tracking} />
+            </div>
+            <div className="grid gap-1">
+                <Label>Useful life (months)</Label>
+                <Input
+                    value={data.default_useful_life_months}
+                    onChange={(e) => setData('default_useful_life_months', e.target.value)}
+                    className="w-24 text-right"
+                    placeholder="60"
+                    inputMode="numeric"
+                />
+                <InputError message={errors.default_useful_life_months} />
             </div>
             {category && (
                 <div className="flex items-center gap-2 self-center">
@@ -126,7 +139,9 @@ export default function AssetCategories({ categories, trackings, can_manage }: {
                                         <span className="font-medium">{category.name}</span>
                                         <span className="text-muted-foreground font-mono text-xs">{category.code}</span>
                                         <span className="text-muted-foreground">
-                                            {category.default_tracking_label} · {category.items_count} thing{category.items_count === 1 ? '' : 's'}
+                                            {category.default_tracking_label}
+                                            {category.default_useful_life_months ? ` · ${category.default_useful_life_months} months` : ''} ·{' '}
+                                            {category.items_count} thing{category.items_count === 1 ? '' : 's'}
                                         </span>
                                         {!category.is_active && <Badge variant="outline">Switched off</Badge>}
                                     </div>

@@ -8,11 +8,13 @@ use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
+use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Accounting\Support\MoneyLedgers;
+use App\Modules\Assets\Models\AssetCategory;
 use App\Modules\Assets\Models\FixedAsset;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -53,6 +55,7 @@ class RecordFixedAsset
         mixed $depreciationStartsOn = null,
         ?string $note = null,
         bool $costInOpeningBalances = false,
+        ?AssetCategory $category = null,
     ): FixedAsset {
         $acquired = Carbon::parse($acquiredOn)->startOfDay();
         $starts = $depreciationStartsOn ? Carbon::parse($depreciationStartsOn)->startOfDay() : $acquired->copy();
@@ -109,6 +112,17 @@ class RecordFixedAsset
             ]);
         }
 
+        // ⭐ Finance decision B3: below the capitalisation threshold a purchase is
+        // an expense, not an asset. The threshold is the Owner's, in Finance policy.
+        $businessId = app(BusinessContext::class)->id();
+        $threshold = $businessId === null ? null : FinancePolicy::for($businessId)->money('capitalisation_threshold_minor');
+
+        if ($threshold !== null && $threshold->minor > 0 && Money::ofTaka($cost)->minor < $threshold->minor) {
+            throw ValidationException::withMessages([
+                'cost' => "Below the capitalisation threshold of {$threshold->format()}: book it as an expense, or change the threshold in Finance policy.",
+            ]);
+        }
+
         // ⚠ The heads under Cash in Hand, Bank Accounts and Mobile Financial
         // Services carry no slug (21 Sep 2026: one per money account), so the
         // test above no longer catches "Dr cash / Cr cash" on its own.
@@ -147,11 +161,12 @@ class RecordFixedAsset
             ]);
         }
 
-        return DB::transaction(function () use ($assetCode, $name, $assetAccount, $acquired, $starts, $price, $salvage, $usefulLifeMonths, $createdBy, $moneyAccount, $supplier, $note, $costInOpeningBalances) {
+        return DB::transaction(function () use ($assetCode, $name, $assetAccount, $acquired, $starts, $price, $salvage, $usefulLifeMonths, $createdBy, $moneyAccount, $supplier, $note, $costInOpeningBalances, $category) {
             $asset = FixedAsset::create([
                 'asset_code' => $assetCode,
                 'name' => $name,
                 'account_id' => $assetAccount->id,
+                'asset_category_id' => $category?->id,
                 'acquired_on' => $acquired,
                 'cost' => $price->toTaka(),
                 'salvage_value' => $salvage->toTaka(),

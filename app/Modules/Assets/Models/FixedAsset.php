@@ -31,6 +31,7 @@ class FixedAsset extends Model
         'asset_code',
         'name',
         'account_id',
+        'asset_category_id',
         'acquired_on',
         'cost',
         'salvage_value',

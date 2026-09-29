@@ -33,6 +33,7 @@ class AssetCategoryController extends Controller
                     'code' => $category->code,
                     'default_tracking' => $category->default_tracking->value,
                     'default_tracking_label' => $category->default_tracking->label(),
+                    'default_useful_life_months' => $category->default_useful_life_months,
                     'is_active' => $category->is_active,
                     'items_count' => $category->items_count,
                 ]),
@@ -82,6 +83,7 @@ class AssetCategoryController extends Controller
             'code' => ['required', 'string', 'regex:/^[A-Z]{2,6}$/', Rule::unique('asset_categories', 'code')
                 ->where('business_id', $businessId)->ignore($category?->id)],
             'default_tracking' => ['required', Rule::enum(AssetTracking::class)],
+            'default_useful_life_months' => ['nullable', 'integer', 'between:1,600'],
             'is_active' => ['sometimes', 'boolean'],
         ], [
             'code.regex' => 'Use 2 to 6 letters, for example IT or FURN.',

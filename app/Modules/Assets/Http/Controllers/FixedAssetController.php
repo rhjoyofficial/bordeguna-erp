@@ -8,6 +8,7 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Assets\Actions\RecordFixedAsset;
+use App\Modules\Assets\Models\AssetCategory;
 use App\Modules\Assets\Models\FixedAsset;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -92,6 +93,8 @@ class FixedAssetController extends Controller
                 ->get(['id', 'name'])
                 ->all(),
             'today' => now()->toDateString(),
+            'categories' => AssetCategory::query()->where('is_active', true)->orderBy('sort')->orderBy('name')
+                ->get(['id', 'name', 'code', 'default_useful_life_months'])->all(),
         ]);
     }
 
@@ -109,7 +112,9 @@ class FixedAssetController extends Controller
             'acquired_on' => ['required', 'date'],
             'cost' => ['required', 'numeric', 'gt:0'],
             'salvage_value' => ['nullable', 'numeric', 'gte:0'],
-            'useful_life_months' => ['required', 'integer', 'min:1'],
+            // A class supplies the life when none is typed (finance decision B4).
+            'asset_category_id' => ['nullable', 'integer', Rule::exists('asset_categories', 'id')->where('business_id', $businessId)],
+            'useful_life_months' => ['nullable', 'integer', 'min:1', 'required_without:asset_category_id'],
             'depreciation_starts_on' => ['nullable', 'date'],
             'money_account_id' => ['nullable', 'integer', Rule::exists('money_accounts', 'id')
                 ->where('business_id', $businessId)],
@@ -119,6 +124,13 @@ class FixedAssetController extends Controller
             'cost_in_opening_balances' => ['nullable', 'boolean'],
         ]);
 
+        $category = empty($data['asset_category_id']) ? null : AssetCategory::query()->findOrFail($data['asset_category_id']);
+        $life = $data['useful_life_months'] ?? $category?->default_useful_life_months;
+
+        if ($life === null) {
+            throw ValidationException::withMessages(['useful_life_months' => "{$category?->name} has no default life. Type the useful life."]);
+        }
+
         try {
             $action->handle(
                 assetCode: $data['asset_code'],
@@ -126,7 +138,8 @@ class FixedAssetController extends Controller
                 assetAccount: Account::findOrFail($data['account_id']),
                 acquiredOn: $data['acquired_on'],
                 cost: (string) $data['cost'],
-                usefulLifeMonths: (int) $data['useful_life_months'],
+                usefulLifeMonths: (int) $life,
+                category: $category,
                 createdBy: $request->user(),
                 moneyAccount: empty($data['money_account_id'])
                     ? null

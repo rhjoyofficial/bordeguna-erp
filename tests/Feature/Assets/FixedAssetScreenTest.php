@@ -3,10 +3,12 @@
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Assets\database\seeders\AssetAccountMappingSeeder;
 use App\Modules\Assets\database\seeders\AssetsPermissionsSeeder;
+use App\Modules\Assets\Models\AssetCategory;
 use App\Modules\Assets\Models\FixedAsset;
 use App\Modules\Assets\Models\FixedAssetDepreciation;
 use App\Modules\Foundation\Enums\MoneyAccountType;
@@ -292,4 +294,51 @@ it('tells each screen what its viewer may do', function () {
     ($this->asRole)('Manager')
         ->get('/assets/depreciation')
         ->assertInertia(fn (AssertableInertia $page) => $page->where('canRun', false)->etc());
+});
+
+// ── Finance decisions B3 and B4 (29 Sep 2026) ──────────────────────────────
+
+it('takes the useful life from the asset class when none is typed, and keeps the class on the asset', function () {
+    $vehicles = AssetCategory::create([
+        'business_id' => $this->business->id, 'name' => 'Vehicles', 'code' => 'VEH', 'default_useful_life_months' => 60,
+    ]);
+
+    $this->actingAs($this->owner)
+        ->post('/assets', ($this->payload)(['useful_life_months' => null, 'asset_category_id' => $vehicles->id]))
+        ->assertRedirect('/assets');
+
+    $asset = FixedAsset::sole();
+
+    expect($asset->useful_life_months)->toBe(60)
+        ->and($asset->asset_category_id)->toBe($vehicles->id);
+});
+
+it('lets a typed life override the class, and asks for one when the class has none', function () {
+    $small = AssetCategory::create([
+        'business_id' => $this->business->id, 'name' => 'Small tools', 'code' => 'SML',
+    ]);
+
+    $this->actingAs($this->owner)
+        ->post('/assets', ($this->payload)(['useful_life_months' => null, 'asset_category_id' => $small->id]))
+        ->assertSessionHasErrors('useful_life_months');
+
+    $this->actingAs($this->owner)
+        ->post('/assets', ($this->payload)(['useful_life_months' => 48, 'asset_category_id' => $small->id]))
+        ->assertRedirect('/assets');
+
+    expect(FixedAsset::sole()->useful_life_months)->toBe(48);
+});
+
+it('refuses to capitalise a purchase below the capitalisation threshold', function () {
+    $this->actingAs($this->owner)
+        ->post('/assets', ($this->payload)(['cost' => '9999.99', 'salvage_value' => '0']))
+        ->assertSessionHasErrors(['cost' => 'Below the capitalisation threshold of 10,000.00: book it as an expense, or change the threshold in Finance policy.']);
+
+    FinancePolicy::create(['business_id' => $this->business->id, 'capitalisation_threshold_minor' => 500_000]);
+
+    $this->actingAs($this->owner)
+        ->post('/assets', ($this->payload)(['cost' => '9999.99', 'salvage_value' => '0']))
+        ->assertRedirect('/assets');
+
+    expect(FixedAsset::count())->toBe(1);
 });

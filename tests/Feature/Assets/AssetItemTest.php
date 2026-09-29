@@ -376,7 +376,8 @@ it('fixes a category code once a tag carries it, and seeds categories only into 
 
     expect(AssetCategory::query()->where('name', 'Vehicles')->exists())->toBeFalse()
         ->and(AssetCategory::query()->where('code', 'KIT')->exists())->toBeTrue()
-        ->and(AssetCategory::query()->count())->toBe(11);
+        // 12 seeded (MACH and LHI since 29 Sep 2026) + KIT.
+        ->and(AssetCategory::query()->count())->toBe(13);
 
     expect(fn () => ($this->register)('VEH'))->toThrow(ValidationException::class, 'is switched off');
 });

@@ -24,6 +24,8 @@ class AssetCategory extends Model
         'name',
         'code',
         'default_tracking',
+        // Book depreciation life a new fixed asset of this class defaults to (B4).
+        'default_useful_life_months',
         'is_active',
         'sort',
     ];

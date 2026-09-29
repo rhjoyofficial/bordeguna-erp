@@ -42,6 +42,7 @@ export default function AssetsIndex({
     moneyAccounts,
     suppliers,
     today,
+    categories,
 }: {
     assets: Paginated<Asset>;
     canManage: boolean;
@@ -49,11 +50,13 @@ export default function AssetsIndex({
     moneyAccounts: { id: number; name: string; type: string }[];
     suppliers: { id: number; name: string }[];
     today: string;
+    categories: { id: number; name: string; code: string; default_useful_life_months: number | null }[];
 }) {
     const { data, setData, post, errors, processing, reset } = useForm({
         asset_code: '',
         name: '',
         account_id: '',
+        asset_category_id: '',
         acquired_on: today,
         cost: '',
         salvage_value: '',
@@ -174,6 +177,34 @@ export default function AssetsIndex({
                                 inputMode="decimal"
                             />
                             <InputError message={errors.salvage_value} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="asset_category_id">Class</Label>
+                            <SearchSelect
+                                fit
+                                id="asset_category_id"
+                                value={data.asset_category_id}
+                                onChange={(e) => {
+                                    const chosen = categories.find((c) => String(c.id) === e.target.value);
+                                    setData({
+                                        ...data,
+                                        asset_category_id: e.target.value,
+                                        useful_life_months: chosen?.default_useful_life_months
+                                            ? String(chosen.default_useful_life_months)
+                                            : data.useful_life_months,
+                                    });
+                                }}
+                            >
+                                <option value="">No class</option>
+                                {categories.map((category) => (
+                                    <option key={category.id} value={category.id}>
+                                        {category.name}
+                                        {category.default_useful_life_months ? ` (${category.default_useful_life_months} months)` : ''}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                            <InputError message={errors.asset_category_id} />
                         </div>
 
                         <div className="grid gap-2">

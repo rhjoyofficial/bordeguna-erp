@@ -30,6 +30,14 @@ class AssetCategorySeeder extends Seeder
         ['Furniture', 'FURN', AssetTracking::Individual],
         ['Safety gear', 'SAFE', AssetTracking::Individual],
         ['Vehicles', 'VEH', AssetTracking::Individual],
+        ['Production machinery', 'MACH', AssetTracking::Individual],
+        ['Leasehold improvement', 'LHI', AssetTracking::Individual],
+    ];
+
+    /** Book depreciation life by class, in months (finance decision B4). */
+    private const LIFE = [
+        'FURN' => 120, 'IT' => 36, 'NET' => 36, 'PRN' => 36, 'CAM' => 36,
+        'OFF' => 60, 'VEH' => 60, 'SAFE' => 60, 'TOOL' => 84, 'MACH' => 84, 'LHI' => 60,
     ];
 
     public function run(): void
@@ -47,6 +55,7 @@ class AssetCategorySeeder extends Seeder
                     'name' => $name,
                     'code' => $code,
                     'default_tracking' => $tracking,
+                    'default_useful_life_months' => self::LIFE[$code] ?? null,
                     'sort' => ($order + 1) * 10,
                 ]);
             }

@@ -115,7 +115,7 @@ it('sorts each movement into operating, investing or financing', function () {
  */
 it('puts a brand new fixed asset account into investing without being told', function () {
     $newAsset = Account::create([
-        'code' => '1240', 'name' => 'Machinery', 'type' => $this->equipment->type,
+        'code' => '1270', 'name' => 'Machinery', 'type' => $this->equipment->type,
         'parent_id' => $this->equipment->parent_id, 'is_postable' => true, 'is_active' => true,
     ]);
 
