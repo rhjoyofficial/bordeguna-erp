@@ -1,7 +1,7 @@
 import InputError from '@/components/input-error';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useEffect, useState } from 'react';
@@ -95,10 +95,9 @@ export function CustomerQuickCreate({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
                 <DialogHeader>
                     <DialogTitle>New customer</DialogTitle>
-                    <DialogDescription>Added straight away and chosen here. Address, BIN and credit terms are filled later on the customer page.</DialogDescription>
                 </DialogHeader>
                 {/* ⚠ Not a <form>: this opens from inside a sale form. */}
                 <div className="grid gap-4">

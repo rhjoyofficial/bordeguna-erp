@@ -27,10 +27,6 @@ const dictionary = {
     'clock.clock_in': { en: 'Clock in', bn: 'ক্লক-ইন' },
     'clock.clock_out': { en: 'Clock out', bn: 'ক্লক-আউট' },
     'clock.recording': { en: 'Recording…', bn: 'রেকর্ড হচ্ছে…' },
-    'clock.privacy_note': {
-        en: 'Your location, accuracy, IP address and device details are recorded with each punch.',
-        bn: 'প্রতিটি হাজিরার সাথে আপনার অবস্থান, নির্ভুলতা, আইপি ঠিকানা ও ডিভাইসের তথ্য রেকর্ড করা হয়।',
-    },
     'clock.no_geolocation': {
         en: 'This browser cannot share location. Ask HR to record your attendance manually.',
         bn: 'এই ব্রাউজার অবস্থান জানাতে পারে না। এইচআর-কে বলুন আপনার হাজিরা হাতে লিখে রাখতে।',
@@ -91,10 +87,6 @@ const dictionary = {
     // ── The correction request dialog ───────────────────────────────────
     'correction.request': { en: 'Request correction', bn: 'সংশোধনের অনুরোধ' },
     'correction.title_for': { en: 'Request a correction for {date}', bn: '{date} তারিখের সংশোধনের অনুরোধ' },
-    'correction.description': {
-        en: 'Your manager reviews this first, then HR. Nothing changes until it is approved, and your original punches are never altered.',
-        bn: 'প্রথমে আপনার ম্যানেজার, তারপর এইচআর এটি দেখবেন। অনুমোদনের আগে কিছুই বদলায় না, এবং আপনার আসল হাজিরা কখনও মোছা হয় না।',
-    },
     'correction.what_is_wrong': { en: 'What is wrong', bn: 'কী ভুল হয়েছে' },
     'correction.correct_time': { en: 'Correct time', bn: 'সঠিক সময়' },
     'correction.direction': { en: 'Direction', bn: 'দিক' },
@@ -111,10 +103,6 @@ const dictionary = {
 
     // ── My payslips ─────────────────────────────────────────────────────
     'payslips.title': { en: 'My payslips', bn: 'আমার বেতনপত্র' },
-    'payslips.appears_after_approval': {
-        en: 'A payslip appears here once its payroll has been approved.',
-        bn: 'বেতন অনুমোদনের পর বেতনপত্র এখানে দেখা যায়।',
-    },
     'payslips.password_note': {
         en: 'Downloaded payslips are password protected. Your password: {hint}',
         bn: 'ডাউনলোড করা বেতনপত্র পাসওয়ার্ড দিয়ে সুরক্ষিত। আপনার পাসওয়ার্ড: {hint}',
@@ -226,10 +214,6 @@ const dictionary = {
 
     // ── Cashier shifts (daily screen 2 of 6, 26 Sep 2026) ────────────────
     'shift.title': { en: 'Cashier shifts', bn: 'ক্যাশিয়ার শিফট' },
-    'shift.intro': {
-        en: 'Each till opens with a counted float and closes with a count. The system works out what should be in the drawer; the difference is booked to Cash Over and Short.',
-        bn: 'প্রতিটি ক্যাশবাক্স গুনে নেওয়া টাকা দিয়ে খোলে, আর গুনে বন্ধ হয়। ড্রয়ারে কত থাকার কথা তা সিস্টেম হিসাব করে; পার্থক্যটা ক্যাশ কম-বেশি খাতে লেখা হয়।',
-    },
     'shift.your_till': { en: 'your till', bn: 'আপনার ক্যাশবাক্স' },
     'shift.opened_by': { en: 'Opened by {name}, {when}', bn: '{name} খুলেছেন, {when}' },
     'shift.opening_float': { en: 'Opening float', bn: 'শুরুর টাকা' },
@@ -237,10 +221,6 @@ const dictionary = {
     'shift.money_out': { en: 'Money out', bn: 'টাকা গেছে' },
     'shift.movements': { en: 'Till movements', bn: 'ক্যাশবাক্সে হাতবদল' },
     'shift.expected': { en: 'Expected in the drawer', bn: 'ড্রয়ারে থাকার কথা' },
-    'shift.books_note': {
-        en: 'Money in and out are everything the books recorded for this till since it opened: sales, receipts, refunds, and payment or contra vouchers. To pay an expense or take cash to the bank, use a voucher from this till; a movement below only records custody, such as change brought in.',
-        bn: 'টাকা আসা-যাওয়া মানে এই ক্যাশবাক্স খোলার পর থেকে খাতায় লেখা সবকিছু: বিক্রি, আদায়, ফেরত, আর পেমেন্ট বা কন্ট্রা ভাউচার। খরচ দিতে বা ব্যাংকে টাকা নিতে এই ক্যাশবাক্স থেকে ভাউচার করুন; নিচের হাতবদল শুধু কার কাছে টাকা তা লেখে, যেমন খুচরা আনা।',
-    },
     'shift.direction': { en: 'Direction', bn: 'কোন দিকে' },
     'shift.cash_out': { en: 'Cash out', bn: 'টাকা বের' },
     'shift.cash_in': { en: 'Cash in', bn: 'টাকা ঢোকানো' },
@@ -251,19 +231,11 @@ const dictionary = {
     'shift.in': { en: 'In', bn: 'ঢুকেছে' },
     'shift.out': { en: 'Out', bn: 'বেরিয়েছে' },
     'shift.open_heading': { en: 'Open a shift', bn: 'শিফট খুলুন' },
-    'shift.open_intro': {
-        en: 'Count the drawer first. The float you type here is what the close will be measured against.',
-        bn: 'আগে ড্রয়ারের টাকা গুনুন। এখানে যে অঙ্ক লিখবেন, শিফট বন্ধের সময় তার সাথেই মেলানো হবে।',
-    },
     'shift.till': { en: 'Till', bn: 'ক্যাশবাক্স' },
     'shift.which_till': { en: 'Which cash drawer?', bn: 'কোন ক্যাশবাক্স?' },
     'shift.opening_float_counted': { en: 'Opening float (counted)', bn: 'শুরুর টাকা (গুনে)' },
     'shift.open_button': { en: 'Open shift', bn: 'শিফট খুলুন' },
     'shift.close_heading': { en: 'Close the shift', bn: 'শিফট বন্ধ করুন' },
-    'shift.close_intro': {
-        en: 'Count every note and coin in the drawer, then type the total. The system does the comparing.',
-        bn: 'ড্রয়ারের প্রতিটি নোট আর কয়েন গুনে মোট অঙ্কটা লিখুন। মেলানোর কাজ সিস্টেম করবে।',
-    },
     'shift.counted_cash': { en: 'Counted cash', bn: 'গুনে পাওয়া টাকা' },
     'shift.counted_placeholder': { en: 'physical count', bn: 'হাতে গোনা অঙ্ক' },
     'shift.note_optional': { en: 'Note (optional)', bn: 'নোট (ইচ্ছা হলে)' },
@@ -289,10 +261,6 @@ const dictionary = {
     'receipt.title': { en: 'Receive payment', bn: 'টাকা আদায়' },
     'receipt.receipts': { en: 'Receipts', bn: 'আদায়ের তালিকা' },
     'receipt.sales': { en: 'Sales', bn: 'সেলস' },
-    'receipt.intro': {
-        en: 'Money a customer paid. It settles their oldest invoices first; change the split below before you post if they said otherwise.',
-        bn: 'ক্রেতা যে টাকা দিলেন। এটা আগে তাঁর পুরোনো ইনভয়েসগুলো মেটায়; ক্রেতা অন্যভাবে বললে পোস্ট করার আগে নিচের ভাগটা বদলে নিন।',
-    },
     'receipt.customer': { en: 'Customer', bn: 'ক্রেতা' },
     'receipt.choose_customer': { en: 'Choose a customer', bn: 'ক্রেতা বাছুন' },
     'receipt.amount_received': { en: 'Amount received (taka)', bn: 'যত টাকা পেলেন' },
@@ -398,10 +366,6 @@ const dictionary = {
     'orders.add_line': { en: '+ Add line', bn: '+ লাইন যোগ করুন' },
     'orders.order_total': { en: 'Order total', bn: 'অর্ডারের মোট' },
     'orders.note_optional': { en: 'Note (optional)', bn: 'নোট (ইচ্ছা হলে)' },
-    'orders.price_fixed_note': {
-        en: 'The price is fixed on the order when it is recorded: a later price change does not move it, and the invoice bills this price.',
-        bn: 'অর্ডার লেখার সময়ই দাম স্থির হয়ে যায়: পরে দাম বদলালেও এটা বদলায় না, আর ইনভয়েসে এই দামই বসে।',
-    },
     'orders.record': { en: 'Record sales order', bn: 'অর্ডার লিখে রাখুন' },
     // One line
     'orders.select_product': { en: 'Select product', bn: 'পণ্য বাছুন' },
@@ -422,10 +386,6 @@ const dictionary = {
     },
     // Quick customer
     'orders.quick_title': { en: 'New customer', bn: 'নতুন ক্রেতা' },
-    'orders.quick_intro': {
-        en: 'Added to Customers and picked for this order. Everything else can be filled in later.',
-        bn: 'ক্রেতার তালিকায় যোগ হবে আর এই অর্ডারে বাছাই হয়ে যাবে। বাকিটা পরে পূরণ করা যাবে।',
-    },
     'orders.quick_name': { en: 'Name', bn: 'নাম' },
     'orders.quick_phone': { en: 'Phone', bn: 'ফোন' },
     'orders.quick_same_phone': { en: '{name} already has this phone.', bn: 'এই ফোন নম্বর ইতিমধ্যে {name}-এর।' },
@@ -437,10 +397,6 @@ const dictionary = {
     'orders.quick_add': { en: 'Add customer', bn: 'ক্রেতা যোগ করুন' },
     // ── Goods receipt on the purchase order (daily screen 6 of 6, 26 Sep 2026) ──
     'grn.title': { en: 'Record goods receipt', bn: 'মাল বুঝে নেওয়া লিখুন' },
-    'grn.intro': {
-        en: 'Defaults to the full remaining quantity - reduce a line for a partial shipment, or set it to 0 if it did not come. Copy the batch number and dates from the label when it has them: stock with the earliest expiry is sold first.',
-        bn: 'শুরুতে পুরো বাকি পরিমাণটাই বসানো থাকে - আংশিক চালান হলে লাইনটা কমান, না এলে 0 করুন। লেবেলে থাকলে ব্যাচ নম্বর আর তারিখগুলো তুলে দিন: যার মেয়াদ আগে শেষ, সেই মাল আগে বিক্রি হয়।',
-    },
     'grn.supplier_challan': { en: 'Supplier challan no.', bn: 'সরবরাহকারীর চালান নং' },
     'grn.supplier_challan_placeholder': { en: 'From their delivery note', bn: 'তাদের ডেলিভারি নোট থেকে' },
     'grn.note': { en: 'Note', bn: 'নোট' },

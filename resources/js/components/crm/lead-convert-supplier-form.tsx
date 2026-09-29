@@ -76,9 +76,6 @@ export function LeadConvertSupplierForm({ lead, suppliers, onDone }: { lead: Lea
         <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="sm:col-span-2 lg:col-span-4">
                 <h2 className="font-medium">Convert {lead.name ?? `lead #${lead.id}`} to a supplier</h2>
-                <p className="text-muted-foreground text-sm">
-                    The lead is kept with its samples and history. Nothing financial happens here; bank details are added on the supplier screen.
-                </p>
             </div>
 
             <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-4">
@@ -92,7 +89,9 @@ export function LeadConvertSupplierForm({ lead, suppliers, onDone }: { lead: Lea
 
             {mode === 'existing' ? (
                 <div className="grid gap-2 sm:col-span-2 lg:col-span-4">
-                    <Label htmlFor="convert_supplier_id">Existing supplier</Label>
+                    <Label htmlFor="convert_supplier_id" required>
+                        Existing supplier
+                    </Label>
                     <SearchSelect
                         id="convert_supplier_id"
                         value={form.data.supplier_id}
@@ -155,7 +154,6 @@ export function LeadConvertSupplierForm({ lead, suppliers, onDone }: { lead: Lea
                     onChange={(e) => form.setData('nid', Array.from(e.target.files ?? []))}
                 />
                 <InputError message={documentError('nid')} />
-                <p className="text-muted-foreground text-xs">Once saved, only the Owner can open an NID scan. No NID number is recorded.</p>
             </div>
 
             <div className="sm:col-span-2 lg:col-span-4">

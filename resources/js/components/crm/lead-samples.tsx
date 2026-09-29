@@ -152,7 +152,9 @@ function Verdict({ sampleId, results }: { sampleId: number; results: ValueLabel[
     return (
         <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-2 border-t pt-3">
             <div className="grid gap-1">
-                <Label htmlFor={`result_${sampleId}`}>Verdict</Label>
+                <Label htmlFor={`result_${sampleId}`} required>
+                    Verdict
+                </Label>
                 <SearchSelect fit id={`result_${sampleId}`} value={form.data.result} onChange={(e) => form.setData('result', e.target.value)}>
                     <option value="">Choose…</option>
                     {results.map((r) => (
@@ -169,7 +171,6 @@ function Verdict({ sampleId, results }: { sampleId: number; results: ValueLabel[
             <Button size="sm" disabled={form.processing || form.data.result === ''}>
                 Record verdict
             </Button>
-            <span className="text-muted-foreground w-full text-xs">Given once. A re-test is a new sample.</span>
             <InputError message={form.errors.result} />
         </form>
     );

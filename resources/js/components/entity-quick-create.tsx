@@ -1,6 +1,6 @@
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useEffect, useState } from 'react';
@@ -129,10 +129,9 @@ export function EntityQuickCreate({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
                 <DialogHeader>
                     <DialogTitle>{config.title}</DialogTitle>
-                    <DialogDescription>It is added straight away and chosen here. You can fill in the rest on its own page later.</DialogDescription>
                 </DialogHeader>
                 {/* ⚠ Not a <form>: this opens from inside another form, and a nested
                     form's submit would submit the outer one too. */}

@@ -87,7 +87,9 @@ export function BdPlaceFields({
     return (
         <>
             <div className="grid gap-2">
-                <Label htmlFor={`${idPrefix}_district`}>District{required ? '' : ' (optional)'}</Label>
+                <Label htmlFor={`${idPrefix}_district`} required={required}>
+                    District{required ? '' : ' (optional)'}
+                </Label>
                 <SearchableSelect
                     id={`${idPrefix}_district`}
                     value={value.district}
@@ -100,7 +102,9 @@ export function BdPlaceFields({
                 <InputError message={errors.district} />
             </div>
             <div className="grid gap-2">
-                <Label htmlFor={`${idPrefix}_thana`}>Thana{required ? '' : ' (optional)'}</Label>
+                <Label htmlFor={`${idPrefix}_thana`} required={required}>
+                    Thana{required ? '' : ' (optional)'}
+                </Label>
                 <SearchableSelect
                     id={`${idPrefix}_thana`}
                     value={value.thana}

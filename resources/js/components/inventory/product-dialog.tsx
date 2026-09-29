@@ -1,7 +1,7 @@
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { type SharedData } from '@/types';
@@ -358,11 +358,10 @@ export function ProductDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+            <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl" aria-describedby={undefined}>
                 <form onSubmit={submit} className="grid gap-5">
                     <DialogHeader>
                         <DialogTitle>{product ? `Edit ${product.name}` : 'New product'}</DialogTitle>
-                        <DialogDescription>Name, unit and MRP, then what each kind of buyer pays. Everything else is under More.</DialogDescription>
                     </DialogHeader>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -414,7 +413,6 @@ export function ProductDialog({
                                 placeholder="e.g. 520"
                                 className="w-full"
                             />
-                            <p className="text-muted-foreground text-xs">What a consumer or retail shop pays when no Retail price is set.</p>
                             <InputError message={errors.mrp} />
                         </div>
                         <div className="grid gap-2">
@@ -495,13 +493,7 @@ export function ProductDialog({
 
                     {groups !== null && (
                         <section className="grid gap-2">
-                            <div>
-                                <h3 className="text-sm font-semibold">Prices</h3>
-                                <p className="text-muted-foreground text-xs">
-                                    A group marked "Not sold" cannot buy this product until you set its price. Changes start today; earlier sales keep
-                                    the price they had.
-                                </p>
-                            </div>
+                            <h3 className="text-sm font-semibold">Prices</h3>
                             <div className="overflow-x-auto">
                                 <table className="w-full min-w-[34rem] text-sm">
                                     <thead>
@@ -623,7 +615,6 @@ export function ProductDialog({
                                             </option>
                                         ))}
                                     </SearchSelect>
-                                    <p className="text-muted-foreground text-xs">VAT is off. Recorded for later; changes nothing now.</p>
                                     <InputError message={errors.tax_class_id} />
                                 </div>
                                 <div className="grid gap-2">
@@ -662,7 +653,6 @@ export function ProductDialog({
                                             ))}
                                         </SearchSelect>
                                     </div>
-                                    <p className="text-muted-foreground text-xs">Only used by the production yield check.</p>
                                     <InputError message={errors.content_quantity ?? errors.content_unit_id} />
                                 </div>
                                 <div className="grid gap-2">
@@ -699,7 +689,6 @@ export function ProductDialog({
                                             onChange={(e) => set('shelf_life_warning_days', e.target.value)}
                                             placeholder="90"
                                         />
-                                        <p className="text-muted-foreground text-xs">A warning, never a refusal. Blank means 90 days.</p>
                                         <InputError message={errors.shelf_life_warning_days} />
                                     </div>
                                 )}

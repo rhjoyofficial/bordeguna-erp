@@ -56,7 +56,6 @@ export function SupplierImportPanel() {
                         <a href="/purchasing/suppliers/template">Download blank template</a>
                     </Button>
                 </div>
-                <p className="text-muted-foreground text-xs">Export, edit in a spreadsheet, import back - the same columns both ways.</p>
             </div>
 
             {open && (
@@ -70,7 +69,6 @@ export function SupplierImportPanel() {
                             className="text-sm"
                         />
                         <Button disabled={review.processing || !review.data.file}>Check the file</Button>
-                        <span className="text-muted-foreground text-xs">Nothing is written until you confirm.</span>
                     </form>
 
                     {page.errors?.file && <p className="text-destructive mt-2 text-sm">{page.errors.file}</p>}

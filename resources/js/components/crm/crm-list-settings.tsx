@@ -30,10 +30,6 @@ export function CrmListSettings({ lists }: { lists: CrmList[] }) {
         <section className="flex flex-col gap-4">
             <div>
                 <h2 className="text-lg font-medium">Lists a lead picks from</h2>
-                <p className="text-muted-foreground text-sm">
-                    What officers choose from on a lead. Rename freely; retire an entry to take it out of the picker without changing any lead that
-                    already carries it.
-                </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
                 {lists.map((list) => (

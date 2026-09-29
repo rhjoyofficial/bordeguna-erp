@@ -238,9 +238,6 @@ export function LeadProfileFields({
                         />
                         <InputError message={errors.other_companies} />
                     </div>
-                    {/* ⚠⚠ As they told it (answer 17): recorded, never a minimum, and
-                        nothing downstream treats these numbers as checked. */}
-                    <p className="text-muted-foreground text-xs sm:col-span-2 lg:col-span-4">Capacity, as the distributor describes it.</p>
                     {(
                         [
                             ['warehouse_count', 'Warehouses'],

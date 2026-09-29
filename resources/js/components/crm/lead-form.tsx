@@ -262,7 +262,9 @@ export function LeadForm({
                 <InputError message={errors.contact_name} />
             </div>
             <div className="grid gap-2">
-                <Label htmlFor="status">Status</Label>
+                <Label htmlFor="status" required>
+                    Status
+                </Label>
                 {/* ⚠ `converted` is absent by design - it asserts a customer
                     exists and is set only by the conversion action. */}
                 <SearchSelect id="status" value={data.status} onChange={(e) => setData('status', e.target.value)}>
@@ -353,11 +355,6 @@ export function LeadForm({
                             </li>
                         ))}
                     </ul>
-                    {!editing && canVerify && (
-                        <p className="text-muted-foreground mt-2 text-xs">
-                            Save this lead first if you want to link it to one of these. Nothing is ever deleted or merged away.
-                        </p>
-                    )}
                     <InputError message={(duplicateForm.errors as Record<string, string>).survivor_id} />
                 </div>
             )}
@@ -464,8 +461,7 @@ export function LeadForm({
                 new touch to the history; it never overwrites the first. */}
             <details className="border-t pt-4 sm:col-span-2 lg:col-span-4">
                 <summary className="cursor-pointer text-sm font-medium">
-                    Where this lead came from (optional){' '}
-                    {editing && <span className="text-muted-foreground font-normal">- adds a new touch, never overwrites</span>}
+                    Where this lead came from (optional)
                 </summary>
                 <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="grid gap-2">

@@ -177,7 +177,7 @@ export function ActivityLogForm({
                 )}
                 <div className="grid gap-2">
                     {/* ⚠⚠ When it HAPPENED, not when it was typed. */}
-                    <Label htmlFor="occurred_at">When (blank = now)</Label>
+                    <Label htmlFor="occurred_at">When</Label>
                     <Input
                         id="occurred_at"
                         type="datetime-local"
@@ -211,7 +211,6 @@ export function ActivityLogForm({
 
             {isVisit && (
                 <div className="flex flex-col gap-3 rounded-md border border-dashed p-3">
-                    <p className="text-muted-foreground text-xs">Proof of the visit, both optional.</p>
                     <div className="flex flex-wrap items-center gap-3">
                         {located ? (
                             <>
@@ -262,7 +261,6 @@ export function ActivityLogForm({
 
             <div>
                 <Button disabled={log.processing}>Record</Button>
-                <span className="text-muted-foreground ml-3 text-xs">This cannot be edited afterwards.</span>
             </div>
         </form>
     );

@@ -1,7 +1,7 @@
 import InputError from '@/components/input-error';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useEffect, useState } from 'react';
@@ -167,10 +167,9 @@ export function LedgerQuickCreate({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
                 <DialogHeader>
                     <DialogTitle>New ledger head</DialogTitle>
-                    <DialogDescription>It is added to the chart of accounts for every business, and chosen here straight away.</DialogDescription>
                 </DialogHeader>
                 {/* ⚠ Not a <form>: this dialog opens from inside another form, and a
                     nested form's submit would submit the outer one too. */}
@@ -243,7 +242,6 @@ export function LedgerQuickCreate({
                                 </div>
                             </div>
                             <InputError message={errors['new_heading.code'] ?? errors['new_heading.name']} />
-                            <p className="text-muted-foreground text-xs">A heading groups heads on the statements and is never posted to itself.</p>
                         </div>
                     ) : null}
                     <div className="grid grid-cols-[8rem_1fr] gap-3">

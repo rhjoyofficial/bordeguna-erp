@@ -59,7 +59,6 @@ export function IdentityDocumentsPanel({
 
     const errors = form.errors as Record<string, string | undefined>;
     const fileError = Object.entries(errors).find(([key]) => key.startsWith('documents'))?.[1];
-    const chosen = documents.kinds.find((k) => k.value === form.data.kind);
 
     return (
         <div className="flex flex-col gap-3 rounded-lg border p-4">
@@ -121,7 +120,6 @@ export function IdentityDocumentsPanel({
                         onChange={(e) => form.setData('files', Array.from(e.target.files ?? []))}
                     />
                     <InputError message={fileError} />
-                    {chosen?.restricted && <p className="text-muted-foreground text-xs">Once saved, only the Owner can open an NID scan.</p>}
                     <div>
                         <Button size="sm" disabled={form.processing || form.data.files.length === 0}>
                             Save scan

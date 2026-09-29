@@ -118,10 +118,6 @@ export function LeadConvertForm({
         <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="sm:col-span-2 lg:col-span-4">
                 <h2 className="font-medium">Convert {lead.name ?? `lead #${lead.id}`} to a customer</h2>
-                <p className="text-muted-foreground text-sm">
-                    The lead is kept, never deleted, and its history stays where it is. Nothing financial happens here - no invoice, no price, no
-                    stock.
-                </p>
             </div>
 
             <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-4">
@@ -135,7 +131,9 @@ export function LeadConvertForm({
 
             {mode === 'existing' ? (
                 <div className="grid gap-2 sm:col-span-2 lg:col-span-4">
-                    <Label htmlFor="convert_customer_id">Existing customer</Label>
+                    <Label htmlFor="convert_customer_id" required>
+                        Existing customer
+                    </Label>
                     <SearchSelect
                         id="convert_customer_id"
                         value={form.data.customer_id}
@@ -151,9 +149,6 @@ export function LeadConvertForm({
                         ))}
                     </SearchSelect>
                     <InputError message={form.errors.customer_id} />
-                    <p className="text-muted-foreground text-xs">
-                        Use this when the prospect turns out to be someone you already sell to. No second record is created.
-                    </p>
                 </div>
             ) : (
                 <>
@@ -161,11 +156,8 @@ export function LeadConvertForm({
                         <Label htmlFor="convert_code" required>
                             Customer code
                         </Label>
-                        <Input id="convert_code" value={form.data.code} onChange={(e) => form.setData('code', e.target.value)} />
+                        <Input id="convert_code" placeholder="Permanent, e.g. CUS-001" value={form.data.code} onChange={(e) => form.setData('code', e.target.value)} />
                         <InputError message={form.errors.code} />
-                        {/* ⚠ Deliberately typed, never generated. A machine-invented
-                            identifier is one nobody recognises out loud. */}
-                        <p className="text-muted-foreground text-xs">Permanent. Choose something people will say aloud.</p>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="convert_name" required>
@@ -263,9 +255,7 @@ export function LeadConvertForm({
                                 <InputError message={form.errors.payment_terms} />
                             </div>
                         </>
-                    ) : (
-                        <p className="text-muted-foreground text-xs sm:col-span-2">No credit: a dealer or distributor pays in advance.</p>
-                    )}
+                    ) : null}
                 </>
             )}
 
@@ -293,7 +283,6 @@ export function LeadConvertForm({
                     onChange={(e) => form.setData('nid', Array.from(e.target.files ?? []))}
                 />
                 <InputError message={documentError('nid')} />
-                <p className="text-muted-foreground text-xs">Once saved, only the Owner can open an NID scan. No NID number is recorded.</p>
             </div>
 
             {/* The action reports "already converted", "marked lost" and

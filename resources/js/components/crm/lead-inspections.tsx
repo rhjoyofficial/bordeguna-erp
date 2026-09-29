@@ -63,7 +63,6 @@ export function LeadInspections({
             {canInspect && leadType === 'distributor' && (
                 <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-md border p-4">
                     <p className="text-sm font-medium">Record what you saw</p>
-                    <p className="text-muted-foreground text-xs">Optional. The distributor's own figures stay as they told them.</p>
                     <div className="grid gap-2 sm:w-48">
                         <Label htmlFor="inspected_on" required>
                             Visited on
@@ -105,7 +104,6 @@ export function LeadInspections({
                     <InputError message={(form.errors as Record<string, string | undefined>).lead_type} />
                     <div>
                         <Button disabled={form.processing}>Record inspection</Button>
-                        <span className="text-muted-foreground ml-3 text-xs">This cannot be edited afterwards.</span>
                     </div>
                 </form>
             )}

@@ -111,9 +111,6 @@ export function DoneFields({
                             onChange={(v) => set('expense_voucher_id', v)}
                             options={[{ value: '', label: 'Not paid yet, or not by voucher' }, ...vouchers]}
                         />
-                        <p className="text-muted-foreground text-xs">
-                            Nothing is paid from here. Record the payment as an expense voucher, then choose it.
-                        </p>
                         <InputError message={errors.expense_voucher_id} />
                     </div>
                 </>
