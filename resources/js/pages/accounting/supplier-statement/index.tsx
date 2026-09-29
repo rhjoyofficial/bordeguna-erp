@@ -15,7 +15,7 @@ interface SupplierOption {
 
 interface Line {
     date: string;
-    kind: 'bill' | 'credit_note' | 'payment';
+    kind: 'bill' | 'credit_note' | 'payment' | 'adjustment';
     label: string;
     reference: string | null;
     charge: string | null;

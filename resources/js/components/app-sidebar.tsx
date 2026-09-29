@@ -593,6 +593,8 @@ export function AppSidebar() {
                           { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },
                           // Who owed us and whom we owed at cutover, per open invoice or bill.
                           ...(canPostJournal ? [{ title: 'Opening balances', url: '/accounting/opening-balances', icon: Landmark }] : []),
+                          // Write-offs, discounts and set-offs against named invoices and bills.
+                          ...(canPostJournal ? [{ title: 'Adjustments', url: '/accounting/adjustments', icon: Scale }] : []),
                           // The VAT switch, the BIN and the rates (Owner only;
                           // the route refuses anyone else).
                           { title: 'VAT return', url: '/accounting/vat-return', icon: Percent },

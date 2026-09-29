@@ -3,6 +3,7 @@
 namespace App\Modules\Sales\Models;
 
 use App\Models\User;
+use App\Modules\Accounting\Models\PartyAdjustmentAllocation;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use Illuminate\Database\Eloquent\Builder;
@@ -135,12 +136,24 @@ class SalesInvoice extends Model
         return Money::ofTaka((string) ($this->creditAllocations()->sum('amount') ?: '0'));
     }
 
+    /** Write-offs, discounts and set-offs allocated to this invoice (29 Sep 2026). */
+    public function adjustmentAllocations(): HasMany
+    {
+        return $this->hasMany(PartyAdjustmentAllocation::class, 'sales_invoice_id');
+    }
+
+    public function adjustedTotal(): Money
+    {
+        return Money::ofTaka((string) ($this->adjustmentAllocations()->sum('amount') ?: '0'));
+    }
+
     public function outstanding(): Money
     {
         return Money::ofMinor(
             $this->totalMoney()->minor
                 - $this->receivedTotal()->minor
-                - $this->creditedTotal()->minor,
+                - $this->creditedTotal()->minor
+                - $this->adjustedTotal()->minor,
         );
     }
 
@@ -183,10 +196,12 @@ class SalesInvoice extends Model
         $invoices = $query->getModel()->getTable();
         $receipts = (new CustomerReceiptAllocation)->getTable();
         $credits = (new SalesReturnAllocation)->getTable();
+        $adjusted = (new PartyAdjustmentAllocation)->getTable();
 
         return "(ROUND({$invoices}.total * 100)"
             ." - COALESCE((SELECT ROUND(SUM(r.amount) * 100) FROM {$receipts} r WHERE r.sales_invoice_id = {$invoices}.id), 0)"
-            ." - COALESCE((SELECT ROUND(SUM(c.amount) * 100) FROM {$credits} c WHERE c.sales_invoice_id = {$invoices}.id), 0))";
+            ." - COALESCE((SELECT ROUND(SUM(c.amount) * 100) FROM {$credits} c WHERE c.sales_invoice_id = {$invoices}.id), 0)"
+            ." - COALESCE((SELECT ROUND(SUM(a.amount) * 100) FROM {$adjusted} a WHERE a.sales_invoice_id = {$invoices}.id), 0))";
     }
 
     /**

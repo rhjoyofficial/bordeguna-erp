@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Support;
 
 use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Accounting\Models\PartyAdjustment;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
@@ -110,6 +111,19 @@ final class CustomerStatement
                     'label' => 'Refund paid',
                     'reference' => $refund->reference,
                     'amount' => Money::ofTaka((string) $refund->amount),
+                ]))
+            ->concat(PartyAdjustment::query()
+                ->where('customer_id', $customer->id)
+                ->whereDate('adjusted_on', '<=', $toDate)
+                ->get()
+                ->map(fn (PartyAdjustment $adjustment) => [
+                    'date' => Carbon::parse($adjustment->adjusted_on->toDateString()),
+                    'kind' => 'adjustment',
+                    'rank' => 4,
+                    'id' => $adjustment->id,
+                    'label' => $adjustment->label(),
+                    'reference' => $adjustment->reason,
+                    'amount' => $adjustment->money()->negated(),
                 ]))
             ->sortBy([['date', 'asc'], ['rank', 'asc'], ['id', 'asc']])
             ->values();

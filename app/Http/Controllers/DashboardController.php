@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Modules\Accounting\Models\PartyAdjustmentAllocation;
 use App\Modules\Accounting\Support\IncomeStatement;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
@@ -138,7 +139,11 @@ class DashboardController extends Controller
             ->whereIn('sales_invoice_id', SalesInvoice::query()->select('id'))
             ->sum('amount') ?: 0);
 
-        return number_format($invoiced - $received - $credited, 2);
+        $adjusted = (float) (PartyAdjustmentAllocation::query()
+            ->whereIn('sales_invoice_id', SalesInvoice::query()->select('id'))
+            ->sum('amount') ?: 0);
+
+        return number_format($invoiced - $received - $credited - $adjusted, 2);
     }
 
     private function stockValue(): string

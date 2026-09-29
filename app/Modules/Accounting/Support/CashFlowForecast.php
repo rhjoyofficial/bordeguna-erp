@@ -52,12 +52,18 @@ class CashFlowForecast
             ->groupBy('sales_invoice_id')
             ->pluck('credited', 'sales_invoice_id');
 
+        $invoiceAdjustments = DB::table('party_adjustment_allocations')->whereNotNull('sales_invoice_id')
+            ->selectRaw('sales_invoice_id, SUM(amount) as adjusted')
+            ->groupBy('sales_invoice_id')
+            ->pluck('adjusted', 'sales_invoice_id');
+
         $invoicesIn = $own(DB::table('sales_invoices'), 'sales_invoices')
             ->get(['id', 'due_date', 'invoice_date', 'total'])
-            ->map(function ($invoice) use ($receiptAllocations, $creditAllocations) {
+            ->map(function ($invoice) use ($receiptAllocations, $creditAllocations, $invoiceAdjustments) {
                 $outstanding = (float) $invoice->total
                     - (float) ($receiptAllocations[$invoice->id] ?? 0)
-                    - (float) ($creditAllocations[$invoice->id] ?? 0);
+                    - (float) ($creditAllocations[$invoice->id] ?? 0)
+                    - (float) ($invoiceAdjustments[$invoice->id] ?? 0);
 
                 return [
                     'due' => $invoice->due_date ?? $invoice->invoice_date,
@@ -77,13 +83,19 @@ class CashFlowForecast
             ->groupBy('supplier_bill_id')
             ->pluck('credited', 'supplier_bill_id');
 
+        $billAdjustments = DB::table('party_adjustment_allocations')->whereNotNull('supplier_bill_id')
+            ->selectRaw('supplier_bill_id, SUM(amount) as adjusted')
+            ->groupBy('supplier_bill_id')
+            ->pluck('adjusted', 'supplier_bill_id');
+
         $billsOut = $own(DB::table('supplier_bills'), 'supplier_bills')
             ->whereNull('reversed_at')
             ->get(['id', 'due_date', 'bill_date', 'total'])
-            ->map(function ($bill) use ($billPayments, $billCredits) {
+            ->map(function ($bill) use ($billPayments, $billCredits, $billAdjustments) {
                 $outstanding = (float) $bill->total
                     - (float) ($billPayments[$bill->id] ?? 0)
-                    - (float) ($billCredits[$bill->id] ?? 0);
+                    - (float) ($billCredits[$bill->id] ?? 0)
+                    - (float) ($billAdjustments[$bill->id] ?? 0);
 
                 return [
                     'due' => $bill->due_date ?? $bill->bill_date,

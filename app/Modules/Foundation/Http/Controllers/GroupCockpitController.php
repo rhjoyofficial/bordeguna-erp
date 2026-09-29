@@ -66,7 +66,11 @@ class GroupCockpitController extends Controller
             - (float) DB::table('sales_return_allocations')
                 ->join('sales_invoices', 'sales_invoices.id', '=', 'sales_return_allocations.sales_invoice_id')
                 ->where('sales_invoices.business_id', $businessId)
-                ->sum('sales_return_allocations.amount');
+                ->sum('sales_return_allocations.amount')
+            - (float) DB::table('party_adjustment_allocations')
+                ->join('sales_invoices', 'sales_invoices.id', '=', 'party_adjustment_allocations.sales_invoice_id')
+                ->where('sales_invoices.business_id', $businessId)
+                ->sum('party_adjustment_allocations.amount');
 
         $payables = (float) DB::table('supplier_bills')->where('business_id', $businessId)->whereNull('reversed_at')->sum('total')
             - (float) DB::table('supplier_payment_allocations')
@@ -76,7 +80,12 @@ class GroupCockpitController extends Controller
             - (float) DB::table('supplier_credit_note_allocations')
                 ->join('supplier_bills', 'supplier_bills.id', '=', 'supplier_credit_note_allocations.supplier_bill_id')
                 ->where('supplier_bills.business_id', $businessId)
-                ->sum('supplier_credit_note_allocations.amount');
+                ->sum('supplier_credit_note_allocations.amount')
+            - (float) DB::table('party_adjustment_allocations')
+                ->join('supplier_bills', 'supplier_bills.id', '=', 'party_adjustment_allocations.supplier_bill_id')
+                ->where('supplier_bills.business_id', $businessId)
+                ->whereNull('supplier_bills.reversed_at')
+                ->sum('party_adjustment_allocations.amount');
 
         // This month's P&L lines: income is credit-normal (negative minor),
         // so the sign flips to read as money earned.

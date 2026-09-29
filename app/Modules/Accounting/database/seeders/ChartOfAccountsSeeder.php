@@ -188,6 +188,8 @@ class ChartOfAccountsSeeder extends Seeder
         ['4920', 'Interest Income', AccountType::Income, '4900', true, null],
         ['4930', 'Rent Received', AccountType::Income, '4900', true, null],
         ['4940', 'Supplier Rebates and Refunds', AccountType::Income, '4900', true, null],
+        // Party adjustments (29 Sep 2026): a discount a supplier took off a bill.
+        ['4950', 'Discounts Received', AccountType::Income, '4900', true, 'discounts_received'],
         ['4990', 'Miscellaneous Income', AccountType::Income, '4900', true, null],
 
         // ─── 5000 Cost of Sales ─────────────────────────────────────────────
@@ -359,6 +361,8 @@ class ChartOfAccountsSeeder extends Seeder
         ['6403', 'Replacement Delivery', AccountType::Expense, '6400', true, null],
         ['6404', 'Customer Service', AccountType::Expense, '6400', true, null],
         ['6405', 'Customer Complaint Resolution', AccountType::Expense, '6400', true, null],
+        // Party adjustments (29 Sep 2026): a receivable given up as uncollectable.
+        ['6406', 'Bad Debts Written Off', AccountType::Expense, '6400', true, 'bad_debts'],
         ['6430', 'Events and Hospitality', AccountType::Expense, '6000', false, null],
         ['6431', 'Official Event', AccountType::Expense, '6430', true, null],
         ['6432', 'Guest Lunch', AccountType::Expense, '6430', true, null],

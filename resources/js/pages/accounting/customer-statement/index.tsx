@@ -15,7 +15,7 @@ interface CustomerOption {
 
 interface Line {
     date: string;
-    kind: 'invoice' | 'return' | 'receipt' | 'refund';
+    kind: 'invoice' | 'return' | 'receipt' | 'refund' | 'adjustment';
     label: string;
     reference: string | null;
     charge: string | null;

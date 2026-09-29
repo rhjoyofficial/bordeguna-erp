@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Support;
 
 use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Accounting\Models\PartyAdjustment;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
@@ -93,6 +94,19 @@ final class SupplierStatement
                     'label' => 'Payment made',
                     'reference' => $payment->reference,
                     'amount' => Money::ofTaka((string) $payment->amount)->negated(),
+                ]))
+            ->concat(PartyAdjustment::query()
+                ->where('supplier_id', $supplier->id)
+                ->whereDate('adjusted_on', '<=', $toDate)
+                ->get()
+                ->map(fn (PartyAdjustment $adjustment) => [
+                    'date' => Carbon::parse($adjustment->adjusted_on->toDateString()),
+                    'kind' => 'adjustment',
+                    'rank' => 3,
+                    'id' => $adjustment->id,
+                    'label' => $adjustment->label(),
+                    'reference' => $adjustment->reason,
+                    'amount' => $adjustment->money()->negated(),
                 ]))
             ->sortBy([['date', 'asc'], ['rank', 'asc'], ['id', 'asc']])
             ->values();

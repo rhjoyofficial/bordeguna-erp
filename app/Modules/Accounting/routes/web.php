@@ -25,6 +25,7 @@ use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\OpeningBalanceController;
+use App\Modules\Accounting\Http\Controllers\PartyAdjustmentController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
 use App\Modules\Accounting\Http\Controllers\SupplierStatementController;
@@ -204,6 +205,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // ⭐ Opening receivables and payables, one row per open invoice or bill
         // at cutover (finance decision A4/A5, 29 Sep 2026).
         Route::get('opening-balances', [OpeningBalanceController::class, 'index'])->name('opening-balances.index');
+        // Bad-debt write-offs, discounts and set-offs against named documents (29 Sep 2026).
+        Route::get('adjustments', [PartyAdjustmentController::class, 'index'])->name('adjustments.index');
+        Route::post('adjustments', [PartyAdjustmentController::class, 'store'])->name('adjustments.store');
+        Route::delete('adjustments/{adjustment}', [PartyAdjustmentController::class, 'destroy'])->whereNumber('adjustment')->name('adjustments.destroy');
         Route::post('opening-balances', [OpeningBalanceController::class, 'store'])->name('opening-balances.store');
         Route::delete('opening-balances/{kind}/{id}', [OpeningBalanceController::class, 'destroy'])
             ->whereIn('kind', ['receivable', 'payable'])->whereNumber('id')->name('opening-balances.destroy');

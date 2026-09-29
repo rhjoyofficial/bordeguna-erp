@@ -35,6 +35,7 @@ final class PurchaseOrderBilling
                 ->select(['id', 'business_id', 'purchase_order_id', 'bill_number', 'bill_date', 'total', 'reversed_at'])
                 ->withSum('allocations as paid_sum', 'amount')
                 ->withSum('creditAllocations as credited_sum', 'amount')
+                ->withSum('adjustmentAllocations as adjusted_sum', 'amount')
                 ->orderBy('bill_date')
                 ->orderBy('id'),
         ];
@@ -82,6 +83,7 @@ final class PurchaseOrderBilling
 
         return Money::ofTaka((string) $bill->total)
             ->plus(Money::ofTaka((string) ($bill->paid_sum ?? '0'))->negated())
-            ->plus(Money::ofTaka((string) ($bill->credited_sum ?? '0'))->negated());
+            ->plus(Money::ofTaka((string) ($bill->credited_sum ?? '0'))->negated())
+            ->plus(Money::ofTaka((string) ($bill->adjusted_sum ?? '0'))->negated());
     }
 }

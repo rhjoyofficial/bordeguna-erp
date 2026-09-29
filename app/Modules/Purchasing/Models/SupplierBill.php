@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Models;
 
 use App\Models\User;
+use App\Modules\Accounting\Models\PartyAdjustmentAllocation;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
@@ -98,6 +99,12 @@ class SupplierBill extends Model
         return $this->hasMany(SupplierCreditNoteAllocation::class);
     }
 
+    /** Discounts and set-offs allocated to this bill (29 Sep 2026). */
+    public function adjustmentAllocations(): HasMany
+    {
+        return $this->hasMany(PartyAdjustmentAllocation::class, 'supplier_bill_id');
+    }
+
     /**
      * ⚠ DERIVED from the allocations, never stored on the bill.
      *
@@ -135,7 +142,8 @@ class SupplierBill extends Model
 
         return Money::ofTaka((string) $this->total)
             ->plus($this->paidTotal()->negated())
-            ->plus($this->creditedTotal()->negated());
+            ->plus($this->creditedTotal()->negated())
+            ->plus(Money::ofTaka((string) ($this->adjustmentAllocations()->sum('amount') ?: '0'))->negated());
     }
 
     public function isSettled(): bool

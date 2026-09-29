@@ -5,6 +5,8 @@ namespace App\Modules\Accounting\Support;
 use App\Modules\Accounting\Enums\AgeingBucket;
 use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Accounting\Models\PartyAdjustment;
+use App\Modules\Accounting\Models\PartyAdjustmentAllocation;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
@@ -103,6 +105,15 @@ final class Ageing
 
         $refunds = CustomerRefund::query()->whereDate('refunded_on', '<=', $on)->get();
 
+        // Write-offs, discounts and set-offs dated on or before the day.
+        $invoiceAdjustments = self::allocationsFor(
+            PartyAdjustmentAllocation::query()->whereNotNull('sales_invoice_id')
+                ->whereIn('party_adjustment_id', PartyAdjustment::query()->whereDate('adjusted_on', '<=', $on)->select('id')),
+            'party_adjustment_id',
+            'sales_invoice_id',
+            $included,
+        );
+
         $documents = self::documentsByParty(
             $invoices,
             'customer_id',
@@ -114,7 +125,8 @@ final class Ageing
                 total: Money::ofTaka((string) $invoice->total),
                 outstanding: Money::ofTaka((string) $invoice->total)
                     ->plus(($receiptAllocations['byTarget'][$invoice->id] ?? Money::zero())->negated())
-                    ->plus(($returnAllocations['byTarget'][$invoice->id] ?? Money::zero())->negated()),
+                    ->plus(($returnAllocations['byTarget'][$invoice->id] ?? Money::zero())->negated())
+                    ->plus(($invoiceAdjustments['byTarget'][$invoice->id] ?? Money::zero())->negated()),
                 daysOverdue: self::daysOverdue($invoice->due_date ?? $invoice->invoice_date, $asAt),
             ),
         );
@@ -172,6 +184,14 @@ final class Ageing
             $included,
         );
 
+        $billAdjustments = self::allocationsFor(
+            PartyAdjustmentAllocation::query()->whereNotNull('supplier_bill_id')
+                ->whereIn('party_adjustment_id', PartyAdjustment::query()->whereDate('adjusted_on', '<=', $on)->select('id')),
+            'party_adjustment_id',
+            'supplier_bill_id',
+            $included,
+        );
+
         $documents = self::documentsByParty(
             $bills,
             'supplier_id',
@@ -183,7 +203,8 @@ final class Ageing
                 total: Money::ofTaka((string) $bill->total),
                 outstanding: Money::ofTaka((string) $bill->total)
                     ->plus(($paymentAllocations['byTarget'][$bill->id] ?? Money::zero())->negated())
-                    ->plus(($creditAllocations['byTarget'][$bill->id] ?? Money::zero())->negated()),
+                    ->plus(($creditAllocations['byTarget'][$bill->id] ?? Money::zero())->negated())
+                    ->plus(($billAdjustments['byTarget'][$bill->id] ?? Money::zero())->negated()),
                 daysOverdue: self::daysOverdue($bill->due_date ?? $bill->bill_date, $asAt),
             ),
         );

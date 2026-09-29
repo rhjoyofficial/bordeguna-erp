@@ -3,7 +3,6 @@
 namespace App\Modules\Foundation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Sales\Models\Customer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -131,7 +130,11 @@ class GroupPartnerController extends Controller
             return [
                 'name' => $row->name ?? '?',
                 'code' => $row->code ?? null,
-                'outstanding' => round($invoiced - $received - $credited, 2),
+                'outstanding' => round($invoiced - $received - $credited - (float) DB::table('party_adjustment_allocations')
+                    ->join('sales_invoices', 'sales_invoices.id', '=', 'party_adjustment_allocations.sales_invoice_id')
+                    ->where('sales_invoices.business_id', $businessId)
+                    ->where('sales_invoices.customer_id', $partnerId)
+                    ->sum('party_adjustment_allocations.amount'), 2),
             ];
         }
 
@@ -154,7 +157,11 @@ class GroupPartnerController extends Controller
         return [
             'name' => $row->name ?? '?',
             'code' => $row->code ?? null,
-            'outstanding' => round($billed - $paid - $credited, 2),
+            'outstanding' => round($billed - $paid - $credited - (float) DB::table('party_adjustment_allocations')
+                ->join('supplier_bills', 'supplier_bills.id', '=', 'party_adjustment_allocations.supplier_bill_id')
+                ->where('supplier_bills.business_id', $businessId)
+                ->where('supplier_bills.supplier_id', $partnerId)
+                ->sum('party_adjustment_allocations.amount'), 2),
         ];
     }
 
