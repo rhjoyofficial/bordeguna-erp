@@ -146,6 +146,7 @@ class PlanProductCatalogueImport
             }
 
             $threshold = $this->resolveThreshold($values['low_stock_threshold'] ?? null, $line, $sku, $plan);
+            $details = $this->resolveDetails($values, $line, $sku, $plan, $existingUnits);
             $isActive = $this->resolveIsActive($values['is_active'] ?? null, $line, $sku, $plan);
 
             if ($type !== null && $unitKey !== null && $name !== '') {
@@ -173,6 +174,7 @@ class PlanProductCatalogueImport
                 'description' => CatalogueText::nullIfBlank($values['description'] ?? null),
                 'low_stock_threshold' => $threshold,
                 'is_active' => $isActive,
+                ...$details,
             ];
 
             $existing = $existingProducts->get($sku);
@@ -420,6 +422,55 @@ class PlanProductCatalogueImport
         return $value;
     }
 
+    /**
+     * The optional product-detail columns (ProductCatalogueFile::PRODUCT_DETAILS),
+     * as product attributes. A column absent from the file is absent here.
+     *
+     * @return array<string, mixed>
+     */
+    private function resolveDetails(array $values, int $line, string $sku, CatalogueImportPlan $plan, $units): array
+    {
+        $details = [];
+
+        if (array_key_exists('tracks_expiry', $values)) {
+            $raw = strtolower((string) CatalogueText::nullIfBlank($values['tracks_expiry']));
+            if ($raw !== '' && ! in_array($raw, [...self::TRUE_WORDS, ...self::FALSE_WORDS], true)) {
+                $plan->addError($line, $sku, "tracks_expiry \"{$values['tracks_expiry']}\" is not a yes/no value.");
+            }
+
+            $details['tracks_expiry'] = in_array($raw, self::TRUE_WORDS, true);
+        }
+
+        if (array_key_exists('shelf_life_warning_days', $values)) {
+            $raw = CatalogueText::nullIfBlank($values['shelf_life_warning_days']);
+
+            if ($raw !== null && (! ctype_digit($raw) || (int) $raw > 3650)) {
+                $plan->addError($line, $sku, "shelf_life_warning_days \"{$raw}\" must be whole days between 0 and 3650.");
+            }
+
+            $details['shelf_life_warning_days'] = $raw === null ? null : (int) $raw;
+        }
+
+        if (array_key_exists('content_quantity', $values) || array_key_exists('content_unit', $values)) {
+            $quantity = CatalogueText::nullIfBlank($values['content_quantity'] ?? null);
+            $unit = CatalogueText::nullIfBlank($values['content_unit'] ?? null);
+            $unitId = $unit === null ? null : $units->get(CatalogueText::unitKey($unit))?->id;
+
+            if ($quantity !== null && (! is_numeric($quantity) || (float) $quantity <= 0)) {
+                $plan->addError($line, $sku, "content_quantity \"{$quantity}\" must be a number greater than zero.");
+            } elseif (($quantity === null) !== ($unit === null)) {
+                $plan->addError($line, $sku, 'content_quantity and content_unit go together: give both or neither.');
+            } elseif ($unit !== null && $unitId === null) {
+                $plan->addError($line, $sku, "content_unit \"{$unit}\" is not a unit in this business (use its abbreviation, e.g. g or mL).");
+            }
+
+            $details['content_quantity'] = $quantity;
+            $details['content_unit_id'] = $unitId;
+        }
+
+        return $details;
+    }
+
     private function resolveIsActive(?string $raw, int $line, string $sku, CatalogueImportPlan $plan): bool
     {
         $value = strtolower((string) CatalogueText::nullIfBlank($raw));
@@ -525,6 +576,22 @@ class PlanProductCatalogueImport
         foreach (['sku', 'barcode', 'name', 'description'] as $field) {
             if ((string) $existing->{$field} !== (string) $attributes[$field]) {
                 $changes[$field] = [$existing->{$field}, $attributes[$field]];
+            }
+        }
+
+        // The optional product details, compared only when the file carries them.
+        foreach (['tracks_expiry', 'shelf_life_warning_days', 'content_unit_id'] as $field) {
+            if (array_key_exists($field, $attributes) && $existing->{$field} !== $attributes[$field]) {
+                $changes[$field] = [$existing->{$field}, $attributes[$field]];
+            }
+        }
+
+        if (array_key_exists('content_quantity', $attributes)) {
+            $was = $existing->content_quantity;
+            $now = $attributes['content_quantity'];
+
+            if (($was === null) !== ($now === null) || ($was !== null && bccomp((string) $was, (string) $now, 4) !== 0)) {
+                $changes['content_quantity'] = [$was, $now];
             }
         }
 

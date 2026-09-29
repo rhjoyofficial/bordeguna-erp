@@ -46,7 +46,7 @@ beforeEach(function () {
         ]);
     };
 
-    foreach ([['RETAIL', 'Retail'], ['DEALER', 'Dealer'], ['DISTRIBUTOR', 'Distributor'], ['CORPORATE', 'Corporate']] as [$code, $name]) {
+    foreach ([['RETAIL', 'Retail'], ['DEALER', 'Dealer'], ['DISTRIBUTOR', 'Distributor'], ['CORPORATE', 'Corporate'], ['SHOP', 'Retail shop']] as [$code, $name]) {
         PriceGroup::create([
             'business_id' => $this->business->id,
             'code' => $code,
@@ -307,8 +307,10 @@ it('reads the real catalogue file shape, ignoring its non-price columns', functi
     expect($plan->errors)->toBeEmpty()
         ->and($plan->creates)->toHaveCount(4)
         // ⚠ Ignored, but REPORTED. A misspelt column must be visible.
-        ->and($plan->ignoredColumns)->toContain('mrp')
-        ->and($plan->ignoredColumns)->toContain('brand');
+        ->and($plan->ignoredColumns)->toContain('brand')
+        // Since 29 Sep 2026 the MRP column is read and sets the product's MRP.
+        ->and($plan->ignoredColumns)->not->toContain('mrp')
+        ->and($plan->mrpChanges)->toHaveCount(1);
 });
 
 it('refuses a misspelt price column outright', function () {
@@ -355,5 +357,36 @@ it('accepts cost_price, which carries a price and is not a selling price', funct
     expect($plan->errors)->toBeEmpty()
         ->and($plan->creates)->toHaveCount(1)
         ->and($plan->ignoredColumns)->toContain('cost_price')
-        ->and($plan->ignoredColumns)->toContain('mrp');
+        ->and($plan->mrpChanges[0]['becomes'])->toBe('220.0000');
+});
+
+it('sets the MRP and the Retail-shop price, and an MRP alone makes a product sellable', function () {
+    $product = ($this->product)('SKU-1', 'Thing');
+    ($this->product)('SKU-2', 'Other');
+
+    $plan = ($this->import)('sku,mrp,shop_price
+SKU-1,250,210
+SKU-2,99,
+');
+
+    expect($plan->errors)->toBeEmpty()
+        ->and(collect($plan->creates)->pluck('group')->all())->toBe(['SHOP'])
+        ->and($plan->mrpChanges)->toHaveCount(2)
+        ->and($plan->stillUnpriced)->toBe([]);
+
+    app(ApplyPriceListImport::class)->handle($plan, Carbon::today(), $this->user);
+
+    expect((string) $product->fresh()->mrp)->toStartWith('250');
+});
+
+it('refuses a zero MRP and two different MRPs for one product', function () {
+    ($this->product)('SKU-1', 'Thing');
+
+    expect(($this->import)('sku,mrp
+SKU-1,0
+')->errors)->not->toBeEmpty()
+        ->and(($this->import)('sku,mrp,min_quantity
+SKU-1,100,0
+SKU-1,120,10
+')->errors)->not->toBeEmpty();
 });

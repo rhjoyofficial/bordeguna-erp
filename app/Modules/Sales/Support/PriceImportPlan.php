@@ -38,6 +38,14 @@ class PriceImportPlan
     /** @var list<array{sku:string, group:string, price:string}> */
     public array $unchanged = [];
 
+    /**
+     * Products whose MRP the file sets or changes (29 Sep 2026). The MRP is a
+     * product field, not an effective-dated rule, so it is overwritten.
+     *
+     * @var list<array{line:int, sku:string, product:string, productId:int, was:?string, becomes:string}>
+     */
+    public array $mrpChanges = [];
+
     /** Columns in the file this importer does not read. @var list<string> */
     public array $ignoredColumns = [];
 
@@ -70,6 +78,6 @@ class PriceImportPlan
 
     public function wouldChangeAnything(): bool
     {
-        return $this->creates !== [];
+        return $this->creates !== [] || $this->mrpChanges !== [];
     }
 }

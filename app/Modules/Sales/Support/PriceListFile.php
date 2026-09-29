@@ -44,10 +44,14 @@ class PriceListFile
         'dealer_price' => 'DEALER',
         'distributor_price' => 'DISTRIBUTOR',
         'corporate_price' => 'CORPORATE',
+        // The Retail shop tier (26 Sep 2026). Without a price here a shop
+        // customer is refused, and until 29 Sep only the product dialog could
+        // set one.
+        'shop_price' => 'SHOP',
     ];
 
     /** Read for meaning, not just carried past. */
-    public const USED = ['sku', 'name', 'product_name', 'is_active', 'min_quantity', 'effective_from', 'note'];
+    public const USED = ['sku', 'name', 'product_name', 'is_active', 'min_quantity', 'effective_from', 'note', 'mrp'];
 
     /**
      * Columns that carry a price and are knowingly NOT a selling price.
@@ -63,7 +67,7 @@ class PriceListFile
      * ⚠ Naming them is the point. A typo like `retale_price` still errors; only
      * these specific, understood columns are waved past.
      */
-    public const NOT_A_SELLING_PRICE = ['cost_price', 'mrp', 'online_discount', 'purchase_price'];
+    public const NOT_A_SELLING_PRICE = ['cost_price', 'online_discount', 'purchase_price'];
 
     /**
      * @return array{rows: list<array{line:int, values:array<string,string>}>, ignored: list<string>}
@@ -171,7 +175,10 @@ class PriceListFile
 
         $known = array_merge(self::USED, array_keys(self::PRICE_COLUMNS));
 
-        if (array_intersect(array_keys(self::PRICE_COLUMNS), $header) === []) {
+        // ⭐ `mrp` counts (29 Sep 2026): the MRP is the end-customer price
+        // (pricing model, 23 Aug) and RETAIL falls back to it, so a file of MRPs
+        // alone makes every product sellable at retail.
+        if (array_intersect([...array_keys(self::PRICE_COLUMNS), 'mrp'], $header) === []) {
             throw new RuntimeException(
                 'The file carries no price column at all. Expected at least one of: '.
                 implode(', ', array_keys(self::PRICE_COLUMNS)).'.'

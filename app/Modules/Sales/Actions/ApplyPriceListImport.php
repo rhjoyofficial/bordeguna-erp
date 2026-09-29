@@ -3,6 +3,7 @@
 namespace App\Modules\Sales\Actions;
 
 use App\Models\User;
+use App\Modules\Inventory\Models\Product;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Support\PriceImportPlan;
 use Illuminate\Support\Carbon;
@@ -64,6 +65,11 @@ class ApplyPriceListImport
                     'note' => 'Imported from price list',
                     'created_by' => $by->id,
                 ]);
+            }
+
+            // The MRP is a product field, overwritten in place (29 Sep 2026).
+            foreach ($plan->mrpChanges as $change) {
+                Product::query()->whereKey($change['productId'])->update(['mrp' => $change['becomes']]);
             }
 
             return [

@@ -102,7 +102,11 @@ class PlanPriceListImport
                 continue;
             }
 
-            $rowPricedAnything = false;
+            $rowPricedAnything = $this->planMrp($values, $product, $plan, $line, $sku);
+
+            if ($rowPricedAnything) {
+                $pricedProductIds[$product->id] = true;
+            }
 
             foreach (PriceListFile::PRICE_COLUMNS as $column => $code) {
                 if (! array_key_exists($column, $values)) {
@@ -196,6 +200,48 @@ class PlanPriceListImport
         sort($plan->stillUnpriced);
 
         return $plan;
+    }
+
+    /**
+     * The product's MRP, from an `mrp` column (29 Sep 2026). Blank leaves it
+     * alone; a product priced on two rows (quantity breaks) takes it once.
+     * Returns whether the row sets an MRP the product will sell at retail by.
+     */
+    private function planMrp(array $values, Product $product, PriceImportPlan $plan, int $line, string $sku): bool
+    {
+        $raw = $values['mrp'] ?? '';
+
+        if ($raw === '') {
+            return false;
+        }
+
+        if (! is_numeric($raw) || (float) $raw <= 0) {
+            $plan->addError($line, $sku, "mrp is '{$raw}'. An MRP must be a number greater than zero.");
+
+            return false;
+        }
+
+        $mrp = $this->normalisePrice($raw);
+
+        foreach ($plan->mrpChanges as $change) {
+            if ($change['productId'] === $product->id) {
+                if ($this->scale($change['becomes']) !== $this->scale($mrp)) {
+                    $plan->addError($line, $sku, "The file gives this product two different MRPs (first on line {$change['line']}).");
+                }
+
+                return true;
+            }
+        }
+
+        $was = $product->mrp === null ? null : (string) $product->mrp;
+
+        if ($was !== null && $this->scale($was) === $this->scale($mrp)) {
+            return true;
+        }
+
+        $plan->mrpChanges[] = ['line' => $line, 'sku' => $sku, 'product' => $product->name, 'productId' => $product->id, 'was' => $was, 'becomes' => $mrp];
+
+        return true;
     }
 
     /**

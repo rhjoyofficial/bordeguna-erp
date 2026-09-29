@@ -157,7 +157,7 @@ class ProductImportController extends Controller
      */
     public function export(): StreamedResponse
     {
-        $products = Product::with(['category', 'brand', 'unitOfMeasure'])->orderBy('sku')->get();
+        $products = Product::with(['category', 'brand', 'unitOfMeasure', 'contentUnit'])->orderBy('sku')->get();
 
         return response()->streamDownload(function () use ($products) {
             $out = fopen('php://output', 'w');
@@ -182,6 +182,11 @@ class ProductImportController extends Controller
                     $product->description,
                     $product->low_stock_threshold,
                     $product->is_active ? '1' : '0',
+                    // ProductCatalogueFile::PRODUCT_DETAILS, so the round trip keeps them.
+                    $product->tracks_expiry ? '1' : '0',
+                    $product->shelf_life_warning_days,
+                    $product->content_quantity,
+                    $product->contentUnit?->abbreviation,
                 ]);
             }
 

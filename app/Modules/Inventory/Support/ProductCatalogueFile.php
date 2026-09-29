@@ -18,7 +18,20 @@ class ProductCatalogueFile
 
     // ⚠ `brand` is OPTIONAL because raw materials have no brand (D-5). A
     // finished good without one is a warning, not an error (D-3).
-    public const OPTIONAL = ['brand', 'barcode', 'description', 'low_stock_threshold', 'is_active'];
+    public const OPTIONAL = ['brand', 'barcode', 'description', 'low_stock_threshold', 'is_active', ...self::PRODUCT_DETAILS];
+
+    /**
+     * ⭐ Product details a catalogue file may carry (29 Sep 2026), so a whole
+     * shop catalogue loads without opening every product dialog. Each is
+     * applied ONLY when its column is present: an older file without them
+     * never blanks what somebody set by hand.
+     *
+     *   tracks_expiry            yes/no
+     *   shelf_life_warning_days  whole days
+     *   content_quantity         the net content, e.g. 500
+     *   content_unit             its unit abbreviation, e.g. g, mL (must exist)
+     */
+    public const PRODUCT_DETAILS = ['tracks_expiry', 'shelf_life_warning_days', 'content_quantity', 'content_unit'];
 
     /**
      * @return list<array{line:int, values:array<string,string>}>

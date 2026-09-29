@@ -84,6 +84,7 @@ class PriceImportController extends Controller
             'creates' => $plan->creates,
             'supersedes' => $plan->supersedes,
             'unchanged' => count($plan->unchanged),
+            'mrp_changes' => count($plan->mrpChanges),
             'ignored_columns' => $plan->ignoredColumns,
             // ⚠⚠ The honest answer to "what still cannot be sold after this".
             // A product with no price in force does not sell at a default; the
@@ -131,7 +132,7 @@ class PriceImportController extends Controller
         return redirect()
             ->route('sales.prices.index')
             ->with('success', count($plan->creates).' price rule(s) created from '.$effectiveFrom->toDateString()
-                .', '.count($plan->supersedes).' closed.');
+                .', '.count($plan->supersedes).' closed, '.count($plan->mrpChanges).' MRP(s) set.');
     }
 
     /**

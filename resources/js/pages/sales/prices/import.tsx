@@ -24,6 +24,7 @@ interface Preview {
     creates: { line: number; sku: string; product: string; group: string; price: string; minQuantity: string }[];
     supersedes: { sku: string; group: string; from: string; was: string; becomes: string; closesOn: string }[];
     unchanged: number;
+    mrp_changes?: number;
     ignored_columns: string[];
     still_unpriced: string[];
 }
@@ -114,9 +115,10 @@ export default function PriceImport({
                             <span className="text-foreground font-medium">{preview.effective_from}</span>.
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
                             {[
                                 ['new prices', preview.creates.length, ''],
+                                ['MRP set', preview.mrp_changes ?? 0, ''],
                                 ['replaced', preview.supersedes.length, ''],
                                 ['unchanged', preview.unchanged, ''],
                                 ['warnings', preview.warnings.length, 'warn'],
@@ -244,7 +246,7 @@ export default function PriceImport({
                             <Button disabled={apply.processing || blocked}>
                                 {apply.processing
                                     ? 'Importing'
-                                    : `Apply from ${preview.effective_from} - ${preview.creates.length} new, ${preview.supersedes.length} replaced`}
+                                    : `Apply from ${preview.effective_from} - ${preview.creates.length} new, ${preview.supersedes.length} replaced, ${preview.mrp_changes ?? 0} MRP`}
                             </Button>
                             <InputError message={applyError} />
                         </form>

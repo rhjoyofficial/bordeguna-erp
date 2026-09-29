@@ -731,3 +731,39 @@ it('prints the database it is about to work on', function () {
         ->expectsOutputToContain('Database:')
         ->assertExitCode(0);
 });
+
+// ⭐ 29 Sep 2026: expiry tracking and net content load with the catalogue, and a
+// file without those columns never blanks them.
+it('carries expiry tracking and net content when the file has those columns, and leaves them alone when it does not', function () {
+    ($this->inTenant)(fn () => UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Gram', 'abbreviation' => 'g']));
+
+    $header = "sku,name,category,unit,unit_abbr,type,tracks_expiry,shelf_life_warning_days,content_quantity,content_unit\n";
+
+    $this->artisan('catalogue:import', [
+        'file' => ($this->file)($header."SKU-1,Honey 500 g,Honey,Pieces,pcs,finished_good,yes,45,500,g\n"),
+        '--business' => 'catalogue-co', '--apply' => true,
+    ])->assertExitCode(0);
+
+    ($this->inTenant)(function () {
+        $product = Product::query()->where('sku', 'SKU-1')->sole();
+
+        expect($product->tracks_expiry)->toBeTrue()
+            ->and($product->shelf_life_warning_days)->toBe(45)
+            ->and((float) $product->content_quantity)->toBe(500.0)
+            ->and($product->contentUnit->abbreviation)->toBe('g');
+    });
+
+    // The ordinary file, without the detail columns: nothing is blanked.
+    ($this->import)("SKU-1,Honey 500 g,Honey,Pieces,pcs,finished_good,,,,,\n")->assertExitCode(0);
+
+    ($this->inTenant)(fn () => expect(Product::query()->where('sku', 'SKU-1')->sole()->shelf_life_warning_days)->toBe(45));
+});
+
+it('refuses a content unit that does not exist and a quantity without its unit', function () {
+    $header = "sku,name,category,unit,unit_abbr,type,content_quantity,content_unit\n";
+
+    $this->artisan('catalogue:import', [
+        'file' => ($this->file)($header."SKU-1,A,Honey,Pieces,pcs,finished_good,500,zz\nSKU-2,B,Honey,Pieces,pcs,finished_good,500,\n"),
+        '--business' => 'catalogue-co', '--apply' => true,
+    ])->expectsOutputToContain('is not a unit in this business')->assertExitCode(1);
+});
