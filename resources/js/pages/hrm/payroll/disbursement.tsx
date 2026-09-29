@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useRef, useState } from 'react';
@@ -95,7 +96,7 @@ const rowClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b';
 const headClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground';
 
 const money = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => dhakaToday();
 
 function statusVariant(status: string): 'default' | 'secondary' | 'outline' | 'destructive' {
     if (status === 'paid') return 'default';

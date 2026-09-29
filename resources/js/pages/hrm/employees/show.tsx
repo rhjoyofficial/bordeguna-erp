@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useRef, useState } from 'react';
@@ -265,7 +266,7 @@ function ProfilePhoto({ employeeId, photoUrl, name }: { employeeId: number; phot
  */
 function ConfirmDialog({ employeeId, name, probationDue }: { employeeId: number; name: string; probationDue: string | null }) {
     const [open, setOpen] = useState(false);
-    const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+    const [date, setDate] = useState(dhakaToday());
 
     const submit = () => {
         router.post(

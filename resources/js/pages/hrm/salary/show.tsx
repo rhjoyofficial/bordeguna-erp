@@ -13,6 +13,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -67,7 +68,7 @@ const money = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits
 
 function StructureDialog({ employeeId, components, current }: { employeeId: number; components: Component[]; current: Structure | null }) {
     const [open, setOpen] = useState(false);
-    const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
+    const [effectiveFrom, setEffectiveFrom] = useState(dhakaToday());
     const [reason, setReason] = useState('');
     // ADJ-01: who may be assigned overtime at all. Carried forward from the
     // current structure so a routine revision does not silently revoke it.

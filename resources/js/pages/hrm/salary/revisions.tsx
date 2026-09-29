@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -80,7 +81,7 @@ const cardClass = 'border-sidebar-border/70 dark:border-sidebar-border overflow-
 const rowClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b';
 
 const money = (value: number) => value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => dhakaToday();
 
 function ProposeDialog({ employees, components }: { employees: EmployeeOption[]; components: ComponentOption[] }) {
     const [open, setOpen] = useState(false);

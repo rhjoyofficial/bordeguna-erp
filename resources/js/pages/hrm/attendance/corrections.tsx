@@ -6,6 +6,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
@@ -94,7 +95,7 @@ function CorrectionDialog({
     // correction" is one click rather than a hunt through the screen.
     const [open, setOpen] = useState(prefill?.employee_id != null && prefill?.attendance_date != null);
     const [employeeId, setEmployeeId] = useState(prefill?.employee_id != null ? String(prefill.employee_id) : '');
-    const [date, setDate] = useState(prefill?.attendance_date ?? new Date().toISOString().slice(0, 10));
+    const [date, setDate] = useState(prefill?.attendance_date ?? dhakaToday());
     const [type, setType] = useState(types[0]?.value ?? 'add_punch');
     const [punchId, setPunchId] = useState('');
     const [correctedAt, setCorrectedAt] = useState('');

@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { Fragment, useState } from 'react';
@@ -502,7 +503,7 @@ export default function DailyAttendance({
     };
 
     const showToday = () => {
-        const iso = new Date().toISOString().slice(0, 10);
+        const iso = dhakaToday();
         reload({ from: iso, to: iso });
     };
 

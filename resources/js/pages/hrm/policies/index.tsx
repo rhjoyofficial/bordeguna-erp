@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
@@ -133,7 +134,7 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
     const onOpenChange = (next: boolean) => {
         if (next) {
             const c = policy.config;
-            setEffectiveFrom(new Date().toISOString().slice(0, 10));
+            setEffectiveFrom(dhakaToday());
             setGeneral({
                 early_leave_grace_minutes: String(c.early_leave_grace_minutes),
                 half_day_maximum_hours: String(c.half_day_maximum_hours),

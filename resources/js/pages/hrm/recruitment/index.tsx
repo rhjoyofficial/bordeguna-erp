@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -61,7 +62,7 @@ const stageTone: Record<string, string> = {
     withdrawn: 'bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100',
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => dhakaToday();
 
 export default function RecruitmentIndex({
     openings,

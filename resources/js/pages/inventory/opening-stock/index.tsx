@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -66,14 +67,14 @@ export default function OpeningStockIndex({
     // nothing, and sharing the form's state would let a stray warehouse change
     // made while printing follow through into the document that posts.
     const [sheetWarehouse, setSheetWarehouse] = useState(String(countSheetDefaultId ?? countSheetWarehouses[0]?.id ?? ''));
-    const [sheetDate, setSheetDate] = useState(new Date().toISOString().slice(0, 10));
+    const [sheetDate, setSheetDate] = useState(dhakaToday());
     const sheetUrl = (format: 'print' | 'csv') =>
         `/inventory/opening-stock/count-sheet?warehouse=${sheetWarehouse}&as_at=${sheetDate}&format=${format}`;
 
     const { data, setData, post, errors, processing, reset } = useForm({
         // The default warehouse when it is still waiting, not whichever sorts first.
         warehouse_id: String(defaultWarehouseId ?? warehouses[0]?.id ?? ''),
-        as_at: new Date().toISOString().slice(0, 10),
+        as_at: dhakaToday(),
         note: '',
         lines: [emptyLine()] as Line[],
     });

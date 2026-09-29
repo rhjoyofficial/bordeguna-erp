@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useRef, useState } from 'react';
@@ -84,7 +85,7 @@ export default function ProductionRunCreate({
         bill_of_material_id: '',
         output_expiry_date: '',
         output_mrp: '',
-        occurred_at: new Date().toISOString().slice(0, 10),
+        occurred_at: dhakaToday(),
         expense_waste: false as boolean,
         note: '',
         confirm: true as boolean,
