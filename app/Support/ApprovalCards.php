@@ -543,8 +543,13 @@ class ApprovalCards
         // exists so a new Approvable model cannot arrive here unnoticed.
         return $this->card(
             $approvalRequest,
-            type: class_basename($approvable),
-            summary: "#{$approvable->id}",
+            // ⚠ The record can be GONE (a deleted draft, a discarded claim) while
+            // its settled request stays in the history: 500 on /approvals/history
+            // 29 Sep 2026 read ->id on null here.
+            type: class_basename($approvable ?? $approvalRequest->approvable_type),
+            summary: $approvable === null
+                ? "#{$approvalRequest->approvable_id} (record no longer exists)"
+                : "#{$approvable->id}",
             details: [],
             reason: null,
             viewUrl: null,

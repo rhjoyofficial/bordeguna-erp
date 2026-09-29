@@ -12,6 +12,7 @@ use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -226,4 +227,20 @@ it('lets the requester see their own settled requests, an unrelated user none', 
     $this->actingAs($outsider)->withSession(['current_business_id' => $this->business->id])
         ->get(route('approvals.history'))
         ->assertForbidden();
+});
+
+it('still lists a settled request whose record has since been deleted, instead of a 500', function () {
+    submitPendingRequests($this);
+    $stockRequest = StockRequest::sole();
+
+    $this->actingAs($this->owner)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('inventory.stock-requests.approve', $stockRequest))->assertRedirect();
+
+    // The record vanishes; its settled approval request stays behind.
+    DB::table('stock_requests')->where('id', $stockRequest->id)->delete();
+
+    $this->actingAs($this->owner)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('approvals.history'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('approvals/history')->has('requests', 1)->where('requests.0.approve_url', null));
 });
