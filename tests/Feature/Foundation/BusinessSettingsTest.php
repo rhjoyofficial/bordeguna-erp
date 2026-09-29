@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\BusinessIdentity;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -86,4 +87,31 @@ it('blocks a non-admin from business settings', function () {
 
     $this->actingAs($this->staff)->withSession(['current_business_id' => $this->business->id])
         ->patch(route('business.update'), bizPayload())->assertForbidden();
+});
+
+it('keeps the registration numbers and signatory and prints them on the letterhead', function () {
+    bizOwner()->patch(route('business.update'), bizPayload([
+        'tin' => '111122223333',
+        'trade_licence_no' => 'TL-0001',
+        'trade_licence_valid_until' => '2027-06-30',
+        'signatory_name' => 'A Proprietor',
+        'signatory_title' => 'Proprietor',
+    ]))->assertRedirect()->assertSessionHasNoErrors();
+
+    $business = $this->business->fresh();
+    expect($business->trade_licence_valid_until->toDateString())->toBe('2027-06-30');
+
+    $identity = BusinessIdentity::for($business)->toArray();
+    expect($identity['tin'])->toBe('111122223333')
+        ->and($identity['trade_licence_no'])->toBe('TL-0001')
+        ->and($identity['signatory_name'])->toBe('A Proprietor')
+        ->and($identity['bin'])->toBeNull();
+});
+
+it('prints nothing for registration numbers that were never set', function () {
+    $identity = BusinessIdentity::for($this->business)->toArray();
+
+    expect($identity['tin'])->toBeNull()
+        ->and($identity['trade_licence_no'])->toBeNull()
+        ->and($identity['signatory_name'])->toBeNull();
 });

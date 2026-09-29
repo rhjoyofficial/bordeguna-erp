@@ -31,6 +31,11 @@ class BusinessIdentity
         public readonly ?string $website,
         public readonly ?string $logoUrl,
         public readonly array $missing,
+        public readonly ?string $tin = null,
+        public readonly ?string $tradeLicenceNo = null,
+        public readonly ?string $bin = null,
+        public readonly ?string $signatoryName = null,
+        public readonly ?string $signatoryTitle = null,
     ) {}
 
     public static function for(Business $business): self
@@ -57,6 +62,13 @@ class BusinessIdentity
             website: blank($business->website) ? null : (string) $business->website,
             logoUrl: $logo?->url(),
             missing: $missing,
+            // The registration line (29 Sep 2026). The BIN stays owned by VAT
+            // settings; it is read here, never written.
+            tin: blank($business->tin) ? null : (string) $business->tin,
+            tradeLicenceNo: blank($business->trade_licence_no) ? null : (string) $business->trade_licence_no,
+            bin: blank($business->vat_bin) ? null : (string) $business->vat_bin,
+            signatoryName: blank($business->signatory_name) ? null : (string) $business->signatory_name,
+            signatoryTitle: blank($business->signatory_title) ? null : (string) $business->signatory_title,
         );
     }
 
@@ -76,7 +88,7 @@ class BusinessIdentity
     }
 
     /**
-     * @return array{name:string, legal_name:?string, address:?string, phone:?string, email:?string, website:?string, logo_url:?string, missing:list<string>}
+     * @return array{name:string, legal_name:?string, address:?string, phone:?string, email:?string, website:?string, logo_url:?string, missing:list<string>, tin:?string, trade_licence_no:?string, bin:?string, signatory_name:?string, signatory_title:?string}
      */
     public function toArray(): array
     {
@@ -89,6 +101,11 @@ class BusinessIdentity
             'website' => $this->website,
             'logo_url' => $this->logoUrl,
             'missing' => $this->missing,
+            'tin' => $this->tin,
+            'trade_licence_no' => $this->tradeLicenceNo,
+            'bin' => $this->bin,
+            'signatory_name' => $this->signatoryName,
+            'signatory_title' => $this->signatoryTitle,
         ];
     }
 }

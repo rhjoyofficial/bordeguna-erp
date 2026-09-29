@@ -21,6 +21,11 @@ class Business extends Model
         'phone',
         'email',
         'website',
+        'tin',
+        'trade_licence_no',
+        'trade_licence_valid_until',
+        'signatory_name',
+        'signatory_title',
         'document_font',
         'ai_assistant_enabled',
         'assistant_languages',
@@ -72,6 +77,7 @@ class Business extends Model
     {
         return [
             'is_active' => 'boolean',
+            'trade_licence_valid_until' => 'date:Y-m-d',
             'is_default' => 'boolean',
             // ⚠ Without this the column reads back as integer 0/1, and a
             // `=== false` check against it silently never matches.

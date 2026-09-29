@@ -9,6 +9,11 @@ export interface Issuer {
     website: string | null;
     logo_url: string | null;
     missing: string[];
+    tin?: string | null;
+    trade_licence_no?: string | null;
+    bin?: string | null;
+    signatory_name?: string | null;
+    signatory_title?: string | null;
 }
 
 /**
@@ -57,6 +62,15 @@ export function DocumentLetterhead({ issuer, title, subtitle }: { issuer: Issuer
 
     const contact = [issuer.phone, issuer.email, issuer.website].filter(Boolean).join(' · ');
 
+    /* The registration line: only the numbers the business has saved. */
+    const registration = [
+        issuer.trade_licence_no && `Trade licence ${issuer.trade_licence_no}`,
+        issuer.tin && `TIN ${issuer.tin}`,
+        issuer.bin && `BIN ${issuer.bin}`,
+    ]
+        .filter(Boolean)
+        .join(' · ');
+
     return (
         <>
             {issuer.missing.length > 0 && (
@@ -94,6 +108,7 @@ export function DocumentLetterhead({ issuer, title, subtitle }: { issuer: Issuer
                         {/* Joined only from what is set, so a business with no website
                             does not print a stray separator. */}
                         {contact && <p className="mt-0.5 text-[10px] text-black/65">{contact}</p>}
+                        {registration && <p className="mt-0.5 text-[10px] text-black/65">{registration}</p>}
                     </div>
 
                     <div className="hidden basis-[26%] text-right text-[10px] leading-snug whitespace-pre-line text-black/65 sm:block">

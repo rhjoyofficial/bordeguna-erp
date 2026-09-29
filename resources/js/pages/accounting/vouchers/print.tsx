@@ -183,6 +183,13 @@ export default function VoucherPrint({ voucher, issuer }: { voucher: VoucherDocu
                                 {label === 'Approved by' && voucher.posted_by && (
                                     <div className="text-xs text-black/60">Posted: {voucher.posted_by}</div>
                                 )}
+                                {/* The business's authorised signatory, from Settings, Business. */}
+                                {label === 'Approved by' && issuer.signatory_name && (
+                                    <div className="text-xs text-black/60">
+                                        {issuer.signatory_name}
+                                        {issuer.signatory_title ? `, ${issuer.signatory_title}` : ''}
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>

@@ -35,7 +35,7 @@ class BusinessSettingsController extends Controller
 
         return Inertia::render('settings/business', [
             'business' => $business->only([
-                'id', 'name', 'legal_name', 'address', 'phone', 'email', 'website', 'document_font', 'currency', 'timezone', 'fiscal_year_start_month', 'payroll_cycle_start_day', 'wfh_monthly_cap',
+                'id', 'name', 'legal_name', 'address', 'phone', 'email', 'website', 'tin', 'trade_licence_no', 'trade_licence_valid_until', 'signatory_name', 'signatory_title', 'document_font', 'currency', 'timezone', 'fiscal_year_start_month', 'payroll_cycle_start_day', 'wfh_monthly_cap',
             ]),
             'logo_url' => $logo?->url(),
             'currencies' => self::CURRENCIES,
@@ -70,6 +70,13 @@ class BusinessSettingsController extends Controller
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'website' => ['nullable', 'string', 'max:255'],
+            // The business's own registration numbers (29 Sep 2026). Free text
+            // on purpose: licence numbers differ by issuing office.
+            'tin' => ['nullable', 'string', 'max:30'],
+            'trade_licence_no' => ['nullable', 'string', 'max:40'],
+            'trade_licence_valid_until' => ['nullable', 'date'],
+            'signatory_name' => ['nullable', 'string', 'max:120'],
+            'signatory_title' => ['nullable', 'string', 'max:80'],
             // The face official documents are set in. Constrained to the
             // catalogue: a free-text family name would be a font that exists
             // on the machine that typed it and nowhere else.

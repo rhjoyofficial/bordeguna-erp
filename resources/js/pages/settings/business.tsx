@@ -20,6 +20,11 @@ interface BusinessProfile {
     phone: string | null;
     email: string | null;
     website: string | null;
+    tin: string | null;
+    trade_licence_no: string | null;
+    trade_licence_valid_until: string | null;
+    signatory_name: string | null;
+    signatory_title: string | null;
     document_font: string | null;
     currency: string;
     timezone: string;
@@ -123,6 +128,11 @@ export default function Business({ business, logo_url, currencies, timezones, fo
         phone: business.phone ?? '',
         email: business.email ?? '',
         website: business.website ?? '',
+        tin: business.tin ?? '',
+        trade_licence_no: business.trade_licence_no ?? '',
+        trade_licence_valid_until: business.trade_licence_valid_until ?? '',
+        signatory_name: business.signatory_name ?? '',
+        signatory_title: business.signatory_title ?? '',
         document_font: business.document_font ?? default_font,
         currency: business.currency,
         timezone: business.timezone,
@@ -188,6 +198,43 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                                     placeholder="www.bordeguna.com"
                                     value={data.website}
                                     onChange={(e) => setData('website', e.target.value)}
+                                />
+                            </Field>
+                        </FormRow>
+
+                        {/* Printed on the letterhead of every official document. */}
+                        <FormRow>
+                            <Field label="Trade licence no." htmlFor="trade_licence_no" size="md" error={errors.trade_licence_no}>
+                                <Input
+                                    id="trade_licence_no"
+                                    value={data.trade_licence_no}
+                                    onChange={(e) => setData('trade_licence_no', e.target.value)}
+                                />
+                            </Field>
+                            <Field label="Licence valid until" htmlFor="trade_licence_valid_until" error={errors.trade_licence_valid_until}>
+                                <Input
+                                    id="trade_licence_valid_until"
+                                    type="date"
+                                    className="w-auto"
+                                    value={data.trade_licence_valid_until}
+                                    onChange={(e) => setData('trade_licence_valid_until', e.target.value)}
+                                />
+                            </Field>
+                            <Field label="TIN" htmlFor="tin" size="md" error={errors.tin}>
+                                <Input id="tin" value={data.tin} onChange={(e) => setData('tin', e.target.value)} />
+                            </Field>
+                        </FormRow>
+
+                        <FormRow>
+                            <Field label="Authorised signatory" htmlFor="signatory_name" size="lg" error={errors.signatory_name}>
+                                <Input id="signatory_name" value={data.signatory_name} onChange={(e) => setData('signatory_name', e.target.value)} />
+                            </Field>
+                            <Field label="Signatory title" htmlFor="signatory_title" size="md" error={errors.signatory_title}>
+                                <Input
+                                    id="signatory_title"
+                                    placeholder="Proprietor"
+                                    value={data.signatory_title}
+                                    onChange={(e) => setData('signatory_title', e.target.value)}
                                 />
                             </Field>
                         </FormRow>
