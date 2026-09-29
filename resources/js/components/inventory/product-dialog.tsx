@@ -218,7 +218,7 @@ export function ProductDialog({
                 );
             })
             .catch(() => setGroups(null));
-    }, [open, product]);
+    }, [open, product, defaultType]);
 
     const pricesChanged = useMemo(() => {
         if (groups === null) return false;
