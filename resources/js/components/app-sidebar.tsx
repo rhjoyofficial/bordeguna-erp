@@ -57,7 +57,6 @@ import {
     Repeat,
     Ruler,
     Scale,
-    ScanBarcode,
     ShieldCheck,
     ShoppingCart,
     SlidersHorizontal,
@@ -427,7 +426,6 @@ export function AppSidebar() {
                                     { title: 'Hand-overs', url: '/assets/movements', icon: ArrowLeftRight },
                                     { title: 'Stock-takes', url: '/assets/counts', icon: ClipboardCheck },
                                     { title: 'Maintenance', url: '/assets/maintenance', icon: Wrench },
-                                    { title: 'Asset tags', url: '/assets/items/labels', icon: ScanBarcode },
                                     { title: 'Asset categories', url: '/assets/categories', icon: Tags },
                                     { title: 'Outside parties', url: '/assets/parties', icon: Contact },
                                 ]
@@ -524,101 +522,65 @@ export function AppSidebar() {
         // Accounting Phase 2. Gated on accounting.view, which is Owner, Finance
         // and Payroll by default - a general ledger eventually carries a line
         // per salary payment, so reading it is close to reading payroll.
+        // ⭐ 29 Sep 2026 (Joy: "a real ERP does not have this huge menu"): the one
+        // 42-link Finance list is split by what somebody opens it FOR - the
+        // day's work, the reports, and the setup touched once a month. Same
+        // links, same gates; setup and reports start closed.
         ...(canViewAccounting
             ? [
                   {
-                      label: 'Finance & Accounts',
+                      label: 'Accounts',
                       items: [
-                          // ⚠ First, because it is the one screen that answers
-                          // "how are we doing" without being asked for a date
-                          // range first.
                           { title: 'Overview', url: '/accounting/overview', icon: ChartColumn },
-                          // ⚠ The two statements first, and the trial balance
-                          // after them. A trial balance answers "do the books
-                          // add up"; these answer "how did we do" and "what do
-                          // we own" - which is what somebody opens the section
-                          // to find out.
-                          { title: 'Profit & loss', url: '/accounting/income-statement', icon: TrendingUp },
-                          { title: 'Balance sheet', url: '/accounting/balance-sheet', icon: FileBarChart },
-                          { title: 'Trial balance', url: '/accounting/trial-balance', icon: Scale },
-                          // ⚠ The third primary statement, beside the two it
-                          // completes. P&L says whether we made money; the
-                          // balance sheet says what we hold; only this answers
-                          // "profitable, so why is there none in the bank".
-                          { title: 'Cash flow', url: '/accounting/cash-flow', icon: Waves },
-                          { title: 'Cash forecast', url: '/accounting/cash-forecast', icon: TrendingUp },
-                          // ⚠ The two ageings sit next to the statements rather
-                          // than under Sales and Purchasing, because they are
-                          // read against the balance sheet they must agree
-                          // with, and the screen states that agreement.
-                          { title: 'Receivables ageing', url: '/accounting/receivables-ageing', icon: HandCoins },
-                          // The follow-up the ageing raises: which invoices,
-                          // which payments, in what order, for ONE customer.
-                          { title: 'Customer statement', url: '/accounting/customer-statement', icon: Contact },
-                          // One employee's ledgers: advances, salary owed, deductions
-                          // held, claims owed (the accountant, 26 Sep 2026).
-                          { title: 'Employee statement', url: '/accounting/employee-statement', icon: Contact },
-                          { title: 'Payables ageing', url: '/accounting/payables-ageing', icon: ReceiptText },
-                          { title: 'Supplier statement', url: '/accounting/supplier-statement', icon: Contact },
-                          // ⚠ "Cash & bank book" is the REPORT; "Bank & cash"
-                          // below is the setup screen that names the accounts.
-                          // Its figures are the trial balance's own (C-CBB-2).
-                          { title: 'Cash & bank book', url: '/accounting/cash-and-bank', icon: Wallet },
-                          // ⚠ Beside the ageings for the same reason: both tie
-                          // out to a control account on screen, and stock value
-                          // is read against the balance sheet it must agree
-                          // with. A route with no link here is this project's
-                          // recurring unreachable-screen defect.
-                          { title: 'Inventory valuation', url: '/accounting/inventory-valuation', icon: Boxes },
-                          { title: 'Cost of goods sold', url: '/accounting/cost-of-goods-sold', icon: Coins },
-                          { title: 'General ledger', url: '/accounting/general-ledger', icon: ListTree },
-                          // accounting:reconcile without the SSH: do the books
-                          // agree with the documents, right now.
-                          { title: 'Reconciliation', url: '/accounting/reconciliation', icon: ShieldCheck },
-                          { title: 'Day book', url: '/accounting/day-book', icon: CalendarClock },
-                          // The four vouchers an accountant names (19 Sep 2026). One
-                          // engine behind them; the list page switches between types.
                           { title: 'Payment vouchers', url: '/accounting/vouchers/payment', icon: Banknote },
                           { title: 'Receive vouchers', url: '/accounting/vouchers/receipt', icon: HandCoins },
                           { title: 'Contra vouchers', url: '/accounting/vouchers/contra', icon: ArrowLeftRight },
                           { title: 'Journal vouchers', url: '/accounting/vouchers/journal', icon: NotebookPen },
-                          // Every cheque on a posted voucher: pending, cleared, bounced.
                           { title: 'Cheques', url: '/accounting/cheques', icon: ReceiptText },
+                          { title: 'Other income', url: '/accounting/other-income', icon: HandCoins },
+                          ...(canPostJournal ? [{ title: 'Adjustments', url: '/accounting/adjustments', icon: Scale }] : []),
+                          ...(canPostJournal ? [{ title: 'Inter-business transfers', url: '/accounting/inter-business', icon: ArrowLeftRight }] : []),
+                          { title: 'Bank statements', url: '/accounting/bank-statements', icon: Landmark },
+                          { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },
+                          { title: 'VAT return', url: '/accounting/vat-return', icon: Percent },
+                      ],
+                  },
+                  {
+                      label: 'Financial reports',
+                      defaultOpen: false,
+                      items: [
+                          { title: 'Profit & loss', url: '/accounting/income-statement', icon: TrendingUp },
+                          { title: 'Balance sheet', url: '/accounting/balance-sheet', icon: FileBarChart },
+                          { title: 'Trial balance', url: '/accounting/trial-balance', icon: Scale },
+                          { title: 'Cash flow', url: '/accounting/cash-flow', icon: Waves },
+                          { title: 'Cash forecast', url: '/accounting/cash-forecast', icon: TrendingUp },
+                          { title: 'Receivables ageing', url: '/accounting/receivables-ageing', icon: HandCoins },
+                          { title: 'Payables ageing', url: '/accounting/payables-ageing', icon: ReceiptText },
+                          { title: 'Customer statement', url: '/accounting/customer-statement', icon: Contact },
+                          { title: 'Supplier statement', url: '/accounting/supplier-statement', icon: Contact },
+                          { title: 'Employee statement', url: '/accounting/employee-statement', icon: Contact },
+                          { title: 'Cash & bank book', url: '/accounting/cash-and-bank', icon: Wallet },
+                          { title: 'General ledger', url: '/accounting/general-ledger', icon: ListTree },
+                          { title: 'Day book', url: '/accounting/day-book', icon: CalendarClock },
                           { title: 'Journals', url: '/accounting/journals', icon: NotebookPen },
+                          { title: 'Inventory valuation', url: '/accounting/inventory-valuation', icon: Boxes },
+                          { title: 'Cost of goods sold', url: '/accounting/cost-of-goods-sold', icon: Coins },
+                          { title: 'Reconciliation', url: '/accounting/reconciliation', icon: ShieldCheck },
+                          { title: 'Transfer history', url: '/accounting/money-transfers', icon: ArrowLeftRight },
+                      ],
+                  },
+                  {
+                      label: 'Accounts setup',
+                      defaultOpen: false,
+                      items: [
                           { title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen },
-                          // Module 2, Slice 1: the boundary the whole ledger obeys.
+                          ...(canPostJournal ? [{ title: 'Opening balances', url: '/accounting/opening-balances', icon: Landmark }] : []),
                           { title: 'Period close', url: '/accounting/period-close', icon: LockKeyhole },
                           { title: 'Budgets', url: '/accounting/budgets', icon: Target },
-                          { title: 'Bank statements', url: '/accounting/bank-statements', icon: Landmark },
                           { title: 'Accruals & prepayments', url: '/accounting/amortizations', icon: CalendarClock },
                           { title: 'Payment reminders', url: '/accounting/dunning', icon: BellRing },
-                          { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },
-                          // Who owed us and whom we owed at cutover, per open invoice or bill.
-                          ...(canPostJournal ? [{ title: 'Opening balances', url: '/accounting/opening-balances', icon: Landmark }] : []),
-                          // Write-offs, discounts and set-offs against named invoices and bills.
-                          ...(canPostJournal ? [{ title: 'Adjustments', url: '/accounting/adjustments', icon: Scale }] : []),
-                          // Money to another business of the group, booked in both.
-                          ...(canPostJournal ? [{ title: 'Inter-business transfers', url: '/accounting/inter-business', icon: ArrowLeftRight }] : []),
-                          // The VAT switch, the BIN and the rates (Owner only;
-                          // the route refuses anyone else).
-                          { title: 'VAT return', url: '/accounting/vat-return', icon: Percent },
                           { title: 'VAT settings', url: '/accounting/vat-settings', icon: Percent },
                           ...(canManageFinancePolicy ? [{ title: 'Finance policy', url: '/accounting/finance-policy', icon: Percent }] : []),
-                          // ⚠⚠ Directly under the screen that NAMES the accounts,
-                          // because this is the only way to move money between
-                          // them. Five accounts existed with no transfer document
-                          // at all, so a bank-to-till withdrawal could only be a
-                          // hand-written journal - which meant it went unrecorded.
-                          // 26 Sep 2026: new moves are Contra vouchers (above); this is the TRF- history.
-                          { title: 'Transfer history', url: '/accounting/money-transfers', icon: ArrowLeftRight },
-                          // ⚠⚠ 4900 Other Income was postable from the day the
-                          // chart was seeded and NO SCREEN COULD REACH IT, so
-                          // scrap, interest, rent and supplier refunds had to be
-                          // hand-written journals. This link ships in the same
-                          // change as the route, the screen and the permission,
-                          // because an engine with no way in is the mistake this
-                          // project has made ten times.
-                          { title: 'Other income', url: '/accounting/other-income', icon: HandCoins },
                       ],
                   },
               ]
@@ -630,7 +592,7 @@ export function AppSidebar() {
         ...(canManageAttendance || canAccessSalary
             ? [
                   {
-                      label: 'Reports',
+                      label: 'HR reports',
                       items: [
                           // RPT-04. Same gate as Reports and for the same
                           // reason: the widget list is filtered per user
