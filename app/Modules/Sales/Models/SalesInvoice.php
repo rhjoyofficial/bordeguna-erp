@@ -33,6 +33,7 @@ class SalesInvoice extends Model
         'invoice_discount',
         'tax_total',
         'total',
+        'is_opening',
         'note',
         'created_by',
     ];
@@ -55,7 +56,19 @@ class SalesInvoice extends Model
             'tax_point_date' => 'date',
             'prices_include_tax' => 'boolean',
             'total' => 'decimal:4',
+            'is_opening' => 'boolean',
         ];
+    }
+
+    /**
+     * Invoices and bills made IN the ERP, leaving out the opening ones (money
+     * owed from before cutover, finance decision A4/A5). Every sales or
+     * purchases figure reads through this; what is owed (ageing, statements,
+     * outstanding) deliberately does not.
+     */
+    public function scopeTrading(Builder $query): Builder
+    {
+        return $query->where($query->getModel()->getTable().'.is_opening', false);
     }
 
     public function getActivitylogOptions(): LogOptions

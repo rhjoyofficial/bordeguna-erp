@@ -60,6 +60,7 @@ class SendMorningBriefing extends Command
             'yesterday_sales' => round((float) DB::table('sales_invoices')
                 ->where('business_id', $businessId)
                 ->whereDate('invoice_date', $yesterday)
+                ->where('is_opening', false)
                 ->sum('total'), 2),
             'cash_now' => round((float) DB::table('journal_lines')
                 ->where('business_id', $businessId)

@@ -123,7 +123,9 @@ class PostPurchaseJournals
 
     public function forBill(SupplierBill $bill, User $postedBy): ?Journal
     {
-        if ($this->existingJournal($bill) !== null) {
+        // ⚠⚠ An opening bill has no lines: laid out here its whole total would
+        // post as a price variance. Its one journal is RecordOpeningBalanceDocument's.
+        if ($bill->is_opening || $this->existingJournal($bill) !== null) {
             return null;
         }
 

@@ -141,7 +141,10 @@ class PostSalesJournals
      */
     public function forInvoice(SalesInvoice $invoice, User $postedBy): ?Journal
     {
-        if ($this->existingJournal($invoice) !== null) {
+        // ⚠⚠ An opening invoice has no lines: laid out here it would post its
+        // whole total as revenue, or as a rounding difference. Its one journal
+        // is RecordOpeningBalanceDocument's.
+        if ($invoice->is_opening || $this->existingJournal($invoice) !== null) {
             return null;
         }
 

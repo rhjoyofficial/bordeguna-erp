@@ -227,8 +227,8 @@ class VatSettingsController extends Controller
 
     private function assertNothingUntaxedFrom(Business $business, Carbon $from): void
     {
-        $invoices = SalesInvoice::query()->whereDate('invoice_date', '>=', $from)->where('tax_total', 0)->count();
-        $bills = SupplierBill::query()->whereDate('bill_date', '>=', $from)->where('tax_total', 0)->count();
+        $invoices = SalesInvoice::query()->trading()->whereDate('invoice_date', '>=', $from)->where('tax_total', 0)->count();
+        $bills = SupplierBill::query()->where('is_opening', false)->whereDate('bill_date', '>=', $from)->where('tax_total', 0)->count();
 
         // ⚠ Zero-rated and exempt sales are legitimately untaxed after the
         // switch, so this only guards the moment of switching ON: once VAT

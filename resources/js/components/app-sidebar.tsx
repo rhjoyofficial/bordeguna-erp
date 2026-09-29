@@ -128,6 +128,7 @@ export function AppSidebar() {
         canManageOrganization,
         canManageReasons,
         canManageFinancePolicy,
+        canPostJournal,
     } = usePage<SharedData>().props;
 
     // ⚠ Inventory's write permissions, shared by the module itself. Staff were
@@ -602,6 +603,8 @@ export function AppSidebar() {
                           { title: 'Accruals & prepayments', url: '/accounting/amortizations', icon: CalendarClock },
                           { title: 'Payment reminders', url: '/accounting/dunning', icon: BellRing },
                           { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },
+                          // Who owed us and whom we owed at cutover, per open invoice or bill.
+                          ...(canPostJournal ? [{ title: 'Opening balances', url: '/accounting/opening-balances', icon: Landmark }] : []),
                           // The VAT switch, the BIN and the rates (Owner only;
                           // the route refuses anyone else).
                           { title: 'VAT return', url: '/accounting/vat-return', icon: Percent },

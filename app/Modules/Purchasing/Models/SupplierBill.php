@@ -32,6 +32,7 @@ class SupplierBill extends Model
         'bill_date',
         'due_date',
         'total',
+        'is_opening',
         'note',
         'reversed_at',
         'reversed_by',
@@ -46,6 +47,7 @@ class SupplierBill extends Model
             'due_date' => 'date',
             'reversed_at' => 'datetime',
             'total' => 'decimal:4',
+            'is_opening' => 'boolean',
         ];
     }
 

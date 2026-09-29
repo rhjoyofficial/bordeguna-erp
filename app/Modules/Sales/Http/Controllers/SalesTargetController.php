@@ -39,6 +39,7 @@ class SalesTargetController extends Controller
                 $actual = (float) DB::table('sales_invoices')
                     ->where('business_id', $businessId)
                     ->where('created_by', $target->user_id)
+                    ->where('is_opening', false)
                     ->whereBetween('invoice_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
                     ->sum('total');
 

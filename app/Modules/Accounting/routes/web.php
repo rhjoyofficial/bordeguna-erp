@@ -24,6 +24,7 @@ use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
+use App\Modules\Accounting\Http\Controllers\OpeningBalanceController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
 use App\Modules\Accounting\Http\Controllers\SupplierStatementController;
@@ -200,6 +201,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
     // can move money between any two accounts with no document behind it.
     // Owner only, and being Owner-only IS the control in this phase.
     Route::middleware('can:accounting.journal.post')->group(function () {
+        // ⭐ Opening receivables and payables, one row per open invoice or bill
+        // at cutover (finance decision A4/A5, 29 Sep 2026).
+        Route::get('opening-balances', [OpeningBalanceController::class, 'index'])->name('opening-balances.index');
+        Route::post('opening-balances', [OpeningBalanceController::class, 'store'])->name('opening-balances.store');
+        Route::delete('opening-balances/{kind}/{id}', [OpeningBalanceController::class, 'destroy'])
+            ->whereIn('kind', ['receivable', 'payable'])->whereNumber('id')->name('opening-balances.destroy');
+
         Route::get('journals/new/manual', [JournalController::class, 'create'])->name('journals.create');
         Route::post('journals', [JournalController::class, 'store'])->name('journals.store');
         Route::post('journals/{journal}/reverse', [JournalController::class, 'reverse'])->name('journals.reverse');

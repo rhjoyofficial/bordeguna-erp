@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Modules\Accounting\Support\IncomeStatement;
 use App\Modules\Foundation\Enums\ApprovalStatus;
-use App\Modules\Foundation\Models\ActivityLogEntry;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
@@ -56,8 +55,8 @@ class DashboardController extends Controller
         return Inertia::render('dashboard', [
             'unpriced_sellable' => $canViewSales || $user->can('sales.prices.manage') ? $this->unpricedSellable() : null,
 
-            'total_sales' => $canViewSales ? $this->sum(SalesInvoice::query(), 'total') : null,
-            'total_purchases' => $canViewPurchasing ? $this->sum(SupplierBill::query(), 'total') : null,
+            'total_sales' => $canViewSales ? $this->sum(SalesInvoice::query()->trading(), 'total') : null,
+            'total_purchases' => $canViewPurchasing ? $this->sum(SupplierBill::query()->where('is_opening', false), 'total') : null,
             'total_sales_returns' => $canViewSales ? $this->sum(SalesReturn::query(), 'credit_total') : null,
             'total_purchase_returns' => $canViewPurchasing ? $this->sum(SupplierCreditNote::query(), 'total') : null,
 
@@ -189,7 +188,7 @@ class DashboardController extends Controller
         $bucketLabel = fn (Carbon $date) => $interval === 'day' ? $date->format('j M') : $date->format('M');
 
         $salesByBucket = $withSales
-            ? SalesInvoice::query()
+            ? SalesInvoice::query()->trading()
                 ->where('invoice_date', '>=', $buckets->first())
                 ->get(['invoice_date', 'total'])
                 ->groupBy(fn (SalesInvoice $invoice) => $bucketKey($invoice->invoice_date))
@@ -197,7 +196,7 @@ class DashboardController extends Controller
             : collect();
 
         $purchasesByBucket = $withPurchases
-            ? SupplierBill::query()
+            ? SupplierBill::query()->where('is_opening', false)
                 ->where('bill_date', '>=', $buckets->first())
                 ->get(['bill_date', 'total'])
                 ->groupBy(fn (SupplierBill $bill) => $bucketKey($bill->bill_date))
@@ -215,7 +214,7 @@ class DashboardController extends Controller
     {
         return [
             'invoices' => $withSales
-                ? SalesInvoice::with('customer')->latest('invoice_date')->latest('id')->limit(5)->get()
+                ? SalesInvoice::with('customer')->trading()->latest('invoice_date')->latest('id')->limit(5)->get()
                     ->map(fn (SalesInvoice $invoice) => [
                         'id' => $invoice->id,
                         'reference' => $invoice->invoice_number,
@@ -271,5 +270,4 @@ class DashboardController extends Controller
                 : null,
         ];
     }
-
 }

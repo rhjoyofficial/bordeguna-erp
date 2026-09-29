@@ -90,7 +90,9 @@ final class VatReturnBuilder
     {
         $rows = [];
 
-        $invoices = SalesInvoice::query()->with('customer:id,name')
+        // ⚠ Opening invoices are debts from before the ERP, not supplies in this
+        // period: counted here they would inflate turnover and turnover tax.
+        $invoices = SalesInvoice::query()->trading()->with('customer:id,name')
             ->whereDate('invoice_date', '>=', $start)->whereDate('invoice_date', '<=', $end)
             ->orderBy('invoice_date')->orderBy('id')->get();
 
@@ -150,7 +152,7 @@ final class VatReturnBuilder
     {
         $rows = [];
 
-        $bills = SupplierBill::query()->with(['supplier:id,name', 'lines'])
+        $bills = SupplierBill::query()->where('is_opening', false)->with(['supplier:id,name', 'lines'])
             ->where(function ($query) use ($start, $end) {
                 $query->where(fn ($q) => $q->whereDate('bill_date', '>=', $start)->whereDate('bill_date', '<=', $end))
                     ->orWhere(fn ($q) => $q->whereDate('reversed_at', '>=', $start)->whereDate('reversed_at', '<=', $end));

@@ -53,7 +53,7 @@ final class HqReadController extends Controller
 
         return $this->ok([
             'sales' => $can('sales.reports.view') ? [
-                'invoiced_this_month' => (float) SalesInvoice::where('invoice_date', '>=', $month)->sum('total'),
+                'invoiced_this_month' => (float) SalesInvoice::query()->trading()->where('invoice_date', '>=', $month)->sum('total'),
                 // Invoices carry no paid flag; "past due date" is what the Sales screens themselves show.
                 'invoices_past_due_date' => (int) SalesInvoice::where('due_date', '<', now()->startOfDay())->count(),
                 'customers' => Customer::where('is_active', true)->count(),
