@@ -47,6 +47,7 @@ beforeEach(function () {
         'email' => 'rahim@acme.test',
         'address' => '12 Adabor Road, Dhaka',
         'payment_terms' => 'Net 30',
+        'supplier_type' => 'goods',
         'bin' => '004123456-0101',
         'tin' => '123456789012',
         'bank_name' => 'BRAC Bank',

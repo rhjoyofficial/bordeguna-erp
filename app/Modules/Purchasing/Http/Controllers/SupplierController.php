@@ -204,6 +204,7 @@ class SupplierController extends Controller
             'suppliers' => $suppliers,
             'filters' => $filters,
             'mayManage' => $mayManage,
+            'supplierTypes' => Supplier::TYPES,
         ]);
     }
 
@@ -257,6 +258,7 @@ class SupplierController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string'],
             'payment_terms' => ['nullable', 'string', 'max:255'],
+            'supplier_type' => ['nullable', Rule::in(array_keys(Supplier::TYPES))],
 
             // Tax identity. Optional: a supplier is real before anybody knows
             // their BIN.

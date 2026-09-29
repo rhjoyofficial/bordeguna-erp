@@ -22,6 +22,7 @@ interface Supplier {
     email: string | null;
     address: string | null;
     payment_terms: string | null;
+    supplier_type: string | null;
     // ⚠ Only sent to users who may manage suppliers.
     bin?: string | null;
     tin?: string | null;
@@ -44,6 +45,7 @@ const EMPTY = {
     email: '',
     address: '',
     payment_terms: '',
+    supplier_type: '',
     bin: '',
     tin: '',
     bank_name: '',
@@ -63,10 +65,12 @@ export default function SuppliersIndex({
     suppliers,
     filters: initialFilters,
     mayManage,
+    supplierTypes,
 }: {
     suppliers: Paginated<Supplier>;
     filters: { search: string; status: string };
     mayManage: boolean;
+    supplierTypes: Record<string, string>;
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/purchasing/suppliers', initialFilters);
     const [editing, setEditing] = useState<Supplier | null>(null);
@@ -83,6 +87,7 @@ export default function SuppliersIndex({
             email: supplier.email ?? '',
             address: supplier.address ?? '',
             payment_terms: supplier.payment_terms ?? '',
+            supplier_type: supplier.supplier_type ?? '',
             bin: supplier.bin ?? '',
             tin: supplier.tin ?? '',
             bank_name: supplier.bank_name ?? '',
@@ -145,6 +150,19 @@ export default function SuppliersIndex({
                             {field('email', 'Email', { type: 'email' })}
                             {field('address', 'Address')}
                             {field('payment_terms', 'Payment terms', { placeholder: 'e.g. Net 30' })}
+                            {/* Finance decision C4: picks the TDS / VDS rates offered when paying. */}
+                            <div className="grid gap-2">
+                                <Label htmlFor="supplier_type">Supplier type</Label>
+                                <SearchSelect fit id="supplier_type" value={data.supplier_type} onChange={(e) => setData('supplier_type', e.target.value)}>
+                                    <option value="">Not set</option>
+                                    {Object.entries(supplierTypes).map(([value, label]) => (
+                                        <option key={value} value={value}>
+                                            {label}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                                <InputError message={errors.supplier_type} />
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

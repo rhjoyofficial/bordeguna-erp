@@ -28,10 +28,22 @@ class Supplier extends Model implements ControlsAttachmentAccess, OpensAttachmen
         return 'purchasing.suppliers.manage';
     }
 
+    /** Finance decision C4: the type picks the TDS/VDS rates that apply. */
+    public const TYPES = [
+        'goods' => 'Goods supplier',
+        'service' => 'Service provider',
+        'contractor' => 'Contractor',
+        'transport' => 'Transport / courier',
+        'landlord' => 'Landlord (rent)',
+        'professional' => 'Professional / consultant',
+        'other' => 'Other',
+    ];
+
     protected $fillable = [
         'business_id',
         'code',
         'name',
+        'supplier_type',
         'contact_name',
         'phone',
         'email',

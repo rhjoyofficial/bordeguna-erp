@@ -136,6 +136,9 @@ class ChartOfAccountsSeeder extends Seeder
         // (C-VAT-1) overstates revenue until the engine extracts this out of it.
         // ⚠ Planted now and posted to by nothing. The engine is dormant.
         // Finance decision C2: money owed to another business of the group.
+        // Finance decision C4: tax held back from a supplier payment, owed to NBR.
+        ['2180', 'TDS Payable', AccountType::Liability, '2100', true, 'tds_payable'],
+        ['2185', 'VDS Payable', AccountType::Liability, '2100', true, 'vds_payable'],
         ['2190', 'Due to Other Businesses', AccountType::Liability, '2100', true, 'due_to_businesses'],
         ['2170', 'Output VAT Payable', AccountType::Liability, '2100', true, 'output_vat_payable'],
         // The VAT return's own account (D9). Filing a return moves the period's

@@ -12,6 +12,7 @@ use App\Modules\Purchasing\Http\Controllers\SupplierDocumentController;
 use App\Modules\Purchasing\Http\Controllers\SupplierImportController;
 use App\Modules\Purchasing\Http\Controllers\SupplierPaymentController;
 use App\Modules\Purchasing\Http\Controllers\SupplierQuickCreateController;
+use App\Modules\Purchasing\Http\Controllers\WithholdingRateController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purchasing.')->group(function () {
@@ -46,6 +47,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         Route::post('suppliers/quick', [SupplierQuickCreateController::class, 'store'])->name('suppliers.quick');
         Route::put('suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
         Route::delete('suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
+        // Finance decision C4 (29 Sep 2026): TDS / VDS rates, dated, per supplier type.
+        Route::get('withholding-rates', [WithholdingRateController::class, 'index'])->name('withholding-rates.index');
+        Route::post('withholding-rates', [WithholdingRateController::class, 'store'])->name('withholding-rates.store');
+        Route::put('withholding-rates/{rate}', [WithholdingRateController::class, 'update'])->name('withholding-rates.update');
+        Route::delete('withholding-rates/{rate}', [WithholdingRateController::class, 'destroy'])->name('withholding-rates.destroy');
         // ⭐ Plan D11: trade licence and NID scans. Adding needs the same trust as
         // editing the supplier; opening or removing an NID also needs
         // purchasing.suppliers.identity.view (IdentityDocuments and the stream).

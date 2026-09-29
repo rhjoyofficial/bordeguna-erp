@@ -50,6 +50,9 @@ interface Payment {
     paid_on: string;
     /** Formatted taka, not the raw decimal(15,4) the column holds. */
     amount: string;
+    tds_amount: string;
+    vds_amount: string;
+    net_paid: string;
     reference: string | null;
     note: string | null;
     supplier: { id: number; name: string; code: string | null } | null;
@@ -81,6 +84,9 @@ export default function PaymentShow({
                     <Detail label="Paid from" value={payment.money_account?.name ?? '-'} />
                     <Detail label="Payment date" value={asDate(payment.paid_on)} />
                     <Detail label="Amount" value={payment.amount} emphasis />
+                    {Number(payment.tds_amount) > 0 && <Detail label="TDS held back" value={payment.tds_amount} />}
+                    {Number(payment.vds_amount) > 0 && <Detail label="VDS held back" value={payment.vds_amount} />}
+                    {payment.net_paid !== payment.amount && <Detail label="Left the account" value={payment.net_paid} />}
                     <Detail label="Reference" value={payment.reference || '-'} />
                     <Detail label="Recorded by" value={payment.created_by?.name ?? '-'} />
                     {payment.note && <Detail label="Note" value={payment.note} />}

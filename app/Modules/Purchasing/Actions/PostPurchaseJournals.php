@@ -322,10 +322,20 @@ class PostPurchaseJournals
             return null;
         }
 
+        // Finance decision C4: the payable is settled in full, the bank pays
+        // the net, and the tax held back is owed to NBR.
         $lines = [
             JournalLineDraft::debit($payable->id, $total, $payment->reference, $payment->supplier),
-            JournalLineDraft::credit($bank->id, $total, $payment->moneyAccount->label(), null, $payment->moneyAccount),
+            JournalLineDraft::credit($bank->id, $payment->netPaid(), $payment->moneyAccount->label(), null, $payment->moneyAccount),
         ];
+
+        foreach (['tds' => 'tds_payable', 'vds' => 'vds_payable'] as $kind => $slug) {
+            $held = Money::ofTaka((string) $payment->{"{$kind}_amount"});
+
+            if (! $held->isZero()) {
+                $lines[] = JournalLineDraft::credit(Account::bySlug($slug)->id, $held, strtoupper($kind).' held from '.$payment->supplier?->name, $payment->supplier);
+            }
+        }
 
         $lines = LedgerRounding::balance($lines, $on, "Rounding on payment #{$payment->id}");
 

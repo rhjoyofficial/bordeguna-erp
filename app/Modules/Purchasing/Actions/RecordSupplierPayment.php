@@ -10,6 +10,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Models\WithholdingRate;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -46,6 +47,9 @@ class RecordSupplierPayment
         // payment belongs to the voucher, whose own journal carries the debit
         // to Accounts Payable, so no second journal is posted here.
         ?int $voucherId = null,
+        // Finance decision C4: the TDS / VDS rates held back from this payment.
+        ?WithholdingRate $tdsRate = null,
+        ?WithholdingRate $vdsRate = null,
     ): SupplierPayment {
         $date = Carbon::parse($paidOn)->startOfDay();
 
@@ -76,7 +80,22 @@ class RecordSupplierPayment
             ]);
         }
 
-        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId) {
+        foreach (['tds_rate_id' => [$tdsRate, 'tds'], 'vds_rate_id' => [$vdsRate, 'vds']] as $field => [$rate, $kind]) {
+            if ($rate === null) {
+                continue;
+            }
+
+            if ($voucherId !== null) {
+                throw ValidationException::withMessages([$field => 'Hold tax back on the supplier payment screen, not on a voucher.']);
+            }
+
+            if ($rate->kind !== $kind || ! $rate->appliesTo($supplier)
+                || ! WithholdingRate::query()->whereKey($rate->id)->inForceOn($date)->exists()) {
+                throw ValidationException::withMessages([$field => "{$rate->label()} does not apply to this supplier on that date."]);
+            }
+        }
+
+        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId, $tdsRate, $vdsRate) {
             $total = Money::zero();
 
             foreach ($allocations as $index => $entry) {
@@ -115,9 +134,17 @@ class RecordSupplierPayment
                 $total = $total->plus($amount);
             }
 
+            $tds = $tdsRate?->taxOn($total) ?? Money::zero();
+            $vds = $vdsRate?->taxOn($total) ?? Money::zero();
+            $net = Money::ofMinor($total->minor - $tds->minor - $vds->minor);
+
+            if ($net->minor < 0) {
+                throw ValidationException::withMessages(['tds_rate_id' => 'The tax held back is more than the payment.']);
+            }
+
             if ($voucherId === null) {
                 // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
-                MoneyAvailability::assertCanPay($moneyAccount, $total, $date, 'money_account_id');
+                MoneyAvailability::assertCanPay($moneyAccount, $net, $date, 'money_account_id');
             }
 
             $payment = SupplierPayment::create([
@@ -126,6 +153,10 @@ class RecordSupplierPayment
                 'voucher_id' => $voucherId,
                 'paid_on' => $date,
                 'amount' => $total->toTaka(),
+                'tds_rate_id' => $tdsRate?->id,
+                'tds_amount' => $tds->toTaka(),
+                'vds_rate_id' => $vdsRate?->id,
+                'vds_amount' => $vds->toTaka(),
                 'reference' => $reference,
                 'note' => $note,
                 'created_by' => $createdBy->id,

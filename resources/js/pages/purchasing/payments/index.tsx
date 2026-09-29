@@ -51,11 +51,17 @@ export default function PaymentsIndex({
                 <ReportHeading
                     title="Supplier payments"
                     actions={
-                        canRecordSupplierPayment && (
-                            <Button asChild size="sm">
-                                <Link href="/purchasing/payments/new">Pay a supplier</Link>
+                        <div className="flex gap-2">
+                            {/* Finance decision C4: the TDS / VDS rates a payment can hold back. */}
+                            <Button asChild size="sm" variant="outline">
+                                <Link href="/purchasing/withholding-rates">Tax rates</Link>
                             </Button>
-                        )
+                            {canRecordSupplierPayment && (
+                                <Button asChild size="sm">
+                                    <Link href="/purchasing/payments/new">Pay a supplier</Link>
+                                </Button>
+                            )}
+                        </div>
                     }
                 />
 

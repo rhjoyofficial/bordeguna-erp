@@ -13,6 +13,7 @@ use App\Modules\Purchasing\Actions\RecordSupplierPayment;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Models\WithholdingRate;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -122,6 +123,15 @@ class SupplierPaymentController extends Controller
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(['id', 'name', 'type']),
+            // Finance decision C4: the TDS / VDS rates the owner keeps, with the
+            // supplier types each applies to (null = any).
+            'withholdingRates' => WithholdingRate::query()->orderBy('kind')->orderBy('name')->get()
+                ->map(fn (WithholdingRate $r) => [
+                    'id' => $r->id, 'kind' => $r->kind, 'label' => $r->label(), 'rate' => (float) $r->rate,
+                    'supplier_type' => $r->supplier_type,
+                    'from' => $r->effective_from?->toDateString(), 'to' => $r->effective_to?->toDateString(),
+                ]),
+            'supplierType' => $supplier?->supplier_type,
             'today' => now()->toDateString(),
         ]);
     }
@@ -156,6 +166,8 @@ class SupplierPaymentController extends Controller
             // not an error. The action drops them and then refuses a payment
             // that allocates nothing at all, which is the real rule.
             'allocations.*.amount' => ['required', 'numeric', 'gte:0'],
+            'tds_rate_id' => ['nullable', 'integer', Rule::exists('withholding_rates', 'id')->where('business_id', $businessId)->where('kind', 'tds')],
+            'vds_rate_id' => ['nullable', 'integer', Rule::exists('withholding_rates', 'id')->where('business_id', $businessId)->where('kind', 'vds')],
         ]);
 
         $supplier = Supplier::findOrFail($data['supplier_id']);
@@ -200,6 +212,8 @@ class SupplierPaymentController extends Controller
                 createdBy: $request->user(),
                 reference: $data['reference'] ?? null,
                 note: $data['note'] ?? null,
+                tdsRate: empty($data['tds_rate_id']) ? null : WithholdingRate::find($data['tds_rate_id']),
+                vdsRate: empty($data['vds_rate_id']) ? null : WithholdingRate::find($data['vds_rate_id']),
             );
         } catch (PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['paid_on' => $e->getMessage()]);
@@ -251,6 +265,9 @@ class SupplierPaymentController extends Controller
                 // decimal(15,4) the column holds (which reads "750.0000").
                 'paid_on' => $payment->paid_on?->toDateString(),
                 'amount' => Money::ofTaka((string) $payment->amount)->toTaka(),
+                'tds_amount' => Money::ofTaka((string) $payment->tds_amount)->toTaka(),
+                'vds_amount' => Money::ofTaka((string) $payment->vds_amount)->toTaka(),
+                'net_paid' => $payment->netPaid()->toTaka(),
             ]),
             'allocations' => $allocations,
             // ⚠ The journal is shown on the document on purpose, exactly as the

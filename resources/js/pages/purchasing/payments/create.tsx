@@ -28,6 +28,16 @@ interface MoneyAccountRow {
     type: string;
 }
 
+interface WithholdingRateRow {
+    id: number;
+    kind: 'tds' | 'vds';
+    label: string;
+    rate: number;
+    supplier_type: string | null;
+    from: string | null;
+    to: string | null;
+}
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Purchasing', href: '/purchasing/purchase-orders' },
     { title: 'Payments', href: '/purchasing/payments' },
@@ -45,6 +55,8 @@ export default function PaymentCreate({
     moneyAccounts,
     today,
     prefill,
+    withholdingRates = [],
+    supplierType = null,
 }: {
     suppliers: SupplierRow[];
     selectedSupplierId: number | null;
@@ -53,6 +65,8 @@ export default function PaymentCreate({
     today: string;
     // Set when the form was opened from a bill's "Pay this bill" button.
     prefill?: { bill_id: number; amount: string } | null;
+    withholdingRates?: WithholdingRateRow[];
+    supplierType?: string | null;
 }) {
     const { data, setData } = useForm({
         supplier_id: selectedSupplierId ?? '',
@@ -60,6 +74,8 @@ export default function PaymentCreate({
         paid_on: today,
         reference: '',
         note: '',
+        tds_rate_id: '',
+        vds_rate_id: '',
         // bill id -> amount typed by the clerk. ⚠ A prefill is only a typed
         // number: it can be changed or cleared, and the server re-checks it
         // against what is outstanding exactly as if the clerk had typed it.
@@ -87,6 +103,22 @@ export default function PaymentCreate({
 
     const total = useMemo(() => bills.reduce((sum, bill) => sum + toPaisa(data.amounts[bill.id] ?? '0'), 0), [bills, data.amounts]);
 
+    // Finance decision C4: only the rates in force on the payment date that fit
+    // this supplier's type. The server re-checks and computes the tax itself.
+    const ratesFor = (kind: 'tds' | 'vds') =>
+        withholdingRates.filter(
+            (r) =>
+                r.kind === kind &&
+                (r.supplier_type === null || r.supplier_type === supplierType) &&
+                (r.from === null || r.from <= data.paid_on) &&
+                (r.to === null || r.to >= data.paid_on),
+        );
+    const heldBy = (id: string) => {
+        const rate = withholdingRates.find((r) => String(r.id) === id);
+        return rate ? Math.round((total * rate.rate) / 100) : 0;
+    };
+    const held = heldBy(data.tds_rate_id) + heldBy(data.vds_rate_id);
+
     // ⚠ The server refuses overpayment and is the authority. This only stops the
     // clerk submitting something it already knows will be rejected.
     const overpaid = useMemo(() => bills.filter((bill) => toPaisa(data.amounts[bill.id] ?? '0') > toPaisa(bill.outstanding)), [bills, data.amounts]);
@@ -106,6 +138,8 @@ export default function PaymentCreate({
                 paid_on: data.paid_on,
                 reference: data.reference,
                 note: data.note,
+                tds_rate_id: data.tds_rate_id || null,
+                vds_rate_id: data.vds_rate_id || null,
                 allocations,
             },
             {
@@ -257,6 +291,37 @@ export default function PaymentCreate({
                 )}
 
                 {errors.allocations && <p className="text-destructive text-sm">{errors.allocations}</p>}
+
+                {data.supplier_id !== '' && (ratesFor('tds').length > 0 || ratesFor('vds').length > 0) && (
+                    <div className="flex flex-wrap items-start gap-4">
+                        {(['tds', 'vds'] as const).map((kind) =>
+                            ratesFor(kind).length === 0 ? null : (
+                                <div key={kind} className="grid gap-2">
+                                    <Label htmlFor={`${kind}_rate_id`}>{kind === 'tds' ? 'Hold back TDS' : 'Hold back VDS'}</Label>
+                                    <SearchSelect
+                                        fit
+                                        id={`${kind}_rate_id`}
+                                        value={data[`${kind}_rate_id`]}
+                                        onChange={(e) => setData(`${kind}_rate_id`, e.target.value)}
+                                    >
+                                        <option value="">None</option>
+                                        {ratesFor(kind).map((r) => (
+                                            <option key={r.id} value={r.id}>
+                                                {r.label}
+                                            </option>
+                                        ))}
+                                    </SearchSelect>
+                                    {errors[`${kind}_rate_id`] && <p className="text-destructive text-sm">{errors[`${kind}_rate_id`]}</p>}
+                                </div>
+                            ),
+                        )}
+                        {held > 0 && (
+                            <p className="text-muted-foreground self-end pb-2 text-sm">
+                                Tax held back {toTaka(held)}. Leaves the account: <span className="font-medium">{toTaka(total - held)}</span>
+                            </p>
+                        )}
+                    </div>
+                )}
 
                 <div className="grid gap-2">
                     <Label htmlFor="note">Note</Label>

@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Models;
 
 use App\Models\User;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Models\MoneyAccount;
 use Illuminate\Database\Eloquent\Model;
@@ -30,6 +31,10 @@ class SupplierPayment extends Model
         'voucher_id',
         'paid_on',
         'amount',
+        'tds_rate_id',
+        'tds_amount',
+        'vds_rate_id',
+        'vds_amount',
         'reference',
         'note',
         'created_by',
@@ -40,6 +45,8 @@ class SupplierPayment extends Model
         return [
             'paid_on' => 'date:Y-m-d',
             'amount' => 'decimal:4',
+            'tds_amount' => 'decimal:4',
+            'vds_amount' => 'decimal:4',
         ];
     }
 
@@ -63,6 +70,16 @@ class SupplierPayment extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** What actually left the money account: the amount settled less the tax held back. */
+    public function netPaid(): Money
+    {
+        return Money::ofMinor(
+            Money::ofTaka((string) $this->amount)->minor
+            - Money::ofTaka((string) $this->tds_amount)->minor
+            - Money::ofTaka((string) $this->vds_amount)->minor
+        );
     }
 
     public function allocations(): HasMany
