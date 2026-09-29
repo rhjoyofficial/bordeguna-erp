@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Purchasing\Models\Supplier;
@@ -112,6 +113,11 @@ class RecordSupplierPayment
                 }
 
                 $total = $total->plus($amount);
+            }
+
+            if ($voucherId === null) {
+                // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
+                MoneyAvailability::assertCanPay($moneyAccount, $total, $date, 'money_account_id');
             }
 
             $payment = SupplierPayment::create([

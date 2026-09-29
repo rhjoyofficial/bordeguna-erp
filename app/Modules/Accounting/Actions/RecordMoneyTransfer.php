@@ -12,6 +12,7 @@ use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -132,6 +133,9 @@ class RecordMoneyTransfer
                 ]);
             }
         }
+
+        // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
+        MoneyAvailability::assertCanPay($from, Money::sum([$moved, $charge]), $date, 'from_money_account_id');
 
         return DB::transaction(function () use (
             $from, $to, $moved, $charge, $feeAccount, $date, $createdBy, $reference, $note, $businessId

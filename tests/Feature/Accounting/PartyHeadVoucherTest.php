@@ -38,6 +38,9 @@ use Illuminate\Validation\ValidationException;
  * statement still ties to the ledger.
  */
 beforeEach(function () {
+    // The balance guard is off in the suite by default (phpunit.xml); on here.
+    config(['accounting.money_availability' => true]);
+
     Carbon::setTestNow('2026-09-20 10:00:00');
 
     $this->business = Business::create(['name' => 'Heads Co', 'slug' => 'heads-co', 'fiscal_year_start_month' => 7]);

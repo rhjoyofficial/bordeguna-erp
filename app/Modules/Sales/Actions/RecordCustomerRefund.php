@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Commerce\Enums\GatewayRefundStatus;
 use App\Modules\Commerce\Models\GatewayRefund;
 use App\Modules\Foundation\Models\AccountingPeriod;
@@ -75,6 +76,9 @@ class RecordCustomerRefund
                 'amount' => 'A refund must be greater than zero.',
             ]);
         }
+
+        // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
+        MoneyAvailability::assertCanPay($moneyAccount, $refunding, $date, 'money_account_id');
 
         return DB::transaction(function () use ($salesReturn, $moneyAccount, $refunding, $createdBy, $date, $reference, $note) {
             // ⚠ Re-read under a lock: two clerks refunding the same return at
@@ -170,6 +174,9 @@ class RecordCustomerRefund
                 'amount' => 'A refund must be greater than zero.',
             ]);
         }
+
+        // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
+        MoneyAvailability::assertCanPay($moneyAccount, $refunding, $date, 'money_account_id');
 
         return DB::transaction(function () use ($order, $moneyAccount, $refunding, $createdBy, $date, $reference, $note, $throughGateway, $bookingGatewayRefund) {
             /** @var SalesOrder $order */

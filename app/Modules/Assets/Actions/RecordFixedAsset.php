@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Assets\Models\FixedAsset;
 use App\Modules\Foundation\Models\AccountingPeriod;
@@ -172,6 +173,9 @@ class RecordFixedAsset
                 if ($moneyAccount->account_id === null) {
                     throw MappingNotFound::for("money account [{$moneyAccount->name}]", $acquired);
                 }
+
+                // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
+                MoneyAvailability::assertCanPay($moneyAccount, $price, $acquired, 'money_account_id');
 
                 $this->postJournal->handle(new JournalDraft(
                     date: $acquired,

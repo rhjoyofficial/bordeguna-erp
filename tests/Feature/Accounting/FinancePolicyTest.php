@@ -14,6 +14,10 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
+use App\Modules\Purchasing\Actions\RecordExpenseVoucher;
+use App\Modules\Purchasing\Actions\RecordSupplierPayment;
+use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierBill;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
@@ -26,6 +30,9 @@ use Spatie\Permission\PermissionRegistrar;
  * no cash payment above the Income Tax Act s.55 limit (B13).
  */
 beforeEach(function () {
+    // The balance guard is off in the suite by default (phpunit.xml); on here.
+    config(['accounting.money_availability' => true]);
+
     Carbon::setTestNow('2026-09-19 10:00:00');
 
     $this->business = Business::create(['name' => 'Policy Co', 'slug' => 'policy-co', 'fiscal_year_start_month' => 7]);
@@ -197,4 +204,30 @@ it('refuses a full provision earlier than the half one', function () {
             'staff_purchase_cap_percent' => 10, 'bad_debt_half_after_days' => 365,
             'bad_debt_full_after_days' => 180, 'courier_settlement_alert_days' => 7,
         ])->assertSessionHasErrors('bad_debt_full_after_days');
+});
+
+it('judges every other way money leaves: a supplier payment, an old expense voucher, but never the history importer', function () {
+    $supplier = Supplier::create(['business_id' => $this->business->id, 'name' => 'Padma Oil']);
+    $bill = SupplierBill::create([
+        'business_id' => $this->business->id, 'supplier_id' => $supplier->id, 'bill_number' => 'SB-1',
+        'bill_date' => '2026-09-01', 'total' => '5000', 'created_by' => $this->user->id,
+    ]);
+
+    expect(fn () => app(RecordSupplierPayment::class)->handle(
+        $supplier, $this->cash, '2026-09-19', [['bill' => $bill, 'amount' => '5000']], $this->user,
+    ))->toThrow(ValidationException::class, 'Office Cash holds 0.00');
+
+    $expense = Account::where('code', '6051')->sole();
+
+    expect(fn () => app(RecordExpenseVoucher::class)->handle(
+        moneyAccount: $this->cash, spentOn: '2026-09-19', lines: [['account' => $expense, 'amount' => '100']], createdBy: $this->user,
+    ))->toThrow(ValidationException::class, 'not enough to pay 100.00');
+
+    // History loads whatever the till held on the day.
+    app(RecordExpenseVoucher::class)->handle(
+        moneyAccount: $this->cash, spentOn: '2026-08-01', lines: [['account' => $expense, 'amount' => '100']], createdBy: $this->user,
+        checkBalance: false,
+    );
+
+    expect(MoneyAvailability::balanceMinor($this->cash))->toBe(-10_000);
 });

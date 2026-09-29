@@ -12,6 +12,7 @@ use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -54,6 +55,9 @@ class RecordExpenseVoucher
         ?string $paidTo = null,
         ?string $reference = null,
         ?string $note = null,
+        // The expense importer loads HISTORY, dated before any opening balance
+        // exists, so it does not ask whether the till held the money then.
+        bool $checkBalance = true,
     ): ExpenseVoucher {
         $date = Carbon::parse($spentOn)->startOfDay();
 
@@ -111,8 +115,13 @@ class RecordExpenseVoucher
             }
         }
 
-        return DB::transaction(function () use ($moneyAccount, $date, $lines, $createdBy, $supplier, $paidTo, $reference, $note, $businessId) {
+        return DB::transaction(function () use ($moneyAccount, $date, $lines, $createdBy, $supplier, $paidTo, $reference, $note, $businessId, $checkBalance) {
             $total = Money::sum(array_map(fn (array $line) => Money::ofTaka($line['amount']), $lines));
+
+            // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
+            if ($checkBalance) {
+                MoneyAvailability::assertCanPay($moneyAccount, $total, $date, 'money_account_id');
+            }
 
             $voucher = ExpenseVoucher::create([
                 'voucher_number' => $this->nextNumber($businessId, $date),

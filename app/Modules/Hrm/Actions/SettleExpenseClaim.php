@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Models\ExpenseClaim;
@@ -221,6 +222,9 @@ class SettleExpenseClaim
             $payable = Account::bySlug('employee_reimbursements_payable');
             $cash = Account::findOrFail($moneyAccount->account_id);
             $amount = Money::ofTaka((string) $claim->amount);
+
+            // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
+            MoneyAvailability::assertCanPay($moneyAccount, $amount, now()->startOfDay(), 'money_account_id');
 
             $journal = app(PostJournal::class)->handle(
                 new JournalDraft(

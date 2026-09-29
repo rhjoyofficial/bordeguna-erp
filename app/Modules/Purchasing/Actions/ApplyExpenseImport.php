@@ -60,6 +60,7 @@ class ApplyExpenseImport
                     // would answer "who was paid" two ways.
                     paidTo: $supplier === null && $row['payee'] !== '' ? $row['payee'] : null,
                     reference: $row['reference'] === '' ? null : $row['reference'],
+                    checkBalance: false,
                     note: $row['note'] === '' ? null : $row['note'],
                 );
 

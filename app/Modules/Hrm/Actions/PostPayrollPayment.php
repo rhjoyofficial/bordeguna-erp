@@ -12,6 +12,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Models\PayslipPayment;
 use Illuminate\Support\Carbon;
@@ -72,6 +73,9 @@ class PostPayrollPayment
         if ($amount->isZero()) {
             return null;
         }
+
+        // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
+        MoneyAvailability::assertCanPay($moneyAccount, $amount, $on, 'money_account_id');
 
         $payable = AccountMapping::resolve('payroll.net_payable', $on);
         $bank = Account::findOrFail($moneyAccount->account_id);

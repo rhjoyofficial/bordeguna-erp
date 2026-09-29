@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Models\Loan;
 use Illuminate\Support\Carbon;
@@ -65,6 +66,9 @@ class PostLoanDisbursement
         if ($principal->isZero()) {
             return null;
         }
+
+        // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
+        MoneyAvailability::assertCanPay($moneyAccount, $principal, $on, 'money_account_id');
 
         return $this->postJournal->handle(new JournalDraft(
             date: $on,

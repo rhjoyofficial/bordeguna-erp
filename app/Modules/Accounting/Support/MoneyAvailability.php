@@ -94,6 +94,13 @@ final class MoneyAvailability
             return;
         }
 
+        // ⚠ Off ONLY in the test suite (phpunit.xml), where hundreds of tests pay
+        // from accounts they never funded to check a posting's shape. The guard's
+        // own tests switch it back on; production has no such variable.
+        if (! config('accounting.money_availability', true)) {
+            return;
+        }
+
         if (! FinancePolicy::for((int) $account->business_id)->refuse_negative_money) {
             return;
         }
