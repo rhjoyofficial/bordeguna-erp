@@ -12,7 +12,8 @@ export interface VoucherDocument {
     type: VoucherTypeProps;
     title: string;
     number: string | null;
-    status: 'draft' | 'posted' | 'reversed';
+    status: 'draft' | 'pending_approval' | 'posted' | 'reversed';
+    can_approve?: boolean;
     date: string;
     counterparty: string | null;
     narration: string | null;
@@ -101,12 +102,35 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                                 onConfirm={() => router.post(route('accounting.vouchers.post', voucher.id), {}, { preserveScroll: true })}
                             />
                         )}
-                        {voucher.status !== 'draft' && (
+                        {voucher.status === 'pending_approval' && voucher.can_approve && (
+                            <>
+                                <ConfirmDialog
+                                    trigger={<Button variant="outline">Send back</Button>}
+                                    title="Send it back to its preparer?"
+                                    description="It becomes a draft again, to be corrected and sent again."
+                                    confirmLabel="Send back"
+                                    withNote
+                                    noteRequired
+                                    noteLabel="What needs changing?"
+                                    onConfirm={(note) =>
+                                        router.post(route('accounting.vouchers.send-back', voucher.id), { note }, { preserveScroll: true })
+                                    }
+                                />
+                                <ConfirmDialog
+                                    trigger={<Button>Approve and post</Button>}
+                                    title={`Approve this ${type.label.toLowerCase()}?`}
+                                    description={`It is posted at once for ${voucher.total}, with its ${type.prefix} number.`}
+                                    confirmLabel="Approve and post"
+                                    onConfirm={() => router.post(route('accounting.vouchers.approve', voucher.id), {}, { preserveScroll: true })}
+                                />
+                            </>
+                        )}
+                        {(voucher.status === 'posted' || voucher.status === 'reversed') && (
                             <Button asChild variant="outline">
                                 <Link href={route('accounting.vouchers.print', voucher.id)}>Print</Link>
                             </Button>
                         )}
-                        {voucher.status !== 'draft' && canPrepareVouchers && (
+                        {(voucher.status === 'posted' || voucher.status === 'reversed') && canPrepareVouchers && (
                             <Button variant="outline" onClick={() => router.post(route('accounting.vouchers.duplicate', voucher.id))}>
                                 Duplicate
                             </Button>
@@ -139,6 +163,12 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                         )}
                     </div>
                 </div>
+
+                {voucher.status === 'pending_approval' && (
+                    <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
+                        Above the approval limit: waiting for a second person to approve it. Nothing is in the books until then.
+                    </div>
+                )}
 
                 {voucher.reversal && (
                     <div className="rounded-md border border-red-500/40 bg-red-500/5 px-4 py-3 text-sm">

@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\User;
+use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
@@ -113,6 +114,7 @@ class ApprovalInbox
                 PayrollAdjustment::class => ['employee:id,employee_code,first_name,last_name', 'period'],
                 SalaryRevision::class => ['employee:id,employee_code,first_name,last_name'],
                 ExpenseClaim::class => ['employee:id,employee_code,first_name,last_name', 'lines.attachments'],
+                Voucher::class => ['lines.account', 'moneyAccount', 'toMoneyAccount', 'createdBy:id,name'],
             ]),
         ];
     }

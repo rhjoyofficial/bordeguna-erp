@@ -229,6 +229,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::get('vouchers/doc/{voucher}/print', [VoucherController::class, 'print'])->whereNumber('voucher')->name('vouchers.print');
     });
 
+    // ⭐ The second approval on a large payment (finance decision B13). No
+    // permission gate here on purpose: the approval STAGE decides who may act
+    // (canBeActionedBy), and the preparer never can.
+    Route::post('vouchers/doc/{voucher}/approve', [VoucherController::class, 'approve'])->whereNumber('voucher')->name('vouchers.approve');
+    Route::post('vouchers/doc/{voucher}/send-back', [VoucherController::class, 'sendBack'])->whereNumber('voucher')->name('vouchers.send-back');
+
     Route::middleware('can:accounting.voucher.prepare')->group(function () {
         Route::get('vouchers/doc/{voucher}/edit', [VoucherController::class, 'edit'])->whereNumber('voucher')->name('vouchers.edit');
         Route::put('vouchers/doc/{voucher}', [VoucherController::class, 'update'])->whereNumber('voucher')->name('vouchers.update');

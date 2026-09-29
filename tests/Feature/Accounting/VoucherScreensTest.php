@@ -29,7 +29,7 @@ beforeEach(function () {
 
     $this->business = Business::create(['name' => 'Voucher Co', 'slug' => 'voucher-co', 'fiscal_year_start_month' => 7]);
     // Posting-shape tests; the balance guard is tested in FinancePolicyTest.
-    FinancePolicy::create(['business_id' => $this->business->id, 'refuse_negative_money' => false]);
+    FinancePolicy::create(['business_id' => $this->business->id, 'refuse_negative_money' => false, 'payment_second_approval_above_minor' => 0]);
     TenantScope::enter($this->business->id);
     $this->seed(ChartOfAccountsSeeder::class);
 

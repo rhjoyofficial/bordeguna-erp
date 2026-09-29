@@ -78,8 +78,16 @@ class PostVoucher
             // produce one journal, not two.
             $voucher = Voucher::query()->lockForUpdate()->findOrFail($voucher->id);
 
-            if (! $voucher->isDraft()) {
-                throw ValidationException::withMessages(['voucher' => "{$voucher->title()} is already posted."]);
+            // ⚠ A voucher awaiting approval posts only once that approval is
+            // complete (SubmitOrPostVoucher); until then it touches nothing.
+            $approved = $voucher->isPendingApproval() && $voucher->approvalRequest?->isComplete();
+
+            if (! $voucher->isDraft() && ! $approved) {
+                throw ValidationException::withMessages([
+                    'voucher' => $voucher->isPendingApproval()
+                        ? "{$voucher->title()} is waiting for a second person's approval."
+                        : "{$voucher->title()} is already posted.",
+                ]);
             }
 
             $voucher->load(['lines.account', 'lines.party', 'moneyAccount', 'toMoneyAccount']);

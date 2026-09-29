@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Actions\PostVoucher;
 use App\Modules\Accounting\Actions\ReverseVoucher;
 use App\Modules\Accounting\Actions\SaveVoucherDraft;
+use App\Modules\Accounting\Actions\SubmitOrPostVoucher;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
@@ -30,6 +31,7 @@ use App\Modules\Sales\Models\CustomerReceipt;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -119,14 +121,14 @@ class VoucherController extends Controller
         return $this->form($voucher->type, $voucher);
     }
 
-    public function store(Request $request, string $type, SaveVoucherDraft $save, PostVoucher $post): RedirectResponse
+    public function store(Request $request, string $type, SaveVoucherDraft $save, SubmitOrPostVoucher $post): RedirectResponse
     {
         $voucher = $save->handle($this->type($type), $this->validated($request), $request->user());
 
         return $this->afterSave($request, $voucher, $post);
     }
 
-    public function update(Request $request, Voucher $voucher, SaveVoucherDraft $save, PostVoucher $post): RedirectResponse
+    public function update(Request $request, Voucher $voucher, SaveVoucherDraft $save, SubmitOrPostVoucher $post): RedirectResponse
     {
         $voucher = $save->handle($voucher->type, $this->validated($request), $request->user(), $voucher);
 
@@ -142,7 +144,7 @@ class VoucherController extends Controller
 
     public function print(Voucher $voucher): Response
     {
-        abort_if($voucher->isDraft(), 404);
+        abort_unless($voucher->isPosted() || $voucher->status === VoucherStatus::Reversed, 404);
 
         return Inertia::render('accounting/vouchers/print', [
             'voucher' => $this->document($voucher),
@@ -150,11 +152,67 @@ class VoucherController extends Controller
         ]);
     }
 
-    public function post(Request $request, Voucher $voucher, PostVoucher $post): RedirectResponse
+    public function post(Request $request, Voucher $voucher, SubmitOrPostVoucher $submit): RedirectResponse
     {
-        $voucher = $post->handle($voucher, $request->user());
+        $result = $submit->handle($voucher, $request->user());
 
-        return redirect()->route('accounting.vouchers.show', $voucher)->with('success', "{$voucher->voucher_number} posted.");
+        return redirect()->route('accounting.vouchers.show', $result['voucher'])->with('success', $this->postedMessage($result));
+    }
+
+    /**
+     * The second person's yes (finance decision B13). The stage decides who may
+     * act, and the preparer never can (Voucher::refusesApprovalBy).
+     */
+    public function approve(Request $request, Voucher $voucher, PostVoucher $post): RedirectResponse
+    {
+        $approval = $voucher->approvalRequest;
+        abort_if($approval === null, 404);
+        abort_unless($approval->canBeActionedBy($request->user()), 403);
+
+        try {
+            $voucher = DB::transaction(function () use ($request, $voucher, $approval, $post) {
+                $final = $approval->approve($request->user());
+
+                return $final ? $post->handle($voucher->fresh(), $request->user()) : $voucher;
+            });
+        } catch (ValidationException $e) {
+            // ⚠ Rolled back: still awaiting approval. The inbox shows no field
+            // errors, so the refusal travels as the page message.
+            return back()->with('error', 'Not approved: '.collect($e->errors())->flatten()->first());
+        }
+
+        return redirect()->route('accounting.vouchers.show', $voucher)
+            ->with('success', $voucher->isPosted() ? "Approved and posted as {$voucher->voucher_number}." : 'Approved.');
+    }
+
+    /** Back to its preparer as a draft, with the reason (a refusal that can be corrected). */
+    public function sendBack(Request $request, Voucher $voucher): RedirectResponse
+    {
+        $approval = $voucher->approvalRequest;
+        abort_if($approval === null, 404);
+        abort_unless($approval->canBeActionedBy($request->user()), 403);
+
+        $data = $request->validate(['note' => ['required_without:review_note', 'nullable', 'string', 'max:1000'], 'review_note' => ['nullable', 'string', 'max:1000']]);
+        $note = $data['note'] ?? $data['review_note'];
+
+        DB::transaction(function () use ($request, $voucher, $approval, $note) {
+            $approval->sendBack($request->user(), $note);
+            $voucher->update(['status' => VoucherStatus::Draft]);
+        });
+
+        return back()->with('success', "{$voucher->title()} sent back to its preparer.");
+    }
+
+    /**
+     * @param  array{voucher: Voucher, pending: bool}  $result
+     */
+    private function postedMessage(array $result): string
+    {
+        $voucher = $result['voucher'];
+
+        return $result['pending']
+            ? "{$voucher->title()} is above the approval limit, so it has been sent for a second person's approval. It posts when they approve."
+            : "{$voucher->voucher_number} posted.";
     }
 
     public function reverse(Request $request, Voucher $voucher, ReverseVoucher $reverse): RedirectResponse
@@ -218,7 +276,7 @@ class VoucherController extends Controller
         return back()->with('success', 'Attachment removed.');
     }
 
-    private function afterSave(Request $request, Voucher $voucher, PostVoucher $post): RedirectResponse
+    private function afterSave(Request $request, Voucher $voucher, SubmitOrPostVoucher $post): RedirectResponse
     {
         // "Save and post" in one press, for whoever may post. Anyone else gets
         // a saved draft and is told so - never a silent downgrade.
@@ -229,7 +287,7 @@ class VoucherController extends Controller
             }
 
             try {
-                $voucher = $post->handle($voucher, $request->user());
+                $result = $post->handle($voucher, $request->user());
             } catch (ValidationException $e) {
                 // ⚠ The draft IS saved. Landing back on the blank "new" form
                 // would invite a second press and a second draft, so the
@@ -239,7 +297,7 @@ class VoucherController extends Controller
                     ->with('error', 'Saved as a draft, but it could not be posted yet.');
             }
 
-            return redirect()->route('accounting.vouchers.show', $voucher)->with('success', "{$voucher->voucher_number} posted.");
+            return redirect()->route('accounting.vouchers.show', $result['voucher'])->with('success', $this->postedMessage($result));
         }
 
         return redirect()->route('accounting.vouchers.show', $voucher)->with('success', 'Draft saved.');
@@ -455,6 +513,9 @@ class VoucherController extends Controller
             'journal' => $voucher->journal === null ? null : ['id' => $voucher->journal->id, 'number' => $voucher->journal->journal_number],
             // What a customer or supplier line settled (finance decision C3).
             'settles' => $this->settles($voucher),
+            // Whether the reader may give the second approval (never its preparer).
+            'can_approve' => $voucher->isPendingApproval() && auth()->user() !== null
+                && ($voucher->approvalRequest?->canBeActionedBy(auth()->user()) ?? false),
             'reversal' => $voucher->reversalJournal === null ? null : [
                 'id' => $voucher->reversalJournal->id,
                 'number' => $voucher->reversalJournal->journal_number,

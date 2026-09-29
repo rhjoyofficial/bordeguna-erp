@@ -2,15 +2,17 @@
 
 namespace App\Modules\Foundation\Models;
 
+use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Contracts\RefusesSelfApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Exceptions\ApprovalAlreadyDecidedException;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -135,6 +137,15 @@ class ApprovalRequest extends Model
     public function canBeActionedBy(User $user): bool
     {
         if (! $this->isPending()) {
+            return false;
+        }
+
+        // Checked before the stage, so it holds even for a super admin. Only a
+        // type that opts in (RefusesSelfApproval) is ever loaded for it.
+        $class = Relation::getMorphedModel($this->approvable_type) ?? $this->approvable_type;
+
+        if (is_string($class) && is_subclass_of($class, RefusesSelfApproval::class)
+            && $this->approvable?->refusesApprovalBy($user, $this)) {
             return false;
         }
 

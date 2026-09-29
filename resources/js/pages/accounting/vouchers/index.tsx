@@ -13,7 +13,7 @@ interface Row {
     title: string;
     number: string | null;
     date: string;
-    status: 'draft' | 'posted' | 'reversed';
+    status: 'draft' | 'pending_approval' | 'posted' | 'reversed';
     counterparty: string | null;
     money_account: string | null;
     to_money_account: string | null;
@@ -36,6 +36,14 @@ export function StatusBadge({ status }: { status: Row['status'] }) {
 
     if (status === 'reversed') {
         return <Badge variant="destructive">Reversed</Badge>;
+    }
+
+    if (status === 'pending_approval') {
+        return (
+            <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400">
+                Awaiting approval
+            </Badge>
+        );
     }
 
     return <Badge>Posted</Badge>;
@@ -132,6 +140,7 @@ export default function VouchersIndex({
                         options={[
                             { value: '', label: 'Any status' },
                             { value: 'draft', label: 'Draft' },
+                            { value: 'pending_approval', label: 'Awaiting approval' },
                             { value: 'posted', label: 'Posted' },
                             { value: 'reversed', label: 'Reversed' },
                         ]}

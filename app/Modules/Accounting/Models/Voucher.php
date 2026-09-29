@@ -6,8 +6,11 @@ use App\Models\User;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Contracts\RefusesSelfApproval;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\MoneyAccount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,9 +26,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * on it changes again - a mistake is reversed (an ordinary reversing journal)
  * and entered afresh, which "Reverse and copy" does in one step.
  */
-class Voucher extends Model
+class Voucher extends Model implements RefusesSelfApproval
 {
-    use BelongsToBusiness, HasAttachments, LogsActivity;
+    use Approvable, BelongsToBusiness, HasAttachments, LogsActivity;
 
     public const EVIDENCE_COLLECTION = 'evidence';
 
@@ -107,6 +110,20 @@ class Voucher extends Model
     public function reversedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reversed_by');
+    }
+
+    public function isPendingApproval(): bool
+    {
+        return $this->status === VoucherStatus::PendingApproval;
+    }
+
+    /**
+     * A voucher is never approved by the person who prepared it or asked for
+     * the approval: the second person is the whole point (finance decision C6).
+     */
+    public function refusesApprovalBy(User $user, ApprovalRequest $request): bool
+    {
+        return $user->id === (int) $this->created_by || $user->id === (int) $request->requested_by;
     }
 
     public function isDraft(): bool

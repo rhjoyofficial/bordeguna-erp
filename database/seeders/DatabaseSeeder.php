@@ -5,12 +5,14 @@ namespace Database\Seeders;
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\AccountingPermissionsSeeder;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Accounting\database\seeders\VoucherWorkflowSeeder;
 use App\Modules\Assets\database\seeders\AssetAccountMappingSeeder;
 use App\Modules\Assets\database\seeders\AssetCategorySeeder;
 use App\Modules\Assets\database\seeders\AssetsPermissionsSeeder;
 use App\Modules\Commerce\database\seeders\CommercePermissionsSeeder;
 use App\Modules\Crm\database\seeders\CrmLookupSeeder;
 use App\Modules\Crm\database\seeders\CrmPermissionsSeeder;
+use App\Modules\Crm\database\seeders\MessageCampaignWorkflowSeeder;
 use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
 use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
 use App\Modules\Foundation\database\seeders\FoundationSeeder;
@@ -117,6 +119,10 @@ class DatabaseSeeder extends Seeder
         $this->call(PayrollWorkflowSeeder::class);
         $this->call(PayrollInputWorkflowSeeder::class);
         $this->call(ExpenseClaimWorkflowSeeder::class);
+        // Second approval on large payments (29 Sep 2026), and the campaign
+        // workflow that existed but was never called here.
+        $this->call(VoucherWorkflowSeeder::class);
+        $this->call(MessageCampaignWorkflowSeeder::class);
         // ⚠ After AttendancePolicySeeder, BangladeshHolidayCalendarSeeder and
         // the shift/schedule tables exist: this replaces the generic POL-03
         // example policy with Bor de Guna's real ladder, and binds their teams

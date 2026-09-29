@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Crm\Models\MessageCampaign;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
@@ -352,6 +353,42 @@ class ApprovalCards
                 viewUrl: $approvable->employee_id ? route('hrm.salary.show', $approvable->employee_id) : null,
                 approveUrl: route('hrm.revisions.approve', $approvable),
                 rejectUrl: route('hrm.revisions.reject', $approvable),
+            );
+        }
+
+        // ⭐ A payment above the approval limit, posted by its own preparer
+        // (finance decision B13, 29 Sep 2026). Approving POSTS it.
+        if ($approvable instanceof Voucher) {
+            $from = $approvable->moneyAccount?->label();
+            $to = $approvable->toMoneyAccount?->label();
+            $heads = $approvable->lines->map(fn ($line) => $line->account?->label())->filter()->unique()->values();
+
+            return $this->card(
+                $approvalRequest,
+                type: $approvable->type->label(),
+                summary: "{$approvable->title()} — ".$approvable->total()->format(),
+                details: array_filter([
+                    ['label' => 'Amount', 'value' => $approvable->total()->format()],
+                    ['label' => 'Date', 'value' => $approvable->voucher_date?->toDateString()],
+                    $from === null ? null : ['label' => $approvable->type->value === 'contra' ? 'Moved from' : 'Paid from', 'value' => $from],
+                    $to === null ? null : ['label' => 'Moved to', 'value' => $to],
+                    $approvable->counterparty ? ['label' => 'Paid to', 'value' => $approvable->counterparty] : null,
+                    ['label' => 'Prepared by', 'value' => $approvable->createdBy?->name],
+                    $heads->isEmpty() ? null : ['label' => 'Books', 'value' => 'Approving posts it: Dr '.$heads->implode(', ').($from ? " / Cr {$from}" : '')],
+                    $approvable->narration ? ['label' => 'Narration', 'value' => $approvable->narration] : null,
+                ]),
+                reason: $approvable->narration,
+                lines: $approvable->lines->map(fn ($line) => [
+                    'description' => trim(($line->account?->label() ?? '').($line->narration ? ' — '.$line->narration : '')),
+                    'quantity' => '',
+                    'amount' => $line->amount()->format(),
+                ])->values()->all(),
+                viewUrl: route('accounting.vouchers.show', $approvable),
+                approveUrl: route('accounting.vouchers.approve', $approvable),
+                // A refusal hands it back to its preparer as a draft: a wrong
+                // figure is corrected and sent again, never retyped.
+                rejectUrl: route('accounting.vouchers.send-back', $approvable),
+                sendBackUrl: route('accounting.vouchers.send-back', $approvable),
             );
         }
 
