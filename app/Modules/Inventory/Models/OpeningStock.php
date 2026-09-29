@@ -22,7 +22,9 @@ class OpeningStock extends Model
 
     protected function casts(): array
     {
-        return ['as_at' => 'date'];
+        // ⚠ 'date:Y-m-d', not 'date': serialised as an ISO UTC timestamp, midnight
+        // in Dhaka became the previous day on screen (29 Sep 2026).
+        return ['as_at' => 'date:Y-m-d'];
     }
 
     public function getActivitylogOptions(): LogOptions
