@@ -26,6 +26,7 @@ use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\OpeningBalanceController;
 use App\Modules\Accounting\Http\Controllers\PartyAdjustmentController;
+use App\Modules\Accounting\Http\Controllers\InterBusinessTransferController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
 use App\Modules\Accounting\Http\Controllers\SupplierStatementController;
@@ -207,6 +208,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::get('opening-balances', [OpeningBalanceController::class, 'index'])->name('opening-balances.index');
         // Bad-debt write-offs, discounts and set-offs against named documents (29 Sep 2026).
         Route::get('adjustments', [PartyAdjustmentController::class, 'index'])->name('adjustments.index');
+        // Money to another business of the group, booked in both (29 Sep 2026).
+        Route::get('inter-business', [InterBusinessTransferController::class, 'index'])->name('inter-business.index');
+        Route::post('inter-business', [InterBusinessTransferController::class, 'store'])->name('inter-business.store');
         Route::post('adjustments', [PartyAdjustmentController::class, 'store'])->name('adjustments.store');
         Route::delete('adjustments/{adjustment}', [PartyAdjustmentController::class, 'destroy'])->whereNumber('adjustment')->name('adjustments.destroy');
         Route::post('opening-balances', [OpeningBalanceController::class, 'store'])->name('opening-balances.store');

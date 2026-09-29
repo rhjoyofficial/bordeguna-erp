@@ -595,6 +595,8 @@ export function AppSidebar() {
                           ...(canPostJournal ? [{ title: 'Opening balances', url: '/accounting/opening-balances', icon: Landmark }] : []),
                           // Write-offs, discounts and set-offs against named invoices and bills.
                           ...(canPostJournal ? [{ title: 'Adjustments', url: '/accounting/adjustments', icon: Scale }] : []),
+                          // Money to another business of the group, booked in both.
+                          ...(canPostJournal ? [{ title: 'Inter-business transfers', url: '/accounting/inter-business', icon: ArrowLeftRight }] : []),
                           // The VAT switch, the BIN and the rates (Owner only;
                           // the route refuses anyone else).
                           { title: 'VAT return', url: '/accounting/vat-return', icon: Percent },

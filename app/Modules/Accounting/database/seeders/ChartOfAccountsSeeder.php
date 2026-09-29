@@ -98,6 +98,9 @@ class ChartOfAccountsSeeder extends Seeder
         // Deducted at source by customers and set against the year's tax bill.
         // It is money owed back to the business, so it is an asset, not a cost.
         ['1190', 'Advance Income Tax', AccountType::Asset, '1100', true, null],
+        // Finance decision C2 (29 Sep 2026): money lent to another business of the group,
+        // the other business named on each line. Cancels against 2190 across the group.
+        ['1195', 'Due from Other Businesses', AccountType::Asset, '1100', true, 'due_from_businesses'],
 
         ['1200', 'Non-Current Assets', AccountType::Asset, '1000', false, null],
         ['1210', 'Furniture and Fixtures', AccountType::Asset, '1200', true, null],
@@ -132,6 +135,8 @@ class ChartOfAccountsSeeder extends Seeder
         // is a liability and not revenue - and why a VAT-inclusive price
         // (C-VAT-1) overstates revenue until the engine extracts this out of it.
         // ⚠ Planted now and posted to by nothing. The engine is dormant.
+        // Finance decision C2: money owed to another business of the group.
+        ['2190', 'Due to Other Businesses', AccountType::Liability, '2100', true, 'due_to_businesses'],
         ['2170', 'Output VAT Payable', AccountType::Liability, '2100', true, 'output_vat_payable'],
         // The VAT return's own account (D9). Filing a return moves the period's
         // output and input VAT here; what is left is what is owed to NBR, paid by

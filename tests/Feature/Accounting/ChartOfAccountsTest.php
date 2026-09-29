@@ -277,12 +277,12 @@ it('refuses an account whose type disagrees with its parent', function () {
     // balances; only the balance sheet is wrong.
     $this->actingAs($this->accountant)
         ->post(route('accounting.accounts.store'), [
-            'code' => '1195', 'name' => 'Rent paid', 'type' => 'expense',
+            'code' => '1197', 'name' => 'Rent paid', 'type' => 'expense',
             'parent_id' => $currentAssets->id, 'is_postable' => true, 'is_active' => true,
         ])
         ->assertSessionHasErrors('parent_id');
 
-    expect(Account::where('code', '1195')->exists())->toBeFalse();
+    expect(Account::where('code', '1197')->exists())->toBeFalse();
 });
 
 it('refuses to make an account its own ancestor', function () {

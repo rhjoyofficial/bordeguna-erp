@@ -38,7 +38,7 @@ use Illuminate\Support\Collection;
  */
 final class VoucherAccounts
 {
-    private const RESERVED_SLUGS = ['employee_reimbursements_payable', 'opening_balance_equity', 'retained_earnings'];
+    private const RESERVED_SLUGS = ['employee_reimbursements_payable', 'opening_balance_equity', 'retained_earnings', 'due_from_businesses', 'due_to_businesses'];
 
     private const MONEY_SLUGS = ['cash_in_hand', 'cash_at_bank', 'mobile_financial_services', 'courier_receivable', 'gateway_receivable'];
 
@@ -66,6 +66,9 @@ final class VoucherAccounts
         'employee_reimbursements_payable' => 'Posted by Payroll > Expense claims.',
         'opening_balance_equity' => 'Used only by opening balances.',
         'retained_earnings' => 'Kept by the system: profit carried forward at year end.',
+        // Both businesses' books move together, or the group stops cancelling.
+        'due_from_businesses' => 'Moved by Finance & Accounts > Inter-business transfers.',
+        'due_to_businesses' => 'Moved by Finance & Accounts > Inter-business transfers.',
     ];
 
     /** slug => the party class a line on that account must carry (PartyLedgers::voucherPickable()). */
