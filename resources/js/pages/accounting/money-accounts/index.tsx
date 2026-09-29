@@ -223,6 +223,15 @@ export default function MoneyAccountsIndex({
                                     <Label htmlFor="branch">Branch</Label>
                                     <Input id="branch" value={data.branch} onChange={(e) => setData('branch', e.target.value)} className="w-40" />
                                 </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="routing_number">Routing no.</Label>
+                                    <Input
+                                        id="routing_number"
+                                        value={data.routing_number}
+                                        onChange={(e) => setData('routing_number', e.target.value)}
+                                        className="w-36"
+                                    />
+                                </div>
                             </>
                         )}
 
@@ -283,7 +292,15 @@ export default function MoneyAccountsIndex({
                                     </td>
                                     <td className="text-muted-foreground py-2">{account.type_label}</td>
                                     <td className="text-muted-foreground py-2">
-                                        {[account.bank_name, account.branch, account.provider, account.account_number].filter(Boolean).join(' · ')}
+                                        {[
+                                            account.bank_name,
+                                            account.branch,
+                                            account.provider,
+                                            account.account_number,
+                                            account.routing_number ? `Routing ${account.routing_number}` : null,
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' · ')}
                                     </td>
                                     <td className="text-muted-foreground py-2">
                                         {account.ledger_account ?? (
