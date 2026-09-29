@@ -205,3 +205,19 @@ it('is closed to Staff, who may record stock but not rewrite the catalogue', fun
 it('opens for a Manager', function () {
     ($this->asRole)('Manager')->get(route('inventory.products.import'))->assertOk();
 });
+
+// ⚠⚠ 29 Sep 2026: a refused Apply "goes back" to the preview URL, which only
+// answers a POST. It must land on the import page with the message kept.
+it('sends a refresh of the preview, or a refused apply, back to the import page with its message', function () {
+    ($this->asRole)('Owner')->get('/inventory/products/import/preview')
+        ->assertRedirect(route('inventory.products.import'));
+
+    ($this->asRole)('Owner')
+        ->from('/inventory/products/import/preview')
+        ->post(route('inventory.products.import.store'), ['token' => '', 'hash' => ''])
+        ->assertRedirect('/inventory/products/import/preview');
+
+    ($this->asRole)('Owner')->get('/inventory/products/import/preview')
+        ->assertRedirect(route('inventory.products.import'))
+        ->assertSessionHasErrors('token');
+});

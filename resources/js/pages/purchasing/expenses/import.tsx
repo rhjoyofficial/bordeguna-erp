@@ -43,7 +43,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const taka = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function ExpenseImport({ preview }: {
+export default function ExpenseImport({
+    preview,
+}: {
     preview: Preview | null;
     columns: string[];
     accounts: { code: string; label: string }[];
@@ -60,6 +62,11 @@ export default function ExpenseImport({ preview }: {
 
     const submitApply: FormEventHandler = (e) => {
         e.preventDefault();
+        // ⚠⚠ The token comes from the preview ON SCREEN, read at the moment of
+        // Apply. useForm captured it when the page first mounted, before any
+        // preview existed, and the preview visit keeps that state: every Apply
+        // posted an empty token and was refused (29 Sep 2026).
+        apply.transform((data) => ({ ...data, token: preview?.token ?? '', hash: preview?.hash ?? '' }));
         apply.post(route('purchasing.expenses.import.store'));
     };
 
@@ -149,8 +156,8 @@ export default function ExpenseImport({ preview }: {
                                 <ul className="mt-2 space-y-1 text-sm">
                                     {preview.errors.map((e, i) => (
                                         <li key={i}>
-                                            <span className="text-muted-foreground">line {e.line}</span> <span className="font-mono text-xs">{e.reference}</span> -{' '}
-                                            {e.message}
+                                            <span className="text-muted-foreground">line {e.line}</span>{' '}
+                                            <span className="font-mono text-xs">{e.reference}</span> - {e.message}
                                         </li>
                                     ))}
                                 </ul>
@@ -163,8 +170,8 @@ export default function ExpenseImport({ preview }: {
                                 <ul className="mt-2 space-y-1 text-sm">
                                     {preview.warnings.map((w, i) => (
                                         <li key={i}>
-                                            <span className="text-muted-foreground">line {w.line}</span> <span className="font-mono text-xs">{w.reference}</span>{' '}
-                                            - {w.message}
+                                            <span className="text-muted-foreground">line {w.line}</span>{' '}
+                                            <span className="font-mono text-xs">{w.reference}</span> - {w.message}
                                         </li>
                                     ))}
                                 </ul>

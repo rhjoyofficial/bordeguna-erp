@@ -61,6 +61,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::get('labels', [LabelSheetController::class, 'index'])->name('labels');
         Route::get('labels/print', [LabelSheetController::class, 'print'])->name('labels.print');
         Route::get('products/import', [ProductImportController::class, 'create'])->name('products.import');
+        // ⚠ A preview is a POST's answer. Refreshing it, or a refused Apply
+        // sending the browser "back", asks for this URL with GET: land on the
+        // import page with any message kept, never on a 405 (29 Sep 2026).
+        Route::get('products/import/preview', fn () => tap(redirect()->route('inventory.products.import'), fn () => session()->reflash()))->name('products.import.preview.back');
         Route::post('products/import/preview', [ProductImportController::class, 'preview'])->name('products.import.preview');
         Route::post('products/import', [ProductImportController::class, 'store'])->name('products.import.store');
     });
@@ -166,6 +170,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         // different door - and a new permission would mean a seeder in the
         // deploy of the week the count happens.
         Route::get('opening-stock/import', [OpeningStockImportController::class, 'create'])->name('opening-stock.import');
+        // ⚠ A preview is a POST's answer. Refreshing it, or a refused Apply
+        // sending the browser "back", asks for this URL with GET: land on the
+        // import page with any message kept, never on a 405 (29 Sep 2026).
+        Route::get('opening-stock/import/preview', fn () => tap(redirect()->route('inventory.opening-stock.import'), fn () => session()->reflash()))->name('opening-stock.import.preview.back');
         Route::post('opening-stock/import/preview', [OpeningStockImportController::class, 'preview'])->name('opening-stock.import.preview');
         Route::post('opening-stock/import', [OpeningStockImportController::class, 'store'])->name('opening-stock.import.store');
 

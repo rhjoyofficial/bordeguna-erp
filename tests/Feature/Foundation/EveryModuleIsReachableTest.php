@@ -103,6 +103,9 @@ it('leaves no user-facing page with no way to reach it', function () {
         // Decided by the controller's RETURN TYPE rather than by a list of
         // names, so a new lookup endpoint does not have to be remembered here.
         ->reject(fn ($route) => returnsJson($route))
+        // ⚠ `*.preview.back` is a redirect, not a page: the GET answer for an
+        // import preview URL that only a POST renders (29 Sep 2026).
+        ->reject(fn ($route) => str_ends_with((string) $route->getName(), '.preview.back'))
         ->reject(fn ($route) => str_contains($route->uri(), '{')
             || str_starts_with($route->uri(), '_')
             || in_array($route->uri(), ['/', 'dashboard', 'up'], true))

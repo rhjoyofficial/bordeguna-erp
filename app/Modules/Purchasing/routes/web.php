@@ -165,6 +165,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         // the button thirty times, and the same permission.
         Route::get('expenses/import', [ExpenseImportController::class, 'create'])->name('expenses.import');
         Route::get('expenses/import/template', [ExpenseImportController::class, 'template'])->name('expenses.import.template');
+        // ⚠ A preview is a POST's answer. Refreshing it, or a refused Apply
+        // sending the browser "back", asks for this URL with GET: land on the
+        // import page with any message kept, never on a 405 (29 Sep 2026).
+        Route::get('expenses/import/preview', fn () => tap(redirect()->route('purchasing.expenses.import'), fn () => session()->reflash()))->name('expenses.import.preview.back');
         Route::post('expenses/import/preview', [ExpenseImportController::class, 'preview'])->name('expenses.import.preview');
         Route::post('expenses/import', [ExpenseImportController::class, 'store'])->name('expenses.import.store');
         Route::post('expenses/{voucher}/evidence', [ExpenseVoucherController::class, 'uploadEvidence'])->name('expenses.evidence.store');

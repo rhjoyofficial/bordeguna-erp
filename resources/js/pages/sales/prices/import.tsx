@@ -35,13 +35,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Import', href: '/sales/prices/import' },
 ];
 
-export default function PriceImport({
-    preview,
-    groups,
-}: {
-    preview: Preview | null;
-    groups: { code: string; name: string }[];
-}) {
+export default function PriceImport({ preview, groups }: { preview: Preview | null; groups: { code: string; name: string }[] }) {
     const upload = useForm<{ file: File | null; effective_from: string }>({
         file: null,
         effective_from: preview?.effective_from ?? '',
@@ -60,6 +54,16 @@ export default function PriceImport({
 
     const submitApply: FormEventHandler = (e) => {
         e.preventDefault();
+        // ⚠⚠ The token comes from the preview ON SCREEN, read at the moment of
+        // Apply. useForm captured it when the page first mounted, before any
+        // preview existed, and the preview visit keeps that state: every Apply
+        // posted an empty token and was refused (29 Sep 2026).
+        apply.transform((data) => ({
+            ...data,
+            token: preview?.token ?? '',
+            hash: preview?.hash ?? '',
+            effective_from: preview?.effective_from ?? data.effective_from,
+        }));
         apply.post(route('sales.prices.import.store'));
     };
 
@@ -83,7 +87,9 @@ export default function PriceImport({
 
                 <form onSubmit={submitFile} className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
-                        <Label htmlFor="file" required>CSV file</Label>
+                        <Label htmlFor="file" required>
+                            CSV file
+                        </Label>
                         <input
                             id="file"
                             type="file"
@@ -94,7 +100,9 @@ export default function PriceImport({
                         <InputError message={upload.errors.file} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="effective_from" required>These prices start on</Label>
+                        <Label htmlFor="effective_from" required>
+                            These prices start on
+                        </Label>
                         <Input
                             id="effective_from"
                             type="date"

@@ -126,6 +126,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     // one rule: prices decide what every future sale is worth.
     Route::middleware('can:sales.prices.import')->group(function () {
         Route::get('prices/import', [PriceImportController::class, 'create'])->name('prices.import');
+        // ⚠ A preview is a POST's answer. Refreshing it, or a refused Apply
+        // sending the browser "back", asks for this URL with GET: land on the
+        // import page with any message kept, never on a 405 (29 Sep 2026).
+        Route::get('prices/import/preview', fn () => tap(redirect()->route('sales.prices.import'), fn () => session()->reflash()))->name('prices.import.preview.back');
         Route::post('prices/import/preview', [PriceImportController::class, 'preview'])->name('prices.import.preview');
         Route::post('prices/import', [PriceImportController::class, 'store'])->name('prices.import.store');
     });

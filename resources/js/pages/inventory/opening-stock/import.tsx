@@ -97,6 +97,16 @@ export default function OpeningStockImport({
 
     const submitApply: FormEventHandler = (e) => {
         e.preventDefault();
+        // ⚠⚠ The token comes from the preview ON SCREEN, read at the moment of
+        // Apply. useForm captured it when the page first mounted, before any
+        // preview existed, and the preview visit keeps that state: every Apply
+        // posted an empty token and was refused (29 Sep 2026).
+        apply.transform((data) => ({
+            ...data,
+            token: preview?.token ?? '',
+            hash: preview?.hash ?? '',
+            as_at: preview?.as_at ?? data.as_at,
+        }));
         apply.post(route('inventory.opening-stock.import.store'));
     };
 
