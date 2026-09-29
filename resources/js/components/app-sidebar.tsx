@@ -582,6 +582,8 @@ export function AppSidebar() {
                           { title: 'Receive vouchers', url: '/accounting/vouchers/receipt', icon: HandCoins },
                           { title: 'Contra vouchers', url: '/accounting/vouchers/contra', icon: ArrowLeftRight },
                           { title: 'Journal vouchers', url: '/accounting/vouchers/journal', icon: NotebookPen },
+                          // Every cheque on a posted voucher: pending, cleared, bounced.
+                          { title: 'Cheques', url: '/accounting/cheques', icon: ReceiptText },
                           { title: 'Journals', url: '/accounting/journals', icon: NotebookPen },
                           { title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen },
                           // Module 2, Slice 1: the boundary the whole ledger obeys.

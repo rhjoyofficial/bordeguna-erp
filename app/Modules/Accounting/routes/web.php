@@ -27,6 +27,7 @@ use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\OpeningBalanceController;
 use App\Modules\Accounting\Http\Controllers\PartyAdjustmentController;
 use App\Modules\Accounting\Http\Controllers\InterBusinessTransferController;
+use App\Modules\Accounting\Http\Controllers\ChequeRegisterController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
 use App\Modules\Accounting\Http\Controllers\SupplierStatementController;
@@ -261,4 +262,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
     });
 
     Route::get('vouchers/{type}', [VoucherController::class, 'index'])->middleware('can:accounting.view')->name('vouchers.index');
+
+    // The cheque register (finance decision C5, 29 Sep 2026): reading follows
+    // the books; clearing or bouncing a cheque writes to them, so it is `post`.
+    Route::get('cheques', [ChequeRegisterController::class, 'index'])->middleware('can:accounting.view')->name('cheques.index');
+    Route::post('cheques/{voucher}', [ChequeRegisterController::class, 'update'])->whereNumber('voucher')->middleware('can:accounting.voucher.post')->name('cheques.update');
 });
