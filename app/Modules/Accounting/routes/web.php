@@ -25,6 +25,7 @@ use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
+use App\Modules\Accounting\Http\Controllers\SupplierStatementController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
 use App\Modules\Accounting\Http\Controllers\VatReturnController;
 use App\Modules\Accounting\Http\Controllers\VatSettingsController;
@@ -102,6 +103,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // to the operating-reports gate below on 26 Sep 2026 (C-GLA-A answered:
         // Joy, Q19).
         Route::get('payables-ageing', [AgeingController::class, 'payables'])->name('payables-ageing');
+        // One supplier's account, told in documents and checked by the ledger.
+        Route::get('supplier-statement', [SupplierStatementController::class, 'index'])->name('supplier-statement');
 
         // Where the money is and how it moved. Same `accounting.view` as the
         // ledger its figures come from (C-CBB-2), so no seeder change.

@@ -569,6 +569,7 @@ export function AppSidebar() {
                           // held, claims owed (the accountant, 26 Sep 2026).
                           { title: 'Employee statement', url: '/accounting/employee-statement', icon: Contact },
                           { title: 'Payables ageing', url: '/accounting/payables-ageing', icon: ReceiptText },
+                          { title: 'Supplier statement', url: '/accounting/supplier-statement', icon: Contact },
                           // ⚠ "Cash & bank book" is the REPORT; "Bank & cash"
                           // below is the setup screen that names the accounts.
                           // Its figures are the trial balance's own (C-CBB-2).
