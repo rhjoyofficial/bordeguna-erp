@@ -70,8 +70,8 @@ class SalesOrder extends Model
         return [
             'status' => SalesOrderStatus::class,
             'channel' => SalesChannel::class,
-            'ordered_at' => 'date',
-            'expected_date' => 'date',
+            'ordered_at' => 'date:Y-m-d',
+            'expected_date' => 'date:Y-m-d',
             // ⚠ A STRING, kept at two places, for the reason slice 2.3 measured
             // the hard way: MySQL returns "60.00" for a decimal and SQLite
             // returns "60", the suite runs on SQLite and production is MySQL, so

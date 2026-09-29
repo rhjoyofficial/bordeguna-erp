@@ -87,11 +87,11 @@ class AssetItem extends Model implements ControlsAttachmentAccess
             'condition' => AssetCondition::class,
             'quantity' => 'integer',
             'sequence' => 'integer',
-            'acquired_on' => 'date',
-            'warranty_ends_on' => 'date',
-            'service_ends_on' => 'date',
+            'acquired_on' => 'date:Y-m-d',
+            'warranty_ends_on' => 'date:Y-m-d',
+            'service_ends_on' => 'date:Y-m-d',
             'purchase_price' => 'decimal:4',
-            'custody_since' => 'date',
+            'custody_since' => 'date:Y-m-d',
             'acknowledged_at' => 'datetime',
         ];
     }

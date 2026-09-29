@@ -40,8 +40,8 @@ class RecurringExpense extends Model
             'amount_varies' => 'boolean',
             'frequency' => RecurringFrequency::class,
             'status' => RecurringExpenseStatus::class,
-            'start_date' => 'date',
-            'end_date' => 'date',
+            'start_date' => 'date:Y-m-d',
+            'end_date' => 'date:Y-m-d',
             'day_of_month' => 'integer',
             'lead_days' => 'integer',
         ];

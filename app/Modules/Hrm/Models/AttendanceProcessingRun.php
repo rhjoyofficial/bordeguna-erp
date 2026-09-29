@@ -49,8 +49,8 @@ class AttendanceProcessingRun extends Model
     protected function casts(): array
     {
         return [
-            'from_date' => 'date',
-            'to_date' => 'date',
+            'from_date' => 'date:Y-m-d',
+            'to_date' => 'date:Y-m-d',
             'days_processed' => 'integer',
             'days_finalized' => 'integer',
             'days_skipped_locked' => 'integer',

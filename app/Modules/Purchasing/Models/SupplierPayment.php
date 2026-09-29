@@ -38,7 +38,7 @@ class SupplierPayment extends Model
     protected function casts(): array
     {
         return [
-            'paid_on' => 'date',
+            'paid_on' => 'date:Y-m-d',
             'amount' => 'decimal:4',
         ];
     }

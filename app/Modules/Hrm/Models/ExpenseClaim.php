@@ -56,7 +56,7 @@ class ExpenseClaim extends Model
     protected function casts(): array
     {
         return [
-            'spent_on' => 'date',
+            'spent_on' => 'date:Y-m-d',
             'amount' => 'decimal:4',
             'submitted_at' => 'datetime',
             'settled_at' => 'datetime',

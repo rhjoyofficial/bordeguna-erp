@@ -31,7 +31,7 @@ class Note extends Model
         return [
             'is_private' => 'boolean',
             'is_pinned' => 'boolean',
-            'remind_on' => 'date',
+            'remind_on' => 'date:Y-m-d',
             'archived_at' => 'datetime',
         ];
     }

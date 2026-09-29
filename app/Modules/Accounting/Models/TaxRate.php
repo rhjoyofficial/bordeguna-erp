@@ -30,7 +30,7 @@ class TaxRate extends Model
     protected function casts(): array
     {
         return [
-            'effective_from' => 'date',
+            'effective_from' => 'date:Y-m-d',
             // ⚠ A percentage, not money: 15.0000 means fifteen percent. It does
             // not go through Money, which counts paisa.
             'rate' => 'decimal:4',

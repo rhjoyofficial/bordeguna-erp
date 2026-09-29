@@ -54,7 +54,7 @@ class PayslipPayment extends Model
             'event_type' => PaymentEventType::class,
             'method' => SalaryPaymentMethod::class,
             'amount' => 'decimal:2',
-            'paid_on' => 'date',
+            'paid_on' => 'date:Y-m-d',
         ];
     }
 

@@ -48,12 +48,12 @@ class SalesInvoice extends Model
     protected function casts(): array
     {
         return [
-            'invoice_date' => 'date',
-            'due_date' => 'date',
+            'invoice_date' => 'date:Y-m-d',
+            'due_date' => 'date:Y-m-d',
             'subtotal' => 'decimal:4',
             'invoice_discount' => 'decimal:4',
             'tax_total' => 'decimal:4',
-            'tax_point_date' => 'date',
+            'tax_point_date' => 'date:Y-m-d',
             'prices_include_tax' => 'boolean',
             'total' => 'decimal:4',
             'is_opening' => 'boolean',

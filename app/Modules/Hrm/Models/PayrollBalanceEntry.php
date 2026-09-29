@@ -45,7 +45,7 @@ class PayrollBalanceEntry extends Model
         return [
             'entry_type' => PayrollBalanceEntryType::class,
             'amount' => 'decimal:2',
-            'occurred_on' => 'date',
+            'occurred_on' => 'date:Y-m-d',
         ];
     }
 

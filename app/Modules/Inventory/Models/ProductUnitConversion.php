@@ -38,7 +38,7 @@ class ProductUnitConversion extends Model
     protected function casts(): array
     {
         return [
-            'effective_from' => 'date',
+            'effective_from' => 'date:Y-m-d',
             'stock_units_per_purchase_unit' => 'decimal:8',
         ];
     }

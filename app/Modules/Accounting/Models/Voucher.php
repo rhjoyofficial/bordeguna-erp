@@ -44,8 +44,8 @@ class Voucher extends Model
         return [
             'type' => VoucherType::class,
             'status' => VoucherStatus::class,
-            'voucher_date' => 'date',
-            'instrument_date' => 'date',
+            'voucher_date' => 'date:Y-m-d',
+            'instrument_date' => 'date:Y-m-d',
             'posted_at' => 'datetime',
             'reversed_at' => 'datetime',
         ];

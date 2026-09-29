@@ -43,7 +43,7 @@ class Movement extends Model
     {
         return [
             'type' => MovementType::class,
-            'movement_date' => 'date',
+            'movement_date' => 'date:Y-m-d',
             'applied_at' => 'datetime',
         ];
     }

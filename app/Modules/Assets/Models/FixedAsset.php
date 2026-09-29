@@ -46,8 +46,8 @@ class FixedAsset extends Model
     protected function casts(): array
     {
         return [
-            'acquired_on' => 'date',
-            'depreciation_starts_on' => 'date',
+            'acquired_on' => 'date:Y-m-d',
+            'depreciation_starts_on' => 'date:Y-m-d',
             'cost' => 'decimal:4',
             'salvage_value' => 'decimal:4',
             'useful_life_months' => 'integer',

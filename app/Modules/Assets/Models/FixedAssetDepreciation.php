@@ -29,7 +29,7 @@ class FixedAssetDepreciation extends Model
     protected function casts(): array
     {
         return [
-            'charged_on' => 'date',
+            'charged_on' => 'date:Y-m-d',
             'amount' => 'decimal:4',
             'year' => 'integer',
             'month' => 'integer',

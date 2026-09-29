@@ -30,8 +30,8 @@ class Campaign extends Model
     protected function casts(): array
     {
         return [
-            'starts_on' => 'date',
-            'ends_on' => 'date',
+            'starts_on' => 'date:Y-m-d',
+            'ends_on' => 'date:Y-m-d',
             'is_active' => 'boolean',
         ];
     }

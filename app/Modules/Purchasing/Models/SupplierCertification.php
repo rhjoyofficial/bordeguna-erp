@@ -36,7 +36,7 @@ class SupplierCertification extends Model implements ControlsAttachmentAccess
     {
         return [
             'type' => CertificationType::class,
-            'expires_on' => 'date',
+            'expires_on' => 'date:Y-m-d',
         ];
     }
 

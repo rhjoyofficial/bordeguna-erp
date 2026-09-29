@@ -49,7 +49,7 @@ class AttendanceCorrection extends Model implements ControlsAttachmentAccess
     protected function casts(): array
     {
         return [
-            'attendance_date' => 'date',
+            'attendance_date' => 'date:Y-m-d',
             'type' => CorrectionType::class,
             'direction' => PunchDirection::class,
             'corrected_at' => 'datetime',

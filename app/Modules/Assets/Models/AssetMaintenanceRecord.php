@@ -39,9 +39,9 @@ class AssetMaintenanceRecord extends Model implements ControlsAttachmentAccess
         return [
             'kind' => MaintenanceKind::class,
             'state' => MaintenanceState::class,
-            'reported_on' => 'date',
+            'reported_on' => 'date:Y-m-d',
             'out_of_service' => 'boolean',
-            'done_on' => 'date',
+            'done_on' => 'date:Y-m-d',
             'condition_after' => AssetCondition::class,
             'cost' => 'decimal:4',
             'closed_at' => 'datetime',

@@ -51,7 +51,7 @@ class PurchaseOrder extends Model
         return [
             'status' => PurchaseOrderStatus::class,
             'payment_status' => PaymentStatus::class,
-            'expected_date' => 'date',
+            'expected_date' => 'date:Y-m-d',
         ];
     }
 

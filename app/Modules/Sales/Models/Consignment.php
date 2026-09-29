@@ -47,7 +47,7 @@ class Consignment extends Model
             'status' => ConsignmentStatus::class,
             'cod_amount' => 'decimal:4',
             'collected_amount' => 'decimal:4',
-            'outcome_on' => 'date',
+            'outcome_on' => 'date:Y-m-d',
         ];
     }
 

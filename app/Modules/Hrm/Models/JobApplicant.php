@@ -37,7 +37,7 @@ class JobApplicant extends Model
     {
         return [
             'stage' => ApplicantStage::class,
-            'applied_on' => 'date',
+            'applied_on' => 'date:Y-m-d',
             'expected_salary' => 'decimal:2',
         ];
     }

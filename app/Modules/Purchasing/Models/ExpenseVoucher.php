@@ -50,7 +50,7 @@ class ExpenseVoucher extends Model
     protected function casts(): array
     {
         return [
-            'spent_on' => 'date',
+            'spent_on' => 'date:Y-m-d',
             'total' => 'decimal:4',
         ];
     }

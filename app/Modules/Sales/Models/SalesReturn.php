@@ -37,7 +37,7 @@ class SalesReturn extends Model
     protected function casts(): array
     {
         return [
-            'returned_at' => 'date',
+            'returned_at' => 'date:Y-m-d',
             'credit_total' => 'decimal:4',
         ];
     }

@@ -47,7 +47,7 @@ class Journal extends Model
     {
         return [
             'journal_type' => JournalType::class,
-            'journal_date' => 'date',
+            'journal_date' => 'date:Y-m-d',
             'posted_at' => 'datetime',
         ];
     }

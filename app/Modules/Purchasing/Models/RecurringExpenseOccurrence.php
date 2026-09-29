@@ -26,7 +26,7 @@ class RecurringExpenseOccurrence extends Model
     protected function casts(): array
     {
         return [
-            'due_on' => 'date',
+            'due_on' => 'date:Y-m-d',
             'expected_amount' => 'decimal:2',
             'status' => RecurringOccurrenceStatus::class,
             'settled_at' => 'datetime',

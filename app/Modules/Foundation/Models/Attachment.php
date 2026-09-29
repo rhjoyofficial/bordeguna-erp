@@ -50,8 +50,8 @@ class Attachment extends Model
     {
         return [
             'size' => 'integer',
-            'expires_at' => 'date',
-            'document_date' => 'date',
+            'expires_at' => 'date:Y-m-d',
+            'document_date' => 'date:Y-m-d',
             'version' => 'integer',
         ];
     }

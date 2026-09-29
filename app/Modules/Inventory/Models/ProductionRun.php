@@ -63,7 +63,7 @@ class ProductionRun extends Model
             'consumed_value' => 'decimal:4',
             'waste_value' => 'decimal:4',
             'yield_check' => 'array',
-            'output_expiry_date' => 'date',
+            'output_expiry_date' => 'date:Y-m-d',
             'occurred_at' => 'datetime',
             'confirmed_at' => 'datetime',
             'reversed_at' => 'datetime',

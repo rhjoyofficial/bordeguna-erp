@@ -32,8 +32,8 @@ class JobOpening extends Model
     {
         return [
             'status' => JobOpeningStatus::class,
-            'opened_on' => 'date',
-            'closes_on' => 'date',
+            'opened_on' => 'date:Y-m-d',
+            'closes_on' => 'date:Y-m-d',
         ];
     }
 

@@ -28,8 +28,8 @@ class AmortizationSchedule extends Model
     protected function casts(): array
     {
         return [
-            'start_month' => 'date',
-            'released_through' => 'date',
+            'start_month' => 'date:Y-m-d',
+            'released_through' => 'date:Y-m-d',
             'total_amount' => 'decimal:2',
             'months' => 'integer',
         ];

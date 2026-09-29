@@ -42,8 +42,8 @@ class AttendancePolicy extends Model
         return [
             'version' => 'integer',
             'config' => 'array',
-            'effective_from' => 'date',
-            'effective_to' => 'date',
+            'effective_from' => 'date:Y-m-d',
+            'effective_to' => 'date:Y-m-d',
         ];
     }
 

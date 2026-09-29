@@ -89,7 +89,7 @@ class Business extends Model
             'payroll_cycle_start_day' => 'integer',
             'prices_include_tax' => 'boolean',
             'vat_enabled' => 'boolean',
-            'vat_effective_from' => 'date',
+            'vat_effective_from' => 'date:Y-m-d',
         ];
     }
 

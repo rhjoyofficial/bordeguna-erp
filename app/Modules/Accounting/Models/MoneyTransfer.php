@@ -40,7 +40,7 @@ class MoneyTransfer extends Model
     protected function casts(): array
     {
         return [
-            'transferred_on' => 'date',
+            'transferred_on' => 'date:Y-m-d',
             'amount' => 'decimal:2',
             'fee' => 'decimal:2',
         ];

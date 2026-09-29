@@ -37,7 +37,7 @@ class SupplierCreditNote extends Model
     protected function casts(): array
     {
         return [
-            'credit_date' => 'date',
+            'credit_date' => 'date:Y-m-d',
             'total' => 'decimal:4',
         ];
     }

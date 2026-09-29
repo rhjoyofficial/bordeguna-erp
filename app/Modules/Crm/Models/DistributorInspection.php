@@ -34,7 +34,7 @@ class DistributorInspection extends Model implements ControlsAttachmentAccess
 
     protected function casts(): array
     {
-        return ['inspected_on' => 'date'];
+        return ['inspected_on' => 'date:Y-m-d'];
     }
 
     protected static function booted(): void

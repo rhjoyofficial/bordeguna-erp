@@ -52,7 +52,7 @@ class SalaryRevision extends Model
     protected function casts(): array
     {
         return [
-            'effective_from' => 'date',
+            'effective_from' => 'date:Y-m-d',
             'proposed_lines' => 'array',
             'overtime_eligible' => 'boolean',
             'arrear_amount' => 'decimal:2',

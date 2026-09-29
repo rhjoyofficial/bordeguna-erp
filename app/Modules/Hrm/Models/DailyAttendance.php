@@ -68,7 +68,7 @@ class DailyAttendance extends Model
     protected function casts(): array
     {
         return [
-            'attendance_date' => 'date',
+            'attendance_date' => 'date:Y-m-d',
             'status' => AttendanceStatus::class,
             'consequence' => AttendanceConsequence::class,
             'first_in' => 'datetime',

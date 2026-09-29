@@ -36,11 +36,11 @@ class AssetMaintenancePlan extends Model
         return [
             'every_count' => 'integer',
             'every_unit' => MaintenanceEvery::class,
-            'next_due_on' => 'date',
+            'next_due_on' => 'date:Y-m-d',
             'remind_days' => 'integer',
-            'remind_from' => 'date',
+            'remind_from' => 'date:Y-m-d',
             'is_active' => 'boolean',
-            'last_done_on' => 'date',
+            'last_done_on' => 'date:Y-m-d',
         ];
     }
 

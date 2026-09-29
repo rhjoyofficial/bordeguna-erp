@@ -47,8 +47,8 @@ class CourierStatement extends Model
     protected function casts(): array
     {
         return [
-            'statement_date' => 'date',
-            'received_on' => 'date',
+            'statement_date' => 'date:Y-m-d',
+            'received_on' => 'date:Y-m-d',
             'deposit_amount' => 'decimal:4',
             'share_amount' => 'decimal:4',
             'posted_at' => 'datetime',

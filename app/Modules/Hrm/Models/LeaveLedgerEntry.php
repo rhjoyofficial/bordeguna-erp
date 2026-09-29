@@ -46,7 +46,7 @@ class LeaveLedgerEntry extends Model
             'year' => 'integer',
             'entry_type' => LeaveLedgerEntryType::class,
             'days' => 'decimal:2',
-            'occurred_on' => 'date',
+            'occurred_on' => 'date:Y-m-d',
         ];
     }
 

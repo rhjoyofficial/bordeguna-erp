@@ -40,7 +40,7 @@ class AssetMovement extends Model implements ControlsAttachmentAccess
         return [
             'kind' => AssetMovementKind::class,
             'status' => AssetMovementStatus::class,
-            'moved_on' => 'date',
+            'moved_on' => 'date:Y-m-d',
             'received_at' => 'datetime',
         ];
     }

@@ -44,7 +44,7 @@ class LoanLedgerEntry extends Model
         return [
             'entry_type' => LoanLedgerEntryType::class,
             'amount' => 'decimal:2',
-            'occurred_on' => 'date',
+            'occurred_on' => 'date:Y-m-d',
         ];
     }
 

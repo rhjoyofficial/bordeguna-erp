@@ -48,7 +48,7 @@ class IncomeVoucher extends Model
     protected function casts(): array
     {
         return [
-            'received_on' => 'date',
+            'received_on' => 'date:Y-m-d',
             'total' => 'decimal:4',
         ];
     }

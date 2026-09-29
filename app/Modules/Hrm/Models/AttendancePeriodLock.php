@@ -36,8 +36,8 @@ class AttendancePeriodLock extends Model
     protected function casts(): array
     {
         return [
-            'period_start' => 'date',
-            'period_end' => 'date',
+            'period_start' => 'date:Y-m-d',
+            'period_end' => 'date:Y-m-d',
             'locked_at' => 'datetime',
             'unlocked_at' => 'datetime',
         ];

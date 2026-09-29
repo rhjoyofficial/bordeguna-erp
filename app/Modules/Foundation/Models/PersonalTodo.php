@@ -25,7 +25,7 @@ class PersonalTodo extends Model
     protected function casts(): array
     {
         return [
-            'due_on' => 'date',
+            'due_on' => 'date:Y-m-d',
             'completed_at' => 'datetime',
         ];
     }

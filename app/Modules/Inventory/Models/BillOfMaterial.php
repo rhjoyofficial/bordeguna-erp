@@ -55,7 +55,7 @@ class BillOfMaterial extends Model
             'version' => 'integer',
             'output_quantity' => 'decimal:4',
             'is_active' => 'boolean',
-            'effective_from' => 'date',
+            'effective_from' => 'date:Y-m-d',
         ];
     }
 

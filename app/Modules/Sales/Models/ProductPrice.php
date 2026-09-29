@@ -46,8 +46,8 @@ class ProductPrice extends Model
             'basis_mrp' => 'decimal:4',
             // ⚠ Dates, not datetimes. Comparing a datetime cast against a date
             // string has produced five separate defects on this project.
-            'effective_from' => 'date',
-            'effective_to' => 'date',
+            'effective_from' => 'date:Y-m-d',
+            'effective_to' => 'date:Y-m-d',
             'is_discount' => 'boolean',
         ];
     }

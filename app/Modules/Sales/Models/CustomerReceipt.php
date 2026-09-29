@@ -42,7 +42,7 @@ class CustomerReceipt extends Model
     protected function casts(): array
     {
         return [
-            'received_on' => 'date',
+            'received_on' => 'date:Y-m-d',
             'amount' => 'decimal:4',
         ];
     }

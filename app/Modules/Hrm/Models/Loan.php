@@ -65,7 +65,7 @@ class Loan extends Model
             'installment_count' => 'integer',
             'start_year' => 'integer',
             'start_month' => 'integer',
-            'disbursed_on' => 'date',
+            'disbursed_on' => 'date:Y-m-d',
             'settled_at' => 'datetime',
             'applied_at' => 'datetime',
         ];

@@ -40,7 +40,7 @@ class AccountingPeriod extends Model
     protected function casts(): array
     {
         return [
-            'closed_through' => 'date',
+            'closed_through' => 'date:Y-m-d',
             'is_unlocked' => 'boolean',
             'unlocked_at' => 'datetime',
         ];

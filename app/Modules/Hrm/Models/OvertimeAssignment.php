@@ -46,7 +46,7 @@ class OvertimeAssignment extends Model
     protected function casts(): array
     {
         return [
-            'work_date' => 'date',
+            'work_date' => 'date:Y-m-d',
             'hours' => 'decimal:2',
             'is_holiday_work' => 'boolean',
             'compensatory_days' => 'decimal:2',

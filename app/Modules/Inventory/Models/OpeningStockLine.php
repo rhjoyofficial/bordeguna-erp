@@ -27,7 +27,7 @@ class OpeningStockLine extends Model
         return [
             'quantity' => 'decimal:4',
             'unit_cost' => 'decimal:4',
-            'expiry_date' => 'date',
+            'expiry_date' => 'date:Y-m-d',
         ];
     }
 

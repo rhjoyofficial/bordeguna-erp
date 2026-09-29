@@ -121,11 +121,11 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
             'separation_type' => SeparationType::class,
             'mfs_provider' => MfsProvider::class,
             'salary_payment_method' => SalaryPaymentMethod::class,
-            'separation_date' => 'date',
-            'date_of_birth' => 'date',
-            'joining_date' => 'date',
-            'confirmation_date' => 'date',
-            'contract_end_date' => 'date',
+            'separation_date' => 'date:Y-m-d',
+            'date_of_birth' => 'date:Y-m-d',
+            'joining_date' => 'date:Y-m-d',
+            'confirmation_date' => 'date:Y-m-d',
+            'contract_end_date' => 'date:Y-m-d',
         ];
     }
 
