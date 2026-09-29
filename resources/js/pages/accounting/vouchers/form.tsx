@@ -108,8 +108,12 @@ const MONEY_GROUPS = ['Cash in hand', 'Bank accounts', 'Mobile wallets', 'Paymen
  * Money accounts as their LEDGER HEADS, grouped (26 Sep 2026, "money flows by
  * heading"). Each cash, bank and wallet account owns one head, so the head IS
  * the account; the value stays the money account id the server expects.
+ *
+ * ⚠ A PLAIN FUNCTION, NOT A COMPONENT: SearchSelect only reads literal <option>
+ * children (through fragments). As <MoneyHeadOptions /> it collected nothing and
+ * Paid from / Received into / Moved from / Moved to all opened empty.
  */
-function MoneyHeadOptions({ accounts, hintFor }: { accounts: MoneyOption[]; hintFor?: (account: MoneyOption) => string | null }) {
+function moneyHeadOptions({ accounts, hintFor }: { accounts: MoneyOption[]; hintFor?: (account: MoneyOption) => string | null }) {
     return (
         <>
             {MONEY_GROUPS.filter((group) => accounts.some((account) => account.group === group)).map((group) => (
@@ -268,7 +272,7 @@ export default function VoucherFormPage({
                                 onChange={(e) => setData('money_account_id', e.target.value)}
                             >
                                 <option value="">Choose a ledger head</option>
-                                <MoneyHeadOptions accounts={moneyAccounts} />
+                                {moneyHeadOptions({ accounts: moneyAccounts })}
                             </SearchSelect>
                             <p className="text-muted-foreground text-xs">
                                 {moneyAccounts.every((account) => account.hint !== null) ? (
@@ -304,14 +308,13 @@ export default function VoucherFormPage({
                                 onChange={(e) => setData('to_money_account_id', e.target.value)}
                             >
                                 <option value="">Choose a ledger head</option>
-                                <MoneyHeadOptions
-                                    accounts={moneyAccounts.filter((account) => String(account.id) !== data.money_account_id)}
+                                {moneyHeadOptions({
+                                    accounts: moneyAccounts.filter((account) => String(account.id) !== data.money_account_id),
                                     // Money never moves INTO a gateway by hand: the gateway fills itself from sales.
-                                    hintFor={(account) =>
+                                    hintFor: (account) =>
                                         account.hint ??
-                                        (account.type === 'gateway' ? 'Online-sale money: it only leaves a gateway, never enters one.' : null)
-                                    }
-                                />
+                                        (account.type === 'gateway' ? 'Online-sale money: it only leaves a gateway, never enters one.' : null),
+                                })}
                             </SearchSelect>
                             <p className="text-muted-foreground text-xs">
                                 Cash deposited, cash withdrawn, or bank to bank, head to head. Each account is its own ledger head, made in{' '}
