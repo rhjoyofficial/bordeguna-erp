@@ -58,6 +58,9 @@ export default function ProductionRunsIndex({ runs, filters }: { runs: Paginated
                             <option value="confirmed">Confirmed</option>
                             <option value="reversed">Reversed</option>
                         </SearchSelect>
+                        <Button asChild variant="outline">
+                            <Link href="/inventory/production-yield">Yield report</Link>
+                        </Button>
                         <Button asChild>
                             <Link href="/inventory/production-runs/new">New run</Link>
                         </Button>

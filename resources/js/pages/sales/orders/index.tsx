@@ -158,11 +158,7 @@ function ExposureBox({ customerId }: { customerId: string }) {
                 <span className="text-foreground font-medium">{exposure.total}</span>
                 {exposure.credit_limit !== null && <> {t('orders.against_limit', { limit: exposure.credit_limit })}</>}
             </p>
-            {overLimit && (
-                <p className="text-destructive mt-1 font-medium">
-                    {t('orders.over_limit')}
-                </p>
-            )}
+            {overLimit && <p className="text-destructive mt-1 font-medium">{t('orders.over_limit')}</p>}
         </div>
     );
 }
@@ -376,7 +372,9 @@ function QuickCustomerDialog({
                 </DialogHeader>
                 <form onSubmit={submit} className="grid gap-3">
                     <div className="grid gap-1">
-                        <Label htmlFor="quick-name" required>{t('orders.quick_name')}</Label>
+                        <Label htmlFor="quick-name" required>
+                            {t('orders.quick_name')}
+                        </Label>
                         <Input id="quick-name" value={data.name} onChange={(e) => setData('name', e.target.value)} autoFocus />
                         <InputError message={errors.name} />
                     </div>
@@ -589,9 +587,7 @@ function CreateOrderForm({
                         <span className="text-right">{t('orders.line_total')}</span>
                         <span className="w-16" />
                     </div>
-                    {!data.customer_id && (
-                        <p className="text-muted-foreground text-sm">{t('orders.pick_customer_first')}</p>
-                    )}
+                    {!data.customer_id && <p className="text-muted-foreground text-sm">{t('orders.pick_customer_first')}</p>}
                     {data.lines.map((line, index) => (
                         <OrderLineRow
                             key={line.uid}
@@ -699,12 +695,10 @@ export default function SalesOrdersIndex({
                     />
                 )}
 
-                {own_only && (
-                    <p className="text-muted-foreground text-sm">{t('orders.own_only')}</p>
-                )}
+                {own_only && <p className="text-muted-foreground text-sm">{t('orders.own_only')}</p>}
 
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
-                    <FilterField label={t('orders.search')} htmlFor="filter-search" className="min-w-56 flex-1">
+                    <FilterField label={t('orders.search')} htmlFor="filter-search" className="w-80">
                         <Input
                             id="filter-search"
                             value={filters.search}
@@ -748,7 +742,9 @@ export default function SalesOrdersIndex({
                                         confirmation call - and the reference
                                         shown is the one the CUSTOMER quotes. */}
                                     {order.channel === 'website' && (
-                                        <p className="text-muted-foreground text-xs">{t('orders.website')} {order.shop_reference ?? ''}</p>
+                                        <p className="text-muted-foreground text-xs">
+                                            {t('orders.website')} {order.shop_reference ?? ''}
+                                        </p>
                                     )}
                                 </td>
                                 <td className="text-muted-foreground py-2">{order.customer.name}</td>

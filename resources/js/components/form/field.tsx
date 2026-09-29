@@ -31,7 +31,7 @@ const SIZES = {
     sm: 'w-36',
     md: 'w-48',
     lg: 'w-64',
-    grow: 'min-w-56 flex-1',
+    grow: 'min-w-56 flex-1 max-w-md',
     auto: '',
 } as const;
 

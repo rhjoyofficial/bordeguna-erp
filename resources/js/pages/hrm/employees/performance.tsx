@@ -69,7 +69,7 @@ export default function Performance({ employee, goals, reviews }: PerformancePro
                                 });
                             }}
                         >
-                            <div className="min-w-56 flex-1 space-y-1">
+                            <div className="max-w-md min-w-56 flex-1 space-y-1">
                                 <Label className="text-xs" required>
                                     New goal
                                 </Label>

@@ -61,6 +61,7 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
                     <div className="space-y-1 sm:col-span-2">
                         <Label required>Name of the deal</Label>
                         <Input
+                            className="max-w-md"
                             placeholder="e.g. Eid honey deal"
                             value={form.data.name}
                             onChange={(event) => form.setData('name', event.target.value)}

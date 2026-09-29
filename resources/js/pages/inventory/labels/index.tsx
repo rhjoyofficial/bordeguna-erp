@@ -92,7 +92,13 @@ export default function LabelsIndex({
                     </div>
                     <div className="grid flex-1 gap-2">
                         <Label htmlFor="search">Find a product</Label>
-                        <Input id="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name, SKU or barcode" />
+                        <Input
+                            id="search"
+                            className="w-80"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Name, SKU or barcode"
+                        />
                     </div>
                     <Button onClick={print} disabled={total === 0}>
                         Print {total > 0 ? `${total} label${total === 1 ? '' : 's'}` : 'labels'}

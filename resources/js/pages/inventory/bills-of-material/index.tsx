@@ -164,6 +164,7 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                                 Product being made
                             </Label>
                             <SearchSelect
+                                fit
                                 id="output_product_id"
                                 value={data.output_product_id}
                                 onChange={(e) => setData('output_product_id', e.target.value)}
@@ -298,7 +299,13 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                         </div>
                         <div className="grid flex-1 gap-2">
                             <Label htmlFor="note">Note</Label>
-                            <Input id="note" value={data.note} onChange={(e) => setData('note', e.target.value)} placeholder="optional" />
+                            <Input
+                                id="note"
+                                className="max-w-md"
+                                value={data.note}
+                                onChange={(e) => setData('note', e.target.value)}
+                                placeholder="optional"
+                            />
                         </div>
                     </div>
 

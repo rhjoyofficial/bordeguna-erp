@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday } from '@/lib/dates';
-import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
+import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 interface Price {
@@ -58,10 +58,21 @@ export default function PricesIndex({
         post(route('sales.prices.store'), { onSuccess: () => reset() });
     };
 
+    const { canImportPrices } = usePage<SharedData>().props;
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Selling Prices" />
             <div className="flex flex-col gap-6 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h1 className="text-lg font-semibold">Selling prices</h1>
+                    {/* Import prices was a sidebar row until 29 Sep 2026. */}
+                    {canImportPrices && (
+                        <Button asChild variant="outline">
+                            <Link href="/sales/prices/import">Import prices</Link>
+                        </Button>
+                    )}
+                </div>
                 {/* A price is never edited, only superseded: set a new one from a
                     date, and the old row stays so an old invoice can still be
                     explained. */}
@@ -105,7 +116,9 @@ export default function PricesIndex({
                         <InputError message={errors.effective_to} />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="customer_id" required={!data.price_group_id}>For one customer</Label>
+                        <Label htmlFor="customer_id" required={!data.price_group_id}>
+                            For one customer
+                        </Label>
                         <SearchSelect id="customer_id" value={data.customer_id} onChange={(e) => setData('customer_id', e.target.value)}>
                             <option value="">No particular customer</option>
                             {customers.map((c) => (
@@ -116,7 +129,9 @@ export default function PricesIndex({
                         </SearchSelect>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="price_group_id" required={!data.customer_id}>Or a price group</Label>
+                        <Label htmlFor="price_group_id" required={!data.customer_id}>
+                            Or a price group
+                        </Label>
                         {/* ⚠ Rows, never typed: the free-text version of this field
                             is how a distributor gets silently charged retail. */}
                         <SearchSelect id="price_group_id" value={data.price_group_id} onChange={(e) => setData('price_group_id', e.target.value)}>

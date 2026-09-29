@@ -147,7 +147,7 @@ export default function CustomersIndex({
                 <form onSubmit={submit} className="flex flex-col gap-5 rounded-lg border p-4">
                     <FormGroup title="Identity">
                         <Field label="Name" htmlFor="name" size="grow" error={errors.name} required>
-                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
+                            <Input id="name" className="max-w-md" value={data.name} onChange={(e) => setData('name', e.target.value)} />
                         </Field>
                         <Field label="Code" htmlFor="code" size="sm" error={errors.code}>
                             <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="DIST-001" />

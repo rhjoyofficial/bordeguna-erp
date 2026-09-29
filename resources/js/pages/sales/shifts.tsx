@@ -122,7 +122,9 @@ function MovementForm({ shiftId }: { shiftId: number }) {
             }}
         >
             <div className="space-y-1">
-                <Label className="text-xs" required>{t('shift.direction')}</Label>
+                <Label className="text-xs" required>
+                    {t('shift.direction')}
+                </Label>
                 <Select value={form.data.type} onValueChange={(value) => form.setData('type', value)}>
                     <SelectTrigger className="w-32">
                         <SelectValue />
@@ -134,7 +136,9 @@ function MovementForm({ shiftId }: { shiftId: number }) {
                 </Select>
             </div>
             <div className="space-y-1">
-                <Label className="text-xs" required>{t('shift.amount')}</Label>
+                <Label className="text-xs" required>
+                    {t('shift.amount')}
+                </Label>
                 <Input
                     className="w-28"
                     type="number"
@@ -145,8 +149,10 @@ function MovementForm({ shiftId }: { shiftId: number }) {
                     onChange={(event) => form.setData('amount', event.target.value)}
                 />
             </div>
-            <div className="min-w-56 flex-1 space-y-1">
-                <Label className="text-xs" required>{t('shift.reason_required')}</Label>
+            <div className="max-w-md min-w-56 flex-1 space-y-1">
+                <Label className="text-xs" required>
+                    {t('shift.reason_required')}
+                </Label>
                 <Input
                     placeholder={t('shift.reason_placeholder')}
                     value={form.data.reason}
@@ -191,7 +197,7 @@ function CloseForm({ shiftId, expected }: { shiftId: number; expected: number })
                     />
                     {form.errors.closing_count && <p className="text-destructive text-xs">{form.errors.closing_count}</p>}
                 </div>
-                <div className="min-w-56 flex-1 space-y-1">
+                <div className="max-w-md min-w-56 flex-1 space-y-1">
                     <Label>{t('shift.note_optional')}</Label>
                     <Input
                         placeholder={t('shift.note_placeholder')}

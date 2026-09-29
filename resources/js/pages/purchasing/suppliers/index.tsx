@@ -188,7 +188,7 @@ export default function SuppliersIndex({
                 )}
 
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
-                    <FilterField label="Search" htmlFor="filter-search" className="min-w-56 flex-1">
+                    <FilterField label="Search" htmlFor="filter-search" className="w-80">
                         <Input
                             id="filter-search"
                             value={filters.search}

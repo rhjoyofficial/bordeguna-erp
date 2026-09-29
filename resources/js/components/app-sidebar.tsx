@@ -70,7 +70,6 @@ import {
     TrendingUp,
     Truck,
     Undo2,
-    Upload,
     UserCircle,
     UserPlus,
     Users,
@@ -107,12 +106,9 @@ export function AppSidebar() {
         canViewStores,
         canSell,
         canRecordOrders,
-        canRecordReceipts,
         canManagePrices,
         canRecordOpeningStock,
-        canImportCatalogue,
         canManageBom,
-        canImportPrices,
         canViewCrm,
         canViewContacts,
         canSendCampaigns,
@@ -149,30 +145,38 @@ export function AppSidebar() {
                 { title: 'Dashboard', url: '/dashboard', icon: LayoutGrid },
                 // Module 1, Slice 3: the day on one page.
                 { title: 'My work', url: '/work', icon: ListChecks },
-                { title: 'Business health', url: '/health', icon: Activity },
                 ...(canReviewApprovals ? [{ title: 'Approvals', url: '/approvals', icon: CheckSquare, badge: pendingApprovalsCount }] : []),
-                // ⚠ ONE self-service entry, on Joy's reorganisation (23 Aug
-                // 2026): Clock in/out, My leave and My payslips live as tabs
-                // under My profile now (SelfServiceTabs), not as sidebar rows.
-                // Their routes are unchanged, so old bookmarks still land.
+                { title: 'Business health', url: '/health', icon: Activity },
+            ],
+        },
+        // ⭐ 29 Sep 2026 (Joy: "organise it like a real ERP"): everyone's own
+        // tools in one group, closed until one of its pages is open. Clock in/out,
+        // My leave and My payslips stay tabs under My profile (23 Aug decision).
+        // The calendar belongs to no module: it reads HR, CRM, Sales and
+        // Purchasing and shows each reader only the sources they may see.
+        {
+            label: 'Workspace',
+            defaultOpen: false,
+            items: [
                 ...(hasEmployeeProfile ? [{ title: 'My profile', url: '/hrm/my-profile', icon: UserCircle }] : []),
                 ...(hasEmployeeProfile ? [{ title: 'My team', url: '/hrm/my-team', icon: Network }] : []),
                 ...(hasEmployeeProfile ? [{ title: 'Staff purchase', url: '/hrm/staff-purchase', icon: Store }] : []),
-                // Module 1, Slice 1: the reporting tree - the phone book's
-                // shape, so it sits with the other everyone-features.
                 { title: 'Org chart', url: '/hrm/org-chart', icon: Network },
-                // ⚠ Top level rather than inside a module group, because the
-                // calendar belongs to no module: it reads HR, CRM, Sales and
-                // Purchasing and shows each reader only the sources they may
-                // already see.
                 ...(canViewCalendar ? [{ title: 'Calendar', url: '/calendar', icon: CalendarDays }] : []),
                 ...(canViewNotes ? [{ title: 'Notes', url: '/notes', icon: PenSquare }] : []),
                 ...(canViewFiles ? [{ title: 'Documents', url: '/files', icon: FolderOpen }] : []),
                 ...(canUseChat ? [{ title: 'Chat', url: '/chat', icon: MessageSquare }] : []),
-                { title: 'Switch business', url: '/businesses/switch', icon: Repeat },
+            ],
+        },
+        // The four businesses side by side. "Switch business" is in the user
+        // menu (bottom left), where every ERP keeps it.
+        {
+            label: 'Group',
+            defaultOpen: false,
+            items: [
+                { title: 'Group cockpit', url: '/group/cockpit', icon: LayoutGrid },
                 { title: 'Group partners', url: '/group/partners', icon: Network },
                 { title: 'Group products', url: '/group/products', icon: Network },
-                { title: 'Group cockpit', url: '/group/cockpit', icon: LayoutGrid },
             ],
         },
         // ⚠ The last two ungated groups, closed 24 Aug 2026: "open to the
@@ -213,7 +217,6 @@ export function AppSidebar() {
                           // notices a drifting yield - shipped WITH their screens in one
                           // commit, the reachability rule this file records.
                           ...(inventory.manageProduction ? [{ title: 'Production', url: '/inventory/production-runs', icon: Factory }] : []),
-                          { title: 'Production yield', url: '/inventory/production-yield', icon: FileBarChart },
                           // ⭐ 26 Sep 2026 (Q19): what the shelf is worth, for the Manager.
                           // The Finance & Accounts section lists it too, so once only.
                           ...(canViewOperatingReports && !canViewAccounting
@@ -229,15 +232,7 @@ export function AppSidebar() {
                           // ⭐ 27 Sep 2026 (Joy): raw materials kept separate from the
                           // finished goods above; same screen, filtered to raw.
                           { title: 'Raw materials', url: '/inventory/products?kind=raw', icon: Boxes },
-                          // C-IMP-7. The whole point of the import screen is that Joy
-                          // stops sending files to be loaded for him, so it has to be
-                          // findable without being told where it is.
-                          ...(canImportCatalogue ? [{ title: 'Import products', url: '/inventory/products/import', icon: Upload }] : []),
-                          // ⚠⚠ Products have carried a `barcode` column since
-                          // 4 August with nothing to print it - data entered
-                          // that had no way back out. Gated on the same
-                          // permission as the catalogue it prints from.
-                          ...(canImportCatalogue ? [{ title: 'Barcode labels', url: '/inventory/labels', icon: ScanBarcode }] : []),
+                          // Import products and Barcode labels are buttons on Products (29 Sep 2026).
                           // ⚠⚠ The cutover's one irreversible document, and it had no
                           // link at all until 19 Aug. Gated, because the route is:
                           // opening stock sets the FIFO layers behind every margin.
@@ -293,15 +288,12 @@ export function AppSidebar() {
                           ...(canViewSales ? [{ title: 'Invoices', url: '/sales/invoices', icon: FileText }] : []),
                           // ⭐ Money in, and the list of it (21 Sep 2026): before this a receipt
                           // could only be taken from one invoice's page, and never listed.
-                          ...(canRecordReceipts ? [{ title: t('menu.receive_payment'), url: '/sales/receipts/new', icon: HandCoins }] : []),
                           ...(canViewSales ? [{ title: 'Receipts', url: '/sales/receipts', icon: HandCoins }] : []),
                           ...(canViewSales ? [{ title: 'Courier payouts', url: '/sales/courier-statements', icon: Wallet }] : []),
                           // Goods coming back - shipped WITH its screens in one
                           // commit, same reachability rule as the order book.
                           ...(canViewSales ? [{ title: 'Returns', url: '/sales/returns', icon: Undo2 }] : []),
                           ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
-                          // Credit limits and days, by file, applied after approval (26 Sep 2026).
-                          ...(canViewSales ? [{ title: 'Credit terms', url: '/sales/credit-terms', icon: Contact }] : []),
                           // ⭐ 26 Sep 2026 (Q19): the Manager reads who owes us and one
                           // customer's account. Listed here only when the Finance &
                           // Accounts section (which lists them too) is not shown.
@@ -311,11 +303,7 @@ export function AppSidebar() {
                                     { title: 'Customer statement', url: '/accounting/customer-statement', icon: Contact },
                                 ]
                               : []),
-                          // The sales-by-brand report. Its route group is open to any
-                          // signed-in user and the registry enforces sales.reports.view,
-                          // so the report was reachable but had no way in from the
-                          // sidebar for a sales user (the reports index link is HRM-gated).
-                          ...(canViewSales ? [{ title: 'Sales by brand', url: '/hrm/reports/sales_by_brand', icon: FileBarChart }] : []),
+                          // Sales by brand is a button on Invoices (29 Sep 2026).
                       ],
                   },
                   {
@@ -331,9 +319,9 @@ export function AppSidebar() {
                           ...(canManagePrices ? [{ title: 'Discounts', url: '/sales/discounts', icon: Percent }] : []),
                           ...(canManagePrices ? [{ title: 'Promotions', url: '/sales/promotions', icon: Percent }] : []),
                           ...(canManagePrices ? [{ title: 'Targets', url: '/sales/targets', icon: BadgeDollarSign }] : []),
-                          // C-IMP-7. Reachable, or it is the fifth screen built
-                          // and never found.
-                          ...(canImportPrices ? [{ title: 'Import prices', url: '/sales/prices/import', icon: Upload }] : []),
+                          // Credit limits and days, by file, applied after approval (26 Sep 2026).
+                          ...(canViewSales ? [{ title: 'Credit terms', url: '/sales/credit-terms', icon: Contact }] : []),
+                          // Import prices is a button on Selling prices (29 Sep 2026).
                       ],
                   },
               ]

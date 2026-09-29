@@ -81,7 +81,7 @@ export default function UnitConversions({
                         <Label htmlFor="product_id" required>
                             Product
                         </Label>
-                        <SearchSelect id="product_id" value={data.product_id} onChange={(e) => setData('product_id', e.target.value)}>
+                        <SearchSelect fit id="product_id" value={data.product_id} onChange={(e) => setData('product_id', e.target.value)}>
                             <option value="">Choose a product</option>
                             {products.map((p) => (
                                 <option key={p.id} value={p.id}>
@@ -164,6 +164,7 @@ export default function UnitConversions({
                         </Label>
                         <Input
                             id="source"
+                            className="max-w-md"
                             value={data.source}
                             onChange={(e) => setData('source', e.target.value)}
                             placeholder="e.g. Razzak Oil Mill delivery note 12 Aug"
@@ -173,7 +174,7 @@ export default function UnitConversions({
 
                     <div className="grid gap-2 lg:col-span-2">
                         <Label htmlFor="note">Note (optional)</Label>
-                        <Input id="note" value={data.note} onChange={(e) => setData('note', e.target.value)} />
+                        <Input id="note" className="max-w-md" value={data.note} onChange={(e) => setData('note', e.target.value)} />
                         <InputError message={errors.note} />
                     </div>
 

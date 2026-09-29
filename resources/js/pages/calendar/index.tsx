@@ -215,7 +215,7 @@ export default function CalendarIndex({
                                 <Label htmlFor="title" required>
                                     What is happening
                                 </Label>
-                                <Input id="title" value={form.data.title} onChange={(e) => form.setData('title', e.target.value)} />
+                                <Input id="title" className="w-80" value={form.data.title} onChange={(e) => form.setData('title', e.target.value)} />
                                 <InputError message={form.errors.title} />
                             </div>
                             <div className="grid gap-2">
@@ -243,7 +243,12 @@ export default function CalendarIndex({
                             </div>
                             <div className="grid gap-2 md:col-span-2">
                                 <Label htmlFor="location">Where</Label>
-                                <Input id="location" value={form.data.location} onChange={(e) => form.setData('location', e.target.value)} />
+                                <Input
+                                    id="location"
+                                    className="w-80"
+                                    value={form.data.location}
+                                    onChange={(e) => form.setData('location', e.target.value)}
+                                />
                             </div>
                             <div className="flex items-end gap-4 md:col-span-2">
                                 <label className="flex items-center gap-2 text-sm">

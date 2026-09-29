@@ -49,11 +49,16 @@ export default function InvoicesIndex({
                 <ReportHeading
                     title="Sales invoices"
                     actions={
-                        can_create && (
-                            <Button asChild size="sm">
-                                <Link href={route('sales.invoices.create')}>New invoice from challans</Link>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button asChild size="sm" variant="outline">
+                                <Link href="/hrm/reports/sales_by_brand">Sales by brand</Link>
                             </Button>
-                        )
+                            {can_create && (
+                                <Button asChild size="sm">
+                                    <Link href={route('sales.invoices.create')}>New invoice from challans</Link>
+                                </Button>
+                            )}
+                        </div>
                     }
                 />
                 <FilterBar showClear={hasActiveFilters} onClear={resetFilters}>

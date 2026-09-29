@@ -111,7 +111,9 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
             <h2 className="font-semibold">New quotation</h2>
             <div className="grid gap-3 sm:grid-cols-4">
                 <div className="space-y-1">
-                    <Label className="text-xs" required>Quote for</Label>
+                    <Label className="text-xs" required>
+                        Quote for
+                    </Label>
                     <Select value={form.data.party_kind} onValueChange={(value) => form.setData('party_kind', value)}>
                         <SelectTrigger>
                             <SelectValue />
@@ -123,7 +125,9 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                     </Select>
                 </div>
                 <div className="space-y-1 sm:col-span-2">
-                    <Label className="text-xs" required>{form.data.party_kind === 'customer' ? 'Customer' : 'Lead'}</Label>
+                    <Label className="text-xs" required>
+                        {form.data.party_kind === 'customer' ? 'Customer' : 'Lead'}
+                    </Label>
                     {form.data.party_kind === 'customer' ? (
                         <>
                             <SearchableSelect
@@ -142,7 +146,9 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                                 open={addingCustomer}
                                 onOpenChange={setAddingCustomer}
                                 initialName={typedCustomer}
-                                onCreated={(row) => router.reload({ only: ['customers'], onSuccess: () => form.setData('customer_id', String(row.id)) })}
+                                onCreated={(row) =>
+                                    router.reload({ only: ['customers'], onSuccess: () => form.setData('customer_id', String(row.id)) })
+                                }
                             />
                         </>
                     ) : (
@@ -157,7 +163,9 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                     <InputError message={form.errors.customer_id ?? form.errors.lead_id} />
                 </div>
                 <div className="space-y-1">
-                    <Label className="text-xs" required>Valid until</Label>
+                    <Label className="text-xs" required>
+                        Valid until
+                    </Label>
                     <Input type="date" value={form.data.valid_until} onChange={(e) => form.setData('valid_until', e.target.value)} />
                     <InputError message={form.errors.valid_until} />
                 </div>
@@ -166,8 +174,10 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
             <div className="space-y-2">
                 {form.data.lines.map((line, index) => (
                     <div key={index} className="flex flex-wrap items-end gap-2">
-                        <div className="min-w-56 flex-1 space-y-1">
-                            <Label className="text-xs" required>Product</Label>
+                        <div className="max-w-md min-w-56 flex-1 space-y-1">
+                            <Label className="text-xs" required>
+                                Product
+                            </Label>
                             <SearchableSelect
                                 value={line.product_id}
                                 onChange={(value) => patch(index, 'product_id', value)}
@@ -177,7 +187,9 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                             />
                         </div>
                         <div className="space-y-1">
-                            <Label className="text-xs" required>Quantity</Label>
+                            <Label className="text-xs" required>
+                                Quantity
+                            </Label>
                             <Input
                                 className="w-24"
                                 type="number"
@@ -229,7 +241,7 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
             </div>
 
             <div className="flex items-end gap-3">
-                <div className="flex-1 space-y-1">
+                <div className="max-w-md flex-1 space-y-1">
                     <Label className="text-xs">Note (optional)</Label>
                     <Input value={form.data.note} onChange={(e) => form.setData('note', e.target.value)} />
                 </div>

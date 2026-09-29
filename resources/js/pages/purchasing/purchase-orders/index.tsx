@@ -157,7 +157,7 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
 
                     return (
                         <div key={index} className="flex flex-wrap items-start gap-2">
-                            <div className="grid min-w-64 flex-1 gap-1">
+                            <div className="grid max-w-md min-w-64 flex-1 gap-1">
                                 <SearchableSelect
                                     value={line.product_id}
                                     onChange={(v) => updateLine(index, { product_id: v })}

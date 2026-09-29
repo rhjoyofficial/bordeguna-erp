@@ -474,7 +474,7 @@ export default function MessagingSettings({
                                                 }
                                             />
                                             <Input
-                                                className="min-w-56 flex-1"
+                                                className="max-w-md min-w-56 flex-1"
                                                 aria-label={`${secret} value`}
                                                 type="password"
                                                 autoComplete="off"
@@ -694,10 +694,7 @@ export default function MessagingSettings({
                     {/* ── One real message, and exactly what came back ────── */}
                     {testingId !== null && (
                         <div className="space-y-3 rounded-lg border p-4">
-                            <HeadingSmall
-                                title="Send one test message"
-                                description="Goes to a real handset and costs one message."
-                            />
+                            <HeadingSmall title="Send one test message" description="Goes to a real handset and costs one message." />
                             <FormRow>
                                 <Field label="To" htmlFor="test_to" size="md" error={testForm.errors.to} required>
                                     <Input

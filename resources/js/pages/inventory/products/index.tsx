@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 interface Product {
@@ -79,15 +79,18 @@ export default function ProductsIndex({
     filters: { search: string; type: string; category_id: string; brand_id: string };
     kind?: string;
 }) {
+    const { canImportCatalogue } = usePage<SharedData>().props;
     // ⭐ 27 Sep 2026 (Joy): raw materials and products are separate screens over
     // one model. `kind=raw` is the raw-materials view; everything else is what
     // the shop sells. The kind rides in the base URL so it survives every filter
     // change and the Clear button.
     const isRaw = kind === 'raw';
-    const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters(
-        isRaw ? '/inventory/products?kind=raw' : '/inventory/products',
-        initialFilters,
-    );
+    const {
+        filters,
+        setFilter,
+        reset: resetFilters,
+        hasActiveFilters,
+    } = useFilters(isRaw ? '/inventory/products?kind=raw' : '/inventory/products', initialFilters);
     // ⭐ One dialog for the product and its prices (21 Sep 2026); the form that
     // used to sit open above the list, with fourteen fields, is gone.
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -115,11 +118,24 @@ export default function ProductsIndex({
                     <div>
                         <h1 className="text-lg font-semibold">{isRaw ? 'Raw materials' : 'Products'}</h1>
                     </div>
-                    <Button onClick={openNew}>{isRaw ? 'New raw material' : 'New product'}</Button>
+                    {/* Import and labels were sidebar rows until 29 Sep 2026; they belong with the list. */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        {canImportCatalogue && (
+                            <>
+                                <Button asChild variant="outline">
+                                    <Link href="/inventory/products/import">Import</Link>
+                                </Button>
+                                <Button asChild variant="outline">
+                                    <Link href="/inventory/labels">Barcode labels</Link>
+                                </Button>
+                            </>
+                        )}
+                        <Button onClick={openNew}>{isRaw ? 'New raw material' : 'New product'}</Button>
+                    </div>
                 </div>
 
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
-                    <FilterField label="Search" htmlFor="filter-search" className="min-w-56 flex-1">
+                    <FilterField label="Search" htmlFor="filter-search" className="w-80">
                         <Input
                             id="filter-search"
                             value={filters.search}

@@ -102,6 +102,7 @@ export default function NotesIndex({
                         <Label htmlFor="search">Search</Label>
                         <Input
                             id="search"
+                            className="max-w-md"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && applyFilters({ search })}
@@ -124,7 +125,7 @@ export default function NotesIndex({
                             <Label htmlFor="title" required>
                                 Title
                             </Label>
-                            <Input id="title" value={form.data.title} onChange={(e) => form.setData('title', e.target.value)} />
+                            <Input id="title" className="max-w-xl" value={form.data.title} onChange={(e) => form.setData('title', e.target.value)} />
                             <InputError message={form.errors.title} />
                         </div>
                         <div className="grid gap-2">
