@@ -117,7 +117,7 @@ class GroupCockpitController extends Controller
             'cash' => round($cash, 2),
             'receivables' => round($receivables, 2),
             'payables' => round($payables, 2),
-            'month_income' => round(-$monthLines('income'), 2),
+            'month_income' => round(-$monthLines('income'), 2) + 0.0, // + 0.0: no "-0.00" on a quiet month
             'month_expense' => round($monthLines('expense'), 2),
             'intercompany' => round($intercompany, 2),
         ];
