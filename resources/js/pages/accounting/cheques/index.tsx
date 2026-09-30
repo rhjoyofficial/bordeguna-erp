@@ -50,7 +50,12 @@ function StatusForm({ cheque, today, onDone }: { cheque: Cheque; today: string; 
         <form onSubmit={submit} className="flex flex-wrap items-end gap-3 py-2">
             <div className="flex flex-col gap-1">
                 <Label htmlFor={`status-${cheque.voucher_id}`}>What happened</Label>
-                <SearchSelect fit id={`status-${cheque.voucher_id}`} value={form.data.status} onChange={(e) => form.setData('status', e.target.value)}>
+                <SearchSelect
+                    fit
+                    id={`status-${cheque.voucher_id}`}
+                    value={form.data.status}
+                    onChange={(e) => form.setData('status', e.target.value)}
+                >
                     <option value="cleared">Cleared</option>
                     <option value="bounced">Bounced (reverses the voucher)</option>
                     <option value="cancelled">Cancelled (reverses the voucher)</option>
@@ -70,7 +75,12 @@ function StatusForm({ cheque, today, onDone }: { cheque: Cheque; today: string; 
             </div>
             <div className="flex flex-col gap-1">
                 <Label htmlFor={`note-${cheque.voucher_id}`}>Note</Label>
-                <Input id={`note-${cheque.voucher_id}`} className="w-64" value={form.data.note} onChange={(e) => form.setData('note', e.target.value)} />
+                <Input
+                    id={`note-${cheque.voucher_id}`}
+                    className="w-64"
+                    value={form.data.note}
+                    onChange={(e) => form.setData('note', e.target.value)}
+                />
             </div>
             <Button size="sm" disabled={form.processing}>
                 Save
@@ -95,7 +105,8 @@ export default function ChequeRegister({ cheques, filters, statuses, canUpdate, 
                 <div>
                     <h1 className="text-xl font-semibold">Cheques</h1>
                     <p className="text-muted-foreground text-sm">
-                        Every cheque on a posted voucher. Mark each one cleared when the bank shows it; a bounced or cancelled cheque reverses its voucher.
+                        Every cheque on a posted voucher. Mark each one cleared when the bank shows it; a bounced or cancelled cheque reverses its
+                        voucher.
                     </p>
                 </div>
 
@@ -125,14 +136,12 @@ export default function ChequeRegister({ cheques, filters, statuses, canUpdate, 
                     {cheques.length === 0 ? (
                         <p className="text-muted-foreground text-sm">No cheques. A voucher whose instrument is Cheque appears here once posted.</p>
                     ) : (
-                        <table className="w-full min-w-[60rem] text-sm">
+                        <table className="w-full min-w-[44rem] text-sm">
                             <thead>
                                 <tr className="text-muted-foreground border-b text-left">
                                     <th className="py-2 pr-3">Cheque</th>
                                     <th className="py-2 pr-3">Date</th>
-                                    <th className="py-2 pr-3">Direction</th>
                                     <th className="py-2 pr-3">Party</th>
-                                    <th className="py-2 pr-3">Our account</th>
                                     <th className="py-2 pr-3 text-right">Amount</th>
                                     <th className="py-2 pr-3">Voucher</th>
                                     <th className="py-2 pr-3">Status</th>
@@ -145,12 +154,16 @@ export default function ChequeRegister({ cheques, filters, statuses, canUpdate, 
                                         <tr className="border-b align-top">
                                             <td className="py-2 pr-3 font-medium">
                                                 {c.number ?? '-'}
-                                                {c.bank && <div className="text-muted-foreground text-xs">{c.bank}</div>}
+                                                <div className="text-muted-foreground text-xs">
+                                                    {c.direction === 'issued' ? 'Issued' : 'Received'}
+                                                    {c.bank && ` · ${c.bank}`}
+                                                </div>
                                             </td>
-                                            <td className="py-2 pr-3">{c.cheque_date ?? '-'}</td>
-                                            <td className="py-2 pr-3">{c.direction === 'issued' ? 'Issued' : 'Received'}</td>
-                                            <td className="py-2 pr-3">{c.party ?? '-'}</td>
-                                            <td className="py-2 pr-3">{c.account ?? '-'}</td>
+                                            <td className="py-2 pr-3 whitespace-nowrap">{c.cheque_date ?? '-'}</td>
+                                            <td className="py-2 pr-3">
+                                                {c.party ?? '-'}
+                                                {c.account && <div className="text-muted-foreground text-xs">Our account: {c.account}</div>}
+                                            </td>
                                             <td className="py-2 pr-3 text-right tabular-nums">{c.amount}</td>
                                             <td className="py-2 pr-3">
                                                 <Link href={`/accounting/vouchers/doc/${c.voucher_id}`} className="hover:underline">
@@ -172,7 +185,7 @@ export default function ChequeRegister({ cheques, filters, statuses, canUpdate, 
                                         </tr>
                                         {open === c.voucher_id && (
                                             <tr className="border-b">
-                                                <td colSpan={9}>
+                                                <td colSpan={7}>
                                                     <StatusForm cheque={c} today={today} onDone={() => setOpen(null)} />
                                                 </td>
                                             </tr>

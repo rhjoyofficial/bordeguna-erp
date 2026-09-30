@@ -28,7 +28,7 @@ class SupplierCsv
      * blank. A file that demanded a contact would have no way to express her.
      */
     public const OPTIONAL = [
-        'contact_name', 'phone', 'email', 'address', 'payment_terms',
+        'contact_name', 'phone', 'email', 'address', 'payment_terms', 'supplier_type',
         'bin', 'tin', 'bank_name', 'bank_branch', 'bank_account_name',
         'bank_account_number', 'mfs_number', 'notes', 'is_active',
     ];
@@ -42,6 +42,7 @@ class SupplierCsv
         'email' => 'Optional. Must be a real address if given.',
         'address' => 'Free text, one line.',
         'payment_terms' => 'Free text for now. e.g. 30 days, Cash on delivery',
+        'supplier_type' => 'Picks the TDS/VDS rates offered when paying: goods, service, contractor, transport, landlord, professional or other. Optional.',
         'bin' => 'Business Identification Number (VAT). Optional.',
         'tin' => 'Taxpayer Identification Number. Optional.',
         'bank_name' => 'e.g. BRAC Bank',

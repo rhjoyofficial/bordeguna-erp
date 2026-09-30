@@ -153,7 +153,12 @@ export default function SuppliersIndex({
                             {/* Finance decision C4: picks the TDS / VDS rates offered when paying. */}
                             <div className="grid gap-2">
                                 <Label htmlFor="supplier_type">Supplier type</Label>
-                                <SearchSelect fit id="supplier_type" value={data.supplier_type} onChange={(e) => setData('supplier_type', e.target.value)}>
+                                <SearchSelect
+                                    fit
+                                    id="supplier_type"
+                                    value={data.supplier_type}
+                                    onChange={(e) => setData('supplier_type', e.target.value)}
+                                >
                                     <option value="">Not set</option>
                                     {Object.entries(supplierTypes).map(([value, label]) => (
                                         <option key={value} value={value}>

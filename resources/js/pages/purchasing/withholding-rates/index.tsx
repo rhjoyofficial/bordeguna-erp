@@ -96,7 +96,12 @@ export default function WithholdingRates({ rates, kinds, supplierTypes, today }:
                         </div>
                         <div className="flex flex-col gap-1">
                             <Label htmlFor="supplier_type">Supplier type</Label>
-                            <SearchSelect fit id="supplier_type" value={form.data.supplier_type} onChange={(e) => form.setData('supplier_type', e.target.value)}>
+                            <SearchSelect
+                                fit
+                                id="supplier_type"
+                                value={form.data.supplier_type}
+                                onChange={(e) => form.setData('supplier_type', e.target.value)}
+                            >
                                 <option value="">Any type</option>
                                 {Object.entries(supplierTypes).map(([value, label]) => (
                                     <option key={value} value={value}>
@@ -207,7 +212,9 @@ export default function WithholdingRates({ rates, kinds, supplierTypes, today }:
                                                     confirmLabel="Delete"
                                                     destructive
                                                     onConfirm={() =>
-                                                        router.delete(route('purchasing.withholding-rates.destroy', rate.id), { preserveScroll: true })
+                                                        router.delete(route('purchasing.withholding-rates.destroy', rate.id), {
+                                                            preserveScroll: true,
+                                                        })
                                                     }
                                                 />
                                             )}

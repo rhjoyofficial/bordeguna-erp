@@ -95,3 +95,33 @@ it('shows a limited viewer only their own company', function () {
             ->has('companies', 1)
             ->where('totals.cash', fn ($value) => (float) $value === 10000.0));
 });
+
+it('shows money between our businesses on its own, cancelling across the group', function () {
+    // Finance decision C2: BDG sent LaLaDia 3,000. BDG is owed it (1195),
+    // LaLaDia owes it (2190); the trade columns do not move.
+    $dueFrom = DB::table('accounts')->insertGetId(['code' => '1195', 'name' => 'Due from Other Businesses', 'type' => 'asset',
+        'is_postable' => 1, 'is_active' => 1, 'system_slug' => 'due_from_businesses', 'created_at' => now(), 'updated_at' => now()]);
+    $dueTo = DB::table('accounts')->insertGetId(['code' => '2190', 'name' => 'Due to Other Businesses', 'type' => 'liability',
+        'is_postable' => 1, 'is_active' => 1, 'system_slug' => 'due_to_businesses', 'created_at' => now(), 'updated_at' => now()]);
+    $cash = DB::table('accounts')->where('code', '1110')->value('id');
+
+    foreach ([[$this->bdg->id, $dueFrom, 300_000], [$this->lld->id, $dueTo, -300_000]] as [$biz, $account, $minor]) {
+        $journal = DB::table('journals')->insertGetId([
+            'business_id' => $biz, 'journal_number' => 'IB-'.$biz, 'journal_type' => 'manual',
+            'journal_date' => '2026-09-12', 'memo' => 'Inter-business transfer',
+            'posted_by' => $this->owner->id, 'posted_at' => now(), 'created_at' => now(),
+        ]);
+        DB::table('journal_lines')->insert([
+            ['journal_id' => $journal, 'business_id' => $biz, 'line_no' => 1, 'account_id' => $account, 'amount_minor' => $minor, 'money_account_id' => null, 'created_at' => now()],
+            ['journal_id' => $journal, 'business_id' => $biz, 'line_no' => 2, 'account_id' => $cash, 'amount_minor' => -$minor, 'money_account_id' => null, 'created_at' => now()],
+        ]);
+    }
+
+    ($this->asOwner)()->get(route('group.cockpit'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('companies.0.intercompany', fn ($value) => (float) $value === 3000.0)
+            ->where('companies.1.intercompany', fn ($value) => (float) $value === -3000.0)
+            ->where('totals.intercompany', fn ($value) => (float) $value === 0.0)
+            ->where('totals.receivables', fn ($value) => (float) $value === 0.0));
+});

@@ -432,3 +432,23 @@ it('keeps one definition of the columns for template, export and import', functi
         expect($fillable)->toContain($column);
     }
 });
+
+it('takes the supplier type by key or by the screen label, and refuses anything else', function () {
+    // Finance decision C4: the type picks the TDS/VDS rates on a payment.
+    $path = tempnam(sys_get_temp_dir(), 'sup').'.csv';
+    file_put_contents($path, "code,name,supplier_type\nADDEEN,Ad-Deen Food,goods\nNIKOLA,Nikola Host,Service provider\n");
+
+    $this->artisan('suppliers:import', ['file' => $path, '--business' => 'import-co', '--apply' => true])->assertSuccessful();
+
+    TenantScope::enter($this->business->id);
+    expect(Supplier::where('code', 'ADDEEN')->value('supplier_type'))->toBe('goods')
+        ->and(Supplier::where('code', 'NIKOLA')->value('supplier_type'))->toBe('service')
+        ->and(SupplierCsv::export(Supplier::query()->orderBy('code')->get()))->toContain(',goods,');
+
+    $bad = tempnam(sys_get_temp_dir(), 'sup').'.csv';
+    file_put_contents($bad, "code,name,supplier_type\nPREMI,Premi Farm,farmer\n");
+
+    $this->artisan('suppliers:import', ['file' => $bad, '--business' => 'import-co', '--apply' => true])
+        ->expectsOutputToContain('is not a supplier type')
+        ->assertFailed();
+});

@@ -16,7 +16,7 @@ class PlanSupplierImport
 {
     /** Columns a person may set through the file. */
     private const WRITABLE = [
-        'name', 'contact_name', 'phone', 'email', 'address', 'payment_terms',
+        'name', 'contact_name', 'phone', 'email', 'address', 'payment_terms', 'supplier_type',
         'bin', 'tin', 'bank_name', 'bank_branch', 'bank_account_name',
         'bank_account_number', 'mfs_number', 'notes', 'is_active',
     ];
@@ -81,6 +81,22 @@ class PlanSupplierImport
                 $plan->addError($line, $code, 'is_active must be "active" or "inactive" (or left blank, which means active).');
 
                 continue;
+            }
+
+            // Finance decision C4: the key (`goods`) or the screen's label
+            // (`Goods supplier`), either case; stored as the key.
+            $type = trim($values['supplier_type'] ?? '');
+
+            if ($type !== '') {
+                $key = collect(Supplier::TYPES)->search(fn (string $label, string $key) => strcasecmp($type, $key) === 0 || strcasecmp($type, $label) === 0);
+
+                if ($key === false) {
+                    $plan->addError($line, $code, "\"{$type}\" is not a supplier type. Use one of: ".implode(', ', array_keys(Supplier::TYPES)).'.');
+
+                    continue;
+                }
+
+                $values['supplier_type'] = $key;
             }
 
             $this->warnAboutPhone($plan, $line, $code, trim($values['phone'] ?? ''));

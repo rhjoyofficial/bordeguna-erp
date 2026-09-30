@@ -12,9 +12,14 @@ use Inertia\Response;
 /**
  * The group cockpit (Module 6, Slice 4): one screen where the owner sees
  * the group breathe. Everything is read from each company's own books AT
- * VIEW TIME; nothing consolidated is ever stored. Until intercompany pairs
- * exist (slice 3, waiting on Joy's answers), the totals are plain sums and
- * the screen says so plainly.
+ * view time; nothing consolidated is ever stored.
+ *
+ * ⭐ Intercompany (finance decision C2, 30 Sep 2026): money one business sent
+ * another sits in 1195 Due from / 2190 Due to, never in the trade receivables
+ * and payables summed here, so the group totals are not inflated by it. The
+ * `intercompany` column shows each business's net position; across the group
+ * it must be zero, and the screen says so - a non-zero total means one side
+ * of a transfer is missing.
  */
 class GroupCockpitController extends Controller
 {
@@ -38,6 +43,7 @@ class GroupCockpitController extends Controller
                 'payables' => round($companies->sum('payables'), 2),
                 'month_income' => round($companies->sum('month_income'), 2),
                 'month_expense' => round($companies->sum('month_expense'), 2),
+                'intercompany' => round($companies->sum('intercompany'), 2),
             ],
             'month' => Carbon::now()->format('F Y'),
         ]);
@@ -87,6 +93,15 @@ class GroupCockpitController extends Controller
                 ->whereNull('supplier_bills.reversed_at')
                 ->sum('party_adjustment_allocations.amount');
 
+        // Owed between our own businesses: Due from (1195) less Due to (2190),
+        // both read from this business's ledger. Debit-normal, so positive =
+        // the other businesses owe this one.
+        $intercompany = (float) DB::table('journal_lines')
+            ->join('accounts', 'accounts.id', '=', 'journal_lines.account_id')
+            ->where('journal_lines.business_id', $businessId)
+            ->whereIn('accounts.system_slug', ['due_from_businesses', 'due_to_businesses'])
+            ->sum('journal_lines.amount_minor') / 100;
+
         // This month's P&L lines: income is credit-normal (negative minor),
         // so the sign flips to read as money earned.
         $monthLines = fn (string $type) => (float) DB::table('journal_lines')
@@ -104,6 +119,7 @@ class GroupCockpitController extends Controller
             'payables' => round($payables, 2),
             'month_income' => round(-$monthLines('income'), 2),
             'month_expense' => round($monthLines('expense'), 2),
+            'intercompany' => round($intercompany, 2),
         ];
     }
 }

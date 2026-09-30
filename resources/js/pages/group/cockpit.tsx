@@ -4,9 +4,8 @@ import { Head } from '@inertiajs/react';
 
 /**
  * The group cockpit (Module 6, Slice 4): each company's vital signs, read
- * from its own books at view time, and honest plain-sum totals. When
- * intercompany pairs exist they will be eliminated here; until then the
- * screen says what the numbers are.
+ * from its own books at view time. Money between our own businesses is kept
+ * out of the trade columns and shown on its own; across the group it cancels.
  */
 interface CompanyRow {
     id: number;
@@ -16,11 +15,12 @@ interface CompanyRow {
     payables: number;
     month_income: number;
     month_expense: number;
+    intercompany: number;
 }
 
 interface CockpitProps {
     companies: CompanyRow[];
-    totals: { cash: number; receivables: number; payables: number; month_income: number; month_expense: number };
+    totals: { cash: number; receivables: number; payables: number; month_income: number; month_expense: number; intercompany: number };
     month: string;
 }
 
@@ -47,6 +47,12 @@ export default function GroupCockpit({ companies, totals, month }: CockpitProps)
                                 <th className="px-3 py-2 text-right font-medium">We owe</th>
                                 <th className="px-3 py-2 text-right font-medium">Income ({month})</th>
                                 <th className="px-3 py-2 text-right font-medium">Spend ({month})</th>
+                                <th
+                                    className="px-3 py-2 text-right font-medium"
+                                    title="Positive: our other businesses owe this one. Negative: this one owes them."
+                                >
+                                    Between our businesses
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
@@ -58,8 +64,9 @@ export default function GroupCockpit({ companies, totals, month }: CockpitProps)
                                     </td>
                                     <td className="px-3 py-2 text-right tabular-nums">{money(company.receivables)}</td>
                                     <td className="px-3 py-2 text-right tabular-nums">{money(company.payables)}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{money(company.month_income)}</td>
+                                    <td className="px-3 py-2 text-right text-emerald-700 tabular-nums">{money(company.month_income)}</td>
                                     <td className="px-3 py-2 text-right tabular-nums">{money(company.month_expense)}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums">{money(company.intercompany)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -71,12 +78,21 @@ export default function GroupCockpit({ companies, totals, month }: CockpitProps)
                                 </td>
                                 <td className="px-3 py-2 text-right tabular-nums">{money(totals.receivables)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums">{money(totals.payables)}</td>
-                                <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{money(totals.month_income)}</td>
+                                <td className="px-3 py-2 text-right text-emerald-700 tabular-nums">{money(totals.month_income)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums">{money(totals.month_expense)}</td>
+                                <td className={'px-3 py-2 text-right tabular-nums ' + (totals.intercompany !== 0 ? 'text-destructive' : '')}>
+                                    {totals.intercompany === 0 ? 'Cancels out' : money(totals.intercompany)}
+                                </td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
+                {totals.intercompany !== 0 && (
+                    <p className="text-destructive text-sm">
+                        Money between our businesses should cancel out across the group. It does not, so one side of a transfer is missing in a
+                        business you cannot see here, or was entered by hand.
+                    </p>
+                )}
             </div>
         </AppLayout>
     );
