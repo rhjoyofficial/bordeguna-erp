@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
@@ -46,7 +47,6 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 /** Money in this form is paisa. Two decimal places, added as integers. */
 const toPaisa = (value: string): number => Math.round((Number(value) || 0) * 100);
-const toTaka = (paisa: number): string => (paisa / 100).toFixed(2);
 
 export default function PaymentCreate({
     suppliers,
@@ -156,16 +156,16 @@ export default function PaymentCreate({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Pay a supplier" />
             <form onSubmit={submit} className="flex flex-col gap-6 p-4">
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="flex flex-wrap items-start gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="supplier_id" required>
                             Supplier
                         </Label>
-                        <SearchSelect id="supplier_id" value={String(data.supplier_id)} onChange={(e) => chooseSupplier(e.target.value)}>
+                        <SearchSelect fit id="supplier_id" value={String(data.supplier_id)} onChange={(e) => chooseSupplier(e.target.value)}>
                             <option value="">Select a supplier</option>
                             {suppliers.map((supplier) => (
                                 <option key={supplier.id} value={supplier.id}>
-                                    {supplier.name} - {supplier.outstanding} owed
+                                    {supplier.name} - {formatMoney(supplier.outstanding)} owed
                                 </option>
                             ))}
                         </SearchSelect>
@@ -178,6 +178,7 @@ export default function PaymentCreate({
                             Paid from
                         </Label>
                         <SearchSelect
+                            fit
                             id="money_account_id"
                             value={String(data.money_account_id)}
                             onChange={(e) => setData('money_account_id', e.target.value)}
@@ -196,7 +197,13 @@ export default function PaymentCreate({
                         <Label htmlFor="paid_on" required>
                             Payment date
                         </Label>
-                        <Input id="paid_on" type="date" value={data.paid_on} onChange={(e) => setData('paid_on', e.target.value)} />
+                        <Input
+                            id="paid_on"
+                            type="date"
+                            className="w-auto"
+                            value={data.paid_on}
+                            onChange={(e) => setData('paid_on', e.target.value)}
+                        />
                         {errors.paid_on && <p className="text-destructive text-sm">{errors.paid_on}</p>}
                     </div>
 
@@ -204,6 +211,7 @@ export default function PaymentCreate({
                         <Label htmlFor="reference">Reference</Label>
                         <Input
                             id="reference"
+                            className="w-80"
                             value={data.reference}
                             placeholder="Cheque number, bKash trx id, slip number"
                             onChange={(e) => setData('reference', e.target.value)}
@@ -240,7 +248,7 @@ export default function PaymentCreate({
                                             <td className="p-3 font-medium">{bill.bill_number}</td>
                                             <td className="p-3">{bill.bill_date ?? '-'}</td>
                                             <td className="p-3">{bill.due_date ?? '-'}</td>
-                                            <td className="p-3 text-right tabular-nums">{bill.total}</td>
+                                            <td className="p-3 text-right tabular-nums">{formatMoney(bill.total)}</td>
                                             <td className="p-3 text-right tabular-nums">
                                                 <button
                                                     type="button"
@@ -248,7 +256,7 @@ export default function PaymentCreate({
                                                     onClick={() => payAllOf(bill)}
                                                     title="Pay all of this bill"
                                                 >
-                                                    {bill.outstanding}
+                                                    {formatMoney(bill.outstanding)}
                                                 </button>
                                             </td>
                                             <td className="p-3 text-right">
@@ -260,7 +268,11 @@ export default function PaymentCreate({
                                                     value={data.amounts[bill.id] ?? ''}
                                                     onChange={(e) => setData('amounts', { ...data.amounts, [bill.id]: e.target.value })}
                                                 />
-                                                {isOver && <p className="text-destructive mt-1 text-xs">Only {bill.outstanding} is outstanding.</p>}
+                                                {isOver && (
+                                                    <p className="text-destructive mt-1 text-xs">
+                                                        Only {formatMoney(bill.outstanding)} is outstanding.
+                                                    </p>
+                                                )}
                                                 {errors[`allocations.${index}.amount`] && (
                                                     <p className="text-destructive mt-1 text-xs">{errors[`allocations.${index}.amount`]}</p>
                                                 )}
@@ -282,7 +294,7 @@ export default function PaymentCreate({
                                         <td className="p-3" colSpan={5}>
                                             Total payment
                                         </td>
-                                        <td className="p-3 text-right tabular-nums">{toTaka(total)}</td>
+                                        <td className="p-3 text-right tabular-nums">{formatMoney(total / 100)}</td>
                                     </tr>
                                 </tfoot>
                             )}
@@ -317,7 +329,8 @@ export default function PaymentCreate({
                         )}
                         {held > 0 && (
                             <p className="text-muted-foreground self-end pb-2 text-sm">
-                                Tax held back {toTaka(held)}. Leaves the account: <span className="font-medium">{toTaka(total - held)}</span>
+                                Tax held back {formatMoney(held / 100)}. Leaves the account:{' '}
+                                <span className="font-medium">{formatMoney((total - held) / 100)}</span>
                             </p>
                         )}
                     </div>
@@ -330,7 +343,9 @@ export default function PaymentCreate({
 
                 <div className="flex items-center gap-3">
                     <Button type="submit" disabled={processing || total <= 0 || overpaid.length > 0}>
-                        Record payment of {toTaka(total)}
+                        {held > 0
+                            ? `Settle ${formatMoney(total / 100)}, pay ${formatMoney((total - held) / 100)}`
+                            : `Record payment of ${formatMoney(total / 100)}`}
                     </Button>
                     {overpaid.length > 0 && <span className="text-destructive text-sm">One or more lines pay more than is outstanding.</span>}
                 </div>

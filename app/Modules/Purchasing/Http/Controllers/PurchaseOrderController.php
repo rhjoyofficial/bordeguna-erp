@@ -178,7 +178,7 @@ class PurchaseOrderController extends Controller
             'received_by' => $receipt->receivedBy?->name,
             // ⚠ Formatted here, in the app's Asia/Dhaka clock. The datetime cast
             // serialises in UTC, which put a 9 a.m. delivery at 3 a.m.
-            'received_at' => $receipt->received_at?->format('Y-m-d H:i'),
+            'received_at' => $receipt->received_at?->format($receipt->received_at->format('H:i') === '00:00' ? 'Y-m-d' : 'Y-m-d H:i'),
             'supplier_challan_number' => $receipt->supplier_challan_number,
             'note' => $receipt->note,
             'lines' => $receipt->lines->map(fn ($line) => [

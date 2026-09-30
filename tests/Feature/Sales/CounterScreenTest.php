@@ -97,3 +97,16 @@ it('feeds the grid everything a card needs: category, categories in use, and the
             // A product nothing prices has NO card price, not a zero.
             ->missing("cardPrices.{$this->unpriced->id}"));
 });
+
+it('prices a card from the MRP when retail has no row of its own, without sending the MRP itself', function () {
+    // 30 Sep 2026 live walk-through: every MRP-priced product read "No price
+    // set" because the grid query never loaded the mrp column.
+    $this->unpriced->update(['mrp' => '870']);
+
+    ($this->asOwner)()->get(route('sales.counter.create'))
+        ->assertOk()
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->where("cardPrices.{$this->unpriced->id}", 870)
+            ->missing('products.0.mrp')
+            ->missing('products.1.mrp'));
+});

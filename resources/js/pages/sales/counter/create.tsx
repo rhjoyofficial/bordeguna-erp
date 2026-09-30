@@ -102,7 +102,6 @@ interface LastSale {
     change: string | null;
 }
 
-
 // ⚠ A value no money account id can take: the empty value means "not chosen
 // yet", which is NOT the same as "the customer owes it". Until 21 Sep 2026 the
 // two were one value, so an unchosen picker was a credit sale.
@@ -225,9 +224,15 @@ export default function CounterSale({
     const payingCash = selectedAccount?.type === 'cash';
     const isWalkIn = walkInId !== null && data.customer_id === String(walkInId);
 
+    // ⚠ Browsing shows only what can be sold at a price today; raw materials and
+    // packaging have none and only cluttered the till (30 Sep 2026 walk-through).
+    // A search or scan still finds every product, priced or not.
+    const browsing = search.trim() === '';
+    const unpricedHidden = browsing ? products.filter((p) => cardPrices[p.id] === undefined).length : 0;
+
     const shown = products.filter((p) => {
         if (categoryId !== null && p.category_id !== categoryId) return false;
-        if (search.trim() === '') return true;
+        if (browsing) return cardPrices[p.id] !== undefined;
         const needle = search.trim().toLowerCase();
         return (
             p.name.toLowerCase().includes(needle) || (p.sku ?? '').toLowerCase().includes(needle) || (p.barcode ?? '').toLowerCase().includes(needle)
@@ -559,6 +564,10 @@ export default function CounterSale({
                         <p role="alert" className="text-destructive text-sm font-medium">
                             {scanMessage}
                         </p>
+                    )}
+
+                    {unpricedHidden > 0 && (
+                        <p className="text-muted-foreground text-xs">{t('pos.unpriced_hidden', { count: String(unpricedHidden) })}</p>
                     )}
 
                     <div className="lg:overflow-y-auto">

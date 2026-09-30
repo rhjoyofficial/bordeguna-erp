@@ -1,3 +1,4 @@
+import { formatMoney, formatQuantity } from '@/lib/utils';
 import { Head, useForm } from '@inertiajs/react';
 import type { FormEventHandler } from 'react';
 
@@ -50,8 +51,9 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
             purchase_order_line_id: line.id,
             // Defaulted to what is still billable and to the AGREED price, so
             // the common case is one click and any deviation is deliberate.
-            quantity: line.billable,
-            unit_cost: line.order_unit_cost,
+            // Plain numbers in the boxes, not the stored "100.0000".
+            quantity: String(Number(line.billable)),
+            unit_cost: String(Number(line.order_unit_cost)),
         })),
     });
 
@@ -159,8 +161,18 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                                 <th className="p-3 text-right">Billed</th>
                                 <th className="p-3 text-right">Billable</th>
                                 <th className="p-3 text-right">Order price</th>
-                                <th className="w-28 p-3">Quantity<span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">*</span></th>
-                                <th className="w-28 p-3">Unit cost<span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">*</span></th>
+                                <th className="w-28 p-3">
+                                    Quantity
+                                    <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                        *
+                                    </span>
+                                </th>
+                                <th className="w-28 p-3">
+                                    Unit cost
+                                    <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                        *
+                                    </span>
+                                </th>
                                 <th className="p-3 text-right">Line total</th>
                             </tr>
                         </thead>
@@ -184,17 +196,25 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                                             <div className="font-medium">{line.product}</div>
                                             <div className="text-muted-foreground text-xs">{line.sku}</div>
                                         </td>
-                                        <td className="p-3 text-right tabular-nums">{line.quantity_received}</td>
-                                        <td className="p-3 text-right tabular-nums">{line.quantity_returned}</td>
-                                        <td className="p-3 text-right tabular-nums">{line.quantity_invoiced}</td>
-                                        <td className="p-3 text-right font-medium tabular-nums">{line.billable}</td>
-                                        <td className="p-3 text-right tabular-nums">{line.order_unit_cost}</td>
+                                        <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity_received)}</td>
+                                        <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity_returned)}</td>
+                                        <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity_invoiced)}</td>
+                                        <td className="p-3 text-right font-medium tabular-nums">{formatQuantity(line.billable)}</td>
+                                        <td className="p-3 text-right tabular-nums">{formatMoney(line.order_unit_cost)}</td>
                                         <td className="p-3">
-                                            <Input value={entry?.quantity ?? ''} onChange={(e) => setLine(index, { quantity: e.target.value })} />
+                                            <Input
+                                                className="w-28 text-right"
+                                                value={entry?.quantity ?? ''}
+                                                onChange={(e) => setLine(index, { quantity: e.target.value })}
+                                            />
                                             <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                                         </td>
                                         <td className="p-3">
-                                            <Input value={entry?.unit_cost ?? ''} onChange={(e) => setLine(index, { unit_cost: e.target.value })} />
+                                            <Input
+                                                className="w-28 text-right"
+                                                value={entry?.unit_cost ?? ''}
+                                                onChange={(e) => setLine(index, { unit_cost: e.target.value })}
+                                            />
                                             <InputError message={errors[`lines.${index}.unit_cost` as keyof typeof errors]} />
                                             {lineVariance !== 0 && (
                                                 <p className="mt-1 text-xs text-amber-600">

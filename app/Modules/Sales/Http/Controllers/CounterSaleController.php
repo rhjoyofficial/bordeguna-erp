@@ -47,7 +47,10 @@ class CounterSaleController extends Controller
         // screen adds the product whose SKU or barcode is exactly that code
         // (Sales UX audit #4). Inventory prints the labels; the till must read them.
         $products = Product::query()->where('is_active', true)->stocked()
-            ->orderBy('name')->get(['id', 'name', 'sku', 'barcode', 'category_id']);
+            ->orderBy('name')->get(['id', 'name', 'sku', 'barcode', 'category_id', 'mrp'])
+            // ⚠ mrp is loaded for the resolver: RETAIL falls back to it, and without
+            // the column every MRP-priced card read "No price set" (30 Sep 2026).
+            ->each->makeHidden('mrp');
 
         return Inertia::render('sales/counter/create', [
             'warehouses' => Warehouse::query()->where('is_active', true)

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
+import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -246,7 +247,13 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                     />
                 </Field>
                 <Field label={t('grn.received_on')} htmlFor="received_on" size="sm" error={errors.received_on}>
-                    <Input id="received_on" type="date" max={today} value={data.received_on} onChange={(e) => setData('received_on', e.target.value)} />
+                    <Input
+                        id="received_on"
+                        type="date"
+                        max={today}
+                        value={data.received_on}
+                        onChange={(e) => setData('received_on', e.target.value)}
+                    />
                 </Field>
                 <Field label={t('grn.note')} htmlFor="receipt_note" size="grow" error={errors.note}>
                     <Input id="receipt_note" value={data.note} onChange={(e) => setData('note', e.target.value)} />
@@ -281,7 +288,13 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                             </span>
                         </p>
                         <FormRow className="gap-3">
-                            <Field label={t('grn.quantity')} htmlFor={`receive-qty-${line.id}`} size="sm" required error={lineError(index, 'quantity')}>
+                            <Field
+                                label={t('grn.quantity')}
+                                htmlFor={`receive-qty-${line.id}`}
+                                size="sm"
+                                required
+                                error={lineError(index, 'quantity')}
+                            >
                                 <div className="flex items-center gap-2">
                                     <Input
                                         id={`receive-qty-${line.id}`}
@@ -295,7 +308,13 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                             </Field>
                             {stocked && (
                                 <>
-                                    <Field label={t('grn.batch_no')} htmlFor={`receive-batch-${line.id}`} size="sm" required={Boolean(line.product.tracks_expiry)} error={lineError(index, 'batch_number')}>
+                                    <Field
+                                        label={t('grn.batch_no')}
+                                        htmlFor={`receive-batch-${line.id}`}
+                                        size="sm"
+                                        required={Boolean(line.product.tracks_expiry)}
+                                        error={lineError(index, 'batch_number')}
+                                    >
                                         <Input
                                             id={`receive-batch-${line.id}`}
                                             value={entry.batch_number}
@@ -314,7 +333,12 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                                     </Field>
                                     {/* ⚠ `min` only saves a round trip. The server refuses an
                                         expiry before today whatever the browser allows. */}
-                                    <Field label={t('grn.expires_on')} htmlFor={`receive-exp-${line.id}`} required={Boolean(line.product.tracks_expiry)} error={lineError(index, 'expiry_date')}>
+                                    <Field
+                                        label={t('grn.expires_on')}
+                                        htmlFor={`receive-exp-${line.id}`}
+                                        required={Boolean(line.product.tracks_expiry)}
+                                        error={lineError(index, 'expiry_date')}
+                                    >
                                         <Input
                                             id={`receive-exp-${line.id}`}
                                             type="date"
@@ -531,7 +555,7 @@ export default function PurchaseOrderShow({
                                 <th className="py-2 pr-3 text-right">Received</th>
                                 <th className="py-2 pr-3 text-right">Returned</th>
                                 <th className="py-2 pr-3 text-right">Unit cost</th>
-                                <th className="py-2">Last received at</th>
+                                <th className="py-2">Last price paid</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -545,14 +569,16 @@ export default function PurchaseOrderShow({
                                             {line.product.type === 'service' && <span className="text-muted-foreground"> - service</span>}
                                         </td>
                                         <td className="text-muted-foreground py-2 pr-3">{purchaseUnitOf(line) ?? '-'}</td>
-                                        <td className="py-2 pr-3 text-right tabular-nums">{line.quantity_ordered}</td>
-                                        <td className="py-2 pr-3 text-right tabular-nums">{line.quantity_received}</td>
-                                        <td className="text-muted-foreground py-2 pr-3 text-right tabular-nums">{line.quantity_returned}</td>
-                                        <td className="text-muted-foreground py-2 pr-3 text-right tabular-nums">{line.unit_cost}</td>
+                                        <td className="py-2 pr-3 text-right tabular-nums">{formatQuantity(line.quantity_ordered)}</td>
+                                        <td className="py-2 pr-3 text-right tabular-nums">{formatQuantity(line.quantity_received)}</td>
+                                        <td className="text-muted-foreground py-2 pr-3 text-right tabular-nums">
+                                            {formatQuantity(line.quantity_returned)}
+                                        </td>
+                                        <td className="text-muted-foreground py-2 pr-3 text-right tabular-nums">{formatMoney(line.unit_cost)}</td>
                                         <td className="text-muted-foreground py-2 text-xs">
                                             {last ? (
                                                 <>
-                                                    <span className="text-foreground text-sm tabular-nums">{last.unit_cost}</span>
+                                                    <span className="text-foreground text-sm tabular-nums">{formatMoney(last.unit_cost)}</span>
                                                     {last.po_number && ` on ${last.po_number}`}
                                                     {last.received_on && `, ${last.received_on}`}
                                                 </>
@@ -664,7 +690,7 @@ export default function PurchaseOrderShow({
                                 <ul className="mt-1 list-disc pl-5">
                                     {receipt.lines.map((line) => (
                                         <li key={line.id}>
-                                            {line.product} ({line.sku}) - {line.quantity_received}
+                                            {line.product} ({line.sku}) - {formatQuantity(line.quantity_received)}
                                             {(line.batch_number || line.manufactured_date || line.expiry_date) && (
                                                 <span className="text-muted-foreground text-xs">
                                                     {line.batch_number && ` · batch ${line.batch_number}`}

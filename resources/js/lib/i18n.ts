@@ -137,6 +137,10 @@ const dictionary = {
     'pos.all': { en: 'All', bn: 'সব' },
     'pos.no_match': { en: 'Nothing matches that search.', bn: 'এই খোঁজায় কিছু মেলেনি।' },
     'pos.no_price_set': { en: 'No price set', bn: 'দাম দেওয়া নেই' },
+    'pos.unpriced_hidden': {
+        en: '{count} items with no price (raw materials, packaging) are hidden. Search to find one.',
+        bn: 'দাম নেই এমন {count}টি পণ্য (কাঁচামাল, প্যাকেজিং) লুকানো আছে। খুঁজতে নাম লিখুন।',
+    },
     'pos.order': { en: 'Order', bn: 'অর্ডার' },
     'pos.item_one': { en: '{count} item', bn: '{count} পণ্য' },
     'pos.item_many': { en: '{count} items', bn: '{count} পণ্য' },
@@ -362,7 +366,10 @@ const dictionary = {
     'orders.quantity': { en: 'Quantity', bn: 'পরিমাণ' },
     'orders.price': { en: 'Price', bn: 'দাম' },
     'orders.line_total': { en: 'Line total', bn: 'লাইনের মোট' },
-    'orders.pick_customer_first': { en: 'Pick the customer first: the price depends on who is buying.', bn: 'আগে ক্রেতা বাছুন: কে কিনছে তার ওপর দাম নির্ভর করে।' },
+    'orders.pick_customer_first': {
+        en: 'Pick the customer first: the price depends on who is buying.',
+        bn: 'আগে ক্রেতা বাছুন: কে কিনছে তার ওপর দাম নির্ভর করে।',
+    },
     'orders.add_line': { en: '+ Add line', bn: '+ লাইন যোগ করুন' },
     'orders.order_total': { en: 'Order total', bn: 'অর্ডারের মোট' },
     'orders.note_optional': { en: 'Note (optional)', bn: 'নোট (ইচ্ছা হলে)' },
