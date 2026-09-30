@@ -7,6 +7,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -505,11 +506,12 @@ export default function ExpensesIndex({ vouchers, filters, canRecord, expenseAcc
                                         {voucher.lines.map((line) => (
                                             <div key={line.id}>
                                                 {line.account ?? '-'}
-                                                {line.description ? ` - ${line.description}` : ''} <span className="tabular-nums">{line.amount}</span>
+                                                {line.description ? ` - ${line.description}` : ''}{' '}
+                                                <span className="tabular-nums">{formatMoney(line.amount)}</span>
                                             </div>
                                         ))}
                                     </td>
-                                    <td className="p-3 text-right font-medium tabular-nums">{voucher.total}</td>
+                                    <td className="p-3 text-right font-medium tabular-nums">{formatMoney(voucher.total)}</td>
                                     <td className="p-3">
                                         <EvidenceCell voucher={voucher} canRecord={canRecord} />
                                     </td>

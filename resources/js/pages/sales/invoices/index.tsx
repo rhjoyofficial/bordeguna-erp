@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -97,8 +98,8 @@ export default function InvoicesIndex({
                                     </td>
                                     <td className="p-3">{invoice.invoice_date}</td>
                                     <td className="p-3">{invoice.customer?.name ?? '-'}</td>
-                                    <td className="p-3 text-right tabular-nums">{invoice.total}</td>
-                                    <td className="p-3 text-right tabular-nums">{invoice.outstanding}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(invoice.total)}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(invoice.outstanding)}</td>
                                     <td className="p-3">
                                         <Badge variant={invoice.is_settled ? 'secondary' : 'outline'}>
                                             {invoice.is_settled ? 'Paid' : invoice.is_part_paid ? 'Part paid' : 'Unpaid'}

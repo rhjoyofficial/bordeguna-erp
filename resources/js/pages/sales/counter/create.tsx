@@ -293,7 +293,8 @@ export default function CounterSale({
             }
 
             const body = await response.json();
-            const listPrice = body.unit_price ?? '';
+            // A plain number in the price box ("340", not the stored "340.0000").
+            const listPrice = body.unit_price === null || body.unit_price === undefined ? '' : String(Number(body.unit_price));
 
             // A price the cashier typed stays; the list price under it follows
             // the quantity, so the trail compares against the right figure.
@@ -544,20 +545,23 @@ export default function CounterSale({
                             >
                                 {t('pos.all')}
                             </button>
-                            {categories.map((c) => (
-                                <button
-                                    key={c.id}
-                                    type="button"
-                                    onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}
-                                    className={
-                                        categoryId === c.id
-                                            ? 'bg-primary text-primary-foreground rounded-full px-3 py-1 text-xs font-medium'
-                                            : 'border-border text-muted-foreground hover:text-foreground rounded-full border px-3 py-1 text-xs'
-                                    }
-                                >
-                                    {c.name}
-                                </button>
-                            ))}
+                            {/* While browsing, only chips that can show a priced card. */}
+                            {categories
+                                .filter((c) => !browsing || products.some((p) => p.category_id === c.id && cardPrices[p.id] !== undefined))
+                                .map((c) => (
+                                    <button
+                                        key={c.id}
+                                        type="button"
+                                        onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}
+                                        className={
+                                            categoryId === c.id
+                                                ? 'bg-primary text-primary-foreground rounded-full px-3 py-1 text-xs font-medium'
+                                                : 'border-border text-muted-foreground hover:text-foreground rounded-full border px-3 py-1 text-xs'
+                                        }
+                                    >
+                                        {c.name}
+                                    </button>
+                                ))}
                         </div>
                     </div>
                     {scanMessage && (

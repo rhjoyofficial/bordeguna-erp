@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useState } from 'react';
@@ -155,7 +156,7 @@ function ExposureBox({ customerId }: { customerId: string }) {
         <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-md border p-3 text-sm">
             <p className="text-muted-foreground">
                 {t('orders.exposure', { invoices: exposure.open_invoices, orders: exposure.undelivered_orders })}{' '}
-                <span className="text-foreground font-medium">{exposure.total}</span>
+                <span className="text-foreground font-medium">{formatMoney(exposure.total)}</span>
                 {exposure.credit_limit !== null && <> {t('orders.against_limit', { limit: exposure.credit_limit })}</>}
             </p>
             {overLimit && <p className="text-destructive mt-1 font-medium">{t('orders.over_limit')}</p>}

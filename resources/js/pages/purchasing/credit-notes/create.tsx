@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -159,7 +160,12 @@ export default function CreditNoteCreate({
                                 <th className="p-3">Bill</th>
                                 <th className="p-3">Date</th>
                                 <th className="p-3 text-right">Outstanding</th>
-                                <th className="p-3 text-right">Credit against this bill<span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">*</span></th>
+                                <th className="p-3 text-right">
+                                    Credit against this bill
+                                    <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                        *
+                                    </span>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
@@ -167,7 +173,7 @@ export default function CreditNoteCreate({
                                 <tr key={bill.id} className="border-t">
                                     <td className="p-3 font-medium">{bill.bill_number}</td>
                                     <td className="text-muted-foreground p-3">{bill.bill_date ?? '-'}</td>
-                                    <td className="p-3 text-right tabular-nums">{bill.outstanding}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(bill.outstanding)}</td>
                                     <td className="p-3 text-right">
                                         <Input
                                             className="ml-auto w-36 text-right"

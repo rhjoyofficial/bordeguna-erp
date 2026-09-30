@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -223,7 +224,7 @@ export default function PriceImport({ preview, groups }: { preview: Preview | nu
                                                     <td className="p-3 font-mono text-xs">{c.sku}</td>
                                                     <td className="p-3">{c.product}</td>
                                                     <td className="p-3">{c.group}</td>
-                                                    <td className="p-3 text-right tabular-nums">{c.price}</td>
+                                                    <td className="p-3 text-right tabular-nums">{formatMoney(c.price)}</td>
                                                     <td className="text-muted-foreground p-3 text-xs">
                                                         {Number(c.minQuantity) > 1 ? `from ${c.minQuantity}` : ''}
                                                     </td>

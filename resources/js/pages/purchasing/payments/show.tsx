@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -111,7 +112,7 @@ export default function PaymentShow({
                                         <td className="p-3 font-medium">{allocation.bill?.bill_number ?? '-'}</td>
                                         <td className="p-3">{asDate(allocation.bill?.bill_date ?? null)}</td>
                                         <td className="p-3 text-right tabular-nums">{allocation.bill?.total ?? '-'}</td>
-                                        <td className="p-3 text-right tabular-nums">{allocation.amount}</td>
+                                        <td className="p-3 text-right tabular-nums">{formatMoney(allocation.amount)}</td>
                                         <td className="p-3 text-right tabular-nums">{allocation.bill?.outstanding ?? '-'}</td>
                                     </tr>
                                 ))}

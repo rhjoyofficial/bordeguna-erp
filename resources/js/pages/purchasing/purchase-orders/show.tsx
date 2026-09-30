@@ -444,9 +444,9 @@ function ReturnGoodsForm({ order }: { order: Order }) {
 const billingSentence = (billing: Billing): string => {
     switch (billing.state) {
         case 'owed':
-            return `Billed ${billing.billed}; ${billing.outstanding} is still owed to the supplier.`;
+            return `Billed ${formatMoney(billing.billed)}; ${formatMoney(billing.outstanding)} is still owed to the supplier.`;
         case 'settled':
-            return `Billed ${billing.billed}; every bill against this order is settled.`;
+            return `Billed ${formatMoney(billing.billed)}; every bill against this order is settled.`;
         default:
             return 'No supplier bill has been recorded against this order yet.';
     }
@@ -653,8 +653,8 @@ export default function PurchaseOrderShow({
                                                     {bill.is_reversed && <span className="text-destructive ml-2 text-xs">reversed</span>}
                                                 </td>
                                                 <td className="py-2 pr-3">{bill.bill_date ?? '-'}</td>
-                                                <td className="py-2 pr-3 text-right tabular-nums">{bill.total}</td>
-                                                <td className="py-2 pr-3 text-right tabular-nums">{bill.outstanding}</td>
+                                                <td className="py-2 pr-3 text-right tabular-nums">{formatMoney(bill.total)}</td>
+                                                <td className="py-2 pr-3 text-right tabular-nums">{formatMoney(bill.outstanding)}</td>
                                                 <td className="py-2 text-right">
                                                     {can_record_payment && !bill.is_reversed && parseFloat(bill.outstanding) > 0 && (
                                                         <Button size="sm" variant="outline" asChild>
@@ -729,7 +729,7 @@ export default function PurchaseOrderShow({
                                      */}
                                     {aggregateReturnLines(purchaseReturn.lines).map((entry) => (
                                         <li key={entry.key}>
-                                            {entry.name} ({entry.sku}) - {entry.quantity}
+                                            {entry.name} ({entry.sku}) - {formatQuantity(entry.quantity)}
                                             {entry.batches > 1 && (
                                                 <span className="text-muted-foreground text-xs"> (across {entry.batches} cost layers)</span>
                                             )}

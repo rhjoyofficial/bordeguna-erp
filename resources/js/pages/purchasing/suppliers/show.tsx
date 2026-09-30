@@ -4,6 +4,7 @@ import { ReportHeading } from '@/components/report/report-shell';
 import { type SupplierCertification, SupplierCertificationsPanel } from '@/components/supplier-certifications-panel';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 
@@ -91,13 +92,13 @@ export default function SupplierShow({
                     <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
                         <p className="text-muted-foreground text-xs">We owe now</p>
                         <p className="mt-1 text-xl font-semibold">
-                            {payable.amount}
+                            {formatMoney(payable.amount)}
                             {payable.is_credit && <span className="text-muted-foreground ml-1 text-sm">(they owe us)</span>}
                         </p>
                     </div>
                     <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
                         <p className="text-muted-foreground text-xs">Billed, lifetime</p>
-                        <p className="mt-1 text-xl font-semibold">{totals.billed}</p>
+                        <p className="mt-1 text-xl font-semibold">{formatMoney(totals.billed)}</p>
                     </div>
                     <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
                         <p className="text-muted-foreground text-xs">Paid, lifetime</p>
@@ -163,8 +164,8 @@ export default function SupplierShow({
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="text-muted-foreground p-3 text-right">of {bill.total}</td>
-                                            <td className="p-3 text-right font-medium">{bill.outstanding}</td>
+                                            <td className="text-muted-foreground p-3 text-right">of {formatMoney(bill.total)}</td>
+                                            <td className="p-3 text-right font-medium">{formatMoney(bill.outstanding)}</td>
                                         </tr>
                                     ))}
                                     {open_bills.length === 0 && (
@@ -192,7 +193,7 @@ export default function SupplierShow({
                                         <tr key={index} className="border-t">
                                             <td className="text-muted-foreground p-3 whitespace-nowrap">{movement.date}</td>
                                             <td className="p-3">{movement.label}</td>
-                                            <td className="p-3 text-right whitespace-nowrap">{movement.amount}</td>
+                                            <td className="p-3 text-right whitespace-nowrap">{formatMoney(movement.amount)}</td>
                                         </tr>
                                     ))}
                                     {recent.length === 0 && (

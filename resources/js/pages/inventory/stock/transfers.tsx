@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router } from '@inertiajs/react';
 
@@ -84,7 +85,7 @@ export default function StockTransfersIndex({
                                 <td className="text-muted-foreground py-2">
                                     {transfer.source_warehouse.name} → {transfer.target_warehouse.name}
                                 </td>
-                                <td className="py-2">{transfer.quantity}</td>
+                                <td className="py-2">{formatQuantity(transfer.quantity)}</td>
                                 <td className="text-muted-foreground max-w-xs py-2">
                                     {transfer.reason.name}
                                     {transfer.note && <div className="text-xs">{transfer.note}</div>}

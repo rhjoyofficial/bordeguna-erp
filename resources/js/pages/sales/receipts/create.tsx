@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useMemo, useState } from 'react';
@@ -187,7 +188,12 @@ export default function ReceiptCreate({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="note">{t('receipt.note')}</Label>
-                        <Input id="note" value={form.data.note} onChange={(e) => form.setData('note', e.target.value)} placeholder={t('receipt.optional')} />
+                        <Input
+                            id="note"
+                            value={form.data.note}
+                            onChange={(e) => form.setData('note', e.target.value)}
+                            placeholder={t('receipt.optional')}
+                        />
                     </div>
                 </div>
 
@@ -226,7 +232,7 @@ export default function ReceiptCreate({
                                                         </Badge>
                                                     )}
                                                 </td>
-                                                <td className="text-muted-foreground py-2 text-right tabular-nums">{invoice.total}</td>
+                                                <td className="text-muted-foreground py-2 text-right tabular-nums">{formatMoney(invoice.total)}</td>
                                                 <td className="py-2 text-right tabular-nums">{money(toPaisa(invoice.outstanding))}</td>
                                                 <td className="py-2 text-right">
                                                     <Input

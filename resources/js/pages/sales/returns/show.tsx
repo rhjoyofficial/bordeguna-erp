@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday } from '@/lib/dates';
+import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -117,7 +118,7 @@ export default function ReturnShow({
                                         {line.delivery_line?.product?.name ?? '-'}{' '}
                                         <span className="text-muted-foreground">({line.delivery_line?.product?.sku})</span>
                                     </td>
-                                    <td className="p-3 text-right tabular-nums">{line.quantity}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity)}</td>
                                     <td className="p-3 text-right tabular-nums">{line.quantity_to_stock}</td>
                                     <td className="p-3 text-right tabular-nums">{line.quantity_written_off}</td>
                                     <td className="p-3 text-right tabular-nums">{parseFloat(line.credit_net).toFixed(2)}</td>

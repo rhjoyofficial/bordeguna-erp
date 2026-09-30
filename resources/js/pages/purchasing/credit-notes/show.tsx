@@ -1,4 +1,5 @@
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 
@@ -74,7 +75,7 @@ export default function CreditNoteShow({
                                 <tr key={allocation.id} className="border-t">
                                     <td className="p-3 font-medium">{allocation.bill?.bill_number ?? '-'}</td>
                                     <td className="text-muted-foreground p-3">{allocation.bill?.bill_date ?? '-'}</td>
-                                    <td className="p-3 text-right tabular-nums">{allocation.amount}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(allocation.amount)}</td>
                                     <td className="p-3 text-right tabular-nums">{allocation.bill?.outstanding ?? '-'}</td>
                                 </tr>
                             ))}

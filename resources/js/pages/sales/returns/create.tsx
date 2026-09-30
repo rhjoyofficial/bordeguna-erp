@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -171,12 +172,12 @@ export default function ReturnCreate({
                                                 <td className="p-3">
                                                     {line.product_name} <span className="text-muted-foreground">({line.product_sku})</span>
                                                 </td>
-                                                <td className="p-3 text-right tabular-nums">{line.quantity_delivered}</td>
-                                                <td className="p-3 text-right tabular-nums">{line.quantity_returnable}</td>
+                                                <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity_delivered)}</td>
+                                                <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity_returnable)}</td>
                                                 {/* Returned goods relieve the unbilled portion first
                                                     (C-SR-4); anything beyond it credits the customer at
                                                     the price they were invoiced. */}
-                                                <td className="p-3 text-right tabular-nums">{line.quantity_uninvoiced}</td>
+                                                <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity_uninvoiced)}</td>
                                                 <td className="p-3">
                                                     <Input
                                                         className="max-w-28"

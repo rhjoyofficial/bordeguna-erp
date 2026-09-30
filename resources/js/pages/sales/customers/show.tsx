@@ -4,6 +4,7 @@ import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -107,7 +108,7 @@ export default function CustomerShow({
                     <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
                         <p className="text-muted-foreground text-xs">Owes now</p>
                         <p className="mt-1 text-xl font-semibold">
-                            {balance.amount}
+                            {formatMoney(balance.amount)}
                             {balance.is_credit && <span className="text-muted-foreground ml-1 text-sm">(in credit)</span>}
                         </p>
                         {balance.ledger_agrees === false && (
@@ -178,8 +179,8 @@ export default function CustomerShow({
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="text-muted-foreground p-3 text-right">of {invoice.total}</td>
-                                            <td className="p-3 text-right font-medium">{invoice.outstanding}</td>
+                                            <td className="text-muted-foreground p-3 text-right">of {formatMoney(invoice.total)}</td>
+                                            <td className="p-3 text-right font-medium">{formatMoney(invoice.outstanding)}</td>
                                         </tr>
                                     ))}
                                     {open_invoices.length === 0 && (
@@ -212,7 +213,7 @@ export default function CustomerShow({
                                                     <span className="text-muted-foreground ml-1 text-xs">({movement.reference})</span>
                                                 )}
                                             </td>
-                                            <td className="p-3 text-right whitespace-nowrap">{movement.amount}</td>
+                                            <td className="p-3 text-right whitespace-nowrap">{formatMoney(movement.amount)}</td>
                                             <td className="text-muted-foreground p-3 text-right whitespace-nowrap">bal {movement.balance}</td>
                                         </tr>
                                     ))}

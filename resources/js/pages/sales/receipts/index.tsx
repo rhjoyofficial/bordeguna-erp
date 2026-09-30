@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -127,7 +128,7 @@ export default function ReceiptsIndex({
                                             {receipt.invoices.map((invoice) => (
                                                 <Link key={invoice.id} href={`/sales/invoices/${invoice.id}`}>
                                                     <Badge variant="outline">
-                                                        {invoice.number} · {invoice.amount}
+                                                        {invoice.number} · {formatMoney(invoice.amount)}
                                                     </Badge>
                                                 </Link>
                                             ))}
@@ -135,7 +136,7 @@ export default function ReceiptsIndex({
                                         </div>
                                     </td>
                                     <td className="text-muted-foreground py-2">{receipt.reference ?? '-'}</td>
-                                    <td className="py-2 text-right font-medium tabular-nums">{receipt.amount}</td>
+                                    <td className="py-2 text-right font-medium tabular-nums">{formatMoney(receipt.amount)}</td>
                                     <td className="py-2 text-right">
                                         <a
                                             href={`/sales/receipts/${receipt.id}/print`}

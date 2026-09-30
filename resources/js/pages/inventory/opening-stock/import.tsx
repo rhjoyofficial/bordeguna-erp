@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -296,7 +297,7 @@ export default function OpeningStockImport({
                                                     <td className="text-muted-foreground p-2">{row.line}</td>
                                                     <td className="p-2 font-mono text-xs">{row.sku}</td>
                                                     <td className="p-2">{row.product}</td>
-                                                    <td className="p-2 text-right tabular-nums">{row.quantity}</td>
+                                                    <td className="p-2 text-right tabular-nums">{formatQuantity(row.quantity)}</td>
                                                     <td className="p-2 text-right tabular-nums">{row.unitCost}</td>
                                                     <td className="p-2 text-right tabular-nums">{row.value}</td>
                                                     <td className="text-muted-foreground p-2 text-xs">

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router } from '@inertiajs/react';
 
@@ -99,7 +100,7 @@ export default function StockRequestsIndex({
                                     {request.warehouse.name}
                                     {request.target_warehouse && ` → ${request.target_warehouse.name}`}
                                 </td>
-                                <td className="py-2">{request.quantity}</td>
+                                <td className="py-2">{formatQuantity(request.quantity)}</td>
                                 <td className="text-muted-foreground py-2">{request.approval_request.requested_by.name}</td>
                                 <td className="text-muted-foreground max-w-xs py-2">
                                     {request.reason.name}
@@ -123,7 +124,7 @@ export default function StockRequestsIndex({
                                                     </Button>
                                                 }
                                                 title="Reject stock request"
-                                                description={`${request.product.name}: ${request.quantity} at ${request.warehouse.name}. This cannot be undone.`}
+                                                description={`${request.product.name}: ${formatQuantity(request.quantity)} at ${request.warehouse.name}. This cannot be undone.`}
                                                 confirmLabel="Reject request"
                                                 destructive
                                                 withNote

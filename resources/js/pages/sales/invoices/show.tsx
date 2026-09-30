@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -150,10 +151,10 @@ export default function InvoiceShow({
                                         )}
                                     </td>
                                     <td className="text-muted-foreground p-3">{line.delivery_line?.delivery?.delivery_number ?? '-'}</td>
-                                    <td className="p-3 text-right tabular-nums">{line.quantity}</td>
-                                    <td className="p-3 text-right tabular-nums">{line.unit_price}</td>
-                                    <td className="p-3 text-right tabular-nums">{line.line_discount}</td>
-                                    <td className="p-3 text-right tabular-nums">{line.line_net}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity)}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(line.unit_price)}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(line.line_discount)}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(line.line_net)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -164,11 +165,11 @@ export default function InvoiceShow({
                     <div className="grid gap-1 text-sm">
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Subtotal</span>
-                            <span className="tabular-nums">{invoice.subtotal}</span>
+                            <span className="tabular-nums">{formatMoney(invoice.subtotal)}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Discount on the bill</span>
-                            <span className="tabular-nums">{invoice.invoice_discount}</span>
+                            <span className="tabular-nums">{formatMoney(invoice.invoice_discount)}</span>
                         </div>
                         {invoice.discount_reason && (
                             <p className="text-muted-foreground text-xs">
@@ -179,12 +180,12 @@ export default function InvoiceShow({
                         {Number(invoice.tax_total) > 0 && (
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">VAT</span>
-                                <span className="tabular-nums">{invoice.tax_total}</span>
+                                <span className="tabular-nums">{formatMoney(invoice.tax_total)}</span>
                             </div>
                         )}
                         <div className="flex justify-between font-semibold">
                             <span>Total</span>
-                            <span className="tabular-nums">{invoice.total}</span>
+                            <span className="tabular-nums">{formatMoney(invoice.total)}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Received</span>
@@ -278,7 +279,7 @@ export default function InvoiceShow({
                                         <td className="p-3">{allocation.receipt?.received_on?.slice(0, 10)}</td>
                                         <td className="p-3">{allocation.receipt?.money_account?.name}</td>
                                         <td className="text-muted-foreground p-3">{allocation.receipt?.reference}</td>
-                                        <td className="p-3 text-right tabular-nums">{allocation.amount}</td>
+                                        <td className="p-3 text-right tabular-nums">{formatMoney(allocation.amount)}</td>
                                         <td className="p-3 text-right">
                                             {allocation.receipt && (
                                                 <Link

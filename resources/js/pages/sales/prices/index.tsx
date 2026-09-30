@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday } from '@/lib/dates';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -180,7 +181,7 @@ export default function PricesIndex({
                                         )}
                                     </td>
                                     <td className="p-3 text-right tabular-nums">{price.min_quantity}</td>
-                                    <td className="p-3 text-right tabular-nums">{price.unit_price}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(price.unit_price)}</td>
                                     <td className="text-muted-foreground p-3">
                                         {price.effective_from}
                                         {price.effective_to ? ` to ${price.effective_to}` : ' onwards'}

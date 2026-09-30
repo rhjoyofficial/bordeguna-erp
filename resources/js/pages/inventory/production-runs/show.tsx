@@ -2,6 +2,7 @@ import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 
@@ -271,7 +272,7 @@ export default function ProductionRunShow({
                                             {line.product} <span className="text-muted-foreground text-xs">{line.sku}</span>
                                         </td>
                                         <td className="p-3 text-right tabular-nums">
-                                            {line.quantity_consumed} {line.unit}
+                                            {formatQuantity(line.quantity_consumed)} {line.unit}
                                         </td>
                                         <td className="text-muted-foreground p-3 text-right tabular-nums">
                                             {line.standard_quantity === null ? '-' : `${line.standard_quantity} ${line.unit ?? ''}`}
@@ -332,7 +333,7 @@ export default function ProductionRunShow({
                                         <tr key={movement.id} className="border-t">
                                             <td className="p-3">{movement.product}</td>
                                             <td className="p-3">{movement.direction}</td>
-                                            <td className="p-3 text-right tabular-nums">{movement.quantity}</td>
+                                            <td className="p-3 text-right tabular-nums">{formatQuantity(movement.quantity)}</td>
                                             <td className="p-3 text-right tabular-nums">{money(movement.unit_cost)}</td>
                                             <td className="p-3">{movement.batch_number ?? '-'}</td>
                                             <td className="text-muted-foreground p-3">

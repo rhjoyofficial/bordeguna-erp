@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -209,7 +210,12 @@ function BookParcelForm({ challan, couriers }: { challan: Challan; couriers: { i
             </div>
             <div className="grid gap-1">
                 <Label required>Amount to collect</Label>
-                <Input className="w-32" placeholder="0 if already paid" value={data.cod_amount} onChange={(e) => setData('cod_amount', e.target.value)} />
+                <Input
+                    className="w-32"
+                    placeholder="0 if already paid"
+                    value={data.cod_amount}
+                    onChange={(e) => setData('cod_amount', e.target.value)}
+                />
                 <InputError message={errors.cod_amount} />
             </div>
             <Button size="sm" disabled={processing}>
@@ -318,7 +324,7 @@ function ParcelOutcomeForm({ challan }: { challan: Challan }) {
                                     <td className="py-1">
                                         {line.product} <span className="text-muted-foreground">({line.sku})</span>
                                     </td>
-                                    <td className="py-1 tabular-nums">{line.quantity}</td>
+                                    <td className="py-1 tabular-nums">{formatQuantity(line.quantity)}</td>
                                     {data.outcome === 'partially_delivered' && (
                                         <td className="py-1">
                                             <Input
@@ -630,7 +636,7 @@ function GatewayRefundList({ order, refunds, canCheck }: { order: Order; refunds
                 <div key={refund.id} className="grid gap-0.5">
                     <p className="flex flex-wrap items-center gap-x-2">
                         <span>
-                            {refund.requested_at} - {refund.refund_trans_id} - {refund.amount} -{' '}
+                            {refund.requested_at} - {refund.refund_trans_id} - {formatMoney(refund.amount)} -{' '}
                             <span className={refund.status === 'refunded' ? 'font-medium' : 'text-muted-foreground'}>{refund.status_label}</span>
                             {refund.refunded_at && refund.status === 'refunded' && (
                                 <span className="text-muted-foreground"> on {refund.refunded_at}</span>
@@ -717,9 +723,9 @@ function PaymentsCard({
                                         say what is held. */}
                                     {receipt.invoices.length === 0
                                         ? 'Paid for this order, no invoice yet'
-                                        : receipt.invoices.map((invoice) => `${invoice.amount} to ${invoice.invoice_number}`).join(', ')}
+                                        : receipt.invoices.map((invoice) => `${formatMoney(invoice.amount)} to ${invoice.invoice_number}`).join(', ')}
                                 </td>
-                                <td className="py-1.5 text-right font-medium">{receipt.amount}</td>
+                                <td className="py-1.5 text-right font-medium">{formatMoney(receipt.amount)}</td>
                             </tr>
                         ))}
                         {payments.refunds.map((refund) => (
@@ -730,7 +736,7 @@ function PaymentsCard({
                                     {refund.reference && <span className="text-muted-foreground"> ({refund.reference})</span>}
                                 </td>
                                 <td className="text-muted-foreground py-1.5">Refund</td>
-                                <td className="py-1.5 text-right font-medium">-{refund.amount}</td>
+                                <td className="py-1.5 text-right font-medium">-{formatMoney(refund.amount)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -1133,7 +1139,7 @@ export default function SalesOrderShow({
                     <p className="text-muted-foreground">
                         Customer exposure: open invoices {exposure.open_invoices} + undelivered orders {exposure.undelivered_orders}
                         {parseFloat(exposure.paid_in_advance) > 0 && <> - paid in advance {exposure.paid_in_advance}</>} ={' '}
-                        <span className="text-foreground font-medium">{exposure.total}</span>
+                        <span className="text-foreground font-medium">{formatMoney(exposure.total)}</span>
                         {exposure.credit_limit !== null && <> against a credit limit of {exposure.credit_limit}</>}
                     </p>
                     {credit_refusal ? (
@@ -1208,10 +1214,10 @@ export default function SalesOrderShow({
                                     {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>
                                     {line.bundle_label && <div className="text-muted-foreground text-xs">{line.bundle_label}</div>}
                                 </td>
-                                <td className="py-2">{line.quantity_ordered}</td>
-                                <td className="py-2">{line.quantity_delivered}</td>
+                                <td className="py-2">{formatQuantity(line.quantity_ordered)}</td>
+                                <td className="py-2">{formatQuantity(line.quantity_delivered)}</td>
                                 <td className="py-2">{remaining(line)}</td>
-                                <td className="py-2">{line.unit_price}</td>
+                                <td className="py-2">{formatMoney(line.unit_price)}</td>
                                 {hasDiscount && <td className="py-2">{parseFloat(line.line_discount) > 0 ? line.line_discount : ''}</td>}
                                 <td className="text-muted-foreground py-2">{line.price_note}</td>
                             </tr>

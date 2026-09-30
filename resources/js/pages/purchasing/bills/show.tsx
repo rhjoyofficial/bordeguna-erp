@@ -1,3 +1,4 @@
+import { formatQuantity } from '@/lib/utils';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { FormEventHandler } from 'react';
 
@@ -150,7 +151,7 @@ export default function BillShow({
                                         <div className="font-medium">{line.product}</div>
                                         <div className="text-muted-foreground text-xs">{line.sku}</div>
                                     </td>
-                                    <td className="p-3 text-right tabular-nums">{line.quantity}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity)}</td>
                                     <td className="p-3 text-right tabular-nums">{line.order_unit_cost ? money(line.order_unit_cost) : '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{money(line.unit_cost)}</td>
                                     <td className="p-3 text-right tabular-nums">{money(line.line_total)}</td>

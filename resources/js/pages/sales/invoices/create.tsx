@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -201,7 +202,7 @@ export default function InvoiceCreate({
                                                 <td className="p-3">
                                                     {line.product_name} <span className="text-muted-foreground">({line.product_sku})</span>
                                                 </td>
-                                                <td className="p-3 tabular-nums">{line.quantity_uninvoiced}</td>
+                                                <td className="p-3 tabular-nums">{formatQuantity(line.quantity_uninvoiced)}</td>
                                                 <td className="p-3">
                                                     <Input
                                                         className="max-w-28"
@@ -267,7 +268,7 @@ export default function InvoiceCreate({
                                     whatever is typed here; anything typed is added to it. */}
                                 {agreed_order_discounts.map((row) => (
                                     <p key={row.order_number} className="text-xs">
-                                        Also billed automatically: {row.amount} agreed on {row.order_number}
+                                        Also billed automatically: {formatMoney(row.amount)} agreed on {row.order_number}
                                         {row.coupon_code ? ` (code ${row.coupon_code})` : ''}, if everything above is billed.
                                     </p>
                                 ))}
@@ -282,8 +283,8 @@ export default function InvoiceCreate({
                             <div className="text-sm">
                                 {agreed_delivery_charges.map((row) => (
                                     <p key={row.order_number}>
-                                        Delivery charge {row.amount} agreed on {row.order_number} is added as its own line, once, on the first invoice
-                                        that bills goods from that order.
+                                        Delivery charge {formatMoney(row.amount)} agreed on {row.order_number} is added as its own line, once, on the
+                                        first invoice that bills goods from that order.
                                     </p>
                                 ))}
                             </div>
