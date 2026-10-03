@@ -834,3 +834,34 @@ it('folds a mid-review spend back into a returned claim, keeping exactly one ope
             ->where('draft.id', $survivor->id)
             ->where('claims', fn ($claims) => collect($claims)->isEmpty()));
 });
+
+it('pays an approved claim with several categories from the screen, with no head to pick', function () {
+    // ⚠⚠ Found 3 Oct 2026: such a claim has no single expense_account_id, the
+    // screen sends expense_account_id = '', and settle() did findOrFail(null),
+    // so "Pay now" was a 404.
+    addSpend()->assertSessionHasNoErrors();
+    $claim = ExpenseClaim::sole();
+    addSpend([
+        'amount' => '80',
+        'expense_category_id' => tripCategory('Conveyance'),
+        'description' => 'Rickshaw',
+        'receipt' => null,
+    ]);
+    nameIt($claim);
+    ($this->asStaff)()->post(route('hrm.my-expenses.submit', $claim))->assertSessionHasNoErrors();
+    ($this->asApprover)()->post(route('hrm.expense-claims.approve', $claim))->assertSessionHasNoErrors();
+
+    ($this->asApprover)()->post("/hrm/expense-claims/{$claim->id}/settle", [
+        'method' => 'payment',
+        'expense_account_id' => '',
+        'money_account_id' => $this->till->id,
+    ])->assertSessionHasNoErrors()->assertRedirect();
+
+    $claim->refresh();
+    $payable = Account::bySlug('employee_reimbursements_payable')->id;
+
+    expect($claim->settlement_method)->toBe('payment')
+        ->and($claim->settled_at)->not->toBeNull()
+        // Booked at approval (Cr payable 530), cleared by the payment (Dr 530).
+        ->and((int) DB::table('journal_lines')->where('account_id', $payable)->sum('amount_minor'))->toBe(0);
+});

@@ -547,9 +547,20 @@ class ExpenseClaimController extends Controller
             ],
         ]);
 
-        $expenseAccount = isset($data['expense_account_id'])
+        // ⚠⚠ Found 3 Oct 2026: a claim whose lines carry SEVERAL categories has
+        // no single expense_account_id, and this used to findOrFail(null), so
+        // paying it was a 404. Such a claim was expensed per line at approval;
+        // no head is needed to pay it. Only a legacy claim (no categories, never
+        // booked) still has to be told which head to expense.
+        $expenseAccount = filled($data['expense_account_id'] ?? null)
             ? Account::findOrFail($data['expense_account_id'])
-            : Account::findOrFail($claim->expense_account_id);
+            : ($claim->expense_account_id !== null ? Account::find($claim->expense_account_id) : null);
+
+        if ($expenseAccount === null && $claim->approval_journal_id === null && ! $claim->hasPostableLines()) {
+            throw ValidationException::withMessages([
+                'expense_account_id' => 'Choose the expense head this claim is booked to.',
+            ]);
+        }
 
         if ($data['method'] === ExpenseClaim::SETTLE_PAYROLL) {
             $period = PayrollPeriod::findOrFail($data['payroll_period_id']);

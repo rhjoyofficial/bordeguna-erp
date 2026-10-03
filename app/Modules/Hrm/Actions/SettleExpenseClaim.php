@@ -45,14 +45,28 @@ class SettleExpenseClaim
     /**
      * Pay the claim now, out of a money account.
      */
-    public function payNow(ExpenseClaim $claim, MoneyAccount $moneyAccount, Account $expenseAccount, User $actor): ExpenseClaim
+    public function payNow(ExpenseClaim $claim, MoneyAccount $moneyAccount, ?Account $expenseAccount, User $actor): ExpenseClaim
     {
         $this->assertSettleable($claim);
+
+        // A category claim approved before approval-posting existed: book it
+        // the way approval would have, then pay it like any booked claim. Same
+        // rule withSalary() follows.
+        if ($claim->approval_journal_id === null && $claim->hasPostableLines()) {
+            app(PostExpenseClaimApproval::class)->handle($claim, $actor);
+            $claim->refresh();
+        }
 
         // A category claim was EXPENSED AT APPROVAL - paying it now clears
         // the payable against the till, and must not expense a second time.
         if ($claim->approval_journal_id !== null) {
             return $this->payPostedClaim($claim, $moneyAccount, $actor);
+        }
+
+        if ($expenseAccount === null) {
+            throw ValidationException::withMessages([
+                'expense_account_id' => 'Choose the expense head this claim is booked to.',
+            ]);
         }
 
         return DB::transaction(function () use ($claim, $moneyAccount, $expenseAccount, $actor) {
@@ -103,7 +117,7 @@ class SettleExpenseClaim
     /**
      * Add the claim to the employee's next salary.
      */
-    public function withSalary(ExpenseClaim $claim, Account $expenseAccount, PayrollPeriod $period, User $actor): ExpenseClaim
+    public function withSalary(ExpenseClaim $claim, ?Account $expenseAccount, PayrollPeriod $period, User $actor): ExpenseClaim
     {
         $this->assertSettleable($claim);
 
@@ -184,7 +198,7 @@ class SettleExpenseClaim
             }
 
             $claim->update([
-                'expense_account_id' => $expenseAccount->id,
+                'expense_account_id' => $expenseAccount?->id ?? $claim->expense_account_id,
                 'settlement_method' => ExpenseClaim::SETTLE_PAYROLL,
                 'settled_at' => now(),
                 'settled_by' => $actor->id,
