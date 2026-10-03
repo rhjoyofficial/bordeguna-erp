@@ -6,6 +6,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AmortizationSchedule;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -21,6 +22,10 @@ use Spatie\Permission\PermissionRegistrar;
  * the idempotency pointer.
  */
 beforeEach(function () {
+    // ⚠ Pinned: "asking beyond today" below assumed today was in September
+    // 2026, so the test broke on 1 Oct 2026 when October became releasable.
+    Carbon::setTestNow('2026-09-30 12:00:00');
+
     $this->business = Business::create(['name' => 'Amort Co', 'slug' => 'amort-co']);
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
@@ -37,6 +42,8 @@ beforeEach(function () {
     $this->prepaid = Account::create(['code' => '1180', 'name' => 'Prepaid Expenses', 'type' => 'asset', 'is_postable' => true]);
     $this->hosting = Account::firstOrCreate(['code' => '6225'], ['name' => 'Software and Hosting', 'type' => 'expense', 'is_postable' => true]);
 });
+
+afterEach(fn () => Carbon::setTestNow());
 
 it('releases the months due, posting real journals with the remainder in the final month', function () {
     $schedule = AmortizationSchedule::create([
