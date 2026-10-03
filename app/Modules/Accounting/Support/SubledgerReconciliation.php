@@ -203,7 +203,9 @@ final class SubledgerReconciliation
             return;
         }
 
-        $bills = Money::sum(SupplierBill::query()->pluck('total')->map(
+        // ⚠ A reversed bill's journal is reversed too, so it owes nothing; counting
+        // it reported false AP and GRNI breaks (found 3 Oct 2026). Same below.
+        $bills = Money::sum(SupplierBill::query()->whereNull('reversed_at')->pluck('total')->map(
             fn ($total) => Money::ofTaka((string) $total),
         ));
         $payments = Money::sum(SupplierPayment::query()->pluck('amount')->map(
@@ -244,7 +246,7 @@ final class SubledgerReconciliation
             partyClass: Supplier::class,
             creditNormal: true,
             derivedByParty: $this->foldByKey([
-                [SupplierBill::query()->get(['supplier_id', 'total']), 'supplier_id',
+                [SupplierBill::query()->whereNull('reversed_at')->get(['supplier_id', 'total']), 'supplier_id',
                     fn ($bill) => Money::ofTaka((string) $bill->total)],
                 [SupplierPayment::query()->get(['supplier_id', 'amount']), 'supplier_id',
                     fn ($payment) => Money::ofTaka((string) $payment->amount)->negated()],
@@ -382,7 +384,7 @@ final class SubledgerReconciliation
         // derived 1,000, because it was still valuing the bill at what the
         // supplier charged rather than at what arrived.
         $billed = Money::sum(
-            SupplierBillLine::query()->with('purchaseOrderLine')->get()
+            SupplierBillLine::query()->whereHas('bill', fn ($bill) => $bill->whereNull('reversed_at'))->with('purchaseOrderLine')->get()
                 ->map(fn ($line) => $line->purchaseOrderLine === null
                     ? Money::zero()
                     : Money::ofProduct(

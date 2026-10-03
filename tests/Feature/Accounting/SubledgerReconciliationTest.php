@@ -25,6 +25,8 @@ use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\Actions\RecordSupplierPayment;
+use App\Modules\Purchasing\Actions\ReverseSupplierBill;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Actions\RecordCounterSale;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
@@ -411,3 +413,27 @@ function stockOnHandInLedger(): string
         ->where('account_id', $accountId)
         ->sum('amount_minor') / 100, 2, '.', '');
 }
+
+it('does not count a reversed supplier bill as owed', function () {
+    // ⚠⚠ Found 3 Oct 2026: a reversed bill's journal is reversed too, but the
+    // reconciliation still summed its total, so AP and GRNI showed false breaks.
+    $order = PurchaseOrder::with('lines')->first();
+    $line = $order->lines->first();
+
+    app(RecordGoodsReceipt::class)->handle($order, [['line' => $line, 'quantity' => '20']], $this->user);
+
+    $second = app(RecordSupplierBill::class)->handle(
+        supplier: $this->supplier,
+        billNumber: 'INV-9002',
+        billDate: Carbon::parse('2026-08-10'),
+        lines: [['line' => $line->fresh(), 'quantity' => '20', 'unitCost' => '25.00']],
+        createdBy: $this->user,
+        purchaseOrder: $order->fresh(),
+    );
+
+    app(ReverseSupplierBill::class)->handle($second, $this->user, 'Entered twice');
+
+    $result = SubledgerReconciliation::reconcileAllBusinesses();
+
+    expect($result['problems'])->toBeEmpty();
+});
