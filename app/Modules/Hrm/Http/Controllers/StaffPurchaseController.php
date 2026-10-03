@@ -11,6 +11,7 @@ use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollPeriod;
+use App\Modules\Hrm\Support\PayrollCycle;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordCounterSale;
@@ -236,7 +237,7 @@ class StaffPurchaseController extends Controller
                     'employee_id' => $employee->id,
                     'type' => PayrollAdjustmentType::Deduction,
                     'amount' => $staffTotal,
-                    'payroll_period_id' => PayrollPeriod::forMonth((int) now()->year, (int) now()->month)->id,
+                    'payroll_period_id' => $this->deductionPeriod()->id,
                     'reason' => "Staff purchase {$row->number}",
                     'source_key' => "staff_purchase:{$row->id}",
                     'requested_by' => $request->user()->id,
@@ -253,6 +254,27 @@ class StaffPurchaseController extends Controller
         });
 
         return back()->with('success', "Handed over as sale {$row->number} at the staff price.");
+    }
+
+    /**
+     * The payroll month a salary deduction belongs to.
+     *
+     * ⚠⚠ Found 3 Oct 2026: this picked the CALENDAR month, so a hand-over on
+     * 24-31 October landed in the October period, which ended on the 23rd and
+     * may already be paid. The cycle that contains today is the right one; if
+     * that run has already been paid out, the next month's.
+     */
+    private function deductionPeriod(): PayrollPeriod
+    {
+        $cycle = PayrollCycle::containing(now());
+        $period = PayrollPeriod::forMonth($cycle['year'], $cycle['month']);
+
+        if ($period->latestRun()?->status?->isPaidOut() === true) {
+            $next = Carbon::create($cycle['year'], $cycle['month'], 1)->addMonth();
+            $period = PayrollPeriod::forMonth((int) $next->year, (int) $next->month);
+        }
+
+        return $period;
     }
 
     // ── The shared arithmetic ────────────────────────────────────────────

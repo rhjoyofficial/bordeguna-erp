@@ -1,15 +1,16 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
-use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
-use App\Modules\Accounting\Models\Account;
 use App\Modules\Hrm\database\seeders\HrmPermissionsSeeder;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\PayrollAdjustment;
+use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
@@ -216,4 +217,21 @@ it('keeps approval away from the staff themselves', function () {
 
     ($this->asStaff)()->post(route('hrm.staff-purchases.approve', $id))
         ->assertForbidden();
+});
+
+it('puts a deduction handed over after the cut-off into the next payroll month', function () {
+    // ⚠⚠ Found 3 Oct 2026: the period was the CALENDAR month, so a hand-over on
+    // 26 September landed in the September period (24 Aug - 23 Sep), which had
+    // already ended. On the 24-23 cycle 26 September belongs to October.
+    Carbon::setTestNow('2026-09-26 11:00:00');
+
+    $id = applyFor([['product_id' => $this->honey->id]], 'salary_deduction');
+    ($this->asHr)()->post(route('hrm.staff-purchases.approve', $id));
+    ($this->asHr)()->post(route('hrm.staff-purchases.fulfill', $id), [])
+        ->assertSessionHasNoErrors();
+
+    $period = PayrollPeriod::find(PayrollAdjustment::query()->sole()->payroll_period_id);
+
+    expect($period->month)->toBe(10)
+        ->and($period->year)->toBe(2026);
 });
