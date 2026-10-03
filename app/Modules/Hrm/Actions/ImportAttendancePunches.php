@@ -86,12 +86,28 @@ class ImportAttendancePunches
         $report = [];
         $importedDates = [];
 
-        DB::transaction(function () use (
-            $parsed, $source, $deviceIdentifier, $employeesByEnroll,
+        // ⚠ Found 3 Oct 2026: the batch used to be created AFTER the rows, so no
+        // punch ever carried import_batch_id and "which file brought this punch
+        // in" had no answer. The batch now exists first; its counts are filled
+        // in once the rows are done.
+        $batch = DB::transaction(function () use (
+            $parsed, $filename, $source, $deviceIdentifier, $employeesByEnroll,
             &$imported, &$duplicates, &$failed, &$report, &$importedDates
         ) {
+            $batch = AttendanceImportBatch::create([
+                'filename' => $filename,
+                'source' => $source,
+                'device_identifier' => $deviceIdentifier,
+                'total_rows' => count($parsed['rows']),
+                'imported_count' => 0,
+                'duplicate_count' => 0,
+                'failed_count' => 0,
+                'report' => [],
+                'uploaded_by' => Auth::id(),
+            ]);
+
             foreach ($parsed['rows'] as $row) {
-                $outcome = $this->importRow($row, $source, $deviceIdentifier, $employeesByEnroll);
+                $outcome = $this->importRow($row, $source, $deviceIdentifier, $employeesByEnroll, $batch->id);
 
                 match ($outcome['status']) {
                     'imported' => $imported++,
@@ -113,21 +129,18 @@ class ImportAttendancePunches
                     ];
                 }
             }
-        });
 
-        $batch = AttendanceImportBatch::create([
-            'filename' => $filename,
-            'source' => $source,
-            'device_identifier' => $deviceIdentifier,
-            'total_rows' => count($parsed['rows']),
-            'imported_count' => $imported,
-            'duplicate_count' => $duplicates,
-            'failed_count' => $failed,
-            // Capped so one catastrophically wrong file cannot bloat the row;
-            // the counts above stay exact regardless.
-            'report' => array_slice($report, 0, 500),
-            'uploaded_by' => Auth::id(),
-        ]);
+            $batch->update([
+                'imported_count' => $imported,
+                'duplicate_count' => $duplicates,
+                'failed_count' => $failed,
+                // Capped so one catastrophically wrong file cannot bloat the row;
+                // the counts above stay exact regardless.
+                'report' => array_slice($report, 0, 500),
+            ]);
+
+            return $batch;
+        });
 
         // ⚠⚠ The lesson this closes: an import lands PUNCHES, and every screen
         // kept showing the old world until somebody ran the processing command
@@ -192,7 +205,7 @@ class ImportAttendancePunches
      * @param  Collection<string, Employee>  $employeesByEnroll
      * @return array{status: string, reason: string|null}
      */
-    private function importRow(array $row, PunchSource $source, ?string $deviceIdentifier, $employeesByEnroll): array
+    private function importRow(array $row, PunchSource $source, ?string $deviceIdentifier, $employeesByEnroll, int $batchId): array
     {
         if ($row['enroll_id'] === null) {
             return ['status' => 'failed', 'reason' => 'No employee/enroll ID on this row.'];
@@ -216,6 +229,7 @@ class ImportAttendancePunches
             // A device column in the file beats the one chosen at upload time.
             'device_identifier' => $row['device_identifier'] ?: $deviceIdentifier,
             'enroll_id' => $row['enroll_id'],
+            'import_batch_id' => $batchId,
         ]);
 
         return $punch === null

@@ -18,6 +18,7 @@ use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\HolidayCalendar;
 use App\Modules\Hrm\Models\Shift;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -189,7 +190,7 @@ it('handles a realistic month-size import in one request', function () {
 
     $lines = [];
     foreach (range(0, 33) as $offset) {
-        $date = Illuminate\Support\Carbon::parse('2026-07-24')->addDays($offset)->toDateString();
+        $date = Carbon::parse('2026-07-24')->addDays($offset)->toDateString();
         foreach ($employees as $i => $employee) {
             if (count($lines) >= 300) {
                 break 2;
@@ -205,4 +206,16 @@ it('handles a realistic month-size import in one request', function () {
         ->and($batch->processingError)->toBeNull();
 
     expect(DailyAttendance::count())->toBeGreaterThan(0);
+});
+
+it('links every imported punch to the import that brought it in', function () {
+    // ⚠ Found 3 Oct 2026: the batch was created after the rows, so no punch
+    // ever carried import_batch_id.
+    $batch = app(ImportAttendancePunches::class)->handle(autoProcCsv([
+        '7,2026-07-27,08:55:00,C/In,K40-1',
+        '7,2026-07-27,18:03:00,C/Out,K40-1',
+    ]), 'linked.csv', PunchSource::Biometric);
+
+    expect($batch->imported_count)->toBe(2)
+        ->and(AttendancePunch::where('import_batch_id', $batch->id)->count())->toBe(2);
 });
