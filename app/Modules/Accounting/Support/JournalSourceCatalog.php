@@ -41,6 +41,7 @@ final class JournalSourceCatalog
         'Voucher' => ['Voucher', 'Vouchers', 'voucher_number'],
         'PayrollRun' => ['Payroll', 'Payroll', null],
         'Loan' => ['Employee loan', 'Payroll', 'reference'],
+        'LoanLedgerEntry' => ['Loan settlement', 'Payroll', null],
         'ExpenseClaim' => ['Expense claim', 'Payroll', 'claim_number'],
         'FixedAsset' => ['Fixed asset', 'Assets', 'name'],
         'InventoryAdjustment' => ['Stock adjustment', 'Inventory', null],

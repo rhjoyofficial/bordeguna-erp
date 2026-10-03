@@ -2,6 +2,8 @@
 
 namespace App\Modules\Hrm\Actions;
 
+use App\Models\User;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Enums\LoanInstallmentStatus;
 use App\Modules\Hrm\Enums\LoanLedgerEntryType;
 use App\Modules\Hrm\Enums\LoanStatus;
@@ -31,10 +33,17 @@ use Illuminate\Validation\ValidationException;
  */
 class SettleLoan
 {
+    public function __construct(private readonly PostLoanSettlement $posting) {}
+
     /**
+     * `$receivedInto` and `$receivedOn` are what the ledger needs: which account
+     * the money came into and on what day. Once accounting is on, a settlement
+     * that cannot say where the money went is refused by the posting, and the
+     * whole settlement rolls back with it.
+     *
      * @throws ValidationException
      */
-    public function handle(Loan $loan, float $amountReceived, string $note): Loan
+    public function handle(Loan $loan, float $amountReceived, string $note, ?MoneyAccount $receivedInto = null, ?string $receivedOn = null, ?User $settledBy = null): Loan
     {
         if (! $loan->isApplied() || $loan->status !== LoanStatus::Active) {
             throw ValidationException::withMessages([
@@ -61,8 +70,8 @@ class SettleLoan
             ]);
         }
 
-        return DB::transaction(function () use ($loan, $outstanding, $note) {
-            LoanLedgerEntry::once("loan_settlement:{$loan->id}", [
+        return DB::transaction(function () use ($loan, $outstanding, $note, $receivedInto, $receivedOn, $settledBy) {
+            $entry = LoanLedgerEntry::once("loan_settlement:{$loan->id}", [
                 'loan_id' => $loan->id,
                 'employee_id' => $loan->employee_id,
                 'entry_type' => LoanLedgerEntryType::EarlySettlement,
@@ -70,12 +79,16 @@ class SettleLoan
                 // never the amount handed over — an overpayment is change, not a
                 // negative loan balance.
                 'amount' => -$outstanding,
-                'occurred_on' => now()->toDateString(),
+                'occurred_on' => $receivedOn ?? now()->toDateString(),
                 'note' => $note,
                 'reference_type' => $loan->getMorphClass(),
                 'reference_id' => $loan->id,
                 'created_by' => Auth::id(),
             ]);
+
+            if ($entry !== null) {
+                $this->posting->handle($loan, $entry, $receivedInto, $settledBy ?? Auth::user());
+            }
 
             // Kept as history rather than removed: "what was the plan, and what
             // actually happened" is a question a settled loan still has to

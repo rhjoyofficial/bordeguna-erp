@@ -215,6 +215,19 @@ class AccountController extends Controller
                 'is_postable' => 'This account already has postings or a Bank & cash account, so it cannot become a heading.',
             ]);
         }
+
+        // ⚠⚠ Found 3 Oct 2026: 1170 was turned into a heading on 21 Sep while
+        // the payroll mappings still pointed at it, so every loan disbursement
+        // and loan recovery was refused from then on. An account the system
+        // posts to by mapping must stay postable; repoint the mapping first.
+        if ($account->exists && ! $account->is_postable && $account->isDirty('is_postable')
+            && DB::table('account_mappings')->where('account_id', $account->id)
+                ->where(fn ($q) => $q->whereNull('effective_to')->orWhere('effective_to', '>=', now()->toDateString()))
+                ->exists()) {
+            throw ValidationException::withMessages([
+                'is_postable' => 'The system posts to this account automatically (payroll, sales, purchases or stock), so it cannot become a heading.',
+            ]);
+        }
     }
 
     /**

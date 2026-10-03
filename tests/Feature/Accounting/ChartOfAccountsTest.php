@@ -5,6 +5,8 @@ use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Enums\NormalBalance;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountMapping;
+use App\Modules\Accounting\Support\ChartPermissions;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Support\Facades\Schema;
@@ -377,4 +379,26 @@ it('reads an account the way a report prints it', function () {
     $account = Account::create(['code' => '1110', 'name' => 'Cash in Hand', 'type' => AccountType::Asset]);
 
     expect($account->label())->toBe('1110 - Cash in Hand');
+});
+
+it('refuses to turn an account the system posts to into a heading', function () {
+    // ⚠⚠ Found 3 Oct 2026: 1170 became a heading on 21 Sep while the payroll
+    // mappings still pointed at it, and every loan was refused from then on.
+    $this->seed(ChartOfAccountsSeeder::class);
+    Permission::findOrCreate(ChartPermissions::STRUCTURE, 'web');
+    $this->accountant->givePermissionTo(ChartPermissions::STRUCTURE);
+
+    $account = Account::create(['code' => '9410', 'name' => 'Mapped head', 'type' => AccountType::Asset]);
+    AccountMapping::create([
+        'business_id' => $this->business->id, 'key' => 'test.mapped_head', 'account_id' => $account->id, 'effective_from' => '2026-01-01',
+    ]);
+
+    $this->actingAs($this->accountant)
+        ->put(route('accounting.accounts.update', $account->id), [
+            'code' => '9410', 'name' => 'Mapped head', 'type' => 'asset',
+            'parent_id' => null, 'is_postable' => false, 'is_active' => true,
+        ])
+        ->assertSessionHasErrors(['is_postable' => 'The system posts to this account automatically (payroll, sales, purchases or stock), so it cannot become a heading.']);
+
+    expect($account->fresh()->is_postable)->toBeTrue();
 });

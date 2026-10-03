@@ -189,9 +189,20 @@ class LoanController extends Controller
         $validated = $request->validate([
             'amount_received' => ['required', 'numeric', 'min:0.01'],
             'note' => ['required', 'string', 'max:500'],
+            // ⚠ Where the money came in and when: the settlement now clears the
+            // employee's balance on 1170 too, so the ledger needs both facts.
+            'money_account_id' => ['required', 'integer', Rule::exists('money_accounts', 'id')],
+            'received_on' => ['required', 'date', 'before_or_equal:today'],
         ]);
 
-        $settled = $action->handle($loan, (float) $validated['amount_received'], $validated['note']);
+        $settled = $action->handle(
+            $loan,
+            (float) $validated['amount_received'],
+            $validated['note'],
+            MoneyAccount::find($validated['money_account_id']),
+            $validated['received_on'],
+            $request->user(),
+        );
 
         return back()->with('success', sprintf(
             '%s settled. %d remaining installment(s) cancelled.',

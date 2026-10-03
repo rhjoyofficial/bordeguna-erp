@@ -13,6 +13,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Actions\DisburseLoan;
+use App\Modules\Hrm\Actions\SettleLoan;
 use App\Modules\Hrm\database\seeders\PayrollAccountMappingSeeder;
 use App\Modules\Hrm\Enums\LoanStatus;
 use App\Modules\Hrm\Enums\LoanType;
@@ -165,4 +166,48 @@ it('still dates a disbursement today when no day is given', function () {
     app(DisburseLoan::class)->handle($this->loan, $this->bank, $this->user);
 
     expect($this->loan->fresh()->disbursed_on->toDateString())->toBe(now()->toDateString());
+});
+
+// --- Early settlement posts too (found 3 Oct 2026) ------------------------------------
+
+it('clears the employee balance on 1170 when a loan is settled early', function () {
+    app(DisburseLoan::class)->handle($this->loan, $this->bank, $this->user);
+
+    // ⚠⚠ Settlement used to write only the HR loan ledger: the loan read
+    // "settled" while 1170 still said the employee owed 20,000.
+    app(SettleLoan::class)->handle(
+        $this->loan->fresh(), 20000, 'Paid back by bank transfer', $this->bank, '2026-08-03', $this->user,
+    );
+
+    expect($this->loan->fresh()->status)->toBe(LoanStatus::Settled)
+        ->and(($this->balanceOn)('employee_advances'))->toBe(0)
+        ->and(($this->balanceOn)('cash_at_bank'))->toBe(0)
+        ->and(Journal::count())->toBe(2);
+
+    $settlement = Journal::latest('id')->first();
+
+    expect($settlement->balance()->isZero())->toBeTrue()
+        ->and($settlement->lines->firstWhere('amount_minor', '<', 0)->party->is($this->employee))->toBeTrue();
+});
+
+it('refuses an early settlement that cannot say where the money came in, and keeps the loan open', function () {
+    app(DisburseLoan::class)->handle($this->loan, $this->bank, $this->user);
+
+    expect(fn () => app(SettleLoan::class)->handle(
+        $this->loan->fresh(), 20000, 'Paid back', null, '2026-08-03', $this->user,
+    ))->toThrow(MappingNotFound::class);
+
+    expect($this->loan->fresh()->status)->toBe(LoanStatus::Active)
+        ->and(Journal::count())->toBe(1);
+});
+
+it('keeps 1170 postable even after it was turned into a heading', function () {
+    // The 21 Sep state: the payroll mapping still points at a heading.
+    Account::bySlug('employee_advances')->update(['is_postable' => false]);
+
+    (include base_path('app/Modules/Accounting/database/migrations/2026_10_03_100000_employee_advances_account_takes_postings_again.php'))->up();
+
+    app(DisburseLoan::class)->handle($this->loan, $this->bank, $this->user);
+
+    expect(($this->balanceOn)('employee_advances'))->toBe(2000000);
 });

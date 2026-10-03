@@ -256,9 +256,11 @@ function RequestDialog({
     );
 }
 
-function SettleDialog({ loan }: { loan: LoanRow }) {
+function SettleDialog({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: Props['moneyAccounts'] }) {
     const [open, setOpen] = useState(false);
     const [amount, setAmount] = useState(String(loan.outstanding));
+    const [accountId, setAccountId] = useState(String(moneyAccounts[0]?.id ?? ''));
+    const [receivedOn, setReceivedOn] = useState(dhakaToday());
     const [note, setNote] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -288,6 +290,27 @@ function SettleDialog({ loan }: { loan: LoanRow }) {
                         {errors.loan && <p className="text-destructive text-xs">{errors.loan}</p>}
                     </div>
                     <div className="grid gap-2">
+                        <Label htmlFor="settle_account" required>
+                            Received into
+                        </Label>
+                        <SearchSelect id="settle_account" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+                            <option value="">Select an account</option>
+                            {moneyAccounts.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                    {a.name}
+                                </option>
+                            ))}
+                        </SearchSelect>
+                        {errors.money_account_id && <p className="text-destructive text-xs">{errors.money_account_id}</p>}
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="settle_date" required>
+                            Received on
+                        </Label>
+                        <Input id="settle_date" type="date" className="w-auto" value={receivedOn} onChange={(e) => setReceivedOn(e.target.value)} />
+                        {errors.received_on && <p className="text-destructive text-xs">{errors.received_on}</p>}
+                    </div>
+                    <div className="grid gap-2">
                         <Label htmlFor="settle_note" required>
                             Note
                         </Label>
@@ -300,11 +323,11 @@ function SettleDialog({ loan }: { loan: LoanRow }) {
                         <Button variant="outline">Cancel</Button>
                     </DialogClose>
                     <Button
-                        disabled={note.trim() === ''}
+                        disabled={note.trim() === '' || accountId === ''}
                         onClick={() =>
                             router.post(
                                 route('hrm.loans.settle', loan.id),
-                                { amount_received: Number(amount), note },
+                                { amount_received: Number(amount), note, money_account_id: Number(accountId), received_on: receivedOn },
                                 {
                                     preserveScroll: true,
                                     onError: (e: Record<string, string>) => setErrors(e),
@@ -448,7 +471,7 @@ function LoanCard({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: Props
                             <ApproveDialog loan={loan} moneyAccounts={moneyAccounts} />
                         </>
                     )}
-                    {loan.can_settle && <SettleDialog loan={loan} />}
+                    {loan.can_settle && <SettleDialog loan={loan} moneyAccounts={moneyAccounts} />}
                     <Button size="sm" variant="ghost" onClick={() => setShowDetail((v) => !v)}>
                         {showDetail ? 'Hide' : 'Schedule & ledger'}
                     </Button>
