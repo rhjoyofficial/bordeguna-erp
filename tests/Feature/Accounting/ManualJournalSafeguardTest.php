@@ -190,14 +190,14 @@ it('leaves a general expense head payroll only allocates to open, and keeps the 
     expect($owned)->toHaveKey($id('1170'));
 });
 
-it('sends overtime and bonus to their own accounts, a fine back to wages, and keeps the wage group payroll\'s', function () {
+it('sends overtime and bonus to their own accounts, a fine to the held liability, and keeps the wage group payroll\'s', function () {
     // Accountant meeting 19 Sep 2026, D1 and D2.
     $on = Carbon::now();
     $code = fn (string $key, ?string $fallback = null) => AccountMapping::resolve($key, $on, $fallback)->code;
 
     expect($code('payroll.earning.overtime', 'payroll.earning.default'))->toBe('6133')
         ->and($code('payroll.earning.bonus', 'payroll.earning.default'))->toBe('6132')
-        ->and($code('payroll.deduction.penalty', 'payroll.deduction.default'))->toBe('6131');
+        ->and($code('payroll.deduction.penalty', 'payroll.deduction.default'))->toBe('2147');
 
     // Overtime and Bonus are in the wage head's own group, so a voucher or a
     // manual journal still may not touch them; Conveyance remains shared.

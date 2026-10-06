@@ -128,6 +128,9 @@ class ChartOfAccountsSeeder extends Seeder
         // because payroll posting has to find it (Phase 3).
         ['2140', 'Employee Deductions Payable', AccountType::Liability, '2100', true, 'employee_deductions_payable'],
         ['2145', 'Employee Reimbursements Payable', AccountType::Liability, '2100', true, 'employee_reimbursements_payable'],
+        // Finance policy B6 (29 Sep 2026): a fine deducted from pay is held,
+        // never income and never a credit to the wage cost (Labour Act s.25).
+        ['2147', 'Staff Fines Held', AccountType::Liability, '2100', true, 'staff_fines_held'],
         ['2150', 'Advances from Customers', AccountType::Liability, '2100', true, 'customer_advances'],
         ['2160', 'Accrued Expenses', AccountType::Liability, '2100', true, null],
         // ⚠⚠ C-VAT-6. VAT charged to customers and owed onward to the

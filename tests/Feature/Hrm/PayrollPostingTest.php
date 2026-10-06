@@ -533,3 +533,24 @@ it('files a reimbursement as the cost it was, not as pay', function () {
     expect($on('fuel_and_conveyance'))->toBe(200500)
         ->and($on('salaries_expense'))->toBe(2500000);
 });
+
+it('holds a staff fine in its own liability, never as wage credit or income (B6)', function () {
+    // Finance policy B6, 29 Sep 2026: a fine is held, not the employer's money.
+    $run = ($this->buildRun)([
+        ['basic', 'earning', '30000.00'],
+        ['penalty', 'deduction', '300.00'],
+    ], '29700.00');
+
+    app(TransitionPayrollRun::class)->markApproved($run, $this->user);
+
+    $journal = Journal::first();
+    $on = fn (string $slug) => (int) JournalLine::where('journal_id', $journal->id)
+        ->where('account_id', Account::bySlug($slug)->id)->sum('amount_minor');
+
+    expect(Account::bySlug('staff_fines_held')->code)->toBe('2147')
+        ->and($on('staff_fines_held'))->toBe(-30000)
+        // The wage cost is the full 30,000: the fine does not shrink it.
+        ->and($on('salaries_expense'))->toBe(3000000)
+        ->and($on('salaries_payable'))->toBe(-2970000)
+        ->and($journal->balance()->isZero())->toBeTrue();
+});

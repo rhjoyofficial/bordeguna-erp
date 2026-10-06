@@ -103,11 +103,13 @@ class PayrollAccountMappingSeeder extends Seeder
         // the master expense chart; nothing pointed at them.
         'payroll.earning.overtime' => 'overtime_expense',
         'payroll.earning.bonus' => 'bonus_expense',
-        // ⚠ A FINE IS NOT A LIABILITY. It fell through to Employee Deductions
-        // Payable, which says the company owes that money onward to somebody.
-        // It owes it to nobody: it is wage the employee did not get, exactly
-        // like an absence, so it credits the wage cost back.
-        'payroll.deduction.penalty' => 'salaries_expense',
+        // ⚠⚠ A FINE IS HELD (Finance policy B6, 29 Sep 2026, superseding the
+        // 19 Sep D2 mapping to Salaries and Wages). The Labour Act (s.25) does
+        // not let the employer keep a fine as its own money, so it is neither
+        // income nor a credit to the wage cost: it sits in its own liability,
+        // 2147 Staff Fines Held. Re-pointed on live data by the migration
+        // 2026_10_06_110000_staff_fines_are_held_not_wage_credit.
+        'payroll.deduction.penalty' => 'staff_fines_held',
 
         // ─── The two sides of the settlement ─────────────────────────────────
         'payroll.net_payable' => 'salaries_payable',
