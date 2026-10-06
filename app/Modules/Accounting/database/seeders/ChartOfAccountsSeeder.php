@@ -391,6 +391,9 @@ class ChartOfAccountsSeeder extends Seeder
         ['6475', 'Payment Gateway Charge', AccountType::Expense, '6470', true, 'payment_gateway_charge'],
         ['6476', 'Transaction Charge', AccountType::Expense, '6470', true, null],
         ['6477', 'Other Financial Charges', AccountType::Expense, '6470', true, null],
+        // The interest the business PAYS on 2210 Bank Loans (6 Oct 2026). A
+        // finance cost, so it sits with the finance charges.
+        ['6478', 'Interest Expense', AccountType::Expense, '6470', true, 'interest_expense'],
         ['6500', 'Licence, Testing and Professional', AccountType::Expense, '6000', false, null],
         ['6501', 'Trade Licence', AccountType::Expense, '6500', true, null],
         ['6502', 'BSTI and Certification', AccountType::Expense, '6500', true, null],
