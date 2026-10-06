@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Payroll;
 
+use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Models\AttendanceWaiver;
 use App\Modules\Hrm\Models\BonusAward;
@@ -12,10 +13,14 @@ use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\OvertimeAssignment;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollPeriod;
+use App\Modules\Hrm\Models\PayrollRun;
+use App\Modules\Hrm\Models\Payslip;
+use App\Modules\Hrm\Models\PayslipLine;
 use App\Modules\Hrm\Models\SalaryStructure;
 use App\Modules\Hrm\Payroll\Data\AttendanceFacts;
 use App\Modules\Hrm\Payroll\Data\EmployeePayrollContext;
 use App\Modules\Hrm\Payroll\Data\PayrollInput;
+use App\Modules\Hrm\Payroll\Stages\ApplyStaffPurchaseRecovery;
 use App\Modules\Hrm\Salary\SalaryBreakdown;
 use App\Modules\Hrm\Support\PayrollBalanceLedger;
 use Illuminate\Support\Carbon;
@@ -39,12 +44,17 @@ class PayrollContextBuilder
      *                                           so SAL-05's arrear calculation can
      *                                           re-price a closed month against the
      *                                           exact structure it was paid on
+     * @param  bool  $withStaffPurchase  false for SAL-05's before/after
+     *                                   comparison: a capped recovery is a share
+     *                                   of the net, so it would shrink the
+     *                                   arrear it is compared against
      */
     public function build(
         Employee $employee,
         PayrollPeriod $period,
         PayrollConfig $config,
         ?SalaryStructure $structure = null,
+        bool $withStaffPurchase = true,
     ): EmployeePayrollContext {
         $spec = $period->toSpec();
         $structure ??= SalaryStructure::activeFor($employee->id, $spec->end);
@@ -65,7 +75,57 @@ class PayrollContextBuilder
             joiningDate: $employee->joining_date?->toDateString(),
             separationDate: $employee->separation_date?->toDateString(),
             overtimeEligible: (bool) ($structure?->overtime_eligible ?? false),
+            staffPurchaseOwed: $withStaffPurchase ? $this->staffPurchaseOwed($employee, $period) : 0.0,
+            staffPurchaseCapPercent: FinancePolicy::for((int) $period->business_id)->staff_purchase_cap_percent,
         );
+    }
+
+    /** The source_key prefix StaffPurchaseController writes on a salary-deduction hand-over. */
+    public const STAFF_PURCHASE_KEY = 'staff_purchase:';
+
+    /**
+     * B8: what the employee still owes for staff purchases, as at this period.
+     *
+     * Derived, never stored: every staff purchase charged to this period or an
+     * earlier one, less every staff purchase recovery on the payslips of the
+     * earlier periods (the latest version of each that was not cancelled or
+     * rejected). Whatever a capped month did not take is therefore still owed
+     * the next month without anything being written to carry it, and re-running
+     * an open payroll can never recover the same purchase twice.
+     */
+    private function staffPurchaseOwed(Employee $employee, PayrollPeriod $period): float
+    {
+        $periodStart = $period->start_date->toDateString();
+
+        $charged = (float) PayrollAdjustment::where('employee_id', $employee->id)
+            ->where('source_key', 'like', self::STAFF_PURCHASE_KEY.'%')
+            ->payable()
+            ->whereHas('period', fn ($p) => $p->whereDate('start_date', '<=', $periodStart))
+            ->sum('amount');
+
+        if ($charged <= 0) {
+            return 0.0;
+        }
+
+        $runIds = PayrollPeriod::query()
+            ->where('business_id', $period->business_id)
+            ->whereDate('start_date', '<', $periodStart)
+            ->with('runs')
+            ->get()
+            ->map(fn (PayrollPeriod $earlier) => $earlier->runs
+                ->first(fn (PayrollRun $run) => ! $run->status->isVoided())?->id)
+            ->filter()
+            ->values();
+
+        $recovered = $runIds->isEmpty() ? 0.0 : (float) PayslipLine::query()
+            ->where('code', ApplyStaffPurchaseRecovery::CODE)
+            ->whereIn('payslip_id', Payslip::query()
+                ->where('employee_id', $employee->id)
+                ->whereIn('payroll_run_id', $runIds)
+                ->select('id'))
+            ->sum('amount');
+
+        return max(0.0, round($charged - $recovered, 2));
     }
 
     public function structureFor(Employee $employee, PayrollPeriod $period): ?SalaryStructure
@@ -281,6 +341,10 @@ class PayrollContextBuilder
     {
         $inputs = PayrollAdjustment::where('employee_id', $employee->id)
             ->where('payroll_period_id', $period->id)
+            // B8: a staff purchase is recovered by its own capped stage, from
+            // the running balance, never in full as a plain deduction.
+            ->where(fn ($q) => $q->whereNull('source_key')
+                ->orWhere('source_key', 'not like', self::STAFF_PURCHASE_KEY.'%'))
             ->payable()
             ->get()
             ->map(fn (PayrollAdjustment $adjustment) => new PayrollInput(

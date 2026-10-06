@@ -160,8 +160,10 @@ class ApplySalaryRevision
             return 0.0;
         }
 
-        $before = $this->engine->process($this->builder->build($employee, $period, $config, $previous));
-        $after = $this->engine->process($this->builder->build($employee, $period, $config, $revised));
+        // B8: without the capped staff purchase recovery, which is a share of
+        // the net and would otherwise shave the arrear by the same share.
+        $before = $this->engine->process($this->builder->build($employee, $period, $config, $previous, withStaffPurchase: false));
+        $after = $this->engine->process($this->builder->build($employee, $period, $config, $revised, withStaffPurchase: false));
 
         return round($after->net - $before->net, 2);
     }

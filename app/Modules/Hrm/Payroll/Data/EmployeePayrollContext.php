@@ -41,6 +41,18 @@ final readonly class EmployeePayrollContext
          * overtime went unpaid instead of leaving a silent absence.
          */
         public bool $overtimeEligible = true,
+        /**
+         * B8 (Finance policy, 29 Sep 2026): everything the employee still owes
+         * for staff purchases taken on salary deduction, up to and including
+         * this period. Recovered by `ApplyStaffPurchaseRecovery`, never in full
+         * when it is more than the cap allows.
+         */
+        public float $staffPurchaseOwed = 0.0,
+        /**
+         * The cap on that recovery, as a percentage of this month's net pay
+         * before it. Null means no cap.
+         */
+        public ?int $staffPurchaseCapPercent = null,
     ) {}
 
     /**

@@ -12,6 +12,7 @@ use App\Modules\Hrm\Payroll\Stages\ApplyAttendanceConsequences;
 use App\Modules\Hrm\Payroll\Stages\ApplyOvertime;
 use App\Modules\Hrm\Payroll\Stages\ApplyPayrollInputs;
 use App\Modules\Hrm\Payroll\Stages\ApplyProration;
+use App\Modules\Hrm\Payroll\Stages\ApplyStaffPurchaseRecovery;
 use App\Modules\Hrm\Payroll\Stages\ResolveSalaryLines;
 use App\Modules\Hrm\Payroll\Stages\ValidatePayslip;
 
@@ -29,6 +30,7 @@ use App\Modules\Hrm\Payroll\Stages\ValidatePayslip;
  *   5. add per-day attendance allowances        (C14 — TA & DA)
  *   6. add overtime                             (ADJ-01, ADJ-02 via C7a, ADJ-03)
  *   7. add allowances, loans and adjustments    (ADJ-05, ADJ-07, ADJ-08)
+ *   7b. recover staff purchases, capped          (Finance policy B8)
  *   8. run the blocking checks                  (PAY-09, PAY-11)
  *
  * The order is not arbitrary. Gross must exist before anything is deducted from
@@ -66,6 +68,7 @@ class PayrollEngine
             new ApplyAttendanceAllowances,
             new ApplyOvertime,
             new ApplyPayrollInputs,
+            new ApplyStaffPurchaseRecovery,
             new ValidatePayslip,
         ];
     }

@@ -625,7 +625,7 @@ class GuideBook
                     'Open Staff purchase from the sidebar: only products WITH a staff price are shown, at your price and MRP.',
                     'Tick the products (ONE unit per product per month), choose how you will pay - cash, bKash, bank, or salary deduction - and apply.',
                     'Your monthly allowance is 3,000 taka COUNTED AT MRP, and it does not roll over. The screen shows how much is used.',
-                    'After approval, collect from the store - they hand over against your approved application, nothing else. A salary-deduction purchase is cut from your next salary automatically.',
+                    'After approval, collect from the store - they hand over against your approved application, nothing else. A salary-deduction purchase is cut from your next salary automatically, but never more than 10% of the monthly net pay (Finance policy); the rest is cut the month after.',
                     '⚠ Personal and family use only - resale suspends the benefit. No returns; a defective item is exchanged after checking.',
                 ],
                 'keywords' => ['staff purchase', 'staff price', 'employee discount', 'benefit', 'kena', 'staff dam'],
