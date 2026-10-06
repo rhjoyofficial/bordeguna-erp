@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -128,7 +129,7 @@ it('exposes hasEmployeeProfile true for a linked user and false otherwise', func
 });
 
 it('still lets an employee download their own document after the SelfScope refactor', function () {
-    app(\App\Modules\Foundation\Actions\StoreAttachment::class)->handle(
+    app(StoreAttachment::class)->handle(
         attachable: $this->employee,
         file: UploadedFile::fake()->create('nid.pdf', 100, 'application/pdf'),
         collection: 'national_id',
@@ -145,4 +146,28 @@ it('still lets an employee download their own document after the SelfScope refac
     $colleague->assignRole('Staff');
     $this->actingAs($colleague)->withSession(['current_business_id' => $this->business->id])
         ->get($doc->url())->assertForbidden();
+});
+
+// --- The zero-permission Self-service role (checked 6 Oct 2026) -----------
+//
+// On production the Self-service role holds no permissions at all, and that is
+// by design: every self-service screen is self-scope (SelfScope / Employee::
+// forUser), never a permission. This pins it, so a future `can:` middleware
+// on one of these routes fails here instead of locking staff out of their own
+// payslip, attendance, leave and claims.
+it('serves every self-service tab to a login that holds no permission at all', function () {
+    Role::firstOrCreate(['name' => 'Self-service', 'business_id' => $this->business->id, 'guard_name' => 'web']);
+    $this->selfUser->syncRoles(['Self-service']);
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    expect($this->selfUser->fresh()->getAllPermissions())->toHaveCount(0);
+
+    foreach ([
+        'hrm.my-profile', 'hrm.clock', 'hrm.my-leave', 'hrm.my-payslips',
+        'hrm.my-expenses', 'hrm.staff-purchase', 'hrm.my-notices.index', 'hrm.my-assets',
+    ] as $name) {
+        $response = essActingAsSelf()->get(route($name));
+
+        expect($response->status())->toBe(200, "{$name} refused a zero-permission employee login");
+    }
 });
