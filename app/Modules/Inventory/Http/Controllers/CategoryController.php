@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Inventory\Models\Category;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -92,6 +93,19 @@ class CategoryController extends Controller
 
     public function destroy(Category $category): RedirectResponse
     {
+        // A category in use is never deleted: products would silently lose it
+        // (nullOnDelete) and a CRM interest would make the delete fail.
+        $products = DB::table('products')->where('category_id', $category->id)->count();
+        $inUse = $products > 0
+            || DB::table('crm_product_interests')->where('category_id', $category->id)->exists()
+            || DB::table('stock_counts')->where('category_id', $category->id)->exists();
+
+        if ($inUse) {
+            return back()->with('error', $products > 0
+                ? "{$category->name} still has {$products} product(s). Move them to another category first."
+                : "{$category->name} is used by CRM interests or stock counts, so it is kept.");
+        }
+
         $category->delete();
 
         return back()->with('success', 'Category deleted.');

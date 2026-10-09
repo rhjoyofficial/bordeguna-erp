@@ -218,3 +218,29 @@ it('is closed to anyone who cannot manage the catalogue', function () {
         ]))
         ->assertForbidden();
 });
+
+it('keeps a category that still has products, and deletes an unused one', function () {
+    $product = Product::create([
+        'business_id' => $this->business->id,
+        'category_id' => $this->category->id,
+        'unit_of_measure_id' => $this->unit->id,
+        'sku' => 'HON-KEEP-1',
+        'name' => 'Honey 500 g',
+        'type' => 'finished_good',
+    ]);
+
+    ($this->asRole)('Owner')
+        ->withHeader('X-Business-Id', (string) $this->business->id)
+        ->delete(route('inventory.categories.destroy', $this->category->id))
+        ->assertRedirect()->assertSessionHas('error');
+
+    expect(Category::find($this->category->id))->not->toBeNull()
+        ->and($product->fresh()->category_id)->toBe($this->category->id);
+
+    ($this->asRole)('Owner')
+        ->withHeader('X-Business-Id', (string) $this->business->id)
+        ->delete(route('inventory.categories.destroy', $this->uncoded->id))
+        ->assertRedirect()->assertSessionHas('success');
+
+    expect(Category::find($this->uncoded->id))->toBeNull();
+});
