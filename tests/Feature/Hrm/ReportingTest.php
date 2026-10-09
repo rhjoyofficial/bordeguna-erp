@@ -591,6 +591,21 @@ it('queues a report that is estimated over the threshold instead of serving it',
     Queue::assertPushed(RenderReportJob::class);
 });
 
+it('hands the filter header to a queued report, so the file still says what produced it', function () {
+    Queue::fake();
+    config()->set('hrm.reporting.queue_threshold', 2);
+
+    $this->actingAs($this->hr)->get(route('hrm.reports.run', [
+        'report' => 'attendance_daily', 'date' => $this->date, 'format' => 'csv',
+    ]))->assertRedirect();
+
+    Queue::assertPushed(RenderReportJob::class, function (RenderReportJob $job) {
+        $labels = (new ReflectionProperty($job, 'labels'))->getValue($job);
+
+        return $labels !== [];
+    });
+});
+
 it('serves directly when under the threshold', function () {
     Queue::fake();
     config()->set('hrm.reporting.queue_threshold', 5000);

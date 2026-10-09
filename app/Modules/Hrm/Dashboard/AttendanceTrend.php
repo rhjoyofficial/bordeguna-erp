@@ -74,7 +74,7 @@ class AttendanceTrend
                         );
                 }),
             )
-            ->get(['attendance_date', 'status']);
+            ->get(['attendance_date', 'status', 'late_minutes']);
 
         $byDate = $rows->groupBy(fn (DailyAttendance $d) => $d->attendance_date->toDateString());
 
@@ -83,15 +83,18 @@ class AttendanceTrend
         for ($date = $from->copy(); $date->lte($to); $date->addDay()) {
             $key = $date->toDateString();
             $forDay = $byDate->get($key, collect());
+            // Late is `late_minutes > 0` on a worked day, the rule the daily
+            // report and the Late today tile use; `status === Late` misses a
+            // late half day. Present and late are disjoint because they stack.
+            $worked = $forDay->filter(fn (DailyAttendance $d) => $d->status?->isWorkedDay() === true);
+            $late = $worked->filter(fn (DailyAttendance $d) => (int) $d->late_minutes > 0)->count();
 
             $points[] = [
                 'date' => $key,
                 'label' => $date->format('j M'),
                 'weekday' => $date->format('D'),
-                'present' => $forDay->where('status', AttendanceStatus::Present)->count()
-                    + $forDay->where('status', AttendanceStatus::HalfDay)->count()
-                    + $forDay->where('status', AttendanceStatus::FieldDuty)->count(),
-                'late' => $forDay->where('status', AttendanceStatus::Late)->count(),
+                'present' => $worked->count() - $late,
+                'late' => $late,
                 'absent' => $forDay->where('status', AttendanceStatus::Absent)->count(),
                 'leave' => $forDay->where('status', AttendanceStatus::OnLeave)->count(),
                 'off' => $forDay->where('status', AttendanceStatus::WeeklyOff)->count()

@@ -52,6 +52,8 @@ class RenderReportJob implements ShouldQueue
 
     /**
      * @param  array<string, mixed>  $parameters
+     * @param  array<string, string>  $labels  the filter header the controller
+     *                                         resolved; the job cannot rebuild it
      */
     public function __construct(
         private readonly string $reportKey,
@@ -59,6 +61,7 @@ class RenderReportJob implements ShouldQueue
         private readonly array $parameters,
         private readonly int $userId,
         private readonly ?int $businessId = null,
+        private readonly array $labels = [],
     ) {}
 
     public function handle(
@@ -89,7 +92,7 @@ class RenderReportJob implements ShouldQueue
         // The controller already scoped these values, so this is belt and
         // braces — but a queued render is exactly the path where an unscoped
         // export would land in someone's inbox with nobody watching.
-        $parameters = new ReportParameters(ReportScope::for($user)->apply($this->parameters));
+        $parameters = new ReportParameters(ReportScope::for($user)->apply($this->parameters), $this->labels);
 
         $dataset = $runner->run($definition, $parameters, $user);
         $temp = $writer->write($dataset);

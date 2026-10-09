@@ -25,7 +25,7 @@ beforeEach(function () {
     ]);
 });
 
-function trendDay(int $employeeId, string $date, AttendanceStatus $status): DailyAttendance
+function trendDay(int $employeeId, string $date, AttendanceStatus $status, ?int $lateMinutes = null): DailyAttendance
 {
     return DailyAttendance::create([
         'employee_id' => $employeeId,
@@ -33,7 +33,7 @@ function trendDay(int $employeeId, string $date, AttendanceStatus $status): Dail
         'status' => $status,
         'consequence' => AttendanceConsequence::None,
         'worked_minutes' => 480, 'payable_minutes' => 480, 'break_minutes' => 0,
-        'late_minutes' => 0, 'early_leave_minutes' => 0,
+        'late_minutes' => $lateMinutes ?? ($status === AttendanceStatus::Late ? 30 : 0), 'early_leave_minutes' => 0,
         'is_provisional' => false, 'holds_payroll' => false,
     ]);
 }
@@ -121,4 +121,18 @@ it('does not cap a range that fits', function () {
     $trend = AttendanceTrend::for(trendFilters('2026-08-01', '2026-08-07'), app(BusinessContext::class));
 
     expect($trend['truncated'])->toBeFalse()->and($trend['days'])->toBe(7);
+});
+
+it('counts late by late minutes, as the daily report does, so a late half day is late and not present', function () {
+    $other = Employee::create([
+        'employee_code' => 'TRD-2', 'first_name' => 'Nusrat', 'last_name' => 'Jahan',
+        'employment_type' => 'permanent', 'status' => 'active', 'joining_date' => '2026-01-01',
+    ]);
+    trendDay($this->employee->id, '2026-08-03', AttendanceStatus::HalfDay, lateMinutes: 25);
+    trendDay($other->id, '2026-08-03', AttendanceStatus::Present);
+
+    $trend = AttendanceTrend::for(trendFilters('2026-08-01', '2026-08-07'), app(BusinessContext::class));
+
+    expect($trend['points'][2]['late'])->toBe(1)
+        ->and($trend['points'][2]['present'])->toBe(1);
 });

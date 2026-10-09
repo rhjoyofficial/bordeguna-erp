@@ -139,6 +139,10 @@ class ReportController extends Controller
                 // Captured here, while the request still has it. The job cannot
                 // recover it after serialisation — see the job's docblock.
                 app(BusinessContext::class)->id(),
+                // The filter header ("Office: Head Office") is resolved here,
+                // where the option lists are; without it the file the user
+                // receives says nothing about what produced it.
+                $parameters->describe(),
             );
 
             return back()->with('status', sprintf(
