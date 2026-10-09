@@ -113,6 +113,14 @@ class SalaryController extends Controller
             'lines.*.value' => ['required', 'numeric', 'min:0'],
         ]);
 
+        // ADJ-06: only the FIRST salary is set directly. Any change to an
+        // existing salary is a revision, which needs approval.
+        if (SalaryStructure::where('employee_id', $employee->id)->exists()) {
+            throw ValidationException::withMessages([
+                'effective_from' => 'This employee already has a salary. A change is a salary revision, which needs approval.',
+            ]);
+        }
+
         $action->handle(
             $employee,
             $validated['effective_from'],

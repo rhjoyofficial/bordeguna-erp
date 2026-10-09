@@ -66,7 +66,17 @@ interface Props {
 
 const money = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function StructureDialog({ employeeId, components, current }: { employeeId: number; components: Component[]; current: Structure | null }) {
+function StructureDialog({
+    employeeId,
+    components,
+    current,
+    isRevision,
+}: {
+    employeeId: number;
+    components: Component[];
+    current: Structure | null;
+    isRevision: boolean;
+}) {
     const [open, setOpen] = useState(false);
     const [effectiveFrom, setEffectiveFrom] = useState(dhakaToday());
     const [reason, setReason] = useState('');
@@ -94,9 +104,12 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
     const basicSet = components.some((c) => c.is_basic && values[c.id] !== undefined && values[c.id] !== '');
 
     const submit = () => {
+        // ADJ-06: the first salary is set directly; a change to it is a
+        // revision that goes to the approval inbox.
+        const payload = { effective_from: effectiveFrom, reason: reason || null, overtime_eligible: overtimeEligible, lines: lines() };
         router.post(
-            route('hrm.salary.store', employeeId),
-            { effective_from: effectiveFrom, reason: reason || null, overtime_eligible: overtimeEligible, lines: lines() },
+            isRevision ? route('hrm.revisions.store') : route('hrm.salary.store', employeeId),
+            isRevision ? { ...payload, employee_id: employeeId } : payload,
             {
                 preserveScroll: true,
                 onError: (e: Record<string, string>) => setErrors(e),
@@ -136,14 +149,15 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button size="sm">{current ? 'Revise salary' : 'Set salary'}</Button>
+                <Button size="sm">{isRevision ? 'Revise salary' : 'Set salary'}</Button>
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>{current ? 'Revise salary' : 'Set salary'}</DialogTitle>
+                    <DialogTitle>{isRevision ? 'Revise salary' : 'Set salary'}</DialogTitle>
                     <DialogDescription>
-                        A revision closes the current structure the day before this date and opens a new one. Nothing already paid is rewritten, so a
-                        closed month keeps the figures it was calculated on.
+                        {isRevision
+                            ? 'The revision goes for approval. Once approved, it closes the current structure the day before this date and opens the new one. An earlier date adds an arrear to the next open payroll.'
+                            : 'The first salary for this employee. Later changes are revisions and need approval.'}
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid max-h-[60vh] gap-4 overflow-y-auto pr-1">
@@ -156,8 +170,11 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
                             {errors.effective_from && <p className="text-destructive text-xs">{errors.effective_from}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="reason">Reason (optional)</Label>
+                            <Label htmlFor="reason" required={isRevision}>
+                                {isRevision ? 'Reason' : 'Reason (optional)'}
+                            </Label>
                             <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Annual increment" />
+                            {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                         </div>
                     </div>
 
@@ -182,8 +199,8 @@ function StructureDialog({ employeeId, components, current }: { employeeId: numb
                     <DialogClose asChild>
                         <Button variant="outline">Cancel</Button>
                     </DialogClose>
-                    <Button onClick={submit} disabled={!basicSet}>
-                        Save
+                    <Button onClick={submit} disabled={!basicSet || (isRevision && reason.trim() === '')}>
+                        {isRevision ? 'Send for approval' : 'Save'}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -277,7 +294,9 @@ export default function SalaryShow({ can_manage, employee, current, history, com
                             {employee.designation && ` · ${employee.designation}`}
                         </p>
                     </div>
-                    {can_manage && <StructureDialog employeeId={employee.id} components={components} current={current} />}
+                    {can_manage && (
+                        <StructureDialog employeeId={employee.id} components={components} current={current} isRevision={history.length > 0} />
+                    )}
                 </div>
 
                 {current === null ? (

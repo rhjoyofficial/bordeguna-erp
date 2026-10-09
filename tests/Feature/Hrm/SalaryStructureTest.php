@@ -409,3 +409,15 @@ it('audits a salary structure change', function () {
 
     expect($logged)->toBeTrue();
 });
+
+it('refuses a direct change to an existing salary, because a change is a revision that needs approval (ADJ-06)', function () {
+    app(SaveSalaryStructure::class)->handle($this->employee, '2026-01-01', salLines());
+
+    salHr()->post(route('hrm.salary.store', $this->employee), [
+        'effective_from' => '2026-07-01',
+        'reason' => 'Quiet raise',
+        'lines' => salLines(),
+    ])->assertSessionHasErrors('effective_from');
+
+    expect(SalaryStructure::where('employee_id', $this->employee->id)->count())->toBe(1);
+});
