@@ -200,7 +200,12 @@ class ExpenseRegisterReport implements ReportDefinition
             )
             ->when(
                 $parameters->int('money_account_id'),
-                fn (Builder $q, int $id) => $q->where('journal_lines.money_account_id', $id),
+                // The paying line, not the expense line (see below): the debit
+                // never carries a money account, so filtering on it found nothing.
+                fn (Builder $q, int $id) => $q->whereExists(fn ($paid) => $paid->selectRaw('1')
+                    ->from('journal_lines as paid_from')
+                    ->whereColumn('paid_from.journal_id', 'journal_lines.journal_id')
+                    ->where('paid_from.money_account_id', $id)),
             )
             ->orderBy('journals.journal_date')
             ->orderBy('journals.id')
@@ -230,6 +235,10 @@ class ExpenseRegisterReport implements ReportDefinition
                     ->select('money_accounts.name')
                     ->join('journal_lines as paying_line', 'paying_line.money_account_id', '=', 'money_accounts.id')
                     ->whereColumn('paying_line.journal_id', 'journal_lines.journal_id')
+                    // A journal paid from two accounts names the first line's,
+                    // the same one on every run.
+                    ->orderBy('paying_line.line_no')
+                    ->orderBy('paying_line.id')
                     ->limit(1),
                 'money_account_name',
             );

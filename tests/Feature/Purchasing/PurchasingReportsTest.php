@@ -302,3 +302,26 @@ it('states on its own face that a standing cost has not been paid', function () 
     expect($meta->lockNote)->toContain('EXPECTS')
         ->and($meta->lockNote)->toContain('expense register');
 });
+
+it('filters the register by the account the money was paid from', function () {
+    $petty = MoneyAccount::create([
+        'business_id' => $this->business->id, 'name' => 'Petty Cash', 'type' => 'cash',
+        'account_id' => $this->bank->account_id, 'is_active' => true,
+    ]);
+    ($this->record)('2026-09-10', '300', 'Paid by bank');
+    app(RecordExpenseVoucher::class)->handle(
+        moneyAccount: $petty,
+        spentOn: '2026-09-11',
+        lines: [['account' => $this->account, 'amount' => '120', 'description' => 'Paid from petty cash']],
+        createdBy: $this->user,
+        paidTo: 'Tea stall',
+    );
+
+    $rows = app(ExpenseRegisterReport::class)
+        ->rows(new ReportParameters(['spent_from' => '2026-09-01', 'spent_to' => '2026-09-30', 'money_account_id' => $petty->id]))
+        ->all();
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows[0]['description'])->toBe('Paid from petty cash')
+        ->and($rows[0]['paid_from'])->toBe('Petty Cash');
+});
