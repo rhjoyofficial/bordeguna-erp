@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -35,13 +36,27 @@ class SalesTargetController extends Controller
             ->get()
             ->map(function ($target) use ($businessId, $monthStart, $monthEnd) {
                 // The actual = invoices this person WROTE this month. Not
-                // orders, not promises - invoiced revenue.
-                $actual = (float) DB::table('sales_invoices')
+                // orders, not promises - invoiced revenue, WITHOUT the VAT
+                // (it is the government's money, not a sale) and LESS what
+                // customers returned this month off this person's invoices.
+                $invoiced = (float) DB::table('sales_invoices')
                     ->where('business_id', $businessId)
                     ->where('created_by', $target->user_id)
                     ->where('is_opening', false)
                     ->whereBetween('invoice_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
-                    ->sum('total');
+                    ->sum(DB::raw('total - tax_total'));
+
+                $returned = (float) DB::table('sales_return_invoice_lines as returned')
+                    ->join('sales_return_lines', 'sales_return_lines.id', '=', 'returned.sales_return_line_id')
+                    ->join('sales_returns', 'sales_returns.id', '=', 'sales_return_lines.sales_return_id')
+                    ->join('sales_invoice_lines', 'sales_invoice_lines.id', '=', 'returned.sales_invoice_line_id')
+                    ->join('sales_invoices', 'sales_invoices.id', '=', 'sales_invoice_lines.sales_invoice_id')
+                    ->where('returned.business_id', $businessId)
+                    ->where('sales_invoices.created_by', $target->user_id)
+                    ->whereBetween('sales_returns.returned_at', [$monthStart->toDateString(), $monthEnd->toDateString()])
+                    ->sum('returned.net');
+
+                $actual = $invoiced - $returned;
 
                 return [
                     'id' => $target->id,
@@ -69,27 +84,31 @@ class SalesTargetController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'user_id' => ['required', 'integer', Rule::exists('business_user', 'user_id')->where('business_id', app(BusinessContext::class)->id())],
             'month' => ['required', 'date_format:Y-m'],
             'target_amount' => ['required', 'numeric', 'min:0'],
             'commission_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
 
         // One target per person per month - setting again REPLACES, because
-        // two targets for the same month is an argument, not a plan.
-        DB::table('sales_targets')->updateOrInsert(
-            [
-                'business_id' => app(BusinessContext::class)->id(),
-                'user_id' => $data['user_id'],
-                'month' => $data['month'].'-01',
-            ],
-            [
-                'target_amount' => $data['target_amount'],
-                'commission_percent' => $data['commission_percent'] ?? 0,
-                'created_by' => $request->user()->id,
-                'updated_at' => now(), 'created_at' => now(),
-            ],
-        );
+        // two targets for the same month is an argument, not a plan. The
+        // first-set time is kept.
+        $match = [
+            'business_id' => app(BusinessContext::class)->id(),
+            'user_id' => $data['user_id'],
+            'month' => $data['month'].'-01',
+        ];
+        $values = [
+            'target_amount' => $data['target_amount'],
+            'commission_percent' => $data['commission_percent'] ?? 0,
+            'created_by' => $request->user()->id,
+            'updated_at' => now(),
+        ];
+
+        $existing = DB::table('sales_targets')->where($match)->value('id');
+        $existing
+            ? DB::table('sales_targets')->where('id', $existing)->update($values)
+            : DB::table('sales_targets')->insert($match + $values + ['created_at' => now()]);
 
         return back()->with('success', 'Target set.');
     }

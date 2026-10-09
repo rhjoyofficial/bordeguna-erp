@@ -108,3 +108,69 @@ it('keeps the screen off limits without the sales permission', function () {
         ->get(route('sales.targets'))
         ->assertForbidden();
 });
+
+it('counts sales without VAT and less what customers returned this month', function () {
+    ($this->asOwner)()->post(route('sales.targets.store'), [
+        'user_id' => $this->seller->id, 'month' => '2026-09',
+        'target_amount' => '100000', 'commission_percent' => '2',
+    ])->assertSessionHasNoErrors();
+
+    // 10,000 of goods + 1,500 VAT.
+    $invoiceId = DB::table('sales_invoices')->insertGetId([
+        'business_id' => $this->business->id, 'customer_id' => $this->customer->id,
+        'invoice_number' => 'INV-VAT-1', 'invoice_date' => '2026-09-05',
+        'subtotal' => 10000, 'invoice_discount' => 0, 'tax_total' => 1500, 'total' => 11500,
+        'created_by' => $this->seller->id, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    // 2,000 of it came back on 12 Sep. Only the link rows matter to the
+    // target, so the delivery side is left as bare ids (SQLite defers the
+    // foreign keys to a commit the test never makes; a pragma that switches
+    // them off is ignored inside the test transaction).
+    DB::statement('PRAGMA defer_foreign_keys = ON');
+    $lineId = DB::table('sales_invoice_lines')->insertGetId([
+        'business_id' => $this->business->id, 'sales_invoice_id' => $invoiceId,
+        'description' => 'Honey', 'quantity' => 10, 'unit_price' => 1000, 'line_net' => 10000,
+        'tax_rate' => 15, 'tax_amount' => 1500, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $returnId = DB::table('sales_returns')->insertGetId([
+        'business_id' => $this->business->id, 'customer_id' => $this->customer->id,
+        'delivery_id' => 999, 'return_number' => 'SR-1', 'returned_at' => '2026-09-12',
+        'credit_total' => 2300, 'created_by' => $this->owner->id,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $returnLineId = DB::table('sales_return_lines')->insertGetId([
+        'business_id' => $this->business->id, 'sales_return_id' => $returnId,
+        'delivery_line_id' => 999, 'quantity' => 2, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('sales_return_invoice_lines')->insert([
+        'business_id' => $this->business->id, 'sales_return_line_id' => $returnLineId,
+        'sales_invoice_line_id' => $lineId, 'quantity' => 2, 'gross' => 2000, 'discount' => 0,
+        'net' => 2000, 'tax' => 300, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    ($this->asOwner)()->get(route('sales.targets', ['month' => '2026-09']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rows.0.actual', fn ($value) => (float) $value === 8000.0)
+            ->where('rows.0.commission', fn ($value) => (float) $value === 160.0));
+});
+
+it('keeps the first-set time when a target is set again, and only sets one for a member of the business', function () {
+    ($this->asOwner)()->post(route('sales.targets.store'), [
+        'user_id' => $this->seller->id, 'month' => '2026-09', 'target_amount' => '1000',
+    ])->assertSessionHasNoErrors();
+    Carbon::setTestNow('2026-09-20 10:00:00');
+    ($this->asOwner)()->post(route('sales.targets.store'), [
+        'user_id' => $this->seller->id, 'month' => '2026-09', 'target_amount' => '2000',
+    ])->assertSessionHasNoErrors();
+
+    $target = DB::table('sales_targets')->first();
+    expect((string) $target->created_at)->toStartWith('2026-09-15')
+        ->and((string) $target->updated_at)->toStartWith('2026-09-20');
+
+    $outsider = User::factory()->create();
+    ($this->asOwner)()->post(route('sales.targets.store'), [
+        'user_id' => $outsider->id, 'month' => '2026-09', 'target_amount' => '1000',
+    ])->assertSessionHasErrors('user_id');
+});
