@@ -361,3 +361,22 @@ it('does not leak schedule assignments across businesses', function () {
     app(BusinessContext::class)->set($this->otherBusiness->id);
     expect(ScheduleAssignment::count())->toBe(0);
 });
+
+it('rejects a shift or holiday calendar belonging to another business', function () {
+    app(BusinessContext::class)->set($this->otherBusiness->id);
+    $foreignShift = Shift::create([
+        'name' => 'Their Shift', 'start_time' => '09:00', 'end_time' => '18:00',
+        'grace_minutes' => 15, 'break_minutes' => 60, 'is_overnight' => false,
+    ]);
+    $foreignCalendar = HolidayCalendar::create([
+        'name' => 'Their Calendar', 'year' => 2026, 'weekly_off_days' => [5], 'is_default' => true,
+    ]);
+    app(BusinessContext::class)->set($this->business->id);
+
+    schedOwner()->post(route('hrm.schedules.store'), schedPayload([
+        'shift_id' => $foreignShift->id,
+        'holiday_calendar_id' => $foreignCalendar->id,
+    ]))->assertSessionHasErrors(['shift_id', 'holiday_calendar_id']);
+
+    expect(ScheduleAssignment::count())->toBe(0);
+});

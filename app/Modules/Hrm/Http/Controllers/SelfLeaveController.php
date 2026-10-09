@@ -3,6 +3,7 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\RequestLeave;
 use App\Modules\Hrm\Actions\RequestMovement;
 use App\Modules\Hrm\Enums\LeaveDayPortion;
@@ -97,7 +98,7 @@ class SelfLeaveController extends Controller
         }
 
         $validated = $request->validate([
-            'leave_type_id' => ['required', Rule::exists('leave_types', 'id')],
+            'leave_type_id' => ['required', Rule::exists('leave_types', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date'],
             'day_portion' => ['required', new EnumRule(LeaveDayPortion::class)],

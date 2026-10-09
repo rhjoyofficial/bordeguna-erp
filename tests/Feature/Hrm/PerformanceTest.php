@@ -103,3 +103,29 @@ it('shows the performance page and keeps outsiders off', function () {
         ->get(route('hrm.employees.performance', $this->employee))
         ->assertForbidden();
 });
+
+it('keeps another business review for the same person and period, and the first written time', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    DB::table('performance_reviews')->insert([
+        'business_id' => $other->id, 'employee_id' => $this->employee->id, 'period' => '2026-Q3',
+        'rating' => 2, 'reviewed_by' => $this->hr->id,
+        'created_at' => '2026-09-01 10:00:00', 'updated_at' => '2026-09-01 10:00:00',
+    ]);
+
+    ($this->asHr)()->post(route('hrm.employees.reviews.store', $this->employee), [
+        'period' => '2026-Q3', 'rating' => 3,
+    ])->assertSessionHasNoErrors();
+    Carbon::setTestNow('2026-09-04 09:00:00');
+    ($this->asHr)()->post(route('hrm.employees.reviews.store', $this->employee), [
+        'period' => '2026-Q3', 'rating' => 5,
+    ])->assertSessionHasNoErrors();
+
+    $theirs = DB::table('performance_reviews')->where('business_id', $other->id)->first();
+    $mine = DB::table('performance_reviews')->where('business_id', $this->business->id)->first();
+
+    expect(DB::table('performance_reviews')->count())->toBe(2)
+        ->and((int) $theirs->rating)->toBe(2)
+        ->and((int) $mine->rating)->toBe(5)
+        ->and((string) $mine->created_at)->toStartWith('2026-09-03 14:00')
+        ->and((string) $mine->updated_at)->toStartWith('2026-09-04 09:00');
+});

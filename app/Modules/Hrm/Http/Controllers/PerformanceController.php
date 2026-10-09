@@ -137,21 +137,25 @@ class PerformanceController extends Controller
             'improvements' => ['nullable', 'string'],
         ]);
 
-        // One review per person per period: saving again REPLACES the draft.
-        DB::table('performance_reviews')->updateOrInsert(
-            [
-                'employee_id' => $employee->id,
-                'period' => $data['period'],
-            ],
-            [
-                'business_id' => app(BusinessContext::class)->id(),
-                'rating' => $data['rating'],
-                'strengths' => $data['strengths'] ?? null,
-                'improvements' => $data['improvements'] ?? null,
-                'reviewed_by' => $request->user()->id,
-                'updated_at' => now(), 'created_at' => now(),
-            ],
-        );
+        // One review per person per period per business: saving again
+        // REPLACES the draft, keeping when it was first written.
+        $match = [
+            'business_id' => app(BusinessContext::class)->id(),
+            'employee_id' => $employee->id,
+            'period' => $data['period'],
+        ];
+        $values = [
+            'rating' => $data['rating'],
+            'strengths' => $data['strengths'] ?? null,
+            'improvements' => $data['improvements'] ?? null,
+            'reviewed_by' => $request->user()->id,
+            'updated_at' => now(),
+        ];
+
+        $existing = DB::table('performance_reviews')->where($match)->value('id');
+        $existing
+            ? DB::table('performance_reviews')->where('id', $existing)->update($values)
+            : DB::table('performance_reviews')->insert($match + $values + ['created_at' => now()]);
 
         return back()->with('success', 'Review saved for '.$data['period'].'.');
     }

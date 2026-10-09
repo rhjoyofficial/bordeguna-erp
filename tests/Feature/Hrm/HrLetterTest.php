@@ -162,3 +162,21 @@ it('will not let an HR user in one business reach an employee who belongs only t
     // The HR user is acting in Letter Co; the stranger belongs only to Other Co.
     ($this->asHr)()->get(route('hrm.employees.letters', $stranger))->assertNotFound();
 });
+
+it('lists only the current business letters for an employee who works in two businesses', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    foreach ([[$this->business->id, 'MINE-1'], [$other->id, 'THEIRS-1']] as [$businessId, $ref]) {
+        DB::table('hr_letters')->insert([
+            'business_id' => $businessId, 'employee_id' => $this->employee->id,
+            'reference_no' => $ref, 'type' => 'appointment', 'issued_on' => '2026-09-01',
+            'body_data' => '{}', 'issued_by' => $this->hr->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    ($this->asHr)()->get(route('hrm.employees.letters', $this->employee))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('letters', 1)
+            ->where('letters.0.reference_no', 'MINE-1'));
+});

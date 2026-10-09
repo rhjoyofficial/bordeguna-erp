@@ -93,6 +93,7 @@ class HrLetterController extends Controller
         return Inertia::render('hrm/letters/index', [
             'employee' => $employee->only(['id', 'employee_code', 'first_name', 'last_name']),
             'letters' => DB::table('hr_letters')
+                ->where('business_id', app(BusinessContext::class)->id())
                 ->where('employee_id', $employee->id)
                 ->orderByDesc('id')
                 ->get()

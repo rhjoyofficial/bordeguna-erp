@@ -139,6 +139,8 @@ class ScheduleController extends Controller
         $scope = ScheduleScope::tryFrom($request->string('scope_type')->toString());
         $type = ScheduleType::tryFrom($request->string('schedule_type')->toString());
 
+        $businessId = app(BusinessContext::class)->id();
+
         $validator = Validator::make($request->all(), [
             'scope_type' => ['required', new Enum(ScheduleScope::class)],
             'scope_id' => array_filter([
@@ -149,10 +151,10 @@ class ScheduleController extends Controller
             'schedule_type' => ['required', new Enum(ScheduleType::class)],
             // A calendar is always required: it is what makes a day a working
             // day at all, so no schedule is meaningful without one.
-            'holiday_calendar_id' => ['required', Rule::exists('holiday_calendars', 'id')->where('is_active', true)],
+            'holiday_calendar_id' => ['required', Rule::exists('holiday_calendars', 'id')->where('business_id', $businessId)->where('is_active', true)],
             'shift_id' => [
                 $type?->requiresShift() ? 'required' : 'nullable',
-                Rule::exists('shifts', 'id')->where('is_active', true),
+                Rule::exists('shifts', 'id')->where('business_id', $businessId)->where('is_active', true),
             ],
             'effective_from' => ['required', 'date'],
             'effective_to' => ['nullable', 'date', 'after_or_equal:effective_from'],
