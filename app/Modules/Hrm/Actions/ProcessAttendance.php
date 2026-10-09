@@ -9,6 +9,7 @@ use App\Modules\Hrm\Models\AttendancePolicy;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Support\LatenessAlerts;
+use App\Modules\Hrm\Support\PayrollCycle;
 use App\Modules\Hrm\Support\ScheduleResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -96,6 +97,38 @@ class ProcessAttendance
         }
 
         return $results;
+    }
+
+    /**
+     * Recompute this employee's days AFTER `$date` to the end of its payroll
+     * cycle, never past today (a future day has no punches yet, and processing
+     * it would write a spurious absence). `force` so a finalised day is
+     * recomputed too. Used when a decision on one day (forgiveness, an applied
+     * correction) changes the occurrence numbers the later days were counted
+     * with.
+     *
+     * ⚠ Only days that already have a record are re-run. Never process an empty
+     * date here: forDay would write an Absent day for a date nobody has
+     * attendance for yet. Production days always exist (the nightly job writes
+     * them); this guard keeps a single decision from fabricating a month.
+     */
+    public function restOfCycleAfter(Employee $employee, Carbon|string $date): void
+    {
+        $from = Carbon::parse($date)->addDay()->startOfDay();
+        $cycleEnd = PayrollCycle::containing(Carbon::parse($date)->startOfDay())['end'];
+        $today = Carbon::today();
+        $to = $cycleEnd->greaterThan($today) ? $today : $cycleEnd;
+
+        if ($to->lessThan($from)) {
+            return;
+        }
+
+        DailyAttendance::where('employee_id', $employee->id)
+            ->whereDate('attendance_date', '>=', $from->toDateString())
+            ->whereDate('attendance_date', '<=', $to->toDateString())
+            ->orderBy('attendance_date')
+            ->pluck('attendance_date')
+            ->each(fn ($day) => $this->forDay($employee, $day, force: true));
     }
 
     private function store(Employee $employee, AttendanceOutcome $outcome, ?AttendancePolicy $policy): DailyAttendance

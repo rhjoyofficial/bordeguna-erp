@@ -535,3 +535,26 @@ it('accepts a correction time that carries seconds', function () {
     expect(\App\Modules\Hrm\Models\AttendanceCorrection::latest('id')->first()->corrected_at->format('H:i:s'))
         ->toBe('09:00:17');
 });
+
+it('re-runs the later days of the cycle so a corrected late no longer counts on them', function () {
+    $lateIn = corrPunch('2026-08-03 09:47:00', 'in');
+    corrPunch('2026-08-03 18:00:00', 'out');
+    corrPunch('2026-08-04 09:47:00', 'in');
+    corrPunch('2026-08-04 18:00:00', 'out');
+    app(ProcessAttendance::class)->forDay($this->employee, '2026-08-03');
+    $later = app(ProcessAttendance::class)->forDay($this->employee, '2026-08-04');
+    expect($later->occurrence_number)->toBe(2);
+
+    app(RequestCorrection::class)->handle($this->employee, '2026-08-03', [
+        'type' => CorrectionType::AmendPunch->value,
+        'punch_id' => $lateIn->id,
+        'corrected_at' => '2026-08-03 09:00:00',
+        'direction' => 'in',
+        'reason' => 'Device clock drift.',
+    ], $this->hr);
+
+    // 4 Aug was counted as the second late; with 3 Aug corrected it is the first.
+    expect($later->fresh()->occurrence_number)->toBe(1);
+    // Nothing is invented for days that have no record yet.
+    expect(DailyAttendance::where('employee_id', $this->employee->id)->count())->toBe(2);
+});

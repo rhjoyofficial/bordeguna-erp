@@ -8,10 +8,8 @@ use App\Modules\Hrm\Actions\ProcessAttendance;
 use App\Modules\Hrm\Models\AttendanceWaiver;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
-use App\Modules\Hrm\Support\PayrollCycle;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 /**
@@ -81,7 +79,7 @@ class AttendanceWaiverController extends Controller
 
         // ⭐ 27 Sep 2026 (Joy): forgiving a day also frees the ladder, so every
         // later day in the same cycle recomputes with one fewer occurrence.
-        $this->reprocessCycleFrom($employee, $validated['attendance_date']);
+        app(ProcessAttendance::class)->restOfCycleAfter($employee, $validated['attendance_date']);
 
         return back()->with('success', 'Day forgiven. The deduction is removed and the day no longer counts against the monthly lateness allowance; the attendance record itself is unchanged.');
     }
@@ -101,45 +99,9 @@ class AttendanceWaiverController extends Controller
             'revoked_by' => $request->user()->id,
         ]);
 
-        $this->reprocessCycleFrom($waiver->employee, $waiver->attendance_date->toDateString());
+        app(ProcessAttendance::class)->restOfCycleAfter($waiver->employee, $waiver->attendance_date->toDateString());
 
         return back()->with('success', 'Forgiveness undone. The day counts in payroll and against the lateness allowance again.');
-    }
-
-    /**
-     * Recompute this employee's days from the forgiven date to the end of its
-     * payroll cycle, but never past today (a future day has no punches yet, and
-     * processing it would write a spurious absence). `force` so a finalised day
-     * is recomputed too, because forgiveness is exactly the kind of decision
-     * that changes an already-finalised number.
-     */
-    private function reprocessCycleFrom(Employee $employee, string $date): void
-    {
-        // The waived day itself keeps its record and its captured verdict; only
-        // the days AFTER it in the same cycle need re-running, because their
-        // occurrence numbers were counted with the now-forgiven day in them.
-        $from = Carbon::parse($date)->addDay()->startOfDay();
-        $cycleEnd = PayrollCycle::containing(Carbon::parse($date)->startOfDay())['end'];
-        $today = Carbon::today();
-        $to = $cycleEnd->greaterThan($today) ? $today : $cycleEnd;
-
-        if ($to->lessThan($from)) {
-            return;
-        }
-
-        // ⚠ Only days that already have a record are re-run. Never process an
-        // empty date here: forDay would write an Absent day for a date nobody
-        // has attendance for yet, inventing an absence the forgiveness never
-        // implied. Production days always exist (the nightly job writes them);
-        // this guard is what keeps a bare forgiveness from fabricating a month.
-        $process = app(ProcessAttendance::class);
-
-        DailyAttendance::where('employee_id', $employee->id)
-            ->whereDate('attendance_date', '>=', $from->toDateString())
-            ->whereDate('attendance_date', '<=', $to->toDateString())
-            ->orderBy('attendance_date')
-            ->pluck('attendance_date')
-            ->each(fn ($day) => $process->forDay($employee, $day, force: true));
     }
 
     private function businessId(): int
