@@ -116,7 +116,7 @@ class LoanController extends Controller
 
         $data = $request->validate([
             'note' => ['nullable', 'string', 'max:500'],
-            'money_account_id' => ['nullable', 'integer', Rule::exists('money_accounts', 'id')],
+            'money_account_id' => ['nullable', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id())],
             // ⚠ The day the money actually left, which is often not today.
             'disbursed_on' => ['nullable', 'date', 'before_or_equal:today'],
         ]);
@@ -191,7 +191,7 @@ class LoanController extends Controller
             'note' => ['required', 'string', 'max:500'],
             // ⚠ Where the money came in and when: the settlement now clears the
             // employee's balance on 1170 too, so the ledger needs both facts.
-            'money_account_id' => ['required', 'integer', Rule::exists('money_accounts', 'id')],
+            'money_account_id' => ['required', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'received_on' => ['required', 'date', 'before_or_equal:today'],
         ]);
 

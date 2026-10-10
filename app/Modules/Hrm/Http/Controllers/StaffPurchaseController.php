@@ -204,7 +204,7 @@ class StaffPurchaseController extends Controller
         $data = $request->validate([
             'money_account_id' => [
                 Rule::requiredIf($row->payment_mode !== 'salary_deduction'),
-                'nullable', 'integer', 'exists:money_accounts,id',
+                'nullable', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id()),
             ],
         ]);
 

@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -89,7 +90,7 @@ class HolidayWorkController extends Controller
         $data = $request->validate([
             'date' => ['required', 'date'],
             'employee_ids' => ['required', 'array', 'min:1'],
-            'employee_ids.*' => ['integer', 'exists:employees,id'],
+            'employee_ids.*' => ['integer', Rule::exists('employee_assignments', 'employee_id')->where('business_id', app(BusinessContext::class)->id())],
             'reason' => ['required', 'string', 'max:1000'],
         ]);
 

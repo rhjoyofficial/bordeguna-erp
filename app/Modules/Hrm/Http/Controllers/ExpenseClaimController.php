@@ -535,7 +535,7 @@ class ExpenseClaimController extends Controller
                 Rule::requiredIf(fn () => $request->input('method') === ExpenseClaim::SETTLE_PAYMENT),
                 'nullable',
                 'integer',
-                Rule::exists('money_accounts', 'id'),
+                Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id()),
             ],
             // ⚠ Required only for the salary route, and named rather than
             // inferred: an adjustment belongs to one payroll month.
@@ -543,7 +543,7 @@ class ExpenseClaimController extends Controller
                 Rule::requiredIf(fn () => $request->input('method') === ExpenseClaim::SETTLE_PAYROLL),
                 'nullable',
                 'integer',
-                Rule::exists('payroll_periods', 'id'),
+                Rule::exists('payroll_periods', 'id')->where('business_id', app(BusinessContext::class)->id()),
             ],
         ]);
 

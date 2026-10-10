@@ -3,6 +3,8 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\EmployeeAssignment;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -75,4 +77,20 @@ it('refuses recording from anyone without the leave permission', function () {
     $this->actingAs($this->staff)
         ->post('/hrm/holiday-work', ['date' => '2026-08-26', 'employee_ids' => [1], 'reason' => 'Dispatch'])
         ->assertForbidden();
+});
+
+it('will not record holiday work for somebody who works only in another business', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-holiday-co']);
+    $stranger = Employee::create([
+        'employee_code' => 'OTH-1', 'first_name' => 'Far', 'last_name' => 'Away',
+        'employment_type' => 'permanent', 'status' => 'active',
+    ]);
+    EmployeeAssignment::withoutGlobalScopes()->create([
+        'business_id' => $other->id, 'employee_id' => $stranger->id,
+        'is_primary' => true, 'effective_from' => '2026-01-01',
+    ]);
+
+    $this->actingAs($this->hr)
+        ->post('/hrm/holiday-work', ['date' => '2026-08-26', 'employee_ids' => [$stranger->id], 'reason' => 'Dispatch'])
+        ->assertSessionHasErrors('employee_ids.0');
 });

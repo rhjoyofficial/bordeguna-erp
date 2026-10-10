@@ -203,8 +203,8 @@ class RecruitmentController extends Controller
     {
         return $request->validate([
             'title' => ['required', 'string', 'max:255'],
-            'department_id' => ['nullable', Rule::exists('departments', 'id')],
-            'designation_id' => ['nullable', Rule::exists('designations', 'id')],
+            'department_id' => ['nullable', Rule::exists('departments', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            'designation_id' => ['nullable', Rule::exists('designations', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'description' => ['nullable', 'string', 'max:5000'],
             'openings' => ['required', 'integer', 'min:1', 'max:500'],
             'status' => ['required', Rule::in(JobOpeningStatus::values())],
@@ -219,7 +219,7 @@ class RecruitmentController extends Controller
     private function applicantRules(Request $request): array
     {
         $data = $request->validate([
-            'job_opening_id' => ['required', Rule::exists('job_openings', 'id')],
+            'job_opening_id' => ['required', Rule::exists('job_openings', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'name' => ['required', 'string', 'max:255'],
             // ⚠ One way to reach them at least, or the application cannot be
             // acted on at all.

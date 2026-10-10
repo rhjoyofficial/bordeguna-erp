@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ConfirmDisbursementBatch;
 use App\Modules\Hrm\Actions\CreateDisbursementBatches;
 use App\Modules\Hrm\Actions\RecordPayslipPayment;
@@ -23,6 +24,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum as EnumRule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -161,7 +163,7 @@ class DisbursementController extends Controller
             // ⚠ Required here, not nullable. Confirming means the money has gone
             // and a payment that cannot say which account it left is the record
             // that was missing every time somebody was paid.
-            'money_account_id' => ['required', 'exists:money_accounts,id'],
+            'money_account_id' => ['required', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id())],
         ]);
 
         $paid = $action->handle(
@@ -239,7 +241,7 @@ class DisbursementController extends Controller
             // ⚠ The individual payment now asks the same question the batch
             // confirmation does. Money leaving without a named account is the
             // record that made a cash book impossible to produce.
-            'money_account_id' => ['nullable', 'integer', 'exists:money_accounts,id'],
+            'money_account_id' => ['nullable', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id())],
         ]);
 
         // ⚠⚠ A MISSING ACCOUNT IS A QUESTION, NOT A 500. With accounting on,
