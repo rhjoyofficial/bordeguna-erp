@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -254,17 +255,18 @@ describe('the server prices the sale', function () {
         $manager = ($this->userAs)('Manager');
 
         ($this->sell)($manager, ['lines' => [
-            ['product_id' => $this->honey->id, 'quantity' => '2', 'unit_price' => '800', 'override_reason' => 'Regular customer, agreed last week'],
+            ['product_id' => $this->honey->id, 'quantity' => '2', 'unit_price' => '840', 'override_reason' => 'Regular customer, agreed last week'],
         ]])->assertSessionHasNoErrors();
 
         $line = SalesInvoiceLine::sole();
 
-        expect((string) $line->unit_price)->toBe('800.0000')
+        // Tk 20 off Tk 1,700: inside a Manager's 3% (Joy, 26 Sep 2026).
+        expect((string) $line->unit_price)->toBe('840.0000')
             ->and((string) $line->list_price)->toBe('850.0000')
             ->and($line->price_overridden)->toBeTrue()
             ->and($line->override_reason)->toBe('Regular customer, agreed last week')
             ->and($line->overridden_by)->toBe($manager->id)
-            ->and((string) SalesInvoice::sole()->total)->toBe('1600.0000');
+            ->and((string) SalesInvoice::sole()->total)->toBe('1680.0000');
     });
 
     it('records a discounted line as discounted at its list price, with the reason and who', function () {
@@ -304,7 +306,7 @@ describe('the server prices the sale', function () {
         $manager = ($this->userAs)('Manager');
 
         ($this->sell)($manager, ['lines' => [
-            ['product_id' => $this->honey->id, 'quantity' => '1', 'unit_price' => '820', 'override_reason' => 'Price match'],
+            ['product_id' => $this->honey->id, 'quantity' => '1', 'unit_price' => '830', 'override_reason' => 'Price match'],
         ]])->assertSessionHasNoErrors();
 
         $line = ($this->props)($this->actingAs($manager)->get('/sales/invoices/'.SalesInvoice::sole()->id))['invoice']['lines'][0];
@@ -512,4 +514,86 @@ it('refuses cash into a till that is not the one this cashier opened', function 
 
     ($this->sell)($cashier, ['money_account_id' => $this->backTill->id, 'cash_given' => '2000'])->assertSessionHasNoErrors();
     expect(SalesInvoice::count())->toBe(1);
+});
+
+/**
+ * Joy, 26 Sep 2026: Owner unlimited; Manager or a person in charge 3% of the
+ * goods per bill; anyone else allowed to override 1% or Tk 300, whichever is
+ * lower. Goods are at list price; price cuts, line discounts and the bill
+ * discount all count.
+ */
+describe('the per-bill discount cap', function () {
+    beforeEach(function () {
+        Role::where('business_id', $this->business->id)->where('name', 'Staff')->first()
+            ->givePermissionTo('sales.price.override');
+    });
+
+    it('lets a Manager give 3% of the goods and no more', function () {
+        $manager = ($this->userAs)('Manager');
+
+        // Two honey at 850 = Tk 1,700 of goods, so 3% is Tk 51.
+        ($this->sell)($manager, ['invoice_discount' => '52', 'discount_reason' => 'Asked nicely'])
+            ->assertSessionHasErrors('invoice_discount');
+        expect(SalesInvoice::count())->toBe(0);
+
+        ($this->sell)($manager, ['invoice_discount' => '51', 'discount_reason' => 'Asked nicely'])
+            ->assertSessionHasNoErrors();
+        expect(SalesInvoice::count())->toBe(1);
+    });
+
+    it('adds a price cut, a line discount and the bill discount together', function () {
+        // Tk 20 cut + Tk 20 line discount + Tk 12 on the bill = Tk 52 > Tk 51.
+        ($this->sell)(($this->userAs)('Manager'), [
+            'invoice_discount' => '12', 'discount_reason' => 'Bulk',
+            'lines' => [['product_id' => $this->honey->id, 'quantity' => '2', 'unit_price' => '840', 'discount' => '20', 'override_reason' => 'Bulk']],
+        ])->assertSessionHasErrors('invoice_discount');
+
+        expect(SalesInvoice::count())->toBe(0);
+    });
+
+    it('holds other staff to 1% of the goods', function () {
+        $staff = ($this->userAs)('Staff');
+
+        ($this->sell)($staff, ['invoice_discount' => '18', 'discount_reason' => 'Rounding'])
+            ->assertSessionHasErrors('invoice_discount');
+        ($this->sell)($staff, ['invoice_discount' => '17', 'discount_reason' => 'Rounding'])
+            ->assertSessionHasNoErrors();
+    });
+
+    it('never lets other staff give more than Tk 300, even when 1% is more', function () {
+        // Forty honey at the 10+ price of 800 = Tk 32,000; 1% would be Tk 320.
+        $staff = ($this->userAs)('Staff');
+        $big = ['lines' => [['product_id' => $this->honey->id, 'quantity' => '40']], 'discount_reason' => 'Big order'];
+
+        ($this->sell)($staff, $big + ['invoice_discount' => '301'])->assertSessionHasErrors('invoice_discount');
+        ($this->sell)($staff, $big + ['invoice_discount' => '300'])->assertSessionHasNoErrors();
+    });
+
+    it('gives a person in charge the Manager cap', function () {
+        $staff = ($this->userAs)('Staff');
+        $staff->givePermissionTo('sales.discount.in_charge');
+
+        ($this->sell)($staff, ['invoice_discount' => '51', 'discount_reason' => 'In charge today'])
+            ->assertSessionHasNoErrors();
+    });
+
+    it('does not cap the Owner', function () {
+        ($this->sell)(($this->userAs)('Owner'), ['invoice_discount' => '850', 'discount_reason' => 'Gift'])
+            ->assertSessionHasNoErrors();
+    });
+
+    it('reads the caps from the Finance policy', function () {
+        FinancePolicy::create(['business_id' => $this->business->id, 'manager_discount_cap_percent' => 5]);
+
+        // 5% of Tk 1,700 = Tk 85.
+        ($this->sell)(($this->userAs)('Manager'), ['invoice_discount' => '85', 'discount_reason' => 'New policy'])
+            ->assertSessionHasNoErrors();
+    });
+
+    it('does not count a price raised above the list as a discount', function () {
+        ($this->sell)(($this->userAs)('Staff'), [
+            'invoice_discount' => '17', 'discount_reason' => 'Rounding',
+            'lines' => [['product_id' => $this->honey->id, 'quantity' => '2', 'unit_price' => '900', 'override_reason' => 'Gift wrapped']],
+        ])->assertSessionHasNoErrors();
+    });
 });

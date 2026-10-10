@@ -27,6 +27,7 @@ class FinancePolicy extends Model
         'raw_material_cash_limit_minor',
         'petty_cash_float_minor',
         'capitalisation_threshold_minor',
+        'staff_discount_cap_minor',
     ];
 
     protected $fillable = [
@@ -34,6 +35,8 @@ class FinancePolicy extends Model
         'refuse_negative_money',
         ...self::MONEY_FIELDS,
         'staff_purchase_cap_percent',
+        'manager_discount_cap_percent',
+        'staff_discount_cap_percent',
         'bad_debt_half_after_days',
         'bad_debt_full_after_days',
         'courier_settlement_alert_days',
@@ -55,6 +58,9 @@ class FinancePolicy extends Model
         'petty_cash_float_minor' => 1_000_000,
         'capitalisation_threshold_minor' => 1_000_000,
         'staff_purchase_cap_percent' => 10,
+        'manager_discount_cap_percent' => 3,
+        'staff_discount_cap_percent' => 1,
+        'staff_discount_cap_minor' => 30_000,
         'bad_debt_half_after_days' => 180,
         'bad_debt_full_after_days' => 365,
         'courier_settlement_alert_days' => 7,
@@ -71,6 +77,9 @@ class FinancePolicy extends Model
             'petty_cash_float_minor' => 'integer',
             'capitalisation_threshold_minor' => 'integer',
             'staff_purchase_cap_percent' => 'integer',
+            'manager_discount_cap_percent' => 'integer',
+            'staff_discount_cap_percent' => 'integer',
+            'staff_discount_cap_minor' => 'integer',
             'bad_debt_half_after_days' => 'integer',
             'bad_debt_full_after_days' => 'integer',
             'courier_settlement_alert_days' => 'integer',

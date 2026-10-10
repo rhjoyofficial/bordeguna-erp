@@ -101,9 +101,18 @@ class SalesPermissionsSeeder extends Seeder
         ],
     ];
 
+    /**
+     * Created, given to no role. Person in Charge is a permission handed to a
+     * named person (Joy, 26 Sep 2026): it lifts their counter discount cap
+     * to the Manager's.
+     */
+    private const UNGRANTED = [
+        'sales.discount.in_charge',
+    ];
+
     public function run(): void
     {
-        $permissionNames = collect(self::ROLE_PERMISSIONS)->flatten()->unique();
+        $permissionNames = collect(self::ROLE_PERMISSIONS)->flatten()->merge(self::UNGRANTED)->unique();
 
         foreach ($permissionNames as $name) {
             Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);

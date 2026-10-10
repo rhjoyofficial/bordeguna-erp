@@ -26,6 +26,8 @@ class FinancePolicyController extends Controller
         $values = [
             'refuse_negative_money' => $policy->refuse_negative_money,
             'staff_purchase_cap_percent' => $policy->staff_purchase_cap_percent,
+            'manager_discount_cap_percent' => $policy->manager_discount_cap_percent,
+            'staff_discount_cap_percent' => $policy->staff_discount_cap_percent,
             'bad_debt_half_after_days' => $policy->bad_debt_half_after_days,
             'bad_debt_full_after_days' => $policy->bad_debt_full_after_days,
             'courier_settlement_alert_days' => $policy->courier_settlement_alert_days,
@@ -47,6 +49,8 @@ class FinancePolicyController extends Controller
         $rules = [
             'refuse_negative_money' => ['required', 'boolean'],
             'staff_purchase_cap_percent' => ['required', 'integer', 'between:0,100'],
+            'manager_discount_cap_percent' => ['required', 'integer', 'between:0,100'],
+            'staff_discount_cap_percent' => ['required', 'integer', 'between:0,100'],
             'bad_debt_half_after_days' => ['required', 'integer', 'between:1,3650'],
             'bad_debt_full_after_days' => ['required', 'integer', 'between:1,3650', 'gte:bad_debt_half_after_days'],
             'courier_settlement_alert_days' => ['required', 'integer', 'between:1,90'],

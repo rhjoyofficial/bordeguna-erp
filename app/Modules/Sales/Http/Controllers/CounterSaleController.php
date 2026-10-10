@@ -20,6 +20,7 @@ use App\Modules\Sales\Actions\RecordCounterSale;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Support\ApplyPromotions;
+use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -332,6 +333,16 @@ class CounterSaleController extends Controller
                 $refusals['discount_reason'] = 'Say why the bill is discounted.';
             }
 
+            // Joy's per-bill caps (26 Sep 2026), checked once the person may
+            // discount at all: the lines and the bill together, at list price.
+            if ($refusals === []) {
+                $overCap = DiscountCap::refusal($user, app(BusinessContext::class)->id(), $saleLines, $invoiceDiscount);
+
+                if ($overCap !== null) {
+                    $refusals['invoice_discount'] = $overCap;
+                }
+            }
+
             // Every refusal at once: a cashier fixing one row at a time, with a
             // customer waiting, is the slowest way to learn about three.
             if ($refusals !== []) {
@@ -441,7 +452,8 @@ class CounterSaleController extends Controller
      *
      * A changed price, or a discount on the line, needs `sales.price.override`
      * AND a reason; the invoice line then keeps the list price, the reason and
-     * who (RecordSalesInvoice). ⚠ No cap: the owner has not set one.
+     * who (RecordSalesInvoice). The per-bill cap is DiscountCap's, checked by
+     * the caller once lines and bill discount are both known.
      *
      * ⚠ An override changes a price that EXISTS. A product with no price for
      * this buyer is still refused (NoSellingPriceException) even for an Owner:

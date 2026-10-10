@@ -16,6 +16,9 @@ type Policy = {
     petty_cash_float: string;
     capitalisation_threshold: string;
     staff_purchase_cap_percent: number;
+    manager_discount_cap_percent: number;
+    staff_discount_cap_percent: number;
+    staff_discount_cap: string;
     bad_debt_half_after_days: number;
     bad_debt_full_after_days: number;
     courier_settlement_alert_days: number;
@@ -50,6 +53,16 @@ const SECTIONS: { title: string; rows: { key: NumberKey; label: string; unit: st
             { key: 'bad_debt_full_after_days', label: '100% bad-debt provision after', unit: 'days' },
             { key: 'courier_settlement_alert_days', label: 'Courier payout expected within', unit: 'days' },
             { key: 'staff_purchase_cap_percent', label: 'Staff purchase recovery cap', unit: '% of net pay' },
+        ],
+    },
+    {
+        // Joy, 26 Sep 2026. The Owner has no cap. Goods value at list price,
+        // without delivery or VAT; promotions are not discretionary.
+        title: 'Counter discount caps (per bill)',
+        rows: [
+            { key: 'manager_discount_cap_percent', label: 'Manager or person in charge', unit: '% of goods' },
+            { key: 'staff_discount_cap_percent', label: 'Staff with the override permission', unit: '% of goods' },
+            { key: 'staff_discount_cap', label: 'Staff, and never more than', unit: 'Tk' },
         ],
     },
 ];
