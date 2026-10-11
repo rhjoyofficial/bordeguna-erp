@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\Http;
 
 /**
  * Pathao merchant API (aladdin). OAuth 2.0 password grant, then Bearer.
- * Read-only in slice 1: issue-token, stores, city-list.
+ * Read-only in slice 1: issue-token, stores, city-list. Slice 2 adds the
+ * coverage lists: city-list, zone-list, area-list (each area says whether
+ * home delivery and pickup are available there).
  *
  * ⚠ The token is cached PER ACCOUNT AND ENVIRONMENT, encrypted, until shortly
  * before it expires (Pathao gives 5 days and asks for it to be kept). The key
@@ -18,7 +20,7 @@ use Illuminate\Support\Facades\Http;
  * rides on a token the old one earned. One global token (the shop's way) would
  * hand one merchant's token to another account.
  */
-class PathaoDriver implements CourierDriver
+class PathaoDriver implements CourierDriver, ListsLocations
 {
     private const TOKEN_PATH = '/aladdin/api/v1/issue-token';
 
@@ -57,6 +59,38 @@ class PathaoDriver implements CourierDriver
         }
 
         return ConnectionResult::success($list, count(self::rows($cities->json())));
+    }
+
+    public function cities(CourierAccount $account): LocationList
+    {
+        return $this->list($account, '/aladdin/api/v1/city-list', 'city_id', 'city_name');
+    }
+
+    public function zones(CourierAccount $account, string $cityId): LocationList
+    {
+        return $this->list($account, '/aladdin/api/v1/cities/'.rawurlencode($cityId).'/zone-list', 'zone_id', 'zone_name');
+    }
+
+    public function areas(CourierAccount $account, string $cityId, string $zoneId): LocationList
+    {
+        return $this->list($account, '/aladdin/api/v1/zones/'.rawurlencode($zoneId).'/area-list', 'area_id', 'area_name');
+    }
+
+    private function list(CourierAccount $account, string $path, string $idKey, string $nameKey): LocationList
+    {
+        $call = $this->authorisedGet($account, $path);
+
+        if (! $call->ok()) {
+            return LocationList::failed((string) $call->error);
+        }
+
+        $json = $call->json();
+
+        if (! array_key_exists('data', $json)) {
+            return LocationList::failed('Pathao answered '.$path.' without a list.');
+        }
+
+        return LocationList::from(self::rows($json), $idKey, $nameKey);
     }
 
     public static function tokenCacheKey(CourierAccount $account): string
