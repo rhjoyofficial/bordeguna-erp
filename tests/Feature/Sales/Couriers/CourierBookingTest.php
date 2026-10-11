@@ -27,6 +27,7 @@ use App\Modules\Sales\Couriers\Models\CourierBookingRequest;
 use App\Modules\Sales\Couriers\Models\CourierLocation;
 use App\Modules\Sales\Couriers\Models\CourierLocationMap;
 use App\Modules\Sales\Couriers\Models\CourierShipmentEvent;
+use App\Modules\Sales\Couriers\Providers\CourierProviderRegistry;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
@@ -38,8 +39,9 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesInvoice;
-use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\SalesOrderOrigin;
+use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
@@ -197,12 +199,12 @@ function cbkBook(object $t, Delivery $delivery, CourierAccount $account, array $
     ]);
 }
 
-function cbkOk(array $data): \GuzzleHttp\Promise\PromiseInterface
+function cbkOk(array $data): PromiseInterface
 {
     return Http::response(['error' => false, 'message' => 'ok', 'data' => $data], 201);
 }
 
-function cbkPathaoToken(): \GuzzleHttp\Promise\PromiseInterface
+function cbkPathaoToken(): PromiseInterface
 {
     return Http::response(['token_type' => 'Bearer', 'expires_in' => 432000, 'access_token' => 'tok-ABC', 'refresh_token' => 'r']);
 }
@@ -827,8 +829,8 @@ it('stores the automatic posting switch off, refuses to turn it on, and lets the
 });
 
 it('reads every documented courier word, and keeps an unknown one raw without moving the parcel', function () {
-    $cb = app(\App\Modules\Sales\Couriers\Providers\CourierProviderRegistry::class)->get('carrybee');
-    $pathao = app(\App\Modules\Sales\Couriers\Providers\CourierProviderRegistry::class)->get('pathao');
+    $cb = app(CourierProviderRegistry::class)->get('carrybee');
+    $pathao = app(CourierProviderRegistry::class)->get('pathao');
 
     $carrybee = [
         'order.created' => 'booked', 'order.pickup-requested' => 'booked', 'order.assigned-for-pickup' => 'pickup_assigned',
@@ -875,4 +877,14 @@ it('reads every documented courier word, and keeps an unknown one raw without mo
 
     expect(CourierShipmentEvent::query()->where('event', 'order.teleported')->sole())->raw_status->toBe('order.teleported')->applied->toBeFalse()->canonical_status->toBeNull()
         ->and(Consignment::query()->sole()->courier_status)->toBe(CourierStatus::Booked);
+});
+
+it('serves the webhook outside the session and CSRF, throttled', function () {
+    $route = app('router')->getRoutes()->getByName('couriers.webhook');
+    $csrf = app(ValidateCsrfToken::class);
+    $excepted = new ReflectionMethod($csrf, 'inExceptArray');
+
+    expect($route->gatherMiddleware())->not->toContain('web')->toContain('throttle:300,1')
+        ->and($excepted->invoke($csrf, Illuminate\Http\Request::create('/webhooks/couriers/'.fake()->uuid(), 'POST')))->toBeTrue()
+        ->and($excepted->invoke($csrf, Illuminate\Http\Request::create('/sales/deliveries/1/courier-booking', 'POST')))->toBeFalse();
 });

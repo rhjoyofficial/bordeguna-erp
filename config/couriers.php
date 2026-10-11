@@ -21,7 +21,6 @@ return [
     // Calls one job run makes before it queues the next run.
     'location_sync_calls_per_job' => (int) env('COURIER_LOCATION_SYNC_CALLS_PER_JOB', 150),
 
-
     /*
     |--------------------------------------------------------------------------
     | Parcel status pull (courier hub slice 4)
