@@ -463,7 +463,10 @@ class PlanShopOrderImport
         $date = null;
 
         try {
-            if (preg_match('/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})(?:[ T].*)?$/', $value, $m)) {
+            if (preg_match('/^\d{5}(\.\d+)?$/', $value) === 1) {
+                // An Excel date cell with no date format arrives as its serial number.
+                $date = Carbon::create(1899, 12, 30)->addDays((int) $value);
+            } elseif (preg_match('/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})(?:[ T].*)?$/', $value, $m)) {
                 $date = checkdate((int) $m[2], (int) $m[3], (int) $m[1]) ? Carbon::create((int) $m[1], (int) $m[2], (int) $m[3]) : null;
             } elseif (preg_match('/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2}|\d{4})(?:\s.*)?$/', $value, $m)) {
                 $year = strlen($m[3]) === 2 ? 2000 + (int) $m[3] : (int) $m[3];

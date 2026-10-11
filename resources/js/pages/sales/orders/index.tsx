@@ -725,9 +725,15 @@ export default function SalesOrdersIndex({
             <Head title={t('orders.title')} />
             <div className="flex flex-col gap-6 p-4">
                 {can_create && !creating && (
-                    <Button className="w-fit" onClick={() => setCreating(true)}>
-                        {t('orders.new')}
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button className="w-fit" onClick={() => setCreating(true)}>
+                            {t('orders.new')}
+                        </Button>
+                        {/* Shop orders from a sheet (11 Oct 2026), the same trust as one order. */}
+                        <Button variant="outline" className="w-fit" asChild>
+                            <Link href={route('sales.orders.import')}>Import shop orders</Link>
+                        </Button>
+                    </div>
                 )}
                 {can_create && creating && (
                     <CreateOrderForm

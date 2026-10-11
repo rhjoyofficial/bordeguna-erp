@@ -122,6 +122,7 @@ export function useNavGroups(): NavGroup[] {
         canManageCrmSettings,
         canManageCourierSettings,
         canProposeRateCards,
+        canBookParcels,
         canConfigureDashboards,
         canViewAssets,
         canViewAssetItems,
@@ -300,6 +301,9 @@ export function useNavGroups(): NavGroup[] {
                           ...(canViewSales ? [{ title: t('menu.deliveries'), url: '/sales/deliveries', icon: PackageCheck }] : []),
                           // Parcels out with couriers: where their answers are entered.
                           ...(canViewSales ? [{ title: 'Parcels', url: '/sales/consignments', icon: Truck }] : []),
+                          // Approved orders waiting for a courier, booked in one click (11 Oct 2026).
+                          // Route, screen and this line ship in one commit - the reachability rule.
+                          ...(canBookParcels ? [{ title: 'Parcels to book', url: '/sales/parcels-to-book', icon: PackageCheck }] : []),
                           ...(canViewSales ? [{ title: 'Invoices', url: '/sales/invoices', icon: FileText }] : []),
                           // ⭐ Money in, and the list of it (21 Sep 2026): before this a receipt
                           // could only be taken from one invoice's page, and never listed.
