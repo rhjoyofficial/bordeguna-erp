@@ -78,7 +78,7 @@ export default function DashboardSettings({ roles, dashboards }: { roles: RoleRo
                                             <td className="text-muted-foreground p-3">{role.users}</td>
                                             <td className="p-3">
                                                 <select
-                                                    className="border-input bg-background h-9 w-full max-w-xs rounded-md border px-2 text-sm"
+                                                    className="border-input bg-background h-9 w-full max-w-md rounded-md border px-2 text-sm"
                                                     value={form.data.assignments[index].dashboard ?? ''}
                                                     aria-label={`Dashboard for ${role.name}`}
                                                     onChange={(e) => {
