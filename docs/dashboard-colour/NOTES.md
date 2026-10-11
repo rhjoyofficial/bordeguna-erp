@@ -115,3 +115,37 @@ Screenshots (scratch SQLite, 61 days of demo ledger lines, session signed
 server side): `round3-owner-light-1440.png`, `round3-owner-dark-1440.png`,
 `round3-finance-light-1440.png`, `round3-owner-light-390.png`. No horizontal
 scroll at 390 px.
+
+## Fourth pass: simpler colour, minimal hero, recorded sounds (11 Oct 2026)
+
+Joy, on the third pass: "i like it, but no need the each part top border
+color, also improve and simplify the finance part colors, no needs on hover
+movements full card, enhance, simplify overall colors, no needs full card bg
+colors, also first part can but minimal and futureistic".
+
+- Cards: no top stripe, plain surface, a static hairline border, no lift,
+  scale or glow on hover. Icon tiles are neutral; only a card whose figure
+  needs someone (attention waiting, a warn or bad tone, a failed load) turns
+  its icon tile amber or red.
+- One colour system: the ERP brand green for links and the live pulse
+  (`.dash-acc-brand`), neutral greys for structure, two chart colours (blue
+  in and trend, orange out; `chartColour`), donut parts as steps of the one
+  blue (`shareColour`), semantic green, amber and red only where they mean
+  something. The per-domain accents and `accentFor` are gone; `SERIES` stays
+  for reports. Ageing rows run neutral, amber, red on the dots and bars, and
+  the values stay in the normal text colour while the bucket is empty.
+  Status pills are softer; people chips are neutral; signal rows are neutral
+  with a small amber count or green tick.
+- Hero: deep green to near black in both modes, one faint light pool, a
+  hairline grid fading from the top right, hairline glass tiles, small
+  spaced uppercase labels, light large tabular figures, monochrome icons, a
+  thin softly glowing trend line, a green or red change chip. Hover only
+  brightens a tile's edge.
+- Sounds: `public/sounds/success.mp3`, `attention.mp3`, `error.mp3`, decoded
+  once after the first click or key press, at the person's volume, with the
+  synthesised tones as the fallback (sources and licence assumption in
+  `lib/dashboard-sound.ts`). All earlier rules kept; each class has its Test
+  button in the sound settings.
+
+Screenshots: `round4-owner-light-1440.png`, `round4-owner-dark-1440.png`,
+`round4-finance-light-1440.png`, `round4-owner-light-390.png`.
