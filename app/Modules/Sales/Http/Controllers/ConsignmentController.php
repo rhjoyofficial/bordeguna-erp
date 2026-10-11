@@ -231,6 +231,8 @@ class ConsignmentController extends Controller
                 'lines' => $lines,
                 'note' => $data['note'] ?? null,
                 'reason' => $data['door_reason'] ?? '',
+                'resolution' => $data['resolution'] ?? null,
+                'prices' => $prices,
             ], $needsOwner, $request->user());
 
             return back()->with('success', "{$needsOwner->why} The {$needsOwner->discount->format()} discount on {$consignment->consignment_number} was sent to the Owner; it is recorded when the Owner approves it.");
