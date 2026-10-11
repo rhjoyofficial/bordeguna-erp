@@ -170,3 +170,49 @@ words and figures only, by meaning (`figureClass`, `labelClass`,
 
 Screenshots: `round5-owner-light-1440.png`, `round5-owner-dark-1440.png`,
 `round5-finance-light-1440.png`, `round5-owner-light-390.png`.
+
+## Sixth pass: easier to use, same look (11 Oct 2026)
+
+Joy: "if there any improvement possible do". The round 5 look is unchanged;
+these are usability changes only.
+
+- **Getting started** (Owner dashboard, see-all people only), under the
+  hero: x of 6 done with a thin green bar, and one row per step with a tick
+  or an empty circle, a one-line why and a link. Steps, read per business
+  from the real tables and cached for 60 s (`GettingStarted`): an opening
+  balance journal (`journal_type = opening_balance`; trading journals do not
+  count), every active stocked product with a costed stock batch (cost lives
+  on batches, not products), an opening stock document, customers (the
+  seeded walk-in row does not count), suppliers, and a switched-on courier
+  account whose webhook is paired (handshake ok, or an authentic update
+  already received). Gone by itself when all are done; "Hide this" stores
+  the business id in `users.preferences.dashboard_getting_started_dismissed`
+  (that person, that business only).
+- **No holes in the grid**: widths are worked out for the page
+  (`layout.ts`): in the person's own order, a card that would leave a hole
+  at the end of a row stretches over it, and so does the last card. Order
+  never changes. Checked at 1440 and 1280; 390 stays one column.
+- **All-zero buckets**: Receivables, Payables, Cash on delivery chain,
+  Orders by state (any bar breakdown whose buckets, total and side figures
+  are all zero) show one calm line ("Nothing owed to you right now" and so
+  on). Any figure above zero brings the bars back on the next live refresh.
+  A ledger caption (does not tie to the ledger) still shows.
+- **Section chips**: a slim sticky row under the filters, one chip per
+  widget group the person has (Work, Money, Sales, Couriers, People,
+  Stock, Me), in page order. A chip scrolls to the group's first card; the
+  group being read is lit (IntersectionObserver, no scroll listener). On a
+  phone the chips scroll sideways inside the row; the page never does.
+- **Courier connections**: a Webhook column (Paired 9 Oct / Reply value
+  missing in red / Secret does not match in red / Never tried) and Last
+  update pushed now reads the account's `webhook_last_event_at` as well.
+- **Sidebar**: on load the menu still restores where it was, then moves
+  just enough to show the page you are on (it opened at Settings while on
+  Dashboard).
+
+Screenshots (scratch SQLite, session signed server side, no password typed):
+`ux-owner-light-1440-empty.png` (seeded books, nothing posted),
+`ux-owner-light-1440-demo.png` and `ux-owner-dark-1440.png` (40 days of demo
+ledger lines, an opening journal, two courier accounts: one paired, one
+missing its reply value), `ux-owner-light-390.png`,
+`ux-owner-light-1440-chips.png` (after pressing Couriers). No horizontal
+scroll at 1440, 1280 or 390.
