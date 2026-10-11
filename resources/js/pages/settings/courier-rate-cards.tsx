@@ -35,7 +35,7 @@ interface CardSummary {
     in_force: boolean;
 }
 
-interface Line {
+type Line = {
     id?: number;
     from_band: string;
     to_band: string;
@@ -49,7 +49,7 @@ interface Line {
     expected_discount: string | null;
     sample_count: number | null;
     previous_price: string | null;
-}
+};
 
 interface CardDetail {
     id: number;
@@ -91,7 +91,8 @@ const sourceLabel: Record<CardSummary['source'], string> = {
 };
 
 const blank = (v: unknown) => v === null || v === undefined || v === '';
-const effective = (line: Line) => (blank(line.price) ? null : Number(line.price) - (blank(line.expected_discount) ? 0 : Number(line.expected_discount)));
+const effective = (line: Line) =>
+    blank(line.price) ? null : Number(line.price) - (blank(line.expected_discount) ? 0 : Number(line.expected_discount));
 const cellClass = 'h-8 px-2 text-xs';
 
 function selectClass() {
@@ -112,7 +113,12 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
     });
 
     useEffect(() => {
-        form.setData({ version: card?.version ?? '', notes: card?.notes ?? '', is_list_price: card?.is_list_price ?? false, lines: card?.lines ?? [] });
+        form.setData({
+            version: card?.version ?? '',
+            notes: card?.notes ?? '',
+            is_list_price: card?.is_list_price ?? false,
+            lines: card?.lines ?? [],
+        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [card?.id, card?.lines.length, card?.version]);
 
@@ -165,7 +171,11 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
     const upload = () => {
         if (!card || !file) return;
         setBusy('import');
-        router.post(route('couriers.ratecards.import', card.id), { file }, { forceFormData: true, preserveScroll: true, onFinish: () => setBusy(null) });
+        router.post(
+            route('couriers.ratecards.import', card.id),
+            { file },
+            { forceFormData: true, preserveScroll: true, onFinish: () => setBusy(null) },
+        );
     };
 
     const lineErrors = Object.entries(errors).filter(([key]) => key.startsWith('lines'));
@@ -199,7 +209,12 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                             </Button>
                         ))}
                         <span className="grow" />
-                        <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => act('propose', 'couriers.ratecards.propose', { provider })}>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy !== null}
+                            onClick={() => act('propose', 'couriers.ratecards.propose', { provider })}
+                        >
                             {busy === 'propose' ? 'Proposing...' : 'Propose from statements'}
                         </Button>
                         <Button
@@ -257,7 +272,9 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                             {c.based_on && ` (from ${c.based_on})`}
                                         </td>
                                         <td className="py-1.5 pr-3 text-right tabular-nums">{c.lines}</td>
-                                        <td className="py-1.5 pr-3 text-xs">{c.approved_at ? `${c.approved_by ?? 'seeded'}, ${c.approved_at}` : '-'}</td>
+                                        <td className="py-1.5 pr-3 text-xs">
+                                            {c.approved_at ? `${c.approved_by ?? 'seeded'}, ${c.approved_at}` : '-'}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -307,9 +324,9 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
 
                             {calibrated && (
                                 <p className="text-muted-foreground text-xs">
-                                    Proposed from what the statements charged. "Before" is the price in force, "After" this draft's price, "Parcels" the
-                                    clean parcels behind it. A line moves only with at least {min_samples} parcels; that is the least to consider, not
-                                    proof. Check returns, re-weighing and outliers on the Courier fees report before approving.
+                                    Proposed from what the statements charged. "Before" is the price in force, "After" this draft's price, "Parcels"
+                                    the clean parcels behind it. A line moves only with at least {min_samples} parcels; that is the least to consider,
+                                    not proof. Check returns, re-weighing and outliers on the Courier fees report before approving.
                                 </p>
                             )}
 
@@ -341,7 +358,10 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                         {form.data.lines.map((line, i) => {
                                             const after = effective(line);
                                             const moved =
-                                                calibrated && line.previous_price !== null && after !== null && Math.abs(after - Number(line.previous_price)) > 0.004;
+                                                calibrated &&
+                                                line.previous_price !== null &&
+                                                after !== null &&
+                                                Math.abs(after - Number(line.previous_price)) > 0.004;
 
                                             return (
                                                 <tr key={line.id ?? `new-${i}`} className={cn('border-t', moved && 'bg-sky-50 dark:bg-sky-950/30')}>
@@ -419,10 +439,14 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">{line.weight_from_g}</td>
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">{line.weight_to_g ?? 'no top'}</td>
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">{line.price}</td>
-                                                            <td className="py-1.5 pr-2 text-right tabular-nums">{line.extra_per_kg_after_g ?? '-'}</td>
+                                                            <td className="py-1.5 pr-2 text-right tabular-nums">
+                                                                {line.extra_per_kg_after_g ?? '-'}
+                                                            </td>
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">{line.extra_per_kg_price ?? '-'}</td>
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">{line.return_fee_percent ?? '-'}</td>
-                                                            <td className="py-1.5 pr-2 text-right tabular-nums">{line.expected_discount ?? 'not known'}</td>
+                                                            <td className="py-1.5 pr-2 text-right tabular-nums">
+                                                                {line.expected_discount ?? 'not known'}
+                                                            </td>
                                                         </>
                                                     )}
                                                     {calibrated && (
@@ -443,7 +467,13 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                                     )}
                                                     {isDraft && (
                                                         <td className="py-1">
-                                                            <Button type="button" size="sm" variant="ghost" className="h-7 px-2" onClick={() => removeLine(i)}>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-7 px-2"
+                                                                onClick={() => removeLine(i)}
+                                                            >
                                                                 Remove
                                                             </Button>
                                                         </td>
@@ -525,7 +555,9 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                         title={`Approve ${card.version}?`}
                                         description={`From ${effectiveFrom} every estimate without a live quote uses these prices. Estimates already made keep their own version. It cannot be edited afterwards.`}
                                         confirmLabel="Approve"
-                                        onConfirm={() => act('approve', 'couriers.ratecards.approve', { effective_from: effectiveFrom }, { rateCard: card.id })}
+                                        onConfirm={() =>
+                                            act('approve', 'couriers.ratecards.approve', { effective_from: effectiveFrom }, { rateCard: card.id })
+                                        }
                                     />
                                     {form.isDirty && <span className="text-muted-foreground pb-2 text-xs">Save the draft first.</span>}
                                 </div>

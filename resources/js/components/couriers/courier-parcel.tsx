@@ -190,7 +190,9 @@ function LiveFeeEstimate({
         <div className={`rounded-md border p-2 text-xs ${confidenceClass[estimate.confidence]}`} aria-live="polite">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span className="font-medium">
-                    {estimate.sufficient && estimate.total !== null ? `Courier charge about Tk ${estimate.total.toLocaleString('en-IN')}` : 'Insufficient data'}
+                    {estimate.sufficient && estimate.total !== null
+                        ? `Courier charge about Tk ${estimate.total.toLocaleString('en-IN')}`
+                        : 'Insufficient data'}
                 </span>
                 {estimate.sufficient && (
                     <span className="text-muted-foreground">
@@ -202,7 +204,9 @@ function LiveFeeEstimate({
             </div>
             <p className="text-muted-foreground mt-1">{estimate.basis}</p>
             {estimate.return_fee_scenario !== null && (
-                <p className="text-muted-foreground mt-1">If it comes back, a return fee of about Tk {estimate.return_fee_scenario.toLocaleString('en-IN')} may apply (not included).</p>
+                <p className="text-muted-foreground mt-1">
+                    If it comes back, a return fee of about Tk {estimate.return_fee_scenario.toLocaleString('en-IN')} may apply (not included).
+                </p>
             )}
         </div>
     );
@@ -554,11 +558,7 @@ export function CourierStatusPanel({ consignmentId, info, canBook }: { consignme
                     </button>
                 )}
             </div>
-            {info.fee_estimate && (
-                <p className="text-muted-foreground mt-1">
-                    ERP estimate kept at booking: {info.fee_estimate.basis}
-                </p>
-            )}
+            {info.fee_estimate && <p className="text-muted-foreground mt-1">ERP estimate kept at booking: {info.fee_estimate.basis}</p>}
             {open && (
                 <ol className="border-sidebar-border/70 mt-2 ml-1 flex flex-col gap-1 border-l pl-3">
                     {info.events.map((event) => (

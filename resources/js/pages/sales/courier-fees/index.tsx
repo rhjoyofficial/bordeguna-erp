@@ -90,7 +90,8 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Courier fees', href: '/sales/courier-fees' },
 ];
 
-const tk = (value: number | null | undefined) => (value === null || value === undefined ? '-' : value.toLocaleString('en-IN', { maximumFractionDigits: 2 }));
+const tk = (value: number | null | undefined) =>
+    value === null || value === undefined ? '-' : value.toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const pct = (value: number | null | undefined) => (value === null || value === undefined ? '-' : `${value > 0 ? '+' : ''}${value.toFixed(1)}%`);
 
 function selectClass() {
@@ -196,7 +197,12 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
                     </div>
                     <div className="grid gap-1">
                         <Label htmlFor="fees-band">Band</Label>
-                        <select id="fees-band" className={selectClass()} value={form.band} onChange={(e) => setForm({ ...form, band: e.target.value })}>
+                        <select
+                            id="fees-band"
+                            className={selectClass()}
+                            value={form.band}
+                            onChange={(e) => setForm({ ...form, band: e.target.value })}
+                        >
                             <option value="">All bands</option>
                             {bandOptions.map((b) => (
                                 <option key={`${b.provider}-${b.code}`} value={b.code}>
@@ -224,7 +230,13 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
                     </div>
                     <div className="grid gap-1">
                         <Label htmlFor="fees-from">Booked from</Label>
-                        <Input id="fees-from" type="date" className="w-40" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} />
+                        <Input
+                            id="fees-from"
+                            type="date"
+                            className="w-40"
+                            value={form.from}
+                            onChange={(e) => setForm({ ...form, from: e.target.value })}
+                        />
                     </div>
                     <div className="grid gap-1">
                         <Label htmlFor="fees-to">to</Label>
@@ -243,9 +255,7 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
                         {summary.unmatched_lines > 0 && ` ${summary.unmatched_lines} statement lines matched no parcel of ours and are left out.`}
                     </p>
                     {summary.excluded.length > 0 && (
-                        <p className="text-muted-foreground text-xs">
-                            Left out: {summary.excluded.map((e) => `${e.label} ${e.count}`).join(', ')}.
-                        </p>
+                        <p className="text-muted-foreground text-xs">Left out: {summary.excluded.map((e) => `${e.label} ${e.count}`).join(', ')}.</p>
                     )}
                     {small && (
                         <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
@@ -255,8 +265,16 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-2">
-                    <AggregateCard title="ERP estimate vs statement" aggregate={summary.estimate} note="Estimate kept at booking, against net fee plus COD fee." />
-                    <AggregateCard title="Courier quote vs statement" aggregate={summary.quote} note="What the courier said when it took the parcel." />
+                    <AggregateCard
+                        title="ERP estimate vs statement"
+                        aggregate={summary.estimate}
+                        note="Estimate kept at booking, against net fee plus COD fee."
+                    />
+                    <AggregateCard
+                        title="Courier quote vs statement"
+                        aggregate={summary.quote}
+                        note="What the courier said when it took the parcel."
+                    />
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-2">
@@ -272,7 +290,7 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                                         <YAxis unit="%" tick={{ fontSize: 11 }} width={44} />
-                                        <Tooltip formatter={(value: number) => pct(value)} />
+                                        <Tooltip formatter={(value) => pct(typeof value === 'number' ? value : null)} />
                                         <Legend wrapperStyle={{ fontSize: 12 }} />
                                         <ReferenceLine y={0} stroke="var(--muted-foreground)" />
                                         <Bar dataKey="estimate_median_pct" name="ERP estimate" fill="var(--chart-1)" radius={[3, 3, 0, 0]} />
@@ -294,11 +312,25 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                         <XAxis dataKey="week" tick={{ fontSize: 11 }} />
                                         <YAxis unit="%" tick={{ fontSize: 11 }} width={44} />
-                                        <Tooltip formatter={(value: number) => pct(value)} />
+                                        <Tooltip formatter={(value) => pct(typeof value === 'number' ? value : null)} />
                                         <Legend wrapperStyle={{ fontSize: 12 }} />
                                         <ReferenceLine y={0} stroke="var(--muted-foreground)" />
-                                        <Line type="monotone" dataKey="estimate_median_pct" name="ERP estimate" stroke="var(--chart-1)" strokeWidth={2} dot />
-                                        <Line type="monotone" dataKey="quote_median_pct" name="Courier quote" stroke="var(--chart-4)" strokeWidth={2} dot />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="estimate_median_pct"
+                                            name="ERP estimate"
+                                            stroke="var(--chart-1)"
+                                            strokeWidth={2}
+                                            dot
+                                        />
+                                        <Line
+                                            type="monotone"
+                                            dataKey="quote_median_pct"
+                                            name="Courier quote"
+                                            stroke="var(--chart-4)"
+                                            strokeWidth={2}
+                                            dot
+                                        />
                                     </LineChart>
                                 </ResponsiveContainer>
                             </div>
@@ -322,7 +354,12 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
                                 {report.by_band.map((b) => (
                                     <tr key={b.label} className="border-t">
                                         <td className="py-1.5 pr-3">{b.label}</td>
-                                        <td className={cn('py-1.5 pr-3 text-right tabular-nums', b.count < summary.min_samples && 'text-amber-700 dark:text-amber-400')}>
+                                        <td
+                                            className={cn(
+                                                'py-1.5 pr-3 text-right tabular-nums',
+                                                b.count < summary.min_samples && 'text-amber-700 dark:text-amber-400',
+                                            )}
+                                        >
                                             {b.count}
                                         </td>
                                         <td className="py-1.5 pr-3 text-right tabular-nums">{tk(b.actual_median)}</td>
@@ -374,18 +411,33 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
                                         )}
                                         {row.overridden && <span className="block text-xs">typed by hand</span>}
                                     </td>
-                                    <td className="py-1.5 pr-3 text-right tabular-nums" title={row.estimate ? `${row.estimate.method} ${row.estimate.version ?? ''}` : ''}>
+                                    <td
+                                        className="py-1.5 pr-3 text-right tabular-nums"
+                                        title={row.estimate ? `${row.estimate.method} ${row.estimate.version ?? ''}` : ''}
+                                    >
                                         {tk(row.estimate?.total)}
                                     </td>
                                     <td className="py-1.5 pr-3 text-right tabular-nums">{tk(row.quote?.total)}</td>
                                     <td className="py-1.5 pr-3 text-right tabular-nums">
                                         {tk(row.actual?.total)}
-                                        {row.actual && row.actual.discount > 0 && <span className="block text-xs">less {tk(row.actual.discount)} discount</span>}
+                                        {row.actual && row.actual.discount > 0 && (
+                                            <span className="block text-xs">less {tk(row.actual.discount)} discount</span>
+                                        )}
                                     </td>
-                                    <td className={cn('py-1.5 pr-3 text-right tabular-nums', row.estimate_outlier && 'font-medium text-amber-700 dark:text-amber-400')}>
+                                    <td
+                                        className={cn(
+                                            'py-1.5 pr-3 text-right tabular-nums',
+                                            row.estimate_outlier && 'font-medium text-amber-700 dark:text-amber-400',
+                                        )}
+                                    >
                                         {pct(row.estimate_pct)}
                                     </td>
-                                    <td className={cn('py-1.5 pr-3 text-right tabular-nums', row.quote_outlier && 'font-medium text-amber-700 dark:text-amber-400')}>
+                                    <td
+                                        className={cn(
+                                            'py-1.5 pr-3 text-right tabular-nums',
+                                            row.quote_outlier && 'font-medium text-amber-700 dark:text-amber-400',
+                                        )}
+                                    >
                                         {pct(row.quote_pct)}
                                     </td>
                                     <td className="py-1.5 pr-3">
@@ -402,7 +454,11 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
                 </div>
 
                 <p className="text-muted-foreground text-xs">
-                    Prices behind the estimates: <Link href={route('couriers.ratecards.index')} className="underline">Courier rate cards</Link>.
+                    Prices behind the estimates:{' '}
+                    <Link href={route('couriers.ratecards.index')} className="underline">
+                        Courier rate cards
+                    </Link>
+                    .
                 </p>
             </div>
         </AppLayout>
