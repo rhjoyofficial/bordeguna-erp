@@ -100,6 +100,10 @@ beforeEach(function () {
         // ⚠ The printed MRP (21 Sep 2026), caught by the guard below the moment
         // it joined Product::$fillable - the fifth time it has done its job.
         'mrp' => '520',
+        // ⭐ Courier hub slice 3 (11 Oct 2026): the weight of one unit as it
+        // ships. Typing it sets weight_source to manual, which the guard also
+        // needs filled - the sixth time it has done its job.
+        'weight_grams' => 560,
     ];
 });
 

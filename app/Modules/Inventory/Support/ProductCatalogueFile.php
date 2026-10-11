@@ -30,8 +30,10 @@ class ProductCatalogueFile
      *   shelf_life_warning_days  whole days
      *   content_quantity         the net content, e.g. 500
      *   content_unit             its unit abbreviation, e.g. g, mL (must exist)
+     *   weight_grams             one unit as it ships, whole grams (11 Oct 2026);
+     *                            a blank cell leaves the weight as it is
      */
-    public const PRODUCT_DETAILS = ['tracks_expiry', 'shelf_life_warning_days', 'content_quantity', 'content_unit'];
+    public const PRODUCT_DETAILS = ['tracks_expiry', 'shelf_life_warning_days', 'content_quantity', 'content_unit', 'weight_grams'];
 
     /**
      * @return list<array{line:int, values:array<string,string>}>

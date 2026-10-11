@@ -378,6 +378,15 @@ const dictionary = {
     'orders.select_product': { en: 'Select product', bn: 'পণ্য বাছুন' },
     'orders.search_products': { en: 'Search products…', bn: 'পণ্য খুঁজুন…' },
     'orders.quantity_in': { en: 'Quantity ({unit})', bn: 'পরিমাণ ({unit})' },
+    // Courier hub slice 3 (11 Oct 2026): the parcel weight, worked out from the lines and editable.
+    'orders.parcel_weight': { en: 'Parcel weight (g)', bn: 'পার্সেলের ওজন (গ্রাম)' },
+    'orders.weight_from_lines': { en: 'From the lines: {grams} g', bn: 'লাইন থেকে: {grams} গ্রাম' },
+    'orders.weight_at_least': { en: 'At least {grams} g', bn: 'কমপক্ষে {grams} গ্রাম' },
+    'orders.weight_missing_items': { en: '{count} item(s) without weight', bn: '{count}টি পণ্যের ওজন নেই' },
+    'orders.weight_hint': {
+        en: 'Change it if you know better. Blank keeps the weight from the lines.',
+        bn: 'আপনি ভালো জানলে বদলে দিন। খালি রাখলে লাইনের ওজনই থাকবে।',
+    },
     'orders.unit_price': { en: 'Unit price', bn: 'একক দাম' },
     'orders.changed_from': { en: 'Changed from {price}: undo', bn: '{price} থেকে বদলানো: আগেরটা ফেরান' },
     'orders.remove': { en: 'Remove', bn: 'বাদ দিন' },

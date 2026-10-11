@@ -39,6 +39,10 @@ class Consignment extends Model
         'sales_return_id',
         'created_by',
         'outcome_recorded_by',
+        // ⭐ Courier hub slice 3: what the courier was told the parcel weighs,
+        // and what its lines weigh by the product weights at booking.
+        'declared_weight_auto_grams',
+        'declared_weight_grams',
     ];
 
     protected function casts(): array
@@ -48,13 +52,15 @@ class Consignment extends Model
             'cod_amount' => 'decimal:4',
             'collected_amount' => 'decimal:4',
             'outcome_on' => 'date:Y-m-d',
+            'declared_weight_auto_grams' => 'integer',
+            'declared_weight_grams' => 'integer',
         ];
     }
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['consignment_number', 'money_account_id', 'cod_amount', 'status', 'outcome_on', 'collected_amount'])
+            ->logOnly(['consignment_number', 'money_account_id', 'cod_amount', 'status', 'outcome_on', 'collected_amount', 'declared_weight_grams'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

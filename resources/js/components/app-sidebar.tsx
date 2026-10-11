@@ -255,6 +255,10 @@ export function useNavGroups(): NavGroup[] {
                           // C-IMP-7 again. This one was built on 9 August and had no way
                           // in until 20 August.
                           ...(inventory.manageCatalog ? [{ title: 'Purchase units', url: '/inventory/unit-conversions', icon: Scale }] : []),
+                          // ⭐ Courier hub slice 3 (11 Oct 2026): fill every product's
+                          // weight in one sheet. Route, screen and this line ship in one
+                          // commit - the reachability rule.
+                          ...(inventory.manageCatalog ? [{ title: 'Product weights', url: '/inventory/products/weights', icon: Scale }] : []),
                           // C-BOM-9. Route, screen and this line shipped in one commit.
                           // The recipe screen posts nothing - it only decides what a run
                           // suggests - but a template nobody can find saves nobody any

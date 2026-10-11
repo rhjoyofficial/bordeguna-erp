@@ -7,6 +7,7 @@ use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
+use App\Modules\Inventory\Enums\WeightSource;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -44,6 +45,12 @@ class Product extends Model
         // and null means the check is silently off for this product.
         'content_quantity',
         'content_unit_id',
+        // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the weight of ONE stock
+        // unit as it ships, in whole grams, and where that number came from.
+        // Null = not known, and ⚠ never read as zero. A parcel's weight is
+        // worked out from these (Sales\Support\ParcelWeight).
+        'weight_grams',
+        'weight_source',
         'is_active',
         // Website Phase 2, slice 2.1. ⭐ ON THE PRODUCT MASTER, NOT THE STORE:
         // "this cannot be made to order" is true at the counter, on the phone
@@ -73,6 +80,8 @@ class Product extends Model
             'mrp' => 'decimal:4',
             'low_stock_threshold' => 'decimal:4',
             'content_quantity' => 'decimal:4',
+            'weight_grams' => 'integer',
+            'weight_source' => WeightSource::class,
             'is_active' => 'boolean',
             'availability_override' => AvailabilityPolicy::class,
             'lead_time_days' => 'integer',
@@ -84,7 +93,7 @@ class Product extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'sku', 'brand_id', 'category_id', 'low_stock_threshold', 'is_active'])
+            ->logOnly(['name', 'sku', 'brand_id', 'category_id', 'low_stock_threshold', 'weight_grams', 'weight_source', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

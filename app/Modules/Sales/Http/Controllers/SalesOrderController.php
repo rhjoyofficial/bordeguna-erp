@@ -19,6 +19,7 @@ use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\PickPlan;
+use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Sales\Actions\ApproveSalesOrder;
 use App\Modules\Sales\Actions\CancelSalesOrder;
 use App\Modules\Sales\Actions\CheckCustomerCredit;
@@ -43,6 +44,7 @@ use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Support\DeliveryBilling;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderNextSteps;
+use App\Modules\Sales\Support\ParcelWeight;
 use DomainException;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -114,12 +116,15 @@ class SalesOrderController extends Controller
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
             'products' => Product::query()->where('is_active', true)->stocked()
                 ->with('unitOfMeasure:id,abbreviation')
-                ->orderBy('name')->get(['id', 'name', 'sku', 'unit_of_measure_id'])
+                ->orderBy('name')->get(['id', 'name', 'sku', 'unit_of_measure_id', 'weight_grams'])
                 ->map(fn (Product $product) => [
                     'id' => $product->id,
                     'name' => $product->name,
                     'sku' => $product->sku,
                     'unit' => $product->unitOfMeasure?->abbreviation,
+                    // ⭐ Courier hub slice 3: so the form can add up the parcel
+                    // weight as lines are typed. Null = weight missing.
+                    'weight_grams' => $product->weight_grams,
                 ]),
             'can_create' => $request->user()->can('sales.orders.record'),
             'can_override_price' => $request->user()->can('sales.price.override'),
@@ -271,7 +276,8 @@ class SalesOrderController extends Controller
             'createdBy:id,name',
             'approvalRequest.requestedBy:id,name',
             'approvalRequest.reviewedBy:id,name',
-            'lines.product:id,name,sku',
+            // weight_grams: the parcel weight is worked out from it (slice 3).
+            'lines.product:id,name,sku,weight_grams',
             'lines.product.unitOfMeasure:id,abbreviation',
             'lines.deliveryLines.delivery:id,delivery_number,delivered_at',
         ]);
@@ -285,7 +291,7 @@ class SalesOrderController extends Controller
         // as dates, never a model handed to the page.
         $deliveries = Delivery::query()
             ->whereIn('id', $deliveryIds)
-            ->with(['lines.product:id,name,sku', 'lines.orderLine', 'customer', 'consignment.courier:id,name', 'consignment.invoice:id,invoice_number', 'consignment.salesReturn:id,return_number'])
+            ->with(['lines.product:id,name,sku,weight_grams', 'lines.orderLine.order.lines', 'customer', 'consignment.courier:id,name', 'consignment.invoice:id,invoice_number', 'consignment.salesReturn:id,return_number'])
             ->orderBy('delivered_at')
             ->orderBy('id')
             ->get();
@@ -305,6 +311,10 @@ class SalesOrderController extends Controller
                     'cod_preview' => $consignment === null && $untouched
                         ? DeliveryBilling::previewDue($delivery, $resolver)?->toTaka()
                         : null,
+                    // ⭐ Courier hub slice 3: what this challan weighs by the
+                    // product weights, and the weight to offer the courier.
+                    'weight' => ParcelWeight::forDelivery($delivery)->toArray(),
+                    'weight_suggested' => $consignment === null && $untouched ? ParcelWeight::suggestedForDelivery($delivery) : null,
                     'lines' => $delivery->lines->map(fn ($line) => [
                         'id' => $line->id,
                         'product' => $line->product?->name,
@@ -316,6 +326,8 @@ class SalesOrderController extends Controller
                         'courier' => $consignment->courier?->name,
                         'consignment_number' => $consignment->consignment_number,
                         'cod_amount' => $consignment->codAmount()->toTaka(),
+                        'declared_weight_grams' => $consignment->declared_weight_grams,
+                        'declared_weight_auto_grams' => $consignment->declared_weight_auto_grams,
                         'status' => $consignment->status->value,
                         'status_label' => $consignment->status->label(),
                         'outcome_on' => $consignment->outcome_on?->toDateString(),
@@ -335,6 +347,15 @@ class SalesOrderController extends Controller
                 'expected_date' => $order->expected_date?->toDateString(),
             ]),
             'challans' => $challans,
+            // ⭐ Courier hub slice 3: the parcel weight kept on the order, and
+            // what its lines weigh by today's product weights (which items
+            // still have none).
+            'weight' => [
+                'auto_grams' => $order->weight_grams_auto,
+                'typed_grams' => $order->weight_grams,
+                'effective_grams' => $order->effectiveWeightGrams(),
+                'now' => ParcelWeight::forOrder($order)->toArray(),
+            ],
             // ⭐ What is left to do, in order (21 Sep 2026): the page leads with it.
             'next_steps' => OrderNextSteps::for($order, $deliveries, $user),
             'couriers' => MoneyAccount::query()->active()->where('type', MoneyAccountType::Courier->value)
@@ -585,6 +606,9 @@ class SalesOrderController extends Controller
             // the line - the same seam the counter has. Absent, the SERVER
             // resolves the price at the order date.
             'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the parcel weight typed
+            // over the worked-out one. Blank = the worked-out weight. No reason.
+            'weight_grams' => ['nullable', 'integer', 'min:1', 'max:'.ProductWeight::MAX_GRAMS],
         ]);
 
         // ⚠⚠ A typed price is a margin decision (21 Sep 2026): whoever may take an
@@ -618,6 +642,7 @@ class SalesOrderController extends Controller
                 orderedAt: $data['ordered_at'] ?? null,
                 expectedDate: $data['expected_date'] ?? null,
                 note: $data['note'] ?? null,
+                weightGrams: isset($data['weight_grams']) ? (int) $data['weight_grams'] : null,
             );
         } catch (NoSellingPriceException $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);

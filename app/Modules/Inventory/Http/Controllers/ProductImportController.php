@@ -187,6 +187,7 @@ class ProductImportController extends Controller
                     $product->shelf_life_warning_days,
                     $product->content_quantity,
                     $product->contentUnit?->abbreviation,
+                    $product->weight_grams,
                 ]);
             }
 

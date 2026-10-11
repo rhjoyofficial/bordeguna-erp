@@ -9,10 +9,12 @@ use App\Modules\Foundation\Actions\NotifyApprovers;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\ParcelWeight;
 use App\Modules\Sales\Support\SalesOrderOrigin;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +58,7 @@ class CreateSalesOrder
         ?string $expectedDate = null,
         ?string $note = null,
         ?SalesOrderOrigin $origin = null,
+        ?int $weightGrams = null,
     ): SalesOrder {
         // ⚠ Deliberately NOT EffectiveDate::resolve - that helper asserts the
         // accounting period is open, which guards events that post. An order
@@ -110,7 +113,13 @@ class CreateSalesOrder
             }
         }
 
-        $order = DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $expectedDate, $note, $origin) {
+        if ($weightGrams !== null && ($weightGrams < 1 || $weightGrams > ProductWeight::MAX_GRAMS)) {
+            throw ValidationException::withMessages([
+                'weight_grams' => 'The parcel weight must be whole grams between 1 and '.ProductWeight::MAX_GRAMS.'.',
+            ]);
+        }
+
+        $order = DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $expectedDate, $note, $origin, $weightGrams) {
             $order = SalesOrder::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
@@ -223,7 +232,21 @@ class CreateSalesOrder
             // ⚠ An order discount is checked against the goods the ENGINE priced,
             // net of line discounts. Larger than the goods it is not a discount
             // but money owed to the customer, which is a different document.
-            $order->load('lines');
+            $order->load('lines.product');
+
+            // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the parcel weight from
+            // the lines, frozen like the prices. A typed weight is taken as it
+            // is - no reason asked - and the worked-out one is kept beside it
+            // with who typed it, silently, for the later fee analysis.
+            $auto = ParcelWeight::forOrder($order)->autoGrams();
+            $typed = $weightGrams !== null && $weightGrams !== $auto;
+
+            $order->update([
+                'weight_grams_auto' => $auto,
+                'weight_grams' => $typed ? $weightGrams : null,
+                'weight_edited_by' => $typed ? $createdBy->id : null,
+                'weight_edited_at' => $typed ? now() : null,
+            ]);
 
             if ($order->orderDiscount()->minor < 0 || $order->orderDiscount()->minor > Money::ofTaka($order->goodsTotal())->minor) {
                 throw ValidationException::withMessages([

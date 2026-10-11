@@ -33,6 +33,8 @@ interface Product {
     is_active: boolean;
     availability_override: string | null;
     lead_time_days: number | null;
+    weight_grams: number | null;
+    weight_source: string | null;
     current_quantity: string | null;
     average_unit_cost: string | null;
     is_below_threshold: boolean;
@@ -70,14 +72,16 @@ export default function ProductsIndex({
     taxClasses,
     filters: initialFilters,
     kind = 'products',
+    can_manage_weights = false,
 }: {
     products: Paginated<Product>;
     categories: Option[];
     brands: BrandOption[];
     units: UnitOption[];
     taxClasses: Option[];
-    filters: { search: string; type: string; category_id: string; brand_id: string };
+    filters: { search: string; type: string; category_id: string; brand_id: string; weight: string };
     kind?: string;
+    can_manage_weights?: boolean;
 }) {
     const { canImportCatalogue } = usePage<SharedData>().props;
     // ⭐ 27 Sep 2026 (Joy): raw materials and products are separate screens over
@@ -120,6 +124,11 @@ export default function ProductsIndex({
                     </div>
                     {/* Import and labels were sidebar rows until 29 Sep 2026; they belong with the list. */}
                     <div className="flex flex-wrap items-center gap-2">
+                        {can_manage_weights && (
+                            <Button asChild variant="outline">
+                                <Link href="/inventory/products/weights">Weights sheet</Link>
+                            </Button>
+                        )}
                         {canImportCatalogue && (
                             <>
                                 <Button asChild variant="outline">
@@ -181,10 +190,18 @@ export default function ProductsIndex({
                             <option value="none">No brand</option>
                         </SearchSelect>
                     </FilterField>
+                    {/* ⭐ Courier hub slice 3: a parcel weight cannot be worked out
+                        for a product with no weight, so this finds them. */}
+                    <FilterField label="Weight" htmlFor="filter-weight">
+                        <SearchSelect id="filter-weight" value={filters.weight} onChange={(e) => setFilter('weight', e.target.value)}>
+                            <option value="">Any weight</option>
+                            <option value="missing">Weight missing</option>
+                        </SearchSelect>
+                    </FilterField>
                 </FilterBar>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[52rem] text-sm">
+                    <table className="w-full min-w-[58rem] text-sm">
                         <thead>
                             <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                                 <th className="py-2">SKU</th>
@@ -194,6 +211,7 @@ export default function ProductsIndex({
                                 <th className="py-2">Category</th>
                                 <th className="py-2">Brand</th>
                                 <th className="py-2 pr-6 text-right">MRP</th>
+                                <th className="py-2 pr-6 text-right">Weight</th>
                                 <th className="py-2">Stock</th>
                                 <th className="py-2">Avg. cost</th>
                                 <th className="py-2 text-right">Actions</th>
@@ -220,6 +238,19 @@ export default function ProductsIndex({
                                             ? '-'
                                             : Number(product.mrp).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </td>
+                                    <td className="py-2 pr-6 text-right tabular-nums">
+                                        {product.weight_grams !== null ? (
+                                            <span title={product.weight_source === 'from_net_content' ? 'Taken from the net content' : undefined}>
+                                                {product.weight_grams.toLocaleString('en-IN')} g
+                                            </span>
+                                        ) : product.type === 'service' ? (
+                                            '-'
+                                        ) : (
+                                            <Badge variant="outline" className="text-amber-700 dark:text-amber-400">
+                                                Weight missing
+                                            </Badge>
+                                        )}
+                                    </td>
                                     <td className="py-2">
                                         {product.current_quantity !== null ? (
                                             <span className={product.is_below_threshold ? 'text-destructive font-medium' : ''}>
@@ -245,7 +276,7 @@ export default function ProductsIndex({
                             ))}
                             {products.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={10} className="text-muted-foreground py-6 text-center">
+                                    <td colSpan={11} className="text-muted-foreground py-6 text-center">
                                         {hasActiveFilters
                                             ? `No ${isRaw ? 'raw materials' : 'products'} match these filters.`
                                             : `No ${isRaw ? 'raw materials' : 'products'} yet. Press ${isRaw ? 'New raw material' : 'New product'} to add the first one.`}

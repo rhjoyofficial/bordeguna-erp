@@ -63,6 +63,13 @@ class SalesOrder extends Model
         'status',
         'note',
         'created_by',
+        // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the parcel weight worked
+        // out from the lines, the weight somebody typed instead (no reason
+        // asked), and - silently - who typed it and when.
+        'weight_grams_auto',
+        'weight_grams',
+        'weight_edited_by',
+        'weight_edited_at',
     ];
 
     protected function casts(): array
@@ -81,7 +88,19 @@ class SalesOrder extends Model
             'order_discount' => 'decimal:4',
             'delivery_promise_min_hours' => 'integer',
             'delivery_promise_max_hours' => 'integer',
+            'weight_grams_auto' => 'integer',
+            'weight_grams' => 'integer',
+            'weight_edited_at' => 'datetime',
         ];
+    }
+
+    /**
+     * The parcel weight in grams: what somebody typed, else the worked-out
+     * weight. ⚠ Null when neither is known - never zero.
+     */
+    public function effectiveWeightGrams(): ?int
+    {
+        return $this->weight_grams ?? $this->weight_grams_auto;
     }
 
     /**
@@ -103,7 +122,7 @@ class SalesOrder extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['status', 'order_number', 'customer_id'])
+            ->logOnly(['status', 'order_number', 'customer_id', 'weight_grams'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
