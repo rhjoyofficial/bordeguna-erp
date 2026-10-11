@@ -57,6 +57,8 @@ export interface SharedData {
     realtime?: { enabled: boolean; business_channel: string | null; user_channel: string | null };
     /** The record kinds this page shows; a `record.changed` of one of them refreshes it. */
     live?: string[];
+    /** The Bismillah greeting: the person's own switch and the sign-in nonce. Null on guest pages. */
+    bismillah?: { enabled: boolean; login: string | null } | null;
     /** Stored, addressed to this user, and unread. In-app only since 23 Aug. */
     unreadNotificationsCount: number;
     recentNotifications: {

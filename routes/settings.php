@@ -3,6 +3,7 @@
 use App\Http\Controllers\FailedJobController;
 use App\Http\Controllers\Settings\AiCredentialController;
 use App\Http\Controllers\Settings\DashboardAssignmentController;
+use App\Http\Controllers\Settings\GreetingController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\ReasonController;
@@ -35,6 +36,9 @@ Route::middleware('auth')->group(function () {
 
         return back();
     })->name('locale.update');
+
+    // The Bismillah greeting, on or off for oneself (11 Oct 2026).
+    Route::patch('settings/greeting', [GreetingController::class, 'update'])->name('greeting.update');
 });
 
 Route::middleware(['auth', 'business'])->group(function () {

@@ -1,4 +1,4 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 import AccentPicker from '@/components/accent-picker';
@@ -7,9 +7,11 @@ import HeadingSmall from '@/components/heading-small';
 import SidebarColorPicker from '@/components/sidebar-color-picker';
 import TopbarColorPicker from '@/components/topbar-color-picker';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { resetThemePreferences } from '@/hooks/use-appearance';
 import { useTranslation } from '@/lib/i18n';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type SharedData } from '@/types';
 
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
@@ -39,6 +41,14 @@ export default function Appearance() {
     // once.
     const setLocale = (next: 'en' | 'bn') => router.patch('/settings/locale', { locale: next }, { preserveScroll: true });
 
+    // The Bismillah greeting: account-level like the language, saved at once.
+    const greetingOn = usePage<SharedData>().props.bismillah?.enabled ?? true;
+    const [greetingBusy, setGreetingBusy] = useState(false);
+    const setGreeting = (enabled: boolean) => {
+        setGreetingBusy(true);
+        router.patch('/settings/greeting', { enabled }, { preserveScroll: true, onFinish: () => setGreetingBusy(false) });
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Appearance settings" />
@@ -53,6 +63,24 @@ export default function Appearance() {
                         <Button variant={locale === 'bn' ? 'default' : 'outline'} size="sm" onClick={() => setLocale('bn')}>
                             বাংলা
                         </Button>
+                    </div>
+
+                    <HeadingSmall title={t('bismillah.setting_heading')} />
+                    <div className="flex items-start gap-3">
+                        <Checkbox
+                            id="bismillah-greeting"
+                            className="mt-0.5"
+                            checked={greetingOn}
+                            disabled={greetingBusy}
+                            onCheckedChange={(value) => setGreeting(value === true)}
+                            aria-describedby="bismillah-greeting-hint"
+                        />
+                        <div className="grid gap-1">
+                            <Label htmlFor="bismillah-greeting">{t('bismillah.setting_label')}</Label>
+                            <p id="bismillah-greeting-hint" className="text-muted-foreground text-sm">
+                                {t('bismillah.setting_hint')}
+                            </p>
+                        </div>
                     </div>
 
                     <HeadingSmall title="Appearance settings" />

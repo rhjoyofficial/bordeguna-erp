@@ -12,6 +12,7 @@ use App\Modules\Foundation\Support\ErpAssistant;
 use App\Modules\Hrm\Models\Employee;
 use App\Support\ApprovalInbox;
 use App\Support\Attention\NeedsAttention;
+use App\Support\Preferences\BismillahGreeting;
 use App\Support\Realtime\LivePages;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
@@ -108,6 +109,9 @@ class HandleInertiaRequests extends Middleware
             // only, never data: every event is kind + id and the page re-reads.
             'realtime' => fn () => $this->realtime($request),
             'live' => fn () => LivePages::forRequest($request),
+            // The Bismillah greeting (11 Oct 2026): the person's own switch and
+            // the sign-in nonce. Null on guest pages, so it never shows there.
+            'bismillah' => fn () => BismillahGreeting::share($request),
             'pendingApprovalsCount' => fn () => $this->actionableApprovalsCount($request),
             'canReviewApprovals' => fn () => $this->canReviewApprovals($request),
             // Needs attention's sidebar badge (plan C.4): at most a minute old
