@@ -35,58 +35,21 @@ import {
     Users,
     Wallet,
 } from 'lucide-react';
-import type { DashboardWidget, Tone } from './types';
+import type { Tone } from './types';
 
 /**
  * The dashboards' colour language (Joy, 11 Oct 2026). Presentation only: the
  * payloads, permissions and endpoints are untouched.
  *
- * ⚠ The values live in app.css (--dash-*, .dash-acc-*), light and dark, so a
- * colour is changed in one place and dark mode is chosen, not flipped.
+ * A restrained palette (Joy, 11 Oct, fourth pass: "simplify overall colors"):
+ * the ERP brand green for emphasis, neutral greys for structure, two chart
+ * colours (blue for in and trend, orange for out), and the semantic red,
+ * amber and green only where a figure means something is wrong, waiting or
+ * fine. Cards no longer wear a colour per domain.
+ *
+ * ⚠ The values live in app.css (--dash-*), light and dark, so a colour is
+ * changed in one place and dark mode is chosen, not flipped.
  */
-/**
- * Accents are named by COLOUR (one .dash-acc-* class each in app.css); which
- * colour a widget wears is decided here, by its domain first and then per
- * widget, so neighbouring cards on one dashboard rarely share a colour.
- */
-export type Accent = 'emerald' | 'teal' | 'sky' | 'indigo' | 'violet' | 'amber' | 'rose' | 'red';
-
-const CATEGORY_ACCENT: Record<string, Accent> = {
-    Money: 'emerald',
-    Sales: 'indigo',
-    Couriers: 'amber',
-    Stock: 'sky',
-    People: 'rose',
-    Work: 'red',
-    Me: 'violet',
-};
-
-const KEY_ACCENT: Record<string, Accent> = {
-    // Money, spread so the Finance page is not one green wall.
-    money_in_transit: 'amber',
-    gross_profit: 'violet',
-    receivables_ageing: 'teal',
-    payables_ageing: 'rose',
-    money_accounts: 'teal',
-    bank_unmatched: 'sky',
-    period_lock: 'indigo',
-    claims_to_pay: 'rose',
-    finance_approvals: 'red',
-    // Sales.
-    sales_vs_target: 'violet',
-    top_products: 'violet',
-    // People and work.
-    approvals_waiting: 'rose',
-    followups_due: 'violet',
-    // Me: each belongs to a domain a person already knows by colour.
-    my_payslip: 'emerald',
-    my_claims: 'amber',
-    my_attendance: 'rose',
-    my_leave: 'sky',
-    my_tasks: 'red',
-    my_orders: 'indigo',
-    team_attendance: 'rose',
-};
 
 const KEY_ICON: Record<string, LucideIcon> = {
     cash_position: Wallet,
@@ -129,16 +92,28 @@ const KEY_ICON: Record<string, LucideIcon> = {
     courier_statements_pending: FileText,
 };
 
-export function accentFor(widget: Pick<DashboardWidget, 'key' | 'category'>): Accent {
-    return KEY_ACCENT[widget.key] ?? CATEGORY_ACCENT[widget.category] ?? 'emerald';
-}
-
 export function iconFor(key: string): LucideIcon {
     return KEY_ICON[key] ?? LayoutDashboard;
 }
 
 /** Chart series in the validated fixed order. A ninth series reuses nothing: callers fold it. */
 export const SERIES = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `var(--dash-series-${n})`);
+
+/**
+ * The dashboards' own charts use two colours only: blue (series 1: in, the
+ * trend) and orange (series 2: out). A third series, which no widget sends
+ * today, goes neutral rather than adding a hue. Reports keep SERIES.
+ */
+export function chartColour(index: number): string {
+    return index < 2 ? SERIES[index] : 'var(--dash-neutral)';
+}
+
+/** Parts of one whole (a donut) as steps of the one blue, strongest first. */
+export function shareColour(index: number, count: number): string {
+    const strength = count <= 1 ? 100 : Math.round(100 - (index * 65) / (count - 1));
+
+    return `color-mix(in oklab, var(--dash-series-1) ${strength}%, var(--card))`;
+}
 
 export const STATUS = {
     good: 'var(--dash-good)',
@@ -193,12 +168,12 @@ export function statusForText(text: string): StatusKey {
 
 /** Pill classes per status: tinted fill, AA text in both modes, a dot as a second cue. */
 export const PILL: Record<StatusKey, string> = {
-    good: 'bg-emerald-500/12 text-emerald-800 ring-emerald-600/20 dark:text-emerald-300 dark:ring-emerald-400/25',
-    info: 'bg-blue-500/12 text-blue-800 ring-blue-600/20 dark:text-blue-300 dark:ring-blue-400/25',
-    warn: 'bg-amber-500/15 text-amber-800 ring-amber-600/25 dark:text-amber-300 dark:ring-amber-400/25',
-    serious: 'bg-orange-500/12 text-orange-800 ring-orange-600/20 dark:text-orange-300 dark:ring-orange-400/25',
-    bad: 'bg-red-500/12 text-red-800 ring-red-600/20 dark:text-red-300 dark:ring-red-400/25',
-    neutral: 'bg-slate-500/12 text-slate-700 ring-slate-500/20 dark:text-slate-300 dark:ring-slate-400/25',
+    good: 'bg-emerald-500/10 text-emerald-800 ring-emerald-600/15 dark:text-emerald-300 dark:ring-emerald-400/25',
+    info: 'bg-blue-500/10 text-blue-800 ring-blue-600/15 dark:text-blue-300 dark:ring-blue-400/25',
+    warn: 'bg-amber-500/12 text-amber-800 ring-amber-600/20 dark:text-amber-300 dark:ring-amber-400/25',
+    serious: 'bg-orange-500/10 text-orange-800 ring-orange-600/15 dark:text-orange-300 dark:ring-orange-400/25',
+    bad: 'bg-red-500/10 text-red-800 ring-red-600/15 dark:text-red-300 dark:ring-red-400/25',
+    neutral: 'bg-slate-500/10 text-slate-700 ring-slate-500/15 dark:text-slate-300 dark:ring-slate-400/25',
 };
 
 /** Text in a tone, AA on the card (700 steps in light, 400 in dark). */
@@ -245,17 +220,139 @@ export function initials(name: string): string {
     return (words[0][0] + (words.length > 1 ? words[words.length - 1][0] : '')).toUpperCase();
 }
 
-const AVATAR_HUES = [160, 243, 32, 199, 347, 262, 14, 188];
+/** A person's chip: neutral, so a list of names does not turn into a rainbow. */
+export function avatarStyle(): { background: string; color: string } {
+    return { background: 'var(--muted)', color: 'var(--muted-foreground)' };
+}
 
-/** A stable soft colour per name, so the same person always wears the same chip. */
-export function avatarStyle(name: string): { background: string; color: string } {
-    let hash = 0;
+/**
+ * Colour in the TEXT only, by what a figure means (Joy, 11 Oct, fifth pass:
+ * "just add colors on the font where can give good vibe"). Surfaces stay
+ * neutral. Money coming in reads brand green, money going out orange (the
+ * chart's orange), something waiting amber, something wrong red; a zero is
+ * muted grey whatever it is, and a figure with no direction (a balance) keeps
+ * the normal text colour.
+ */
+export type Meaning = 'in' | 'out' | 'waiting' | 'bad';
 
-    for (const ch of name) {
-        hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+const KEY_MEANING: Record<string, Meaning> = {
+    income_trend: 'in',
+    gross_profit: 'in',
+    sales_vs_target: 'in',
+    top_products: 'in',
+    receipts_vs_payments: 'in',
+    my_payslip: 'in',
+    my_orders: 'in',
+    claims_to_pay: 'out',
+    payables_ageing: 'out',
+    my_claims: 'out',
+    approvals_waiting: 'waiting',
+    bank_unmatched: 'waiting',
+    finance_approvals: 'waiting',
+    followups_due: 'waiting',
+    leave_pending: 'waiting',
+    orders_needing_action: 'waiting',
+    orders_to_dispatch: 'waiting',
+    courier_statements_pending: 'waiting',
+    my_tasks: 'waiting',
+};
+
+export function meaningFor(key?: string): Meaning | null {
+    return key ? (KEY_MEANING[key] ?? null) : null;
+}
+
+/** A part's meaning read from its label, the way statusForText reads a status word. */
+export function partMeaning(label: string): Meaning | null {
+    const t = label.toLowerCase();
+
+    if (/(overdue|over 90|failed|lost|short)/.test(t)) {
+        return 'bad';
     }
 
-    const hue = AVATAR_HUES[hash % AVATAR_HUES.length];
+    if (/(pending|waiting|unmatched|stuck|problem|due in|to pay)/.test(t)) {
+        return 'waiting';
+    }
 
-    return { background: `hsla(${hue}, 75%, 50%, 0.16)`, color: `hsl(${hue}, 70%, var(--dash-avatar-l, 32%))` };
+    if (/(expense|cost|money out|paid out|payable|claim|refund)/.test(t)) {
+        return 'out';
+    }
+
+    if (/(income|sales|revenue|profit|margin|net|received|money in)/.test(t)) {
+        return 'in';
+    }
+
+    return null;
+}
+
+type Shade = Meaning | 'good';
+
+/** Large figures (28px semibold, AA large text at 3:1). */
+const LARGE: Record<Shade, string> = {
+    in: 'text-emerald-600 dark:text-emerald-400',
+    good: 'text-emerald-600 dark:text-emerald-400',
+    out: 'text-orange-600 dark:text-orange-400',
+    waiting: 'text-amber-700 dark:text-amber-400',
+    bad: 'text-red-600 dark:text-red-400',
+};
+
+/** Small text (AA at 4.5:1 on the card and on the muted mini tiles). */
+const SMALL: Record<Shade, string> = {
+    in: 'text-emerald-700 dark:text-emerald-300',
+    good: 'text-emerald-700 dark:text-emerald-300',
+    out: 'text-orange-700 dark:text-orange-300',
+    waiting: 'text-amber-800 dark:text-amber-300',
+    bad: 'text-red-700 dark:text-red-300',
+};
+
+function shadeOf(value: number | string | null | undefined, meaning: Meaning | null, tone?: Tone): Shade | 'zero' | null {
+    if (typeof value === 'number' && value === 0) {
+        return 'zero';
+    }
+
+    const status = toneStatus(tone ?? null);
+
+    if (status === 'bad') {
+        return 'bad';
+    }
+
+    if (status === 'warn') {
+        return 'waiting';
+    }
+
+    if (status === 'good') {
+        return 'good';
+    }
+
+    if (meaning === 'in') {
+        return typeof value === 'number' && value < 0 ? 'bad' : 'in';
+    }
+
+    if (meaning === 'waiting' || meaning === 'bad') {
+        return typeof value === 'number' && value > 0 ? meaning : null;
+    }
+
+    return meaning;
+}
+
+/** The text colour for a figure: by its tone first, then by what it means. */
+export function figureClass(value: number | string | null | undefined, meaning: Meaning | null, tone?: Tone, size: 'lg' | 'sm' = 'lg'): string {
+    const shade = shadeOf(value, meaning, tone);
+
+    if (shade === 'zero') {
+        return 'text-muted-foreground';
+    }
+
+    return shade === null ? '' : (size === 'lg' ? LARGE : SMALL)[shade];
+}
+
+/** A mini tile's caption, tinted only when its figure is not zero. */
+export function labelClass(value: number | string | null | undefined, meaning: Meaning | null, tone?: Tone): string {
+    const shade = shadeOf(value, meaning, tone);
+
+    return shade === null || shade === 'zero' ? 'text-muted-foreground' : SMALL[shade];
+}
+
+/** Chart legend words in their series colour, AA as text (the swatch keeps the chart colour). */
+export function legendClass(index: number): string {
+    return index === 0 ? 'text-blue-700 dark:text-blue-300' : index === 1 ? 'text-orange-700 dark:text-orange-300' : 'text-muted-foreground';
 }

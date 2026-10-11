@@ -10,7 +10,22 @@ import { useMemo, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AnimatedNumber } from './animated-number';
 import { changeAgainst, formatValue } from './format';
-import { avatarStyle, initials, PILL, SERIES, STATUS, statusForText, toneStatus, toneText } from './palette';
+import {
+    avatarStyle,
+    chartColour,
+    figureClass,
+    initials,
+    labelClass,
+    legendClass,
+    meaningFor,
+    partMeaning,
+    PILL,
+    shareColour,
+    STATUS,
+    statusForText,
+    toneStatus,
+    toneText,
+} from './palette';
 import type {
     AttentionPayload,
     BreakdownPayload,
@@ -34,27 +49,32 @@ const PERSON_COLUMNS = new Set(['employee', 'customer']);
 const AXIS_TICK = { fill: 'var(--muted-foreground)', fontSize: 11 };
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-const toneFill = (tone: Tone, index: number) => {
+/**
+ * A bar or dot in a breakdown. A tone wins (amber waiting, red overdue). In a
+ * breakdown where some rows carry a tone (ageing), the untoned rows are the
+ * calm neutral start of the scale; otherwise every bar is the one chart blue.
+ */
+const toneFill = (tone: Tone, scaled: boolean) => {
     const status = toneStatus(tone);
 
-    return status ? STATUS[status] : SERIES[index % SERIES.length];
+    return status ? STATUS[status] : scaled ? STATUS.neutral : chartColour(0);
 };
 
 export function WidgetBody({ payload, emptyText, widgetKey }: { payload: WidgetPayload; emptyText: string; widgetKey?: string }) {
     switch (payload.kind) {
         case 'stat':
-            return <StatBody payload={payload} />;
+            return <StatBody payload={payload} widgetKey={widgetKey} />;
         case 'series':
-            return <SeriesBody payload={payload} />;
+            return <SeriesBody payload={payload} widgetKey={widgetKey} />;
         case 'breakdown':
-            return <BreakdownBody payload={payload} emptyText={emptyText} byStatus={STATUS_BREAKDOWNS.has(widgetKey ?? '')} />;
+            return <BreakdownBody payload={payload} emptyText={emptyText} byStatus={STATUS_BREAKDOWNS.has(widgetKey ?? '')} widgetKey={widgetKey} />;
         case 'list':
         case 'lookup':
             return <ListBody payload={payload} emptyText={emptyText} />;
         case 'signals':
             return <SignalsBody payload={payload} />;
         case 'progress':
-            return <ProgressBody payload={payload} emptyText={emptyText} />;
+            return <ProgressBody payload={payload} emptyText={emptyText} widgetKey={widgetKey} />;
         case 'attention':
             return <AttentionBody payload={payload} emptyText={emptyText} />;
         default:
@@ -63,15 +83,16 @@ export function WidgetBody({ payload, emptyText, widgetKey }: { payload: WidgetP
 }
 
 /**
- * An empty state that still belongs to the dashboard: the domain's tint, an
- * icon and the words, never a grey box.
+ * An empty state that still belongs to the dashboard: a quiet neutral note
+ * whose icon carries the domain's colour (a page of empty cards in tinted
+ * boxes read loud, Joy 11 Oct).
  */
 function EmptyNote({ text, calm = false }: { text: string; calm?: boolean }) {
     const Icon = calm ? CircleCheck : Inbox;
 
     return (
-        <div className="flex items-center gap-3 rounded-xl border border-dashed border-[color-mix(in_oklab,var(--acc)_35%,transparent)] bg-[var(--acc-wash)] px-3 py-4 text-sm">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--card)] text-[var(--acc-ink)] shadow-xs">
+        <div className="border-border bg-muted/40 flex items-center gap-3 rounded-xl border border-dashed px-3 py-4 text-sm dark:bg-white/[0.03]">
+            <span className="text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--card)] shadow-xs">
                 <Icon className="size-4" aria-hidden />
             </span>
             <p className="text-muted-foreground">{text}</p>
@@ -120,7 +141,7 @@ function Person({ name }: { name: string }) {
         <span className="flex min-w-0 items-center gap-2">
             <span
                 className="flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
-                style={avatarStyle(name)}
+                style={avatarStyle()}
                 aria-hidden
             >
                 {initials(name)}
@@ -136,15 +157,21 @@ function Parts({ parts }: { parts?: Part[] }) {
     }
 
     const tile =
-        'block min-w-0 rounded-lg bg-[var(--acc-tile)] px-2.5 py-1.5 ring-1 ring-inset ring-[color-mix(in_oklab,var(--acc)_30%,transparent)]';
+        // Neutral on purpose: colour stays on the stripe, icon and pills (Joy, 11 Oct).
+        'block min-w-0 rounded-lg bg-muted/60 px-2.5 py-1.5 ring-1 ring-inset ring-border/70 dark:bg-white/[0.04]';
 
     return (
         <dl className="mt-4 grid grid-cols-2 gap-2 text-xs @md:grid-cols-3">
             {parts.map((part) => {
                 const body = (
                     <>
-                        <dt className="truncate font-medium text-[var(--acc-ink)]">{part.label}</dt>
-                        <dd className={cn('mt-0.5 truncate text-[13px] font-semibold', toneText(part.tone))}>
+                        <dt className={cn('truncate', labelClass(part.value, partMeaning(part.label), part.tone))}>{part.label}</dt>
+                        <dd
+                            className={cn(
+                                'mt-0.5 truncate text-[13px] font-semibold',
+                                figureClass(part.value, partMeaning(part.label), part.tone, 'sm'),
+                            )}
+                        >
                             {typeof part.value === 'number' && part.unit !== 'text' ? (
                                 <AnimatedNumber value={part.value} unit={part.unit ?? 'count'} compact />
                             ) : (
@@ -155,11 +182,7 @@ function Parts({ parts }: { parts?: Part[] }) {
                 );
 
                 return part.url ? (
-                    <Link
-                        key={part.label}
-                        href={part.url}
-                        className={cn(tile, 'transition-colors hover:bg-[color-mix(in_oklab,var(--acc)_24%,var(--card))]')}
-                    >
+                    <Link key={part.label} href={part.url} className={cn(tile, 'hover:bg-muted transition-colors dark:hover:bg-white/[0.08]')}>
                         {body}
                     </Link>
                 ) : (
@@ -172,13 +195,18 @@ function Parts({ parts }: { parts?: Part[] }) {
     );
 }
 
-function StatBody({ payload }: { payload: StatPayload }) {
+function StatBody({ payload, widgetKey }: { payload: StatPayload; widgetKey?: string }) {
     const change = typeof payload.value === 'number' ? changeAgainst(payload.value, payload.previous) : null;
 
     return (
         <div>
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                <p className={cn('text-[1.75rem] leading-tight font-semibold tracking-tight', toneText(payload.tone))}>
+                <p
+                    className={cn(
+                        'text-[1.75rem] leading-tight font-semibold tracking-tight',
+                        figureClass(payload.value, meaningFor(widgetKey), payload.tone),
+                    )}
+                >
                     {typeof payload.value === 'number' ? <AnimatedNumber value={payload.value} unit={payload.unit} /> : payload.value}
                 </p>
                 {change && <ChangeChip change={change} />}
@@ -218,7 +246,7 @@ function ChartTooltip({
     );
 }
 
-function SeriesBody({ payload }: { payload: SeriesPayload }) {
+function SeriesBody({ payload, widgetKey }: { payload: SeriesPayload; widgetKey?: string }) {
     const reduce = useReducedMotion();
     const { t } = useTranslation();
     const change = payload.total !== undefined ? changeAgainst(payload.total, payload.previous_total) : null;
@@ -246,7 +274,7 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
             {payload.total !== undefined && (
                 <div className="mb-3 flex flex-wrap items-center gap-x-2.5 gap-y-1">
                     <span className="text-muted-foreground w-full text-xs">{payload.total_label ?? t('dash.total')}</span>
-                    <span className="text-2xl font-semibold tracking-tight">
+                    <span className={cn('text-2xl font-semibold tracking-tight', figureClass(payload.total, meaningFor(widgetKey)))}>
                         <AnimatedNumber value={payload.total} unit={payload.unit} />
                     </span>
                     {change && <ChangeChip change={change} />}
@@ -266,7 +294,7 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
                                         key={s.key}
                                         dataKey={s.key}
                                         name={s.label}
-                                        fill={SERIES[i]}
+                                        fill={chartColour(i)}
                                         radius={[4, 4, 0, 0]}
                                         maxBarSize={26}
                                         isAnimationActive={!reduce}
@@ -280,9 +308,9 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
                                 <defs>
                                     {payload.series.map((s, i) => (
                                         <linearGradient key={s.key} id={`fill-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor={SERIES[i]} stopOpacity={0.38} />
-                                            <stop offset="70%" stopColor={SERIES[i]} stopOpacity={0.08} />
-                                            <stop offset="100%" stopColor={SERIES[i]} stopOpacity={0} />
+                                            <stop offset="0%" stopColor={chartColour(i)} stopOpacity={0.22} />
+                                            <stop offset="70%" stopColor={chartColour(i)} stopOpacity={0.05} />
+                                            <stop offset="100%" stopColor={chartColour(i)} stopOpacity={0} />
                                         </linearGradient>
                                     ))}
                                 </defs>
@@ -297,7 +325,7 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
                                         type="monotone"
                                         dataKey={s.key}
                                         name={s.label}
-                                        stroke={SERIES[i]}
+                                        stroke={chartColour(i)}
                                         strokeWidth={2}
                                         fill={`url(#fill-${s.key})`}
                                         activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--card)' }}
@@ -311,10 +339,10 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
                     </ResponsiveContainer>
                 </div>
             )}
-            <div className="text-muted-foreground mt-3 flex flex-wrap gap-4 text-xs">
+            <div className="mt-3 flex flex-wrap gap-4 text-xs font-medium">
                 {payload.series.map((s, i) => (
-                    <span key={s.key} className="flex items-center gap-1.5">
-                        <span className="inline-block h-2 w-3.5 rounded-full" style={{ background: SERIES[i] }} />
+                    <span key={s.key} className={cn('flex items-center gap-1.5', legendClass(i))}>
+                        <span className="inline-block h-2 w-3.5 rounded-full" style={{ background: chartColour(i) }} />
                         {s.label}
                     </span>
                 ))}
@@ -323,19 +351,34 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
     );
 }
 
-function BreakdownBody({ payload, emptyText, byStatus }: { payload: BreakdownPayload; emptyText: string; byStatus: boolean }) {
+function BreakdownBody({
+    payload,
+    emptyText,
+    byStatus,
+    widgetKey,
+}: {
+    payload: BreakdownPayload;
+    emptyText: string;
+    byStatus: boolean;
+    widgetKey?: string;
+}) {
     const reduce = useReducedMotion();
     const { t } = useTranslation();
     const max = Math.max(1, ...payload.items.map((i) => Math.abs(i.value)));
     const total = payload.items.reduce((sum, i) => sum + i.value, 0);
+    const scaled = payload.items.some((item) => toneStatus(item.tone) !== null);
     const fill = (item: BreakdownPayload['items'][number], index: number) =>
-        byStatus ? STATUS[statusForText(item.label)] : toneFill(item.tone, index);
+        byStatus
+            ? STATUS[statusForText(item.label)]
+            : payload.chart === 'donut' && !scaled
+              ? shareColour(index, payload.items.length)
+              : toneFill(item.tone, scaled);
 
     return (
         <div>
             {payload.headline && <p className="mb-2 text-sm font-medium">{payload.headline}</p>}
             {payload.total !== undefined && payload.chart !== 'donut' && (
-                <p className="mb-3 text-2xl font-semibold tracking-tight">
+                <p className={cn('mb-3 text-2xl font-semibold tracking-tight', figureClass(payload.total, meaningFor(widgetKey)))}>
                     <AnimatedNumber value={payload.total} unit={payload.unit} />
                 </p>
             )}
@@ -402,7 +445,9 @@ function BreakdownBody({ payload, emptyText, byStatus }: { payload: BreakdownPay
                                         <span className="inline-block size-2 shrink-0 rounded-full" style={{ background: colour }} aria-hidden />
                                         <span className="text-muted-foreground truncate">{item.label}</span>
                                     </span>
-                                    <span className={cn('font-semibold tabular-nums', toneText(item.tone))}>
+                                    <span
+                                        className={cn('font-semibold tabular-nums', item.value === 0 ? 'text-muted-foreground' : toneText(item.tone))}
+                                    >
                                         <AnimatedNumber value={item.value} unit={payload.unit} compact />
                                     </span>
                                 </div>
@@ -584,17 +629,15 @@ function SignalsBody({ payload }: { payload: SignalsPayload }) {
                             href={item.url}
                             className={cn(
                                 'flex h-full items-center gap-3 rounded-xl px-2.5 py-2 ring-1 transition-colors ring-inset',
-                                waiting
-                                    ? 'bg-amber-500/8 ring-amber-500/20 hover:bg-amber-500/15'
-                                    : 'bg-emerald-500/6 ring-emerald-500/15 hover:bg-emerald-500/12',
+                                'bg-muted/40 ring-border/60 hover:bg-muted dark:bg-white/[0.03] dark:hover:bg-white/[0.06]',
                             )}
                         >
                             <span
                                 className={cn(
                                     'flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-sm font-semibold tabular-nums',
                                     waiting
-                                        ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300'
-                                        : 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300',
+                                        ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300'
+                                        : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
                                 )}
                             >
                                 {waiting ? (
@@ -615,14 +658,14 @@ function SignalsBody({ payload }: { payload: SignalsPayload }) {
     );
 }
 
-function ProgressBody({ payload, emptyText }: { payload: ProgressPayload; emptyText: string }) {
+function ProgressBody({ payload, emptyText, widgetKey }: { payload: ProgressPayload; emptyText: string; widgetKey?: string }) {
     const reduce = useReducedMotion();
     const { t } = useTranslation();
     const share = payload.target ? Math.min(1, Math.max(0, payload.value / payload.target)) : 0;
 
     return (
         <div>
-            <p className="text-[1.75rem] leading-tight font-semibold tracking-tight">
+            <p className={cn('text-[1.75rem] leading-tight font-semibold tracking-tight', figureClass(payload.value, meaningFor(widgetKey)))}>
                 <AnimatedNumber value={payload.value} unit={payload.unit} />
             </p>
             {payload.target ? (
@@ -646,7 +689,7 @@ function ProgressBody({ payload, emptyText }: { payload: ProgressPayload; emptyT
                         aria-valuemax={100}
                     >
                         <motion.div
-                            className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[var(--acc)] to-[var(--acc-2)]"
+                            className="h-full w-full origin-left rounded-full bg-[var(--acc)]"
                             initial={reduce ? false : { scaleX: 0 }}
                             animate={{ scaleX: share }}
                             transition={reduce ? { duration: 0 } : { duration: 0.9, ease: EASE, delay: 0.2 }}

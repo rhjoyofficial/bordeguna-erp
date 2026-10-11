@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowUpRight, EyeOff, Loader2, RefreshCw } from 'lucide-
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { secondsAgo } from './format';
-import { accentFor, iconFor } from './palette';
+import { iconFor } from './palette';
 import type { DashboardWidget } from './types';
 import type { FeedEntry } from './use-widget-feed';
 import { WidgetBody } from './widget-body';
@@ -33,13 +33,16 @@ const SERVER_EMPTY = 'Nothing to show yet.';
  * figure, and the way to the screen behind it.
  *
  * ui-motion: Offset and Delay on entry (the cards arrive one after another, so
- * the eye reads them as separate things, fired once on page load), a small
- * lift under the pointer (it is a thing you can act on), and one accent glow
- * when a live refresh CHANGES the figure (feedback that something happened).
- * Under reduced motion they simply appear and stay put.
+ * the eye reads them as separate things, fired once on page load) and one
+ * brand glow when a live refresh CHANGES the figure (feedback that something
+ * happened). The card itself never moves under the pointer (Joy, 11 Oct:
+ * "no needs on hover movements full card"). Under reduced motion they simply
+ * appear.
  *
- * Colour (Joy, 11 Oct 2026): each domain wears its own accent, set by the
- * .dash-acc-* class (app.css) so light and dark are each chosen, not flipped.
+ * Colour (fourth pass, "simplify overall colors"): a plain card with a static
+ * hairline border and a neutral icon tile. Only a card whose figure needs
+ * someone (something waiting, overdue or failed) colours its icon tile, amber
+ * or red, so colour on the page always means something.
  */
 export function WidgetCard({
     widget,
@@ -79,9 +82,24 @@ export function WidgetCard({
     const emptyText = widget.empty_text === SERVER_EMPTY ? t('dash.empty_default') : tr(`widget.${widget.key}.empty`, widget.empty_text);
     const tooOld = (secondsAgo(result.generated_at, now) ?? 0) > Math.max(widget.refresh_seconds * 3, 180);
     const Icon = iconFor(widget.key);
-    // An attention card with nothing waiting turns green: the colour agrees with the words.
+    // The icon tile is neutral unless the figure itself says something is wrong or waiting.
     const data = result.data;
-    const calm = (data?.kind === 'attention' && data.total_count === 0) || (data?.kind === 'signals' && data.items.every((item) => item.count === 0));
+    const state: 'bad' | 'warn' | null =
+        data === null
+            ? 'bad'
+            : data.kind === 'attention'
+              ? data.counts.critical > 0
+                  ? 'bad'
+                  : data.total_count > 0
+                    ? 'warn'
+                    : null
+              : data.kind === 'signals'
+                ? data.items.some((item) => item.count > 0)
+                    ? 'warn'
+                    : null
+                : 'tone' in data && (data.tone === 'bad' || data.tone === 'warn')
+                  ? data.tone
+                  : null;
 
     // A changed figure from the live feed glows once. The first answer never does.
     const fingerprint = JSON.stringify(result.data);
@@ -100,26 +118,27 @@ export function WidgetCard({
             aria-labelledby={`widget-${widget.key}`}
             initial={reduce ? false : { opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            whileHover={reduce ? undefined : { y: -3 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: reduce ? 0 : Math.min(index, 12) * 0.045 }}
             className={cn(
-                `dash-acc-${calm ? 'emerald' : accentFor(widget)}`,
-                'bg-card text-card-foreground @container relative isolate flex flex-col overflow-hidden rounded-2xl border border-[color-mix(in_oklab,var(--acc)_22%,var(--border))] p-4 sm:p-5',
-                'shadow-[0_1px_2px_rgba(20,40,25,0.05),0_10px_28px_-18px_rgba(20,50,30,0.22)] transition-shadow duration-300',
-                'hover:shadow-[0_1px_2px_rgba(20,40,25,0.06),0_22px_40px_-20px_var(--acc)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_12px_30px_-18px_rgba(0,0,0,0.7)]',
+                'dash-acc-brand',
+                'bg-card text-card-foreground @container relative isolate flex flex-col overflow-hidden rounded-2xl border p-4 sm:p-5',
+                'shadow-[0_1px_2px_rgba(20,40,25,0.04)] dark:shadow-none',
                 SPAN[widget.size],
             )}
-            style={{
-                backgroundImage:
-                    'radial-gradient(120% 70% at 100% 0%, var(--acc-wash), transparent 70%), linear-gradient(180deg, var(--acc-wash), transparent 15rem)',
-            }}
         >
-            {/* The domain's colour along the top edge. */}
-            <span aria-hidden className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[var(--acc)] to-[var(--acc-2)]" />
             {pulse > 0 && <span key={pulse} aria-hidden className="dash-pulse pointer-events-none absolute inset-0 rounded-[inherit]" />}
 
             <header className="mb-4 flex items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--acc)] to-[var(--acc-2)] text-white shadow-[0_6px_14px_-6px_var(--acc)]">
+                <span
+                    className={cn(
+                        'flex size-9 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset',
+                        state === 'bad'
+                            ? 'bg-red-500/10 text-red-700 ring-red-600/15 dark:text-red-300 dark:ring-red-400/25'
+                            : state === 'warn'
+                              ? 'bg-amber-500/12 text-amber-800 ring-amber-600/20 dark:text-amber-300 dark:ring-amber-400/25'
+                              : 'bg-muted text-foreground/70 ring-border/60',
+                    )}
+                >
                     <Icon className="size-[18px]" aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">
