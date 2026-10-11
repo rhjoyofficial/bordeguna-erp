@@ -18,7 +18,6 @@ use App\Modules\Sales\Support\ShopOrderImportPlan;
 use App\Modules\Sales\Support\StagedShopOrderFile;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -205,16 +204,10 @@ class ApplyShopOrderImport
                 orderDiscount: $order['order_discount']->toTaka(),
             ),
             weightGrams: $order['weight_grams'],
+            brandId: $order['brand_id'] === null ? null : (int) $order['brand_id'],
             selfApprove: false,
             notifyApprovers: false,
         );
-
-        // ⭐ The brand reaches the order when this branch's schema has the
-        // column (it arrives with feature/order-brand-courier); either way it is
-        // kept on the import row.
-        if ($order['brand_id'] !== null && self::ordersHaveBrand()) {
-            DB::table('sales_orders')->where('id', $salesOrder->id)->update(['brand_id' => (int) $order['brand_id']]);
-        }
 
         if ($advance->minor > 0 && $account !== null) {
             $this->payments->handle(
@@ -273,10 +266,5 @@ class ApplyShopOrderImport
             'outcome' => $outcome,
             'message' => $message,
         ]);
-    }
-
-    public static function ordersHaveBrand(): bool
-    {
-        return Schema::hasColumn('sales_orders', 'brand_id');
     }
 }

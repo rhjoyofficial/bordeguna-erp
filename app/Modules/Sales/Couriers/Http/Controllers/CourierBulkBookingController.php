@@ -7,7 +7,6 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Assets\Support\AssetQrCode;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
-use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\Code128;
 use App\Modules\Sales\Couriers\Booking\ParcelDraft;
@@ -23,6 +22,7 @@ use App\Modules\Sales\Couriers\Support\ParcelsToBook;
 use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderAddress;
+use App\Modules\Sales\Support\OrderBrand;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,7 +52,11 @@ class CourierBulkBookingController extends Controller
 
         $rows = ParcelsToBook::orders()->map(function (SalesOrder $order) use ($accounts, $businessId, $inFlight, $brands, &$places) {
             $plan = ParcelsToBook::plan($order);
-            $default = ParcelsToBook::defaultAccount($order, $accounts, $businessId);
+            // ⭐ The order screen's own choice for this order's brand: the
+            // preselected account is the default, and an account kept for the
+            // other brand carries its reason.
+            $choices = collect(ParcelsToBook::accountChoices($order, $accounts, $businessId));
+            $defaultId = $choices->firstWhere('preselected', true)['id'] ?? null;
             $address = $order->address;
             $open = ParcelsToBook::openBooking($order);
             $due = Money::ofMinor(max(0, Money::ofTaka($order->agreedTotal())->minor - max(0, $order->advanceHeld()->minor)));
@@ -64,7 +68,10 @@ class CourierBulkBookingController extends Controller
                 $key = $code.'|'.$address?->district.'|'.$address?->thana.'|'.$address?->area;
                 $places[$key] ??= CourierDestination::resolve($code, $address?->district, $address?->thana, $address?->area);
                 $resolved = $places[$key];
-                $destinations[$account->id] = $resolved instanceof Unresolved ? $resolved->message : null;
+                $choice = $choices->firstWhere('id', $account->id);
+                $destinations[$account->id] = $choice !== null && ! $choice['available']
+                    ? (string) $choice['unavailable_reason']
+                    : ($resolved instanceof Unresolved ? $resolved->message : null);
             }
 
             $brandId = ParcelsToBook::orderBrandId($order);
@@ -83,7 +90,7 @@ class CourierBulkBookingController extends Controller
                 'delivery_number' => $plan['delivery']?->delivery_number,
                 'weight_grams' => $order->effectiveWeightGrams(),
                 'cod' => (int) ceil($due->minor / 100),
-                'default_account_id' => $default?->id,
+                'default_account_id' => $defaultId,
                 // account id => why the courier cannot take it (null = it can)
                 'destinations' => $destinations,
                 'in_flight' => $inFlight->has($order->id),
@@ -330,7 +337,7 @@ class CourierBulkBookingController extends Controller
     /** @return array<int, string> */
     private function brandNames(): array
     {
-        return Brand::query()->pluck('name', 'id')->mapWithKeys(fn ($name, $id) => [(int) $id => (string) $name])->all();
+        return OrderBrand::names(app(BusinessContext::class)->id());
     }
 
     private function addressText(SalesOrderAddress $address): string

@@ -6,6 +6,7 @@ use App\Modules\Sales\Couriers\Enums\CourierStatus;
 use App\Modules\Sales\Couriers\Models\CourierBookingRequest;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Models\Consignment;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Support\Dashboards\DashboardKey;
 use App\Support\Dashboards\WidgetContext;
 use Illuminate\Support\Carbon;
@@ -60,6 +61,12 @@ class CourierParcelsAttentionWidget extends CourierWidget
         return [['watch' => 'attention', 'sound' => 'attention', 'message' => 'A parcel needs attention.']];
     }
 
+    /** ⭐ Follows the dashboard's Brand switcher (Joy, 11 Oct 2026). */
+    public function brandAware(): bool
+    {
+        return true;
+    }
+
     public function data(WidgetContext $context): array
     {
         $rows = [];
@@ -70,6 +77,7 @@ class CourierParcelsAttentionWidget extends CourierWidget
             ->where('business_id', $context->businessId)
             ->where('status', CourierBookingRequest::UNKNOWN)
             ->whereNull('resolved_at')
+            ->tap(fn ($q) => OrderBrand::onDeliveries($q, $context->brandId, 'courier_booking_requests.delivery_id'))
             ->orderBy('created_at')
             ->get();
 
@@ -94,6 +102,7 @@ class CourierParcelsAttentionWidget extends CourierWidget
             ->where('business_id', $context->businessId)
             ->where('status', ConsignmentStatus::Booked->value)
             ->whereNotNull('courier_status')
+            ->tap(fn ($q) => OrderBrand::onConsignments($q, $context->brandId))
             ->where(fn ($q) => $q
                 ->whereIn('courier_status', $problems)
                 ->orWhere(fn ($q) => $q

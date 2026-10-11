@@ -6,7 +6,6 @@ use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Couriers\Models\CourierAccount;
-use App\Modules\Sales\Couriers\Models\CourierAccountBusiness;
 use App\Modules\Sales\Couriers\Models\CourierBookingRequest;
 use App\Modules\Sales\Couriers\Models\CourierBulkRunItem;
 use App\Modules\Sales\Enums\SalesOrderStatus;
@@ -15,7 +14,6 @@ use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Which approved orders are waiting for a courier, and what one click would do
@@ -126,43 +124,32 @@ final class ParcelsToBook
     }
 
     /**
-     * The courier account an order goes with when none is chosen: the link for
-     * the order's brand (once orders and links carry one), else the business's
-     * default link, else the first account that can book.
+     * The courier account an order goes with when none is chosen: the one the
+     * order screen would preselect, by the official brand routing
+     * (ParcelPresenter::accountOptions over BookParcelThroughCourier::linkFor).
+     * Null when no account serves the order's brand here.
      *
      * @param  Collection<int, CourierAccount>  $accounts  bookable accounts of the business
      */
     public static function defaultAccount(SalesOrder $order, Collection $accounts, int $businessId): ?CourierAccount
     {
-        if ($accounts->isEmpty()) {
-            return null;
-        }
+        $best = collect(self::accountChoices($order, $accounts, $businessId))->firstWhere('preselected', true);
 
-        $links = CourierAccountBusiness::query()->withoutGlobalScopes()->where('business_id', $businessId)
-            ->whereIn('courier_account_id', $accounts->pluck('id')->all())->orderBy('id')->get();
-
-        $brandId = self::orderBrandId($order);
-
-        if ($brandId !== null && Schema::hasColumn('courier_account_business', 'brand_id')) {
-            $forBrand = $links->filter(fn ($link) => $link->getAttribute('brand_id') !== null && (int) $link->getAttribute('brand_id') === $brandId);
-            $link = $forBrand->firstWhere('is_default', true) ?? $forBrand->first();
-
-            if ($link === null) {
-                $anyBrand = $links->filter(fn ($link) => $link->getAttribute('brand_id') === null);
-                $link = $anyBrand->firstWhere('is_default', true) ?? $anyBrand->first();
-            }
-
-            if ($link !== null) {
-                return $accounts->firstWhere('id', $link->courier_account_id);
-            }
-        }
-
-        $link = $links->firstWhere('is_default', true);
-
-        return ($link === null ? null : $accounts->firstWhere('id', $link->courier_account_id)) ?? $accounts->first();
+        return $best === null ? null : $accounts->firstWhere('id', $best['id']);
     }
 
-    /** The order's brand, once `sales_orders.brand_id` exists. */
+    /**
+     * The order screen's account options for this order's brand.
+     *
+     * @param  Collection<int, CourierAccount>  $accounts
+     * @return list<array<string, mixed>>
+     */
+    public static function accountChoices(SalesOrder $order, Collection $accounts, int $businessId): array
+    {
+        return $accounts->isEmpty() ? [] : ParcelPresenter::accountOptions($accounts, $businessId, self::orderBrandId($order));
+    }
+
+    /** The order's brand (null = no brand). */
     public static function orderBrandId(SalesOrder $order): ?int
     {
         $brand = $order->getAttribute('brand_id');

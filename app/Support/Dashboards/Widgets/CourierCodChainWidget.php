@@ -8,6 +8,7 @@ use App\Modules\Sales\Couriers\Enums\CourierStatus;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\CourierStatement;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Support\Dashboards\DashboardKey;
 use App\Support\Dashboards\WidgetContext;
 use Illuminate\Database\Eloquent\Builder;
@@ -85,11 +86,17 @@ class CourierCodChainWidget extends CourierWidget
         return (int) (FinancePolicy::for($businessId)->courier_settlement_alert_days ?: 7);
     }
 
+    /** ⭐ Follows the dashboard's Brand switcher (Joy, 11 Oct 2026). */
+    public function brandAware(): bool
+    {
+        return true;
+    }
+
     public function data(WidgetContext $context): array
     {
         $business = $context->businessId;
         $days = self::alertDays($business);
-        $base = fn () => Consignment::query()->where('business_id', $business);
+        $base = fn () => OrderBrand::onConsignments(Consignment::query()->where('business_id', $business), $context->brandId);
         $settled = fn (Builder $q) => $q->whereHas('statementLine', fn (Builder $line) => $line
             ->whereHas('statement', fn (Builder $s) => $s->where('status', CourierStatement::POSTED)));
         $notBackYet = [...CourierStatus::finalValues(), CourierStatus::Returning->value];

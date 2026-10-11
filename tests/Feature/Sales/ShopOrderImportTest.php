@@ -24,10 +24,8 @@ use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderImport;
 use App\Modules\Sales\Models\SalesOrderImportOrder;
 use App\Modules\Sales\Support\ShopOrderSheet;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use OpenSpout\Common\Entity\Cell\DateTimeCell;
@@ -285,18 +283,18 @@ it('skips an order number imported before and refuses the same file twice', func
         ->and(SalesOrderImportOrder::query()->where('outcome', 'skipped')->value('message'))->toStartWith('Already imported as SO-');
 });
 
-it('keeps the brand on the import row, and writes it to the order once orders carry a brand', function () {
-    soiImport($this, soiCsv([soiRow()]))->assertSessionHasNoErrors();
+it('writes the brand on the order through CreateSalesOrder, and keeps it on the import row', function () {
+    soiImport($this, soiCsv([soiRow(), soiRow(['order_ref' => 'BNC-9', 'brand' => 'Bionic Garden', 'phone' => '01733000000'])]))->assertSessionHasNoErrors();
 
-    expect(SalesOrderImportOrder::query()->value('brand_id'))->toBe($this->lld->id)
-        ->and(SalesOrderImportOrder::query()->value('brand_name'))->toBe('LaLaDia')
-        ->and(Schema::hasColumn('sales_orders', 'brand_id'))->toBeFalse();
+    expect(SalesOrder::query()->where('shop_reference', '#LLD-20261010-0001')->value('brand_id'))->toBe($this->lld->id)
+        ->and(SalesOrder::query()->where('shop_reference', 'BNC-9')->value('brand_id'))->toBe($this->bnc->id)
+        ->and(SalesOrderImportOrder::query()->where('order_ref', 'BNC-9')->value('brand_id'))->toBe($this->bnc->id)
+        ->and(SalesOrderImportOrder::query()->where('order_ref', 'BNC-9')->value('brand_name'))->toBe('Bionic-Garden');
 
-    Schema::table('sales_orders', fn (Blueprint $table) => $table->unsignedBigInteger('brand_id')->nullable());
-
-    soiImport($this, soiCsv([soiRow(['order_ref' => 'BNC-9', 'brand' => 'Bionic Garden', 'phone' => '01733000000'])]))->assertSessionHasNoErrors();
-
-    expect((int) SalesOrder::query()->where('shop_reference', 'BNC-9')->value('brand_id'))->toBe($this->bnc->id);
+    // A brand switched off since is refused at the preview, not half way.
+    $this->bnc->update(['is_active' => false]);
+    soiPreview($this, soiCsv([soiRow(['order_ref' => 'BNC-10', 'brand' => 'BNC'])]))->assertInertia(fn (Assert $page) => $page
+        ->where('preview.errors.0.field', 'brand'));
 });
 
 it('approves on import only for someone who may approve, through the approval rules', function () {

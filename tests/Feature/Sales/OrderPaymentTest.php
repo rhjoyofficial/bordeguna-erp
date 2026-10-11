@@ -227,7 +227,7 @@ it('tells the courier to collect only what was not paid in advance', function ()
 
     // The whole invoice collected at the door is refused, with the advance named.
     ($this->report)($consignment, 'delivered', '1820')
-        ->assertSessionHasErrors(['collected_amount' => 'The invoice for what the customer took comes to 1,820.00 and 500.00 of it was paid in advance, so the courier should have collected 1,320.00, not 1,820.00.']);
+        ->assertSessionHasErrors(['collected_amount' => 'The invoice for what the customer took comes to 1,820.00 and 500.00 of it was paid in advance, so the courier should have collected 1,320.00, not 1,820.00. If part of the parcel came back, record a partial delivery; otherwise choose how the difference is settled and say why.']);
 
     expect(SalesInvoice::query()->count())->toBe(0);
 

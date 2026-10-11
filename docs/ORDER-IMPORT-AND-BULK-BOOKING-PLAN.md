@@ -48,8 +48,8 @@ the order at that store's price group, as the website would; otherwise the custo
 
 Apply re-reads the file from disk, checks the SHA-256 the preview showed, re-plans and refuses
 on any error. Each order is its own transaction: CreateSalesOrder (approval request, auto weight,
-address, delivery charge, discounts), the brand (written when `sales_orders.brand_id` exists on
-this branch, guarded by `Schema::hasColumn`, and kept on the import row either way), then the
+address, delivery charge, discounts, and the brand through its `brandId`, which refuses a brand of
+another business or one switched off; the brand is also kept on the import row), then the
 advance through RecordOrderPayment. "Auto-approve imported orders" is offered only to a holder of
 `sales.orders.approve` and goes through ApproveSalesOrder (credit rules apply; a refused one stays
 waiting). Otherwise approvers get ONE notification for the whole file.
@@ -77,9 +77,10 @@ One click on the selected rows ("Create challans and book"): a `courier_bulk_run
    lock, the estimate), COD = what the challan would bill rounded up, weight = the order's;
 6. records booked (consignment and quoted fee), refused (reason) or unknown (settle on the order).
 
-Courier account: chosen on the screen, or "default for the brand": the business link for the
-order's brand when `courier_account_business.brand_id` exists, else the business default link,
-else the first bookable account. Calls are paced (300 ms, `couriers.bulk_pace_ms`). Progress is
+Courier account: chosen on the screen, or "default for the brand": the account the order screen
+preselects for the order's brand (ParcelPresenter::accountOptions over
+BookParcelThroughCourier::linkFor), so bulk booking has no routing rule of its own. An account kept
+for the other brand is shown unavailable with its reason, and refused by the booking action. Calls are paced (300 ms, `couriers.bulk_pace_ms`). Progress is
 broadcast as RecordChanged (kind `courier_bulk_run`) and also served as JSON for polling.
 
 ## 3. Labels

@@ -158,7 +158,7 @@ class BookParcelsInBulk implements ShouldQueue
             : ParcelsToBook::defaultAccount($order, $accounts, $this->businessId);
 
         if ($account === null) {
-            $this->answer($item, CourierBulkRunItem::REFUSED, 'No courier account can book for this business. An Owner links one in Settings > Couriers.');
+            $this->answer($item, CourierBulkRunItem::REFUSED, 'No courier account serves this order (or its brand) here. An Owner links one in Settings > Couriers.');
 
             return false;
         }

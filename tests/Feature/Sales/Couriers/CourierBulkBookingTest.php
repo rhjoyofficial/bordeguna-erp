@@ -38,13 +38,11 @@ use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\SalesOrderOrigin;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -332,10 +330,7 @@ it('lets only those who may book use parcels to book', function () {
         ->assertSessionHasErrors('courier_account_id');
 });
 
-it('books with the courier account of the order\'s brand once orders and courier links carry one', function () {
-    Schema::table('sales_orders', fn (Blueprint $table) => $table->unsignedBigInteger('brand_id')->nullable());
-    Schema::table('courier_account_business', fn (Blueprint $table) => $table->unsignedBigInteger('brand_id')->nullable());
-
+it('books with the courier account the brand routing picks for the brand of the order', function () {
     $bionic = Brand::create(['business_id' => $this->business->id, 'code' => 'BNC', 'name' => 'Bionic-Garden', 'slug' => 'bionic-garden', 'is_active' => true]);
     $second = app(SaveCourierAccount::class)->handle(null, [
         'provider' => 'carrybee', 'label' => 'CarryBee Bionic', 'environment' => 'live', 'base_url' => CBB_CB,

@@ -333,7 +333,7 @@ it('links the account to this business with a tested store and a courier money a
         ->and($link->is_default)->toBeTrue();
 
     $this->actingAs($this->owner)->get('/settings/couriers')
-        ->assertInertia(fn ($page) => $page->where('accounts.0.link.provider_store_id', '24869')->has('moneyAccounts', 1));
+        ->assertInertia(fn ($page) => $page->where('accounts.0.links.0.provider_store_id', '24869')->where('accounts.0.links.0.brand_id', null)->has('moneyAccounts', 1));
 });
 
 it('refuses a money account that is not a courier account of this business', function () {

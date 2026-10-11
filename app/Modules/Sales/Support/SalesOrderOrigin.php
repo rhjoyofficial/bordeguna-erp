@@ -66,6 +66,9 @@ final readonly class SalesOrderOrigin
          * cancelled if still unpaid after 24 hours.
          */
         public bool $awaitingPayment = false,
+        // Joy, 11 Oct 2026: the brand the order is sold under. A single-brand
+        // store passes its brand; a multi-brand store (null) leaves it unset.
+        public ?int $brandId = null,
     ) {}
 
     /**
@@ -105,6 +108,7 @@ final readonly class SalesOrderOrigin
             promiseMinHours: (int) $store->delivery_promise_min_hours,
             promiseMaxHours: (int) $store->delivery_promise_max_hours,
             awaitingPayment: $awaitingPayment,
+            brandId: $store->brand_id === null ? null : (int) $store->brand_id,
         );
     }
 }
