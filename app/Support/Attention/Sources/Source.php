@@ -3,9 +3,9 @@
 namespace App\Support\Attention\Sources;
 
 use App\Models\User;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Support\Attention\AttentionItem;
 use App\Support\Attention\AttentionSource;
-use App\Support\Attention\NeedsAttention;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -34,7 +34,7 @@ abstract class Source implements AttentionSource
 
     /**
      * @param  array<string, string|int|float>  $params
-     * @param  array<string, mixed>  $extra  since, ownerRole, ownerUserId, count, brandId, actions
+     * @param  array<string, mixed>  $extra  since, ownerRole, ownerUserId, count, brandId (present = a per-parcel item), actions
      */
     protected function item(string $key, string $severity, string $reasonKey, string $english, array $params, string $url, array $extra = []): AttentionItem
     {
@@ -55,6 +55,7 @@ abstract class Source implements AttentionSource
             count: $extra['count'] ?? null,
             brandId: $extra['brandId'] ?? null,
             actions: $extra['actions'] ?? [],
+            brandAware: array_key_exists('brandId', $extra),
         );
     }
 
@@ -65,28 +66,24 @@ abstract class Source implements AttentionSource
     }
 
     /**
-     * The brand of each parcel, through its challan's order lines, when orders
-     * carry a brand (guarded: the column does not exist yet everywhere).
+     * The brand of each parcel, through its challan's order (OrderBrand, the
+     * same path the parcels list filters by).
      *
      * @param  list<int>  $consignmentIds
-     * @return array<int, int> consignment id => brand id
+     * @return array<int, int> consignment id => brand id (no entry = no brand)
      */
     protected static function parcelBrands(array $consignmentIds): array
     {
-        if ($consignmentIds === [] || ! NeedsAttention::brandsKnown()) {
+        if ($consignmentIds === []) {
             return [];
         }
 
-        return DB::table('consignments')
-            ->join('delivery_lines', 'delivery_lines.delivery_id', '=', 'consignments.delivery_id')
-            ->join('sales_order_lines', 'sales_order_lines.id', '=', 'delivery_lines.sales_order_line_id')
-            ->join('sales_orders', 'sales_orders.id', '=', 'sales_order_lines.sales_order_id')
-            ->whereIn('consignments.id', $consignmentIds)
-            ->whereNotNull('sales_orders.brand_id')
-            ->groupBy('consignments.id')
-            ->selectRaw('consignments.id as id, MIN(sales_orders.brand_id) as brand_id')
-            ->pluck('brand_id', 'id')
-            ->map(fn ($brand) => (int) $brand)
+        $deliveries = DB::table('consignments')->whereIn('id', $consignmentIds)->pluck('delivery_id', 'id');
+        $brands = OrderBrand::forDeliveries($deliveries->values());
+
+        return $deliveries
+            ->mapWithKeys(fn ($deliveryId, $id) => [(int) $id => $brands[(int) $deliveryId] ?? null])
+            ->filter(fn ($brand) => $brand !== null)
             ->all();
     }
 }

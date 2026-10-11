@@ -11,7 +11,8 @@ import { useEffect } from 'react';
 interface Filters {
     severity: Severity | null;
     area: string | null;
-    brand: number | null;
+    /** A brand id, 'none' (orders with no brand), or null for all. */
+    brand: string | null;
     mine: boolean;
 }
 
@@ -150,17 +151,14 @@ export default function Attention({ items, total, counts, areas, failed, brands,
                     {brands !== null && (
                         <label className="flex flex-col gap-1 text-xs">
                             <span className="text-muted-foreground">{t('attention.filter.brand')}</span>
-                            <select
-                                className={selectClass}
-                                value={filters.brand ?? ''}
-                                onChange={(e) => apply({ brand: e.target.value ? Number(e.target.value) : null })}
-                            >
+                            <select className={selectClass} value={filters.brand ?? ''} onChange={(e) => apply({ brand: e.target.value || null })}>
                                 <option value="">{t('attention.filter.all_brands')}</option>
                                 {brands.map((brand) => (
-                                    <option key={brand.id} value={brand.id}>
+                                    <option key={brand.id} value={String(brand.id)}>
                                         {brand.name}
                                     </option>
                                 ))}
+                                <option value="none">{t('orders.no_brand')}</option>
                             </select>
                         </label>
                     )}
@@ -198,7 +196,7 @@ export default function Attention({ items, total, counts, areas, failed, brands,
                 ) : (
                     <>
                         <p className="text-muted-foreground text-xs">{t('attention.showing', { shown: items.length, total })}</p>
-                        <AttentionList items={items} userId={userId} />
+                        <AttentionList items={items} userId={userId} brandFiltered={filters.brand !== null} />
                     </>
                 )}
             </div>

@@ -123,7 +123,11 @@ class NeedsAttention
         return $item->ownerRole !== null && in_array($item->ownerRole, $roles, true);
     }
 
-    /** Whether orders carry a brand yet (Joy, 11 Oct 2026: brands inside Bor de Guna). */
+    /**
+     * Whether orders carry a brand (Joy, 11 Oct 2026: brands inside Bor de
+     * Guna). True since the order-brand migration; kept so a database that has
+     * not run it yet shows no brand filter rather than an error.
+     */
     public static function brandsKnown(): bool
     {
         try {

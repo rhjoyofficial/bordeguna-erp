@@ -6,12 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Models\Brand;
 use App\Modules\Sales\Couriers\Actions\SaveCourierAccount;
 use App\Modules\Sales\Couriers\Actions\TestCourierConnection;
 use App\Modules\Sales\Couriers\Models\CourierAccount;
 use App\Modules\Sales\Couriers\Models\CourierAccountBusiness;
 use App\Modules\Sales\Couriers\Providers\CourierProviderDefinition;
 use App\Modules\Sales\Couriers\Providers\CourierProviderRegistry;
+use App\Modules\Sales\Support\OrderBrand;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,7 +41,9 @@ class CourierSettingsController extends Controller
 
         // ⚠ Filtered by hand as well as by the global scope: this is the one
         // place the current business's links are read for display.
-        $links = CourierAccountBusiness::query()->where('business_id', $businessId)->get()->keyBy('courier_account_id');
+        $links = CourierAccountBusiness::query()->where('business_id', $businessId)
+            ->orderByRaw('brand_id IS NULL')->orderBy('id')->get()->groupBy('courier_account_id');
+        $brandNames = OrderBrand::names($businessId);
 
         $otherBusinesses = DB::table('courier_account_business')
             ->where('business_id', '!=', $businessId)
@@ -52,8 +56,8 @@ class CourierSettingsController extends Controller
             ->orderBy('courier_providers.sort_order')->orderBy('courier_accounts.label')
             ->select('courier_accounts.*')
             ->get()
-            ->map(function (CourierAccount $a) use ($links, $otherBusinesses) {
-                $link = $links->get($a->id);
+            ->map(function (CourierAccount $a) use ($links, $otherBusinesses, $brandNames) {
+                $accountLinks = $links->get($a->id, collect());
 
                 return [
                     'id' => $a->id,
@@ -80,12 +84,16 @@ class CourierSettingsController extends Controller
                     'auto_post_outcomes' => (bool) $a->auto_post_outcomes,
                     'created_by' => $a->creator?->name,
                     'other_business_count' => (int) ($otherBusinesses[$a->id] ?? 0),
-                    'link' => $link === null ? null : [
+                    // ⭐ Joy, 11 Oct 2026: a link per brand it serves (null = any brand).
+                    'links' => $accountLinks->map(fn (CourierAccountBusiness $link) => [
+                        'id' => $link->id,
+                        'brand_id' => $link->brand_id === null ? null : (int) $link->brand_id,
+                        'brand_name' => $link->brand_id === null ? null : ($brandNames[(int) $link->brand_id] ?? null),
                         'provider_store_id' => $link->provider_store_id,
                         'provider_store_name' => $link->provider_store_name,
                         'money_account_id' => $link->money_account_id,
                         'is_default' => $link->is_default,
-                    ],
+                    ])->values(),
                 ];
             })->values();
 
@@ -99,6 +107,7 @@ class CourierSettingsController extends Controller
                 ->where('type', MoneyAccountType::Courier->value)
                 ->active()->withLedger()->orderBy('name')->get()
                 ->map(fn (MoneyAccount $m) => ['id' => $m->id, 'label' => $m->label()])->values(),
+            'brands' => OrderBrand::options($businessId),
             // Flashed by rotateSecret, so it is on this one page load only.
             'revealedSecret' => is_array($revealed) ? $revealed : null,
         ]);
@@ -208,6 +217,8 @@ class CourierSettingsController extends Controller
             'provider_store_id' => ['required', 'string', Rule::in($storeIds)],
             'money_account_id' => ['required', 'integer'],
             'is_default' => ['boolean'],
+            // Null = any brand. Checked below: a brand of THIS business.
+            'brand_id' => ['nullable', 'integer'],
         ], [
             'provider_store_id.in' => 'Choose one of the stores the courier returned in the last test.',
         ]);
@@ -228,22 +239,34 @@ class CourierSettingsController extends Controller
             ]);
         }
 
+        $brandId = isset($data['brand_id']) ? (int) $data['brand_id'] : null;
+
+        if ($brandId !== null && ! Brand::query()->where('business_id', $businessId)->whereKey($brandId)->exists()) {
+            throw ValidationException::withMessages(['brand_id' => 'Choose a brand of this business, or Any brand.']);
+        }
+
         $store = collect($courierAccount->testedStores())->firstWhere('id', $data['provider_store_id']);
         $isDefault = (bool) ($data['is_default'] ?? false);
 
-        DB::transaction(function () use ($courierAccount, $businessId, $data, $store, $money, $isDefault, $request) {
+        DB::transaction(function () use ($courierAccount, $businessId, $brandId, $data, $store, $money, $isDefault, $request) {
             if ($isDefault) {
-                // One default per courier per business.
+                // ⭐ One default per courier, per business, PER BRAND (any brand
+                // being its own bucket): the CarryBee LaLaDia and CarryBee Bionic
+                // accounts are both defaults, each for its own brand.
                 $sameProvider = CourierAccount::query()->where('courier_provider_id', $courierAccount->courier_provider_id)->pluck('id');
 
                 CourierAccountBusiness::query()->where('business_id', $businessId)
                     ->whereIn('courier_account_id', $sameProvider)
+                    ->when($brandId === null, fn ($q) => $q->whereNull('brand_id'), fn ($q) => $q->where('brand_id', $brandId))
                     ->where('courier_account_id', '!=', $courierAccount->id)
                     ->update(['is_default' => false]);
             }
 
+            // ⚠ Keyed on the brand too, null included: updateOrCreate asks
+            // `brand_id IS NULL` for any brand, so there is never a second
+            // any-brand link for one account here (MySQL would allow one).
             CourierAccountBusiness::query()->updateOrCreate(
-                ['courier_account_id' => $courierAccount->id, 'business_id' => $businessId],
+                ['courier_account_id' => $courierAccount->id, 'business_id' => $businessId, 'brand_id' => $brandId],
                 [
                     'provider_store_id' => $data['provider_store_id'],
                     'provider_store_name' => mb_substr((string) ($store['name'] ?? ''), 0, 150),
@@ -254,16 +277,26 @@ class CourierSettingsController extends Controller
             );
         });
 
-        return back()->with('success', "{$courierAccount->label} now serves this business from {$store['name']}.");
+        $for = $brandId === null ? 'every brand' : (string) Brand::query()->whereKey($brandId)->value('name');
+
+        return back()->with('success', "{$courierAccount->label} now serves this business from {$store['name']}, for {$for}.");
     }
 
-    public function unlinkBusiness(CourierAccount $courierAccount): RedirectResponse
+    /**
+     * Stop one link: the one for `brand` (a brand id, or "any"). Without it,
+     * every link of the account in this business, as before brands.
+     */
+    public function unlinkBusiness(Request $request, CourierAccount $courierAccount): RedirectResponse
     {
+        $brand = $request->input('brand');
+
         CourierAccountBusiness::query()
             ->where('business_id', app(BusinessContext::class)->id())
             ->where('courier_account_id', $courierAccount->id)
+            ->when($brand === 'any', fn ($q) => $q->whereNull('brand_id'))
+            ->when(is_scalar($brand) && ctype_digit((string) $brand), fn ($q) => $q->where('brand_id', (int) $brand))
             ->delete();
 
-        return back()->with('success', "{$courierAccount->label} no longer serves this business.");
+        return back()->with('success', "{$courierAccount->label} no longer serves this business".($brand === null ? '.' : ' for that brand.'));
     }
 }

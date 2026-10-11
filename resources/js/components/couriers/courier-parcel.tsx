@@ -25,6 +25,12 @@ export interface CourierAccountOption {
     provider_name: string;
     environment: string;
     store_name: string | null;
+    // ⭐ Joy, 11 Oct 2026: which brand's parcels the account carries here (null =
+    // any), whether it serves THIS order's brand, and why not when it does not.
+    serves_brand: string | null;
+    available: boolean;
+    unavailable_reason: string | null;
+    preselected: boolean;
     delivery_types: CourierChoice[];
     item_types: CourierChoice[];
     default_delivery_type: string;
@@ -238,7 +244,10 @@ export function ApiBookParcelForm({
     missingWeight: number;
 }) {
     const { t } = useTranslation();
-    const first = accounts[0];
+    // The server ranks them: the brand's own default, its own link, the any-brand
+    // default. An account kept for another brand is never chosen for the person.
+    const first = accounts.find((a) => a.preselected) ?? accounts.find((a) => a.available);
+    const refused = accounts.filter((a) => !a.available);
     const { data, setData, post, errors, processing } = useForm({
         courier_account_id: first ? String(first.id) : '',
         cod_amount: draft.cod_whole === null ? '' : String(draft.cod_whole),
@@ -283,13 +292,20 @@ export function ApiBookParcelForm({
                         onChange={(e) => pickAccount(e.target.value)}
                     >
                         {accounts.map((a) => (
-                            <option key={a.id} value={a.id}>
+                            <option key={a.id} value={a.id} disabled={!a.available}>
                                 {a.provider_name}: {a.label}
+                                {a.serves_brand ? ` (${a.serves_brand})` : ''}
                                 {a.environment === 'sandbox' ? t('parcel.sandbox') : ''}
+                                {a.available ? '' : t('parcel.not_for_this_order')}
                             </option>
                         ))}
                     </select>
                     <InputError message={errors.courier_account_id} />
+                    {refused.map((a) => (
+                        <p key={a.id} className="text-muted-foreground max-w-80 text-xs">
+                            {a.unavailable_reason}
+                        </p>
+                    ))}
                 </div>
                 <div className="grid gap-1">
                     <Label htmlFor={`api-cod-${challanId}`} required>

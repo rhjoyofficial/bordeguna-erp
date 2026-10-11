@@ -1,6 +1,7 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { BrandBadge, BrandFilter, type BrandOption } from '@/components/sales/brand';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
@@ -44,6 +45,8 @@ interface OrderRow {
     // Website Phase 2, slice 2.4. Null on every order typed into the ERP.
     channel: 'internal' | 'website' | null;
     shop_reference: string | null;
+    // Joy, 11 Oct 2026. Null on an order taken before brands were recorded.
+    brand: { id: number; name: string } | null;
 }
 
 interface Exposure {
@@ -445,6 +448,8 @@ function CreateOrderForm({
     canAddCustomer,
     customerTypes,
     priceGroups,
+    brands,
+    lastBrandId,
     onClose,
     initialCustomerId = null,
 }: {
@@ -455,12 +460,19 @@ function CreateOrderForm({
     canAddCustomer: boolean;
     customerTypes: CustomerType[];
     priceGroups: PriceGroupOption[];
+    brands: BrandOption[];
+    lastBrandId: number | null;
     onClose: () => void;
     initialCustomerId?: number | null;
 }) {
+    // ⭐ Joy, 11 Oct 2026: every order carries its brand. Required while the
+    // business sells under brands; the person's last brand is offered first.
+    const activeBrands = brands.filter((b) => b.is_active !== false);
+    const initialBrand = activeBrands.find((b) => b.id === lastBrandId)?.id ?? (activeBrands.length === 1 ? activeBrands[0].id : null);
     const { t } = useTranslation();
     const { data, setData, post, errors, processing, transform } = useForm<{
         customer_id: string;
+        brand_id: string;
         warehouse_id: string;
         expected_date: string;
         note: string;
@@ -468,6 +480,7 @@ function CreateOrderForm({
         lines: LineDraft[];
     }>({
         customer_id: initialCustomerId ? String(initialCustomerId) : '',
+        brand_id: initialBrand === null ? '' : String(initialBrand),
         // The default warehouse, as everywhere else; "decided at delivery" is one click away.
         warehouse_id: String(warehouses.find((w) => w.is_default)?.id ?? ''),
         expected_date: '',
@@ -578,6 +591,22 @@ function CreateOrderForm({
                         />
                         <InputError message={errors.customer_id} />
                     </div>
+                    {activeBrands.length > 0 && (
+                        <div className="grid gap-2">
+                            <Label htmlFor="order-brand" required>
+                                {t('orders.brand')}
+                            </Label>
+                            <SearchSelect id="order-brand" value={data.brand_id} onChange={(e) => setData('brand_id', e.target.value)}>
+                                <option value="">{t('orders.choose_brand')}</option>
+                                {activeBrands.map((b) => (
+                                    <option key={b.id} value={String(b.id)}>
+                                        {b.name}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                            <InputError message={errors.brand_id} />
+                        </div>
+                    )}
                     <div className="grid gap-2">
                         <Label>{t('orders.warehouse')}</Label>
                         <SearchableSelect
@@ -696,6 +725,8 @@ export default function SalesOrdersIndex({
     price_groups,
     own_only = false,
     preselect_customer = null,
+    brands = [],
+    last_brand_id = null,
     filters: initialFilters,
 }: {
     orders: Paginated<OrderRow>;
@@ -710,7 +741,9 @@ export default function SalesOrdersIndex({
     price_groups: PriceGroupOption[];
     own_only?: boolean;
     preselect_customer?: number | null;
-    filters: { search: string; status: string };
+    brands?: BrandOption[];
+    last_brand_id?: number | null;
+    filters: { search: string; status: string; brand: string };
 }) {
     const { t } = useTranslation();
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/orders', initialFilters);
@@ -739,6 +772,8 @@ export default function SalesOrdersIndex({
                         canAddCustomer={can_add_customer}
                         customerTypes={customer_types}
                         priceGroups={price_groups}
+                        brands={brands}
+                        lastBrandId={last_brand_id}
                         onClose={() => setCreating(false)}
                     />
                 )}
@@ -764,6 +799,11 @@ export default function SalesOrdersIndex({
                             <option value="cancelled">{t('orders.status_cancelled')}</option>
                         </SearchSelect>
                     </FilterField>
+                    {brands.length > 0 && (
+                        <FilterField label={t('orders.brand')} htmlFor="filter-brand">
+                            <BrandFilter value={filters.brand ?? ''} onChange={(v) => setFilter('brand', v)} brands={brands} />
+                        </FilterField>
+                    )}
                 </FilterBar>
 
                 <table className="w-full text-sm">
@@ -771,6 +811,7 @@ export default function SalesOrdersIndex({
                         <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
                             <th className="py-2">{t('orders.col_number')}</th>
                             <th className="py-2">{t('orders.col_customer')}</th>
+                            <th className="py-2">{t('orders.col_brand')}</th>
                             <th className="py-2">{t('orders.col_ordered')}</th>
                             <th className="py-2">{t('orders.col_delivered')}</th>
                             <th className="py-2">{t('orders.col_expected')}</th>
@@ -796,6 +837,9 @@ export default function SalesOrdersIndex({
                                     )}
                                 </td>
                                 <td className="text-muted-foreground py-2">{order.customer.name}</td>
+                                <td className="py-2">
+                                    <BrandBadge name={order.brand?.name} />
+                                </td>
                                 <td className="py-2">{order.total_ordered}</td>
                                 <td className="py-2">{order.total_delivered}</td>
                                 <td className="text-muted-foreground py-2">{order.expected_date ?? '-'}</td>
@@ -817,7 +861,7 @@ export default function SalesOrdersIndex({
                         ))}
                         {orders.data.length === 0 && (
                             <tr>
-                                <td colSpan={7} className="text-muted-foreground py-4 text-center">
+                                <td colSpan={8} className="text-muted-foreground py-4 text-center">
                                     {hasActiveFilters ? t('orders.none_match') : t('orders.none_yet')}
                                 </td>
                             </tr>

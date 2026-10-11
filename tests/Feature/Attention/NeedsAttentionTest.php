@@ -9,6 +9,10 @@ use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Models\Brand;
+use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Couriers\Actions\SaveCourierAccount;
 use App\Modules\Sales\Couriers\Models\CourierAccount;
@@ -278,11 +282,57 @@ it('filters by severity, area and what is mine, never past what the person may s
     $manager = naMember($this->business, 'Manager');
     $visit($manager)->assertInertia(fn ($page) => $page->has('items', 2));
     $visit($manager, '?mine=1')->assertInertia(fn ($page) => $page->has('items', 2)->where('items.0.mine', true));
-    // No brand on orders yet: the brand filter is not offered and changes nothing.
-    $visit($manager, '?brand=99')->assertInertia(fn ($page) => $page->has('items', 2)->where('brands', null));
+    // A brand of no business of ours reads as all brands (OrderBrand::filter).
+    $visit($manager, '?brand=99')->assertInertia(fn ($page) => $page->has('items', 2)->where('filters.brand', null));
 
     $staff = naMember($this->business, 'Staff');
     $visit($staff)->assertInertia(fn ($page) => $page->has('items', 0)->where('total', 0));
+});
+
+it('gives each parcel its order brand and filters by it, keeping business-wide lines under every brand', function () {
+    $lld = Brand::create(['business_id' => $this->business->id, 'code' => 'LLD', 'name' => 'LaLaDia', 'slug' => 'laladia']);
+    $bnc = Brand::create(['business_id' => $this->business->id, 'code' => 'BNC', 'name' => 'Bionic-Garden', 'slug' => 'bionic-garden']);
+    $unit = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Pieces', 'abbreviation' => 'pcs']);
+    $product = Product::create(['business_id' => $this->business->id, 'unit_of_measure_id' => $unit->id, 'sku' => 'SKU-1', 'name' => 'Ghee', 'type' => ProductType::FinishedGood]);
+
+    // A parcel whose challan carries an order line of the given brand.
+    $branded = function (?Brand $brand, string $status) use ($product) {
+        $order = DB::table('sales_orders')->insertGetId([
+            'business_id' => $this->business->id, 'customer_id' => $this->customer->id, 'order_number' => 'SO-'.Str::random(6),
+            'ordered_at' => today()->toDateString(), 'created_by' => $this->owner->id, 'brand_id' => $brand?->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $line = DB::table('sales_order_lines')->insertGetId([
+            'business_id' => $this->business->id, 'sales_order_id' => $order, 'product_id' => $product->id,
+            'quantity_ordered' => 1, 'unit_price' => 100, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $parcel = naParcel($this, ['courier_status' => $status, 'courier_status_at' => now()->subDay()]);
+        DB::table('delivery_lines')->insert([
+            'business_id' => $this->business->id, 'delivery_id' => DB::table('consignments')->where('id', $parcel)->value('delivery_id'),
+            'product_id' => $product->id, 'quantity' => 1, 'sales_order_line_id' => $line, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    };
+
+    $branded($lld, 'on_hold');
+    $branded($bnc, 'lost');
+    $branded(null, 'delivery_failed');
+    naBankLine($this, today()->toDateString());
+
+    $visit = fn (string $query = '') => $this->actingAs($this->owner)
+        ->withSession(['current_business_id' => $this->business->id])->get('/attention'.$query)->assertOk();
+
+    // Three parcels, the bank line, and the new product out of stock.
+    $visit()->assertInertia(fn ($page) => $page->has('items', 5)->has('brands', 2));
+
+    $visit('?brand='.$lld->id)->assertInertia(fn ($page) => $page->has('items', 3)
+        ->where('filters.brand', (string) $lld->id)
+        ->where('items', fn ($items) => collect($items)->pluck('brand', 'source')->sortKeys()->all() === ['bank_unmatched' => null, 'courier_parcels_stuck' => 'LaLaDia', 'stock' => null]));
+
+    $visit('?brand=none')->assertInertia(fn ($page) => $page->has('items', 3)
+        ->where('items', fn ($items) => collect($items)->where('source', 'courier_parcels_stuck')->pluck('params.status')->all() === ['Delivery failed']));
+
+    expect(collect(naFor($this, $this->owner)['items'])->where('source', 'courier_parcels_stuck')->pluck('brandId')->sort()->values()->all())
+        ->toBe([null, $lld->id, $bnc->id]);
 });
 
 it('flags a failing courier API, and a quiet one while parcels are open', function () {

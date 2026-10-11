@@ -4,6 +4,7 @@ namespace App\Support\Attention\Sources;
 
 use App\Models\User;
 use App\Modules\Sales\Couriers\Models\CourierBookingRequest;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Support\Attention\AttentionItem;
 
 /**
@@ -30,7 +31,7 @@ class BookingUnknownSource extends Source
 
     public function items(User $user, int $businessId): array
     {
-        return CourierBookingRequest::query()
+        $requests = CourierBookingRequest::query()
             ->withoutGlobalScopes()
             ->with(['delivery:id,delivery_number', 'account:id,label'])
             ->where('business_id', $businessId)
@@ -38,7 +39,11 @@ class BookingUnknownSource extends Source
             ->whereNull('resolved_at')
             ->orderBy('created_at')
             ->get()
-            ->filter(fn (CourierBookingRequest $request) => $request->needsDecision())
+            ->filter(fn (CourierBookingRequest $request) => $request->needsDecision());
+
+        $brands = OrderBrand::forDeliveries($requests->pluck('delivery_id'));
+
+        return $requests
             ->map(fn (CourierBookingRequest $request) => $this->item(
                 (string) $request->id,
                 AttentionItem::CRITICAL,
@@ -49,7 +54,9 @@ class BookingUnknownSource extends Source
                     'account' => (string) ($request->account?->label ?? ''),
                 ],
                 '/sales/consignments',
-                ['since' => $request->created_at, 'ownerRole' => 'Manager', 'ownerUserId' => $request->created_by === null ? null : (int) $request->created_by],
+                ['since' => $request->created_at, 'ownerRole' => 'Manager', 'ownerUserId' => $request->created_by === null ? null : (int) $request->created_by,
+                    'brandId' => $brands[(int) $request->delivery_id] ?? null,
+                ],
             ))
             ->values()
             ->all();

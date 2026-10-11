@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
@@ -12,6 +13,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
+use App\Modules\Sales\Support\OrderBrand;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -33,8 +35,14 @@ class DeliveryController extends Controller
             'search' => $request->string('search')->toString(),
             'status' => $request->string('status')->toString(),
         ];
+        // ⭐ Joy, 11 Oct 2026: by the brand of the order it came from.
+        $businessId = (int) app(BusinessContext::class)->id();
+        $brand = OrderBrand::filter($request->query('brand'), $businessId);
+        $filters['brand'] = OrderBrand::filterValue($brand);
+        $brandNames = OrderBrand::names($businessId);
 
         $deliveries = Delivery::query()
+            ->tap(fn ($query) => OrderBrand::onDeliveries($query, $brand))
             ->with(['customer:id,name', 'warehouse:id,name', 'lines'])
             ->when($filters['search'], fn ($query, $search) => $query->where(
                 fn ($q) => $q->where('delivery_number', 'like', "%{$search}%")
@@ -52,8 +60,13 @@ class DeliveryController extends Controller
             ->orderByDesc('delivered_at')
             ->orderByDesc('id')
             ->paginate(20)
-            ->withQueryString()
+            ->withQueryString();
+
+        $brandOf = OrderBrand::forDeliveries(collect($deliveries->items())->pluck('id'));
+
+        $deliveries = $deliveries
             ->through(fn (Delivery $delivery) => array_merge($delivery->toArray(), [
+                'brand' => isset($brandOf[$delivery->id]) ? ($brandNames[$brandOf[$delivery->id]] ?? null) : null,
                 // ⚠ The Dhaka date. The datetime serialises in UTC and the list
                 // sliced it, so a challan written before 6 am read as yesterday's.
                 'delivered_at' => $delivery->delivered_at?->toDateString(),
@@ -68,6 +81,7 @@ class DeliveryController extends Controller
         return Inertia::render('sales/deliveries/index', [
             'deliveries' => $deliveries,
             'filters' => $filters,
+            'brands' => OrderBrand::options($businessId),
             'warehouses' => Warehouse::query()->where('is_active', true)
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
             'products' => Product::query()->where('is_active', true)->stocked()

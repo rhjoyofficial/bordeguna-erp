@@ -13,6 +13,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\SystemActor;
 use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\UnitOfMeasure;
@@ -168,6 +169,23 @@ it('writes one real sales order carrying the shop, the channel and the agreement
         // ⚠ The resolver's own explanation travels with the number, exactly as
         // it does for an order typed at the counter.
         ->and($line->price_note)->not->toBeNull();
+});
+
+it('gives a shop order the brand of a single-brand shop, and none from a multi-brand one', function () {
+    // Joy, 11 Oct 2026: every order carries its brand. bionic.garden sells one.
+    $brand = Brand::create(['business_id' => $this->business->id, 'code' => 'BNC', 'name' => 'Bionic-Garden', 'slug' => 'bionic-garden']);
+    $this->store->forceFill(['brand_id' => $brand->id])->save();
+
+    checkoutSameBrowser(readyBasket())->post('http://shop.test/checkout', $this->address);
+    expect(SalesOrder::query()->sole()->brand_id)->toBe($brand->id);
+
+    // A store selling several brands (brand null) leaves the order unbranded,
+    // never guessed.
+    SalesOrder::query()->delete();
+    $this->store->forceFill(['brand_id' => null])->save();
+
+    checkoutSameBrowser(readyBasket())->post('http://shop.test/checkout', $this->address);
+    expect(SalesOrder::query()->sole()->brand_id)->toBeNull();
 });
 
 it('records a destination a courier can actually route, with the postcode derived', function () {

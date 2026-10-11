@@ -45,7 +45,23 @@ final class AttentionItem
         public readonly ?int $count = null,
         public readonly ?int $brandId = null,
         public readonly array $actions = [],
+        public readonly bool $brandAware = false,
     ) {}
+
+    /**
+     * Whether a brand filter keeps this item. A per-parcel item belongs to its
+     * order's brand (or to "No brand"); an item about the whole business (a
+     * courier account, the bank, the books) stays under every brand, as the
+     * ledger widgets do on the dashboards.
+     */
+    public function matchesBrand(int|string|null $filter): bool
+    {
+        if ($filter === null || ! $this->brandAware) {
+            return true;
+        }
+
+        return $filter === 'none' ? $this->brandId === null : $this->brandId === (int) $filter;
+    }
 
     /** Whole days since it started waiting, or null when the source cannot say. */
     public function ageDays(?Carbon $now = null): ?int
@@ -81,6 +97,7 @@ final class AttentionItem
             'owner_user_id' => $this->ownerUserId,
             'count' => $this->count,
             'brand_id' => $this->brandId,
+            'brand_aware' => $this->brandAware,
             'actions' => $this->actions,
         ];
     }

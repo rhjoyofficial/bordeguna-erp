@@ -64,12 +64,20 @@ class WidgetRegistry
     {
         $range = $widget->dateBasis() === null ? 'now' : $context->range->cacheFragment();
 
-        return implode(':', [
+        $parts = [
             'dash', 'w', $widget->key(),
             'b'.$context->businessId,
             $widget->scope()->cacheFragment($context->user),
             $range,
-        ]);
+        ];
+
+        // ⚠ A brand-aware figure is a different figure per brand: never hand
+        // LaLaDia's count to somebody looking at Bionic, or at all brands.
+        if ($widget->brandAware() && $context->brandId !== null) {
+            $parts[] = 'br'.$context->brandId;
+        }
+
+        return implode(':', $parts);
     }
 
     /**

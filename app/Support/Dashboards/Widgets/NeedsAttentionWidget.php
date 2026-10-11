@@ -3,6 +3,7 @@
 namespace App\Support\Dashboards\Widgets;
 
 use App\Events\Dashboards\DashboardEventType;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Support\Attention\AttentionItem;
 use App\Support\Attention\NeedsAttention;
 use App\Support\Dashboards\DashboardKey;
@@ -54,6 +55,12 @@ class NeedsAttentionWidget extends Widget
         return WidgetScope::Self;
     }
 
+    /** Follows the dashboard's Brand switcher for per-parcel lines. */
+    public function brandAware(): bool
+    {
+        return true;
+    }
+
     public function size(): string
     {
         return 'lg';
@@ -99,11 +106,18 @@ class NeedsAttentionWidget extends Widget
     {
         ['items' => $items, 'failed' => $failed] = $this->attention->for($context->user, $context->businessId);
 
+        // The dashboard's brand: parcels of that brand, plus whatever is about
+        // the whole business (the same rule as /attention?brand=).
+        $items = array_values(array_filter($items, fn (AttentionItem $item) => $item->matchesBrand($context->brandId)));
+
+        $brands = NeedsAttention::brandsKnown() ? OrderBrand::names($context->businessId) : [];
         $bySeverity = fn (string $severity) => count(array_filter($items, fn (AttentionItem $item) => $item->severity === $severity));
 
         return [
             'kind' => 'attention',
-            'items' => array_map(fn (AttentionItem $item) => $item->toArray(), array_slice($items, 0, self::SHOWN)),
+            'items' => array_map(fn (AttentionItem $item) => $item->toArray() + [
+                'brand' => $item->brandId === null ? null : ($brands[$item->brandId] ?? null),
+            ], array_slice($items, 0, self::SHOWN)),
             'total_count' => count($items),
             'counts' => [
                 AttentionItem::CRITICAL => $bySeverity(AttentionItem::CRITICAL),

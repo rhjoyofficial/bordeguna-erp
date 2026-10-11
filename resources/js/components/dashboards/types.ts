@@ -144,6 +144,8 @@ export interface WidgetMeta {
     refresh_seconds: number;
     cache_seconds: number;
     date_basis: string | null;
+    // Joy, 11 Oct 2026: whether the figure follows the Brand switcher.
+    brand_aware?: boolean;
     drill_down: string | null;
     empty_text: string;
     refresh_on: string[];

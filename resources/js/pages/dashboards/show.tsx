@@ -1,4 +1,4 @@
-import { LiveIndicator, RangeBar, sendJson, SoundSettingsPopover } from '@/components/dashboards/dashboard-toolbar';
+import { BrandBar, LiveIndicator, RangeBar, sendJson, SoundSettingsPopover } from '@/components/dashboards/dashboard-toolbar';
 import type { DashboardWidget, RangeState, SoundSettings } from '@/components/dashboards/types';
 import { useDashboardChannel } from '@/components/dashboards/use-dashboard-channel';
 import { useWidgetFeed } from '@/components/dashboards/use-widget-feed';
@@ -33,6 +33,8 @@ interface Props {
     range: RangeState;
     range_presets: { value: string; label: string }[];
     range_error: string | null;
+    // Joy, 11 Oct 2026: the Brand switcher (null = all brands).
+    brand?: { selected: number | null; options: { id: number; name: string }[] };
     sound: SoundSettings;
     realtime: { enabled: boolean; business_channel: string; user_channel: string };
     can_configure: boolean;
@@ -49,6 +51,8 @@ interface Props {
  */
 export default function RoleDashboard(props: Props) {
     const { dashboard, switcher, offers_classic, widgets, hidden_widgets, range, range_presets, range_error, realtime, can_configure } = props;
+    const brand = props.brand ?? { selected: null, options: [] };
+    const brandName = brand.options.find((b) => b.id === brand.selected)?.name ?? null;
     const { auth } = usePage<SharedData>().props;
     const { t, tr } = useTranslation();
     const dashboardLabel = tr(`dash.name.${dashboard.key}`, dashboard.label);
@@ -161,7 +165,15 @@ export default function RoleDashboard(props: Props) {
                     </nav>
                 )}
 
-                <RangeBar range={range} presets={range_presets} path={path} />
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <RangeBar
+                        range={range}
+                        presets={range_presets}
+                        path={path}
+                        keep={brand.selected === null ? {} : { brand: String(brand.selected) }}
+                    />
+                    <BrandBar brands={brand.options} selected={brand.selected} path={path} rangeQuery={range.query} />
+                </div>
 
                 {range_error && (
                     <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm">
@@ -183,6 +195,7 @@ export default function RoleDashboard(props: Props) {
                                 entry={entries[widget.key] ?? { result: widget.result, fetchedAt: now, loading: false, stale: false }}
                                 index={index}
                                 now={now}
+                                brandName={brandName}
                                 onRefresh={() => refresh([widget.key])}
                                 onHide={() => saveLayout(allKeys, [...hiddenKeys, widget.key])}
                             />

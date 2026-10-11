@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Support\Attention\AttentionItem;
 use App\Support\Attention\NeedsAttention;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -31,7 +31,7 @@ class AttentionController extends Controller
         $filters = $request->validate([
             'severity' => ['nullable', Rule::in(array_keys(AttentionItem::RANK))],
             'area' => ['nullable', Rule::in(AttentionItem::AREAS)],
-            'brand' => ['nullable', 'integer'],
+            'brand' => ['nullable', 'string', 'max:20'],
             'mine' => ['nullable', 'boolean'],
         ]);
 
@@ -41,18 +41,25 @@ class AttentionController extends Controller
 
         $roles = $user->getRoleNames()->all();
         $brandsKnown = NeedsAttention::brandsKnown();
+        // ⚠ Through OrderBrand::filter: a brand of another business reads as
+        // all brands, never as a narrowing (business isolation).
+        $brand = $brandsKnown ? OrderBrand::filter($filters['brand'] ?? null, $businessId) : null;
+        $brandNames = $brandsKnown ? OrderBrand::names($businessId) : [];
 
-        $shown = array_values(array_filter($items, function (AttentionItem $item) use ($filters, $user, $roles, $brandsKnown) {
+        $shown = array_values(array_filter($items, function (AttentionItem $item) use ($filters, $user, $roles, $brand) {
             return (blank($filters['severity'] ?? null) || $item->severity === $filters['severity'])
                 && (blank($filters['area'] ?? null) || $item->area === $filters['area'])
-                && (! $brandsKnown || blank($filters['brand'] ?? null) || $item->brandId === (int) $filters['brand'])
+                && $item->matchesBrand($brand)
                 && (! ($filters['mine'] ?? false) || NeedsAttention::isMine($item, $user, $roles));
         }));
 
         $count = fn (string $severity) => count(array_filter($items, fn (AttentionItem $item) => $item->severity === $severity));
 
         return Inertia::render('attention', [
-            'items' => array_map(fn (AttentionItem $item) => $item->toArray() + ['mine' => NeedsAttention::isMine($item, $user, $roles)], $shown),
+            'items' => array_map(fn (AttentionItem $item) => $item->toArray() + [
+                'mine' => NeedsAttention::isMine($item, $user, $roles),
+                'brand' => $item->brandId === null ? null : ($brandNames[$item->brandId] ?? null),
+            ], $shown),
             'total' => count($items),
             'counts' => [
                 AttentionItem::CRITICAL => $count(AttentionItem::CRITICAL),
@@ -61,25 +68,14 @@ class AttentionController extends Controller
             ],
             'areas' => array_values(array_unique(array_map(fn (AttentionItem $item) => $item->area, $items))),
             'failed' => $failed,
-            'brands' => $brandsKnown ? $this->brands($businessId) : null,
+            'brands' => $brandsKnown ? OrderBrand::options($businessId)->all() : null,
             'filters' => [
                 'severity' => $filters['severity'] ?? null,
                 'area' => $filters['area'] ?? null,
-                'brand' => isset($filters['brand']) ? (int) $filters['brand'] : null,
+                'brand' => $brand === null ? null : (string) $brand,
                 'mine' => (bool) ($filters['mine'] ?? false),
             ],
             'generated_at' => now()->toIso8601String(),
         ]);
-    }
-
-    /** @return list<array{id: int, name: string}> */
-    private function brands(int $businessId): array
-    {
-        return DB::table('brands')
-            ->where('business_id', $businessId)
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(fn ($brand) => ['id' => (int) $brand->id, 'name' => (string) $brand->name])
-            ->all();
     }
 }

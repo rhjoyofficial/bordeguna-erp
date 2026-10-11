@@ -172,4 +172,5 @@ export const courierParcel = {
     'parcel.on_payout_statement': { en: ' on a payout statement', bn: ' পেআউট স্টেটমেন্টে' },
     'parcel.write_off': { en: ' Write-off: {items}.', bn: ' বাদ দেওয়া: {items}।' },
     'parcel.pending': { en: 'pending', bn: 'অপেক্ষমাণ' },
+    'parcel.not_for_this_order': { en: ', not for this order', bn: ', এই অর্ডারের জন্য নয়' },
 } satisfies Record<string, Entry>;

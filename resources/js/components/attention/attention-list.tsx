@@ -31,6 +31,10 @@ export interface AttentionItemData {
     count: number | null;
     brand_id: number | null;
     actions: AttentionAction[];
+    /** True for a per-parcel item: it belongs to its order's brand. */
+    brand_aware?: boolean;
+    /** The brand's name, when the item belongs to one. */
+    brand?: string | null;
     mine?: boolean;
 }
 
@@ -98,7 +102,18 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
  * The ranked rows, shared by /attention and the dashboard widget so the two
  * look and read the same. `compact` drops the owner column for the widget.
  */
-export function AttentionList({ items, userId, compact = false }: { items: AttentionItemData[]; userId: number | null; compact?: boolean }) {
+export function AttentionList({
+    items,
+    userId,
+    compact = false,
+    brandFiltered = false,
+}: {
+    items: AttentionItemData[];
+    userId: number | null;
+    compact?: boolean;
+    /** A brand filter is on: say which lines are about the whole business. */
+    brandFiltered?: boolean;
+}) {
     const { reason, owner, age, t, tr } = useAttentionText();
 
     const run = (action: AttentionAction) => {
@@ -132,6 +147,12 @@ export function AttentionList({ items, userId, compact = false }: { items: Atten
                             <div className="flex flex-wrap items-center gap-2">
                                 <SeverityBadge severity={item.severity} />
                                 <span className="text-muted-foreground text-xs">{tr(`attention.area.${item.area}`, item.area)}</span>
+                                {item.brand ? (
+                                    <span className="rounded border px-1.5 text-xs">{item.brand}</span>
+                                ) : (
+                                    brandFiltered &&
+                                    !item.brand_aware && <span className="text-muted-foreground text-xs">{t('orders.all_brands')}</span>
+                                )}
                                 {!compact && (
                                     <span className="text-muted-foreground text-xs">
                                         {t('attention.col.owner')}: <span className="text-foreground">{owner(item, userId)}</span>

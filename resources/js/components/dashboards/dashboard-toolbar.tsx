@@ -7,7 +7,7 @@ import { dashboardSound } from '@/lib/dashboard-sound';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
-import { CalendarRange, Volume2, VolumeX } from 'lucide-react';
+import { CalendarRange, Tags, Volume2, VolumeX } from 'lucide-react';
 import { useState } from 'react';
 import type { RangeState, SoundClass, SoundSettings } from './types';
 
@@ -61,12 +61,23 @@ export function LiveIndicator({ status }: { status: string }) {
  * the page props with the new range; the widgets that ignore the range say so
  * on their card.
  */
-export function RangeBar({ range, presets, path }: { range: RangeState; presets: { value: string; label: string }[]; path: string }) {
+export function RangeBar({
+    range,
+    presets,
+    path,
+    keep = {},
+}: {
+    range: RangeState;
+    presets: { value: string; label: string }[];
+    path: string;
+    /** Other dashboard filters (the brand) that a range change keeps. */
+    keep?: Record<string, string>;
+}) {
     const { t, tr } = useTranslation();
     const [from, setFrom] = useState(range.from);
     const [to, setTo] = useState(range.to);
 
-    const go = (query: Record<string, string>) => router.get(path, query, { preserveScroll: true, preserveState: false });
+    const go = (query: Record<string, string>) => router.get(path, { ...query, ...keep }, { preserveScroll: true, preserveState: false });
 
     return (
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('dash.date_range')}>
@@ -116,6 +127,58 @@ export function RangeBar({ range, presets, path }: { range: RangeState; presets:
                     </form>
                 </PopoverContent>
             </Popover>
+        </div>
+    );
+}
+
+/**
+ * The Brand switcher beside the range (Joy, 11 Oct 2026): All brands or one
+ * brand, kept in the URL with the range. Orders, parcels and what was sold
+ * follow it; the ledger and people stay the whole business and say so.
+ */
+export function BrandBar({
+    brands,
+    selected,
+    path,
+    rangeQuery,
+}: {
+    brands: { id: number; name: string }[];
+    selected: number | null;
+    path: string;
+    rangeQuery: Record<string, string>;
+}) {
+    const { t } = useTranslation();
+
+    if (brands.length === 0) {
+        return null;
+    }
+
+    const go = (brand: number | null) => {
+        const query: Record<string, string> = { ...rangeQuery };
+        delete query.brand;
+
+        if (brand !== null) {
+            query.brand = String(brand);
+        }
+
+        router.get(path, query, { preserveScroll: true, preserveState: false });
+    };
+
+    return (
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('orders.brand')}>
+            <Tags className="text-muted-foreground size-4" aria-hidden />
+            {[{ id: null as number | null, name: t('orders.all_brands') }, ...brands].map((brand) => (
+                <Button
+                    key={brand.id ?? 'all'}
+                    size="sm"
+                    variant={selected === brand.id ? 'default' : 'ghost'}
+                    className="h-7 px-2.5 text-xs"
+                    onClick={() => go(brand.id)}
+                    aria-pressed={selected === brand.id}
+                >
+                    {brand.name}
+                </Button>
+            ))}
         </div>
     );
 }

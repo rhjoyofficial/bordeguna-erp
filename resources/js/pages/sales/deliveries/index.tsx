@@ -1,6 +1,7 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { ReportHeading } from '@/components/report/report-shell';
+import { BrandFilter, type BrandOption } from '@/components/sales/brand';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,8 @@ interface Delivery {
     customer: { id: number; name: string } | null;
     warehouse: { id: number; name: string } | null;
     lines: { id: number; quantity: string; quantity_invoiced: string }[];
+    // Through its order (Joy, 11 Oct 2026). Null when the order has none.
+    brand: string | null;
 }
 
 /**
@@ -28,9 +31,11 @@ interface Delivery {
 export default function DeliveriesIndex({
     deliveries,
     filters: initialFilters,
+    brands = [],
 }: {
     deliveries: Paginated<Delivery>;
-    filters: { search: string; status: string };
+    filters: { search: string; status: string; brand: string };
+    brands?: BrandOption[];
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
@@ -58,6 +63,7 @@ export default function DeliveriesIndex({
                         <option value="">{t('delivery.all')}</option>
                         <option value="uninvoiced">{t('delivery.not_fully_invoiced')}</option>
                     </SearchSelect>
+                    <BrandFilter value={filters.brand ?? ''} onChange={(v) => setFilter('brand', v)} brands={brands} />
                 </FilterBar>
 
                 <div className="overflow-x-auto rounded-lg border">
@@ -78,7 +84,14 @@ export default function DeliveriesIndex({
                                 <tr key={delivery.id} className="border-t">
                                     <td className="p-3 font-medium">{delivery.delivery_number}</td>
                                     <td className="p-3">{delivery.delivered_at}</td>
-                                    <td className="p-3">{delivery.customer?.name ?? '-'}</td>
+                                    <td className="p-3">
+                                        {delivery.customer?.name ?? '-'}
+                                        {delivery.brand && (
+                                            <Badge variant="outline" className="ml-2">
+                                                {delivery.brand}
+                                            </Badge>
+                                        )}
+                                    </td>
                                     <td className="p-3">{delivery.warehouse?.name ?? '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{delivery.lines.length}</td>
                                     <td className="p-3">

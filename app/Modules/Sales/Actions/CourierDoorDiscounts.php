@@ -83,6 +83,7 @@ class CourierDoorDiscounts
             $approval->approve($owner, $note);
 
             $payload = $request->payload;
+            $correction = ($payload['resolution'] ?? null) === DoorResolution::PriceCorrection->value;
 
             $consignment = $this->outcomes->handle(
                 consignment: $request->consignment,
@@ -92,14 +93,17 @@ class CourierDoorDiscounts
                 lines: $payload['lines'] ?? [],
                 recordedBy: $request->requestedBy,
                 note: $payload['note'] ?? null,
-                resolution: DoorResolution::Discount,
+                resolution: $correction ? DoorResolution::PriceCorrection : DoorResolution::Discount,
                 reason: (string) $payload['reason'],
+                prices: $correction ? (array) ($payload['prices'] ?? []) : [],
                 discountApprovedBy: $owner,
             );
 
             // ⚠ The Owner approved THIS figure. A parcel whose invoice now
-            // comes to something else is a different decision.
-            if (Money::ofTaka((string) $consignment->door_difference)->minor !== $request->discount()->minor) {
+            // comes to something else is a different decision. (A price
+            // correction replays the exact prices the Owner saw, so its
+            // invoice matches the collection and there is no door difference.)
+            if (! $correction && Money::ofTaka((string) $consignment->door_difference)->minor !== $request->discount()->minor) {
                 throw ValidationException::withMessages([
                     'approval' => "The discount asked for was {$request->discount()->format()}, but the parcel now needs ".Money::ofTaka((string) $consignment->door_difference)->format().'. Reject this and record the answer again.',
                 ]);

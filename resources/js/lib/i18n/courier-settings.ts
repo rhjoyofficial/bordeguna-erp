@@ -153,4 +153,16 @@ export const courierSettings = {
     'couriers.save': { en: 'Save', bn: 'সংরক্ষণ' },
     'couriers.use_here': { en: 'Use for this business', bn: 'এই ব্যবসার জন্য ব্যবহার করুন' },
     'couriers.stop_using': { en: 'Stop using here', bn: 'এখানে ব্যবহার বন্ধ করুন' },
+    // Courier routing by brand (master, 11 Oct 2026)
+    'couriers.for_orders_of': { en: 'For orders of', bn: 'যে ব্র্যান্ডের অর্ডারের জন্য' },
+    'couriers.any_brand': { en: 'Any brand', bn: 'যেকোনো ব্র্যান্ড' },
+    'couriers.a_brand': { en: 'A brand', bn: 'একটি ব্র্যান্ড' },
+    'couriers.brand_not_in_use': { en: ' (not in use)', bn: ' (ব্যবহারে নেই)' },
+    'couriers.for_any_brand': { en: ', for any brand', bn: ', যেকোনো ব্র্যান্ডের জন্য' },
+    'couriers.for_this_brand': { en: ', for this brand', bn: ', এই ব্র্যান্ডের জন্য' },
+    'couriers.for_brand': { en: ' for {brand}', bn: ' ({brand}-এর জন্য)' },
+    'couriers.brand_routing_hint': {
+        en: 'A parcel goes through the account linked to the brand of its order, else one linked for any brand. An account linked only to another brand is never offered for it.',
+        bn: 'পার্সেল যায় তার অর্ডারের ব্র্যান্ডের সাথে যুক্ত অ্যাকাউন্ট দিয়ে, না থাকলে যেকোনো ব্র্যান্ডের জন্য যুক্ত অ্যাকাউন্ট দিয়ে। শুধু অন্য ব্র্যান্ডের সাথে যুক্ত অ্যাকাউন্ট কখনো দেখানো হয় না।',
+    },
 } satisfies Record<string, Entry>;

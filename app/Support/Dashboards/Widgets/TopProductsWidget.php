@@ -3,6 +3,7 @@
 namespace App\Support\Dashboards\Widgets;
 
 use App\Events\Dashboards\DashboardEventType;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Support\Dashboards\DashboardKey;
 use App\Support\Dashboards\Widget;
 use App\Support\Dashboards\WidgetContext;
@@ -76,6 +77,12 @@ class TopProductsWidget extends Widget
         return [DashboardEventType::ORDER_APPROVED];
     }
 
+    /** ⭐ Follows the dashboard's Brand switcher (Joy, 11 Oct 2026). */
+    public function brandAware(): bool
+    {
+        return true;
+    }
+
     public function data(WidgetContext $context): array
     {
         $rows = DB::table('sales_invoice_lines')
@@ -84,6 +91,9 @@ class TopProductsWidget extends Widget
             ->where('sales_invoices.business_id', $context->businessId)
             ->where('sales_invoices.is_opening', false)
             ->whereBetween('sales_invoices.invoice_date', [$context->range->fromDate(), $context->range->toDate()])
+            // ⭐ The brand of the ORDER the line was billed from (through its
+            // challan line). A direct invoice has no order, so no brand.
+            ->tap(fn ($q) => OrderBrand::onInvoiceLines($q, $context->brandId))
             ->groupBy('products.id', 'products.name')
             ->selectRaw('products.id, products.name, SUM(sales_invoice_lines.line_net) as value, SUM(sales_invoice_lines.quantity) as quantity')
             ->orderByDesc('value')

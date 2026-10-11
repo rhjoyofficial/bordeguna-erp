@@ -5,6 +5,7 @@ namespace App\Support\Dashboards\Widgets;
 use App\Events\Dashboards\DashboardEventType;
 use App\Models\User;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Support\Dashboards\DashboardKey;
 use App\Support\Dashboards\Widget;
 use App\Support\Dashboards\WidgetContext;
@@ -86,9 +87,15 @@ class MyOrdersWidget extends Widget
         return [DashboardEventType::ORDER_CREATED, DashboardEventType::ORDER_APPROVED];
     }
 
+    /** ⭐ Follows the dashboard's Brand switcher (Joy, 11 Oct 2026). */
+    public function brandAware(): bool
+    {
+        return true;
+    }
+
     public function data(WidgetContext $context): array
     {
-        $mine = fn ($range) => SalesOrder::query()
+        $mine = fn ($range) => OrderBrand::onOrders(SalesOrder::query(), $context->brandId)
             ->where('created_by', $context->user->id)
             ->whereBetween('ordered_at', [$range->fromDate(), $range->toDate()]);
 

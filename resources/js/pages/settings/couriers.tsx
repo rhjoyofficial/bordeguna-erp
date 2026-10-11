@@ -63,13 +63,28 @@ type Account = {
     auto_post_outcomes: boolean;
     created_by: string | null;
     other_business_count: number;
-    link: { provider_store_id: string | null; provider_store_name: string | null; money_account_id: number | null; is_default: boolean } | null;
+    // ⭐ Joy, 11 Oct 2026: one link per brand the account carries here (brand null
+    // = any brand), each with its own store, money account and default.
+    links: BusinessLinkRow[];
 };
+
+type BusinessLinkRow = {
+    id: number;
+    brand_id: number | null;
+    brand_name: string | null;
+    provider_store_id: string | null;
+    provider_store_name: string | null;
+    money_account_id: number | null;
+    is_default: boolean;
+};
+
+type BrandOption = { id: number; code: string; name: string; is_active: boolean };
 
 type PageProps = {
     providers: Provider[];
     accounts: Account[];
     moneyAccounts: { id: number; label: string }[];
+    brands: BrandOption[];
     revealedSecret: { account_id: number; secret: string } | null;
     errors: Record<string, string | undefined>;
 };
@@ -343,25 +358,41 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
 
 /**
  * Which pickup store and which courier money account THIS business uses with
- * the account. The store list is what the courier returned in the last test.
+ * the account, and for which brand's orders (Joy, 11 Oct 2026). The store list
+ * is what the courier returned in the last test.
  */
-function BusinessLink({ account, moneyAccounts }: { account: Account; moneyAccounts: PageProps['moneyAccounts'] }) {
+function BusinessLink({ account, moneyAccounts, brands }: { account: Account; moneyAccounts: PageProps['moneyAccounts']; brands: BrandOption[] }) {
     const { t } = useTranslation();
-    const form = useForm({
-        provider_store_id: account.link?.provider_store_id ?? account.stores.find((s) => s.active)?.id ?? '',
-        money_account_id: account.link?.money_account_id ? String(account.link.money_account_id) : String(moneyAccounts[0]?.id ?? ''),
-        is_default: account.link?.is_default ?? false,
-    });
+    const linkFor = (brand: string) => account.links.find((l) => (l.brand_id === null ? '' : String(l.brand_id)) === brand);
+    const valuesFor = (brand: string) => {
+        const link = linkFor(brand);
+
+        return {
+            brand_id: brand,
+            provider_store_id: link?.provider_store_id ?? account.stores.find((s) => s.active)?.id ?? '',
+            money_account_id: link?.money_account_id ? String(link.money_account_id) : String(moneyAccounts[0]?.id ?? ''),
+            is_default: link?.is_default ?? false,
+        };
+    };
+    const firstBrand = account.links[0] ? (account.links[0].brand_id === null ? '' : String(account.links[0].brand_id)) : '';
+    const form = useForm(valuesFor(firstBrand));
     const errors = form.errors as Record<string, string | undefined>;
+    const editing = linkFor(form.data.brand_id);
+    const brandName = (link: BusinessLinkRow) => (link.brand_id === null ? t('couriers.any_brand') : (link.brand_name ?? t('couriers.a_brand')));
 
     return (
         <div className="space-y-3">
             <p className="text-sm font-medium">{t('couriers.this_business')}</p>
-            {account.link ? (
-                <p className="text-muted-foreground text-sm">
-                    {t('couriers.ships_from')} <strong>{account.link.provider_store_name ?? account.link.provider_store_id}</strong>
-                    {account.link.is_default ? t('couriers.default_for_courier') : ''}.
-                </p>
+            {account.links.length > 0 ? (
+                <ul className="text-muted-foreground space-y-1 text-sm">
+                    {account.links.map((link) => (
+                        <li key={link.id}>
+                            <strong className="text-foreground">{brandName(link)}</strong>: {t('couriers.ships_from')}{' '}
+                            <strong>{link.provider_store_name ?? link.provider_store_id}</strong>
+                            {link.is_default ? t('couriers.default_for_courier') : ''}.
+                        </li>
+                    ))}
+                </ul>
             ) : (
                 <p className="text-muted-foreground text-sm">{t('couriers.not_used_yet')}</p>
             )}
@@ -377,11 +408,30 @@ function BusinessLink({ account, moneyAccounts }: { account: Account; moneyAccou
                 <form
                     onSubmit={(e) => {
                         e.preventDefault();
+                        form.transform((data) => ({ ...data, brand_id: data.brand_id === '' ? null : Number(data.brand_id) }));
                         form.put(route('couriers.settings.link', account.id), { preserveScroll: true });
                     }}
                     className="space-y-3"
                 >
                     <FormRow>
+                        {brands.length > 0 && (
+                            <Field label={t('couriers.for_orders_of')} htmlFor={`brand-${account.id}`} size="md" error={errors.brand_id}>
+                                <select
+                                    id={`brand-${account.id}`}
+                                    className={selectClass}
+                                    value={form.data.brand_id}
+                                    onChange={(e) => form.setData(valuesFor(e.target.value))}
+                                >
+                                    <option value="">{t('couriers.any_brand')}</option>
+                                    {brands.map((b) => (
+                                        <option key={b.id} value={String(b.id)}>
+                                            {b.name}
+                                            {b.is_active ? '' : t('couriers.brand_not_in_use')}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Field>
+                        )}
                         <Field label={t('couriers.pickup_store')} htmlFor={`store-${account.id}`} size="lg" error={errors.provider_store_id} required>
                             <select
                                 id={`store-${account.id}`}
@@ -415,19 +465,32 @@ function BusinessLink({ account, moneyAccounts }: { account: Account; moneyAccou
                     <label className="flex items-center gap-2 text-sm">
                         <input type="checkbox" checked={form.data.is_default} onChange={(e) => form.setData('is_default', e.target.checked)} />
                         {t('couriers.default_checkbox')}
+                        {brands.length > 0 ? (form.data.brand_id === '' ? t('couriers.for_any_brand') : t('couriers.for_this_brand')) : ''}
                     </label>
+                    {brands.length > 0 && <p className="text-muted-foreground text-xs">{t('couriers.brand_routing_hint')}</p>}
                     <div className="flex gap-2">
                         <Button type="submit" size="sm" disabled={form.processing}>
-                            {account.link ? t('couriers.save') : t('couriers.use_here')}
+                            {editing ? t('couriers.save') : t('couriers.use_here')}
                         </Button>
-                        {account.link && (
+                        {editing && (
                             <Button
                                 type="button"
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => router.delete(route('couriers.settings.unlink', account.id), { preserveScroll: true })}
+                                onClick={() =>
+                                    router.delete(
+                                        route('couriers.settings.unlink', {
+                                            courierAccount: account.id,
+                                            brand: editing.brand_id === null ? 'any' : String(editing.brand_id),
+                                        }),
+                                        { preserveScroll: true },
+                                    )
+                                }
                             >
                                 {t('couriers.stop_using')}
+                                {brands.length > 0
+                                    ? t('couriers.for_brand', { brand: editing.brand_id === null ? t('couriers.any_brand') : brandName(editing) })
+                                    : ''}
                             </Button>
                         )}
                     </div>
@@ -438,7 +501,7 @@ function BusinessLink({ account, moneyAccounts }: { account: Account; moneyAccou
 }
 
 export default function CourierSettings() {
-    const { providers, accounts, moneyAccounts, revealedSecret, errors } = usePage<PageProps>().props;
+    const { providers, accounts, moneyAccounts, brands = [], revealedSecret, errors } = usePage<PageProps>().props;
     const { t, tr } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [{ title: t('couriers.title'), href: '/settings/couriers' }];
     const [adding, setAdding] = useState(false);
@@ -585,7 +648,7 @@ export default function CourierSettings() {
                                 )}
 
                                 <div className="grid gap-6 md:grid-cols-2">
-                                    <BusinessLink account={a} moneyAccounts={moneyAccounts} />
+                                    <BusinessLink account={a} moneyAccounts={moneyAccounts} brands={brands} />
 
                                     <div className="space-y-2">
                                         <p className="text-sm font-medium">{t('couriers.webhook')}</p>
