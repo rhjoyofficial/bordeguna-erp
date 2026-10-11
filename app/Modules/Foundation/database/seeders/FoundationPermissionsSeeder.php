@@ -36,6 +36,9 @@ class FoundationPermissionsSeeder extends Seeder
             // a metered API key, so it is granted deliberately from Settings >
             // Roles rather than arriving with a job title.
             'foundation.ai.use',
+            // Role dashboards (11 Oct 2026): open every dashboard. Audited:
+            // a view only this permission allows is written to the activity log.
+            'dashboard.view_all',
         ],
         // ⚠⚠ The calendar goes to EVERY role (29 Aug 2026), which is unusual on
         // this project and deliberate. It is the one screen whose value is that

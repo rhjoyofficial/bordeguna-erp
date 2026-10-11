@@ -1,9 +1,11 @@
 <?php
 
 use App\Http\Controllers\Settings\AiCredentialController;
+use App\Http\Controllers\Settings\DashboardAssignmentController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\ReasonController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -23,7 +25,7 @@ Route::middleware('auth')->group(function () {
 
     // C-I18N-5: one's own UI language. Auth only, no permission - a user may
     // set their own and can reach nobody else's row through it.
-    Route::patch('settings/locale', function (\Illuminate\Http\Request $request) {
+    Route::patch('settings/locale', function (Request $request) {
         $data = $request->validate([
             'locale' => ['required', 'in:en,bn'],
         ]);
@@ -39,6 +41,11 @@ Route::middleware(['auth', 'business'])->group(function () {
     // these two sit here rather than with the plain profile routes above.
     Route::post('settings/profile/photo', [ProfileController::class, 'storePhoto'])->name('profile.photo.store');
     Route::delete('settings/profile/photo', [ProfileController::class, 'destroyPhoto'])->name('profile.photo.destroy');
+
+    // Which dashboard each role lands on (11 Oct 2026). Owner only, by
+    // dashboard.view_all, checked in the controller.
+    Route::get('settings/dashboards', [DashboardAssignmentController::class, 'index'])->name('dashboard-assignments.index');
+    Route::put('settings/dashboards', [DashboardAssignmentController::class, 'update'])->name('dashboard-assignments.update');
 
     Route::get('settings/reasons', [ReasonController::class, 'index'])->name('reasons.index');
     Route::post('settings/reasons', [ReasonController::class, 'store'])->name('reasons.store');

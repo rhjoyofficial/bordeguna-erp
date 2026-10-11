@@ -176,7 +176,10 @@ it('leaves no user-facing page with no way to reach it', function () {
             || str_starts_with($uri, 'reset-password')
             || str_starts_with($uri, 'verify-email')
             || str_starts_with($uri, 'confirm-password')
-            || str_starts_with($uri, 'businesses'))
+            || str_starts_with($uri, 'businesses')
+            // The socket's private-channel handshake (Laravel registers it for
+            // GET and POST): Echo calls it, no person ever opens it.
+            || $uri === 'broadcasting/auth')
         ->values()
         ->all();
 

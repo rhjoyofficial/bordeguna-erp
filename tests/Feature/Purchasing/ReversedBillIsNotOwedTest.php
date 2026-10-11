@@ -86,7 +86,8 @@ it('does not count a reversed bill as owed by us on the finance dashboard', func
 
 it('does not count a reversed bill as a purchase on the dashboard', function () {
     $this->actingAs($this->user)
-        ->get('/dashboard')
+        // The old dashboard lives on at /dashboard/classic since the role dashboards (11 Oct 2026).
+        ->get('/dashboard/classic')
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('total_purchases', '1,000.00')

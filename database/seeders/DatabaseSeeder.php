@@ -14,6 +14,7 @@ use App\Modules\Crm\database\seeders\CrmLookupSeeder;
 use App\Modules\Crm\database\seeders\CrmPermissionsSeeder;
 use App\Modules\Crm\database\seeders\MessageCampaignWorkflowSeeder;
 use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
+use App\Modules\Foundation\database\seeders\DashboardAssignmentSeeder;
 use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
 use App\Modules\Foundation\database\seeders\FoundationSeeder;
 use App\Modules\Foundation\Support\SeedCredentials;
@@ -164,5 +165,8 @@ class DatabaseSeeder extends Seeder
         $this->call(InventoryAccountMappingSeeder::class);
         $this->call(AssetAccountMappingSeeder::class);
         $this->call(SalesAccountMappingSeeder::class);
+        // Role dashboards (11 Oct 2026): AFTER every seeder that creates roles,
+        // so each named role gets its default dashboard.
+        $this->call(DashboardAssignmentSeeder::class);
     }
 }

@@ -121,6 +121,7 @@ export function useNavGroups(): NavGroup[] {
         canUseChat,
         canManageCrmSettings,
         canManageCourierSettings,
+        canConfigureDashboards,
         canViewAssets,
         canViewAssetItems,
         hasEmployeeProfile,
@@ -141,6 +142,7 @@ export function useNavGroups(): NavGroup[] {
         canManageCrmSettings,
         canManageReasons,
         canManageCourierSettings,
+        canConfigureDashboards,
     });
 
     const navGroups: NavGroup[] = [

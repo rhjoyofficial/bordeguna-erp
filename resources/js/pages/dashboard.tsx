@@ -26,6 +26,10 @@ const breadcrumbs: BreadcrumbItem[] = [
         title: 'Dashboard',
         href: '/dashboard',
     },
+    {
+        title: 'Classic',
+        href: '/dashboard/classic',
+    },
 ];
 
 interface TradeChartPoint {
@@ -294,7 +298,7 @@ export default function Dashboard({
     const hasOpsTiles = stock_value !== null || low_stock_count !== null || open_po_count !== null || pending_approval_count !== null;
 
     const setRange = (range: string) => {
-        router.get('/dashboard', { range }, { preserveState: true, preserveScroll: true, only: ['trade_chart', 'trade_chart_range'] });
+        router.get('/dashboard/classic', { range }, { preserveState: true, preserveScroll: true, only: ['trade_chart', 'trade_chart_range'] });
     };
 
     return (
