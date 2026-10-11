@@ -58,37 +58,43 @@ class CourierWebhookController extends Controller
         $event = is_string($payload['event'] ?? null) ? $payload['event'] : '';
         $handshake = $event === '' || in_array(Str::lower($event), ['webhook.integration', 'webhook_integration'], true);
 
-        // ⚠ CarryBee (verified 11 Oct 2026 on its Add Webhook form): the
-        // handshake carries CarryBee's OWN integration value in
-        // X-CB-Webhook-Integration-Header, not the secret typed on the form, and
-        // expects that value echoed back with 202. The ERP echoes it and keeps
-        // it (first one wins; clear it in Settings to re-pair). Real events are
-        // then accepted when they carry either that value or our own secret.
-        if ($account->provider->code === 'carrybee' && $handshake) {
-            if (! is_string($given) || trim($given) === '') {
-                $this->logShape($request, $account, 'carrybee handshake without the integration header');
+        // ⚠⚠ CarryBee, as its checker really behaves (logged 11 Oct 2026, agent
+        // CB-Webhook-agent/0.8): every call carries X-CarryBee-Webhook-Signature
+        // (our webhook secret, plain or as an HMAC of the body), and the answer
+        // must be 202 carrying X-CB-Webhook-Integration-Header = the value
+        // CarryBee shows on its Webhook Integration page for that business. That
+        // value never arrives in the request, so it is kept on the account
+        // (Settings > Couriers, "integration echo"). The old documented shape
+        // (secret in X-CB-Webhook-Integration-Header) is still accepted.
+        if ($account->provider->code === 'carrybee') {
+            $form = $this->carryBeeSignature($request, $secret);
+
+            if ($form === null) {
+                $this->logShape($request, $account, 'carrybee signature missing or wrong');
 
                 return response('', 401);
             }
 
-            if ($account->integrationSecret() === null) {
-                $account->forceFill(['integration_secret' => $given])->save();
+            $echo = ($value = $account->integrationSecret()) === null ? [] : ['X-CB-Webhook-Integration-Header' => $value];
+
+            if ($handshake) {
+                Log::warning('CarryBee webhook paired', ['courier_account_id' => $account->id, 'signature' => $form, 'echo_set' => $echo !== []]);
+
+                return response('', 202, $echo);
+            }
+        } else {
+            if ($header === null || ! is_string($given) || $secret === null || ! hash_equals($secret, $given)) {
+                Log::notice('Courier webhook refused: secret missing or wrong', ['courier_account_id' => $account->id]);
+                $this->logShape($request, $account, 'refused');
+
+                return response('', 401);
             }
 
-            return response('', 202, [$header => $given]);
-        }
+            $echo = $this->echoHeaders($account);
 
-        if ($header === null || ! is_string($given) || ! $this->authentic($account, $given, $secret)) {
-            Log::notice('Courier webhook refused: secret missing or wrong', ['courier_account_id' => $account->id]);
-            $this->logShape($request, $account, 'refused');
-
-            return response('', 401);
-        }
-
-        $echo = $this->echoHeaders($account, $header, $given);
-
-        if ($handshake) {
-            return response('', 202, $echo);
+            if ($handshake) {
+                return response('', 202, $echo);
+            }
         }
 
         $consignment = $this->findParcel($account, $payload);
@@ -177,26 +183,49 @@ class CourierWebhookController extends Controller
         ]);
     }
 
-    private function authentic(CourierAccount $account, string $given, ?string $secret): bool
-    {
-        if ($secret !== null && hash_equals($secret, $given)) {
-            return true;
-        }
-
-        $integration = $account->provider->code === 'carrybee' ? $account->integrationSecret() : null;
-
-        return $integration !== null && hash_equals($integration, $given);
-    }
-
     /**
      * @return array<string, string>
      */
-    private function echoHeaders(CourierAccount $account, string $header, string $given): array
+    private function echoHeaders(CourierAccount $account): array
     {
         return match ($account->provider->code) {
-            'carrybee' => [$header => $given],
             'pathao' => ($echo = $account->integrationSecret()) === null ? [] : ['X-Pathao-Merchant-Webhook-Integration-Secret' => $echo],
             default => [],
         };
+    }
+
+    /**
+     * Which form of our secret the CarryBee call carries, or null if none does:
+     * the plain secret, or an HMAC-SHA256 of the raw body (hex or base64, with
+     * or without a "sha256=" prefix), in X-CarryBee-Webhook-Signature; or the
+     * plain secret in the documented X-CB-Webhook-Integration-Header.
+     */
+    private function carryBeeSignature(Request $request, ?string $secret): ?string
+    {
+        if ($secret === null || $secret === '') {
+            return null;
+        }
+
+        $signature = (string) $request->header('X-CarryBee-Webhook-Signature', '');
+        $signature = trim(Str::startsWith(Str::lower($signature), 'sha256=') ? substr($signature, 7) : $signature);
+        $body = (string) $request->getContent();
+
+        $candidates = [
+            'plain' => $secret,
+            'hmac-sha256-hex' => hash_hmac('sha256', $body, $secret),
+            'hmac-sha256-base64' => base64_encode(hash_hmac('sha256', $body, $secret, true)),
+        ];
+
+        if ($signature !== '') {
+            foreach ($candidates as $form => $expected) {
+                if (hash_equals($expected, $signature) || hash_equals(Str::lower($expected), Str::lower($signature))) {
+                    return $form;
+                }
+            }
+        }
+
+        $legacy = (string) $request->header('X-CB-Webhook-Integration-Header', '');
+
+        return $legacy !== '' && hash_equals($secret, $legacy) ? 'legacy-header' : null;
     }
 }

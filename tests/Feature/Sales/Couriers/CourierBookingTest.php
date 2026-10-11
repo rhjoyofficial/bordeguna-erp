@@ -576,30 +576,36 @@ it('says to cancel in the Pathao panel when Pathao does not take the cancel, and
         ->and($consignment->fresh()->courier_status)->toBe(CourierStatus::Booked);
 });
 
-it('pairs with CarryBee by echoing its own integration value, then accepts only that value or our secret', function () {
+it('pairs with CarryBee: checks its signature against our secret and answers 202 with the stored integration value', function () {
     $account = cbkAccount('carrybee', $this->business, $this->courierMoney);
     $secret = $account->webhookSecretValue();
     $url = '/webhooks/couriers/'.$account->uuid;
     $carrybee = '40489fe0-9386-4fc9-8e92-2b2fcb9d451c';
+    $account->forceFill(['integration_secret' => $carrybee])->save();
+    $body = ['event' => 'webhook.integration'];
+    $raw = json_encode($body);
 
-    // No header at all is refused; an unknown account is not found.
-    $this->postJson($url, ['event' => 'webhook.integration'])->assertStatus(401);
-    $this->postJson('/webhooks/couriers/'.fake()->uuid(), ['event' => 'webhook.integration'], ['X-CB-Webhook-Integration-Header' => $carrybee])->assertNotFound();
+    // No signature, a wrong one, or an unknown account: refused / not found.
+    $this->postJson($url, $body)->assertStatus(401);
+    $this->postJson($url, $body, ['X-CarryBee-Webhook-Signature' => 'wrong'])->assertStatus(401);
+    $this->postJson('/webhooks/couriers/'.fake()->uuid(), $body, ['X-CarryBee-Webhook-Signature' => $secret])->assertNotFound();
 
-    // The handshake carries CarryBee's OWN value (verified on its form): echoed with 202 and kept.
-    $this->postJson($url, ['event' => 'webhook.integration'], ['X-CB-Webhook-Integration-Header' => $carrybee])
-        ->assertStatus(202)
-        ->assertHeader('X-CB-Webhook-Integration-Header', $carrybee);
+    // The signature may be the plain secret or an HMAC-SHA256 of the body (hex, base64, sha256= prefix).
+    foreach ([$secret, hash_hmac('sha256', $raw, $secret), 'sha256='.hash_hmac('sha256', $raw, $secret), base64_encode(hash_hmac('sha256', $raw, $secret, true))] as $signature) {
+        $this->postJson($url, $body, ['X-CarryBee-Webhook-Signature' => $signature])
+            ->assertStatus(202)
+            ->assertHeader('X-CB-Webhook-Integration-Header', $carrybee);
+    }
+
+    // The documented shape (our secret in X-CB-Webhook-Integration-Header) still works; the stored value is never replaced by a request.
+    $this->postJson($url, $body, ['X-CB-Webhook-Integration-Header' => $secret])->assertStatus(202)->assertHeader('X-CB-Webhook-Integration-Header', $carrybee);
+    $this->postJson($url, $body, ['X-CB-Webhook-Integration-Header' => 'someone-else'])->assertStatus(401);
     expect($account->fresh()->integrationSecret())->toBe($carrybee);
 
-    // A second handshake with another value does not replace the paired one.
-    $this->postJson($url, ['event' => 'webhook.integration'], ['X-CB-Webhook-Integration-Header' => 'someone-else'])->assertStatus(202);
-    expect($account->fresh()->integrationSecret())->toBe($carrybee);
-
-    // Events: CarryBee's value or our secret are accepted; anything else is refused.
-    $this->postJson($url, ['event' => 'order.delivered', 'consignment_id' => 'NOT-OURS'], ['X-CB-Webhook-Integration-Header' => $carrybee])->assertStatus(202);
-    $this->postJson($url, ['event' => 'order.delivered', 'consignment_id' => 'NOT-OURS'], ['X-CB-Webhook-Integration-Header' => $secret])->assertStatus(202);
-    $this->postJson($url, ['event' => 'order.delivered', 'consignment_id' => 'NOT-OURS'], ['X-CB-Webhook-Integration-Header' => 'wrong'])->assertStatus(401);
+    // Events: signed is accepted (and echoed), anything else refused.
+    $this->postJson($url, ['event' => 'order.delivered', 'consignment_id' => 'NOT-OURS'], ['X-CarryBee-Webhook-Signature' => $secret])
+        ->assertStatus(202)->assertHeader('X-CB-Webhook-Integration-Header', $carrybee);
+    $this->postJson($url, ['event' => 'order.delivered', 'consignment_id' => 'NOT-OURS'], ['X-CarryBee-Webhook-Signature' => $carrybee])->assertStatus(401);
     expect(CourierShipmentEvent::query()->withoutGlobalScopes()->count())->toBe(0);
 });
 
