@@ -215,9 +215,7 @@ class CourierLocationsController extends Controller
     {
         $provider = $this->providerFrom($request, $registry);
 
-        $count = CourierLocationMap::query()->where('provider', $provider)
-            ->where('confidence', CourierLocationMap::HIGH)->whereNull('reviewed_at')
-            ->whereNotNull('provider_zone_id')
+        $count = $this->unreviewedHigh($provider)
             ->get()
             ->each(fn (CourierLocationMap $m) => $m->forceFill([
                 'status' => CourierLocationMap::APPLIED,
@@ -409,6 +407,23 @@ class CourierLocationsController extends Controller
     }
 
     /**
+     * What "Approve all high" confirms, and so what its count says: equal-name
+     * matches the system made, with a zone, that nobody has looked at. A map a
+     * person typed is already theirs (QA walk, 11 Oct 2026: the count once
+     * included those and the button then confirmed fewer than it promised).
+     *
+     * @return Builder<CourierLocationMap>
+     */
+    private function unreviewedHigh(string $provider): Builder
+    {
+        return CourierLocationMap::query()->where('provider', $provider)
+            ->where('confidence', CourierLocationMap::HIGH)
+            ->where('source', '!=', CourierLocationMap::MANUAL)
+            ->whereNull('reviewed_at')
+            ->whereNotNull('provider_zone_id');
+    }
+
+    /**
      * @return array<string, int|array<string,int>>
      */
     private function stats(string $provider): array
@@ -431,8 +446,7 @@ class CourierLocationsController extends Controller
             'mapped' => $mapped,
             'review' => $review,
             'unmapped' => max(0, $totalThanas - $mapped - $review),
-            'unreviewed_high' => CourierLocationMap::query()->where('provider', $provider)
-                ->where('confidence', CourierLocationMap::HIGH)->whereNull('reviewed_at')->count(),
+            'unreviewed_high' => $this->unreviewedHigh($provider)->count(),
             'area_maps' => CourierLocationMap::query()->where('provider', $provider)->where('area', '!=', CourierLocationMap::WHOLE_THANA)->count(),
         ];
     }

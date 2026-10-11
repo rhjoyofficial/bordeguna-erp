@@ -12,7 +12,20 @@ import type { Unit } from './types';
  * once (no count up from zero), an update takes 0.6 s from the old value, and
  * with reduced motion it simply swaps.
  */
-export function AnimatedNumber({ value, unit, className, compact = false }: { value: number; unit: Unit; className?: string; compact?: boolean }) {
+export function AnimatedNumber({
+    value,
+    unit,
+    className,
+    compact = false,
+    flash: flashColours = true,
+}: {
+    value: number;
+    unit: Unit;
+    className?: string;
+    compact?: boolean;
+    /** Off on a coloured surface (the hero), where the green and amber flash would lose contrast. */
+    flash?: boolean;
+}) {
     const reduce = useReducedMotion();
     const [shown, setShown] = useState(value);
     const previous = useRef(value);
@@ -52,7 +65,13 @@ export function AnimatedNumber({ value, unit, className, compact = false }: { va
         <span
             className={[
                 'tabular-nums transition-colors duration-700',
-                flash === 'up' ? 'text-emerald-600 dark:text-emerald-400' : flash === 'down' ? 'text-amber-600 dark:text-amber-400' : '',
+                !flashColours
+                    ? ''
+                    : flash === 'up'
+                      ? 'text-emerald-700 dark:text-emerald-400'
+                      : flash === 'down'
+                        ? 'text-amber-700 dark:text-amber-400'
+                        : '',
                 className ?? '',
             ].join(' ')}
         >

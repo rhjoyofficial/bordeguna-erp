@@ -77,6 +77,17 @@ class ConsignmentController extends Controller
 
         $brandOf = OrderBrand::forDeliveries(collect($consignments->items())->pluck('delivery_id'));
 
+        // ⭐ A parcel whose door discount waits for the Owner reads so, not as
+        // plainly "with the courier" (QA walk, 11 Oct 2026). One query a page.
+        $waitingOwner = CourierDoorDiscountRequest::query()
+            ->whereIn('consignment_id', collect($consignments->items())->pluck('id'))
+            ->whereNull('applied_at')
+            ->with('approvalRequest')
+            ->get()
+            ->filter(fn (CourierDoorDiscountRequest $request) => $request->approvalRequest?->isPending() ?? false)
+            ->pluck('consignment_id')
+            ->flip();
+
         $consignments = $consignments
             ->through(fn (Consignment $consignment) => [
                 'id' => $consignment->id,
@@ -90,6 +101,7 @@ class ConsignmentController extends Controller
                 'cod_amount' => $consignment->codAmount()->toTaka(),
                 'status' => $consignment->status->value,
                 'status_label' => $consignment->status->label(),
+                'waiting_owner' => $consignment->isBooked() && $waitingOwner->has($consignment->id),
                 'outcome_on' => $consignment->outcome_on?->toDateString(),
                 'collected_amount' => $consignment->collectedAmount()?->toTaka(),
                 'invoice' => $consignment->invoice?->only(['id', 'invoice_number']),

@@ -159,6 +159,8 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
     };
 
     const bandOptions = bands.filter((b) => form.provider === '' || b.provider === form.provider);
+    // The courier's name on screen, never its code (QA walk, 11 Oct 2026).
+    const courierName = (code: string | null) => providers.find((p) => p.code === code)?.name ?? code ?? '-';
     const { summary } = report;
     const small = summary.clean < summary.min_samples;
 
@@ -211,7 +213,7 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
                             {bandOptions.map((b) => (
                                 <option key={`${b.provider}-${b.code}`} value={b.code}>
                                     {b.name}
-                                    {form.provider === '' ? ` (${b.provider})` : ''}
+                                    {form.provider === '' ? ` (${courierName(b.provider)})` : ''}
                                 </option>
                             ))}
                         </select>
@@ -248,7 +250,8 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
                     </div>
                     <Button size="sm">{t('courier_fees.show')}</Button>
                     <span className="text-muted-foreground text-xs">
-                        {t('courier_fees.cards_in_force')} {cards.map((c) => `${c.provider} ${c.version ?? t('courier_fees.none')}`).join(', ')}
+                        {t('courier_fees.cards_in_force')}{' '}
+                        {cards.map((c) => `${courierName(c.provider)} ${c.version ?? t('courier_fees.none')}`).join(', ')}
                     </span>
                 </form>
 
@@ -413,7 +416,7 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
                                     <td className="py-1.5 pr-3 font-mono text-xs">{row.consignment_number}</td>
                                     <td className="py-1.5 pr-3 tabular-nums">{row.booked_on}</td>
                                     <td className="py-1.5 pr-3">
-                                        {row.provider} / {row.to_band_name ?? row.to_band ?? '-'}
+                                        {courierName(row.provider)} / {row.to_band_name ?? row.to_band ?? '-'}
                                         {row.district ? `, ${row.district}` : ''}
                                     </td>
                                     <td className="py-1.5 pr-3 text-right tabular-nums">

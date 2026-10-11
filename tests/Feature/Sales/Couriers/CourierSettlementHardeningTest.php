@@ -42,6 +42,7 @@ use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesReturn;
 use App\Modules\Sales\Support\CourierStatements\CourierStatementReview;
 use App\Modules\Sales\Support\SalesOrderOrigin;
@@ -219,6 +220,39 @@ it('sends a door discount above the cap to the Owner with nothing posted, and re
         ->and($request->fresh()->approvalRequest->status)->toBe(ApprovalStatus::Approved)
         ->and(($this->posted)('discounts_allowed'))->toBe(12000)
         ->and(SalesInvoice::query()->sole()->outstanding()->minor)->toBe(0);
+});
+
+it('tells the order page a parcel waits for the Owner on a door discount, not for the courier answer', function () {
+    $consignment = ($this->parcel)();
+
+    ($this->report)($this->manager, $consignment, 'delivered', '1700', ['resolution' => 'discount', 'door_reason' => 'Jar lid dented, customer asked'])
+        ->assertSessionHasNoErrors();
+
+    $order = SalesOrder::query()->sole();
+    $steps = fn (User $as) => $this->actingAs($as)->get(route('sales.orders.show', $order))->original->getData()['page']['props']['next_steps'];
+
+    $owner = $steps($this->owner);
+    $manager = $steps($this->manager);
+
+    expect(collect($owner)->pluck('kind')->all())->toBe(['door_discount'])
+        ->and($owner[0]['can'])->toBeTrue()
+        ->and($owner[0]['href'])->toBe(route('approvals.index'))
+        ->and($manager[0]['kind'])->toBe('door_discount')
+        ->and($manager[0]['can'])->toBeFalse();
+});
+
+it('lists a parcel waiting on the Owner for a door discount as waiting for the Owner', function () {
+    $waiting = ($this->parcel)();
+    $other = ($this->parcel)(number: 'CB1002');
+
+    ($this->report)($this->manager, $waiting, 'delivered', '1700', ['resolution' => 'discount', 'door_reason' => 'Jar lid dented, customer asked'])
+        ->assertSessionHasNoErrors();
+
+    $rows = collect($this->actingAs($this->owner)->get(route('sales.consignments.index'))
+        ->original->getData()['page']['props']['consignments']['data'])->keyBy('consignment_number');
+
+    expect($rows['CB1001']['waiting_owner'])->toBeTrue()
+        ->and($rows['CB1002']['waiting_owner'])->toBeFalse();
 });
 
 it('leaves the parcel open when the Owner rejects the door discount', function () {

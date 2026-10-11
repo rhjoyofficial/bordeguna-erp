@@ -61,6 +61,7 @@ export const courierSales = {
     'parcels.fee': { en: 'fee', bn: 'চার্জ' },
     'parcels.cod': { en: 'COD', bn: 'সিওডি' },
     // The ERP's own parcel states (ConsignmentStatus)
+    'parcels.waiting_owner': { en: 'Waiting for the Owner', bn: 'মালিকের সিদ্ধান্তের অপেক্ষায়' },
     'parcels.erp_status.booked': { en: 'With the courier', bn: 'কুরিয়ারের কাছে' },
     'parcels.erp_status.delivered': { en: 'Delivered', bn: 'ডেলিভারি হয়েছে' },
     'parcels.erp_status.partially_delivered': { en: 'Partly delivered', bn: 'আংশিক ডেলিভারি' },
@@ -116,6 +117,10 @@ export const courierSales = {
     'payouts.plus_compensation': { en: ', plus compensation {amount}', bn: ', সাথে ক্ষতিপূরণ {amount}' },
     'payouts.plus_adjustments': { en: ', adjustments {amount}', bn: ', সমন্বয় {amount}' },
     'payouts.money': { en: 'Money', bn: 'টাকা' },
+    'payouts.not_in_books_yet': {
+        en: 'Nothing is in the books yet: record the payout below when it arrives.',
+        bn: 'এখনো খাতায় কিছু ওঠেনি: টাকা এলে নিচে পেআউটটি লিখুন।',
+    },
     'payouts.pays_nothing': { en: 'This statement pays nothing out.', bn: 'এই স্টেটমেন্টে কোনো টাকা দেওয়া হয়নি।' },
     'payouts.shortfall_recorded': {
         en: 'The shortfall is recorded as owed to the courier (Payable to Couriers).',
