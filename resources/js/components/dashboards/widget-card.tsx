@@ -1,9 +1,10 @@
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
 import { AlertTriangle, ArrowUpRight, EyeOff, Loader2, RefreshCw } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
-import { agoText, secondsAgo } from './format';
+import { secondsAgo } from './format';
 import { accentFor, iconFor } from './palette';
 import type { DashboardWidget } from './types';
 import type { FeedEntry } from './use-widget-feed';
@@ -15,11 +16,17 @@ const SPAN: Record<DashboardWidget['size'], string> = {
     lg: 'md:col-span-2 xl:col-span-4',
 };
 
-const BASIS: Record<string, string> = {
-    ledger: 'Ledger',
-    operational: 'Operational',
-    estimate: 'Estimate',
+const BASIS: Record<string, TranslationKey> = {
+    ledger: 'dash.basis.ledger',
+    operational: 'dash.basis.operational',
+    estimate: 'dash.basis.estimate',
 };
+
+/** The server's own wording for a widget that failed (WidgetRegistry::resolve). */
+const SERVER_FAILED = 'This figure could not be loaded. It will try again on its own.';
+
+/** The default empty text every widget inherits (Widget::emptyText). */
+const SERVER_EMPTY = 'Nothing to show yet.';
 
 /**
  * One widget on the page: title, what it is based on, how fresh it is, the
@@ -53,10 +60,28 @@ export function WidgetCard({
     onRefresh: () => void;
 }) {
     const reduce = useReducedMotion();
+    const { t, tr } = useTranslation();
     const result = entry.result;
-    const ago = agoText(secondsAgo(result.generated_at, now));
+    const seconds = secondsAgo(result.generated_at, now);
+    // Same steps as format.ts agoText, in the reader's language; the digits stay digits.
+    const ago =
+        seconds === null
+            ? ''
+            : seconds < 5
+              ? t('dash.ago.now')
+              : seconds < 60
+                ? t('dash.ago.seconds', { n: seconds })
+                : seconds < 3600
+                  ? t('dash.ago.minutes', { n: Math.floor(seconds / 60) })
+                  : t('dash.ago.hours', { n: Math.floor(seconds / 3600) });
+    const title = tr(`widget.${widget.key}.title`, widget.title);
+    const description = widget.description === null ? null : tr(`widget.${widget.key}.description`, widget.description);
+    const emptyText = widget.empty_text === SERVER_EMPTY ? t('dash.empty_default') : tr(`widget.${widget.key}.empty`, widget.empty_text);
     const tooOld = (secondsAgo(result.generated_at, now) ?? 0) > Math.max(widget.refresh_seconds * 3, 180);
     const Icon = iconFor(widget.key);
+    // An attention card with nothing waiting turns green: the colour agrees with the words.
+    const data = result.data;
+    const calm = (data?.kind === 'attention' && data.total_count === 0) || (data?.kind === 'signals' && data.items.every((item) => item.count === 0));
 
     // A changed figure from the live feed glows once. The first answer never does.
     const fingerprint = JSON.stringify(result.data);
@@ -78,16 +103,19 @@ export function WidgetCard({
             whileHover={reduce ? undefined : { y: -3 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: reduce ? 0 : Math.min(index, 12) * 0.045 }}
             className={cn(
-                `dash-acc-${accentFor(widget)}`,
-                'bg-card text-card-foreground @container relative isolate flex flex-col overflow-hidden rounded-2xl border p-4 sm:p-5',
+                `dash-acc-${calm ? 'emerald' : accentFor(widget)}`,
+                'bg-card text-card-foreground @container relative isolate flex flex-col overflow-hidden rounded-2xl border border-[color-mix(in_oklab,var(--acc)_22%,var(--border))] p-4 sm:p-5',
                 'shadow-[0_1px_2px_rgba(20,40,25,0.05),0_10px_28px_-18px_rgba(20,50,30,0.22)] transition-shadow duration-300',
                 'hover:shadow-[0_1px_2px_rgba(20,40,25,0.06),0_22px_40px_-20px_var(--acc)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_12px_30px_-18px_rgba(0,0,0,0.7)]',
                 SPAN[widget.size],
             )}
-            style={{ backgroundImage: 'linear-gradient(180deg, var(--acc-wash), transparent 9rem)' }}
+            style={{
+                backgroundImage:
+                    'radial-gradient(120% 70% at 100% 0%, var(--acc-wash), transparent 70%), linear-gradient(180deg, var(--acc-wash), transparent 15rem)',
+            }}
         >
             {/* The domain's colour along the top edge. */}
-            <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[var(--acc)] to-[var(--acc-2)]" />
+            <span aria-hidden className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[var(--acc)] to-[var(--acc-2)]" />
             {pulse > 0 && <span key={pulse} aria-hidden className="dash-pulse pointer-events-none absolute inset-0 rounded-[inherit]" />}
 
             <header className="mb-4 flex items-start gap-3">
@@ -95,23 +123,19 @@ export function WidgetCard({
                     <Icon className="size-[18px]" aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">
-                    <h2
-                        id={`widget-${widget.key}`}
-                        className="line-clamp-2 text-sm leading-snug font-semibold"
-                        title={widget.description ?? undefined}
-                    >
-                        {widget.title}
+                    <h2 id={`widget-${widget.key}`} className="line-clamp-2 text-sm leading-snug font-semibold" title={description ?? undefined}>
+                        {title}
                     </h2>
                     <p className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px]">
-                        {result.data?.basis && <span>{BASIS[result.data.basis] ?? result.data.basis}</span>}
-                        {widget.date_basis && <span>by {widget.date_basis}</span>}
-                        {brandName && <span>{widget.brand_aware ? brandName : 'All brands'}</span>}
+                        {result.data?.basis && <span>{BASIS[result.data.basis] ? t(BASIS[result.data.basis]) : result.data.basis}</span>}
+                        {widget.date_basis && <span>{t('dash.by_basis', { basis: widget.date_basis })}</span>}
+                        {brandName && <span>{widget.brand_aware ? brandName : t('orders.all_brands')}</span>}
                         <span
                             className={cn('flex items-center gap-1', (entry.stale || tooOld) && 'text-amber-700 dark:text-amber-400')}
                             aria-live="polite"
                         >
                             {entry.loading ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
-                            {entry.stale ? `Not refreshed, showing ${ago}` : `Updated ${ago}`}
+                            {entry.stale ? t('dash.not_refreshed', { ago }) : t('dash.updated', { ago })}
                         </span>
                     </p>
                 </div>
@@ -120,8 +144,8 @@ export function WidgetCard({
                         type="button"
                         onClick={onRefresh}
                         className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-1"
-                        aria-label={`Refresh ${widget.title}`}
-                        title="Refresh now"
+                        aria-label={t('dash.refresh_name', { name: title })}
+                        title={t('dash.refresh_now')}
                     >
                         <RefreshCw className="size-3.5" />
                     </button>
@@ -129,8 +153,8 @@ export function WidgetCard({
                         type="button"
                         onClick={onHide}
                         className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-1"
-                        aria-label={`Hide ${widget.title}`}
-                        title="Hide from my dashboard"
+                        aria-label={t('dash.hide_name', { name: title })}
+                        title={t('dash.hide_title')}
                     >
                         <EyeOff className="size-3.5" />
                     </button>
@@ -138,8 +162,8 @@ export function WidgetCard({
                         <Link
                             href={widget.drill_down}
                             className="text-muted-foreground hover:bg-accent rounded-md p-1 hover:text-[var(--acc-ink)]"
-                            aria-label={`Open the screen behind ${widget.title}`}
-                            title="Open the full screen"
+                            aria-label={t('dash.open_name', { name: title })}
+                            title={t('dash.open_full')}
                         >
                             <ArrowUpRight className="size-3.5" />
                         </Link>
@@ -155,18 +179,24 @@ export function WidgetCard({
                             <AlertTriangle className="size-4" aria-hidden />
                         </span>
                         <div>
-                            <p>{result.message ?? 'This figure could not be loaded.'}</p>
+                            <p>
+                                {result.message === null
+                                    ? t('dash.load_failed')
+                                    : result.message === SERVER_FAILED
+                                      ? t('dash.load_failed_retry')
+                                      : result.message}
+                            </p>
                             <button
                                 type="button"
                                 onClick={onRefresh}
                                 className="mt-1 text-xs font-medium text-amber-800 hover:underline dark:text-amber-300"
                             >
-                                Try again
+                                {t('dash.try_again')}
                             </button>
                         </div>
                     </div>
                 ) : (
-                    <WidgetBody payload={result.data} emptyText={widget.empty_text} widgetKey={widget.key} />
+                    <WidgetBody payload={result.data} emptyText={emptyText} widgetKey={widget.key} />
                 )}
             </div>
         </motion.section>

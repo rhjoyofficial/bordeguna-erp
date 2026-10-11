@@ -3,6 +3,7 @@ import {
     ArrowLeftRight,
     BadgeCheck,
     Banknote,
+    BellRing,
     CalendarCheck,
     CalendarClock,
     FileText,
@@ -43,26 +44,48 @@ import type { DashboardWidget, Tone } from './types';
  * ⚠ The values live in app.css (--dash-*, .dash-acc-*), light and dark, so a
  * colour is changed in one place and dark mode is chosen, not flipped.
  */
-export type Accent = 'money' | 'sales' | 'couriers' | 'stock' | 'people' | 'attention' | 'me';
+/**
+ * Accents are named by COLOUR (one .dash-acc-* class each in app.css); which
+ * colour a widget wears is decided here, by its domain first and then per
+ * widget, so neighbouring cards on one dashboard rarely share a colour.
+ */
+export type Accent = 'emerald' | 'teal' | 'sky' | 'indigo' | 'violet' | 'amber' | 'rose' | 'red';
 
 const CATEGORY_ACCENT: Record<string, Accent> = {
-    Money: 'money',
-    Sales: 'sales',
-    Couriers: 'couriers',
-    Stock: 'stock',
-    People: 'people',
-    Work: 'attention',
-    Me: 'me',
+    Money: 'emerald',
+    Sales: 'indigo',
+    Couriers: 'amber',
+    Stock: 'sky',
+    People: 'rose',
+    Work: 'red',
+    Me: 'violet',
 };
 
-// The Me widgets each belong to a domain a person already knows by colour.
 const KEY_ACCENT: Record<string, Accent> = {
-    my_payslip: 'money',
-    my_claims: 'money',
-    my_attendance: 'people',
-    my_leave: 'stock',
-    my_tasks: 'attention',
-    team_attendance: 'people',
+    // Money, spread so the Finance page is not one green wall.
+    money_in_transit: 'amber',
+    gross_profit: 'violet',
+    receivables_ageing: 'teal',
+    payables_ageing: 'rose',
+    money_accounts: 'teal',
+    bank_unmatched: 'sky',
+    period_lock: 'indigo',
+    claims_to_pay: 'rose',
+    finance_approvals: 'red',
+    // Sales.
+    sales_vs_target: 'violet',
+    top_products: 'violet',
+    // People and work.
+    approvals_waiting: 'rose',
+    followups_due: 'violet',
+    // Me: each belongs to a domain a person already knows by colour.
+    my_payslip: 'emerald',
+    my_claims: 'amber',
+    my_attendance: 'rose',
+    my_leave: 'sky',
+    my_tasks: 'red',
+    my_orders: 'indigo',
+    team_attendance: 'rose',
 };
 
 const KEY_ICON: Record<string, LucideIcon> = {
@@ -71,6 +94,7 @@ const KEY_ICON: Record<string, LucideIcon> = {
     income_trend: TrendingUp,
     gross_profit: PiggyBank,
     business_health: Activity,
+    needs_attention: BellRing,
     bank_unmatched: Landmark,
     period_lock: Lock,
     receivables_ageing: HandCoins,
@@ -106,7 +130,7 @@ const KEY_ICON: Record<string, LucideIcon> = {
 };
 
 export function accentFor(widget: Pick<DashboardWidget, 'key' | 'category'>): Accent {
-    return KEY_ACCENT[widget.key] ?? CATEGORY_ACCENT[widget.category] ?? 'money';
+    return KEY_ACCENT[widget.key] ?? CATEGORY_ACCENT[widget.category] ?? 'emerald';
 }
 
 export function iconFor(key: string): LucideIcon {

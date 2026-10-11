@@ -1,6 +1,9 @@
+import { AttentionList } from '@/components/attention/attention-list';
 import { Input } from '@/components/ui/input';
+import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Link } from '@inertiajs/react';
+import { type SharedData } from '@/types';
+import { Link, usePage } from '@inertiajs/react';
 import { ArrowDownRight, ArrowUpRight, CircleCheck, Inbox } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useMemo, useState } from 'react';
@@ -8,7 +11,18 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, Res
 import { AnimatedNumber } from './animated-number';
 import { changeAgainst, formatValue } from './format';
 import { avatarStyle, initials, PILL, SERIES, STATUS, statusForText, toneStatus, toneText } from './palette';
-import type { BreakdownPayload, ListPayload, Part, ProgressPayload, SeriesPayload, SignalsPayload, StatPayload, Tone, WidgetPayload } from './types';
+import type {
+    AttentionPayload,
+    BreakdownPayload,
+    ListPayload,
+    Part,
+    ProgressPayload,
+    SeriesPayload,
+    SignalsPayload,
+    StatPayload,
+    Tone,
+    WidgetPayload,
+} from './types';
 
 /** Breakdowns whose labels are states, coloured by what the state means. */
 const STATUS_BREAKDOWNS = new Set(['courier_parcels_by_status', 'orders_by_state']);
@@ -41,6 +55,8 @@ export function WidgetBody({ payload, emptyText, widgetKey }: { payload: WidgetP
             return <SignalsBody payload={payload} />;
         case 'progress':
             return <ProgressBody payload={payload} emptyText={emptyText} />;
+        case 'attention':
+            return <AttentionBody payload={payload} emptyText={emptyText} />;
         default:
             return <EmptyNote text={payload.message} />;
     }
@@ -65,17 +81,19 @@ function EmptyNote({ text, calm = false }: { text: string; calm?: boolean }) {
 
 /** "+12.4%" with an arrow: the arrow and the sign say the direction, the colour only repeats it. */
 function ChangeChip({ change }: { change: { text: string; up: boolean } }) {
+    const { t } = useTranslation();
+
     return (
         <span
             className={cn(
                 'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset',
                 change.up ? PILL.good : PILL.bad,
             )}
-            title="Against the previous period"
+            title={t('dash.vs_previous')}
         >
             {change.up ? <ArrowUpRight className="size-3" aria-hidden /> : <ArrowDownRight className="size-3" aria-hidden />}
             {change.text}
-            <span className="sr-only"> against the previous period</span>
+            <span className="sr-only"> {t('dash.vs_previous')}</span>
         </span>
     );
 }
@@ -118,14 +136,14 @@ function Parts({ parts }: { parts?: Part[] }) {
     }
 
     const tile =
-        'block min-w-0 rounded-lg bg-[var(--acc-wash)] px-2.5 py-1.5 ring-1 ring-inset ring-[color-mix(in_oklab,var(--acc)_14%,transparent)]';
+        'block min-w-0 rounded-lg bg-[var(--acc-tile)] px-2.5 py-1.5 ring-1 ring-inset ring-[color-mix(in_oklab,var(--acc)_30%,transparent)]';
 
     return (
         <dl className="mt-4 grid grid-cols-2 gap-2 text-xs @md:grid-cols-3">
             {parts.map((part) => {
                 const body = (
                     <>
-                        <dt className="text-muted-foreground truncate">{part.label}</dt>
+                        <dt className="truncate font-medium text-[var(--acc-ink)]">{part.label}</dt>
                         <dd className={cn('mt-0.5 truncate text-[13px] font-semibold', toneText(part.tone))}>
                             {typeof part.value === 'number' && part.unit !== 'text' ? (
                                 <AnimatedNumber value={part.value} unit={part.unit ?? 'count'} compact />
@@ -140,7 +158,7 @@ function Parts({ parts }: { parts?: Part[] }) {
                     <Link
                         key={part.label}
                         href={part.url}
-                        className={cn(tile, 'transition-colors hover:bg-[color-mix(in_oklab,var(--acc)_18%,transparent)]')}
+                        className={cn(tile, 'transition-colors hover:bg-[color-mix(in_oklab,var(--acc)_24%,var(--card))]')}
                     >
                         {body}
                     </Link>
@@ -202,6 +220,7 @@ function ChartTooltip({
 
 function SeriesBody({ payload }: { payload: SeriesPayload }) {
     const reduce = useReducedMotion();
+    const { t } = useTranslation();
     const change = payload.total !== undefined ? changeAgainst(payload.total, payload.previous_total) : null;
     const hasData = payload.points.some((p) => payload.series.some((s) => Number(p[s.key]) !== 0));
     const summary = payload.series
@@ -226,7 +245,7 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
         <div>
             {payload.total !== undefined && (
                 <div className="mb-3 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                    <span className="text-muted-foreground w-full text-xs">{payload.total_label ?? 'Total'}</span>
+                    <span className="text-muted-foreground w-full text-xs">{payload.total_label ?? t('dash.total')}</span>
                     <span className="text-2xl font-semibold tracking-tight">
                         <AnimatedNumber value={payload.total} unit={payload.unit} />
                     </span>
@@ -234,7 +253,7 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
                 </div>
             )}
             {!hasData ? (
-                <EmptyNote text="Nothing posted in this range." />
+                <EmptyNote text={t('dash.nothing_posted')} />
             ) : (
                 <div className="h-56 w-full" role="img" aria-label={summary}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -306,6 +325,7 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
 
 function BreakdownBody({ payload, emptyText, byStatus }: { payload: BreakdownPayload; emptyText: string; byStatus: boolean }) {
     const reduce = useReducedMotion();
+    const { t } = useTranslation();
     const max = Math.max(1, ...payload.items.map((i) => Math.abs(i.value)));
     const total = payload.items.reduce((sum, i) => sum + i.value, 0);
     const fill = (item: BreakdownPayload['items'][number], index: number) =>
@@ -351,7 +371,7 @@ function BreakdownBody({ payload, emptyText, byStatus }: { payload: BreakdownPay
                             <span className="text-xl font-semibold tracking-tight">
                                 <AnimatedNumber value={payload.total ?? total} unit={payload.unit} compact />
                             </span>
-                            <span className="text-muted-foreground text-[11px]">in all</span>
+                            <span className="text-muted-foreground text-[11px]">{t('dash.colour.in_all')}</span>
                         </div>
                     </div>
                     <ul className="w-full min-w-0 flex-1 space-y-1.5 text-xs">
@@ -417,7 +437,11 @@ function BreakdownBody({ payload, emptyText, byStatus }: { payload: BreakdownPay
                 </ul>
             )}
             {payload.caption && <p className="text-muted-foreground mt-3 text-xs">{payload.caption}</p>}
-            {payload.chart === 'donut' && payload.total === undefined && <p className="sr-only">Total {formatValue(total, payload.unit)}</p>}
+            {payload.chart === 'donut' && payload.total === undefined && (
+                <p className="sr-only">
+                    {t('dash.total')} {formatValue(total, payload.unit)}
+                </p>
+            )}
             <Parts parts={payload.parts} />
         </div>
     );
@@ -425,6 +449,7 @@ function BreakdownBody({ payload, emptyText, byStatus }: { payload: BreakdownPay
 
 function ListBody({ payload, emptyText }: { payload: ListPayload; emptyText: string }) {
     const reduce = useReducedMotion();
+    const { t } = useTranslation();
     const [query, setQuery] = useState('');
     const rows = useMemo(() => {
         if (payload.kind !== 'lookup' || query.trim() === '') {
@@ -451,14 +476,14 @@ function ListBody({ payload, emptyText }: { payload: ListPayload; emptyText: str
                 <Input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search a product or SKU"
+                    placeholder={t('dash.search_stock')}
                     className="mt-1 mb-2 h-8 text-sm"
-                    aria-label="Search stock"
+                    aria-label={t('dash.search_stock_label')}
                 />
             )}
             {rows.length === 0 ? (
                 <div className="mt-2">
-                    <EmptyNote text={query ? 'Nothing matches.' : emptyText} calm={!query} />
+                    <EmptyNote text={query ? t('dash.nothing_matches') : emptyText} calm={!query} />
                 </div>
             ) : (
                 <div className="-mx-1 mt-2 overflow-x-auto">
@@ -532,7 +557,7 @@ function ListBody({ payload, emptyText }: { payload: ListPayload; emptyText: str
                     </table>
                     {payload.total_count > rows.length && payload.kind === 'list' && (
                         <p className="text-muted-foreground mt-2 px-1.5 text-xs">
-                            {rows.length} of {payload.total_count} shown
+                            {t('dash.shown_of', { shown: rows.length, total: payload.total_count })}
                         </p>
                     )}
                 </div>
@@ -542,8 +567,10 @@ function ListBody({ payload, emptyText }: { payload: ListPayload; emptyText: str
 }
 
 function SignalsBody({ payload }: { payload: SignalsPayload }) {
+    const { t } = useTranslation();
+
     if (payload.items.length === 0) {
-        return <EmptyNote text="No signals for your role." calm />;
+        return <EmptyNote text={t('dash.no_signals')} calm />;
     }
 
     return (
@@ -570,7 +597,11 @@ function SignalsBody({ payload }: { payload: SignalsPayload }) {
                                         : 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300',
                                 )}
                             >
-                                {waiting ? <AnimatedNumber value={item.count} unit="count" /> : <CircleCheck className="size-4" aria-label="None" />}
+                                {waiting ? (
+                                    <AnimatedNumber value={item.count} unit="count" />
+                                ) : (
+                                    <CircleCheck className="size-4" aria-label={t('dash.colour.none')} />
+                                )}
                             </span>
                             <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm font-medium">{item.label}</span>
@@ -586,6 +617,7 @@ function SignalsBody({ payload }: { payload: SignalsPayload }) {
 
 function ProgressBody({ payload, emptyText }: { payload: ProgressPayload; emptyText: string }) {
     const reduce = useReducedMotion();
+    const { t } = useTranslation();
     const share = payload.target ? Math.min(1, Math.max(0, payload.value / payload.target)) : 0;
 
     return (
@@ -596,7 +628,7 @@ function ProgressBody({ payload, emptyText }: { payload: ProgressPayload; emptyT
             {payload.target ? (
                 <>
                     <p className="text-muted-foreground flex items-center gap-2 text-xs">
-                        of {formatValue(payload.target, payload.unit)} target
+                        {t('dash.colour.of_target', { target: formatValue(payload.target, payload.unit) })}
                         <span
                             className={cn(
                                 'rounded-full px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset',
@@ -627,6 +659,43 @@ function ProgressBody({ payload, emptyText }: { payload: ProgressPayload; emptyT
                 </div>
             )}
             <Parts parts={payload.parts} />
+        </div>
+    );
+}
+
+/** Needs attention's top rows, the same component as /attention, with the counts above as coloured pills. */
+function AttentionBody({ payload, emptyText }: { payload: AttentionPayload; emptyText: string }) {
+    const { t } = useTranslation();
+    const { auth } = usePage<SharedData>().props;
+    const userId = (auth?.user?.id as number | undefined) ?? null;
+    const severityPill = { critical: PILL.bad, high: PILL.warn, normal: PILL.info } as const;
+
+    return (
+        <div className="space-y-3">
+            <div className="flex flex-wrap gap-2 text-xs">
+                {(['critical', 'high', 'normal'] as const).map((severity) => (
+                    <span
+                        key={severity}
+                        className={cn(
+                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 tabular-nums ring-1 ring-inset',
+                            payload.counts[severity] > 0 ? severityPill[severity] : PILL.neutral,
+                        )}
+                    >
+                        <span className="text-sm font-semibold">{payload.counts[severity]}</span> {t(`attention.severity.${severity}`)}
+                    </span>
+                ))}
+            </div>
+            {payload.failed.length > 0 && (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                    {t('attention.failed_note', { areas: payload.failed.map((f) => f.area).join(', ') })}
+                </p>
+            )}
+            {payload.items.length === 0 ? <EmptyNote text={emptyText} calm /> : <AttentionList items={payload.items} userId={userId} compact />}
+            {payload.total_count > payload.items.length && (
+                <Link href="/attention" className="text-xs font-medium text-[var(--acc-ink)] hover:underline">
+                    {t('attention.more', { count: payload.total_count })}
+                </Link>
+            )}
         </div>
     );
 }

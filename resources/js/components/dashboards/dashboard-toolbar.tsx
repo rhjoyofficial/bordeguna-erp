@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { dashboardSound } from '@/lib/dashboard-sound';
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
 import { CalendarRange, Tags, Volume2, VolumeX } from 'lucide-react';
@@ -28,14 +29,15 @@ export async function sendJson(method: 'PUT' | 'POST', url: string, body: unknow
 
 /** The live/offline dot. Live = socket connected; otherwise each widget polls. */
 export function LiveIndicator({ status }: { status: string }) {
+    const { t } = useTranslation();
     const live = status === 'connected';
     const label = live
-        ? 'Live'
+        ? t('dash.live')
         : status === 'connecting' || status === 'reconnecting'
-          ? 'Connecting'
+          ? t('dash.connecting')
           : status === 'off'
-            ? 'Refreshing on a timer'
-            : 'Offline, refreshing on a timer';
+            ? t('dash.timer')
+            : t('dash.offline_timer');
 
     return (
         <span className="text-muted-foreground flex items-center gap-1.5 text-xs" title={label} aria-live="polite">
@@ -72,13 +74,14 @@ export function RangeBar({
     /** Other dashboard filters (the brand) that a range change keeps. */
     keep?: Record<string, string>;
 }) {
+    const { t, tr } = useTranslation();
     const [from, setFrom] = useState(range.from);
     const [to, setTo] = useState(range.to);
 
     const go = (query: Record<string, string>) => router.get(path, { ...query, ...keep }, { preserveScroll: true, preserveState: false });
 
     return (
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Date range">
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('dash.date_range')}>
             <CalendarRange className="text-muted-foreground size-4" aria-hidden />
             {presets
                 .filter((p) => p.value !== 'custom')
@@ -91,13 +94,13 @@ export function RangeBar({
                         onClick={() => go({ range: preset.value })}
                         aria-pressed={range.preset === preset.value}
                     >
-                        {preset.label}
+                        {tr(`dash.preset.${preset.value}`, preset.label)}
                     </Button>
                 ))}
             <Popover>
                 <PopoverTrigger asChild>
                     <Button size="sm" variant={range.preset === 'custom' ? 'default' : 'ghost'} className="h-7 rounded-full px-2.5 text-xs">
-                        {range.preset === 'custom' ? range.label : 'Custom'}
+                        {range.preset === 'custom' ? range.label : t('dash.preset.custom')}
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-72" align="end">
@@ -110,17 +113,17 @@ export function RangeBar({
                     >
                         <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
-                                <Label htmlFor="range-from">From</Label>
+                                <Label htmlFor="range-from">{t('dash.from')}</Label>
                                 <Input id="range-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} required />
                             </div>
                             <div className="space-y-1">
-                                <Label htmlFor="range-to">To</Label>
+                                <Label htmlFor="range-to">{t('dash.to')}</Label>
                                 <Input id="range-to" type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} required />
                             </div>
                         </div>
-                        <p className="text-muted-foreground text-xs">Dhaka dates, up to 366 days. Compared with the same length just before.</p>
+                        <p className="text-muted-foreground text-xs">{t('dash.range_note')}</p>
                         <Button type="submit" size="sm" className="w-full">
-                            Show
+                            {t('dash.show')}
                         </Button>
                     </form>
                 </PopoverContent>
@@ -145,6 +148,8 @@ export function BrandBar({
     path: string;
     rangeQuery: Record<string, string>;
 }) {
+    const { t } = useTranslation();
+
     if (brands.length === 0) {
         return null;
     }
@@ -161,9 +166,9 @@ export function BrandBar({
     };
 
     return (
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Brand">
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('orders.brand')}>
             <Tags className="text-muted-foreground size-4" aria-hidden />
-            {[{ id: null as number | null, name: 'All brands' }, ...brands].map((brand, index) => (
+            {[{ id: null as number | null, name: t('orders.all_brands') }, ...brands].map((brand, index) => (
                 <Button
                     key={brand.id ?? 'all'}
                     size="sm"
@@ -187,14 +192,15 @@ export function BrandBar({
     );
 }
 
-const CLASSES: { key: SoundClass; label: string; hint: string }[] = [
-    { key: 'success', label: 'Good news', hint: 'Orders, payments, approvals given' },
-    { key: 'attention', label: 'Needs attention', hint: 'Waiting for you, low stock' },
-    { key: 'error', label: 'Problems', hint: 'Failures and sync errors' },
+const CLASSES: { key: SoundClass; label: TranslationKey; hint: TranslationKey }[] = [
+    { key: 'success', label: 'dash.sound.success', hint: 'dash.sound.success_hint' },
+    { key: 'attention', label: 'dash.sound.attention', hint: 'dash.sound.attention_hint' },
+    { key: 'error', label: 'dash.sound.error', hint: 'dash.sound.error_hint' },
 ];
 
 /** Per-person sound settings, saved server-side (users.preferences). */
 export function SoundSettingsPopover({ settings, onChange }: { settings: SoundSettings; onChange: (next: SoundSettings) => void }) {
+    const { t } = useTranslation();
     const [draft, setDraft] = useState(settings);
     const [saving, setSaving] = useState(false);
 
@@ -217,19 +223,19 @@ export function SoundSettingsPopover({ settings, onChange }: { settings: SoundSe
     return (
         <Popover>
             <PopoverTrigger asChild>
-                <Button size="sm" variant="outline" className="h-8 gap-1.5" aria-label="Sound settings">
+                <Button size="sm" variant="outline" className="h-8 gap-1.5" aria-label={t('dash.sound_settings')}>
                     {settings.enabled ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
-                    <span className="hidden sm:inline">Sound {settings.enabled ? 'on' : 'off'}</span>
+                    <span className="hidden sm:inline">{settings.enabled ? t('dash.sound_on') : t('dash.sound_off')}</span>
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-80" align="end">
                 <div className="space-y-4 text-sm">
                     <label className="flex items-center justify-between gap-2">
-                        <span className="font-medium">Play sounds on this dashboard</span>
+                        <span className="font-medium">{t('dash.sound_enable')}</span>
                         <Checkbox checked={draft.enabled} onCheckedChange={(v) => save({ ...draft, enabled: v === true })} />
                     </label>
                     <div className="space-y-1">
-                        <Label htmlFor="sound-volume">Volume</Label>
+                        <Label htmlFor="sound-volume">{t('dash.volume')}</Label>
                         <input
                             id="sound-volume"
                             type="range"
@@ -244,7 +250,7 @@ export function SoundSettingsPopover({ settings, onChange }: { settings: SoundSe
                         />
                     </div>
                     <fieldset className="space-y-2">
-                        <legend className="mb-1 font-medium">Which sounds</legend>
+                        <legend className="mb-1 font-medium">{t('dash.which_sounds')}</legend>
                         {CLASSES.map((c) => (
                             <div key={c.key} className="flex items-center gap-2">
                                 <Checkbox
@@ -253,8 +259,8 @@ export function SoundSettingsPopover({ settings, onChange }: { settings: SoundSe
                                     onCheckedChange={(v) => save({ ...draft, categories: { ...draft.categories, [c.key]: v === true } })}
                                 />
                                 <label htmlFor={`sound-${c.key}`} className="flex-1">
-                                    {c.label}
-                                    <span className="text-muted-foreground block text-xs">{c.hint}</span>
+                                    {t(c.label)}
+                                    <span className="text-muted-foreground block text-xs">{t(c.hint)}</span>
                                 </label>
                                 <Button
                                     type="button"
@@ -263,7 +269,7 @@ export function SoundSettingsPopover({ settings, onChange }: { settings: SoundSe
                                     className="h-7 text-xs"
                                     onClick={() => dashboardSound.preview(c.key, draft.volume)}
                                 >
-                                    Test
+                                    {t('dash.sound_test')}
                                 </Button>
                             </div>
                         ))}
@@ -274,19 +280,19 @@ export function SoundSettingsPopover({ settings, onChange }: { settings: SoundSe
                                 checked={draft.quiet_hours.enabled}
                                 onCheckedChange={(v) => save({ ...draft, quiet_hours: { ...draft.quiet_hours, enabled: v === true } })}
                             />
-                            <span className="font-medium">Quiet hours</span>
+                            <span className="font-medium">{t('dash.quiet_hours')}</span>
                         </label>
                         <div className="grid grid-cols-2 gap-2">
                             <Input
                                 type="time"
-                                aria-label="Quiet from"
+                                aria-label={t('dash.quiet_from')}
                                 value={draft.quiet_hours.from}
                                 onChange={(e) => setDraft({ ...draft, quiet_hours: { ...draft.quiet_hours, from: e.target.value } })}
                                 onBlur={() => save(draft)}
                             />
                             <Input
                                 type="time"
-                                aria-label="Quiet until"
+                                aria-label={t('dash.quiet_until')}
                                 value={draft.quiet_hours.to}
                                 onChange={(e) => setDraft({ ...draft, quiet_hours: { ...draft.quiet_hours, to: e.target.value } })}
                                 onBlur={() => save(draft)}
@@ -294,9 +300,9 @@ export function SoundSettingsPopover({ settings, onChange }: { settings: SoundSe
                         </div>
                     </fieldset>
                     <p className="text-muted-foreground text-xs">
-                        Never on opening the page or for your own actions. At most one sound every 3 seconds; a burst plays once.
-                        {!dashboardSound.isUnlocked && ' Click anywhere once so the browser allows sound.'}
-                        {saving && ' Saving.'}
+                        {t('dash.sound_note')}
+                        {!dashboardSound.isUnlocked && ` ${t('dash.sound_unlock')}`}
+                        {saving && ` ${t('dash.saving')}`}
                     </p>
                 </div>
             </PopoverContent>

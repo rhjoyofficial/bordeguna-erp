@@ -723,94 +723,140 @@
 }
 
 /*
-  One accent per domain, so a glance tells money from stock from people.
-  --acc / --acc-2: the icon tile gradient and the top stripe (non-text, 3:1+).
-  --acc-ink: text in the accent colour, AA on the card in its mode.
-  --acc-wash: the soft tint washed down from the top of the card.
+  Accents, named by colour (palette.ts decides which widget wears which).
+  --acc / --acc-2: icon tile gradient, top stripe, bars (non-text, 3:1+).
+  --acc-ink: accent-coloured text, the 800 step in light and the 300 step in
+    dark, so it stays AA even on the tinted mini tiles.
+  --acc-light: a pale step of the hue, for marks drawn on the dark hero.
+  --acc-wash: the tint washed down the card; --acc-tile: the mini tiles.
 */
-.dash-acc-money {
+.dash-acc-emerald {
     --acc: #059669;
     --acc-2: #0d9488;
-    --acc-ink: #047857;
-    --acc-wash: hsla(160, 84%, 39%, 0.1);
+    --acc-ink: #065f46;
+    --acc-light: #a7f3d0;
+    --acc-wash: color-mix(in oklab, #059669 15%, transparent);
+    --acc-tile: color-mix(in oklab, #059669 13%, var(--card));
 }
-.dash-acc-sales {
+.dash-acc-teal {
+    --acc: #0d9488;
+    --acc-2: #0891b2;
+    --acc-ink: #115e59;
+    --acc-light: #99f6e4;
+    --acc-wash: color-mix(in oklab, #0d9488 15%, transparent);
+    --acc-tile: color-mix(in oklab, #0d9488 13%, var(--card));
+}
+.dash-acc-sky {
+    --acc: #0284c7;
+    --acc-2: #0ea5e9;
+    --acc-ink: #075985;
+    --acc-light: #bae6fd;
+    --acc-wash: color-mix(in oklab, #0284c7 15%, transparent);
+    --acc-tile: color-mix(in oklab, #0284c7 13%, var(--card));
+}
+.dash-acc-indigo {
     --acc: #4f46e5;
-    --acc-2: #7c3aed;
-    --acc-ink: #4338ca;
-    --acc-wash: hsla(243, 75%, 59%, 0.09);
+    --acc-2: #6366f1;
+    --acc-ink: #3730a3;
+    --acc-light: #c7d2fe;
+    --acc-wash: color-mix(in oklab, #4f46e5 15%, transparent);
+    --acc-tile: color-mix(in oklab, #4f46e5 13%, var(--card));
 }
-.dash-acc-couriers {
+.dash-acc-violet {
+    --acc: #7c3aed;
+    --acc-2: #a855f7;
+    --acc-ink: #5b21b6;
+    --acc-light: #ddd6fe;
+    --acc-wash: color-mix(in oklab, #7c3aed 15%, transparent);
+    --acc-tile: color-mix(in oklab, #7c3aed 13%, var(--card));
+}
+.dash-acc-amber {
     --acc: #d97706;
     --acc-2: #ea580c;
-    --acc-ink: #b45309;
-    --acc-wash: hsla(32, 95%, 44%, 0.1);
+    --acc-ink: #92400e;
+    --acc-light: #fde68a;
+    --acc-wash: color-mix(in oklab, #d97706 15%, transparent);
+    --acc-tile: color-mix(in oklab, #d97706 13%, var(--card));
 }
-.dash-acc-stock {
-    --acc: #0284c7;
-    --acc-2: #0891b2;
-    --acc-ink: #0369a1;
-    --acc-wash: hsla(199, 89%, 48%, 0.09);
-}
-.dash-acc-people {
+.dash-acc-rose {
     --acc: #e11d48;
     --acc-2: #db2777;
-    --acc-ink: #be123c;
-    --acc-wash: hsla(347, 77%, 50%, 0.08);
+    --acc-ink: #9f1239;
+    --acc-light: #fecdd3;
+    --acc-wash: color-mix(in oklab, #e11d48 15%, transparent);
+    --acc-tile: color-mix(in oklab, #e11d48 13%, var(--card));
 }
-.dash-acc-attention {
+.dash-acc-red {
     --acc: #dc2626;
     --acc-2: #ea580c;
-    --acc-ink: #b91c1c;
-    --acc-wash: hsla(10, 80%, 50%, 0.08);
+    --acc-ink: #991b1b;
+    --acc-light: #fecaca;
+    --acc-wash: color-mix(in oklab, #dc2626 15%, transparent);
+    --acc-tile: color-mix(in oklab, #dc2626 13%, var(--card));
 }
-.dash-acc-me {
-    --acc: #7c3aed;
-    --acc-2: #c026d3;
-    --acc-ink: #6d28d9;
-    --acc-wash: hsla(262, 83%, 58%, 0.08);
-}
-.dark .dash-acc-money {
+.dark .dash-acc-emerald {
     --acc: #10b981;
     --acc-2: #14b8a6;
-    --acc-ink: #34d399;
-    --acc-wash: hsla(160, 84%, 39%, 0.13);
+    --acc-ink: #6ee7b7;
+    --acc-light: #a7f3d0;
+    --acc-wash: color-mix(in oklab, #10b981 18%, transparent);
+    --acc-tile: color-mix(in oklab, #10b981 16%, var(--card));
 }
-.dark .dash-acc-sales {
+.dark .dash-acc-teal {
+    --acc: #14b8a6;
+    --acc-2: #06b6d4;
+    --acc-ink: #5eead4;
+    --acc-light: #99f6e4;
+    --acc-wash: color-mix(in oklab, #14b8a6 18%, transparent);
+    --acc-tile: color-mix(in oklab, #14b8a6 16%, var(--card));
+}
+.dark .dash-acc-sky {
+    --acc: #0ea5e9;
+    --acc-2: #38bdf8;
+    --acc-ink: #7dd3fc;
+    --acc-light: #bae6fd;
+    --acc-wash: color-mix(in oklab, #0ea5e9 18%, transparent);
+    --acc-tile: color-mix(in oklab, #0ea5e9 16%, var(--card));
+}
+.dark .dash-acc-indigo {
     --acc: #6366f1;
-    --acc-2: #8b5cf6;
+    --acc-2: #818cf8;
     --acc-ink: #a5b4fc;
-    --acc-wash: hsla(239, 84%, 67%, 0.13);
+    --acc-light: #c7d2fe;
+    --acc-wash: color-mix(in oklab, #6366f1 18%, transparent);
+    --acc-tile: color-mix(in oklab, #6366f1 16%, var(--card));
 }
-.dark .dash-acc-couriers {
+.dark .dash-acc-violet {
+    --acc: #8b5cf6;
+    --acc-2: #a855f7;
+    --acc-ink: #c4b5fd;
+    --acc-light: #ddd6fe;
+    --acc-wash: color-mix(in oklab, #8b5cf6 18%, transparent);
+    --acc-tile: color-mix(in oklab, #8b5cf6 16%, var(--card));
+}
+.dark .dash-acc-amber {
     --acc: #f59e0b;
     --acc-2: #f97316;
     --acc-ink: #fcd34d;
-    --acc-wash: hsla(38, 92%, 50%, 0.11);
+    --acc-light: #fde68a;
+    --acc-wash: color-mix(in oklab, #f59e0b 18%, transparent);
+    --acc-tile: color-mix(in oklab, #f59e0b 16%, var(--card));
 }
-.dark .dash-acc-stock {
-    --acc: #0ea5e9;
-    --acc-2: #06b6d4;
-    --acc-ink: #7dd3fc;
-    --acc-wash: hsla(199, 89%, 48%, 0.12);
-}
-.dark .dash-acc-people {
+.dark .dash-acc-rose {
     --acc: #f43f5e;
     --acc-2: #ec4899;
     --acc-ink: #fda4af;
-    --acc-wash: hsla(350, 89%, 60%, 0.11);
+    --acc-light: #fecdd3;
+    --acc-wash: color-mix(in oklab, #f43f5e 18%, transparent);
+    --acc-tile: color-mix(in oklab, #f43f5e 16%, var(--card));
 }
-.dark .dash-acc-attention {
+.dark .dash-acc-red {
     --acc: #ef4444;
     --acc-2: #f97316;
     --acc-ink: #fca5a5;
-    --acc-wash: hsla(0, 84%, 60%, 0.11);
-}
-.dark .dash-acc-me {
-    --acc: #8b5cf6;
-    --acc-2: #d946ef;
-    --acc-ink: #c4b5fd;
-    --acc-wash: hsla(258, 90%, 66%, 0.12);
+    --acc-light: #fecaca;
+    --acc-wash: color-mix(in oklab, #ef4444 18%, transparent);
+    --acc-tile: color-mix(in oklab, #ef4444 16%, var(--card));
 }
 
 /* The hero band's background: gradient plus two soft light pools. */

@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Commerce\Http\Controllers\GatewayRefundController;
+use App\Modules\Sales\Couriers\Http\Controllers\CourierBulkBookingController;
 use App\Modules\Sales\Couriers\Http\Controllers\CourierFeesController;
 use App\Modules\Sales\Couriers\Http\Controllers\CourierLocationsController;
 use App\Modules\Sales\Couriers\Http\Controllers\CourierParcelController;
@@ -29,6 +30,7 @@ use App\Modules\Sales\Http\Controllers\SalesInvoiceController;
 use App\Modules\Sales\Http\Controllers\SalesOrderController;
 use App\Modules\Sales\Http\Controllers\SalesReturnController;
 use App\Modules\Sales\Http\Controllers\SalesTargetController;
+use App\Modules\Sales\Http\Controllers\ShopOrderImportController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')->group(function () {
@@ -77,6 +79,16 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // The order form's price per line, as it is typed (21 Sep 2026). Reads
         // and writes nothing, so a GET, like the counter's price check.
         Route::get('orders/price', [SalesOrderController::class, 'price'])->name('orders.price');
+
+        // ⭐ Shop orders by import sheet (Joy, 11 Oct 2026): order-book data
+        // entry in bulk, the same trust as taking one order. A changed price,
+        // an advance and auto-approval each check their own permission.
+        Route::get('orders/import', [ShopOrderImportController::class, 'index'])->name('orders.import');
+        Route::get('orders/import/template', [ShopOrderImportController::class, 'template'])->name('orders.import.template');
+        Route::get('orders/import/preview', fn () => tap(redirect()->route('sales.orders.import'), fn () => session()->reflash()))->name('orders.import.preview.back');
+        Route::post('orders/import/preview', [ShopOrderImportController::class, 'preview'])->name('orders.import.preview');
+        Route::post('orders/import', [ShopOrderImportController::class, 'store'])->name('orders.import.store');
+        Route::get('orders/imports/{import}', [ShopOrderImportController::class, 'show'])->whereNumber('import')->name('orders.imports.show');
     });
 
     // ⚠ C-SO-1: goods leave against an APPROVED order only. Owner and Manager.
@@ -238,6 +250,17 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
             ->whereNumber('bookingRequest')->name('courier-bookings.not-booked');
         Route::post('consignments/{consignment}/cancel', [CourierParcelController::class, 'cancel'])
             ->whereNumber('consignment')->name('consignments.cancel');
+
+        // ⭐ Parcels to book (Joy, 11 Oct 2026): approved orders, challans made
+        // and booked in one queued run, with labels to print. Same authority as
+        // booking one parcel from the order screen.
+        Route::get('parcels-to-book', [CourierBulkBookingController::class, 'index'])->name('parcels-to-book.index');
+        Route::post('parcels-to-book', [CourierBulkBookingController::class, 'store'])->name('parcels-to-book.store');
+        Route::get('parcels-to-book/labels', [CourierBulkBookingController::class, 'labels'])->name('parcels-to-book.labels');
+        Route::get('parcels-to-book/runs/{run}', [CourierBulkBookingController::class, 'show'])
+            ->whereNumber('run')->name('parcels-to-book.runs.show');
+        Route::get('parcels-to-book/runs/{run}/progress', [CourierBulkBookingController::class, 'progress'])
+            ->whereNumber('run')->name('parcels-to-book.runs.progress');
     });
 
     // ⭐ Slice 5: what a challan would cost at the courier, live on the

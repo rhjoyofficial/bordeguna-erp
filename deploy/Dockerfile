@@ -69,6 +69,7 @@ RUN apk add --no-cache \
         zip \
         gd \
         opcache \
+        pcntl \
     && rm -rf /var/cache/apk/*
 
 # dompdf renders the payslip PDFs and needs gd; bcmath keeps money arithmetic

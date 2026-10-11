@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Support\Attention\NeedsAttention;
+use App\Support\Attention\Sources;
 use App\Support\Dashboards\DashboardAccess;
 use App\Support\Dashboards\DashboardEvents;
 use App\Support\Dashboards\WidgetRegistry;
@@ -16,6 +18,8 @@ class DashboardServiceProvider extends ServiceProvider
 {
     /** In page order within each dashboard. */
     public const WIDGETS = [
+        // What is waiting on somebody, first (plan H.1, row 1).
+        Widgets\NeedsAttentionWidget::class,
         // Money
         Widgets\CashPositionWidget::class,
         Widgets\MoneyInTransitWidget::class,
@@ -61,8 +65,33 @@ class DashboardServiceProvider extends ServiceProvider
         Widgets\MyClaimsWidget::class,
     ];
 
+    /**
+     * Needs attention's feeds (plan C.4). A source is a class plus a line here;
+     * each answers its own permission and may fail alone.
+     */
+    public const ATTENTION_SOURCES = [
+        Sources\BookingUnknownSource::class,
+        Sources\CourierConnectionSource::class,
+        Sources\CourierSettlementOverdueSource::class,
+        Sources\CourierStatementProblemsSource::class,
+        Sources\DoorDecisionsSource::class,
+        Sources\StuckParcelsSource::class,
+        Sources\LossClaimsSource::class,
+        Sources\FeeVarianceSource::class,
+        Sources\BankUnmatchedSource::class,
+        Sources\ReceivablesOverdueSource::class,
+        Sources\PayablesDueSource::class,
+        Sources\ApprovalsWaitingSource::class,
+        Sources\StockSource::class,
+        Sources\FailedJobsSource::class,
+    ];
+
     public function register(): void
     {
+        $this->app->singleton(NeedsAttention::class, fn ($app) => new NeedsAttention(
+            array_map(fn (string $class) => $app->make($class), self::ATTENTION_SOURCES),
+        ));
+
         $this->app->singleton(WidgetRegistry::class, fn ($app) => new WidgetRegistry(
             array_map(fn (string $class) => $app->make($class), self::WIDGETS),
         ));

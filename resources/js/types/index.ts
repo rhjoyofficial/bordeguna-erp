@@ -49,6 +49,10 @@ export interface SharedData {
     flash: { success?: string | null; error?: string | null; warning?: string | null };
     pendingApprovalsCount: number;
     canReviewApprovals: boolean;
+    /** Needs attention's sidebar badge: at most a minute old. */
+    attentionCount?: number;
+    /** system.jobs.manage: Settings > Failed jobs. */
+    canManageJobs?: boolean;
     /** The channels this tab listens on (realtime everywhere, 11 Oct 2026). */
     realtime?: { enabled: boolean; business_channel: string | null; user_channel: string | null };
     /** The record kinds this page shows; a `record.changed` of one of them refreshes it. */
@@ -97,6 +101,7 @@ export interface SharedData {
     canManageCrmSettings: boolean;
     canManageCourierSettings: boolean;
     canProposeRateCards: boolean;
+    canBookParcels: boolean;
     /** dashboard.view_all: Settings > Dashboards. */
     canConfigureDashboards: boolean;
     canManageReasons: boolean;
