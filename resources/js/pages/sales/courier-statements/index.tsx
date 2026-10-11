@@ -18,7 +18,18 @@ interface Statement {
     statement_date: string;
     status: 'draft' | 'posted';
     lines_count: number;
+    errors_count: number;
     share_amount: string | null;
+}
+
+interface Courier {
+    id: number;
+    name: string;
+    provider: string;
+    // The reader for this courier's file, or null when the ERP cannot read it yet.
+    format: string | null;
+    // CarryBee's file carries its own invoice id; Pathao's does not.
+    reference_in_file: boolean;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -30,13 +41,7 @@ const breadcrumbs: BreadcrumbItem[] = [
  * A courier's payout statement is read into a draft, and nothing moves until it
  * is posted from its own page.
  */
-export default function CourierStatementsIndex({
-    statements,
-    couriers,
-}: {
-    statements: Paginated<Statement>;
-    couriers: { id: number; name: string; provider: string | null }[];
-}) {
+export default function CourierStatementsIndex({ statements, couriers }: { statements: Paginated<Statement>; couriers: Courier[] }) {
     const { data, setData, post, errors, processing } = useForm<{
         money_account_id: string;
         statement_reference: string;
@@ -48,6 +53,8 @@ export default function CourierStatementsIndex({
         statement_date: new Date().toLocaleDateString('en-CA'),
         file: null,
     });
+
+    const courier = couriers.find((c) => String(c.id) === data.money_account_id);
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -78,14 +85,21 @@ export default function CourierStatementsIndex({
                                 placeholder="Select courier"
                                 searchPlaceholder="Search couriers…"
                             />
+                            {courier && (
+                                <span className={`text-xs ${courier.format ? 'text-muted-foreground' : 'text-destructive'}`}>
+                                    {courier.format
+                                        ? `Reads the ${courier.format}`
+                                        : "The ERP cannot read this courier's file yet. Link it under Settings, Couriers."}
+                                </span>
+                            )}
                             <InputError message={errors.money_account_id} />
                         </div>
                         <div className="grid gap-1">
-                            <Label required>Invoice id</Label>
+                            <Label required={!courier?.reference_in_file}>Invoice id</Label>
                             <Input
                                 className="w-44"
                                 value={data.statement_reference}
-                                placeholder="e.g. 230826BXGIYJJ"
+                                placeholder={courier?.reference_in_file ? 'Taken from the file' : 'e.g. 230826BXGIYJJ'}
                                 onChange={(e) => setData('statement_reference', e.target.value)}
                             />
                             <InputError message={errors.statement_reference} />
@@ -134,7 +148,14 @@ export default function CourierStatementsIndex({
                                     </td>
                                     <td className="p-3">{statement.courier}</td>
                                     <td className="p-3">{statement.statement_date}</td>
-                                    <td className="p-3 text-right tabular-nums">{statement.lines_count}</td>
+                                    <td className="p-3 text-right tabular-nums">
+                                        {statement.lines_count}
+                                        {statement.errors_count > 0 && (
+                                            <span className="text-destructive block text-xs">
+                                                {statement.errors_count} {statement.errors_count === 1 ? 'row' : 'rows'} unreadable
+                                            </span>
+                                        )}
+                                    </td>
                                     <td className="p-3 text-right tabular-nums">{statement.share_amount ?? '-'}</td>
                                     <td className="p-3">
                                         <Badge variant={statement.status === 'posted' ? 'default' : 'secondary'}>
