@@ -90,3 +90,28 @@ states (which is also how the empty states were checked).
   (`dash.hero.*`, `dash.colour.*` in `lib/i18n/dashboards.ts`); the new Needs
   attention widget feeds the hero's attention tile and shows its severity
   counts as coloured pills.
+
+## Third pass: back to the calm look, simple colour (11 Oct 2026)
+
+Joy, on the second pass: "Previous looks was good, just it their used some
+simple coloring will make it perfect." So the first-pass look is back and
+colour sits only on small marks:
+
+- Hero: one calm green band, neutral glass tiles, white numbers, white
+  sparkline and split bars. Each tile's only colour is its icon, in the
+  domain's 700 step on a white disc (`--acc-strong`), plus the green or red
+  change chip.
+- Cards: plain card background and border, no tint, no coloured border, no
+  coloured hover glow. Domain colour only on the 3px top stripe, the icon
+  tile, chart series and status pills.
+- Mini stat tiles and empty notes are neutral (muted grey, dark text); the
+  empty note keeps a coloured icon. `--acc-wash` is back to a faint 9% (12%
+  dark), used only for row hovers; `--acc-tile` is gone.
+- Kept from the second pass: colour-named accents and the per-widget map in
+  `palette.ts`, every translation, Needs attention (widget, hero tile,
+  severity pills), brand switcher, live refresh, report charts on `SERIES`.
+
+Screenshots (scratch SQLite, 61 days of demo ledger lines, session signed
+server side): `round3-owner-light-1440.png`, `round3-owner-dark-1440.png`,
+`round3-finance-light-1440.png`, `round3-owner-light-390.png`. No horizontal
+scroll at 390 px.
