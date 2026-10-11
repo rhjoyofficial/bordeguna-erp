@@ -369,8 +369,11 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
             )}
             <div className="flex flex-wrap items-end gap-3">
                 <div className="grid gap-1">
-                    <Label required>What the courier reported</Label>
+                    <Label required htmlFor={`outcome-${challan.id}`}>
+                        What the courier reported
+                    </Label>
                     <select
+                        id={`outcome-${challan.id}`}
                         className="border-input bg-background h-9 rounded-md border px-2 text-sm"
                         value={data.outcome}
                         onChange={(e) => setOutcome(e.target.value as typeof data.outcome)}
@@ -383,13 +386,24 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
                     <InputError message={errors.outcome} />
                 </div>
                 <div className="grid gap-1">
-                    <Label required>On</Label>
-                    <Input type="date" className="w-40" value={data.outcome_on} onChange={(e) => setData('outcome_on', e.target.value)} />
+                    <Label required htmlFor={`outcome-on-${challan.id}`}>
+                        On
+                    </Label>
+                    <Input
+                        id={`outcome-on-${challan.id}`}
+                        type="date"
+                        className="w-40"
+                        value={data.outcome_on}
+                        onChange={(e) => setData('outcome_on', e.target.value)}
+                    />
                     <InputError message={errors.outcome_on} />
                 </div>
                 <div className="grid gap-1">
-                    <Label required>Collected</Label>
+                    <Label required htmlFor={`outcome-collected-${challan.id}`}>
+                        Collected
+                    </Label>
                     <Input
+                        id={`outcome-collected-${challan.id}`}
                         className="w-32"
                         value={data.collected_amount}
                         disabled={data.outcome === 'returned'}
@@ -505,7 +519,8 @@ function ChallanCard({
                 <a href={route('sales.deliveries.print', challan.id)} target="_blank" rel="noreferrer" className="text-muted-foreground underline">
                     Print challan
                 </a>
-                {canDeliver && (
+                {/* A parcel's challan is billed by the courier's answer, never by hand. */}
+                {canDeliver && !consignment && (
                     <Link href={route('sales.invoices.create', { customer_id: customerId, delivery_id: challan.id })} className="underline">
                         Invoice this challan
                     </Link>
@@ -1086,7 +1101,7 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
 }
 
 interface NextStep {
-    kind: 'approve' | 'invoice' | 'parcel' | 'collect' | 'deliver' | 'done';
+    kind: 'approve' | 'invoice' | 'parcel' | 'door_discount' | 'collect' | 'deliver' | 'done';
     title: string;
     detail: string;
     href: string | null;

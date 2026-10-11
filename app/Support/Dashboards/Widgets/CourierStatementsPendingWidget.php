@@ -49,6 +49,12 @@ class CourierStatementsPendingWidget extends CourierWidget
         return 'Every imported statement is posted.';
     }
 
+    /** Four columns of a table: one column cut the title and the parcels (QA walk, 11 Oct 2026). */
+    public function size(): string
+    {
+        return 'md';
+    }
+
     public function data(WidgetContext $context): array
     {
         $drafts = CourierStatement::query()

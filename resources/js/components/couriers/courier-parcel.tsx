@@ -125,6 +125,11 @@ const confidenceClass: Record<FeeEstimatePayload['confidence'], string> = {
  * the account, weight, amount to collect or delivery type changes. Our COST:
  * never the customer's delivery charge.
  */
+// Money in an estimate always has two decimals: Tk 117.70, never Tk 117.7 (QA walk, 11 Oct 2026).
+function taka(amount: number): string {
+    return amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function LiveFeeEstimate({
     challanId,
     accountId,
@@ -199,14 +204,14 @@ function LiveFeeEstimate({
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span className="font-medium">
                     {estimate.sufficient && estimate.total !== null
-                        ? t('parcel.estimate_about', { amount: estimate.total.toLocaleString('en-IN') })
+                        ? t('parcel.estimate_about', { amount: taka(estimate.total) })
                         : t('parcel.estimate_insufficient')}
                 </span>
                 {estimate.sufficient && (
                     <span className="text-muted-foreground">
                         {t('parcel.estimate_parts', {
-                            delivery: estimate.delivery_fee?.toLocaleString('en-IN') ?? '',
-                            cod: (estimate.cod_fee ?? 0).toLocaleString('en-IN'),
+                            delivery: taka(estimate.delivery_fee ?? 0),
+                            cod: taka(estimate.cod_fee ?? 0),
                         })}
                     </span>
                 )}
@@ -217,9 +222,7 @@ function LiveFeeEstimate({
             </div>
             <p className="text-muted-foreground mt-1">{estimate.basis}</p>
             {estimate.return_fee_scenario !== null && (
-                <p className="text-muted-foreground mt-1">
-                    {t('parcel.estimate_return_fee', { amount: estimate.return_fee_scenario.toLocaleString('en-IN') })}
-                </p>
+                <p className="text-muted-foreground mt-1">{t('parcel.estimate_return_fee', { amount: taka(estimate.return_fee_scenario) })}</p>
             )}
         </div>
     );

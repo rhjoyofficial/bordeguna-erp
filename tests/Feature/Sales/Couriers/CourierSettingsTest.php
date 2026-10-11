@@ -11,6 +11,7 @@ use App\Modules\Sales\Couriers\Models\CourierAccount;
 use App\Modules\Sales\Couriers\Models\CourierAccountBusiness;
 use App\Modules\Sales\Couriers\Models\CourierProvider;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Spatie\Activitylog\Models\Activity;
@@ -398,4 +399,12 @@ it('seeds the five providers', function () {
     expect(CourierProvider::orderBy('sort_order')->pluck('is_connected', 'code')->all())->toBe([
         'pathao' => true, 'carrybee' => true, 'steadfast' => false, 'redx' => false, 'paperfly' => false,
     ]);
+});
+
+it('shows when an account was last tested as a person reads it, in Dhaka time', function () {
+    $account = makeCarryBeeAccount($this);
+    $account->forceFill(['last_test_at' => Carbon::parse('2026-10-11 15:31:58', 'Asia/Dhaka'), 'last_test_ok' => false])->save();
+
+    $this->actingAs($this->owner)->get('/settings/couriers')
+        ->assertInertia(fn ($page) => $page->where('accounts.0.last_test_at', '11 Oct 2026, 3:31 pm'));
 });

@@ -772,9 +772,10 @@ export default function CourierLocations() {
                             </div>
                         ) : (
                             <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead className="text-muted-foreground text-left text-xs">
-                                        <tr className="border-border border-b">
+                                {/* Below sm each place is a card: the actions sit under it, never off the side (QA walk, 11 Oct 2026). */}
+                                <table className="w-full text-sm max-sm:block">
+                                    <thead className="text-muted-foreground text-left text-xs max-sm:hidden">
+                                        <tr className="border-border border-b max-sm:block">
                                             <th className="py-2 pr-3 font-medium">{t('courier_locations.col_place')}</th>
                                             <th className="py-2 pr-3 font-medium">
                                                 {t('courier_locations.col_courier_place', { name: current.name })}
@@ -784,18 +785,18 @@ export default function CourierLocations() {
                                             <th className="py-2 font-medium" />
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody className="max-sm:block">
                                         {maps.data.map((row) => (
                                             <Fragment key={row.id}>
-                                                <tr className="border-border border-b align-top">
-                                                    <td className="py-2 pr-3">
+                                                <tr className="border-border border-b align-top max-sm:block max-sm:py-2">
+                                                    <td className="py-2 pr-3 max-sm:block max-sm:py-1">
                                                         <p className="font-medium">{row.thana}</p>
                                                         <p className="text-muted-foreground text-xs">
                                                             {row.area ? `${row.area}, ` : ''}
                                                             {row.district}
                                                         </p>
                                                     </td>
-                                                    <td className="py-2 pr-3">
+                                                    <td className="py-2 pr-3 max-sm:block max-sm:py-1">
                                                         {row.zone_name ? (
                                                             <>
                                                                 <p>{row.zone_name}</p>
@@ -817,7 +818,7 @@ export default function CourierLocations() {
                                                             </p>
                                                         )}
                                                     </td>
-                                                    <td className="py-2 pr-3">
+                                                    <td className="py-2 pr-3 max-sm:block max-sm:py-1">
                                                         <ConfidenceBadge row={row} />
                                                         {row.reviewed_by && (
                                                             <p className="text-muted-foreground mt-1 text-xs">
@@ -825,9 +826,9 @@ export default function CourierLocations() {
                                                             </p>
                                                         )}
                                                     </td>
-                                                    <td className="text-muted-foreground py-2 pr-3 text-xs">{row.note}</td>
-                                                    <td className="py-2">
-                                                        <div className="flex justify-end gap-1">
+                                                    <td className="text-muted-foreground py-2 pr-3 text-xs max-sm:block max-sm:py-1">{row.note}</td>
+                                                    <td className="py-2 max-sm:block max-sm:py-1">
+                                                        <div className="flex justify-end gap-1 max-sm:justify-start">
                                                             {row.status === 'suggested' && row.zone_id && (
                                                                 <Button
                                                                     size="sm"
@@ -860,7 +861,7 @@ export default function CourierLocations() {
                                                 </tr>
                                                 {editingId === row.id && (
                                                     <tr className="border-border border-b">
-                                                        <td colSpan={5} className="py-2">
+                                                        <td colSpan={5} className="py-2 max-sm:block">
                                                             <MapEditor
                                                                 provider={provider}
                                                                 row={row}

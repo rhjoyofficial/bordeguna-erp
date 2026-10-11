@@ -107,6 +107,23 @@ interface Equation {
     balanced: boolean;
 }
 
+// A figure cell on the payout lines: a right-aligned column from sm up, a
+// labelled row of its own below it.
+const stacked =
+    'p-3 text-right tabular-nums max-sm:flex max-sm:justify-between max-sm:gap-3 max-sm:py-1 max-sm:before:text-muted-foreground max-sm:before:text-xs max-sm:before:content-[attr(data-label)]';
+
+// A term with its sign, without a "-0.00" or a "+-5.00" (QA walk, 11 Oct 2026).
+function signed(sign: '-' | '+', value: string): string {
+    const amount = Number(value.replace(/[^0-9.-]/g, ''));
+    const bare = value.replace(/^-/, '');
+
+    if (!amount) {
+        return bare;
+    }
+
+    return (sign === '-') !== amount < 0 ? `-${bare}` : `+${bare}`;
+}
+
 function EquationRow({ label, equation }: { label: string; equation: Equation }) {
     const { t } = useTranslation();
 
@@ -114,11 +131,11 @@ function EquationRow({ label, equation }: { label: string; equation: Equation })
         <tr className="border-t">
             <td className="py-1 pr-3 font-medium">{label}</td>
             <td className="py-1 pr-3 text-right tabular-nums">{equation.collected}</td>
-            <td className="py-1 pr-3 text-right tabular-nums">-{equation.net_fees}</td>
-            <td className="py-1 pr-3 text-right tabular-nums">-{equation.cod_fees}</td>
-            <td className="py-1 pr-3 text-right tabular-nums">-{equation.additional}</td>
-            <td className="py-1 pr-3 text-right tabular-nums">+{equation.compensation}</td>
-            <td className="py-1 pr-3 text-right tabular-nums">+{equation.adjustment}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">{signed('-', equation.net_fees)}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">{signed('-', equation.cod_fees)}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">{signed('-', equation.additional)}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">{signed('+', equation.compensation)}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">{signed('+', equation.adjustment)}</td>
             <td className="py-1 pr-3 text-right font-medium tabular-nums">{equation.expected}</td>
             <td className="py-1 pr-3 text-right tabular-nums">{equation.payout}</td>
             <td className={`py-1 text-right tabular-nums ${equation.balanced ? 'text-muted-foreground' : 'text-destructive font-medium'}`}>
@@ -325,6 +342,7 @@ export default function CourierStatementShow({
                         <p className="text-muted-foreground">{t('payouts.money')}</p>
                         {isDraft ? (
                             <>
+                                {summary.deposit_expected && <p className="text-xs">{t('payouts.not_in_books_yet')}</p>}
                                 {!summary.deposit_expected && (
                                     <p className="text-xs">
                                         {t('payouts.pays_nothing')} {shareMinor < 0 ? t('payouts.shortfall_recorded') : t('payouts.share_stays')}
@@ -437,8 +455,9 @@ export default function CourierStatementShow({
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
-                    <table className="w-full text-sm">
-                        <thead className="bg-muted/50 text-left">
+                    {/* Below sm each line is a card, every figure labelled and Ours / Not ours under it (QA walk, 11 Oct 2026). */}
+                    <table className="w-full text-sm max-sm:block">
+                        <thead className="bg-muted/50 text-left max-sm:hidden">
                             <tr>
                                 <th className="p-3">{t('parcels.col_consignment')}</th>
                                 <th className="p-3">{t('payouts.col_whose')}</th>
@@ -451,10 +470,13 @@ export default function CourierStatementShow({
                                 {isDraft && <th className="p-3"></th>}
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="max-sm:block">
                             {shown.map((line) => (
-                                <tr key={line.id} className={`border-t align-top ${line.included ? '' : 'text-muted-foreground'}`}>
-                                    <td className="p-3">
+                                <tr
+                                    key={line.id}
+                                    className={`border-t align-top max-sm:block max-sm:py-2 ${line.included ? '' : 'text-muted-foreground'}`}
+                                >
+                                    <td className="p-3 max-sm:block max-sm:py-1">
                                         <span className="font-medium">{line.consignment_number}</span>
                                         {line.merchant_reference && (
                                             <span className="text-muted-foreground block text-xs">{line.merchant_reference}</span>
@@ -470,13 +492,13 @@ export default function CourierStatementShow({
                                         {line.note && <span className="block text-xs text-amber-700 dark:text-amber-400">{line.note}</span>}
                                         {line.suggestion && <span className="text-muted-foreground block text-xs italic">{line.suggestion}</span>}
                                     </td>
-                                    <td className="p-3">
+                                    <td className="p-3 max-sm:block max-sm:py-1">
                                         {stateLabel(line, t)}
                                         {line.match_method === 'merchant_reference' && (
                                             <span className="text-muted-foreground block text-xs">{t('payouts.matched_on_reference')}</span>
                                         )}
                                     </td>
-                                    <td className="p-3 text-right tabular-nums">
+                                    <td className={stacked} data-label={t('payouts.col_collected')}>
                                         {line.collected}
                                         {line.erp_collected !== null && line.erp_collected !== line.collected && (
                                             <span className="text-destructive block text-xs">
@@ -484,7 +506,7 @@ export default function CourierStatementShow({
                                             </span>
                                         )}
                                     </td>
-                                    <td className="p-3 text-right tabular-nums">
+                                    <td className={stacked} data-label={t('payouts.col_fee')}>
                                         {line.delivery_fee}
                                         {nonZero(line.discount) && (
                                             <span className="text-muted-foreground block text-xs">
@@ -492,9 +514,13 @@ export default function CourierStatementShow({
                                             </span>
                                         )}
                                     </td>
-                                    <td className="p-3 text-right tabular-nums">{line.charge}</td>
-                                    <td className="p-3 text-right tabular-nums">{line.cod_fee}</td>
-                                    <td className="p-3 text-right text-xs tabular-nums">
+                                    <td className={stacked} data-label={t('payouts.col_net_fee')}>
+                                        {line.charge}
+                                    </td>
+                                    <td className={stacked} data-label={t('payouts.col_cod_fee')}>
+                                        {line.cod_fee}
+                                    </td>
+                                    <td className="p-3 text-right text-xs tabular-nums max-sm:block max-sm:py-0 max-sm:text-left">
                                         {nonZero(line.additional) && (
                                             <span className="block">
                                                 {t('payouts.extra')} {line.additional}
@@ -511,9 +537,11 @@ export default function CourierStatementShow({
                                             </span>
                                         )}
                                     </td>
-                                    <td className="p-3 text-right tabular-nums">{line.payout}</td>
+                                    <td className={stacked} data-label={t('payouts.col_payout')}>
+                                        {line.payout}
+                                    </td>
                                     {isDraft && (
-                                        <td className="p-3 text-right whitespace-nowrap">
+                                        <td className="p-3 text-right whitespace-nowrap max-sm:block max-sm:py-1 max-sm:text-left">
                                             {line.state === 'unlisted' && (
                                                 <>
                                                     <Button

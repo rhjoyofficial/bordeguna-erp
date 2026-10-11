@@ -35,6 +35,9 @@ use Inertia\Response;
  */
 class CourierSettingsController extends Controller
 {
+    /** How a moment reads on this screen: "11 Oct 2026, 3:31 pm", Dhaka time (QA walk, 11 Oct 2026). */
+    private const WHEN = 'j M Y, g:i a';
+
     public function index(Request $request, CourierProviderRegistry $registry): Response
     {
         $businessId = app(BusinessContext::class)->id();
@@ -70,8 +73,8 @@ class CourierSettingsController extends Controller
                     // ⚠⚠ Booleans only. Never a value, never a mask.
                     'credentials_set' => $a->credentialsSet(),
                     'is_active' => $a->is_active,
-                    'activated_at' => $a->activated_at?->toDateTimeString(),
-                    'last_test_at' => $a->last_test_at?->toDateTimeString(),
+                    'activated_at' => $a->activated_at?->timezone('Asia/Dhaka')->format(self::WHEN),
+                    'last_test_at' => $a->last_test_at?->timezone('Asia/Dhaka')->format(self::WHEN),
                     'last_test_ok' => $a->last_test_ok,
                     'last_test_message' => $a->last_test_message,
                     'last_test_city_count' => $a->last_test_city_count,

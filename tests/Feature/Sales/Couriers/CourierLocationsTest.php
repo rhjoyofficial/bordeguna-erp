@@ -387,6 +387,24 @@ it('confirms every unreviewed equal-name match at once without touching suggesti
         ->and(locMap('carrybee', 'Dhaka', 'Savar')->status)->toBe('suggested');
 });
 
+it('counts on Approve all high only what the button would confirm', function () {
+    $base = ['provider' => 'carrybee', 'district' => 'Dhaka', 'provider_city_id' => '14', 'provider_city_name' => 'Dhaka', 'confidence' => 'high'];
+    // Would be confirmed: a machine match with a zone, unseen.
+    CourierLocationMap::create($base + ['thana' => 'Dhanmondi', 'provider_zone_id' => '101', 'provider_zone_name' => 'Dhanmondi', 'status' => 'applied', 'source' => 'auto_exact']);
+    // Would not: typed by a person, or without a zone.
+    CourierLocationMap::create($base + ['thana' => 'Mirpur', 'provider_zone_id' => '102', 'provider_zone_name' => 'Mirpur', 'status' => 'applied', 'source' => 'manual']);
+    CourierLocationMap::create($base + ['thana' => 'Savar', 'status' => 'suggested', 'source' => 'auto_exact']);
+
+    $this->actingAs($this->owner)->get('/settings/couriers/locations?provider=carrybee')
+        ->assertInertia(fn ($page) => $page->where('stats.unreviewed_high', 1));
+
+    $this->actingAs($this->owner)->post('/settings/couriers/locations/approve-high', ['provider' => 'carrybee'])
+        ->assertSessionHas('success', '1 equal-name matches confirmed.');
+
+    $this->actingAs($this->owner)->get('/settings/couriers/locations?provider=carrybee')
+        ->assertInertia(fn ($page) => $page->where('stats.unreviewed_high', 0));
+});
+
 it('refuses a map to a zone outside the chosen city or a place not on the list', function () {
     locFakeCarryBee();
     locSync(locActiveAccount());
