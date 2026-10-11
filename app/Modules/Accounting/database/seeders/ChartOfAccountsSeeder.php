@@ -151,12 +151,14 @@ class ChartOfAccountsSeeder extends Seeder
 
         ['2200', 'Non-Current Liabilities', AccountType::Liability, '2000', false, null],
         ['2210', 'Bank Loans', AccountType::Liability, '2200', true, null],
-        ['2220', 'Loans from Owners', AccountType::Liability, '2200', true, null],
+        // Slugged (Slice 0, D8) so the owner's own money in and out can be
+        // found by name, never by a code somebody might renumber.
+        ['2220', 'Loans from Owners', AccountType::Liability, '2200', true, 'owner_loans'],
 
         // ─── 3000 Equity ────────────────────────────────────────────────────
         ['3000', 'Equity', AccountType::Equity, null, false, null],
         ['3100', "Owner's Capital", AccountType::Equity, '3000', true, 'owners_capital'],
-        ['3200', "Owner's Drawings", AccountType::Equity, '3000', true, null],
+        ['3200', "Owner's Drawings", AccountType::Equity, '3000', true, 'owners_drawings'],
         ['3300', 'Retained Earnings', AccountType::Equity, '3000', true, 'retained_earnings'],
         // ⚠⚠ The account that PROVES the opening balances. Every opening figure
         // is entered against it, and when the last one is in it must read zero.
