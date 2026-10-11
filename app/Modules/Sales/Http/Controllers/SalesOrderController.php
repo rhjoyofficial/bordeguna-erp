@@ -31,6 +31,7 @@ use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\RecordOrderPayment;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Actions\SendPaidOrderForApproval;
+use App\Modules\Sales\Couriers\Support\ParcelPresenter;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
@@ -291,13 +292,19 @@ class SalesOrderController extends Controller
         // as dates, never a model handed to the page.
         $deliveries = Delivery::query()
             ->whereIn('id', $deliveryIds)
-            ->with(['lines.product:id,name,sku,weight_grams', 'lines.orderLine.order.lines', 'customer', 'consignment.courier:id,name', 'consignment.invoice:id,invoice_number', 'consignment.salesReturn:id,return_number'])
+            ->with(['lines.product:id,name,sku,weight_grams', 'lines.orderLine.order.lines', 'customer', 'consignment.courier:id,name', 'consignment.invoice:id,invoice_number', 'consignment.salesReturn:id,return_number', 'consignment.courierAccount.provider', 'consignment.shipmentEvents'])
             ->orderBy('delivered_at')
             ->orderBy('id')
             ->get();
 
+        // ⭐ Courier hub slice 4: booking through the courier's API, for whoever
+        // may book, and only with accounts that serve this business.
+        $canBook = $user->can('sales.sell') && $user->can('couriers.parcels.book');
+        $canViewParcels = $user->can('couriers.parcels.view');
+        $courierAccounts = $canBook ? ParcelPresenter::bookableAccounts((int) $order->business_id) : collect();
+
         $challans = $deliveries
-            ->map(function (Delivery $delivery) use ($resolver) {
+            ->map(function (Delivery $delivery) use ($resolver, $canBook, $canViewParcels, $courierAccounts) {
                 $consignment = $delivery->consignment;
                 $untouched = $delivery->lines->every(fn ($line) => (float) $line->quantity_invoiced <= 0 && (float) $line->quantity_returned <= 0);
 
@@ -321,8 +328,13 @@ class SalesOrderController extends Controller
                         'sku' => $line->product?->sku,
                         'quantity' => $line->quantityUninvoiced(),
                     ])->values(),
+                    'courier_draft' => $consignment === null && $untouched && $courierAccounts->isNotEmpty()
+                        ? ParcelPresenter::draft($delivery, $courierAccounts, $resolver)
+                        : null,
+                    'courier_booking' => $consignment === null && ($canBook || $canViewParcels) ? ParcelPresenter::openBooking($delivery) : null,
                     'consignment' => $consignment === null ? null : [
                         'id' => $consignment->id,
+                        'courier_info' => $canViewParcels || $canBook ? ParcelPresenter::courier($consignment) : null,
                         'courier' => $consignment->courier?->name,
                         'consignment_number' => $consignment->consignment_number,
                         'cod_amount' => $consignment->codAmount()->toTaka(),
@@ -360,6 +372,9 @@ class SalesOrderController extends Controller
             'next_steps' => OrderNextSteps::for($order, $deliveries, $user),
             'couriers' => MoneyAccount::query()->active()->where('type', MoneyAccountType::Courier->value)
                 ->orderBy('name')->get(['id', 'name']),
+            'courier_accounts' => ParcelPresenter::accountOptions($courierAccounts, (int) $order->business_id),
+            'can_book_courier' => $canBook,
+            'can_view_parcels' => $canViewParcels,
             'can_record_outcome' => $user->can('sales.sell') && $user->can('sales.receipt.record') && $user->can('sales.returns.record'),
             // ⚠ C-SO-3: exposure SHOWN beside the credit limit, enforced by
             // nobody. The human decides.

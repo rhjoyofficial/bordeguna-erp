@@ -3,6 +3,8 @@
 namespace App\Modules\Sales\Couriers\Providers;
 
 use App\Modules\Sales\Couriers\Drivers\PathaoDriver;
+use App\Modules\Sales\Couriers\Enums\CourierStatus as S;
+use App\Modules\Sales\Couriers\Tracking\StatusWord as W;
 
 /**
  * Pathao Courier merchant API (aladdin), verified from merchant.pathao.com >
@@ -45,6 +47,59 @@ class PathaoProvider extends CourierProviderDefinition
             ['key' => 'min_weight_kg', 'label' => 'Lowest weight (kg)', 'type' => 'number', 'default' => 0.5, 'min' => 0.5, 'max' => 10, 'step' => 0.01],
             ['key' => 'max_weight_kg', 'label' => 'Highest weight (kg)', 'type' => 'number', 'default' => 10, 'min' => 0.5, 'max' => 10, 'step' => 0.01],
         ];
+    }
+
+    /**
+     * Pathao's `order_status_slug` words and its webhook events (11 Oct 2026).
+     */
+    public function statusWords(): array
+    {
+        return [
+            'created' => S::Booked->value,
+            'updated' => W::IGNORE,
+            'pending' => S::Booked->value,
+            'pickup_requested' => S::Booked->value,
+            'assigned_for_pickup' => S::PickupAssigned->value,
+            'picked' => S::PickedUp->value,
+            'pickup_failed' => S::OnHold->value,
+            'pickup_cancelled' => S::Cancelled->value,
+            'cancelled' => S::Cancelled->value,
+            'at_the_sorting_hub' => S::InTransit->value,
+            'in_transit' => S::InTransit->value,
+            'received_at_last_mile_hub' => S::AtDeliveryHub->value,
+            'assigned_for_delivery' => S::OutForDelivery->value,
+            'delivered' => S::Delivered->value,
+            'partial_delivery' => S::PartiallyDelivered->value,
+            'return' => S::Returning->value,
+            'returned' => S::Returning->value,
+            'return_in_transit' => S::Returning->value,
+            'return_id_created' => W::IGNORE,
+            'delivery_failed' => S::DeliveryFailed->value,
+            'on_hold' => S::OnHold->value,
+            'paid_return' => S::PaidReturn->value,
+            'exchange' => S::Exchanged->value,
+            'returned_to_merchant' => S::ReturnedToMerchant->value,
+            'payment_invoice' => W::PAYMENT,
+            'paid' => W::PAYMENT,
+            'store_created' => W::IGNORE,
+            'store_updated' => W::IGNORE,
+        ];
+    }
+
+    public function addressMax(): int
+    {
+        return 220;
+    }
+
+    /** Pathao takes 0.5 to 10 kg. */
+    public function maxWeightGrams(): int
+    {
+        return 10000;
+    }
+
+    public function webhookSecretHeader(): ?string
+    {
+        return 'X-PATHAO-Signature';
     }
 
     public function baseUrls(): array

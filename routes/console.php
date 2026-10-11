@@ -12,6 +12,7 @@ use App\Modules\Hrm\Console\Commands\DisableDueSeparations;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
 use App\Modules\Inventory\Actions\ProposeExpiredStockWriteOffs;
 use App\Modules\Purchasing\Console\Commands\RollAndRemindRecurringExpenses;
+use App\Modules\Sales\Couriers\Console\SyncCourierParcelsCommand;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -157,5 +158,14 @@ Schedule::command(SettleOnlinePayments::class)
 // already reserved on its order, so nothing waits on this but the books.
 Schedule::command(FollowGatewayRefunds::class)
     ->everyThirtyMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// ⭐ Courier parcels (courier hub slice 4, 11 Oct 2026): ask the couriers where
+// open parcels are, beside their webhooks, and settle CarryBee bookings whose
+// answer was lost by looking our reference up. Read-only at the courier, never
+// money: a delivered parcel still waits for a person to confirm it.
+Schedule::command(SyncCourierParcelsCommand::class)
+    ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->onOneServer();

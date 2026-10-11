@@ -3,6 +3,7 @@
 namespace App\Modules\Sales\Couriers\Providers;
 
 use App\Modules\Sales\Couriers\Drivers\CourierDriver;
+use App\Modules\Sales\Couriers\Tracking\StatusWord;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -91,6 +92,66 @@ abstract class CourierProviderDefinition
             'webhook' => null,
             'status_lookup' => null,
         ];
+    }
+
+    /**
+     * The courier's raw status words (webhook events and lookup answers alike,
+     * as StatusWord::slug spells them) mapped to ours, or to StatusWord::PAYMENT
+     * or StatusWord::IGNORE. A word not listed is UNKNOWN: logged, kept raw, and
+     * it moves nothing.
+     *
+     * @return array<string, string>
+     */
+    public function statusWords(): array
+    {
+        return [];
+    }
+
+    public function readStatus(string $raw): StatusWord
+    {
+        return StatusWord::read($raw, $this->statusWords());
+    }
+
+    /**
+     * Booking limits from the courier's documentation: the option key that
+     * holds the item type, the longest address and the heaviest parcel.
+     */
+    public function itemTypeOptionKey(): string
+    {
+        return 'item_type';
+    }
+
+    public function addressMax(): int
+    {
+        return 200;
+    }
+
+    public function maxWeightGrams(): int
+    {
+        return 25000;
+    }
+
+    /**
+     * @return array<string, string> value => label
+     */
+    public function optionChoices(string $key): array
+    {
+        foreach ($this->optionFields() as $field) {
+            if ($field['key'] === $key) {
+                return $field['choices'] ?? [];
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * The webhook header that carries our shared secret, or null when this
+     * courier has no webhook the ERP can take.
+     */
+    public function webhookSecretHeader(): ?string
+    {
+        return null;
     }
 
     public function allowsBaseUrl(string $environment, string $url): bool

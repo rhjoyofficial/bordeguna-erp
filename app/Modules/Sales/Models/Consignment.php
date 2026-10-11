@@ -6,9 +6,13 @@ use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Sales\Couriers\Enums\CourierStatus;
+use App\Modules\Sales\Couriers\Models\CourierAccount;
+use App\Modules\Sales\Couriers\Models\CourierShipmentEvent;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -43,7 +47,29 @@ class Consignment extends Model
         // and what its lines weigh by the product weights at booking.
         'declared_weight_auto_grams',
         'declared_weight_grams',
+        // ⭐ Courier hub slice 4: booked through the courier's API, and what
+        // the COURIER says since. None of it is money (ruling 1).
+        'courier_account_id',
+        'provider_consignment_id',
+        'merchant_order_ref',
+        'booked_via',
+        'provider_fee_quoted',
+        'provider_cod_fee_quoted',
+        'courier_status',
+        'courier_status_raw',
+        'courier_status_at',
+        'status_synced_at',
+        'courier_city_id',
+        'courier_zone_id',
+        'courier_area_id',
+        'hub_weight_grams',
+        'courier_collected_amount',
+        'courier_invoice_ref',
     ];
+
+    public const BOOKED_VIA_API = 'api';
+
+    public const BOOKED_VIA_MANUAL = 'manual';
 
     protected function casts(): array
     {
@@ -54,13 +80,20 @@ class Consignment extends Model
             'outcome_on' => 'date:Y-m-d',
             'declared_weight_auto_grams' => 'integer',
             'declared_weight_grams' => 'integer',
+            'courier_status' => CourierStatus::class,
+            'courier_status_at' => 'datetime',
+            'status_synced_at' => 'datetime',
+            'provider_fee_quoted' => 'decimal:4',
+            'provider_cod_fee_quoted' => 'decimal:4',
+            'courier_collected_amount' => 'decimal:4',
+            'hub_weight_grams' => 'integer',
         ];
     }
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['consignment_number', 'money_account_id', 'cod_amount', 'status', 'outcome_on', 'collected_amount', 'declared_weight_grams'])
+            ->logOnly(['consignment_number', 'money_account_id', 'cod_amount', 'status', 'outcome_on', 'collected_amount', 'declared_weight_grams', 'courier_status'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -76,6 +109,22 @@ class Consignment extends Model
     public function courier(): BelongsTo
     {
         return $this->belongsTo(MoneyAccount::class, 'money_account_id');
+    }
+
+    /** The courier account it was booked through (null when typed by hand). */
+    public function courierAccount(): BelongsTo
+    {
+        return $this->belongsTo(CourierAccount::class);
+    }
+
+    public function shipmentEvents(): HasMany
+    {
+        return $this->hasMany(CourierShipmentEvent::class)->orderByDesc('occurred_at')->orderByDesc('id');
+    }
+
+    public function isBookedViaApi(): bool
+    {
+        return $this->booked_via === self::BOOKED_VIA_API;
     }
 
     public function invoice(): BelongsTo

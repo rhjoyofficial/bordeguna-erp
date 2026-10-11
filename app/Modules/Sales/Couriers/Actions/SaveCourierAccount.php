@@ -50,6 +50,7 @@ class SaveCourierAccount
             'credentials' => ['nullable', 'array'],
             'credentials.*' => ['nullable', 'string', 'max:1000'],
             'options' => ['nullable', 'array'],
+            'integration_secret' => ['nullable', 'string', 'max:255'],
         ], [
             'label.unique' => 'Another account of this courier in this environment already has that label.',
         ])->validate();
@@ -95,8 +96,13 @@ class SaveCourierAccount
             'options' => $options,
         ];
 
+        // ⭐ Slice 4: Pathao's account-level webhook echo value. Blank keeps the
+        // saved one, like a credential. Not part of the tested fingerprint: it
+        // is what WE answer, not what we send.
+        $echo = trim((string) ($data['integration_secret'] ?? ''));
+
         if ($account === null) {
-            return CourierAccount::create($attributes + [
+            return CourierAccount::create($attributes + ($echo === '' ? [] : ['integration_secret' => $echo]) + [
                 'courier_provider_id' => $provider->id,
                 'credentials' => $credentials,
                 'is_active' => false,
@@ -106,6 +112,10 @@ class SaveCourierAccount
 
         if ($credentials !== $account->credentialValues()) {
             $attributes['credentials'] = $credentials;
+        }
+
+        if ($echo !== '') {
+            $account->forceFill(['integration_secret' => $echo]);
         }
 
         $account->fill($attributes)->save();

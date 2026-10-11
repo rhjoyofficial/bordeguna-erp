@@ -75,6 +75,9 @@ class CourierSettingsController extends Controller
                     'can_activate' => $a->canActivate(),
                     'stores' => $a->testedStores(),
                     'webhook_url' => $a->webhookUrl(),
+                    // ⚠ Whether it is set, never the value.
+                    'integration_secret_set' => $a->integrationSecret() !== null,
+                    'auto_post_outcomes' => (bool) $a->auto_post_outcomes,
                     'created_by' => $a->creator?->name,
                     'other_business_count' => (int) ($otherBusinesses[$a->id] ?? 0),
                     'link' => $link === null ? null : [
@@ -103,7 +106,7 @@ class CourierSettingsController extends Controller
 
     public function store(Request $request, SaveCourierAccount $save): RedirectResponse
     {
-        $account = $save->handle(null, $request->only(['provider', 'label', 'environment', 'base_url', 'credentials', 'options']), $request->user(), requireCredentials: true);
+        $account = $save->handle(null, $request->only(['provider', 'label', 'environment', 'base_url', 'credentials', 'options', 'integration_secret']), $request->user(), requireCredentials: true);
 
         return back()->with('success', "{$account->label} saved and left switched off. Test the connection, then activate it.");
     }
@@ -112,7 +115,7 @@ class CourierSettingsController extends Controller
     {
         $wasActive = $courierAccount->is_active;
 
-        $account = $save->handle($courierAccount, $request->only(['label', 'environment', 'base_url', 'credentials', 'options']), $request->user());
+        $account = $save->handle($courierAccount, $request->only(['label', 'environment', 'base_url', 'credentials', 'options', 'integration_secret']), $request->user());
 
         return back()->with('success', $wasActive && ! $account->is_active
             ? "{$account->label} saved. The credentials or address changed, so it is switched off until it passes a new test."
@@ -146,6 +149,29 @@ class CourierSettingsController extends Controller
         $courierAccount->forceFill(['is_active' => false, 'activated_at' => null])->save();
 
         return back()->with('success', "{$courierAccount->label} is switched off.");
+    }
+
+    /**
+     * The automatic money switch (ruling 1). ⚠ It can only be turned OFF, the
+     * emergency stop: turning it on waits for the evidence period and its exit
+     * criteria (reconciliation accuracy, exception rate), and nothing reads it
+     * yet. Every parcel's money is confirmed by a person.
+     */
+    public function autoPost(Request $request, CourierAccount $courierAccount): RedirectResponse
+    {
+        $on = $request->boolean('on');
+
+        if ($on) {
+            throw ValidationException::withMessages([
+                'auto_post_outcomes' => 'Automatic posting is available after the evidence period. Until then a person confirms every parcel.',
+            ]);
+        }
+
+        $courierAccount->forceFill(['auto_post_outcomes' => false, 'auto_post_switched_off_at' => now()])->save();
+
+        activity('couriers')->performedOn($courierAccount)->causedBy($request->user())->log('automatic outcome posting switched off');
+
+        return back()->with('success', "Automatic posting is off for {$courierAccount->label}. A person confirms every parcel.");
     }
 
     /**
