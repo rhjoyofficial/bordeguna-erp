@@ -165,7 +165,15 @@ final class Ageing
     {
         $on = $asAt->toDateString();
 
-        $bills = SupplierBill::query()->whereDate('bill_date', '<=', $on)->get();
+        // ⚠ A reversed bill is not owed from the day it was reversed, and only
+        // from then: the reversal journal is dated that day (ReverseSupplierBill),
+        // so an ageing as at an earlier date still shows the bill, exactly as the
+        // control account did on that date. Nothing has to be netted against it,
+        // because a paid or credited bill cannot be reversed at all.
+        $bills = SupplierBill::query()
+            ->whereDate('bill_date', '<=', $on)
+            ->where(fn (Builder $bill) => $bill->whereNull('reversed_at')->orWhereDate('reversed_at', '>', $on))
+            ->get();
         $included = $bills->pluck('id')->flip();
 
         $payments = SupplierPayment::query()->whereDate('paid_on', '<=', $on)->get();

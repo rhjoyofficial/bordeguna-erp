@@ -57,7 +57,9 @@ class DashboardController extends Controller
             'unpriced_sellable' => $canViewSales || $user->can('sales.prices.manage') ? $this->unpricedSellable() : null,
 
             'total_sales' => $canViewSales ? $this->sum(SalesInvoice::query()->trading(), 'total') : null,
-            'total_purchases' => $canViewPurchasing ? $this->sum(SupplierBill::query()->where('is_opening', false), 'total') : null,
+            // ⚠ A reversed bill was never a purchase: its journal is undone and it can
+            // carry no payment (ReverseSupplierBill refuses a paid or credited bill).
+            'total_purchases' => $canViewPurchasing ? $this->sum(SupplierBill::query()->where('is_opening', false)->whereNull('reversed_at'), 'total') : null,
             'total_sales_returns' => $canViewSales ? $this->sum(SalesReturn::query(), 'credit_total') : null,
             'total_purchase_returns' => $canViewPurchasing ? $this->sum(SupplierCreditNote::query(), 'total') : null,
 
@@ -201,7 +203,7 @@ class DashboardController extends Controller
             : collect();
 
         $purchasesByBucket = $withPurchases
-            ? SupplierBill::query()->where('is_opening', false)
+            ? SupplierBill::query()->where('is_opening', false)->whereNull('reversed_at')
                 ->where('bill_date', '>=', $buckets->first())
                 ->get(['bill_date', 'total'])
                 ->groupBy(fn (SupplierBill $bill) => $bucketKey($bill->bill_date))
