@@ -6,6 +6,7 @@ use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\MoneyAccount;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -32,10 +33,7 @@ final class MoneyAvailability
             return 0;
         }
 
-        $query = DB::table('journal_lines')
-            ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
-            ->where('journal_lines.business_id', $account->business_id)
-            ->where('journal_lines.account_id', $account->account_id);
+        $query = self::linesOf($account);
 
         if ($upTo !== null) {
             $query->whereDate('journals.journal_date', '<=', $upTo->toDateString());
@@ -61,10 +59,7 @@ final class MoneyAvailability
 
         $lowest = $running;
 
-        $later = DB::table('journal_lines')
-            ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
-            ->where('journal_lines.business_id', $account->business_id)
-            ->where('journal_lines.account_id', $account->account_id)
+        $later = self::linesOf($account)
             ->whereDate('journals.journal_date', '>', $date->toDateString())
             ->groupBy('journals.journal_date')
             ->orderBy('journals.journal_date')
@@ -77,6 +72,32 @@ final class MoneyAvailability
         }
 
         return $lowest;
+    }
+
+    /**
+     * The journal lines that belong to one money account, joined to their journal
+     * for its date.
+     *
+     * ⚠⚠ A courier or gateway account does NOT own its head. Every courier
+     * reports under 1145 and every gateway under 1146 (MoneyLedgers), so the head
+     * alone answered "what all couriers together hold" for each one of them:
+     * Pathao showed Pathao's money plus Steadfast's (Slice 0, D4). For those two
+     * kinds the line's own money_account_id says whose money it is. A cash, bank
+     * or MFS account owns its head outright, so the head is still the answer
+     * there, including any line posted to it without naming the account.
+     */
+    private static function linesOf(MoneyAccount $account): Builder
+    {
+        $query = DB::table('journal_lines')
+            ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
+            ->where('journal_lines.business_id', $account->business_id)
+            ->where('journal_lines.account_id', $account->account_id);
+
+        if ($account->isCourier() || $account->isGateway()) {
+            $query->where('journal_lines.money_account_id', $account->id);
+        }
+
+        return $query;
     }
 
     /** The lowest the balance may go, in paisa (zero or a negative overdraft). */
