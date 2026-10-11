@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Support;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Sales\Actions\CourierDoorDiscounts;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\Delivery;
@@ -75,13 +76,32 @@ final class OrderNextSteps
             ];
         }
 
-        if ($withCourier->isNotEmpty()) {
+        // ⚠ A door discount above the cap waits for the Owner, and the challan
+        // hides its answer form until then: say so instead of sending the
+        // person to a form that is not there (QA walk, 11 Oct 2026).
+        $discounts = $withCourier
+            ->mapWithKeys(fn (Delivery $delivery) => [$delivery->id => CourierDoorDiscounts::waitingFor($delivery->consignment)])
+            ->filter();
+        $waitingDiscount = $withCourier->filter(fn (Delivery $delivery) => $discounts->has($delivery->id));
+        $toAnswer = $withCourier->reject(fn (Delivery $delivery) => $discounts->has($delivery->id));
+
+        if ($toAnswer->isNotEmpty()) {
             $steps[] = [
                 'kind' => 'parcel',
                 'title' => "Record the courier's answer",
-                'detail' => $withCourier->pluck('delivery_number')->implode(', ').' '.($withCourier->count() === 1 ? 'is' : 'are').' with the courier. The invoice is made when their answer is recorded on the challan below.',
+                'detail' => $toAnswer->pluck('delivery_number')->implode(', ').' '.($toAnswer->count() === 1 ? 'is' : 'are').' with the courier. The invoice is made when their answer is recorded on the challan below.',
                 'href' => '#challans',
                 'can' => $user->can('sales.sell') && $user->can('sales.receipt.record') && $user->can('sales.returns.record'),
+            ];
+        }
+
+        if ($waitingDiscount->isNotEmpty()) {
+            $steps[] = [
+                'kind' => 'door_discount',
+                'title' => 'Decide the door discount',
+                'detail' => $waitingDiscount->pluck('delivery_number')->implode(', ').' '.($waitingDiscount->count() === 1 ? 'waits' : 'wait').' for the Owner to decide a discount given at the door. Nothing is posted until then.',
+                'href' => route('approvals.index'),
+                'can' => $discounts->contains(fn ($request) => $request->approvalRequest?->canBeActionedBy($user) ?? false),
             ];
         }
 

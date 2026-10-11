@@ -502,7 +502,8 @@ function ChallanCard({
                 <a href={route('sales.deliveries.print', challan.id)} target="_blank" rel="noreferrer" className="text-muted-foreground underline">
                     Print challan
                 </a>
-                {canDeliver && (
+                {/* A parcel's challan is billed by the courier's answer, never by hand. */}
+                {canDeliver && !consignment && (
                     <Link href={route('sales.invoices.create', { customer_id: customerId, delivery_id: challan.id })} className="underline">
                         Invoice this challan
                     </Link>
@@ -1083,7 +1084,7 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
 }
 
 interface NextStep {
-    kind: 'approve' | 'invoice' | 'parcel' | 'collect' | 'deliver' | 'done';
+    kind: 'approve' | 'invoice' | 'parcel' | 'door_discount' | 'collect' | 'deliver' | 'done';
     title: string;
     detail: string;
     href: string | null;
