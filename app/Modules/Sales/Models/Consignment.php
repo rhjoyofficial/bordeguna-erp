@@ -9,7 +9,9 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Sales\Couriers\Enums\CourierStatus;
 use App\Modules\Sales\Couriers\Models\CourierAccount;
 use App\Modules\Sales\Couriers\Models\CourierShipmentEvent;
+use App\Modules\Accounting\Models\PartyAdjustment;
 use App\Modules\Sales\Enums\ConsignmentStatus;
+use App\Modules\Sales\Enums\DoorResolution;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -65,6 +67,14 @@ class Consignment extends Model
         'hub_weight_grams',
         'courier_collected_amount',
         'courier_invoice_ref',
+        // ⭐ Courier hub slice 8: a difference at the door and how it was
+        // settled, and a courier answer dated into a closed month.
+        'door_resolution',
+        'door_difference',
+        'door_reason',
+        'party_adjustment_id',
+        'posted_on',
+        'cutoff_note',
     ];
 
     public const BOOKED_VIA_API = 'api';
@@ -87,13 +97,16 @@ class Consignment extends Model
             'provider_cod_fee_quoted' => 'decimal:4',
             'courier_collected_amount' => 'decimal:4',
             'hub_weight_grams' => 'integer',
+            'door_resolution' => DoorResolution::class,
+            'door_difference' => 'decimal:4',
+            'posted_on' => 'date:Y-m-d',
         ];
     }
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['consignment_number', 'money_account_id', 'cod_amount', 'status', 'outcome_on', 'collected_amount', 'declared_weight_grams', 'courier_status'])
+            ->logOnly(['consignment_number', 'money_account_id', 'cod_amount', 'status', 'outcome_on', 'posted_on', 'collected_amount', 'door_resolution', 'door_difference', 'door_reason', 'declared_weight_grams', 'courier_status'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -140,6 +153,24 @@ class Consignment extends Model
     public function salesReturn(): BelongsTo
     {
         return $this->belongsTo(SalesReturn::class, 'sales_return_id');
+    }
+
+    /** The discount or rounding written off against its invoice (slice 8). */
+    public function partyAdjustment(): BelongsTo
+    {
+        return $this->belongsTo(PartyAdjustment::class);
+    }
+
+    /** The claim on the courier for a parcel it lost or damaged (slice 8). */
+    public function lossClaim(): HasOne
+    {
+        return $this->hasOne(CourierLossClaim::class);
+    }
+
+    /** Door discounts waiting for, or decided by, the Owner (slice 8). */
+    public function doorDiscountRequests(): HasMany
+    {
+        return $this->hasMany(CourierDoorDiscountRequest::class);
     }
 
     public function createdBy(): BelongsTo

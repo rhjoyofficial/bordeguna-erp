@@ -12,6 +12,7 @@ use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
@@ -33,6 +34,7 @@ use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Actions\SendPaidOrderForApproval;
 use App\Modules\Sales\Couriers\Support\ParcelPresenter;
 use App\Modules\Sales\Enums\CustomerType;
+use App\Modules\Sales\Enums\DoorResolution;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
@@ -292,7 +294,7 @@ class SalesOrderController extends Controller
         // as dates, never a model handed to the page.
         $deliveries = Delivery::query()
             ->whereIn('id', $deliveryIds)
-            ->with(['lines.product:id,name,sku,weight_grams', 'lines.orderLine.order.lines', 'customer', 'consignment.courier:id,name', 'consignment.invoice:id,invoice_number', 'consignment.salesReturn:id,return_number', 'consignment.courierAccount.provider', 'consignment.shipmentEvents'])
+            ->with(['lines.product:id,name,sku,weight_grams', 'lines.orderLine.order.lines', 'customer', 'consignment.courier:id,name', 'consignment.invoice:id,invoice_number', 'consignment.salesReturn:id,return_number', 'consignment.courierAccount.provider', 'consignment.shipmentEvents', 'consignment.lossClaim'])
             ->orderBy('delivered_at')
             ->orderBy('id')
             ->get();
@@ -346,6 +348,8 @@ class SalesOrderController extends Controller
                         'collected_amount' => $consignment->collectedAmount()?->toTaka(),
                         'invoice' => $consignment->invoice?->only(['id', 'invoice_number']),
                         'sales_return' => $consignment->salesReturn?->only(['id', 'return_number']),
+                        // ⭐ Courier hub slice 8.
+                        'settlement' => ParcelPresenter::settlement($consignment),
                     ],
                 ];
             });
@@ -376,6 +380,14 @@ class SalesOrderController extends Controller
             'can_book_courier' => $canBook,
             'can_view_parcels' => $canViewParcels,
             'can_record_outcome' => $user->can('sales.sell') && $user->can('sales.receipt.record') && $user->can('sales.returns.record'),
+            // ⭐ Courier hub slice 8: settling what the courier reports.
+            'door_resolutions' => DoorResolution::options(),
+            'can_correct_price' => $user->can('sales.price.override'),
+            'can_report_loss' => $user->can('sales.sell') && $user->can('sales.returns.record'),
+            'can_settle_claims' => $user->can('sales.receipt.record'),
+            'books_open_from' => AccountingPeriod::current()?->is_unlocked === false
+                ? AccountingPeriod::current()->closed_through->copy()->addDay()->toDateString()
+                : null,
             // ⚠ C-SO-3: exposure SHOWN beside the credit limit, enforced by
             // nobody. The human decides.
             'exposure' => app(CustomerExposure::class)->handle($order->customer),

@@ -152,6 +152,12 @@ class RecordPartyAdjustment
                     JournalLineDraft::debit(Account::bySlug('discounts_allowed')->id, $total, $memo),
                     JournalLineDraft::credit($ar(), $total, $memo, $customer),
                 ],
+                // ⭐ Slice 8: the rounding head when it is mapped, else a
+                // discount allowed, as LedgerRounding would choose.
+                'rounding' => [
+                    JournalLineDraft::debit((AccountMapping::forKeyOn('accounting.rounding_difference', $on)?->account_id) ?? Account::bySlug('discounts_allowed')->id, $total, $memo),
+                    JournalLineDraft::credit($ar(), $total, $memo, $customer),
+                ],
                 'supplier_discount' => [
                     JournalLineDraft::debit($ap(), $total, $memo, $supplier),
                     JournalLineDraft::credit(Account::bySlug('discounts_received')->id, $total, $memo),

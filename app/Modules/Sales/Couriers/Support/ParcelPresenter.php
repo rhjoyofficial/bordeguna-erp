@@ -3,6 +3,7 @@
 namespace App\Modules\Sales\Couriers\Support;
 
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Sales\Actions\CourierDoorDiscounts;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Couriers\Booking\BookParcelThroughCourier;
 use App\Modules\Sales\Couriers\Booking\ParcelDraft;
@@ -193,9 +194,56 @@ class ParcelPresenter
             'returned' => ['outcome' => 'returned', 'collected' => '0.00', 'message' => $status === CourierStatus::Cancelled
                 ? 'Cancelled at the courier: record it as returned so the goods go back to stock.'
                 : 'Courier reports it returned to us: confirm when the goods are back.'],
-            'paid_return' => ['outcome' => 'returned', 'collected' => '0.00', 'message' => 'Courier reports a paid return'.($collected === null ? '' : " (collected {$collected})").'. A paid return cannot be recorded yet: record the goods as returned with 0 and tell whoever keeps the books about the money.'],
+            // ⭐ Slice 8 (ruling 2): recorded as one, the money is delivery income.
+            'paid_return' => ['outcome' => 'paid_return', 'collected' => $collected, 'message' => 'Courier reports a paid return'.($collected === null ? '' : " (collected {$collected})").': the goods come back and what the customer paid is delivery income. Confirm when the goods are back.'],
             default => null,
         };
+    }
+
+    /**
+     * ⭐ Slice 8: how the parcel's money was settled beyond the plain outcome:
+     * a difference at the door, a courier answer posted after a closed month,
+     * a loss claim, a door discount waiting for the Owner.
+     *
+     * @return array<string, mixed>
+     */
+    public static function settlement(Consignment $consignment): array
+    {
+        $claim = $consignment->lossClaim;
+        $waiting = $consignment->isBooked() ? CourierDoorDiscounts::waitingFor($consignment) : null;
+
+        return [
+            'posted_on' => $consignment->posted_on?->toDateString(),
+            'cutoff_note' => $consignment->cutoff_note,
+            'door_resolution' => $consignment->door_resolution?->value,
+            'door_resolution_label' => $consignment->door_resolution?->label(),
+            'door_difference' => $consignment->door_difference === null ? null : Money::ofTaka((string) $consignment->door_difference)->toTaka(),
+            'door_reason' => $consignment->door_reason,
+            'loss_claim' => $claim === null ? null : [
+                'id' => $claim->id,
+                'kind' => $claim->kind,
+                'kind_label' => $claim->kindLabel(),
+                'status' => $claim->status,
+                'status_label' => $claim->statusLabel(),
+                'value_at_cost' => Money::ofTaka((string) $claim->value_at_cost)->toTaka(),
+                'claimed_amount' => $claim->claimed()->toTaka(),
+                'compensation_received' => Money::ofTaka((string) $claim->compensation_received)->toTaka(),
+                'notes' => $claim->notes,
+                'closed' => $claim->isClosed(),
+                'paid_on_statement' => $claim->courier_statement_line_id !== null,
+                'adjustments' => $claim->adjustments()->with('approvalRequest')->get()->map(fn ($adjustment) => [
+                    'id' => $adjustment->id,
+                    'quantity' => (string) $adjustment->quantity,
+                    'status' => $adjustment->approvalRequest?->status?->value,
+                ])->values()->all(),
+            ],
+            'waiting_discount' => $waiting === null ? null : [
+                'id' => $waiting->id,
+                'discount' => $waiting->discount()->toTaka(),
+                'reason' => $waiting->reason,
+                'requested_by' => $waiting->requestedBy?->name,
+            ],
+        ];
     }
 
     /**

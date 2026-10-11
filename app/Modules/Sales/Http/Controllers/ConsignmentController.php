@@ -10,13 +10,20 @@ use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Sales\Actions\BookConsignment;
+use App\Modules\Sales\Actions\CourierDoorDiscounts;
+use App\Modules\Sales\Actions\CourierLossClaims;
 use App\Modules\Sales\Actions\RecordConsignmentOutcome;
 use App\Modules\Sales\Couriers\Support\ParcelPresenter;
 use App\Modules\Sales\Enums\ConsignmentStatus;
+use App\Modules\Sales\Enums\DoorResolution;
+use App\Modules\Sales\Exceptions\DoorDiscountNeedsApproval;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Consignment;
+use App\Modules\Sales\Models\CourierDoorDiscountRequest;
+use App\Modules\Sales\Models\CourierLossClaim;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Support\CourierStatements\CourierBalances;
+use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -134,7 +141,7 @@ class ConsignmentController extends Controller
         return back()->with('success', "Challan {$delivery->delivery_number} handed to {$consignment->courier->name} as {$consignment->consignment_number}.");
     }
 
-    public function outcome(Request $request, Consignment $consignment, RecordConsignmentOutcome $action): RedirectResponse
+    public function outcome(Request $request, Consignment $consignment, RecordConsignmentOutcome $action, CourierDoorDiscounts $discounts): RedirectResponse
     {
         $this->authorize('sales.sell');
 
@@ -147,6 +154,12 @@ class ConsignmentController extends Controller
             'lines.*.delivery_line_id' => ['required', 'integer'],
             'lines.*.taken' => ['nullable', 'numeric', 'min:0'],
             'lines.*.written_off' => ['nullable', 'numeric', 'min:0'],
+            // ⭐ Courier hub slice 8 (ruling 3): how a difference is settled.
+            'resolution' => ['nullable', Rule::enum(DoorResolution::class)],
+            'door_reason' => ['nullable', 'string', 'max:500'],
+            'prices' => ['nullable', 'array'],
+            'prices.*.delivery_line_id' => ['required', 'integer'],
+            'prices.*.unit_price' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $outcome = ConsignmentStatus::from($data['outcome']);
@@ -156,6 +169,11 @@ class ConsignmentController extends Controller
                 'written_off' => (string) ($line['written_off'] ?? '0'),
             ])
             ->all();
+        $prices = collect($data['prices'] ?? [])
+            ->filter(fn (array $line) => ($line['unit_price'] ?? null) !== null && $line['unit_price'] !== '')
+            ->mapWithKeys(fn (array $line) => [(int) $line['delivery_line_id'] => (string) $line['unit_price']])
+            ->all();
+        $resolution = isset($data['resolution']) ? DoorResolution::from($data['resolution']) : null;
 
         // ⚠ The outcome writes the documents those permissions guard, so it asks
         // for them: money collected is a receipt, goods back are a return.
@@ -167,6 +185,12 @@ class ConsignmentController extends Controller
             $this->authorize('sales.returns.record');
         }
 
+        if (CourierDoorDiscounts::waitingFor($consignment) !== null) {
+            throw ValidationException::withMessages([
+                'outcome' => 'A discount on this parcel is waiting for the Owner. It is recorded when the Owner decides.',
+            ]);
+        }
+
         try {
             $action->handle(
                 consignment: $consignment,
@@ -176,11 +200,114 @@ class ConsignmentController extends Controller
                 lines: $lines,
                 recordedBy: $request->user(),
                 note: $data['note'] ?? null,
+                resolution: $resolution,
+                reason: $data['door_reason'] ?? null,
+                prices: $prices,
             );
+        } catch (DoorDiscountNeedsApproval $needsOwner) {
+            // ⭐ Nothing was posted. The whole answer waits for the Owner.
+            $discounts->request($consignment, [
+                'outcome' => $outcome->value,
+                'outcome_on' => $data['outcome_on'],
+                'collected_amount' => (string) $data['collected_amount'],
+                'lines' => $lines,
+                'note' => $data['note'] ?? null,
+                'reason' => $data['door_reason'] ?? '',
+            ], $needsOwner, $request->user());
+
+            return back()->with('success', "{$needsOwner->why} The {$needsOwner->discount->format()} discount on {$consignment->consignment_number} was sent to the Owner; it is recorded when the Owner approves it.");
         } catch (PeriodClosedException|MappingNotFound|NoSellingPriceException|InvalidArgumentException $e) {
             throw ValidationException::withMessages(['outcome_on' => $e->getMessage()]);
         }
 
         return back()->with('success', "{$consignment->consignment_number} recorded as {$outcome->label()}.");
+    }
+
+    /**
+     * ⭐ Slice 8 (ruling 5): the courier lost or damaged the parcel.
+     */
+    public function reportLoss(Request $request, Consignment $consignment, CourierLossClaims $claims): RedirectResponse
+    {
+        $this->authorize('sales.sell');
+        $this->authorize('sales.returns.record');
+
+        $data = $request->validate([
+            'kind' => ['required', Rule::in(array_keys(CourierLossClaim::KINDS))],
+            'reported_on' => ['required', 'date'],
+            'claimed_amount' => ['required', 'numeric', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if (CourierDoorDiscounts::waitingFor($consignment) !== null) {
+            throw ValidationException::withMessages(['kind' => 'A discount on this parcel is waiting for the Owner. Ask the Owner to reject it first.']);
+        }
+
+        try {
+            $claim = $claims->report($consignment, $data['kind'], (string) $data['claimed_amount'], $data['reported_on'], $request->user(), $data['notes'] ?? null);
+        } catch (PeriodClosedException|MappingNotFound|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['reported_on' => $e->getMessage()]);
+        }
+
+        return back()->with('success', "{$consignment->consignment_number} recorded as {$claim->kindLabel()}; the claim on the courier is open and the write-off is with its approver.");
+    }
+
+    public function decideClaim(Request $request, CourierLossClaim $claim, CourierLossClaims $claims): RedirectResponse
+    {
+        $this->authorize('sales.receipt.record');
+
+        $data = $request->validate([
+            'decision' => ['required', Rule::in(['accepted', 'rejected'])],
+            'accepted_amount' => ['nullable', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $data['decision'] === 'accepted'
+            ? $claims->accept($claim, $request->user(), isset($data['accepted_amount']) ? (string) $data['accepted_amount'] : null, $data['note'] ?? null)
+            : $claims->reject($claim, $request->user(), (string) ($data['note'] ?? ''));
+
+        return back()->with('success', "Claim recorded as {$claim->fresh()->statusLabel()}.");
+    }
+
+    public function compensation(Request $request, CourierLossClaim $claim, CourierLossClaims $claims): RedirectResponse
+    {
+        $this->authorize('sales.receipt.record');
+
+        $data = $request->validate([
+            'money_account_id' => ['required', 'integer', 'exists:money_accounts,id'],
+            'amount' => ['required', 'numeric', 'gt:0'],
+            'received_on' => ['required', 'date'],
+            'reference' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        try {
+            $claims->compensationReceived($claim, MoneyAccount::query()->findOrFail($data['money_account_id']), (string) $data['amount'], $data['received_on'], $request->user(), $data['reference'] ?? null);
+        } catch (PeriodClosedException|MappingNotFound $e) {
+            throw ValidationException::withMessages(['received_on' => $e->getMessage()]);
+        }
+
+        return back()->with('success', 'Compensation recorded; the claim is closed.');
+    }
+
+    /**
+     * ⭐ Slice 8: the Owner's decision on a door discount above the cap.
+     */
+    public function decideDiscount(Request $request, CourierDoorDiscountRequest $discount, CourierDoorDiscounts $discounts): RedirectResponse
+    {
+        $data = $request->validate([
+            'decision' => ['required', Rule::in(['approve', 'reject'])],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            if ($data['decision'] === 'approve') {
+                $discounts->approve($discount, $request->user(), $data['note'] ?? null);
+            } else {
+                $discounts->reject($discount, $request->user(), $data['note'] ?? null);
+            }
+        } catch (PeriodClosedException|MappingNotFound|NoSellingPriceException|InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['approval' => $e->getMessage()]);
+        }
+
+        return back()->with('success', $data['decision'] === 'approve' ? 'Discount approved and the parcel recorded.' : 'Discount rejected; the parcel is still with the courier in the books.');
     }
 }

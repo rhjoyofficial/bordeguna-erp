@@ -26,6 +26,9 @@ class PartyAdjustment extends Model
         'customer_discount' => 'Discount allowed to a customer',
         'supplier_discount' => 'Discount received from a supplier',
         'set_off' => 'Set-off (customer and supplier are the same party)',
+        // ⭐ Courier hub slice 8: paisa a courier did not collect because the
+        // cash on delivery was rounded to whole taka.
+        'rounding' => 'Rounding difference on a customer invoice',
     ];
 
     protected $fillable = ['business_id', 'kind', 'adjusted_on', 'customer_id', 'supplier_id', 'amount', 'reason', 'created_by'];

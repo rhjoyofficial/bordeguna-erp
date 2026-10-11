@@ -132,7 +132,7 @@ final class CourierStatementReview
                     'problem' => $claimedElsewhere ? "Consignment {$line->consignment_number} has already been paid out on another statement." : self::oursProblem($line, $consignment),
                     'note' => $note,
                     'suggestion' => null,
-                    'fee_kind' => $consignment->status === ConsignmentStatus::Returned ? 'return' : 'delivery',
+                    'fee_kind' => $consignment->status->isReturn() ? 'return' : 'delivery',
                     'match_method' => $method,
                 ];
             }
@@ -168,6 +168,14 @@ final class CourierStatementReview
 
         $problems = [...$problems, ...$rows->pluck('problem')->filter()->values()->all()];
 
+        // ⭐ Risk 4: the share must add up from its own columns, or the journal
+        // below would only balance through a rounding line nobody asked for.
+        $shareEquation = self::equationOf($included->pluck('line'));
+
+        if (! $shareEquation['difference']->isZero()) {
+            $problems[] = "This business's parcels do not add up: collections less fees plus compensation and adjustments come to {$shareEquation['expected']->format()}, but the payout column says {$shareEquation['payout']->format()} (difference {$shareEquation['difference']->format()}). Check the file with the courier.";
+        }
+
         if ($included->isEmpty() && $problems === []) {
             $problems[] = 'No parcel on this statement belongs to this business.';
         }
@@ -187,6 +195,60 @@ final class CourierStatementReview
             compensation: $sum(fn (CourierStatementLine $line) => $line->compensationAmount()),
             adjustment: $sum(fn (CourierStatementLine $line) => $line->adjustmentAmount()),
         );
+    }
+
+    /**
+     * ⭐ Risk 4: collections - net fees - COD fees - additional charges
+     * + compensation + adjustment = payout, for any set of lines.
+     *
+     * @param  iterable<CourierStatementLine>  $lines
+     * @return array{collected: Money, net_fees: Money, cod_fees: Money, additional: Money, compensation: Money, adjustment: Money, expected: Money, payout: Money, difference: Money}
+     */
+    public static function equationOf(iterable $lines): array
+    {
+        $lines = collect($lines);
+        $sum = fn (callable $pick) => Money::sum($lines->map($pick));
+
+        $collected = $sum(fn (CourierStatementLine $line) => $line->collected());
+        $netFees = $sum(fn (CourierStatementLine $line) => $line->netFee());
+        $codFees = $sum(fn (CourierStatementLine $line) => $line->codFee());
+        $additional = $sum(fn (CourierStatementLine $line) => $line->additionalCharge());
+        $compensation = $sum(fn (CourierStatementLine $line) => $line->compensationAmount());
+        $adjustment = $sum(fn (CourierStatementLine $line) => $line->adjustmentAmount());
+        $payout = $sum(fn (CourierStatementLine $line) => $line->payoutAmount());
+
+        $expected = Money::ofMinor($collected->minor - $netFees->minor - $codFees->minor - $additional->minor + $compensation->minor + $adjustment->minor);
+
+        return [
+            'collected' => $collected,
+            'net_fees' => $netFees,
+            'cod_fees' => $codFees,
+            'additional' => $additional,
+            'compensation' => $compensation,
+            'adjustment' => $adjustment,
+            'expected' => $expected,
+            'payout' => $payout,
+            'difference' => Money::ofMinor($payout->minor - $expected->minor),
+        ];
+    }
+
+    /**
+     * The equation for the whole file and for this business's share, as the
+     * statement screen shows it.
+     *
+     * @return array<string, array<string, string|bool>>
+     */
+    public function equations(): array
+    {
+        $shape = fn (array $equation) => [
+            ...array_map(fn (Money $money) => $money->toTaka(), $equation),
+            'balanced' => $equation['difference']->isZero(),
+        ];
+
+        return [
+            'file' => $shape(self::equationOf($this->statement->lines)),
+            'share' => $shape(self::equationOf($this->rows->where('included', true)->pluck('line'))),
+        ];
     }
 
     public function canPost(): bool
@@ -233,7 +295,7 @@ final class CourierStatementReview
         }
 
         $courierSaysReturned = str_contains($status, 'return');
-        $erpSaysReturned = $consignment->status === ConsignmentStatus::Returned;
+        $erpSaysReturned = $consignment->status->isReturn();
 
         return $courierSaysReturned !== $erpSaysReturned
             ? "The courier calls it {$line->delivery_status}; the ERP recorded {$consignment->status->label()}."
