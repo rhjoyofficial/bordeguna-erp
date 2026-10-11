@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Commerce\Http\Controllers\GatewayRefundController;
+use App\Modules\Sales\Couriers\Http\Controllers\CourierSettingsController;
 use App\Modules\Sales\Http\Controllers\ConsignmentController;
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\CourierStatementController;
@@ -300,3 +301,19 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
             ->whereNumber(['order', 'refund'])->name('orders.gateway-refunds.check');
     });
 });
+
+// ⭐ Settings > Couriers (courier hub slice 1, 11 Oct 2026). Under /settings with
+// the other connections, owned by Sales. Owner only by default: credentials and
+// webhook secrets, never accounting authority (ChatGPT risk 11).
+Route::middleware(['web', 'auth', 'business', 'can:couriers.settings.manage'])
+    ->prefix('settings/couriers')->name('couriers.settings.')->group(function () {
+        Route::get('/', [CourierSettingsController::class, 'index'])->name('index');
+        Route::post('/', [CourierSettingsController::class, 'store'])->name('store');
+        Route::put('{courierAccount}', [CourierSettingsController::class, 'update'])->whereNumber('courierAccount')->name('update');
+        Route::post('{courierAccount}/test', [CourierSettingsController::class, 'test'])->whereNumber('courierAccount')->name('test');
+        Route::post('{courierAccount}/activate', [CourierSettingsController::class, 'activate'])->whereNumber('courierAccount')->name('activate');
+        Route::post('{courierAccount}/deactivate', [CourierSettingsController::class, 'deactivate'])->whereNumber('courierAccount')->name('deactivate');
+        Route::post('{courierAccount}/rotate-webhook-secret', [CourierSettingsController::class, 'rotateSecret'])->whereNumber('courierAccount')->name('rotate-secret');
+        Route::put('{courierAccount}/business', [CourierSettingsController::class, 'linkBusiness'])->whereNumber('courierAccount')->name('link');
+        Route::delete('{courierAccount}/business', [CourierSettingsController::class, 'unlinkBusiness'])->whereNumber('courierAccount')->name('unlink');
+    });

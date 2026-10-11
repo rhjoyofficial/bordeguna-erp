@@ -91,6 +91,7 @@ export interface SharedData {
     canViewRecruitment: boolean;
     canUseChat: boolean;
     canManageCrmSettings: boolean;
+    canManageCourierSettings: boolean;
     canManageReasons: boolean;
     canUseAssistant: boolean;
     assistantSuggestions: string[];

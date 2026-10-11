@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Providers;
 
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Sales\Console\Commands\ImportPriceList;
+use App\Modules\Sales\Couriers\Console\ImportCourierCredentials;
 use App\Modules\Sales\Reporting\Definitions\SalesByBrandReport;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -26,7 +27,7 @@ class SalesServiceProvider extends ServiceProvider
         $registry->register($this->app->make(SalesByBrandReport::class));
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ImportPriceList::class]);
+            $this->commands([ImportPriceList::class, ImportCourierCredentials::class]);
         }
     }
 }
