@@ -6,11 +6,15 @@ import { Head } from '@inertiajs/react';
  * The group cockpit (Module 6, Slice 4): each company's vital signs, read
  * from its own books at view time. Money between our own businesses is kept
  * out of the trade columns and shown on its own; across the group it cancels.
+ *
+ * ⚠ "Cash now" is cash, bank and MFS only. Money a courier has collected or a
+ * gateway has taken is owed to us, not spendable, so it has its own column.
  */
 interface CompanyRow {
     id: number;
     name: string;
     cash: number;
+    in_transit: number;
     receivables: number;
     payables: number;
     month_income: number;
@@ -20,7 +24,7 @@ interface CompanyRow {
 
 interface CockpitProps {
     companies: CompanyRow[];
-    totals: { cash: number; receivables: number; payables: number; month_income: number; month_expense: number; intercompany: number };
+    totals: { cash: number; in_transit: number; receivables: number; payables: number; month_income: number; month_expense: number; intercompany: number };
     month: string;
 }
 
@@ -43,6 +47,12 @@ export default function GroupCockpit({ companies, totals, month }: CockpitProps)
                             <tr className="bg-muted/50 text-left">
                                 <th className="px-3 py-2 font-medium">Company</th>
                                 <th className="px-3 py-2 text-right font-medium">Cash now</th>
+                                <th
+                                    className="px-3 py-2 text-right font-medium"
+                                    title="Collected by couriers or taken by the payment gateway and not yet paid out to us."
+                                >
+                                    With couriers / gateway
+                                </th>
                                 <th className="px-3 py-2 text-right font-medium">Owed to us</th>
                                 <th className="px-3 py-2 text-right font-medium">We owe</th>
                                 <th className="px-3 py-2 text-right font-medium">Income ({month})</th>
@@ -62,6 +72,7 @@ export default function GroupCockpit({ companies, totals, month }: CockpitProps)
                                     <td className={'px-3 py-2 text-right tabular-nums ' + (company.cash < 0 ? 'text-destructive' : '')}>
                                         {money(company.cash)}
                                     </td>
+                                    <td className="px-3 py-2 text-right tabular-nums">{money(company.in_transit)}</td>
                                     <td className="px-3 py-2 text-right tabular-nums">{money(company.receivables)}</td>
                                     <td className="px-3 py-2 text-right tabular-nums">{money(company.payables)}</td>
                                     <td className="px-3 py-2 text-right text-emerald-700 tabular-nums">{money(company.month_income)}</td>
@@ -76,6 +87,7 @@ export default function GroupCockpit({ companies, totals, month }: CockpitProps)
                                 <td className={'px-3 py-2 text-right tabular-nums ' + (totals.cash < 0 ? 'text-destructive' : '')}>
                                     {money(totals.cash)}
                                 </td>
+                                <td className="px-3 py-2 text-right tabular-nums">{money(totals.in_transit)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums">{money(totals.receivables)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums">{money(totals.payables)}</td>
                                 <td className="px-3 py-2 text-right text-emerald-700 tabular-nums">{money(totals.month_income)}</td>

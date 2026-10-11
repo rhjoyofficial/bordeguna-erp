@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Console\Commands;
 
 use App\Models\User;
+use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Foundation\Mail\MorningBriefingMail;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -62,10 +63,9 @@ class SendMorningBriefing extends Command
                 ->whereDate('invoice_date', $yesterday)
                 ->where('is_opening', false)
                 ->sum('total'), 2),
-            'cash_now' => round((float) DB::table('journal_lines')
-                ->where('business_id', $businessId)
-                ->whereNotNull('money_account_id')
-                ->sum('amount_minor') / 100, 2),
+            // ⚠ Cash, bank and MFS only: what a courier or gateway holds is owed
+            // to us, not cash we can spend this morning (MoneyLedgers::cashLines).
+            'cash_now' => round(MoneyLedgers::cashMinor($businessId) / 100, 2),
             'due_this_week' => DB::table('recurring_expense_occurrences')
                 ->join('recurring_expenses', 'recurring_expenses.id', '=', 'recurring_expense_occurrences.recurring_expense_id')
                 ->where('recurring_expense_occurrences.business_id', $businessId)

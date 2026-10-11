@@ -36,8 +36,15 @@ beforeEach(function () {
     // ⚠ The chart of accounts is CENTRAL (no business_id) - one chart,
     // every company posts to it; journal_lines carry the business. Books
     // per company: one September sale each, LaLaDia half the size.
+    // ⚠ The till's head sits under the Cash in Hand group: cash is read from
+    // the cash, bank and MFS heads, never from "any line with a money account"
+    // (courier and gateway money is not cash, Slice 0 D2).
+    $cashGroup = DB::table('accounts')->insertGetId([
+        'code' => '1110', 'name' => 'Cash in Hand', 'type' => 'asset', 'system_slug' => 'cash_accounts',
+        'is_postable' => 0, 'is_active' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ]);
     $cash = DB::table('accounts')->insertGetId([
-        'code' => '1110', 'name' => 'Cash', 'type' => 'asset',
+        'code' => '11101', 'name' => 'Cash', 'type' => 'asset', 'parent_id' => $cashGroup,
         'is_postable' => 1, 'is_active' => 1, 'created_at' => now(), 'updated_at' => now(),
     ]);
     $income = DB::table('accounts')->insertGetId([
@@ -103,7 +110,7 @@ it('shows money between our businesses on its own, cancelling across the group',
         'is_postable' => 1, 'is_active' => 1, 'system_slug' => 'due_from_businesses', 'created_at' => now(), 'updated_at' => now()]);
     $dueTo = DB::table('accounts')->insertGetId(['code' => '2190', 'name' => 'Due to Other Businesses', 'type' => 'liability',
         'is_postable' => 1, 'is_active' => 1, 'system_slug' => 'due_to_businesses', 'created_at' => now(), 'updated_at' => now()]);
-    $cash = DB::table('accounts')->where('code', '1110')->value('id');
+    $cash = DB::table('accounts')->where('code', '11101')->value('id');
 
     foreach ([[$this->bdg->id, $dueFrom, 300_000], [$this->lld->id, $dueTo, -300_000]] as [$biz, $account, $minor]) {
         $journal = DB::table('journals')->insertGetId([

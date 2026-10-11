@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\MoneyLedgers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,7 @@ class GroupCockpitController extends Controller
             'companies' => $companies,
             'totals' => [
                 'cash' => round($companies->sum('cash'), 2),
+                'in_transit' => round($companies->sum('in_transit'), 2),
                 'receivables' => round($companies->sum('receivables'), 2),
                 'payables' => round($companies->sum('payables'), 2),
                 'month_income' => round($companies->sum('month_income'), 2),
@@ -57,11 +59,11 @@ class GroupCockpitController extends Controller
      */
     private function companyFacts(int $businessId, string $monthStart, string $today): array
     {
-        // Cash: every money account's ledger balance, the forecast's rule.
-        $cash = (float) DB::table('journal_lines')
-            ->where('business_id', $businessId)
-            ->whereNotNull('money_account_id')
-            ->sum('amount_minor') / 100;
+        // Cash: what sits on the cash, bank and MFS heads, the forecast's rule.
+        // ⚠ Money a courier or gateway is holding is NOT cash (it is owed to us
+        // and cannot pay anybody yet), so it is its own figure beside it.
+        $cash = MoneyLedgers::cashMinor($businessId) / 100;
+        $inTransit = MoneyLedgers::inTransitMinor($businessId) / 100;
 
         // Receivables and payables: the ageing identity restated raw.
         $receivables = (float) DB::table('sales_invoices')->where('business_id', $businessId)->sum('total')
@@ -115,6 +117,7 @@ class GroupCockpitController extends Controller
 
         return [
             'cash' => round($cash, 2),
+            'in_transit' => round($inTransit, 2),
             'receivables' => round($receivables, 2),
             'payables' => round($payables, 2),
             'month_income' => round(-$monthLines('income'), 2) + 0.0, // + 0.0: no "-0.00" on a quiet month

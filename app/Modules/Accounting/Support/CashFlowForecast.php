@@ -35,10 +35,9 @@ class CashFlowForecast
         $businessId = app(BusinessContext::class)->id();
         $own = fn ($query, string $table) => $query->where("{$table}.business_id", $businessId);
 
-        // Opening cash: every money account's ledger balance, right now.
-        $openingCash = (float) $own(DB::table('journal_lines'), 'journal_lines')
-            ->whereNotNull('money_account_id')
-            ->sum('amount_minor') / 100;
+        // Opening cash: the cash, bank and MFS heads, right now. ⚠ Not courier or
+        // gateway money (1145/1146): that is a receivable until it is paid out.
+        $openingCash = MoneyLedgers::cashMinor((int) $businessId) / 100;
 
         // ── Money in: unpaid invoices by due date. Outstanding = total minus
         // receipts and credit allocations - the ageing identity, restated.

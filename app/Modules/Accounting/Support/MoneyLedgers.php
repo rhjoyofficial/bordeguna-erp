@@ -7,6 +7,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -76,6 +77,55 @@ final class MoneyLedgers
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->all();
+    }
+
+    /**
+     * The ledger heads money in transit sits on rather than in hand: 1145
+     * Receivable from Couriers and 1146 Receivable from Payment Gateways.
+     */
+    public const IN_TRANSIT_SLUGS = ['courier_receivable', 'gateway_receivable'];
+
+    /**
+     * One business's journal lines on its cash, bank and MFS heads: the money it
+     * actually holds and can spend today.
+     *
+     * ⚠⚠ NOT "every line with a money account". Courier and gateway accounts are
+     * money accounts too, and their lines carry a money_account_id, but cash a
+     * courier has collected and not paid out (1145), or a gateway has taken and
+     * not settled (1146), is a receivable: it cannot pay a supplier this morning.
+     * Counting it as cash overstated the cockpit, the forecast's opening balance
+     * and the morning briefing (Slice 0, D2).
+     *
+     * ⚠ Read from the ledger head, so a line on a bank head is cash whether or
+     * not it named its money account, which is what the balance sheet says.
+     */
+    public static function cashLines(int $businessId): QueryBuilder
+    {
+        return DB::table('journal_lines')
+            ->join('accounts', 'accounts.id', '=', 'journal_lines.account_id')
+            ->where('journal_lines.business_id', $businessId)
+            ->whereIn('accounts.parent_id', self::groupIds());
+    }
+
+    /** One business's lines on 1145 and 1146: money with couriers and gateways, owed to it. */
+    public static function inTransitLines(int $businessId): QueryBuilder
+    {
+        return DB::table('journal_lines')
+            ->join('accounts', 'accounts.id', '=', 'journal_lines.account_id')
+            ->where('journal_lines.business_id', $businessId)
+            ->whereIn('accounts.system_slug', self::IN_TRANSIT_SLUGS);
+    }
+
+    /** What one business holds in cash, bank and MFS right now, in paisa. */
+    public static function cashMinor(int $businessId): int
+    {
+        return (int) self::cashLines($businessId)->sum('journal_lines.amount_minor');
+    }
+
+    /** What couriers and gateways hold for one business right now, in paisa. */
+    public static function inTransitMinor(int $businessId): int
+    {
+        return (int) self::inTransitLines($businessId)->sum('journal_lines.amount_minor');
     }
 
     /** True for a head sitting directly under one of the three money groups. */

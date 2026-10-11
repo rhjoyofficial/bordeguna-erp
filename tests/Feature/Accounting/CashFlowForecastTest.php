@@ -33,7 +33,10 @@ beforeEach(function () {
     $this->viewer->assignRole('FlowViewer');
 
     // Opening cash: 50,000 sitting in the bank.
-    $gl = Account::create(['code' => '1120', 'name' => 'Cash at Bank', 'type' => 'asset', 'is_postable' => true]);
+    // ⚠ Under the Bank Accounts group: opening cash is read from the cash, bank
+    // and MFS heads, not from courier or gateway money (Slice 0 D2).
+    $group = Account::forceCreate(['code' => '1120', 'name' => 'Bank Accounts', 'type' => 'asset', 'is_postable' => false, 'system_slug' => 'bank_accounts']);
+    $gl = Account::create(['code' => '11201', 'name' => 'Cash at Bank', 'type' => 'asset', 'is_postable' => true, 'parent_id' => $group->id]);
     $this->bank = MoneyAccount::create([
         'business_id' => $this->business->id,
         'name' => 'BRAC Bank', 'type' => 'bank', 'account_id' => $gl->id,
