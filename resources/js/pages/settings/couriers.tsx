@@ -7,7 +7,7 @@ import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { Truck } from 'lucide-react';
 import { useState } from 'react';
 
@@ -440,7 +440,12 @@ export default function CourierSettings() {
                             title="Couriers"
                             description="Courier accounts, their credentials, the pickup store each business uses and where the cash on delivery is owed."
                         />
-                        {!adding && <Button onClick={() => setAdding(true)}>Add a courier account</Button>}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button variant="outline" asChild>
+                                <Link href={route('couriers.settings.locations.index')}>Locations and bands</Link>
+                            </Button>
+                            {!adding && <Button onClick={() => setAdding(true)}>Add a courier account</Button>}
+                        </div>
                     </div>
 
                     {errors.activate && <InputError message={errors.activate} />}
