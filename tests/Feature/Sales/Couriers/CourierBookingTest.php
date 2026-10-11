@@ -576,21 +576,30 @@ it('says to cancel in the Pathao panel when Pathao does not take the cancel, and
         ->and($consignment->fresh()->courier_status)->toBe(CourierStatus::Booked);
 });
 
-it('checks the webhook secret, answers the CarryBee handshake with the header echoed, and logs unknown parcels', function () {
+it('pairs with CarryBee by echoing its own integration value, then accepts only that value or our secret', function () {
     $account = cbkAccount('carrybee', $this->business, $this->courierMoney);
     $secret = $account->webhookSecretValue();
     $url = '/webhooks/couriers/'.$account->uuid;
+    $carrybee = '40489fe0-9386-4fc9-8e92-2b2fcb9d451c';
 
+    // No header at all is refused; an unknown account is not found.
     $this->postJson($url, ['event' => 'webhook.integration'])->assertStatus(401);
-    $this->postJson($url, ['event' => 'webhook.integration'], ['X-CB-Webhook-Integration-Header' => 'wrong'])->assertStatus(401);
-    $this->postJson('/webhooks/couriers/'.fake()->uuid(), ['event' => 'webhook.integration'], ['X-CB-Webhook-Integration-Header' => $secret])->assertNotFound();
+    $this->postJson('/webhooks/couriers/'.fake()->uuid(), ['event' => 'webhook.integration'], ['X-CB-Webhook-Integration-Header' => $carrybee])->assertNotFound();
 
-    $this->postJson($url, ['event' => 'webhook.integration'], ['X-CB-Webhook-Integration-Header' => $secret])
+    // The handshake carries CarryBee's OWN value (verified on its form): echoed with 202 and kept.
+    $this->postJson($url, ['event' => 'webhook.integration'], ['X-CB-Webhook-Integration-Header' => $carrybee])
         ->assertStatus(202)
-        ->assertHeader('X-CB-Webhook-Integration-Header', $secret);
+        ->assertHeader('X-CB-Webhook-Integration-Header', $carrybee);
+    expect($account->fresh()->integrationSecret())->toBe($carrybee);
 
-    $this->postJson($url, ['event' => 'order.delivered', 'consignment_id' => 'NOT-OURS'], ['X-CB-Webhook-Integration-Header' => $secret])
-        ->assertStatus(202);
+    // A second handshake with another value does not replace the paired one.
+    $this->postJson($url, ['event' => 'webhook.integration'], ['X-CB-Webhook-Integration-Header' => 'someone-else'])->assertStatus(202);
+    expect($account->fresh()->integrationSecret())->toBe($carrybee);
+
+    // Events: CarryBee's value or our secret are accepted; anything else is refused.
+    $this->postJson($url, ['event' => 'order.delivered', 'consignment_id' => 'NOT-OURS'], ['X-CB-Webhook-Integration-Header' => $carrybee])->assertStatus(202);
+    $this->postJson($url, ['event' => 'order.delivered', 'consignment_id' => 'NOT-OURS'], ['X-CB-Webhook-Integration-Header' => $secret])->assertStatus(202);
+    $this->postJson($url, ['event' => 'order.delivered', 'consignment_id' => 'NOT-OURS'], ['X-CB-Webhook-Integration-Header' => 'wrong'])->assertStatus(401);
     expect(CourierShipmentEvent::query()->withoutGlobalScopes()->count())->toBe(0);
 });
 
