@@ -13,7 +13,9 @@ import type { FeedEntry } from './use-widget-feed';
 /**
  * The headline figures of each role dashboard, on the brand gradient (Joy,
  * 11 Oct 2026: "make sure dashboard looks colorful, so the main area catch
- * eyes"). Each tile wears its own domain colour on the brand band.
+ * eyes"). One calm band with neutral glass tiles; the only colour on a tile
+ * is its small icon (and the green or red change chip). Joy, 11 Oct: coloured
+ * tiles looked loud, "just simple coloring".
  *
  * ⚠⚠ NO NEW QUERY. Every figure here is read from a widget already on the page
  * and from the same live entry the card below uses, so the hero can never
@@ -242,16 +244,12 @@ function HeroTile({ recipe, widget, entry, index }: { recipe: Recipe; widget: Da
 
     const body = (
         <>
-            {/* The tile's own colour: a lit top edge over a tinted glass panel. */}
-            <span
-                aria-hidden
-                className="absolute inset-x-3 top-0 h-[3px] rounded-b-full bg-gradient-to-r from-[var(--acc-light)] to-[var(--acc-2)]"
-            />
             <div className="flex items-center gap-2.5">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--acc)] to-[var(--acc-2)] shadow-[0_6px_16px_-6px_var(--acc)] ring-1 ring-white/25">
-                    <Icon className="size-[18px]" aria-hidden />
+                {/* The tile's only colour: its icon, in the domain's strong step on a white disc. */}
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/95 text-[var(--acc-strong)] shadow-sm">
+                    <Icon className="size-4" aria-hidden />
                 </span>
-                <span className="min-w-0 truncate text-sm font-semibold">{label}</span>
+                <span className="min-w-0 truncate text-sm font-medium text-white/90">{label}</span>
             </div>
 
             {figure === null ? (
@@ -298,8 +296,8 @@ function HeroTile({ recipe, widget, entry, index }: { recipe: Recipe; widget: Da
                         ) : figure.segments && figure.segments.length > 0 ? (
                             <Segments segments={figure.segments} unit={figure.unit} />
                         ) : allClear ? (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-black/15 px-2.5 py-1 text-xs font-medium ring-1 ring-[var(--acc-light)]/40">
-                                <CircleCheck className="size-3.5 text-[var(--acc-light)]" aria-hidden /> {t('dash.hero.all_clear')}
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium ring-1 ring-white/20">
+                                <CircleCheck className="size-3.5" aria-hidden /> {t('dash.hero.all_clear')}
                             </span>
                         ) : null}
                         {figure.caption && <p className="mt-1.5 truncate text-xs text-white/90">{figure.caption}</p>}
@@ -315,20 +313,13 @@ function HeroTile({ recipe, widget, entry, index }: { recipe: Recipe; widget: Da
         </>
     );
 
-    /*
-      ⚠ Contrast: the tint is the accent at most 48% over a darkened base, so
-      white text stays above 4.5:1 even on amber, the lightest accent.
-    */
+    // Neutral glass on the brand band; the accent class only feeds the icon.
     const tileClass = cn(
         `dash-acc-${accent}`,
-        'group relative block h-full overflow-hidden rounded-xl p-3.5 ring-1 ring-[color-mix(in_oklab,var(--acc-light)_45%,transparent)] sm:p-4',
-        'transition-[transform,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-safe:hover:-translate-y-0.5',
-        'hover:shadow-[0_14px_30px_-14px_var(--acc)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
+        'group block h-full rounded-xl bg-[var(--dash-hero-tile)] p-3.5 ring-1 ring-[var(--dash-hero-ring)] sm:p-4',
+        'transition-[background-color,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-[var(--dash-hero-tile-hover)] motion-safe:hover:-translate-y-0.5',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
     );
-    const tileStyle = {
-        backgroundImage:
-            'radial-gradient(130% 90% at 0% 0%, color-mix(in oklab, var(--acc) 48%, transparent), transparent 75%), linear-gradient(160deg, color-mix(in oklab, var(--acc) 36%, rgba(0, 0, 0, 0.18)), color-mix(in oklab, var(--acc) 14%, rgba(0, 0, 0, 0.18)))',
-    };
 
     return (
         <motion.div
@@ -338,13 +329,11 @@ function HeroTile({ recipe, widget, entry, index }: { recipe: Recipe; widget: Da
             className="h-full"
         >
             {widget.drill_down ? (
-                <Link href={widget.drill_down} className={tileClass} style={tileStyle} aria-label={t('dash.hero.open', { label, value: fullText })}>
+                <Link href={widget.drill_down} className={tileClass} aria-label={t('dash.hero.open', { label, value: fullText })}>
                     {body}
                 </Link>
             ) : (
-                <div className={tileClass} style={tileStyle}>
-                    {body}
-                </div>
+                <div className={tileClass}>{body}</div>
             )}
         </motion.div>
     );
@@ -353,7 +342,6 @@ function HeroTile({ recipe, widget, entry, index }: { recipe: Recipe; widget: Da
 /**
  * ui-motion: the line draws itself once (Masking: pathLength), so the eye
  * follows the trend in time order. Under reduced motion it is simply there.
- * Drawn in the tile's own pale accent.
  */
 function Sparkline({ values, label, delay }: { values: number[]; label: string; delay: number }) {
     const reduce = useReducedMotion();
@@ -379,8 +367,8 @@ function Sparkline({ values, label, delay }: { values: number[]; label: string; 
             >
                 <defs>
                     <linearGradient id={`spark-${id}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="var(--acc-light)" stopOpacity={0.45} />
-                        <stop offset="100%" stopColor="var(--acc-light)" stopOpacity={0} />
+                        <stop offset="0%" stopColor="white" stopOpacity={0.32} />
+                        <stop offset="100%" stopColor="white" stopOpacity={0} />
                     </linearGradient>
                 </defs>
                 <motion.path
@@ -393,7 +381,7 @@ function Sparkline({ values, label, delay }: { values: number[]; label: string; 
                 <motion.path
                     d={line}
                     fill="none"
-                    stroke="var(--acc-light)"
+                    stroke="white"
                     strokeWidth={2}
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -405,7 +393,7 @@ function Sparkline({ values, label, delay }: { values: number[]; label: string; 
             {/* The latest point, as an HTML dot so the stretched viewBox cannot squash it. */}
             <span
                 aria-hidden
-                className="absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--acc-light)] shadow-[0_0_0_3px_rgba(255,255,255,0.25)]"
+                className="absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_3px_rgba(255,255,255,0.25)]"
                 style={{ left: `${(lx / W) * 100}%`, top: `${(ly / 28) * 100}%` }}
             />
         </div>
@@ -419,14 +407,14 @@ function ProgressLine({ share }: { share: number }) {
     return (
         <div className="flex items-center gap-2">
             <div
-                className="h-2 flex-1 overflow-hidden rounded-full bg-black/20"
+                className="h-2 flex-1 overflow-hidden rounded-full bg-white/18"
                 role="progressbar"
                 aria-valuenow={Math.round(clamped * 100)}
                 aria-valuemin={0}
                 aria-valuemax={100}
             >
                 <motion.div
-                    className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[var(--acc-light)] to-white"
+                    className="h-full w-full origin-left rounded-full bg-white"
                     initial={reduce ? false : { scaleX: 0 }}
                     animate={{ scaleX: clamped }}
                     transition={reduce ? { duration: 0 } : { duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.3 }}
@@ -437,7 +425,7 @@ function ProgressLine({ share }: { share: number }) {
     );
 }
 
-/** Each part as its own segment in the tile's colour; the words sit under it, never colour alone. */
+/** Each part as its own segment; the words sit under it, never colour alone. */
 function Segments({ segments, unit }: { segments: { label: string; value: number }[]; unit: Unit }) {
     const total = segments.reduce((sum, s) => sum + s.value, 0) || 1;
     const top = [...segments].sort((a, b) => b.value - a.value).slice(0, 2);
@@ -446,11 +434,7 @@ function Segments({ segments, unit }: { segments: { label: string; value: number
         <div>
             <div className="flex h-2 gap-0.5 overflow-hidden rounded-full" aria-hidden>
                 {segments.map((s, i) => (
-                    <span
-                        key={s.label}
-                        className="h-full rounded-full bg-[var(--acc-light)]"
-                        style={{ flexGrow: s.value / total, opacity: 1 - (i % 4) * 0.22 }}
-                    />
+                    <span key={s.label} className="h-full rounded-full bg-white" style={{ flexGrow: s.value / total, opacity: 1 - (i % 4) * 0.2 }} />
                 ))}
             </div>
             <p className="mt-1.5 truncate text-xs text-white/90">

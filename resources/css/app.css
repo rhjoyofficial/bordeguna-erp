@@ -725,138 +725,133 @@
 /*
   Accents, named by colour (palette.ts decides which widget wears which).
   --acc / --acc-2: icon tile gradient, top stripe, bars (non-text, 3:1+).
-  --acc-ink: accent-coloured text, the 800 step in light and the 300 step in
-    dark, so it stays AA even on the tinted mini tiles.
-  --acc-light: a pale step of the hue, for marks drawn on the dark hero.
-  --acc-wash: the tint washed down the card; --acc-tile: the mini tiles.
+  --acc-ink: accent-coloured text (links), the 800 step in light and the 300
+    step in dark, AA on the card.
+  --acc-light: a pale step of the hue.
+  --acc-wash: a faint tint for hover rows and empty notes only, never a card
+    background (Joy, 11 Oct: tinted cards and tiles looked loud).
+  --acc-strong: the 700 step, set in light only so it holds in dark too: the
+    icon on the hero's white disc (AA on white in both modes).
 */
 .dash-acc-emerald {
+    --acc-strong: #047857;
     --acc: #059669;
     --acc-2: #0d9488;
     --acc-ink: #065f46;
     --acc-light: #a7f3d0;
-    --acc-wash: color-mix(in oklab, #059669 15%, transparent);
-    --acc-tile: color-mix(in oklab, #059669 13%, var(--card));
+    --acc-wash: color-mix(in oklab, #059669 9%, transparent);
 }
 .dash-acc-teal {
+    --acc-strong: #0f766e;
     --acc: #0d9488;
     --acc-2: #0891b2;
     --acc-ink: #115e59;
     --acc-light: #99f6e4;
-    --acc-wash: color-mix(in oklab, #0d9488 15%, transparent);
-    --acc-tile: color-mix(in oklab, #0d9488 13%, var(--card));
+    --acc-wash: color-mix(in oklab, #0d9488 9%, transparent);
 }
 .dash-acc-sky {
+    --acc-strong: #0369a1;
     --acc: #0284c7;
     --acc-2: #0ea5e9;
     --acc-ink: #075985;
     --acc-light: #bae6fd;
-    --acc-wash: color-mix(in oklab, #0284c7 15%, transparent);
-    --acc-tile: color-mix(in oklab, #0284c7 13%, var(--card));
+    --acc-wash: color-mix(in oklab, #0284c7 9%, transparent);
 }
 .dash-acc-indigo {
+    --acc-strong: #4338ca;
     --acc: #4f46e5;
     --acc-2: #6366f1;
     --acc-ink: #3730a3;
     --acc-light: #c7d2fe;
-    --acc-wash: color-mix(in oklab, #4f46e5 15%, transparent);
-    --acc-tile: color-mix(in oklab, #4f46e5 13%, var(--card));
+    --acc-wash: color-mix(in oklab, #4f46e5 9%, transparent);
 }
 .dash-acc-violet {
+    --acc-strong: #6d28d9;
     --acc: #7c3aed;
     --acc-2: #a855f7;
     --acc-ink: #5b21b6;
     --acc-light: #ddd6fe;
-    --acc-wash: color-mix(in oklab, #7c3aed 15%, transparent);
-    --acc-tile: color-mix(in oklab, #7c3aed 13%, var(--card));
+    --acc-wash: color-mix(in oklab, #7c3aed 9%, transparent);
 }
 .dash-acc-amber {
+    --acc-strong: #b45309;
     --acc: #d97706;
     --acc-2: #ea580c;
     --acc-ink: #92400e;
     --acc-light: #fde68a;
-    --acc-wash: color-mix(in oklab, #d97706 15%, transparent);
-    --acc-tile: color-mix(in oklab, #d97706 13%, var(--card));
+    --acc-wash: color-mix(in oklab, #d97706 9%, transparent);
 }
 .dash-acc-rose {
+    --acc-strong: #be123c;
     --acc: #e11d48;
     --acc-2: #db2777;
     --acc-ink: #9f1239;
     --acc-light: #fecdd3;
-    --acc-wash: color-mix(in oklab, #e11d48 15%, transparent);
-    --acc-tile: color-mix(in oklab, #e11d48 13%, var(--card));
+    --acc-wash: color-mix(in oklab, #e11d48 9%, transparent);
 }
 .dash-acc-red {
+    --acc-strong: #b91c1c;
     --acc: #dc2626;
     --acc-2: #ea580c;
     --acc-ink: #991b1b;
     --acc-light: #fecaca;
-    --acc-wash: color-mix(in oklab, #dc2626 15%, transparent);
-    --acc-tile: color-mix(in oklab, #dc2626 13%, var(--card));
+    --acc-wash: color-mix(in oklab, #dc2626 9%, transparent);
 }
 .dark .dash-acc-emerald {
     --acc: #10b981;
     --acc-2: #14b8a6;
     --acc-ink: #6ee7b7;
     --acc-light: #a7f3d0;
-    --acc-wash: color-mix(in oklab, #10b981 18%, transparent);
-    --acc-tile: color-mix(in oklab, #10b981 16%, var(--card));
+    --acc-wash: color-mix(in oklab, #10b981 12%, transparent);
 }
 .dark .dash-acc-teal {
     --acc: #14b8a6;
     --acc-2: #06b6d4;
     --acc-ink: #5eead4;
     --acc-light: #99f6e4;
-    --acc-wash: color-mix(in oklab, #14b8a6 18%, transparent);
-    --acc-tile: color-mix(in oklab, #14b8a6 16%, var(--card));
+    --acc-wash: color-mix(in oklab, #14b8a6 12%, transparent);
 }
 .dark .dash-acc-sky {
     --acc: #0ea5e9;
     --acc-2: #38bdf8;
     --acc-ink: #7dd3fc;
     --acc-light: #bae6fd;
-    --acc-wash: color-mix(in oklab, #0ea5e9 18%, transparent);
-    --acc-tile: color-mix(in oklab, #0ea5e9 16%, var(--card));
+    --acc-wash: color-mix(in oklab, #0ea5e9 12%, transparent);
 }
 .dark .dash-acc-indigo {
     --acc: #6366f1;
     --acc-2: #818cf8;
     --acc-ink: #a5b4fc;
     --acc-light: #c7d2fe;
-    --acc-wash: color-mix(in oklab, #6366f1 18%, transparent);
-    --acc-tile: color-mix(in oklab, #6366f1 16%, var(--card));
+    --acc-wash: color-mix(in oklab, #6366f1 12%, transparent);
 }
 .dark .dash-acc-violet {
     --acc: #8b5cf6;
     --acc-2: #a855f7;
     --acc-ink: #c4b5fd;
     --acc-light: #ddd6fe;
-    --acc-wash: color-mix(in oklab, #8b5cf6 18%, transparent);
-    --acc-tile: color-mix(in oklab, #8b5cf6 16%, var(--card));
+    --acc-wash: color-mix(in oklab, #8b5cf6 12%, transparent);
 }
 .dark .dash-acc-amber {
     --acc: #f59e0b;
     --acc-2: #f97316;
     --acc-ink: #fcd34d;
     --acc-light: #fde68a;
-    --acc-wash: color-mix(in oklab, #f59e0b 18%, transparent);
-    --acc-tile: color-mix(in oklab, #f59e0b 16%, var(--card));
+    --acc-wash: color-mix(in oklab, #f59e0b 12%, transparent);
 }
 .dark .dash-acc-rose {
     --acc: #f43f5e;
     --acc-2: #ec4899;
     --acc-ink: #fda4af;
     --acc-light: #fecdd3;
-    --acc-wash: color-mix(in oklab, #f43f5e 18%, transparent);
-    --acc-tile: color-mix(in oklab, #f43f5e 16%, var(--card));
+    --acc-wash: color-mix(in oklab, #f43f5e 12%, transparent);
 }
 .dark .dash-acc-red {
     --acc: #ef4444;
     --acc-2: #f97316;
     --acc-ink: #fca5a5;
     --acc-light: #fecaca;
-    --acc-wash: color-mix(in oklab, #ef4444 18%, transparent);
-    --acc-tile: color-mix(in oklab, #ef4444 16%, var(--card));
+    --acc-wash: color-mix(in oklab, #ef4444 12%, transparent);
 }
 
 /* The hero band's background: gradient plus two soft light pools. */

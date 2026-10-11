@@ -63,14 +63,15 @@ export function WidgetBody({ payload, emptyText, widgetKey }: { payload: WidgetP
 }
 
 /**
- * An empty state that still belongs to the dashboard: the domain's tint, an
- * icon and the words, never a grey box.
+ * An empty state that still belongs to the dashboard: a quiet neutral note
+ * whose icon carries the domain's colour (a page of empty cards in tinted
+ * boxes read loud, Joy 11 Oct).
  */
 function EmptyNote({ text, calm = false }: { text: string; calm?: boolean }) {
     const Icon = calm ? CircleCheck : Inbox;
 
     return (
-        <div className="flex items-center gap-3 rounded-xl border border-dashed border-[color-mix(in_oklab,var(--acc)_35%,transparent)] bg-[var(--acc-wash)] px-3 py-4 text-sm">
+        <div className="border-border bg-muted/40 flex items-center gap-3 rounded-xl border border-dashed px-3 py-4 text-sm dark:bg-white/[0.03]">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--card)] text-[var(--acc-ink)] shadow-xs">
                 <Icon className="size-4" aria-hidden />
             </span>
@@ -136,14 +137,15 @@ function Parts({ parts }: { parts?: Part[] }) {
     }
 
     const tile =
-        'block min-w-0 rounded-lg bg-[var(--acc-tile)] px-2.5 py-1.5 ring-1 ring-inset ring-[color-mix(in_oklab,var(--acc)_30%,transparent)]';
+        // Neutral on purpose: colour stays on the stripe, icon and pills (Joy, 11 Oct).
+        'block min-w-0 rounded-lg bg-muted/60 px-2.5 py-1.5 ring-1 ring-inset ring-border/70 dark:bg-white/[0.04]';
 
     return (
         <dl className="mt-4 grid grid-cols-2 gap-2 text-xs @md:grid-cols-3">
             {parts.map((part) => {
                 const body = (
                     <>
-                        <dt className="truncate font-medium text-[var(--acc-ink)]">{part.label}</dt>
+                        <dt className="text-muted-foreground truncate">{part.label}</dt>
                         <dd className={cn('mt-0.5 truncate text-[13px] font-semibold', toneText(part.tone))}>
                             {typeof part.value === 'number' && part.unit !== 'text' ? (
                                 <AnimatedNumber value={part.value} unit={part.unit ?? 'count'} compact />
@@ -155,11 +157,7 @@ function Parts({ parts }: { parts?: Part[] }) {
                 );
 
                 return part.url ? (
-                    <Link
-                        key={part.label}
-                        href={part.url}
-                        className={cn(tile, 'transition-colors hover:bg-[color-mix(in_oklab,var(--acc)_24%,var(--card))]')}
-                    >
+                    <Link key={part.label} href={part.url} className={cn(tile, 'hover:bg-muted transition-colors dark:hover:bg-white/[0.08]')}>
                         {body}
                     </Link>
                 ) : (

@@ -104,18 +104,14 @@ export function WidgetCard({
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: reduce ? 0 : Math.min(index, 12) * 0.045 }}
             className={cn(
                 `dash-acc-${calm ? 'emerald' : accentFor(widget)}`,
-                'bg-card text-card-foreground @container relative isolate flex flex-col overflow-hidden rounded-2xl border border-[color-mix(in_oklab,var(--acc)_22%,var(--border))] p-4 sm:p-5',
+                'bg-card text-card-foreground @container relative isolate flex flex-col overflow-hidden rounded-2xl border p-4 sm:p-5',
                 'shadow-[0_1px_2px_rgba(20,40,25,0.05),0_10px_28px_-18px_rgba(20,50,30,0.22)] transition-shadow duration-300',
-                'hover:shadow-[0_1px_2px_rgba(20,40,25,0.06),0_22px_40px_-20px_var(--acc)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_12px_30px_-18px_rgba(0,0,0,0.7)]',
+                'hover:shadow-[0_1px_2px_rgba(20,40,25,0.06),0_18px_36px_-20px_rgba(20,50,30,0.28)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_12px_30px_-18px_rgba(0,0,0,0.7)]',
                 SPAN[widget.size],
             )}
-            style={{
-                backgroundImage:
-                    'radial-gradient(120% 70% at 100% 0%, var(--acc-wash), transparent 70%), linear-gradient(180deg, var(--acc-wash), transparent 15rem)',
-            }}
         >
-            {/* The domain's colour along the top edge. */}
-            <span aria-hidden className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[var(--acc)] to-[var(--acc-2)]" />
+            {/* The domain's colour: a thin top stripe and the icon tile, nothing else (Joy, 11 Oct: "simple coloring"). */}
+            <span aria-hidden className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[var(--acc)] to-[var(--acc-2)]" />
             {pulse > 0 && <span key={pulse} aria-hidden className="dash-pulse pointer-events-none absolute inset-0 rounded-[inherit]" />}
 
             <header className="mb-4 flex items-start gap-3">
