@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Commerce\Http\Controllers\GatewayRefundController;
+use App\Modules\Sales\Couriers\Http\Controllers\CourierLocationsController;
 use App\Modules\Sales\Couriers\Http\Controllers\CourierSettingsController;
 use App\Modules\Sales\Http\Controllers\ConsignmentController;
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
@@ -309,6 +310,22 @@ Route::middleware(['web', 'auth', 'business', 'can:couriers.settings.manage'])
     ->prefix('settings/couriers')->name('couriers.settings.')->group(function () {
         Route::get('/', [CourierSettingsController::class, 'index'])->name('index');
         Route::post('/', [CourierSettingsController::class, 'store'])->name('store');
+
+        // Locations (slice 2): the courier's own lists, the reviewed thana
+        // maps and the courier's price bands. Provider-wide data.
+        Route::prefix('locations')->name('locations.')->group(function () {
+            Route::get('/', [CourierLocationsController::class, 'index'])->name('index');
+            Route::get('options', [CourierLocationsController::class, 'options'])->name('options');
+            Route::get('suggest', [CourierLocationsController::class, 'suggest'])->name('suggest');
+            Route::post('sync', [CourierLocationsController::class, 'sync'])->name('sync');
+            Route::post('match', [CourierLocationsController::class, 'match'])->name('match');
+            Route::post('approve-high', [CourierLocationsController::class, 'approveHigh'])->name('approve-high');
+            Route::put('maps', [CourierLocationsController::class, 'save'])->name('save');
+            Route::post('maps/{map}/approve', [CourierLocationsController::class, 'approve'])->whereNumber('map')->name('approve');
+            Route::post('bands', [CourierLocationsController::class, 'storeBand'])->name('bands.store');
+            Route::put('bands/{band}', [CourierLocationsController::class, 'updateBand'])->whereNumber('band')->name('bands.update');
+            Route::delete('bands/{band}', [CourierLocationsController::class, 'destroyBand'])->whereNumber('band')->name('bands.destroy');
+        });
         Route::put('{courierAccount}', [CourierSettingsController::class, 'update'])->whereNumber('courierAccount')->name('update');
         Route::post('{courierAccount}/test', [CourierSettingsController::class, 'test'])->whereNumber('courierAccount')->name('test');
         Route::post('{courierAccount}/activate', [CourierSettingsController::class, 'activate'])->whereNumber('courierAccount')->name('activate');

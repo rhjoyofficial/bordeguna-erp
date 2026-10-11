@@ -75,7 +75,7 @@ class CourierLocationMatcher
                     $proposal = $this->propose($city, $zones, $thana['name']);
                     $counts[match (true) {
                         $proposal['status'] === CourierLocationMap::APPLIED => 'applied',
-                        $proposal['provider_zone_id'] !== null || $proposal['candidates'] !== [] => 'suggested',
+                        $proposal['provider_zone_id'] !== null || $proposal['candidates'] !== null => 'suggested',
                         default => 'unmatched',
                     }]++;
 
@@ -139,7 +139,9 @@ class CourierLocationMatcher
             'status' => CourierLocationMap::SUGGESTED,
             'source' => CourierLocationMap::AUTO_SUGGESTED,
             'confidence' => CourierLocationMap::LOW,
-            'candidates' => [],
+            // ⚠ NULL, never an empty JSON list, so "has candidates" is a plain
+            // IS NOT NULL on every database.
+            'candidates' => null,
             'reviewed_by' => null,
             'reviewed_at' => null,
         ];
@@ -166,7 +168,7 @@ class CourierLocationMatcher
                 'status' => CourierLocationMap::APPLIED,
                 'source' => CourierLocationMap::AUTO_EXACT,
                 'confidence' => CourierLocationMap::HIGH,
-                'candidates' => count($candidates) > 1 ? $shortlist : [],
+                'candidates' => count($candidates) > 1 ? $shortlist : null,
                 'note' => 'The zone has the same name as the thana.',
             ];
         }
