@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
 import { CalendarRange, Tags, Volume2, VolumeX } from 'lucide-react';
 import { useState } from 'react';
+import { brandColour } from './palette';
 import type { RangeState, SoundClass, SoundSettings } from './types';
 
 function xsrfToken(): string {
@@ -89,7 +90,7 @@ export function RangeBar({
                         key={preset.value}
                         size="sm"
                         variant={range.preset === preset.value ? 'default' : 'ghost'}
-                        className="h-7 px-2.5 text-xs"
+                        className="h-7 rounded-full px-2.5 text-xs"
                         onClick={() => go({ range: preset.value })}
                         aria-pressed={range.preset === preset.value}
                     >
@@ -98,7 +99,7 @@ export function RangeBar({
                 ))}
             <Popover>
                 <PopoverTrigger asChild>
-                    <Button size="sm" variant={range.preset === 'custom' ? 'default' : 'ghost'} className="h-7 px-2.5 text-xs">
+                    <Button size="sm" variant={range.preset === 'custom' ? 'default' : 'ghost'} className="h-7 rounded-full px-2.5 text-xs">
                         {range.preset === 'custom' ? range.label : t('dash.preset.custom')}
                     </Button>
                 </PopoverTrigger>
@@ -167,15 +168,23 @@ export function BrandBar({
     return (
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('orders.brand')}>
             <Tags className="text-muted-foreground size-4" aria-hidden />
-            {[{ id: null as number | null, name: t('orders.all_brands') }, ...brands].map((brand) => (
+            {[{ id: null as number | null, name: t('orders.all_brands') }, ...brands].map((brand, index) => (
                 <Button
                     key={brand.id ?? 'all'}
                     size="sm"
                     variant={selected === brand.id ? 'default' : 'ghost'}
-                    className="h-7 px-2.5 text-xs"
+                    className="h-7 gap-1.5 rounded-full px-2.5 text-xs"
                     onClick={() => go(brand.id)}
                     aria-pressed={selected === brand.id}
                 >
+                    {/* The brand's own colour, the same wherever the brand appears; the name carries the meaning. */}
+                    {brand.id !== null && (
+                        <span
+                            className="size-2.5 rounded-full ring-2 ring-white/70 dark:ring-black/30"
+                            style={{ background: brandColour(brand.name, index - 1) }}
+                            aria-hidden
+                        />
+                    )}
                     {brand.name}
                 </Button>
             ))}
