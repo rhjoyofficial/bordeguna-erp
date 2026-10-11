@@ -116,6 +116,7 @@ export function AppSidebar() {
         canViewFiles,
         canUseChat,
         canManageCrmSettings,
+        canManageCourierSettings,
         canViewAssets,
         canViewAssetItems,
         hasEmployeeProfile,
@@ -135,6 +136,7 @@ export function AppSidebar() {
         canManageOrganization,
         canManageCrmSettings,
         canManageReasons,
+        canManageCourierSettings,
     });
 
     const navGroups: NavGroup[] = [
@@ -318,6 +320,8 @@ export function AppSidebar() {
                           ...(canManagePrices ? [{ title: 'Discounts', url: '/sales/discounts', icon: Percent }] : []),
                           ...(canManagePrices ? [{ title: 'Promotions', url: '/sales/promotions', icon: Percent }] : []),
                           ...(canManagePrices ? [{ title: 'Targets', url: '/sales/targets', icon: BadgeDollarSign }] : []),
+                          // Courier accounts: credentials, pickup stores, webhooks (11 Oct 2026).
+                          ...(canManageCourierSettings ? [{ title: 'Courier settings', url: '/settings/couriers', icon: Truck }] : []),
                           // Credit limits and days, by file, applied after approval (26 Sep 2026).
                           ...(canViewSales ? [{ title: 'Credit terms', url: '/sales/credit-terms', icon: Contact }] : []),
                           // Import prices is a button on Selling prices (29 Sep 2026).
