@@ -37,6 +37,9 @@ class SalesPermissionsSeeder extends Seeder
             'sales.sell',
             'sales.receipt.record',
             'sales.reports.view',
+            // Reports pack (11 Oct 2026): the reports that show cost (margin,
+            // delivery economics). Not Staff, who read sales but not what it cost.
+            'sales.reports.costs',
             'sales.orders.record',
             'sales.orders.approve',
             // Approve an order over the credit limit, or a distributor's
@@ -75,6 +78,9 @@ class SalesPermissionsSeeder extends Seeder
             'sales.sell',
             'sales.receipt.record',
             'sales.reports.view',
+            // Reports pack (11 Oct 2026): the reports that show cost (margin,
+            // delivery economics). Not Staff, who read sales but not what it cost.
+            'sales.reports.costs',
             'sales.orders.record',
             'sales.orders.approve',
             'sales.orders.cancel',
@@ -93,6 +99,9 @@ class SalesPermissionsSeeder extends Seeder
         // not credit: those are the trade's decisions.
         'Finance' => [
             'sales.reports.view',
+            // Reports pack (11 Oct 2026): the reports that show cost (margin,
+            // delivery economics). Not Staff, who read sales but not what it cost.
+            'sales.reports.costs',
             'sales.receipt.record',
         ],
         // ⚠ Staff TAKE orders (order-book data entry, the same trust level as

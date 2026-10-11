@@ -104,6 +104,8 @@ export function useNavGroups(): NavGroup[] {
         canViewAccounting,
         canViewGroupCockpit,
         canViewOperatingReports,
+        canViewSalesReports,
+        canViewCostReports,
         canViewInventory,
         canViewPurchasing,
         canViewSales,
@@ -334,6 +336,29 @@ export function useNavGroups(): NavGroup[] {
                           // Sales by brand is a button on Invoices (29 Sep 2026).
                       ],
                   },
+                  // ⭐ Reports pack (11 Oct 2026): each report linked by name, so
+                  // nobody has to find a sales report under HR. All run through the
+                  // one report screen; the registry re-checks the permission.
+                  ...(canViewSalesReports
+                      ? [
+                            {
+                                label: t('menu.sales_reports'),
+                                defaultOpen: false,
+                                items: [
+                                    { title: t('menu.report_sales_by_channel'), url: '/hrm/reports/sales_by_channel', icon: ChartColumn },
+                                    // Cost is shown on these two: sales.reports.costs, not Staff.
+                                    ...(canViewCostReports
+                                        ? [
+                                              { title: t('menu.report_margin'), url: '/hrm/reports/sales_margin', icon: TrendingUp },
+                                              { title: t('menu.report_delivery_economics'), url: '/hrm/reports/delivery_economics', icon: Truck },
+                                          ]
+                                        : []),
+                                    { title: t('menu.report_courier_ageing'), url: '/hrm/reports/courier_settlement_ageing', icon: CalendarClock },
+                                    { title: t('menu.all_reports'), url: '/hrm/reports', icon: FileBarChart },
+                                ],
+                            },
+                        ]
+                      : []),
                   {
                       label: 'Sales setup',
                       defaultOpen: false,
@@ -587,6 +612,8 @@ export function useNavGroups(): NavGroup[] {
                           { title: 'Profit & loss', url: '/accounting/income-statement', icon: TrendingUp },
                           { title: 'Balance sheet', url: '/accounting/balance-sheet', icon: FileBarChart },
                           { title: 'Trial balance', url: '/accounting/trial-balance', icon: Scale },
+                          // Reports pack (11 Oct 2026): cash apart from money that is not cash.
+                          { title: t('menu.report_cash_position'), url: '/hrm/reports/cash_position', icon: Wallet },
                           { title: 'Cash flow', url: '/accounting/cash-flow', icon: Waves },
                           { title: 'Cash forecast', url: '/accounting/cash-forecast', icon: TrendingUp },
                           { title: 'Receivables ageing', url: '/accounting/receivables-ageing', icon: HandCoins },

@@ -107,7 +107,10 @@ class XlsxWriter implements ReportWriter
             lastModifiedBy: $dataset->meta->generatedBy ?? 'Bor de Guna ERP',
             // The stamp that would otherwise sit above the header row. It is
             // still on the file, just not in the way of it.
-            description: $dataset->meta->stamp(),
+            // A report's basis note (what the figures are and are not) rides
+            // along with it: a spreadsheet passed on without the PDF must
+            // still say how its numbers were counted.
+            description: trim($dataset->meta->stamp().($dataset->meta->note ? '. '.$dataset->meta->note : '')),
             customProperties: $dataset->meta->filters,
         ));
 

@@ -391,6 +391,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::get('reports/downloads/{file}', [ReportController::class, 'download'])->name('reports.download');
     Route::get('reports/{report}', [ReportController::class, 'show'])->name('reports.show');
     Route::get('reports/{report}/run', [ReportController::class, 'run'])->name('reports.run');
+    // The same report on screen, as JSON: table, totals, basis note, chart.
+    Route::get('reports/{report}/preview', [ReportController::class, 'preview'])->name('reports.preview');
 
     // RPT-04. Deliberately a separate route and controller from `reports`, not a
     // tab inside it: report generation and dashboard rendering are separate

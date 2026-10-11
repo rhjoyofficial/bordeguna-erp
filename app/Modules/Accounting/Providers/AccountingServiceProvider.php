@@ -8,6 +8,7 @@ use App\Modules\Accounting\Console\Commands\ReleaseDueAmortizations;
 use App\Modules\Accounting\Console\Commands\VerifyAccountingLedger;
 use App\Modules\Accounting\Observers\EntityLedgerObserver;
 use App\Modules\Accounting\Reporting\Definitions\BudgetVsActualReport;
+use App\Modules\Accounting\Reporting\Definitions\CashPositionReport;
 use App\Modules\Accounting\Support\ChartPermissions;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Reporting\ReportRegistry;
@@ -45,7 +46,9 @@ class AccountingServiceProvider extends ServiceProvider
         // ⚠ Resolved in boot(), never register() - the registry singleton is
         // built by HrmServiceProvider::register, and every register() runs
         // before any boot(). Same pattern, same reason, as Purchasing.
-        $this->app->make(ReportRegistry::class)
-            ->register($this->app->make(BudgetVsActualReport::class));
+        $registry = $this->app->make(ReportRegistry::class);
+        $registry->register($this->app->make(BudgetVsActualReport::class));
+        // Reports pack (11 Oct 2026): cash, kept apart from money that is not cash.
+        $registry->register($this->app->make(CashPositionReport::class));
     }
 }
