@@ -17,6 +17,7 @@ use App\Modules\Sales\Couriers\Models\CourierLocationMap;
 use App\Modules\Sales\Couriers\Models\CourierLocationSync;
 use App\Modules\Sales\Couriers\Models\CourierZoneBand;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Spatie\Permission\Models\Role;
@@ -170,7 +171,7 @@ it('marks a zone the courier stopped listing as removed, never deletes it, and n
         return ['14' => $dhaka, '19' => [['id' => 201, 'name' => 'Kaliakair']]];
     }], function (Request $r) use (&$failDhaka) {
         if ($failDhaka && str_contains($r->url(), '/cities/14/zones')) {
-            throw new Illuminate\Http\Client\ConnectionException('timed out');
+            throw new ConnectionException('timed out');
         }
     });
     $account = locActiveAccount();
@@ -203,7 +204,7 @@ it('resumes a sync that stopped instead of starting over', function () {
         }
 
         if ($failGazipur && str_contains($r->url(), '/cities/19/zones')) {
-            throw new Illuminate\Http\Client\ConnectionException('timed out');
+            throw new ConnectionException('timed out');
         }
     });
 
@@ -218,6 +219,19 @@ it('resumes a sync that stopped instead of starting over', function () {
         ->and($resumed->status)->toBe(CourierLocationSync::DONE)
         ->and($cityCalls)->toBe(1)
         ->and(CourierLocation::where('level', 'zone')->where('parent_provider_id', '19')->count())->toBe(1);
+});
+
+it('stops rather than move a zone whose id turns up under two cities in one sync', function () {
+    locFakeCarryBee(['zones' => [
+        '14' => [['id' => 101, 'name' => 'Dhanmondi']],
+        '19' => [['id' => 101, 'name' => 'Kaliakair']],
+    ]]);
+
+    $run = locSync(locActiveAccount());
+
+    expect($run->status)->toBe(CourierLocationSync::FAILED)
+        ->and($run->last_error)->toContain('not unique')
+        ->and(CourierLocation::where('level', 'zone')->where('provider_location_id', '101')->first()->parent_provider_id)->toBe('14');
 });
 
 it('splits a sync into batches that queue each other until done', function () {

@@ -2,13 +2,14 @@
 
 namespace App\Modules\Sales\Couriers\Locations;
 
+use App\Models\User;
 use App\Modules\Sales\Couriers\Drivers\ListsLocations;
 use App\Modules\Sales\Couriers\Drivers\LocationList;
 use App\Modules\Sales\Couriers\Models\CourierAccount;
 use App\Modules\Sales\Couriers\Models\CourierLocation;
 use App\Modules\Sales\Couriers\Models\CourierLocationSync;
-use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -128,6 +129,19 @@ class LocationSync
                     return false;
                 }
 
+                // ⚠⚠ The key assumes a zone id (or an area id) is unique across
+                // the whole courier, which the ids seen so far suggest but no
+                // document promises. If the same id turns up under a second
+                // parent in one run, an upsert would silently move it and every
+                // map pointing at it would send parcels to the other city.
+                $clash = $this->idSeenUnderAnotherParent($provider, $childLevel, $parent->provider_location_id, $list, $since);
+
+                if ($clash !== null) {
+                    $this->fail($run, "{$clash} is listed under two different parents, so its id is not unique. Sync stopped before anything was moved; this needs a developer.", $calls);
+
+                    return false;
+                }
+
                 $this->store($provider, $childLevel, $parent->provider_location_id, $list);
                 $this->markRemoved($provider, $childLevel, $parent->provider_location_id, $list);
                 $parent->forceFill(['children_synced_at' => now()])->save();
@@ -145,7 +159,7 @@ class LocationSync
      * Listed parents whose children were not fetched in this run. Ordered by
      * id so a resumed run walks the same way.
      *
-     * @return \Illuminate\Support\Collection<int, CourierLocation>
+     * @return Collection<int, CourierLocation>
      */
     private function pendingParents(string $provider, string $level, Carbon $since)
     {
@@ -182,6 +196,25 @@ class LocationSync
                 ['parent_provider_id', 'name', 'extra', 'synced_at', 'removed_at', 'updated_at'],
             );
         }
+    }
+
+    private function idSeenUnderAnotherParent(string $provider, string $level, string $parentId, LocationList $list, Carbon $since): ?string
+    {
+        $ids = array_column($list->items, 'id');
+
+        if ($ids === []) {
+            return null;
+        }
+
+        $row = CourierLocation::query()
+            ->where('provider', $provider)->where('level', $level)
+            ->whereIn('provider_location_id', $ids)
+            ->where('parent_provider_id', '!=', $parentId)
+            ->whereNull('removed_at')
+            ->where('synced_at', '>=', $since)
+            ->first();
+
+        return $row === null ? null : ucfirst($level)." \"{$row->name}\" ({$row->provider_location_id})";
     }
 
     private function markRemoved(string $provider, string $level, ?string $parentId, LocationList $list): void
