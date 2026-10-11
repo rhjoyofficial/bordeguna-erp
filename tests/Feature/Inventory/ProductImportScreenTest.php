@@ -181,7 +181,7 @@ it('exports in exactly the shape the importer reads', function () {
 
     $lines = explode("\n", trim(substr($csv, 3)));
 
-    expect($lines[0])->toBe('sku,name,category,unit,unit_abbr,type,brand,barcode,description,low_stock_threshold,is_active,tracks_expiry,shelf_life_warning_days,content_quantity,content_unit');
+    expect($lines[0])->toBe('sku,name,category,unit,unit_abbr,type,brand,barcode,description,low_stock_threshold,is_active,tracks_expiry,shelf_life_warning_days,content_quantity,content_unit,weight_grams');
 
     // C-IMP-5: the round trip. Feed the export straight back in and it must
     // recognise its own products rather than proposing to create them again.

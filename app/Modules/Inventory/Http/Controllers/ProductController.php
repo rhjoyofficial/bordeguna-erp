@@ -7,10 +7,12 @@ use App\Modules\Accounting\Models\TaxClass;
 use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Enums\WeightSource;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Inventory\Support\SkuProposal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -36,6 +38,8 @@ class ProductController extends Controller
             'type' => $request->string('type')->toString(),
             'category_id' => $request->string('category_id')->toString(),
             'brand_id' => $request->string('brand_id')->toString(),
+            // ⭐ Courier hub slice 3: "which products still have no weight".
+            'weight' => $request->string('weight')->toString() === 'missing' ? 'missing' : '',
         ];
 
         $products = Product::query()
@@ -60,6 +64,7 @@ class ProductController extends Controller
             ->when($filters['brand_id'], fn ($query, $brandId) => $brandId === 'none'
                 ? $query->whereNull('brand_id')
                 : $query->where('brand_id', $brandId))
+            ->when($filters['weight'] === 'missing', fn ($query) => $query->whereNull('weight_grams'))
             ->orderBy('name')
             ->paginate(15)
             ->withQueryString()
@@ -89,6 +94,8 @@ class ProductController extends Controller
                 // content, exactly as the other ids above.
                 'content_quantity' => $product->content_quantity,
                 'content_unit_id' => $product->content_unit_id,
+                'weight_grams' => $product->weight_grams,
+                'weight_source' => $product->weight_source?->value,
                 'is_active' => $product->is_active,
                 'availability_override' => $product->availability_override?->value,
                 'lead_time_days' => $product->lead_time_days,
@@ -112,6 +119,7 @@ class ProductController extends Controller
             'taxClasses' => TaxClass::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
             'filters' => $filters,
             'kind' => $kind,
+            'can_manage_weights' => $request->user()->can('inventory.catalog.manage'),
         ]);
     }
 
@@ -123,7 +131,7 @@ class ProductController extends Controller
      */
     public function store(Request $request): RedirectResponse|JsonResponse
     {
-        $data = $this->validated($request);
+        $data = $this->withWeightSource($this->validated($request));
 
         $product = Product::create($data + ['is_active' => true]);
 
@@ -134,7 +142,7 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product): RedirectResponse|JsonResponse
     {
-        $data = $this->validated($request, $product);
+        $data = $this->withWeightSource($this->validated($request, $product), $product);
 
         $product->update($data);
 
@@ -304,6 +312,54 @@ class ProductController extends Controller
             // ⚠ Sometimes, so an older form that never sends it cannot switch a
             // product off by omission; the dialog sends it to bring one back.
             'is_active' => ['sometimes', 'boolean'],
+            // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): one stock unit as it
+            // ships, in whole grams. Blank = not known (never zero).
+            'weight_grams' => ['nullable', 'integer', 'min:1', 'max:'.ProductWeight::MAX_GRAMS],
         ]);
+    }
+
+    /**
+     * Where the weight came from, decided here and never sent by the form.
+     *
+     * - A weight somebody typed or changed is `manual`.
+     * - A new product with no weight but a mass net content (400 g) starts at
+     *   that weight, `from_net_content`. A liquid is left empty: no density
+     *   guess (Joy, 11 Oct 2026).
+     * - A weight that came from net content follows the net content when that
+     *   is corrected, until somebody types a weight of their own.
+     * - Clearing the weight clears its source.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function withWeightSource(array $data, ?Product $product = null): array
+    {
+        $typed = array_key_exists('weight_grams', $data) ? $data['weight_grams'] : ($product?->weight_grams);
+        $typed = $typed === null ? null : (int) $typed;
+        $unchanged = $product !== null && $typed === $product->weight_grams;
+
+        if ($typed !== null && ! $unchanged) {
+            return array_merge($data, ['weight_grams' => $typed, 'weight_source' => WeightSource::Manual]);
+        }
+
+        $followsContent = $product === null
+            ? $typed === null
+            : $unchanged && ($product->weight_grams === null || $product->weight_source === WeightSource::FromNetContent);
+
+        if ($followsContent) {
+            $unitId = array_key_exists('content_unit_id', $data) ? $data['content_unit_id'] : $product?->content_unit_id;
+            $quantity = array_key_exists('content_quantity', $data) ? $data['content_quantity'] : $product?->content_quantity;
+            $derived = ProductWeight::fromNetContent($quantity, $unitId === null ? null : UnitOfMeasure::find($unitId));
+
+            if ($derived !== null) {
+                return array_merge($data, ['weight_grams' => $derived, 'weight_source' => WeightSource::FromNetContent]);
+            }
+        }
+
+        if ($typed === null) {
+            return array_merge($data, ['weight_grams' => null, 'weight_source' => null]);
+        }
+
+        return array_merge($data, ['weight_grams' => $typed]);
     }
 }

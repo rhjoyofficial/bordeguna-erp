@@ -3,12 +3,14 @@
 namespace App\Modules\Inventory\Actions;
 
 use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Enums\WeightSource;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Support\CatalogueImportPlan;
 use App\Modules\Inventory\Support\CatalogueText;
+use App\Modules\Inventory\Support\ProductWeight;
 use Illuminate\Support\Collection;
 
 /**
@@ -180,9 +182,35 @@ class PlanProductCatalogueImport
             $existing = $existingProducts->get($sku);
 
             if ($existing === null) {
+                // ⭐ Courier hub slice 3: a typed weight is `manual`; with none,
+                // a mass net content (400 g) starts the weight, as on the screen.
+                if (isset($attributes['weight_grams'])) {
+                    $attributes['weight_source'] = WeightSource::Manual;
+                } elseif (isset($attributes['content_unit_id'])) {
+                    $derived = ProductWeight::fromNetContent(
+                        $attributes['content_quantity'] ?? null,
+                        $existingUnits->first(fn (UnitOfMeasure $u) => $u->id === $attributes['content_unit_id']),
+                    );
+
+                    if ($derived !== null) {
+                        $attributes['weight_grams'] = $derived;
+                        $attributes['weight_source'] = WeightSource::FromNetContent;
+                    }
+                }
+
                 $plan->creates[] = compact('line', 'sku', 'name', 'attributes', 'categoryKey', 'unitKey');
 
                 continue;
+            }
+
+            // ⚠ A weight the file repeats unchanged is left alone, so exporting
+            // and re-importing never turns "from net content" into "typed in".
+            if (array_key_exists('weight_grams', $attributes)) {
+                if ($attributes['weight_grams'] === $existing->weight_grams) {
+                    unset($attributes['weight_grams']);
+                } else {
+                    $attributes['weight_source'] = WeightSource::Manual;
+                }
             }
 
             $changes = $this->changesFor($existing, $attributes, $categoryKey, $unitKey, $existingCategories, $existingUnits);
@@ -468,6 +496,22 @@ class PlanProductCatalogueImport
             $details['content_unit_id'] = $unitId;
         }
 
+        // ⭐ Courier hub slice 3: one stock unit as it ships, in whole grams.
+        // ⚠ A BLANK cell leaves the weight as it is, unlike the columns above:
+        // an empty weight column added to an old file must not wipe weights
+        // that came from net content or from the weights sheet.
+        if (array_key_exists('weight_grams', $values)) {
+            $raw = CatalogueText::nullIfBlank($values['weight_grams']);
+
+            if ($raw !== null) {
+                if (! ctype_digit($raw) || (int) $raw < 1 || (int) $raw > ProductWeight::MAX_GRAMS) {
+                    $plan->addError($line, $sku, "weight_grams \"{$raw}\" must be whole grams between 1 and ".ProductWeight::MAX_GRAMS.'.');
+                } else {
+                    $details['weight_grams'] = (int) $raw;
+                }
+            }
+        }
+
         return $details;
     }
 
@@ -593,6 +637,10 @@ class PlanProductCatalogueImport
             if (($was === null) !== ($now === null) || ($was !== null && bccomp((string) $was, (string) $now, 4) !== 0)) {
                 $changes['content_quantity'] = [$was, $now];
             }
+        }
+
+        if (array_key_exists('weight_grams', $attributes) && $existing->weight_grams !== $attributes['weight_grams']) {
+            $changes['weight_grams'] = [$existing->weight_grams, $attributes['weight_grams']];
         }
 
         if ($existing->type->value !== $attributes['type']) {

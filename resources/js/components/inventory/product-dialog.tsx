@@ -45,6 +45,8 @@ export interface DialogProduct {
     lead_time_days: number | null;
     tracks_expiry?: boolean;
     shelf_life_warning_days?: number | null;
+    weight_grams?: number | null;
+    weight_source?: string | null;
 }
 
 interface Option {
@@ -97,6 +99,8 @@ const EMPTY = {
     lead_time_days: '',
     tracks_expiry: false,
     shelf_life_warning_days: '',
+    // Courier hub slice 3 (11 Oct 2026): one unit as it ships, whole grams.
+    weight_grams: '',
     is_active: true,
 };
 
@@ -193,6 +197,7 @@ export function ProductDialog({
                       tracks_expiry: product.tracks_expiry ?? false,
                       shelf_life_warning_days:
                           product.shelf_life_warning_days === null || product.shelf_life_warning_days === undefined ? '' : String(product.shelf_life_warning_days),
+                      weight_grams: product.weight_grams === null || product.weight_grams === undefined ? '' : String(product.weight_grams),
                       is_active: product.is_active,
                   },
         );
@@ -414,6 +419,28 @@ export function ProductDialog({
                                 className="w-full"
                             />
                             <InputError message={errors.mrp} />
+                        </div>
+                        {/* ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): a parcel's weight is
+                            worked out from this, so every product needs one. */}
+                        <div className="grid gap-2">
+                            <Label htmlFor="pd-weight">Weight (g)</Label>
+                            <Input
+                                id="pd-weight"
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                step={1}
+                                value={form.weight_grams}
+                                onChange={(e) => set('weight_grams', e.target.value)}
+                                placeholder="one unit as it ships"
+                                className="w-full"
+                            />
+                            <p className="text-muted-foreground text-xs">
+                                {product?.weight_source === 'from_net_content' && form.weight_grams === String(product.weight_grams)
+                                    ? 'Taken from the net content. Weigh one packed unit and type it to correct it.'
+                                    : 'Blank shows as weight missing. A new product with its net content in g or kg starts from that.'}
+                            </p>
+                            <InputError message={errors.weight_grams} />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="pd-type" required>
