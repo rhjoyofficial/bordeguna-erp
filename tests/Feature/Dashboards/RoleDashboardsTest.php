@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\database\seeders\DashboardAssignmentSeeder;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\DashboardRoleAssignment;
@@ -350,4 +352,40 @@ it('keeps the classic dashboard, nothing lost', function () {
 
     ($this->visit)($joy, $this->a, '/dashboard/classic')->assertOk()->assertInertia(fn (Assert $page) => $page->component('dashboard')->has('trade_chart'));
     ($this->visit)($joy, $this->a, '/dashboard')->assertInertia(fn (Assert $page) => $page->where('offers_classic', true));
+});
+
+it('reads money from posted ledger lines: cash apart from courier money, income by day', function () {
+    (new ChartOfAccountsSeeder)->run();
+    $joy = dashboardMember($this->a, 'Owner');
+
+    $cash = Account::bySlug('cash_in_hand');
+    $courier = Account::bySlug('courier_receivable');
+    $revenue = Account::query()->where('code', 'like', '4%')->where('is_postable', true)->orderBy('code')->first();
+
+    $post = function (string $number, array $lines) use ($joy) {
+        $journal = DB::table('journals')->insertGetId([
+            'business_id' => $this->a->id, 'journal_number' => $number, 'journal_date' => now()->toDateString(),
+            'posted_by' => $joy->id, 'posted_at' => now(), 'created_at' => now(),
+        ]);
+
+        foreach ($lines as $i => [$account, $minor]) {
+            DB::table('journal_lines')->insert([
+                'journal_id' => $journal, 'business_id' => $this->a->id, 'line_no' => $i + 1,
+                'account_id' => $account->id, 'amount_minor' => $minor, 'created_at' => now(),
+            ]);
+        }
+    };
+
+    // A counter sale paid in cash, and a courier parcel delivered but not paid out.
+    $post('JV-T-1', [[$cash, 100000], [$revenue, -100000]]);
+    $post('JV-T-2', [[$courier, 50000], [$revenue, -50000]]);
+    // Another business's cash never shows here.
+    DB::table('journals')->insert(['business_id' => $this->b->id, 'journal_number' => 'JV-B-1', 'journal_date' => now()->toDateString(), 'posted_by' => $joy->id, 'posted_at' => now(), 'created_at' => now()]);
+
+    $get = fn (string $key) => ($this->visit)($joy, $this->a, "/dashboard/widgets/{$key}?dashboard=owner&range=today")->assertOk()->json('data');
+
+    expect($get('cash_position')['value'])->toEqual(1000)
+        ->and($get('money_in_transit')['value'])->toEqual(500)
+        ->and($get('income_trend')['total'])->toEqual(1500)
+        ->and(collect($get('income_trend')['points'])->last()['income'])->toEqual(1500);
 });
