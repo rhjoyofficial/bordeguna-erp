@@ -35,11 +35,11 @@ class CourierAccount extends Model
     public const WEBHOOK_PATH = '/webhooks/couriers/';
 
     protected $fillable = [
-        'courier_provider_id', 'label', 'environment', 'base_url', 'credentials', 'options',
+        'courier_provider_id', 'label', 'environment', 'base_url', 'credentials', 'options', 'integration_secret',
         'is_active', 'activated_at', 'created_by',
     ];
 
-    protected $hidden = ['credentials', 'webhook_secret', 'tested_fingerprint'];
+    protected $hidden = ['credentials', 'webhook_secret', 'integration_secret', 'tested_fingerprint'];
 
     /** Created switched off; a test then an explicit Activate turns it on. */
     protected $attributes = ['is_active' => false];
@@ -49,6 +49,9 @@ class CourierAccount extends Model
         return [
             'credentials' => 'encrypted:array',
             'webhook_secret' => 'encrypted',
+            'integration_secret' => 'encrypted',
+            'auto_post_outcomes' => 'boolean',
+            'auto_post_switched_off_at' => 'datetime',
             'options' => 'array',
             'is_active' => 'boolean',
             'activated_at' => 'datetime',
@@ -86,7 +89,7 @@ class CourierAccount extends Model
     {
         // ⚠⚠ logOnly, never logAll or logFillable: `credentials` is fillable.
         return LogOptions::defaults()
-            ->logOnly(['label', 'environment', 'base_url', 'options', 'is_active', 'last_test_ok'])
+            ->logOnly(['label', 'environment', 'base_url', 'options', 'is_active', 'last_test_ok', 'auto_post_outcomes'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->useLogName('couriers');
@@ -215,6 +218,12 @@ class CourierAccount extends Model
             $values[] = $webhook;
         }
 
+        $echo = $this->integrationSecret();
+
+        if ($echo !== null && strlen($echo) >= 4) {
+            $values[] = $echo;
+        }
+
         return $values;
     }
 
@@ -241,6 +250,43 @@ class CourierAccount extends Model
     public function canActivate(): bool
     {
         return $this->definition()->connected() && $this->testIsCurrent();
+    }
+
+    /**
+     * Pathao's account-level value the ERP echoes on every webhook answer, or
+     * null when none is saved (or it no longer decrypts).
+     */
+    public function integrationSecret(): ?string
+    {
+        if ($this->getRawOriginal('integration_secret') === null && ! $this->isDirty('integration_secret')) {
+            return null;
+        }
+
+        try {
+            $value = $this->integration_secret;
+        } catch (DecryptException) {
+            return null;
+        }
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    public function webhookSecretValue(): ?string
+    {
+        try {
+            $value = $this->webhook_secret;
+        } catch (DecryptException) {
+            return null;
+        }
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /** The money accounts and stores this account serves, by business. */
+    public function linkFor(int $businessId): ?CourierAccountBusiness
+    {
+        return CourierAccountBusiness::query()->withoutGlobalScopes()
+            ->where('courier_account_id', $this->id)->where('business_id', $businessId)->first();
     }
 
     public function webhookUrl(): string

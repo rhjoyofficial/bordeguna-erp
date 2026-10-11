@@ -75,6 +75,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // gateway's signature and Validation API agree.
         $middleware->validateCsrfTokens(except: [
             'payments/sslcommerz/*',
+            // Courier webhooks sit outside the web group already; listed so a
+            // later move into it cannot quietly 419 every courier call.
+            'webhooks/couriers/*',
         ]);
 
         $middleware->web(append: [

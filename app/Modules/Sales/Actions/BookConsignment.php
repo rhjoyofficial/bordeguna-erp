@@ -24,6 +24,10 @@ use Illuminate\Validation\ValidationException;
 class BookConsignment
 {
     /**
+     * @param  array<string, mixed>  $courierDetails  courier hub slice 4: what an API booking
+     *                                                learned (account, ids, fees, status). Empty
+     *                                                for a number typed by hand.
+     *
      * @throws ValidationException
      */
     public function handle(
@@ -33,6 +37,7 @@ class BookConsignment
         string $codAmount,
         User $createdBy,
         ?int $declaredWeightGrams = null,
+        array $courierDetails = [],
     ): Consignment {
         $consignmentNumber = trim($consignmentNumber);
 
@@ -70,7 +75,7 @@ class BookConsignment
             ]);
         }
 
-        return DB::transaction(function () use ($delivery, $courier, $consignmentNumber, $cod, $createdBy, $declaredWeightGrams) {
+        return DB::transaction(function () use ($delivery, $courier, $consignmentNumber, $cod, $createdBy, $declaredWeightGrams, $courierDetails) {
             // ⚠ Read under a lock, so a clerk invoicing the challan by hand at
             // the same moment cannot slip a bill in between the check and the
             // booking.
@@ -94,6 +99,14 @@ class BookConsignment
                 ]);
             }
 
+            $accountId = $courierDetails['courier_account_id'] ?? null;
+
+            if ($accountId !== null && Consignment::query()->withoutGlobalScopes()->where('courier_account_id', $accountId)->where('consignment_number', $consignmentNumber)->exists()) {
+                throw ValidationException::withMessages([
+                    'consignment_number' => "Consignment {$consignmentNumber} is already recorded for this courier account.",
+                ]);
+            }
+
             // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the weight the courier
             // is told, typed freely with no reason, and beside it what the
             // challan's lines weigh - worked out HERE, never taken from the form.
@@ -110,7 +123,7 @@ class BookConsignment
                 'created_by' => $createdBy->id,
                 'declared_weight_auto_grams' => $auto,
                 'declared_weight_grams' => $declaredWeightGrams ?? ParcelWeight::suggestedForDelivery($delivery),
-            ]);
+            ] + $courierDetails);
         });
     }
 }

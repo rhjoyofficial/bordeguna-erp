@@ -1,3 +1,4 @@
+import { type CourierInfo } from '@/components/couriers/courier-parcel';
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { ReportHeading } from '@/components/report/report-shell';
@@ -27,6 +28,9 @@ interface Consignment {
     // courier has owed it since answering.
     paid_out_on: { id: number; statement_reference: string } | null;
     waiting_days: number | null;
+    // Courier hub slice 4: what the courier says, when it was last asked, its
+    // quoted fees, and its timeline. Not money.
+    courier_info: CourierInfo;
 }
 
 interface CourierHolding {
@@ -34,6 +38,37 @@ interface CourierHolding {
     name: string;
     held_in_books: string;
     awaiting_payout: string;
+}
+
+// The courier's own word for a parcel, last time it was heard, its quoted fees,
+// and the latest few timeline entries.
+function CourierCell({ info }: { info: CourierInfo }) {
+    if (info.courier_status === null && info.booked_via === 'manual') {
+        return <span className="text-muted-foreground text-xs">Typed by hand</span>;
+    }
+
+    return (
+        <div className="text-xs">
+            <Badge variant="outline">{info.courier_status_label ?? 'No word yet'}</Badge>
+            <span className="text-muted-foreground block">{info.status_synced_at ? `heard ${info.status_synced_at}` : 'not asked yet'}</span>
+            {(info.provider_fee_quoted !== null || info.provider_cod_fee_quoted !== null) && (
+                <span className="text-muted-foreground block">
+                    fee {info.provider_fee_quoted ?? '-'}
+                    {info.provider_cod_fee_quoted !== null && ` + COD ${info.provider_cod_fee_quoted}`}
+                </span>
+            )}
+            {info.prompt && <span className="block font-medium text-sky-700 dark:text-sky-400">{info.prompt.message}</span>}
+            {info.events.length > 0 && (
+                <ol className="text-muted-foreground mt-1">
+                    {info.events.slice(0, 3).map((event) => (
+                        <li key={event.id}>
+                            {event.occurred_at} {event.status_label ?? event.raw_status ?? event.event}
+                        </li>
+                    ))}
+                </ol>
+            )}
+        </div>
+    );
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -111,6 +146,7 @@ export default function ConsignmentsIndex({
                                 <th className="p-3">Customer</th>
                                 <th className="p-3 text-right">To collect</th>
                                 <th className="p-3"></th>
+                                <th className="p-3">Courier says</th>
                                 <th className="p-3 text-right">Collected</th>
                                 <th className="p-3">Invoice</th>
                                 <th className="p-3">Paid out</th>
@@ -151,6 +187,9 @@ export default function ConsignmentsIndex({
                                             <span className="text-muted-foreground block text-xs">{consignment.outcome_on}</span>
                                         )}
                                     </td>
+                                    <td className="p-3">
+                                        <CourierCell info={consignment.courier_info} />
+                                    </td>
                                     <td className="p-3 text-right tabular-nums">{consignment.collected_amount ?? '-'}</td>
                                     <td className="p-3">
                                         {consignment.invoice ? (
@@ -184,7 +223,7 @@ export default function ConsignmentsIndex({
                             ))}
                             {consignments.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={9} className="text-muted-foreground p-6 text-center">
+                                    <td colSpan={10} className="text-muted-foreground p-6 text-center">
                                         No parcels here. A challan is handed to a courier from its order.
                                     </td>
                                 </tr>

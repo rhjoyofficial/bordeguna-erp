@@ -1,4 +1,14 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import {
+    ApiBookParcelForm,
+    CourierStatusPanel,
+    SettleBookingPanel,
+    type CourierAccountOption,
+    type CourierBooking,
+    type CourierDraft,
+    type CourierInfo,
+    type CourierPrompt,
+} from '@/components/couriers/courier-parcel';
 import InputError from '@/components/input-error';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +19,7 @@ import AppLayout from '@/layouts/app-layout';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useState } from 'react';
 
 interface Line {
     id: number;
@@ -181,8 +191,13 @@ interface Challan {
     weight: ParcelWeightInfo;
     weight_suggested: number | null;
     lines: { id: number; product: string | null; sku: string | null; quantity: string }[];
+    // Courier hub slice 4: what an API booking would send, and a booking whose
+    // answer is still open (or was refused).
+    courier_draft: CourierDraft | null;
+    courier_booking: CourierBooking | null;
     consignment: {
         id: number;
+        courier_info: CourierInfo | null;
         courier: string | null;
         consignment_number: string;
         cod_amount: string;
@@ -274,8 +289,11 @@ function BookParcelForm({ challan, couriers }: { challan: Challan; couriers: { i
     );
 }
 
-function ParcelOutcomeForm({ challan }: { challan: Challan }) {
+function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: CourierPrompt | null }) {
     const consignment = challan.consignment!;
+    // ⭐ Courier hub slice 4 (ruling 1): what the courier reported is offered,
+    // never posted by itself. A person confirms it here.
+    const startOutcome = prompt?.outcome ?? 'delivered';
     const { data, setData, post, errors, processing } = useForm<{
         outcome: 'delivered' | 'partially_delivered' | 'returned';
         outcome_on: string;
@@ -283,11 +301,15 @@ function ParcelOutcomeForm({ challan }: { challan: Challan }) {
         note: string;
         lines: { delivery_line_id: number; taken: string; written_off: string }[];
     }>({
-        outcome: 'delivered',
+        outcome: startOutcome,
         outcome_on: today(),
-        collected_amount: consignment.cod_amount,
+        collected_amount: startOutcome === 'returned' ? '0' : (prompt?.collected ?? consignment.cod_amount),
         note: '',
-        lines: challan.lines.map((line) => ({ delivery_line_id: line.id, taken: line.quantity, written_off: '0' })),
+        lines: challan.lines.map((line) => ({
+            delivery_line_id: line.id,
+            taken: startOutcome === 'returned' ? '0' : line.quantity,
+            written_off: '0',
+        })),
     });
 
     const setOutcome = (outcome: typeof data.outcome) => {
@@ -318,6 +340,11 @@ function ParcelOutcomeForm({ challan }: { challan: Challan }) {
 
     return (
         <form onSubmit={submit} className="mt-3 flex flex-col gap-3">
+            {prompt && (
+                <p className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-medium dark:border-sky-800 dark:bg-sky-950/40">
+                    {prompt.message}
+                </p>
+            )}
             <div className="flex flex-wrap items-end gap-3">
                 <div className="grid gap-1">
                     <Label required>What the courier reported</Label>
@@ -407,17 +434,26 @@ function ParcelOutcomeForm({ challan }: { challan: Challan }) {
 function ChallanCard({
     challan,
     couriers,
+    courierAccounts,
+    canBookCourier,
     canDeliver,
     canRecordOutcome,
     customerId,
 }: {
     challan: Challan;
     couriers: { id: number; name: string }[];
+    courierAccounts: CourierAccountOption[];
+    canBookCourier: boolean;
     canDeliver: boolean;
     canRecordOutcome: boolean;
     customerId: number;
 }) {
     const consignment = challan.consignment;
+    const booking = challan.courier_booking;
+    // A booking with no clear answer blocks both ways in: settle it first.
+    const bookingOpen = booking !== null && booking.status !== 'failed';
+    const apiReady = canBookCourier && courierAccounts.length > 0 && challan.courier_draft !== null;
+    const [mode, setMode] = useState<'api' | 'manual'>(apiReady ? 'api' : 'manual');
 
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
@@ -469,9 +505,48 @@ function ChallanCard({
                 </p>
             )}
 
-            {consignment?.status === 'booked' && canRecordOutcome && <ParcelOutcomeForm challan={challan} />}
+            {consignment?.courier_info && (
+                <CourierStatusPanel consignmentId={consignment.id} info={consignment.courier_info} canBook={canBookCourier} />
+            )}
 
-            {challan.can_consign && canDeliver && couriers.length > 0 && <BookParcelForm challan={challan} couriers={couriers} />}
+            {consignment?.status === 'booked' && canRecordOutcome && (
+                <ParcelOutcomeForm challan={challan} prompt={consignment.courier_info?.prompt} />
+            )}
+
+            {booking && <SettleBookingPanel booking={booking} canBook={canBookCourier} />}
+
+            {challan.can_consign && canDeliver && !bookingOpen && apiReady && (
+                <div className="mt-3 flex gap-3 text-xs">
+                    <button
+                        type="button"
+                        className={mode === 'api' ? 'font-medium underline' : 'text-muted-foreground'}
+                        onClick={() => setMode('api')}
+                    >
+                        Book through the courier
+                    </button>
+                    <button
+                        type="button"
+                        className={mode === 'manual' ? 'font-medium underline' : 'text-muted-foreground'}
+                        onClick={() => setMode('manual')}
+                    >
+                        Type a consignment number
+                    </button>
+                </div>
+            )}
+
+            {challan.can_consign && canDeliver && !bookingOpen && apiReady && mode === 'api' && (
+                <ApiBookParcelForm
+                    challanId={challan.id}
+                    accounts={courierAccounts}
+                    draft={challan.courier_draft!}
+                    weightSuggested={challan.weight_suggested}
+                    missingWeight={challan.weight.missing_count}
+                />
+            )}
+
+            {challan.can_consign && canDeliver && !bookingOpen && (!apiReady || mode === 'manual') && couriers.length > 0 && (
+                <BookParcelForm challan={challan} couriers={couriers} />
+            )}
 
             {challan.can_consign && canDeliver && couriers.length === 0 && (
                 <p className="text-muted-foreground mt-1 text-xs">
@@ -1045,6 +1120,8 @@ export default function SalesOrderShow({
     credit_refusal,
     can_override_credit,
     weight,
+    courier_accounts,
+    can_book_courier,
 }: {
     order: Order;
     challans: Challan[];
@@ -1064,6 +1141,8 @@ export default function SalesOrderShow({
     credit_refusal: string | null;
     can_override_credit: boolean;
     weight: OrderWeight;
+    courier_accounts: CourierAccountOption[];
+    can_book_courier: boolean;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Sales orders', href: '/sales/orders' },
@@ -1356,6 +1435,8 @@ export default function SalesOrderShow({
                                 key={challan.id}
                                 challan={challan}
                                 couriers={couriers}
+                                courierAccounts={courier_accounts}
+                                canBookCourier={can_book_courier}
                                 canDeliver={can_deliver}
                                 canRecordOutcome={can_record_outcome}
                                 customerId={order.customer.id}

@@ -2,6 +2,10 @@
 
 namespace App\Modules\Sales\Couriers\Drivers;
 
+use App\Modules\Sales\Couriers\Booking\BookingResult;
+use App\Modules\Sales\Couriers\Booking\CancelResult;
+use App\Modules\Sales\Couriers\Booking\ParcelBooking;
+use App\Modules\Sales\Couriers\Booking\ParcelDetails;
 use App\Modules\Sales\Couriers\Models\CourierAccount;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
@@ -11,8 +15,10 @@ use Illuminate\Support\Facades\Http;
  * Read-only in slice 1: GET /api/v2/stores and GET /api/v2/cities.
  * Slice 2 adds the coverage lists, the area suggestion and the address
  * resolver, all read-only (POST address-details changes nothing at CarryBee).
+ * Slice 4 books (POST /api/v2/orders), asks (GET details, by consignment id or
+ * by our merchant_order_id) and cancels.
  */
-class CarryBeeDriver implements CourierDriver, ListsLocations
+class CarryBeeDriver implements BooksParcels, CourierDriver, ListsLocations, LooksUpMerchantReference
 {
     public function __construct(private readonly CourierApi $api) {}
 
@@ -138,6 +144,129 @@ class CarryBeeDriver implements CourierDriver, ListsLocations
         }
 
         return [['city_id' => (string) $data['city_id'], 'zone_id' => (string) $data['zone_id']], null];
+    }
+
+    /**
+     * ⚠ Units as CarryBee wants them: grams as a whole number (1 to 25,000),
+     * whole taka, ids as numbers. Area left out when the map has none.
+     */
+    public function book(CourierAccount $account, ParcelBooking $parcel): BookingResult
+    {
+        $payload = array_filter([
+            'store_id' => $parcel->storeId,
+            'merchant_order_id' => $parcel->merchantOrderId,
+            'delivery_type' => $parcel->deliveryType,
+            'product_type' => $parcel->itemType,
+            'recipient_phone' => $parcel->recipientPhone,
+            'recipient_name' => $parcel->recipientName,
+            'recipient_address' => $parcel->recipientAddress,
+            'city_id' => (int) $parcel->cityId,
+            'zone_id' => (int) $parcel->zoneId,
+            'area_id' => $parcel->areaId === null ? null : (int) $parcel->areaId,
+            'special_instruction' => $parcel->specialInstruction,
+            'product_description' => $parcel->description,
+            'item_weight' => $parcel->weightGrams,
+            'item_quantity' => $parcel->quantity,
+            'collectable_amount' => $parcel->codTaka,
+        ], fn ($v) => $v !== null && $v !== '');
+
+        $path = '/api/v2/orders';
+        $call = $this->api->call($account, 'POST', $path, fn (string $base) => $this->client($account)->asJson()->post($base.$path, $payload));
+
+        if ($call->outcomeUnknown()) {
+            return new BookingResult(BookingResult::UNKNOWN, message: (string) $call->error, httpStatus: $call->status());
+        }
+
+        if (! $call->ok()) {
+            return new BookingResult(
+                BookingResult::FAILED,
+                message: (string) $call->error,
+                httpStatus: $call->status(),
+                summary: ['fields' => array_keys((array) data_get($call->json(), 'causes', []))],
+            );
+        }
+
+        $order = (array) data_get($call->json(), 'data.order', data_get($call->json(), 'data', []));
+        $id = $order['consignment_id'] ?? null;
+
+        // A success with no id is not a booking anybody can follow. The parcel
+        // may still exist, so it is UNKNOWN and checked, never sent again.
+        if (! is_scalar($id) || (string) $id === '') {
+            return new BookingResult(BookingResult::UNKNOWN, message: 'CarryBee answered without a consignment id.', httpStatus: $call->status());
+        }
+
+        return new BookingResult(
+            BookingResult::SUCCEEDED,
+            consignmentId: (string) $id,
+            deliveryFee: self::amount($order['delivery_fee'] ?? null),
+            codFee: self::amount($order['cod_fee'] ?? null),
+            httpStatus: $call->status(),
+        );
+    }
+
+    public function details(CourierAccount $account, string $consignmentId): ParcelDetails
+    {
+        return $this->detailsAt($account, $consignmentId);
+    }
+
+    /**
+     * GET details accepts our merchant_order_id as well as CarryBee's id: the
+     * check made before anybody may book a timed-out parcel again.
+     */
+    public function lookupMerchantReference(CourierAccount $account, string $merchantOrderId): ParcelDetails
+    {
+        return $this->detailsAt($account, $merchantOrderId);
+    }
+
+    public function cancel(CourierAccount $account, string $consignmentId, string $reason): CancelResult
+    {
+        $path = '/api/v2/orders/'.rawurlencode($consignmentId).'/cancel';
+        $call = $this->api->call($account, 'POST', $path, fn (string $base) => $this->client($account)->asJson()
+            ->post($base.$path, ['cancellation_reason' => mb_substr($reason, 0, 199)]));
+
+        return $call->ok()
+            ? new CancelResult(true, 'CarryBee accepted the cancellation.')
+            : new CancelResult(false, 'CarryBee did not cancel it: '.$call->error);
+    }
+
+    private function detailsAt(CourierAccount $account, string $reference): ParcelDetails
+    {
+        $call = $this->get($account, '/api/v2/orders/'.rawurlencode($reference).'/details');
+
+        if ($call->status() === 404) {
+            return ParcelDetails::notFound("CarryBee has no parcel under {$reference}.");
+        }
+
+        if (! $call->ok()) {
+            return ParcelDetails::error((string) $call->error);
+        }
+
+        $data = (array) data_get($call->json(), 'data.order', data_get($call->json(), 'data', []));
+
+        if (! isset($data['consignment_id'])) {
+            return ParcelDetails::error('CarryBee answered without the parcel.');
+        }
+
+        $weight = $data['item_weight'] ?? null;
+
+        return new ParcelDetails(
+            ParcelDetails::FOUND,
+            consignmentId: (string) $data['consignment_id'],
+            merchantOrderId: isset($data['merchant_order_id']) ? (string) $data['merchant_order_id'] : null,
+            rawStatus: isset($data['transfer_status']) ? (string) $data['transfer_status'] : null,
+            updatedAt: isset($data['updated_at']) ? (string) $data['updated_at'] : null,
+            deliveryFee: self::amount($data['delivery_fee'] ?? null),
+            codFee: self::amount($data['cod_fee'] ?? null),
+            collectedAmount: self::amount($data['collected_amount'] ?? null),
+            hubWeightGrams: is_numeric($weight) && (int) $weight > 0 ? (int) $weight : null,
+            invoiceRef: isset($data['invoice_id']) && $data['invoice_id'] !== '' ? (string) $data['invoice_id'] : null,
+        );
+    }
+
+    /** CarryBee sends the delivery fee as a string and the COD fee as a number. */
+    private static function amount(mixed $value): ?string
+    {
+        return is_numeric($value) ? (string) $value : null;
     }
 
     private function list(CourierAccount $account, string $path, string $key): LocationList

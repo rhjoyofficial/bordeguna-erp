@@ -6,6 +6,7 @@ use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Sales\Console\Commands\ImportPriceList;
 use App\Modules\Sales\Couriers\Console\ImportCourierCredentials;
 use App\Modules\Sales\Couriers\Console\SyncCourierLocationsCommand;
+use App\Modules\Sales\Couriers\Console\SyncCourierParcelsCommand;
 use App\Modules\Sales\Reporting\Definitions\SalesByBrandReport;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -18,6 +19,9 @@ class SalesServiceProvider extends ServiceProvider
         // sales or RECORD an order. A field officer holds the second only, and
         // SalesOrderController then shows him the orders he took, nobody else's.
         Gate::define('sales.orders.see', fn ($user) => $user->can('sales.reports.view') || $user->can('sales.orders.record'));
+        // ⭐ Courier hub slice 4: the parcels list opens for whoever reads sales
+        // or follows parcels (couriers.parcels.view).
+        Gate::define('sales.parcels.see', fn ($user) => $user->can('sales.reports.view') || $user->can('couriers.parcels.view'));
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
@@ -28,7 +32,7 @@ class SalesServiceProvider extends ServiceProvider
         $registry->register($this->app->make(SalesByBrandReport::class));
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ImportPriceList::class, ImportCourierCredentials::class, SyncCourierLocationsCommand::class]);
+            $this->commands([ImportPriceList::class, ImportCourierCredentials::class, SyncCourierLocationsCommand::class, SyncCourierParcelsCommand::class]);
         }
     }
 }

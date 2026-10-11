@@ -31,7 +31,7 @@ class CourierApi
         // ⚠ Checked again here, not only at save: a row edited by hand or
         // restored from an old dump must not post credentials anywhere else.
         if (! $account->definition()->allowsBaseUrl((string) $account->environment, (string) $account->base_url)) {
-            return new CourierCall(null, 'The saved address is not an official '.$account->definition()->name().' address for '.$account->environment.'. Choose one from the list and save again.');
+            return new CourierCall(null, 'The saved address is not an official '.$account->definition()->name().' address for '.$account->environment.'. Choose one from the list and save again.', sent: false);
         }
 
         $started = hrtime(true);
@@ -88,12 +88,21 @@ class CourierApi
         };
     }
 
-    private function scrub(CourierAccount $account, string $text): string
+    public function scrub(CourierAccount $account, string $text): string
     {
         foreach ($account->secretValues() as $secret) {
             $text = str_replace($secret, '[hidden]', $text);
         }
 
-        return $text;
+        return self::withoutPhones($text);
+    }
+
+    /**
+     * ⚠ A courier's complaint can quote the recipient's phone back ("01711...
+     * is not valid"). A Bangladeshi mobile number never reaches a log.
+     */
+    public static function withoutPhones(string $text): string
+    {
+        return preg_replace('/(?:\+?880|0)1[3-9]\d{8}/', '[phone]', $text) ?? $text;
     }
 }

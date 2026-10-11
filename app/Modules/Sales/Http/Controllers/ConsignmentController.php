@@ -11,6 +11,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Sales\Actions\BookConsignment;
 use App\Modules\Sales\Actions\RecordConsignmentOutcome;
+use App\Modules\Sales\Couriers\Support\ParcelPresenter;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Consignment;
@@ -45,7 +46,7 @@ class ConsignmentController extends Controller
         $awaitingPayout = fn ($query) => $query->where('status', '!=', ConsignmentStatus::Booked->value)->whereDoesntHave('statementLine');
 
         $consignments = Consignment::query()
-            ->with(['courier:id,name', 'delivery:id,delivery_number,delivered_at,customer_id', 'delivery.customer:id,name', 'delivery.lines.orderLine:id,sales_order_id', 'invoice:id,invoice_number', 'statementLine.statement:id,statement_reference'])
+            ->with(['courier:id,name', 'delivery:id,delivery_number,delivered_at,customer_id', 'delivery.customer:id,name', 'delivery.lines.orderLine:id,sales_order_id', 'invoice:id,invoice_number', 'statementLine.statement:id,statement_reference', 'courierAccount.provider', 'shipmentEvents'])
             ->when($filters['status'] === 'awaiting_payout', $awaitingPayout)
             ->when(! in_array($filters['status'], ['all', 'awaiting_payout'], true), fn ($query) => $query->where('status', $filters['status']))
             ->when($filters['search'], fn ($query, $search) => $query->where(
@@ -76,6 +77,9 @@ class ConsignmentController extends Controller
                 'waiting_days' => ! $consignment->isBooked() && $consignment->statementLine === null && $consignment->outcome_on !== null
                     ? (int) $consignment->outcome_on->diffInDays(today())
                     : null,
+                // ⭐ Courier hub slice 4: what the courier says, when it was
+                // last asked, and the fees it quoted. Not money.
+                'courier_info' => ParcelPresenter::courier($consignment, withEvents: true),
             ]);
 
         return Inertia::render('sales/consignments/index', [

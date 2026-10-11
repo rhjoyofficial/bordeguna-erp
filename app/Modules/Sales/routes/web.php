@@ -2,7 +2,9 @@
 
 use App\Modules\Commerce\Http\Controllers\GatewayRefundController;
 use App\Modules\Sales\Couriers\Http\Controllers\CourierLocationsController;
+use App\Modules\Sales\Couriers\Http\Controllers\CourierParcelController;
 use App\Modules\Sales\Couriers\Http\Controllers\CourierSettingsController;
+use App\Modules\Sales\Couriers\Http\Controllers\CourierWebhookController;
 use App\Modules\Sales\Http\Controllers\ConsignmentController;
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\CourierStatementController;
@@ -212,8 +214,31 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
             ->whereNumber('consignment')->name('consignments.outcome');
     });
 
+    // ⭐ Courier hub slice 4: booking through the courier's API, and settling a
+    // booking whose answer was lost. Technical authority (couriers.parcels.book)
+    // beside the trust of recording the challan; none of it posts money.
+    Route::middleware(['can:sales.sell', 'can:couriers.parcels.book'])->group(function () {
+        Route::post('deliveries/{delivery}/courier-booking', [CourierParcelController::class, 'book'])
+            ->whereNumber('delivery')->name('consignments.book');
+        Route::post('courier-bookings/{bookingRequest}/look-up', [CourierParcelController::class, 'lookUp'])
+            ->whereNumber('bookingRequest')->name('courier-bookings.look-up');
+        Route::post('courier-bookings/{bookingRequest}/booked', [CourierParcelController::class, 'markBooked'])
+            ->whereNumber('bookingRequest')->name('courier-bookings.booked');
+        Route::post('courier-bookings/{bookingRequest}/not-booked', [CourierParcelController::class, 'markNotBooked'])
+            ->whereNumber('bookingRequest')->name('courier-bookings.not-booked');
+        Route::post('consignments/{consignment}/cancel', [CourierParcelController::class, 'cancel'])
+            ->whereNumber('consignment')->name('consignments.cancel');
+    });
+
+    // Asking the courier where a parcel is: read-only at the courier.
+    Route::post('consignments/{consignment}/refresh', [CourierParcelController::class, 'refresh'])
+        ->middleware('can:couriers.parcels.view')->whereNumber('consignment')->name('consignments.refresh');
+
+    // The parcels list: for whoever reads sales, or follows parcels.
+    Route::get('consignments', [ConsignmentController::class, 'index'])
+        ->middleware('can:sales.parcels.see')->name('consignments.index');
+
     Route::middleware('can:sales.reports.view')->group(function () {
-        Route::get('consignments', [ConsignmentController::class, 'index'])->name('consignments.index');
         Route::get('courier-statements', [CourierStatementController::class, 'index'])->name('courier-statements.index');
         Route::get('courier-statements/{courierStatement}', [CourierStatementController::class, 'show'])
             ->whereNumber('courierStatement')->name('courier-statements.show');
@@ -339,7 +364,17 @@ Route::middleware(['web', 'auth', 'business', 'can:couriers.settings.manage'])
         Route::post('{courierAccount}/test', [CourierSettingsController::class, 'test'])->whereNumber('courierAccount')->name('test');
         Route::post('{courierAccount}/activate', [CourierSettingsController::class, 'activate'])->whereNumber('courierAccount')->name('activate');
         Route::post('{courierAccount}/deactivate', [CourierSettingsController::class, 'deactivate'])->whereNumber('courierAccount')->name('deactivate');
+        Route::post('{courierAccount}/auto-post', [CourierSettingsController::class, 'autoPost'])->whereNumber('courierAccount')->name('auto-post');
         Route::post('{courierAccount}/rotate-webhook-secret', [CourierSettingsController::class, 'rotateSecret'])->whereNumber('courierAccount')->name('rotate-secret');
         Route::put('{courierAccount}/business', [CourierSettingsController::class, 'linkBusiness'])->whereNumber('courierAccount')->name('link');
         Route::delete('{courierAccount}/business', [CourierSettingsController::class, 'unlinkBusiness'])->whereNumber('courierAccount')->name('unlink');
     });
+
+// ⭐ Courier webhooks (courier hub slice 4). OUTSIDE the web group on purpose:
+// no session, no CSRF, no business middleware. The courier proves itself with
+// the account's shared header secret, and the parcel's business comes from our
+// own record, never from the body (ruling 12). Throttled per address.
+Route::post('webhooks/couriers/{uuid}', CourierWebhookController::class)
+    ->middleware('throttle:300,1')
+    ->whereUuid('uuid')
+    ->name('couriers.webhook');
