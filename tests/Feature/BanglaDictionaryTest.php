@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Sales\Couriers\Enums\CourierStatus;
+
 /**
  * The Bangla dictionary is the one place in this system where a defect is
  * invisible to everybody who reviews it in English.
@@ -15,22 +17,46 @@
  * so a Bangla string is allowed to contain English digits and punctuation - it
  * just has to contain some Bangla.
  */
+/**
+ * ⚠ Every dictionary file: i18n.ts and the per-area parts in lib/i18n/ that it
+ * spreads in (11 Oct 2026). A part this file did not read would be a part
+ * nobody checks.
+ */
+function dictionarySource(): string
+{
+    $files = [resource_path('js/lib/i18n.ts'), ...glob(resource_path('js/lib/i18n/*.ts'))];
+
+    return implode('
+', array_map('file_get_contents', $files));
+}
+
 function dictionaryEntries(): array
 {
-    $source = file_get_contents(resource_path('js/lib/i18n.ts'));
+    $source = dictionarySource();
+
+    // ⚠ Either quote: prettier (singleQuote) writes a string that holds an
+    // apostrophe in double quotes, and an entry this cannot read would be
+    // skipped in silence by every check below.
+    $string = "(?:'((?:[^'\\\\]|\\\\.)*)'|\"((?:[^\"\\\\]|\\\\.)*)\")";
 
     preg_match_all(
-        "/'([a-z0-9_.]+)':\s*\{\s*en:\s*'((?:[^'\\\\]|\\\\.)*)'\s*,\s*bn:\s*'((?:[^'\\\\]|\\\\.)*)'\s*,?\s*\}/su",
+        "/'([a-z0-9_.]+)':\s*\{\s*en:\s*{$string}\s*,\s*bn:\s*{$string}\s*,?\s*\}/su",
         $source,
         $matches,
         PREG_SET_ORDER,
     );
 
-    return $matches;
+    // [whole, key, en, bn], whichever quote each string used.
+    return array_map(fn (array $m) => [
+        $m[0],
+        $m[1],
+        ($m[2] ?? '') !== '' ? $m[2] : ($m[3] ?? ''),
+        ($m[4] ?? '') !== '' ? $m[4] : ($m[5] ?? ''),
+    ], $matches);
 }
 
 it('parses every entry in the dictionary', function () {
-    $source = file_get_contents(resource_path('js/lib/i18n.ts'));
+    $source = dictionarySource();
 
     preg_match_all("/^\s*'[a-z0-9_.]+':/m", $source, $declared);
 
@@ -95,4 +121,44 @@ it('translates the POS counter, the screen that is read all day', function () {
         ->not->toContain('>Subtotal<')
         ->not->toContain("'Take payment and finish'")
         ->not->toContain('Tap a product to start the sale.');
+});
+
+it('defines every key once across the dictionary files', function () {
+    // ⚠ The parts are spread into one object: a key defined twice would let
+    // the later file silently replace the earlier one.
+    preg_match_all("/^\s*'([a-z0-9_.]+)':/m", dictionarySource(), $declared);
+
+    $twice = array_keys(array_filter(array_count_values($declared[1]), fn (int $n) => $n > 1));
+
+    expect($twice)->toBe([], 'Defined more than once: '.implode(', ', $twice));
+});
+
+it('speaks Bangla on the courier, dashboard and attention screens (11 Oct 2026)', function (string $file) {
+    expect(file_get_contents(resource_path("js/{$file}")))->toContain('useTranslation');
+})->with([
+    'pages/settings/couriers.tsx',
+    'pages/settings/courier-locations.tsx',
+    'pages/settings/courier-rate-cards.tsx',
+    'pages/settings/dashboards.tsx',
+    'pages/settings/failed-jobs.tsx',
+    'pages/sales/courier-fees/index.tsx',
+    'pages/sales/consignments/index.tsx',
+    'pages/sales/courier-statements/index.tsx',
+    'pages/sales/courier-statements/show.tsx',
+    'components/couriers/courier-parcel.tsx',
+    'components/couriers/parcel-settlement.tsx',
+    'pages/dashboards/show.tsx',
+    'components/dashboards/dashboard-toolbar.tsx',
+    'components/dashboards/widget-card.tsx',
+    'components/dashboards/widget-body.tsx',
+    'components/attention/attention-list.tsx',
+    'pages/attention.tsx',
+]);
+
+it('names every courier status in Bangla', function () {
+    $source = dictionarySource();
+
+    foreach (CourierStatus::cases() as $status) {
+        expect($source)->toContain("'courier_status.{$status->value}'");
+    }
 });

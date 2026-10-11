@@ -4,9 +4,8 @@ import HeadingSmall from '@/components/heading-small';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
-
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Dashboards', href: '/settings/dashboards' }];
 
 interface RoleRow {
     id: number;
@@ -28,29 +27,28 @@ interface Option {
  * everyone can always open their own employee dashboard.
  */
 export default function DashboardSettings({ roles, dashboards }: { roles: RoleRow[]; dashboards: Option[] }) {
+    const { t, tr } = useTranslation();
+    const breadcrumbs: BreadcrumbItem[] = [{ title: t('dash.settings.title'), href: '/settings/dashboards' }];
     const form = useForm({
         assignments: roles.map((role) => ({ role_id: role.id, dashboard: role.dashboard as string | null })),
     });
 
-    const labelOf = (value: string) => dashboards.find((d) => d.value === value)?.label ?? value;
+    const labelOf = (value: string) => tr(`dash.name.${value}`, dashboards.find((d) => d.value === value)?.label ?? value);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Dashboards" />
+            <Head title={t('dash.settings.title')} />
             <SettingsLayout>
                 <div className="space-y-6">
-                    <HeadingSmall
-                        title="Dashboards"
-                        description="Which dashboard each role lands on in this business. Somebody with several roles lands on the highest one; holders of see-all access can open every dashboard, and those views are logged."
-                    />
+                    <HeadingSmall title={t('dash.settings.title')} description={t('dash.settings.description')} />
 
                     <ol className="text-muted-foreground grid gap-1 text-sm sm:grid-cols-2">
                         {dashboards.map((d, index) => (
                             <li key={d.value}>
                                 <span className="text-foreground font-medium">
-                                    {index + 1}. {d.label}
+                                    {index + 1}. {labelOf(d.value)}
                                 </span>{' '}
-                                {d.description}
+                                {tr(`dash.description.${d.value}`, d.description)}
                             </li>
                         ))}
                     </ol>
@@ -66,9 +64,9 @@ export default function DashboardSettings({ roles, dashboards }: { roles: RoleRo
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="text-muted-foreground border-b text-left text-xs">
-                                        <th className="p-3 font-medium">Role</th>
-                                        <th className="p-3 font-medium">People</th>
-                                        <th className="p-3 font-medium">Lands on</th>
+                                        <th className="p-3 font-medium">{t('dash.settings.role')}</th>
+                                        <th className="p-3 font-medium">{t('dash.settings.people')}</th>
+                                        <th className="p-3 font-medium">{t('dash.settings.lands_on')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -80,17 +78,17 @@ export default function DashboardSettings({ roles, dashboards }: { roles: RoleRo
                                                 <select
                                                     className="border-input bg-background h-9 w-full max-w-xs rounded-md border px-2 text-sm"
                                                     value={form.data.assignments[index].dashboard ?? ''}
-                                                    aria-label={`Dashboard for ${role.name}`}
+                                                    aria-label={t('dash.settings.dashboard_for', { name: role.name })}
                                                     onChange={(e) => {
                                                         const next = [...form.data.assignments];
                                                         next[index] = { ...next[index], dashboard: e.target.value === '' ? null : e.target.value };
                                                         form.setData('assignments', next);
                                                     }}
                                                 >
-                                                    <option value="">Automatic (from its permissions: {labelOf(role.automatic)})</option>
+                                                    <option value="">{t('dash.settings.automatic', { name: labelOf(role.automatic) })}</option>
                                                     {dashboards.map((d) => (
                                                         <option key={d.value} value={d.value}>
-                                                            {d.label}
+                                                            {labelOf(d.value)}
                                                         </option>
                                                     ))}
                                                 </select>
@@ -101,7 +99,7 @@ export default function DashboardSettings({ roles, dashboards }: { roles: RoleRo
                             </table>
                         </div>
                         <Button type="submit" disabled={form.processing}>
-                            Save
+                            {t('dash.save')}
                         </Button>
                     </form>
                 </div>

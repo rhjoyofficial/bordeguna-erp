@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
@@ -88,8 +89,6 @@ type PageProps = {
     errors: Record<string, string | undefined>;
 };
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Couriers', href: '/settings/couriers' }];
-
 const CAPABILITY_LABELS: Record<string, string> = {
     test_connection: 'Connection test',
     stores: 'Pickup stores',
@@ -138,6 +137,7 @@ function initialData(provider: Provider, account?: Account): AccountFormData {
  * credential fields, its options, and the official URLs for each environment.
  */
 function AccountForm({ providers, account, onDone }: { providers: Provider[]; account?: Account; onDone: () => void }) {
+    const { t } = useTranslation();
     const connected = providers.filter((p) => p.connected);
     const startProvider = account ? providers.find((p) => p.code === account.provider)! : connected[0];
     const form = useForm<AccountFormData>(initialData(startProvider, account));
@@ -170,7 +170,7 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
     return (
         <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
             <FormRow>
-                <Field label="Courier" htmlFor={`provider-${account?.id ?? 'new'}`} size="md" error={errors.provider} required>
+                <Field label={t('couriers.courier')} htmlFor={`provider-${account?.id ?? 'new'}`} size="md" error={errors.provider} required>
                     <select
                         id={`provider-${account?.id ?? 'new'}`}
                         className={selectClass}
@@ -186,12 +186,12 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
                     </select>
                 </Field>
                 <Field
-                    label="Label"
+                    label={t('couriers.label')}
                     htmlFor={`label-${account?.id ?? 'new'}`}
                     size="md"
                     error={errors.label}
                     required
-                    hint="For example LaLaDia or Bionic."
+                    hint={t('couriers.label_hint')}
                 >
                     <Input
                         id={`label-${account?.id ?? 'new'}`}
@@ -200,24 +200,24 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
                         onChange={(e) => form.setData('label', e.target.value)}
                     />
                 </Field>
-                <Field label="Environment" htmlFor={`env-${account?.id ?? 'new'}`} size="sm" error={errors.environment} required>
+                <Field label={t('couriers.environment')} htmlFor={`env-${account?.id ?? 'new'}`} size="sm" error={errors.environment} required>
                     <select
                         id={`env-${account?.id ?? 'new'}`}
                         className={selectClass}
                         value={form.data.environment}
                         onChange={(e) => changeEnvironment(e.target.value)}
                     >
-                        <option value="live">Live</option>
-                        <option value="sandbox">Sandbox (test)</option>
+                        <option value="live">{t('couriers.live')}</option>
+                        <option value="sandbox">{t('couriers.sandbox_test')}</option>
                     </select>
                 </Field>
                 <Field
-                    label="Address"
+                    label={t('couriers.address')}
                     htmlFor={`url-${account?.id ?? 'new'}`}
                     size="grow"
                     error={errors.base_url}
                     required
-                    hint="Only the courier's official addresses are offered, so the credentials can never be sent anywhere else."
+                    hint={t('couriers.address_hint')}
                 >
                     <select
                         id={`url-${account?.id ?? 'new'}`}
@@ -235,7 +235,7 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
             </FormRow>
 
             <div className="space-y-2">
-                <p className="text-sm font-medium">Credentials</p>
+                <p className="text-sm font-medium">{t('couriers.credentials')}</p>
                 <FormRow>
                     {provider.credential_fields.map((f) => {
                         const saved = account?.credentials_set[f.key] ?? false;
@@ -254,7 +254,7 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
                                 {saved && !replacing[f.key] ? (
                                     <div className="flex h-9 items-center gap-2">
                                         <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
-                                            Set
+                                            {t('couriers.set')}
                                         </span>
                                         <Button
                                             type="button"
@@ -262,7 +262,7 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
                                             size="sm"
                                             onClick={() => setReplacing({ ...replacing, [f.key]: true })}
                                         >
-                                            Replace
+                                            {t('couriers.replace')}
                                         </Button>
                                     </div>
                                 ) : (
@@ -271,7 +271,7 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
                                         type={f.secret ? 'password' : 'text'}
                                         autoComplete="off"
                                         spellCheck={false}
-                                        placeholder={saved ? 'Type the new value, or leave blank to keep the saved one' : ''}
+                                        placeholder={saved ? t('couriers.replace_placeholder') : ''}
                                         value={form.data.credentials[f.key] ?? ''}
                                         onChange={(e) => form.setData('credentials', { ...form.data.credentials, [f.key]: e.target.value })}
                                     />
@@ -284,7 +284,7 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
 
             {provider.option_fields.length > 0 && (
                 <div className="space-y-2">
-                    <p className="text-sm font-medium">Options</p>
+                    <p className="text-sm font-medium">{t('couriers.options')}</p>
                     <FormRow>
                         {provider.option_fields.map((f) => {
                             const id = `opt-${account?.id ?? 'new'}-${f.key}`;
@@ -325,15 +325,11 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
             {provider.code === 'pathao' && (
                 <FormRow>
                     <Field
-                        label="Webhook integration secret"
+                        label={t('couriers.integration_secret')}
                         htmlFor={`echo-${account?.id ?? 'new'}`}
                         size="lg"
                         error={errors.integration_secret}
-                        hint={
-                            account?.integration_secret_set
-                                ? 'Saved. Leave blank to keep it. Pathao shows this value on its webhook page; the ERP sends it back on every answer.'
-                                : 'Pathao shows this value on its webhook page; the ERP sends it back on every answer.'
-                        }
+                        hint={account?.integration_secret_set ? t('couriers.integration_secret_saved') : t('couriers.integration_secret_hint')}
                     >
                         <Input
                             id={`echo-${account?.id ?? 'new'}`}
@@ -346,18 +342,14 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
                 </FormRow>
             )}
 
-            {account?.is_active && (
-                <p className="text-muted-foreground text-xs">
-                    Changing a credential, the environment or the address switches this account off until it passes a new test.
-                </p>
-            )}
+            {account?.is_active && <p className="text-muted-foreground text-xs">{t('couriers.change_switches_off')}</p>}
 
             <div className="flex gap-2">
                 <Button type="submit" disabled={form.processing}>
-                    {account ? 'Save changes' : 'Save account'}
+                    {account ? t('couriers.save_changes') : t('couriers.save_account')}
                 </Button>
                 <Button type="button" variant="ghost" onClick={onDone}>
-                    Cancel
+                    {t('couriers.cancel')}
                 </Button>
             </div>
         </form>
@@ -370,6 +362,7 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
  * is what the courier returned in the last test.
  */
 function BusinessLink({ account, moneyAccounts, brands }: { account: Account; moneyAccounts: PageProps['moneyAccounts']; brands: BrandOption[] }) {
+    const { t } = useTranslation();
     const linkFor = (brand: string) => account.links.find((l) => (l.brand_id === null ? '' : String(l.brand_id)) === brand);
     const valuesFor = (brand: string) => {
         const link = linkFor(brand);
@@ -385,36 +378,32 @@ function BusinessLink({ account, moneyAccounts, brands }: { account: Account; mo
     const form = useForm(valuesFor(firstBrand));
     const errors = form.errors as Record<string, string | undefined>;
     const editing = linkFor(form.data.brand_id);
-    const brandName = (link: BusinessLinkRow) => (link.brand_id === null ? 'Any brand' : (link.brand_name ?? 'A brand'));
+    const brandName = (link: BusinessLinkRow) => (link.brand_id === null ? t('couriers.any_brand') : (link.brand_name ?? t('couriers.a_brand')));
 
     return (
         <div className="space-y-3">
-            <p className="text-sm font-medium">This business</p>
+            <p className="text-sm font-medium">{t('couriers.this_business')}</p>
             {account.links.length > 0 ? (
                 <ul className="text-muted-foreground space-y-1 text-sm">
                     {account.links.map((link) => (
                         <li key={link.id}>
-                            <strong className="text-foreground">{brandName(link)}</strong>: ships from{' '}
+                            <strong className="text-foreground">{brandName(link)}</strong>: {t('couriers.ships_from')}{' '}
                             <strong>{link.provider_store_name ?? link.provider_store_id}</strong>
-                            {link.is_default ? ', the default for this courier' : ''}.
+                            {link.is_default ? t('couriers.default_for_courier') : ''}.
                         </li>
                     ))}
                 </ul>
             ) : (
-                <p className="text-muted-foreground text-sm">Not used by this business yet.</p>
+                <p className="text-muted-foreground text-sm">{t('couriers.not_used_yet')}</p>
             )}
             {account.other_business_count > 0 && (
-                <p className="text-muted-foreground text-xs">
-                    Also used by {account.other_business_count} other business(es), each with its own store and money account.
-                </p>
+                <p className="text-muted-foreground text-xs">{t('couriers.other_businesses', { count: account.other_business_count })}</p>
             )}
 
             {account.stores.length === 0 ? (
-                <p className="text-muted-foreground text-sm">Run Test connection first: the pickup stores come from the courier.</p>
+                <p className="text-muted-foreground text-sm">{t('couriers.test_first')}</p>
             ) : moneyAccounts.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                    This business has no courier money account yet. Add one in Accounting, Bank and cash, with the type Courier, then come back.
-                </p>
+                <p className="text-muted-foreground text-sm">{t('couriers.no_money_account')}</p>
             ) : (
                 <form
                     onSubmit={(e) => {
@@ -426,39 +415,39 @@ function BusinessLink({ account, moneyAccounts, brands }: { account: Account; mo
                 >
                     <FormRow>
                         {brands.length > 0 && (
-                            <Field label="For orders of" htmlFor={`brand-${account.id}`} size="md" error={errors.brand_id}>
+                            <Field label={t('couriers.for_orders_of')} htmlFor={`brand-${account.id}`} size="md" error={errors.brand_id}>
                                 <select
                                     id={`brand-${account.id}`}
                                     className={selectClass}
                                     value={form.data.brand_id}
                                     onChange={(e) => form.setData(valuesFor(e.target.value))}
                                 >
-                                    <option value="">Any brand</option>
+                                    <option value="">{t('couriers.any_brand')}</option>
                                     {brands.map((b) => (
                                         <option key={b.id} value={String(b.id)}>
                                             {b.name}
-                                            {b.is_active ? '' : ' (not in use)'}
+                                            {b.is_active ? '' : t('couriers.brand_not_in_use')}
                                         </option>
                                     ))}
                                 </select>
                             </Field>
                         )}
-                        <Field label="Pickup store" htmlFor={`store-${account.id}`} size="lg" error={errors.provider_store_id} required>
+                        <Field label={t('couriers.pickup_store')} htmlFor={`store-${account.id}`} size="lg" error={errors.provider_store_id} required>
                             <select
                                 id={`store-${account.id}`}
                                 className={selectClass}
                                 value={form.data.provider_store_id}
                                 onChange={(e) => form.setData('provider_store_id', e.target.value)}
                             >
-                                <option value="">Choose a store</option>
+                                <option value="">{t('couriers.choose_store')}</option>
                                 {account.stores.map((s) => (
                                     <option key={s.id} value={s.id}>
-                                        {s.name} ({s.id}){s.active ? '' : ', inactive at the courier'}
+                                        {s.name} ({s.id}){s.active ? '' : t('couriers.inactive_at_courier')}
                                     </option>
                                 ))}
                             </select>
                         </Field>
-                        <Field label="Courier money account" htmlFor={`money-${account.id}`} size="lg" error={errors.money_account_id} required>
+                        <Field label={t('couriers.money_account')} htmlFor={`money-${account.id}`} size="lg" error={errors.money_account_id} required>
                             <select
                                 id={`money-${account.id}`}
                                 className={selectClass}
@@ -475,18 +464,13 @@ function BusinessLink({ account, moneyAccounts, brands }: { account: Account; mo
                     </FormRow>
                     <label className="flex items-center gap-2 text-sm">
                         <input type="checkbox" checked={form.data.is_default} onChange={(e) => form.setData('is_default', e.target.checked)} />
-                        Default account for this courier in this business
-                        {brands.length > 0 ? (form.data.brand_id === '' ? ', for any brand' : ', for this brand') : ''}
+                        {t('couriers.default_checkbox')}
+                        {brands.length > 0 ? (form.data.brand_id === '' ? t('couriers.for_any_brand') : t('couriers.for_this_brand')) : ''}
                     </label>
-                    {brands.length > 0 && (
-                        <p className="text-muted-foreground text-xs">
-                            A parcel goes through the account linked to its order's brand, else one linked for any brand. An account linked only to
-                            another brand is never offered for it.
-                        </p>
-                    )}
+                    {brands.length > 0 && <p className="text-muted-foreground text-xs">{t('couriers.brand_routing_hint')}</p>}
                     <div className="flex gap-2">
                         <Button type="submit" size="sm" disabled={form.processing}>
-                            {editing ? 'Save' : 'Use for this business'}
+                            {editing ? t('couriers.save') : t('couriers.use_here')}
                         </Button>
                         {editing && (
                             <Button
@@ -503,7 +487,10 @@ function BusinessLink({ account, moneyAccounts, brands }: { account: Account; mo
                                     )
                                 }
                             >
-                                Stop using here{brands.length > 0 ? ` for ${editing.brand_id === null ? 'any brand' : brandName(editing)}` : ''}
+                                {t('couriers.stop_using')}
+                                {brands.length > 0
+                                    ? t('couriers.for_brand', { brand: editing.brand_id === null ? t('couriers.any_brand') : brandName(editing) })
+                                    : ''}
                             </Button>
                         )}
                     </div>
@@ -515,6 +502,8 @@ function BusinessLink({ account, moneyAccounts, brands }: { account: Account; mo
 
 export default function CourierSettings() {
     const { providers, accounts, moneyAccounts, brands = [], revealedSecret, errors } = usePage<PageProps>().props;
+    const { t, tr } = useTranslation();
+    const breadcrumbs: BreadcrumbItem[] = [{ title: t('couriers.title'), href: '/settings/couriers' }];
     const [adding, setAdding] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [busyId, setBusyId] = useState<number | null>(null);
@@ -528,19 +517,16 @@ export default function CourierSettings() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Couriers" />
+            <Head title={t('couriers.title')} />
             <SettingsLayout>
                 <div className="space-y-6">
                     <div className="flex flex-wrap items-start justify-between gap-4">
-                        <HeadingSmall
-                            title="Couriers"
-                            description="Courier accounts, their credentials, the pickup store each business uses and where the cash on delivery is owed."
-                        />
+                        <HeadingSmall title={t('couriers.title')} description={t('couriers.description')} />
                         <div className="flex flex-wrap items-center gap-2">
                             <Button variant="outline" asChild>
-                                <Link href={route('couriers.settings.locations.index')}>Locations and bands</Link>
+                                <Link href={route('couriers.settings.locations.index')}>{t('couriers.locations_and_bands')}</Link>
                             </Button>
-                            {!adding && <Button onClick={() => setAdding(true)}>Add a courier account</Button>}
+                            {!adding && <Button onClick={() => setAdding(true)}>{t('couriers.add_account')}</Button>}
                         </div>
                     </div>
 
@@ -551,12 +537,12 @@ export default function CourierSettings() {
                     {accounts.length === 0 && !adding && (
                         <div className="border-border flex flex-col items-start gap-2 rounded-md border border-dashed p-6">
                             <Truck className="text-muted-foreground size-6" />
-                            <p className="font-medium">No courier is connected yet</p>
+                            <p className="font-medium">{t('couriers.none_title')}</p>
                             <ol className="text-muted-foreground list-decimal space-y-1 pl-5 text-sm">
-                                <li>Add a courier account and type the credentials from the courier's merchant website.</li>
-                                <li>Press Test connection. It only reads: the pickup stores and the city list.</li>
-                                <li>When the test passes, choose this business's pickup store and courier money account.</li>
-                                <li>Activate the account.</li>
+                                <li>{t('couriers.none_step1')}</li>
+                                <li>{t('couriers.none_step2')}</li>
+                                <li>{t('couriers.none_step3')}</li>
+                                <li>{t('couriers.none_step4')}</li>
                             </ol>
                         </div>
                     )}
@@ -578,7 +564,7 @@ export default function CourierSettings() {
                                                         : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
                                                 )}
                                             >
-                                                {a.environment === 'live' ? 'Live' : 'Sandbox'}
+                                                {a.environment === 'live' ? t('couriers.live') : t('couriers.sandbox')}
                                             </span>
                                             <span
                                                 className={cn(
@@ -588,12 +574,12 @@ export default function CourierSettings() {
                                                         : 'bg-muted text-muted-foreground',
                                                 )}
                                             >
-                                                {a.is_active ? 'Active' : 'Off'}
+                                                {a.is_active ? t('couriers.active') : t('couriers.off')}
                                             </span>
                                             <span className="text-muted-foreground">{a.base_url}</span>
                                         </div>
                                         {a.last_test_at === null ? (
-                                            <p className="text-muted-foreground text-xs">Not tested yet.</p>
+                                            <p className="text-muted-foreground text-xs">{t('couriers.not_tested')}</p>
                                         ) : a.last_test_ok ? (
                                             <p
                                                 className={cn(
@@ -604,12 +590,12 @@ export default function CourierSettings() {
                                                 )}
                                             >
                                                 {a.test_is_current
-                                                    ? `Passed on ${a.last_test_at}. ${a.last_test_message ?? ''}`
-                                                    : `Passed on ${a.last_test_at}, but the credentials or address changed since. Test again.`}
+                                                    ? t('couriers.passed_on', { date: a.last_test_at, message: a.last_test_message ?? '' })
+                                                    : t('couriers.passed_stale', { date: a.last_test_at })}
                                             </p>
                                         ) : (
                                             <p className="text-destructive text-xs">
-                                                Failed on {a.last_test_at}: {a.last_test_message}
+                                                {t('couriers.failed_on', { date: a.last_test_at, message: a.last_test_message ?? '' })}
                                             </p>
                                         )}
                                     </div>
@@ -621,24 +607,24 @@ export default function CourierSettings() {
                                             disabled={busyId === a.id}
                                             onClick={() => post('couriers.settings.test', a.id)}
                                         >
-                                            {busyId === a.id ? 'Testing...' : 'Test connection'}
+                                            {busyId === a.id ? t('couriers.testing') : t('couriers.test_connection')}
                                         </Button>
                                         {a.is_active ? (
                                             <Button variant="outline" size="sm" onClick={() => post('couriers.settings.deactivate', a.id)}>
-                                                Deactivate
+                                                {t('couriers.deactivate')}
                                             </Button>
                                         ) : (
                                             <Button
                                                 size="sm"
                                                 disabled={!a.can_activate}
-                                                title={a.can_activate ? undefined : 'Needs a passing test with the current credentials'}
+                                                title={a.can_activate ? undefined : t('couriers.activate_needs_test')}
                                                 onClick={() => post('couriers.settings.activate', a.id)}
                                             >
-                                                Activate
+                                                {t('couriers.activate')}
                                             </Button>
                                         )}
                                         <Button variant="ghost" size="sm" onClick={() => setEditingId(editingId === a.id ? null : a.id)}>
-                                            {editingId === a.id ? 'Close' : 'Edit'}
+                                            {editingId === a.id ? t('couriers.close') : t('couriers.edit')}
                                         </Button>
                                     </div>
                                 </div>
@@ -648,13 +634,13 @@ export default function CourierSettings() {
                                 {a.test_is_current && a.stores.length > 0 && (
                                     <div className="space-y-1">
                                         <p className="text-sm font-medium">
-                                            Pickup stores the courier returned
-                                            {a.last_test_city_count !== null ? `, ${a.last_test_city_count} cities` : ''}
+                                            {t('couriers.stores_returned')}
+                                            {a.last_test_city_count !== null ? t('couriers.city_count', { count: a.last_test_city_count }) : ''}
                                         </p>
                                         <ul className="text-muted-foreground text-sm">
                                             {a.stores.map((s) => (
                                                 <li key={s.id}>
-                                                    {s.name} ({s.id}){s.active ? '' : ', inactive'}
+                                                    {s.name} ({s.id}){s.active ? '' : t('couriers.inactive')}
                                                 </li>
                                             ))}
                                         </ul>
@@ -665,15 +651,12 @@ export default function CourierSettings() {
                                     <BusinessLink account={a} moneyAccounts={moneyAccounts} brands={brands} />
 
                                     <div className="space-y-2">
-                                        <p className="text-sm font-medium">Webhook</p>
-                                        <p className="text-muted-foreground text-xs">
-                                            The address to give the courier for status updates, with the webhook secret. A status update never posts
-                                            money: a person confirms each parcel on its order.
-                                        </p>
+                                        <p className="text-sm font-medium">{t('couriers.webhook')}</p>
+                                        <p className="text-muted-foreground text-xs">{t('couriers.webhook_help')}</p>
                                         <code className="bg-muted block rounded px-2 py-1 text-xs break-all">{a.webhook_url}</code>
                                         {revealedSecret?.account_id === a.id && (
                                             <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs dark:border-amber-800 dark:bg-amber-950/40">
-                                                <p className="font-medium">New secret, shown once. Copy it now:</p>
+                                                <p className="font-medium">{t('couriers.new_secret_once')}</p>
                                                 <code className="break-all">{revealedSecret.secret}</code>
                                             </div>
                                         )}
@@ -681,21 +664,19 @@ export default function CourierSettings() {
                                             variant="outline"
                                             size="sm"
                                             onClick={() => {
-                                                if (window.confirm('Make a new webhook secret? The old one stops working.'))
-                                                    post('couriers.settings.rotate-secret', a.id);
+                                                if (window.confirm(t('couriers.rotate_confirm'))) post('couriers.settings.rotate-secret', a.id);
                                             }}
                                         >
-                                            Rotate webhook secret
+                                            {t('couriers.rotate_secret')}
                                         </Button>
                                     </div>
                                 </div>
 
                                 <div className="space-y-1">
-                                    <p className="text-sm font-medium">Post delivered parcels automatically</p>
+                                    <p className="text-sm font-medium">{t('couriers.auto_post_title')}</p>
                                     <label className="text-muted-foreground flex items-center gap-2 text-xs">
                                         <input type="checkbox" checked={a.auto_post_outcomes} disabled readOnly />
-                                        {a.auto_post_outcomes ? 'On' : 'Off'}: available after the evidence period. Until then a person confirms every
-                                        parcel.
+                                        {t('couriers.auto_post_help', { state: a.auto_post_outcomes ? t('couriers.on') : t('couriers.off') })}
                                     </label>
                                     {a.auto_post_outcomes && (
                                         <Button
@@ -703,25 +684,25 @@ export default function CourierSettings() {
                                             size="sm"
                                             onClick={() => router.post(route('couriers.settings.auto-post', a.id), { on: false })}
                                         >
-                                            Emergency off
+                                            {t('couriers.emergency_off')}
                                         </Button>
                                     )}
                                 </div>
 
-                                <p className="text-muted-foreground text-xs">{a.created_by ? `Added by ${a.created_by}.` : ''}</p>
+                                <p className="text-muted-foreground text-xs">{a.created_by ? t('couriers.added_by', { name: a.created_by }) : ''}</p>
                             </div>
                         ))}
                     </div>
 
                     <div className="space-y-3">
-                        <h3 className="text-sm font-medium">Couriers the ERP knows</h3>
+                        <h3 className="text-sm font-medium">{t('couriers.known')}</h3>
                         <div className="grid gap-3 md:grid-cols-2">
                             {providers.map((p) => (
                                 <div key={p.code} className="border-border rounded-md border p-3 text-sm">
                                     <p className="font-medium">
                                         {p.name}{' '}
                                         <span className="text-muted-foreground text-xs font-normal">
-                                            {p.connected ? 'Connected' : 'Not yet connected'}
+                                            {p.connected ? t('couriers.connected') : t('couriers.not_connected')}
                                         </span>
                                     </p>
                                     <p className="text-muted-foreground mt-1 text-xs">
@@ -729,17 +710,17 @@ export default function CourierSettings() {
                                             ? Object.entries(p.capabilities)
                                                   .map(
                                                       ([k, v]) =>
-                                                          `${CAPABILITY_LABELS[k] ?? k}: ${v === true ? 'yes' : v === false ? 'no' : 'unknown'}`,
+                                                          `${tr(`couriers.cap.${k}`, CAPABILITY_LABELS[k] ?? k)}: ${v === true ? t('couriers.yes') : v === false ? t('couriers.no') : t('couriers.unknown')}`,
                                                   )
                                                   .join(' · ')
-                                            : 'Its API has not been checked yet, so no account can be added for it.'}
+                                            : t('couriers.api_not_checked')}
                                     </p>
                                 </div>
                             ))}
                         </div>
                         {notConnected.length > 0 && (
                             <p className="text-muted-foreground text-xs">
-                                {notConnected.map((p) => p.name).join(', ')} can be connected once their APIs are checked.
+                                {t('couriers.can_connect_later', { names: notConnected.map((p) => p.name).join(', ') })}
                             </p>
                         )}
                     </div>

@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -54,17 +55,14 @@ const selectClass = 'border-input bg-background h-9 rounded-md border px-2 text-
 
 /** A date before the books open posts on the first open day: say so before it is pressed. */
 export function ClosedPeriodHint({ date }: { date: string }) {
+    const { t } = useTranslation();
     const { books_open_from } = useSettlementProps();
 
     if (!books_open_from || !date || date >= books_open_from) {
         return null;
     }
 
-    return (
-        <p className="text-xs text-amber-700 dark:text-amber-400">
-            The books are closed before {books_open_from}. This keeps {date} as the courier&apos;s date and posts on {books_open_from}.
-        </p>
-    );
+    return <p className="text-xs text-amber-700 dark:text-amber-400">{t('parcel.books_closed', { open: books_open_from, date })}</p>;
 }
 
 export type DoorFields = {
@@ -85,6 +83,7 @@ export function DoorResolutionFields({
     lines: { id: number; product: string | null; sku: string | null; quantity: string }[];
     errors: Record<string, string | undefined>;
 }) {
+    const { t, tr } = useTranslation();
     const { door_resolutions, can_correct_price } = useSettlementProps();
     const options = door_resolutions.filter((option) => option.value !== 'price_correction' || can_correct_price);
 
@@ -98,23 +97,20 @@ export function DoorResolutionFields({
 
     return (
         <div className="flex flex-col gap-2 rounded-md border border-dashed p-2">
-            <p className="text-muted-foreground text-xs">
-                If the courier collected a different amount from what the customer owed, say how the difference is settled. A discount above your
-                limit goes to the Owner and nothing is posted until the Owner approves it.
-            </p>
+            <p className="text-muted-foreground text-xs">{t('parcel.door_help')}</p>
             <div className="flex flex-wrap items-end gap-3">
                 <div className="grid gap-1">
-                    <Label htmlFor="door-resolution">If the amount differs</Label>
+                    <Label htmlFor="door-resolution">{t('parcel.if_amount_differs')}</Label>
                     <select
                         id="door-resolution"
                         className={selectClass}
                         value={data.resolution}
                         onChange={(e) => onChange({ resolution: e.target.value })}
                     >
-                        <option value="">It matches what was owed</option>
+                        <option value="">{t('parcel.it_matches')}</option>
                         {options.map((option) => (
                             <option key={option.value} value={option.value}>
-                                {option.label}
+                                {tr(`parcel.door.${option.value}`, option.label)}
                             </option>
                         ))}
                     </select>
@@ -123,7 +119,7 @@ export function DoorResolutionFields({
                 {data.resolution !== '' && (
                     <div className="grid flex-1 gap-1">
                         <Label htmlFor="door-reason" required>
-                            Why
+                            {t('parcel.why')}
                         </Label>
                         <Input
                             id="door-reason"
@@ -139,9 +135,9 @@ export function DoorResolutionFields({
                 <table className="w-full max-w-xl text-sm">
                     <thead>
                         <tr className="text-muted-foreground text-left">
-                            <th className="py-1">Product</th>
-                            <th className="py-1">Quantity</th>
-                            <th className="py-1">Corrected unit price</th>
+                            <th className="py-1">{t('parcel.product')}</th>
+                            <th className="py-1">{t('parcel.quantity')}</th>
+                            <th className="py-1">{t('parcel.corrected_unit_price')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -153,7 +149,7 @@ export function DoorResolutionFields({
                                     <Input
                                         className="w-28"
                                         inputMode="decimal"
-                                        placeholder="unchanged"
+                                        placeholder={t('parcel.unchanged')}
                                         value={data.prices.find((entry) => entry.delivery_line_id === line.id)?.unit_price ?? ''}
                                         onChange={(e) => setPrice(line.id, e.target.value)}
                                     />
@@ -170,6 +166,7 @@ export function DoorResolutionFields({
 
 /** The courier lost or damaged the parcel: closes it and opens a claim. */
 export function ReportLossForm({ consignmentId, codAmount }: { consignmentId: number; codAmount: string }) {
+    const { t } = useTranslation();
     const { can_report_loss } = useSettlementProps();
     const [open, setOpen] = useState(false);
     const { data, setData, post, errors, processing } = useForm({
@@ -186,7 +183,7 @@ export function ReportLossForm({ consignmentId, codAmount }: { consignmentId: nu
     if (!open) {
         return (
             <button type="button" className="text-muted-foreground mt-2 text-xs underline" onClick={() => setOpen(true)}>
-                Report lost or damaged
+                {t('parcel.report_loss')}
             </button>
         );
     }
@@ -198,14 +195,11 @@ export function ReportLossForm({ consignmentId, codAmount }: { consignmentId: nu
 
     return (
         <form onSubmit={submit} className="mt-3 flex flex-col gap-2 rounded-md border border-rose-200 p-2 dark:border-rose-900">
-            <p className="text-muted-foreground text-xs">
-                The goods are written off through an inventory adjustment (its approver decides), and a claim is opened on the courier. Its
-                compensation closes the claim when it arrives on a payout statement or in the bank.
-            </p>
+            <p className="text-muted-foreground text-xs">{t('parcel.loss_help')}</p>
             <div className="flex flex-wrap items-end gap-3">
                 <div className="grid gap-1">
                     <Label htmlFor={`loss-kind-${consignmentId}`} required>
-                        What happened
+                        {t('parcel.what_happened')}
                     </Label>
                     <select
                         id={`loss-kind-${consignmentId}`}
@@ -213,14 +207,14 @@ export function ReportLossForm({ consignmentId, codAmount }: { consignmentId: nu
                         value={data.kind}
                         onChange={(e) => setData('kind', e.target.value)}
                     >
-                        <option value="lost">Lost by the courier</option>
-                        <option value="damaged">Damaged by the courier</option>
+                        <option value="lost">{t('parcel.lost_by_courier')}</option>
+                        <option value="damaged">{t('parcel.damaged_by_courier')}</option>
                     </select>
                     <InputError message={errors.kind} />
                 </div>
                 <div className="grid gap-1">
                     <Label htmlFor={`loss-on-${consignmentId}`} required>
-                        Reported on
+                        {t('parcel.reported_on')}
                     </Label>
                     <Input
                         id={`loss-on-${consignmentId}`}
@@ -233,7 +227,7 @@ export function ReportLossForm({ consignmentId, codAmount }: { consignmentId: nu
                 </div>
                 <div className="grid gap-1">
                     <Label htmlFor={`loss-claim-${consignmentId}`} required>
-                        Claim from the courier
+                        {t('parcel.claim_from_courier')}
                     </Label>
                     <Input
                         id={`loss-claim-${consignmentId}`}
@@ -247,12 +241,17 @@ export function ReportLossForm({ consignmentId, codAmount }: { consignmentId: nu
             </div>
             <ClosedPeriodHint date={data.reported_on} />
             <div className="flex items-center gap-2">
-                <Input className="max-w-sm" placeholder="Notes (optional)" value={data.notes} onChange={(e) => setData('notes', e.target.value)} />
+                <Input
+                    className="max-w-sm"
+                    placeholder={t('parcel.notes_optional')}
+                    value={data.notes}
+                    onChange={(e) => setData('notes', e.target.value)}
+                />
                 <Button size="sm" variant="destructive" disabled={processing}>
-                    Record and open the claim
+                    {t('parcel.record_open_claim')}
                 </Button>
                 <Button size="sm" type="button" variant="ghost" onClick={() => setOpen(false)}>
-                    Cancel
+                    {t('parcel.cancel')}
                 </Button>
             </div>
         </form>
@@ -260,6 +259,7 @@ export function ReportLossForm({ consignmentId, codAmount }: { consignmentId: nu
 }
 
 function ClaimActions({ claim }: { claim: LossClaimInfo }) {
+    const { t } = useTranslation();
     const { money_accounts } = useSettlementProps();
     const decision = useForm({ decision: 'accepted', accepted_amount: claim.claimed_amount, note: '' });
     const money = useForm({
@@ -283,17 +283,17 @@ function ClaimActions({ claim }: { claim: LossClaimInfo }) {
         <div className="mt-2 flex flex-col gap-2">
             <form onSubmit={decide} className="flex flex-wrap items-end gap-2">
                 <select
-                    aria-label="The courier's answer"
+                    aria-label={t('parcel.courier_answer')}
                     className={selectClass}
                     value={decision.data.decision}
                     onChange={(e) => decision.setData('decision', e.target.value)}
                 >
-                    {claim.status === 'open' && <option value="accepted">Courier accepted</option>}
-                    <option value="rejected">Courier rejected</option>
+                    {claim.status === 'open' && <option value="accepted">{t('parcel.courier_accepted')}</option>}
+                    <option value="rejected">{t('parcel.courier_rejected')}</option>
                 </select>
                 {decision.data.decision === 'accepted' && (
                     <Input
-                        aria-label="Amount accepted"
+                        aria-label={t('parcel.amount_accepted')}
                         className="w-28"
                         inputMode="decimal"
                         value={decision.data.accepted_amount}
@@ -301,26 +301,26 @@ function ClaimActions({ claim }: { claim: LossClaimInfo }) {
                     />
                 )}
                 <Input
-                    aria-label="Note"
+                    aria-label={t('parcel.note')}
                     className="max-w-xs"
-                    placeholder={decision.data.decision === 'rejected' ? 'Why (required)' : 'Note (optional)'}
+                    placeholder={decision.data.decision === 'rejected' ? t('parcel.why_required') : t('parcel.note_optional')}
                     value={decision.data.note}
                     onChange={(e) => decision.setData('note', e.target.value)}
                 />
                 <Button size="sm" variant="outline" disabled={decision.processing}>
-                    Save answer
+                    {t('parcel.save_answer')}
                 </Button>
                 <InputError message={decision.errors.note ?? (decision.errors as Record<string, string | undefined>).claim} />
             </form>
             <form onSubmit={receive} className="flex flex-wrap items-end gap-2">
-                <span className="text-xs font-medium">Paid outside a statement:</span>
+                <span className="text-xs font-medium">{t('parcel.paid_outside')}</span>
                 <select
-                    aria-label="Arrived in"
+                    aria-label={t('parcel.arrived_in')}
                     className={selectClass}
                     value={money.data.money_account_id}
                     onChange={(e) => money.setData('money_account_id', e.target.value)}
                 >
-                    <option value="">Arrived in…</option>
+                    <option value="">{t('parcel.arrived_in_pick')}</option>
                     {money_accounts.map((account) => (
                         <option key={account.id} value={account.id}>
                             {account.name}
@@ -328,28 +328,28 @@ function ClaimActions({ claim }: { claim: LossClaimInfo }) {
                     ))}
                 </select>
                 <Input
-                    aria-label="Amount received"
+                    aria-label={t('parcel.amount_received')}
                     className="w-28"
                     inputMode="decimal"
                     value={money.data.amount}
                     onChange={(e) => money.setData('amount', e.target.value)}
                 />
                 <Input
-                    aria-label="Received on"
+                    aria-label={t('parcel.received_on')}
                     type="date"
                     className="w-40"
                     value={money.data.received_on}
                     onChange={(e) => money.setData('received_on', e.target.value)}
                 />
                 <Input
-                    aria-label="Bank reference"
+                    aria-label={t('parcel.bank_reference')}
                     className="w-36"
-                    placeholder="Reference"
+                    placeholder={t('parcel.reference')}
                     value={money.data.reference}
                     onChange={(e) => money.setData('reference', e.target.value)}
                 />
                 <Button size="sm" disabled={money.processing}>
-                    Record compensation
+                    {t('parcel.record_compensation')}
                 </Button>
                 <InputError
                     message={
@@ -367,6 +367,7 @@ function ClaimActions({ claim }: { claim: LossClaimInfo }) {
 
 /** What slice 8 recorded about the parcel's money, under its outcome. */
 export function ParcelSettlementPanel({ settlement }: { settlement: ParcelSettlement }) {
+    const { t, tr, locale } = useTranslation();
     const { can_settle_claims } = useSettlementProps();
     const claim = settlement.loss_claim;
 
@@ -378,17 +379,17 @@ export function ParcelSettlementPanel({ settlement }: { settlement: ParcelSettle
         <div className="mt-2 flex flex-col gap-1 text-xs">
             {settlement.waiting_discount && (
                 <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
-                    A {formatMoney(settlement.waiting_discount.discount)} discount at the door is waiting for the Owner
-                    {settlement.waiting_discount.requested_by && ` (asked by ${settlement.waiting_discount.requested_by})`}:{' '}
-                    {settlement.waiting_discount.reason}. Nothing is posted until the Owner decides.
+                    {t('parcel.discount_waiting', { amount: formatMoney(settlement.waiting_discount.discount) })}
+                    {settlement.waiting_discount.requested_by && t('parcel.asked_by', { name: settlement.waiting_discount.requested_by })}:{' '}
+                    {settlement.waiting_discount.reason}. {t('parcel.nothing_posted_until')}
                 </p>
             )}
             {settlement.door_resolution_label && (
                 <p>
-                    <span className="font-medium">{settlement.door_resolution_label}</span>
+                    <span className="font-medium">{tr(`parcel.door.${settlement.door_resolution ?? ''}`, settlement.door_resolution_label)}</span>
                     {settlement.door_difference !== null &&
                         Number(settlement.door_difference) !== 0 &&
-                        `, difference ${formatMoney(settlement.door_difference)}`}
+                        t('parcel.difference_part', { amount: formatMoney(settlement.door_difference) })}
                     {settlement.door_reason && `: ${settlement.door_reason}`}
                 </p>
             )}
@@ -396,18 +397,26 @@ export function ParcelSettlementPanel({ settlement }: { settlement: ParcelSettle
             {claim && (
                 <div className="rounded-md border p-2">
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium">Claim on the courier</span>
+                        <span className="font-medium">{t('parcel.claim_on_courier')}</span>
                         <Badge variant={claim.status === 'paid' ? 'default' : claim.status === 'rejected' ? 'destructive' : 'secondary'}>
-                            {claim.status_label}
+                            {tr(`parcel.claim_status.${claim.status}`, claim.status_label)}
                         </Badge>
                     </div>
                     <p className="text-muted-foreground mt-1">
-                        {claim.kind_label}. Goods at cost {formatMoney(claim.value_at_cost)}, claimed {formatMoney(claim.claimed_amount)}
+                        {t('parcel.claim_summary', {
+                            kind: tr(`parcel.claim_kind.${claim.kind}`, claim.kind_label),
+                            cost: formatMoney(claim.value_at_cost),
+                            claimed: formatMoney(claim.claimed_amount),
+                        })}
                         {Number(claim.compensation_received) > 0 &&
-                            `, received ${formatMoney(claim.compensation_received)}${claim.paid_on_statement ? ' on a payout statement' : ''}`}
-                        .
+                            `${t('parcel.claim_received', { amount: formatMoney(claim.compensation_received) })}${claim.paid_on_statement ? t('parcel.on_payout_statement') : ''}`}
+                        {locale === 'bn' ? '।' : '.'}
                         {claim.adjustments.length > 0 &&
-                            ` Write-off: ${claim.adjustments.map((adjustment) => `${formatQuantity(adjustment.quantity)} (${adjustment.status ?? 'pending'})`).join(', ')}.`}
+                            t('parcel.write_off', {
+                                items: claim.adjustments
+                                    .map((adjustment) => `${formatQuantity(adjustment.quantity)} (${adjustment.status ?? t('parcel.pending')})`)
+                                    .join(', '),
+                            })}
                     </p>
                     {claim.notes && <p className="text-muted-foreground whitespace-pre-line">{claim.notes}</p>}
                     {!claim.closed && can_settle_claims && <ClaimActions claim={claim} />}

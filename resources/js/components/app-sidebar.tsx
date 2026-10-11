@@ -60,6 +60,7 @@ import {
     Scale,
     ShieldCheck,
     ShoppingCart,
+    Siren,
     SlidersHorizontal,
     Store,
     Tag,
@@ -123,6 +124,8 @@ export function useNavGroups(): NavGroup[] {
         canManageCourierSettings,
         canProposeRateCards,
         canConfigureDashboards,
+        canManageJobs,
+        attentionCount,
         canViewAssets,
         canViewAssetItems,
         hasEmployeeProfile,
@@ -145,6 +148,7 @@ export function useNavGroups(): NavGroup[] {
         canManageCourierSettings,
         canProposeRateCards,
         canConfigureDashboards,
+        canManageJobs,
     });
 
     const navGroups: NavGroup[] = [
@@ -155,6 +159,8 @@ export function useNavGroups(): NavGroup[] {
                 // Module 1, Slice 3: the day on one page.
                 { title: 'My work', url: '/work', icon: ListChecks },
                 ...(canReviewApprovals ? [{ title: 'Approvals', url: '/approvals', icon: CheckSquare, badge: pendingApprovalsCount }] : []),
+                // Plan C.4: one ranked list of what is waiting on somebody.
+                { title: t('attention.title'), url: '/attention', icon: Siren, badge: attentionCount },
                 { title: 'Business health', url: '/health', icon: Activity },
             ],
         },

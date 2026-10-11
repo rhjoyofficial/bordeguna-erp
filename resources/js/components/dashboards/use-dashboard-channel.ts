@@ -1,28 +1,29 @@
 import { dashboardSound } from '@/lib/dashboard-sound';
 import { echo, ensureEcho, watchConnection } from '@/lib/echo';
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import type { ConnectionStatus } from 'laravel-echo';
 import { useEffect, useRef, useState } from 'react';
 import type { DashboardEvent } from './types';
 
 const EVENT = '.dashboard.event';
 
-/** What each event says out loud (no figures: the payload carries none). */
-const MESSAGES: Record<string, string> = {
-    'sales.order.created': 'A new sales order came in.',
-    'sales.order.approved': 'A sales order was approved.',
-    'sales.payment.received': 'A customer payment was recorded.',
-    'approval.requested': 'Something was sent for approval.',
-    'approval.decided': 'An approval was decided.',
-    'stock.low': 'A product reached its low-stock line.',
-    'expense_claim.submitted': 'An expense claim was submitted.',
-    'leave.decided': 'Your leave request was decided.',
-    'payslip.ready': 'Your payslip is ready.',
-    'courier.parcel_status_changed': 'A parcel moved.',
-    'courier.booking_failed': 'A courier booking failed.',
-    'integration.sync_error': 'A sync with an outside service failed.',
-    'courier.statement_imported': 'A courier statement was imported.',
-    'courier.statement_posted': 'A courier statement was posted.',
-    'courier.booking_unknown': 'A courier booking answer was lost. Check the parcel.',
+/** What each event says out loud (no figures: the payload carries none), in the reader's language. */
+const MESSAGES: Record<string, TranslationKey> = {
+    'sales.order.created': 'dash.event.sales_order_created',
+    'sales.order.approved': 'dash.event.sales_order_approved',
+    'sales.payment.received': 'dash.event.sales_payment_received',
+    'approval.requested': 'dash.event.approval_requested',
+    'approval.decided': 'dash.event.approval_decided',
+    'stock.low': 'dash.event.stock_low',
+    'expense_claim.submitted': 'dash.event.expense_claim_submitted',
+    'leave.decided': 'dash.event.leave_decided',
+    'payslip.ready': 'dash.event.payslip_ready',
+    'courier.parcel_status_changed': 'dash.event.courier_parcel_status_changed',
+    'courier.booking_failed': 'dash.event.courier_booking_failed',
+    'integration.sync_error': 'dash.event.integration_sync_error',
+    'courier.statement_imported': 'dash.event.courier_statement_imported',
+    'courier.statement_posted': 'dash.event.courier_statement_posted',
+    'courier.booking_unknown': 'dash.event.courier_booking_unknown',
 };
 
 /**
@@ -52,6 +53,9 @@ export function useDashboardChannel({
     onRefresh: (keys: string[], options: { silent: boolean }) => void;
     onMessage?: (message: string) => void;
 }): ConnectionStatus | 'off' {
+    const { t } = useTranslation();
+    const translate = useRef(t);
+    translate.current = t;
     const [status, setStatus] = useState<ConnectionStatus | 'off'>(enabled ? 'connecting' : 'off');
     const keysRef = useRef(widgetKeys);
     keysRef.current = widgetKeys;
@@ -78,7 +82,7 @@ export function useDashboardChannel({
 
             // 'none' = a routine move (a parcel picked up): refresh, stay quiet.
             if (!mine && event.sound !== 'none' && (keys.length > 0 || event.personal)) {
-                const message = MESSAGES[event.type];
+                const message = MESSAGES[event.type] ? translate.current(MESSAGES[event.type]) : undefined;
                 dashboardSound.notify(event.sound, `${event.type}:${JSON.stringify(event.ids)}`);
 
                 if (message && dashboardSound.allows(event.sound)) {
