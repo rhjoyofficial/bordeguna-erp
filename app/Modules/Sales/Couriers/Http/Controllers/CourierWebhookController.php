@@ -30,8 +30,9 @@ use Illuminate\Support\Str;
  * ⚠ Authenticity is a shared header secret only (neither courier documents an
  * HMAC), compared in constant time. No session, no CSRF, throttled.
  *
- * - CarryBee: X-CB-Webhook-Integration-Header must equal our webhook secret.
- *   The `webhook.integration` handshake is answered 202 with the header echoed.
+ * - CarryBee: the `webhook.integration` handshake carries CarryBee's own
+ *   value in X-CB-Webhook-Integration-Header; it is echoed with 202 and kept.
+ *   Events must then carry that value or our webhook secret.
  * - Pathao: X-PATHAO-Signature must equal our webhook secret. Every answer
  *   carries X-Pathao-Merchant-Webhook-Integration-Secret (the account-level
  *   value saved in Settings > Couriers).
@@ -53,18 +54,37 @@ class CourierWebhookController extends Controller
         $header = $definition->webhookSecretHeader();
         $secret = $account->webhookSecretValue();
         $given = $header === null ? null : $request->header($header);
+        $payload = $request->json()->all();
+        $event = is_string($payload['event'] ?? null) ? $payload['event'] : '';
+        $handshake = $event === '' || in_array(Str::lower($event), ['webhook.integration', 'webhook_integration'], true);
 
-        if ($header === null || $secret === null || ! is_string($given) || ! hash_equals($secret, $given)) {
+        // ⚠ CarryBee (verified 11 Oct 2026 on its Add Webhook form): the
+        // handshake carries CarryBee's OWN integration value in
+        // X-CB-Webhook-Integration-Header, not the secret typed on the form, and
+        // expects that value echoed back with 202. The ERP echoes it and keeps
+        // it (first one wins; clear it in Settings to re-pair). Real events are
+        // then accepted when they carry either that value or our own secret.
+        if ($account->provider->code === 'carrybee' && $handshake) {
+            if (! is_string($given) || trim($given) === '') {
+                return response('', 401);
+            }
+
+            if ($account->integrationSecret() === null) {
+                $account->forceFill(['integration_secret' => $given])->save();
+            }
+
+            return response('', 202, [$header => $given]);
+        }
+
+        if ($header === null || ! is_string($given) || ! $this->authentic($account, $given, $secret)) {
             Log::notice('Courier webhook refused: secret missing or wrong', ['courier_account_id' => $account->id]);
 
             return response('', 401);
         }
 
-        $echo = $this->echoHeaders($account, $header, $secret);
-        $payload = $request->json()->all();
-        $event = is_string($payload['event'] ?? null) ? $payload['event'] : '';
+        $echo = $this->echoHeaders($account, $header, $given);
 
-        if ($event === '' || in_array(Str::lower($event), ['webhook.integration', 'webhook_integration'], true)) {
+        if ($handshake) {
             return response('', 202, $echo);
         }
 
@@ -134,10 +154,24 @@ class CourierWebhookController extends Controller
     /**
      * @return array<string, string>
      */
-    private function echoHeaders(CourierAccount $account, string $header, string $secret): array
+    private function authentic(CourierAccount $account, string $given, ?string $secret): bool
+    {
+        if ($secret !== null && hash_equals($secret, $given)) {
+            return true;
+        }
+
+        $integration = $account->provider->code === 'carrybee' ? $account->integrationSecret() : null;
+
+        return $integration !== null && hash_equals($integration, $given);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function echoHeaders(CourierAccount $account, string $header, string $given): array
     {
         return match ($account->provider->code) {
-            'carrybee' => [$header => $secret],
+            'carrybee' => [$header => $given],
             'pathao' => ($echo = $account->integrationSecret()) === null ? [] : ['X-Pathao-Merchant-Webhook-Integration-Secret' => $echo],
             default => [],
         };
