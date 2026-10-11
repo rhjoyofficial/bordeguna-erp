@@ -9,7 +9,7 @@ import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { Truck } from 'lucide-react';
+import { Check, Copy, Truck } from 'lucide-react';
 import { useState } from 'react';
 
 type CredentialField = { key: string; label: string; secret: boolean; required: boolean; hint?: string };
@@ -33,6 +33,19 @@ type Provider = {
     option_fields: OptionField[];
     base_urls: Record<string, Record<string, string>>;
     capabilities: Record<string, boolean | null>;
+    /** The pairing guard: the header the courier wants its own value back in, where it shows that value, and the hint. */
+    integration_echo_header: string | null;
+    integration_echo_page: string | null;
+    integration_echo_hint_key: string | null;
+};
+
+type WebhookStatus = {
+    /** The courier wants a reply value and none is saved: its connect button will say "Validation error". */
+    needs_echo: boolean;
+    last_handshake_at: string | null;
+    last_handshake_ok: boolean | null;
+    problem: 'missing_echo' | 'bad_signature' | null;
+    last_event_at: string | null;
 };
 
 type Store = { id: string; name: string; active: boolean };
@@ -60,6 +73,7 @@ type Account = {
     // Courier hub slice 4: Pathao's echo value, set or not (never the value),
     // and the automatic money switch, stored off.
     integration_secret_set: boolean;
+    webhook_status: WebhookStatus;
     auto_post_outcomes: boolean;
     created_by: string | null;
     other_business_count: number;
@@ -137,7 +151,7 @@ function initialData(provider: Provider, account?: Account): AccountFormData {
  * credential fields, its options, and the official URLs for each environment.
  */
 function AccountForm({ providers, account, onDone }: { providers: Provider[]; account?: Account; onDone: () => void }) {
-    const { t } = useTranslation();
+    const { t, tr } = useTranslation();
     const connected = providers.filter((p) => p.connected);
     const startProvider = account ? providers.find((p) => p.code === account.provider)! : connected[0];
     const form = useForm<AccountFormData>(initialData(startProvider, account));
@@ -322,14 +336,21 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
                 </div>
             )}
 
-            {provider.code === 'pathao' && (
+            {provider.integration_echo_header !== null && (
                 <FormRow>
                     <Field
                         label={t('couriers.integration_secret')}
                         htmlFor={`echo-${account?.id ?? 'new'}`}
-                        size="lg"
+                        size="grow"
                         error={errors.integration_secret}
-                        hint={account?.integration_secret_set ? t('couriers.integration_secret_saved') : t('couriers.integration_secret_hint')}
+                        hint={[
+                            account?.integration_secret_set ? t('couriers.integration_secret_saved') : '',
+                            provider.integration_echo_hint_key
+                                ? tr(provider.integration_echo_hint_key, '', { header: provider.integration_echo_header })
+                                : '',
+                        ]
+                            .filter(Boolean)
+                            .join(' ')}
                     >
                         <Input
                             id={`echo-${account?.id ?? 'new'}`}
@@ -500,6 +521,59 @@ function BusinessLink({ account, moneyAccounts, brands }: { account: Account; mo
     );
 }
 
+/** Copies a value the owner must paste into the courier's own website. */
+function CopyButton({ value }: { value: string }) {
+    const { t } = useTranslation();
+    const [copied, setCopied] = useState(false);
+
+    const copy = () => {
+        navigator.clipboard
+            ?.writeText(value)
+            .then(() => {
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 2000);
+            })
+            .catch(() => setCopied(false));
+    };
+
+    return (
+        <Button type="button" variant="outline" size="sm" onClick={copy}>
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            {copied ? t('couriers.copied') : t('couriers.copy')}
+        </Button>
+    );
+}
+
+/**
+ * The pairing guard (11 Oct 2026): what happened the last time the courier
+ * tried to connect its webhook, and when it last sent an update.
+ */
+function WebhookStatusLine({ status }: { status: WebhookStatus }) {
+    const { t } = useTranslation();
+    const date = status.last_handshake_at ?? '';
+
+    return (
+        <div className="space-y-0.5 text-xs">
+            {status.last_handshake_at === null ? (
+                <p className="text-muted-foreground">{t('couriers.webhook_never_tried')}</p>
+            ) : status.last_handshake_ok ? (
+                <p className="text-emerald-700 dark:text-emerald-300">{t('couriers.webhook_paired', { date })}</p>
+            ) : (
+                <p className="text-destructive">
+                    {status.problem === 'missing_echo'
+                        ? t('couriers.webhook_failed_missing_echo', { date })
+                        : status.problem === 'bad_signature'
+                          ? t('couriers.webhook_failed_bad_signature', { date })
+                          : t('couriers.webhook_failed', { date })}
+                </p>
+            )}
+            <p className="text-muted-foreground">
+                {status.last_event_at === null ? t('couriers.webhook_no_event') : t('couriers.webhook_last_event', { date: status.last_event_at })}
+            </p>
+        </div>
+    );
+}
+
 export default function CourierSettings() {
     const { providers, accounts, moneyAccounts, brands = [], revealedSecret, errors } = usePage<PageProps>().props;
     const { t, tr } = useTranslation();
@@ -576,6 +650,14 @@ export default function CourierSettings() {
                                             >
                                                 {a.is_active ? t('couriers.active') : t('couriers.off')}
                                             </span>
+                                            {a.webhook_status.needs_echo && (
+                                                <span
+                                                    className="rounded-full bg-red-100 px-2 py-0.5 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+                                                    title={t('couriers.echo_missing_title')}
+                                                >
+                                                    {t('couriers.echo_missing_badge')}
+                                                </span>
+                                            )}
                                             <span className="text-muted-foreground">{a.base_url}</span>
                                         </div>
                                         {a.last_test_at === null ? (
@@ -653,12 +735,22 @@ export default function CourierSettings() {
                                     <div className="space-y-2">
                                         <p className="text-sm font-medium">{t('couriers.webhook')}</p>
                                         <p className="text-muted-foreground text-xs">{t('couriers.webhook_help')}</p>
-                                        <code className="bg-muted block rounded px-2 py-1 text-xs break-all">{a.webhook_url}</code>
-                                        {revealedSecret?.account_id === a.id && (
-                                            <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs dark:border-amber-800 dark:bg-amber-950/40">
+                                        <WebhookStatusLine status={a.webhook_status} />
+                                        <p className="text-muted-foreground text-xs">{t('couriers.webhook_url')}</p>
+                                        <div className="flex items-start gap-2">
+                                            <code className="bg-muted block min-w-0 flex-1 rounded px-2 py-1 text-xs break-all">{a.webhook_url}</code>
+                                            <CopyButton value={a.webhook_url} />
+                                        </div>
+                                        {revealedSecret?.account_id === a.id ? (
+                                            <div className="space-y-1 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs dark:border-amber-800 dark:bg-amber-950/40">
                                                 <p className="font-medium">{t('couriers.new_secret_once')}</p>
-                                                <code className="break-all">{revealedSecret.secret}</code>
+                                                <div className="flex items-start gap-2">
+                                                    <code className="min-w-0 flex-1 break-all">{revealedSecret.secret}</code>
+                                                    <CopyButton value={revealedSecret.secret} />
+                                                </div>
                                             </div>
+                                        ) : (
+                                            <p className="text-muted-foreground text-xs">{t('couriers.secret_shown_once')}</p>
                                         )}
                                         <Button
                                             variant="outline"

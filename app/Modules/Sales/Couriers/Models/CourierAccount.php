@@ -35,6 +35,12 @@ class CourierAccount extends Model
 
     public const WEBHOOK_PATH = '/webhooks/couriers/';
 
+    /** A pairing call was authentic but the courier's reply value is not saved. */
+    public const PAIRING_MISSING_ECHO = 'missing_echo';
+
+    /** A pairing call did not carry our webhook secret. */
+    public const PAIRING_BAD_SIGNATURE = 'bad_signature';
+
     protected $fillable = [
         'courier_provider_id', 'label', 'environment', 'base_url', 'credentials', 'options', 'integration_secret',
         'is_active', 'activated_at', 'created_by',
@@ -60,6 +66,9 @@ class CourierAccount extends Model
             'last_test_ok' => 'boolean',
             'last_test_stores' => 'array',
             'last_test_city_count' => 'integer',
+            'webhook_last_handshake_at' => 'datetime',
+            'webhook_last_handshake_ok' => 'boolean',
+            'webhook_last_event_at' => 'datetime',
         ];
     }
 
@@ -254,8 +263,9 @@ class CourierAccount extends Model
     }
 
     /**
-     * Pathao's account-level value the ERP echoes on every webhook answer, or
-     * null when none is saved (or it no longer decrypts).
+     * The courier's own pairing value (CarryBee and Pathao show it on their
+     * webhook page) that the ERP echoes on every webhook answer, or null when
+     * none is saved (or it no longer decrypts).
      */
     public function integrationSecret(): ?string
     {
@@ -270,6 +280,56 @@ class CourierAccount extends Model
         }
 
         return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
+     * The courier wants a value back when it pairs, and none is saved: its
+     * connect button will answer "Validation error" until one is.
+     */
+    public function needsIntegrationEcho(): bool
+    {
+        return $this->definition()->integrationEchoHeader() !== null && $this->integrationSecret() === null;
+    }
+
+    /**
+     * The headers every webhook answer carries: the courier's own value under
+     * the header it asked for, or none.
+     *
+     * @return array<string, string>
+     */
+    public function integrationEchoHeaders(): array
+    {
+        $header = $this->definition()->integrationEchoHeader();
+        $value = $this->integrationSecret();
+
+        return $header === null || $value === null ? [] : [$header => $value];
+    }
+
+    /**
+     * Remember a pairing attempt: when, whether it worked, and why not (a
+     * PAIRING_* code). ⚠ Written past the model events on purpose: a courier
+     * call is not an edit of the account (no activity row, no updated_at), and
+     * never a header value.
+     */
+    public function recordHandshake(bool $ok, ?string $problem = null): void
+    {
+        $values = [
+            'webhook_last_handshake_at' => now(),
+            'webhook_last_handshake_ok' => $ok,
+            'webhook_last_handshake_problem' => $ok ? null : $problem,
+        ];
+
+        $this->newQuery()->whereKey($this->getKey())->toBase()->update($values);
+        $this->forceFill($values)->syncOriginalAttributes(array_keys($values));
+    }
+
+    /** An authentic status update arrived (whether or not the parcel is ours). */
+    public function recordWebhookEvent(): void
+    {
+        $values = ['webhook_last_event_at' => now()];
+
+        $this->newQuery()->whereKey($this->getKey())->toBase()->update($values);
+        $this->forceFill($values)->syncOriginalAttributes(array_keys($values));
     }
 
     public function webhookSecretValue(): ?string

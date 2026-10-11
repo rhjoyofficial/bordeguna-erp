@@ -154,6 +154,37 @@ abstract class CourierProviderDefinition
         return null;
     }
 
+    /**
+     * ⚠⚠ THE PAIRING ECHO. The response header the courier insists on finding
+     * in our answer when it pairs (and on its calls after), carrying a value
+     * shown ONLY on the courier's own webhook page. The ERP cannot learn it from
+     * the request: the owner copies it into Settings > Couriers, where it is
+     * kept as the account's `integration_secret`. Null when the courier wants
+     * nothing back. Without the value the courier answers "Validation error".
+     */
+    public function integrationEchoHeader(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * Where on the courier's own website that value is shown, as its menus
+     * name the page (English, the courier's words). Null when there is none.
+     */
+    public function integrationEchoPage(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * The translation key of the hint under the reply-value field: where to
+     * find the value, and anything special about it. Takes {header}.
+     */
+    public function integrationEchoHintKey(): ?string
+    {
+        return null;
+    }
+
     public function allowsBaseUrl(string $environment, string $url): bool
     {
         return array_key_exists($url, $this->baseUrls()[$environment] ?? []);
@@ -282,6 +313,9 @@ abstract class CourierProviderDefinition
             'option_fields' => $this->optionFields(),
             'base_urls' => $this->baseUrls(),
             'capabilities' => $this->capabilities(),
+            'integration_echo_header' => $this->integrationEchoHeader(),
+            'integration_echo_page' => $this->integrationEchoPage(),
+            'integration_echo_hint_key' => $this->integrationEchoHintKey(),
         ];
     }
 }

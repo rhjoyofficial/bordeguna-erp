@@ -55,6 +55,31 @@ export const courierSettings = {
         en: 'The address to give the courier for status updates, with the webhook secret. A status update never posts money: a person confirms each parcel on its order.',
         bn: 'স্ট্যাটাস আপডেটের জন্য কুরিয়ারকে দেওয়ার ঠিকানা, ওয়েবহুক সিক্রেটসহ। স্ট্যাটাস আপডেট কখনো টাকা পোস্ট করে না: প্রতিটি পার্সেল তার অর্ডারে একজন মানুষ নিশ্চিত করেন।',
     },
+    'couriers.webhook_url': { en: 'Webhook address', bn: 'ওয়েবহুক ঠিকানা' },
+    'couriers.copy': { en: 'Copy', bn: 'কপি' },
+    'couriers.copied': { en: 'Copied', bn: 'কপি হয়েছে' },
+    'couriers.secret_shown_once': {
+        en: "The webhook secret is shown only once, when it is made. Lost it? Rotate it, then paste the new one in the courier's form.",
+        bn: 'ওয়েবহুক সিক্রেট শুধু তৈরির সময় একবার দেখানো হয়। হারিয়ে গেলে? বদলান, তারপর নতুনটি কুরিয়ারের ফর্মে বসান।',
+    },
+    'couriers.echo_missing_badge': { en: 'Reply value missing', bn: 'উত্তর-মান নেই' },
+    'couriers.echo_missing_title': {
+        en: 'The courier needs this value before it can connect its webhook. Edit the account and paste it.',
+        bn: 'ওয়েবহুক যুক্ত করার আগে কুরিয়ারের এই মান দরকার। অ্যাকাউন্টটি সম্পাদনা করে মানটি বসান।',
+    },
+    'couriers.webhook_paired': { en: 'Webhook paired on {date}.', bn: '{date} তারিখে ওয়েবহুক যুক্ত হয়েছে।' },
+    'couriers.webhook_failed_missing_echo': {
+        en: "Last attempt on {date} failed: the courier's reply value is missing. Edit the account, paste it, save, then press connect on the courier's page again.",
+        bn: '{date} তারিখের শেষ চেষ্টা ব্যর্থ: কুরিয়ারের উত্তর-মান নেই। অ্যাকাউন্ট সম্পাদনা করে মানটি বসান, সংরক্ষণ করুন, তারপর কুরিয়ারের পাতায় আবার connect চাপুন।',
+    },
+    'couriers.webhook_failed_bad_signature': {
+        en: "Last attempt on {date} failed: the webhook secret in the courier's form does not match the ERP. Copy it again and paste it in the courier's form.",
+        bn: '{date} তারিখের শেষ চেষ্টা ব্যর্থ: কুরিয়ারের ফর্মের ওয়েবহুক সিক্রেট ইআরপির সাথে মেলেনি। আবার কপি করে কুরিয়ারের ফর্মে বসান।',
+    },
+    'couriers.webhook_failed': { en: 'Last attempt on {date} failed.', bn: '{date} তারিখের শেষ চেষ্টা ব্যর্থ।' },
+    'couriers.webhook_never_tried': { en: 'The courier has not tried to connect yet.', bn: 'কুরিয়ার এখনও যুক্ত হওয়ার চেষ্টা করেনি।' },
+    'couriers.webhook_last_event': { en: 'Last update received {date}.', bn: 'শেষ আপডেট এসেছে {date}।' },
+    'couriers.webhook_no_event': { en: 'No status update received yet.', bn: 'এখনও কোনো স্ট্যাটাস আপডেট আসেনি।' },
     'couriers.new_secret_once': { en: 'New secret, shown once. Copy it now:', bn: 'নতুন সিক্রেট, একবারই দেখানো হচ্ছে। এখনই কপি করুন:' },
     'couriers.rotate_confirm': {
         en: 'Make a new webhook secret? The old one stops working.',
@@ -110,14 +135,18 @@ export const courierSettings = {
         bn: 'নতুন মান লিখুন, অথবা সংরক্ষিতটি রাখতে ফাঁকা রাখুন',
     },
     'couriers.options': { en: 'Options', bn: 'অপশন' },
-    'couriers.integration_secret': { en: 'Webhook integration secret', bn: 'ওয়েবহুক ইন্টিগ্রেশন সিক্রেট' },
-    'couriers.integration_secret_saved': {
-        en: 'Saved. Leave blank to keep it. Pathao shows this value on its webhook page; the ERP sends it back on every answer.',
-        bn: 'সংরক্ষিত। রাখতে ফাঁকা রাখুন। Pathao তার ওয়েবহুক পাতায় এই মান দেখায়; ইআরপি প্রতিটি উত্তরে এটি ফেরত পাঠায়।',
+    'couriers.integration_secret': {
+        en: "Courier's reply value (from the courier's webhook page)",
+        bn: 'কুরিয়ারের উত্তর-মান (কুরিয়ারের ওয়েবহুক পাতা থেকে)',
     },
-    'couriers.integration_secret_hint': {
-        en: 'Pathao shows this value on its webhook page; the ERP sends it back on every answer.',
-        bn: 'Pathao তার ওয়েবহুক পাতায় এই মান দেখায়; ইআরপি প্রতিটি উত্তরে এটি ফেরত পাঠায়।',
+    'couriers.integration_secret_saved': { en: 'Saved. Leave blank to keep it.', bn: 'সংরক্ষিত। রাখতে ফাঁকা রাখুন।' },
+    'couriers.echo_hint.carrybee': {
+        en: 'On CarryBee open Developer > Webhook Integration and copy the value from the line "The header {header} value should be exactly ...". It is the same value for every CarryBee business under your login. The ERP sends it back each time CarryBee calls; without it CarryBee says "Validation error".',
+        bn: 'CarryBee-তে Developer > Webhook Integration খুলুন এবং "The header {header} value should be exactly ..." লাইনের মানটি কপি করুন। আপনার লগইনের সব CarryBee ব্যবসার জন্য এই মান একই। CarryBee যতবার কল করে, ইআরপি এটি ফেরত পাঠায়; এটি না থাকলে CarryBee "Validation error" বলে।',
+    },
+    'couriers.echo_hint.pathao': {
+        en: 'On Pathao open Developer API > Webhook Integration and copy the value from the line "The header {header} value should be exactly ...". The ERP sends it back each time Pathao calls; without it Pathao says "Validation error".',
+        bn: 'Pathao-তে Developer API > Webhook Integration খুলুন এবং "The header {header} value should be exactly ..." লাইনের মানটি কপি করুন। Pathao যতবার কল করে, ইআরপি এটি ফেরত পাঠায়; এটি না থাকলে Pathao "Validation error" বলে।',
     },
     'couriers.change_switches_off': {
         en: 'Changing a credential, the environment or the address switches this account off until it passes a new test.',

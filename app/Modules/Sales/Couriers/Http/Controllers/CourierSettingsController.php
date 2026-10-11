@@ -84,6 +84,15 @@ class CourierSettingsController extends Controller
                     'webhook_url' => $a->webhookUrl(),
                     // ⚠ Whether it is set, never the value.
                     'integration_secret_set' => $a->integrationSecret() !== null,
+                    // ⭐ The pairing guard (11 Oct 2026): what happened the last
+                    // time the courier tried to connect, and when it last spoke.
+                    'webhook_status' => [
+                        'needs_echo' => $a->needsIntegrationEcho(),
+                        'last_handshake_at' => $a->webhook_last_handshake_at?->timezone('Asia/Dhaka')->format(self::WHEN),
+                        'last_handshake_ok' => $a->webhook_last_handshake_ok,
+                        'problem' => $a->webhook_last_handshake_problem,
+                        'last_event_at' => $a->webhook_last_event_at?->timezone('Asia/Dhaka')->format(self::WHEN),
+                    ],
                     'auto_post_outcomes' => (bool) $a->auto_post_outcomes,
                     'created_by' => $a->creator?->name,
                     'other_business_count' => (int) ($otherBusinesses[$a->id] ?? 0),

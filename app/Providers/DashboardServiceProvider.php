@@ -72,6 +72,7 @@ class DashboardServiceProvider extends ServiceProvider
     public const ATTENTION_SOURCES = [
         Sources\BookingUnknownSource::class,
         Sources\CourierConnectionSource::class,
+        Sources\CourierWebhookPairingSource::class,
         Sources\CourierSettlementOverdueSource::class,
         Sources\CourierStatementProblemsSource::class,
         Sources\DoorDecisionsSource::class,

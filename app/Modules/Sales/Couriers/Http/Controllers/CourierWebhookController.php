@@ -30,12 +30,18 @@ use Illuminate\Support\Str;
  * ⚠ Authenticity is a shared header secret only (neither courier documents an
  * HMAC), compared in constant time. No session, no CSRF, throttled.
  *
- * - CarryBee: the `webhook.integration` handshake carries CarryBee's own
- *   value in X-CB-Webhook-Integration-Header; it is echoed with 202 and kept.
- *   Events must then carry that value or our webhook secret.
+ * - CarryBee: X-CarryBee-Webhook-Signature carries our webhook secret (plain
+ *   or HMAC). Every answer carries X-CB-Webhook-Integration-Header = the value
+ *   CarryBee shows on its Webhook Integration page.
  * - Pathao: X-PATHAO-Signature must equal our webhook secret. Every answer
- *   carries X-Pathao-Merchant-Webhook-Integration-Secret (the account-level
- *   value saved in Settings > Couriers).
+ *   carries X-Pathao-Merchant-Webhook-Integration-Secret.
+ *
+ * ⚠⚠ THE PAIRING GUARD (11 Oct 2026, three "Validation error"s in one day).
+ * The value echoed back is shown only on the courier's own webhook page, so it
+ * lives on the account (Settings > Couriers, "Courier's reply value"); the
+ * header comes from the provider definition. Every pairing attempt is recorded
+ * on the account (ok, missing_echo or bad_signature, never a header value), and
+ * a failed one becomes an item in Needs attention that says what to do.
  *
  * An unknown parcel is logged (ids only) and answered 202, so the courier does
  * not retry forever a parcel that belongs to a shop still booking by itself.
@@ -62,40 +68,56 @@ class CourierWebhookController extends Controller
         // CB-Webhook-agent/0.8): every call carries X-CarryBee-Webhook-Signature
         // (our webhook secret, plain or as an HMAC of the body), and the answer
         // must be 202 carrying X-CB-Webhook-Integration-Header = the value
-        // CarryBee shows on its Webhook Integration page for that business. That
-        // value never arrives in the request, so it is kept on the account
-        // (Settings > Couriers, "integration echo"). The old documented shape
-        // (secret in X-CB-Webhook-Integration-Header) is still accepted.
+        // CarryBee shows on its Webhook Integration page. The old documented
+        // shape (secret in X-CB-Webhook-Integration-Header) is still accepted.
         if ($account->provider->code === 'carrybee') {
             $form = $this->carryBeeSignature($request, $secret);
-
-            if ($form === null) {
-                $this->logShape($request, $account, 'carrybee signature missing or wrong');
-
-                return response('', 401);
-            }
-
-            $echo = ($value = $account->integrationSecret()) === null ? [] : ['X-CB-Webhook-Integration-Header' => $value];
-
-            if ($handshake) {
-                Log::warning('CarryBee webhook paired', ['courier_account_id' => $account->id, 'signature' => $form, 'echo_set' => $echo !== []]);
-
-                return response('', 202, $echo);
-            }
+            $authentic = $form !== null;
         } else {
-            if ($header === null || ! is_string($given) || $secret === null || ! hash_equals($secret, $given)) {
-                Log::notice('Courier webhook refused: secret missing or wrong', ['courier_account_id' => $account->id]);
-                $this->logShape($request, $account, 'refused');
+            $form = 'plain';
+            $authentic = $header !== null && is_string($given) && $secret !== null && hash_equals($secret, $given);
+        }
 
-                return response('', 401);
-            }
-
-            $echo = $this->echoHeaders($account);
+        if (! $authentic) {
+            Log::notice('Courier webhook refused: secret missing or wrong', ['courier_account_id' => $account->id]);
+            $this->logShape($request, $account, 'signature missing or wrong');
 
             if ($handshake) {
-                return response('', 202, $echo);
+                $account->recordHandshake(false, CourierAccount::PAIRING_BAD_SIGNATURE);
+                Log::warning('Courier webhook pairing refused: the secret in the courier form does not match the ERP', [
+                    'courier_account_id' => $account->id,
+                    'provider' => $account->provider->code,
+                ]);
             }
+
+            return response('', 401);
         }
+
+        // ⚠⚠ The value the courier wants back (from the courier's own webhook
+        // page, kept in Settings > Couriers). One source of truth: the provider
+        // definition names the header, the account holds the value.
+        $echo = $account->integrationEchoHeaders();
+
+        if ($handshake) {
+            if ($account->needsIntegrationEcho()) {
+                // ⚠⚠ Still 202 without the header: the courier then says
+                // "Validation error", and Needs attention tells the owner why.
+                $account->recordHandshake(false, CourierAccount::PAIRING_MISSING_ECHO);
+                Log::warning('Courier webhook pairing: the courier reply value is missing', [
+                    'courier_account_id' => $account->id,
+                    'provider' => $account->provider->code,
+                    'header' => $definition->integrationEchoHeader(),
+                    'where' => $definition->integrationEchoPage(),
+                ]);
+            } else {
+                $account->recordHandshake(true);
+                Log::info('Courier webhook paired', ['courier_account_id' => $account->id, 'signature' => $form]);
+            }
+
+            return response('', 202, $echo);
+        }
+
+        $account->recordWebhookEvent();
 
         $consignment = $this->findParcel($account, $payload);
 
@@ -161,9 +183,6 @@ class CourierWebhookController extends Controller
     }
 
     /**
-     * @return array<string, string>
-     */
-    /**
      * What a refused courier request LOOKED like: header names, content type,
      * body keys and length. Never header values or body values, so no secret or
      * customer detail reaches the log.
@@ -181,17 +200,6 @@ class CourierWebhookController extends Controller
             'form_keys' => array_keys($request->request->all()),
             'body_length' => strlen((string) $request->getContent()),
         ]);
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function echoHeaders(CourierAccount $account): array
-    {
-        return match ($account->provider->code) {
-            'pathao' => ($echo = $account->integrationSecret()) === null ? [] : ['X-Pathao-Merchant-Webhook-Integration-Secret' => $echo],
-            default => [],
-        };
     }
 
     /**

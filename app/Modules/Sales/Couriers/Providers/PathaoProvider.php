@@ -102,6 +102,21 @@ class PathaoProvider extends CourierProviderDefinition
         return 'X-PATHAO-Signature';
     }
 
+    public function integrationEchoHeader(): ?string
+    {
+        return 'X-Pathao-Merchant-Webhook-Integration-Secret';
+    }
+
+    public function integrationEchoPage(): ?string
+    {
+        return 'Pathao Developer API > Webhook Integration';
+    }
+
+    public function integrationEchoHintKey(): ?string
+    {
+        return 'couriers.echo_hint.pathao';
+    }
+
     public function baseUrls(): array
     {
         return [

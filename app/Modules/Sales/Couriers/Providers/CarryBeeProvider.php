@@ -97,6 +97,26 @@ class CarryBeeProvider extends CourierProviderDefinition
         return 'X-CB-Webhook-Integration-Header';
     }
 
+    /**
+     * ⚠⚠ Same header name as the documented secret header, different value:
+     * CarryBee's own value from its Webhook Integration page. It belongs to the
+     * merchant LOGIN, so every CarryBee business under one login shares it.
+     */
+    public function integrationEchoHeader(): ?string
+    {
+        return 'X-CB-Webhook-Integration-Header';
+    }
+
+    public function integrationEchoPage(): ?string
+    {
+        return 'CarryBee Developer > Webhook Integration';
+    }
+
+    public function integrationEchoHintKey(): ?string
+    {
+        return 'couriers.echo_hint.carrybee';
+    }
+
     public function baseUrls(): array
     {
         return [

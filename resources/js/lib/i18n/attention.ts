@@ -106,6 +106,23 @@ export const attention = {
         en: '{account}: the courier has pushed no update for over {hours} hours while {count} parcels are open.',
         bn: '{account}: {count}টি পার্সেল খোলা থাকা অবস্থায় কুরিয়ার {hours} ঘণ্টার বেশি কোনো আপডেট পাঠায়নি।',
     },
+    // The webhook pairing guard (11 Oct 2026)
+    'attention.reason.courier_pairing_missing_echo': {
+        en: "{account} tried to connect its webhook but the courier's reply value is missing. Open {page}, copy the value from the line \"The header {header} value should be exactly ...\", paste it in Settings > Couriers > Edit > Courier's reply value, save, then press connect on the courier's page again.",
+        bn: '{account} তার ওয়েবহুক যুক্ত করার চেষ্টা করেছে, কিন্তু কুরিয়ারের উত্তর-মান (reply value) নেই। {page} খুলুন, "The header {header} value should be exactly ..." লাইনের মানটি কপি করুন, সেটিংস > কুরিয়ার > সম্পাদনা > কুরিয়ারের উত্তর-মান ঘরে বসিয়ে সংরক্ষণ করুন, তারপর কুরিয়ারের পাতায় আবার connect চাপুন।',
+    },
+    'attention.reason.courier_pairing_retry': {
+        en: "{account}: the courier's reply value is saved now. Press connect on {page} again to finish pairing the webhook.",
+        bn: '{account}: কুরিয়ারের উত্তর-মান এখন সংরক্ষিত। ওয়েবহুক যুক্ত করা শেষ করতে {page}-এ আবার connect চাপুন।',
+    },
+    'attention.reason.courier_pairing_bad_secret': {
+        en: "{account} tried to connect its webhook but the webhook secret in the courier's form does not match the ERP. Copy the secret again from Settings > Couriers (Rotate webhook secret shows a new one once), paste it in the courier's form, then connect again.",
+        bn: '{account} তার ওয়েবহুক যুক্ত করার চেষ্টা করেছে, কিন্তু কুরিয়ারের ফর্মে দেওয়া ওয়েবহুক সিক্রেট ইআরপির সাথে মেলেনি। সেটিংস > কুরিয়ার থেকে সিক্রেটটি আবার কপি করুন ("ওয়েবহুক সিক্রেট বদলান" নতুন একটি একবার দেখায়), কুরিয়ারের ফর্মে বসান, তারপর আবার connect চাপুন।',
+    },
+    'attention.reason.courier_pairing_not_ready': {
+        en: '{account}: the courier\'s reply value is not saved, so connecting its webhook would fail with "Validation error". Copy it from {page} into Settings > Couriers first.',
+        bn: '{account}: কুরিয়ারের উত্তর-মান সংরক্ষিত নেই, তাই ওয়েবহুক যুক্ত করতে গেলে "Validation error" আসবে। আগে {page} থেকে মানটি কপি করে সেটিংস > কুরিয়ার-এ বসান।',
+    },
     'attention.reason.loss_claim_open': {
         en: 'Claim on parcel {parcel} ({courier}): Tk {amount} claimed, no answer from the courier yet.',
         bn: 'পার্সেল {parcel} ({courier})-এর দাবি: Tk {amount} দাবি করা হয়েছে, কুরিয়ারের উত্তর এখনও আসেনি।',

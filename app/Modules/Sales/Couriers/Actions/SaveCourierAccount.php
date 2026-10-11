@@ -96,8 +96,8 @@ class SaveCourierAccount
             'options' => $options,
         ];
 
-        // ⭐ Slice 4: Pathao's account-level webhook echo value. Blank keeps the
-        // saved one, like a credential. Not part of the tested fingerprint: it
+        // ⭐ Slice 4: the courier's webhook reply value (CarryBee and Pathao show
+        // it on their webhook page). Blank keeps the saved one, like a credential. Not part of the tested fingerprint: it
         // is what WE answer, not what we send.
         $echo = trim((string) ($data['integration_secret'] ?? ''));
 
