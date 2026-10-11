@@ -9,7 +9,6 @@ use App\Modules\Inventory\Actions\ApplyProductWeightImport;
 use App\Modules\Inventory\Actions\PlanProductWeightImport;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Support\ProductWeightFile;
-use App\Modules\Inventory\Support\ProductWeightImportPlan;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;

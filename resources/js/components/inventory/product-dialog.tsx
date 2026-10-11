@@ -196,7 +196,9 @@ export function ProductDialog({
                       lead_time_days: product.lead_time_days === null ? '' : String(product.lead_time_days),
                       tracks_expiry: product.tracks_expiry ?? false,
                       shelf_life_warning_days:
-                          product.shelf_life_warning_days === null || product.shelf_life_warning_days === undefined ? '' : String(product.shelf_life_warning_days),
+                          product.shelf_life_warning_days === null || product.shelf_life_warning_days === undefined
+                              ? ''
+                              : String(product.shelf_life_warning_days),
                       weight_grams: product.weight_grams === null || product.weight_grams === undefined ? '' : String(product.weight_grams),
                       is_active: product.is_active,
                   },
@@ -401,7 +403,9 @@ export function ProductDialog({
                                 ))}
                             </SearchSelect>
                             {units.length === 0 && (
-                                <p className="text-muted-foreground text-xs">No units yet. Open this list and choose &ldquo;New unit&rdquo; to add one.</p>
+                                <p className="text-muted-foreground text-xs">
+                                    No units yet. Open this list and choose &ldquo;New unit&rdquo; to add one.
+                                </p>
                             )}
                             <InputError message={errors.unit_of_measure_id} />
                         </div>
@@ -699,7 +703,11 @@ export function ProductDialog({
                                     an expiry when received, and when to warn about short shelf life. */}
                                 <div className="grid gap-2 sm:col-span-2">
                                     <label className="flex items-center gap-2 text-sm">
-                                        <input type="checkbox" checked={form.tracks_expiry} onChange={(e) => set('tracks_expiry', e.target.checked)} />
+                                        <input
+                                            type="checkbox"
+                                            checked={form.tracks_expiry}
+                                            onChange={(e) => set('tracks_expiry', e.target.checked)}
+                                        />
                                         Tracks expiry: a goods receipt must carry the batch number and expiry date
                                     </label>
                                     <InputError message={errors.tracks_expiry} />

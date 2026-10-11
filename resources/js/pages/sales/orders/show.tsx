@@ -266,8 +266,8 @@ function BookParcelForm({ challan, couriers }: { challan: Challan; couriers: { i
             )}
             {challan.weight.missing_count > 0 && (
                 <p className="w-full text-xs text-amber-700 dark:text-amber-400">
-                    {challan.weight.missing_count} item(s) without weight ({challan.weight.missing.map((line) => line.sku || line.name).join(', ')}), so
-                    the weight could not be worked out in full. Weigh the parcel and type it.
+                    {challan.weight.missing_count} item(s) without weight ({challan.weight.missing.map((line) => line.sku || line.name).join(', ')}),
+                    so the weight could not be worked out in full. Weigh the parcel and type it.
                 </p>
             )}
         </form>

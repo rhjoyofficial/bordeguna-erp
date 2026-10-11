@@ -150,7 +150,9 @@ export default function ProductWeights({
 
                         {preview.changes.length > 0 && (
                             <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-lg border">
-                                <p className="border-sidebar-border/70 dark:border-sidebar-border border-b p-3 text-sm font-medium">What would change</p>
+                                <p className="border-sidebar-border/70 dark:border-sidebar-border border-b p-3 text-sm font-medium">
+                                    What would change
+                                </p>
                                 <div className="max-h-96 overflow-y-auto">
                                     <table className="w-full text-sm">
                                         <tbody>
@@ -160,7 +162,8 @@ export default function ProductWeights({
                                                     <td className="p-3 font-mono text-xs">{c.sku}</td>
                                                     <td className="p-3">{c.name}</td>
                                                     <td className="p-3 text-right tabular-nums">
-                                                        <span className="text-muted-foreground">{c.from === null ? 'no weight' : `${c.from} g`}</span> → {c.to} g
+                                                        <span className="text-muted-foreground">{c.from === null ? 'no weight' : `${c.from} g`}</span>{' '}
+                                                        → {c.to} g
                                                     </td>
                                                 </tr>
                                             ))}
