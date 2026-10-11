@@ -247,7 +247,7 @@ function HeroTile({ recipe, widget, entry, index }: { recipe: Recipe; widget: Da
         <>
             <div className="flex items-center gap-2">
                 <Icon className="size-3.5 shrink-0 text-white/55" aria-hidden />
-                <span className="min-w-0 truncate text-[11px] font-medium tracking-[0.12em] text-white/70 uppercase">{label}</span>
+                <span className="min-w-0 truncate text-[11px] font-medium tracking-[0.12em] text-emerald-200/75 uppercase">{label}</span>
             </div>
 
             {figure === null ? (

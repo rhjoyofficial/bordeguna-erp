@@ -10,7 +10,22 @@ import { useMemo, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AnimatedNumber } from './animated-number';
 import { changeAgainst, formatValue } from './format';
-import { avatarStyle, chartColour, initials, PILL, shareColour, STATUS, statusForText, toneStatus, toneText } from './palette';
+import {
+    avatarStyle,
+    chartColour,
+    figureClass,
+    initials,
+    labelClass,
+    legendClass,
+    meaningFor,
+    partMeaning,
+    PILL,
+    shareColour,
+    STATUS,
+    statusForText,
+    toneStatus,
+    toneText,
+} from './palette';
 import type {
     AttentionPayload,
     BreakdownPayload,
@@ -48,18 +63,18 @@ const toneFill = (tone: Tone, scaled: boolean) => {
 export function WidgetBody({ payload, emptyText, widgetKey }: { payload: WidgetPayload; emptyText: string; widgetKey?: string }) {
     switch (payload.kind) {
         case 'stat':
-            return <StatBody payload={payload} />;
+            return <StatBody payload={payload} widgetKey={widgetKey} />;
         case 'series':
-            return <SeriesBody payload={payload} />;
+            return <SeriesBody payload={payload} widgetKey={widgetKey} />;
         case 'breakdown':
-            return <BreakdownBody payload={payload} emptyText={emptyText} byStatus={STATUS_BREAKDOWNS.has(widgetKey ?? '')} />;
+            return <BreakdownBody payload={payload} emptyText={emptyText} byStatus={STATUS_BREAKDOWNS.has(widgetKey ?? '')} widgetKey={widgetKey} />;
         case 'list':
         case 'lookup':
             return <ListBody payload={payload} emptyText={emptyText} />;
         case 'signals':
             return <SignalsBody payload={payload} />;
         case 'progress':
-            return <ProgressBody payload={payload} emptyText={emptyText} />;
+            return <ProgressBody payload={payload} emptyText={emptyText} widgetKey={widgetKey} />;
         case 'attention':
             return <AttentionBody payload={payload} emptyText={emptyText} />;
         default:
@@ -150,8 +165,13 @@ function Parts({ parts }: { parts?: Part[] }) {
             {parts.map((part) => {
                 const body = (
                     <>
-                        <dt className="text-muted-foreground truncate">{part.label}</dt>
-                        <dd className={cn('mt-0.5 truncate text-[13px] font-semibold', toneText(part.tone))}>
+                        <dt className={cn('truncate', labelClass(part.value, partMeaning(part.label), part.tone))}>{part.label}</dt>
+                        <dd
+                            className={cn(
+                                'mt-0.5 truncate text-[13px] font-semibold',
+                                figureClass(part.value, partMeaning(part.label), part.tone, 'sm'),
+                            )}
+                        >
                             {typeof part.value === 'number' && part.unit !== 'text' ? (
                                 <AnimatedNumber value={part.value} unit={part.unit ?? 'count'} compact />
                             ) : (
@@ -175,13 +195,18 @@ function Parts({ parts }: { parts?: Part[] }) {
     );
 }
 
-function StatBody({ payload }: { payload: StatPayload }) {
+function StatBody({ payload, widgetKey }: { payload: StatPayload; widgetKey?: string }) {
     const change = typeof payload.value === 'number' ? changeAgainst(payload.value, payload.previous) : null;
 
     return (
         <div>
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                <p className={cn('text-[1.75rem] leading-tight font-semibold tracking-tight', toneText(payload.tone))}>
+                <p
+                    className={cn(
+                        'text-[1.75rem] leading-tight font-semibold tracking-tight',
+                        figureClass(payload.value, meaningFor(widgetKey), payload.tone),
+                    )}
+                >
                     {typeof payload.value === 'number' ? <AnimatedNumber value={payload.value} unit={payload.unit} /> : payload.value}
                 </p>
                 {change && <ChangeChip change={change} />}
@@ -221,7 +246,7 @@ function ChartTooltip({
     );
 }
 
-function SeriesBody({ payload }: { payload: SeriesPayload }) {
+function SeriesBody({ payload, widgetKey }: { payload: SeriesPayload; widgetKey?: string }) {
     const reduce = useReducedMotion();
     const { t } = useTranslation();
     const change = payload.total !== undefined ? changeAgainst(payload.total, payload.previous_total) : null;
@@ -249,7 +274,7 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
             {payload.total !== undefined && (
                 <div className="mb-3 flex flex-wrap items-center gap-x-2.5 gap-y-1">
                     <span className="text-muted-foreground w-full text-xs">{payload.total_label ?? t('dash.total')}</span>
-                    <span className="text-2xl font-semibold tracking-tight">
+                    <span className={cn('text-2xl font-semibold tracking-tight', figureClass(payload.total, meaningFor(widgetKey)))}>
                         <AnimatedNumber value={payload.total} unit={payload.unit} />
                     </span>
                     {change && <ChangeChip change={change} />}
@@ -314,9 +339,9 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
                     </ResponsiveContainer>
                 </div>
             )}
-            <div className="text-muted-foreground mt-3 flex flex-wrap gap-4 text-xs">
+            <div className="mt-3 flex flex-wrap gap-4 text-xs font-medium">
                 {payload.series.map((s, i) => (
-                    <span key={s.key} className="flex items-center gap-1.5">
+                    <span key={s.key} className={cn('flex items-center gap-1.5', legendClass(i))}>
                         <span className="inline-block h-2 w-3.5 rounded-full" style={{ background: chartColour(i) }} />
                         {s.label}
                     </span>
@@ -326,7 +351,17 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
     );
 }
 
-function BreakdownBody({ payload, emptyText, byStatus }: { payload: BreakdownPayload; emptyText: string; byStatus: boolean }) {
+function BreakdownBody({
+    payload,
+    emptyText,
+    byStatus,
+    widgetKey,
+}: {
+    payload: BreakdownPayload;
+    emptyText: string;
+    byStatus: boolean;
+    widgetKey?: string;
+}) {
     const reduce = useReducedMotion();
     const { t } = useTranslation();
     const max = Math.max(1, ...payload.items.map((i) => Math.abs(i.value)));
@@ -343,7 +378,7 @@ function BreakdownBody({ payload, emptyText, byStatus }: { payload: BreakdownPay
         <div>
             {payload.headline && <p className="mb-2 text-sm font-medium">{payload.headline}</p>}
             {payload.total !== undefined && payload.chart !== 'donut' && (
-                <p className="mb-3 text-2xl font-semibold tracking-tight">
+                <p className={cn('mb-3 text-2xl font-semibold tracking-tight', figureClass(payload.total, meaningFor(widgetKey)))}>
                     <AnimatedNumber value={payload.total} unit={payload.unit} />
                 </p>
             )}
@@ -410,7 +445,9 @@ function BreakdownBody({ payload, emptyText, byStatus }: { payload: BreakdownPay
                                         <span className="inline-block size-2 shrink-0 rounded-full" style={{ background: colour }} aria-hidden />
                                         <span className="text-muted-foreground truncate">{item.label}</span>
                                     </span>
-                                    <span className={cn('font-semibold tabular-nums', item.value > 0 && toneText(item.tone))}>
+                                    <span
+                                        className={cn('font-semibold tabular-nums', item.value === 0 ? 'text-muted-foreground' : toneText(item.tone))}
+                                    >
                                         <AnimatedNumber value={item.value} unit={payload.unit} compact />
                                     </span>
                                 </div>
@@ -621,14 +658,14 @@ function SignalsBody({ payload }: { payload: SignalsPayload }) {
     );
 }
 
-function ProgressBody({ payload, emptyText }: { payload: ProgressPayload; emptyText: string }) {
+function ProgressBody({ payload, emptyText, widgetKey }: { payload: ProgressPayload; emptyText: string; widgetKey?: string }) {
     const reduce = useReducedMotion();
     const { t } = useTranslation();
     const share = payload.target ? Math.min(1, Math.max(0, payload.value / payload.target)) : 0;
 
     return (
         <div>
-            <p className="text-[1.75rem] leading-tight font-semibold tracking-tight">
+            <p className={cn('text-[1.75rem] leading-tight font-semibold tracking-tight', figureClass(payload.value, meaningFor(widgetKey)))}>
                 <AnimatedNumber value={payload.value} unit={payload.unit} />
             </p>
             {payload.target ? (

@@ -224,3 +224,135 @@ export function initials(name: string): string {
 export function avatarStyle(): { background: string; color: string } {
     return { background: 'var(--muted)', color: 'var(--muted-foreground)' };
 }
+
+/**
+ * Colour in the TEXT only, by what a figure means (Joy, 11 Oct, fifth pass:
+ * "just add colors on the font where can give good vibe"). Surfaces stay
+ * neutral. Money coming in reads brand green, money going out orange (the
+ * chart's orange), something waiting amber, something wrong red; a zero is
+ * muted grey whatever it is, and a figure with no direction (a balance) keeps
+ * the normal text colour.
+ */
+export type Meaning = 'in' | 'out' | 'waiting' | 'bad';
+
+const KEY_MEANING: Record<string, Meaning> = {
+    income_trend: 'in',
+    gross_profit: 'in',
+    sales_vs_target: 'in',
+    top_products: 'in',
+    receipts_vs_payments: 'in',
+    my_payslip: 'in',
+    my_orders: 'in',
+    claims_to_pay: 'out',
+    payables_ageing: 'out',
+    my_claims: 'out',
+    approvals_waiting: 'waiting',
+    bank_unmatched: 'waiting',
+    finance_approvals: 'waiting',
+    followups_due: 'waiting',
+    leave_pending: 'waiting',
+    orders_needing_action: 'waiting',
+    orders_to_dispatch: 'waiting',
+    courier_statements_pending: 'waiting',
+    my_tasks: 'waiting',
+};
+
+export function meaningFor(key?: string): Meaning | null {
+    return key ? (KEY_MEANING[key] ?? null) : null;
+}
+
+/** A part's meaning read from its label, the way statusForText reads a status word. */
+export function partMeaning(label: string): Meaning | null {
+    const t = label.toLowerCase();
+
+    if (/(overdue|over 90|failed|lost|short)/.test(t)) {
+        return 'bad';
+    }
+
+    if (/(pending|waiting|unmatched|stuck|problem|due in|to pay)/.test(t)) {
+        return 'waiting';
+    }
+
+    if (/(expense|cost|money out|paid out|payable|claim|refund)/.test(t)) {
+        return 'out';
+    }
+
+    if (/(income|sales|revenue|profit|margin|net|received|money in)/.test(t)) {
+        return 'in';
+    }
+
+    return null;
+}
+
+type Shade = Meaning | 'good';
+
+/** Large figures (28px semibold, AA large text at 3:1). */
+const LARGE: Record<Shade, string> = {
+    in: 'text-emerald-600 dark:text-emerald-400',
+    good: 'text-emerald-600 dark:text-emerald-400',
+    out: 'text-orange-600 dark:text-orange-400',
+    waiting: 'text-amber-700 dark:text-amber-400',
+    bad: 'text-red-600 dark:text-red-400',
+};
+
+/** Small text (AA at 4.5:1 on the card and on the muted mini tiles). */
+const SMALL: Record<Shade, string> = {
+    in: 'text-emerald-700 dark:text-emerald-300',
+    good: 'text-emerald-700 dark:text-emerald-300',
+    out: 'text-orange-700 dark:text-orange-300',
+    waiting: 'text-amber-800 dark:text-amber-300',
+    bad: 'text-red-700 dark:text-red-300',
+};
+
+function shadeOf(value: number | string | null | undefined, meaning: Meaning | null, tone?: Tone): Shade | 'zero' | null {
+    if (typeof value === 'number' && value === 0) {
+        return 'zero';
+    }
+
+    const status = toneStatus(tone ?? null);
+
+    if (status === 'bad') {
+        return 'bad';
+    }
+
+    if (status === 'warn') {
+        return 'waiting';
+    }
+
+    if (status === 'good') {
+        return 'good';
+    }
+
+    if (meaning === 'in') {
+        return typeof value === 'number' && value < 0 ? 'bad' : 'in';
+    }
+
+    if (meaning === 'waiting' || meaning === 'bad') {
+        return typeof value === 'number' && value > 0 ? meaning : null;
+    }
+
+    return meaning;
+}
+
+/** The text colour for a figure: by its tone first, then by what it means. */
+export function figureClass(value: number | string | null | undefined, meaning: Meaning | null, tone?: Tone, size: 'lg' | 'sm' = 'lg'): string {
+    const shade = shadeOf(value, meaning, tone);
+
+    if (shade === 'zero') {
+        return 'text-muted-foreground';
+    }
+
+    return shade === null ? '' : (size === 'lg' ? LARGE : SMALL)[shade];
+}
+
+/** A mini tile's caption, tinted only when its figure is not zero. */
+export function labelClass(value: number | string | null | undefined, meaning: Meaning | null, tone?: Tone): string {
+    const shade = shadeOf(value, meaning, tone);
+
+    return shade === null || shade === 'zero' ? 'text-muted-foreground' : SMALL[shade];
+}
+
+/** Chart legend words in their series colour, AA as text (the swatch keeps the chart colour). */
+export function legendClass(index: number): string {
+    return index === 0 ? 'text-blue-700 dark:text-blue-300' : index === 1 ? 'text-orange-700 dark:text-orange-300' : 'text-muted-foreground';
+}
