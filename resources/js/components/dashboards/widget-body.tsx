@@ -10,7 +10,7 @@ import { useMemo, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AnimatedNumber } from './animated-number';
 import { changeAgainst, formatValue } from './format';
-import { avatarStyle, initials, PILL, SERIES, STATUS, statusForText, toneStatus, toneText } from './palette';
+import { avatarStyle, chartColour, initials, PILL, shareColour, STATUS, statusForText, toneStatus, toneText } from './palette';
 import type {
     AttentionPayload,
     BreakdownPayload,
@@ -34,10 +34,15 @@ const PERSON_COLUMNS = new Set(['employee', 'customer']);
 const AXIS_TICK = { fill: 'var(--muted-foreground)', fontSize: 11 };
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-const toneFill = (tone: Tone, index: number) => {
+/**
+ * A bar or dot in a breakdown. A tone wins (amber waiting, red overdue). In a
+ * breakdown where some rows carry a tone (ageing), the untoned rows are the
+ * calm neutral start of the scale; otherwise every bar is the one chart blue.
+ */
+const toneFill = (tone: Tone, scaled: boolean) => {
     const status = toneStatus(tone);
 
-    return status ? STATUS[status] : SERIES[index % SERIES.length];
+    return status ? STATUS[status] : scaled ? STATUS.neutral : chartColour(0);
 };
 
 export function WidgetBody({ payload, emptyText, widgetKey }: { payload: WidgetPayload; emptyText: string; widgetKey?: string }) {
@@ -72,7 +77,7 @@ function EmptyNote({ text, calm = false }: { text: string; calm?: boolean }) {
 
     return (
         <div className="border-border bg-muted/40 flex items-center gap-3 rounded-xl border border-dashed px-3 py-4 text-sm dark:bg-white/[0.03]">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--card)] text-[var(--acc-ink)] shadow-xs">
+            <span className="text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--card)] shadow-xs">
                 <Icon className="size-4" aria-hidden />
             </span>
             <p className="text-muted-foreground">{text}</p>
@@ -121,7 +126,7 @@ function Person({ name }: { name: string }) {
         <span className="flex min-w-0 items-center gap-2">
             <span
                 className="flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
-                style={avatarStyle(name)}
+                style={avatarStyle()}
                 aria-hidden
             >
                 {initials(name)}
@@ -264,7 +269,7 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
                                         key={s.key}
                                         dataKey={s.key}
                                         name={s.label}
-                                        fill={SERIES[i]}
+                                        fill={chartColour(i)}
                                         radius={[4, 4, 0, 0]}
                                         maxBarSize={26}
                                         isAnimationActive={!reduce}
@@ -278,9 +283,9 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
                                 <defs>
                                     {payload.series.map((s, i) => (
                                         <linearGradient key={s.key} id={`fill-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor={SERIES[i]} stopOpacity={0.38} />
-                                            <stop offset="70%" stopColor={SERIES[i]} stopOpacity={0.08} />
-                                            <stop offset="100%" stopColor={SERIES[i]} stopOpacity={0} />
+                                            <stop offset="0%" stopColor={chartColour(i)} stopOpacity={0.22} />
+                                            <stop offset="70%" stopColor={chartColour(i)} stopOpacity={0.05} />
+                                            <stop offset="100%" stopColor={chartColour(i)} stopOpacity={0} />
                                         </linearGradient>
                                     ))}
                                 </defs>
@@ -295,7 +300,7 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
                                         type="monotone"
                                         dataKey={s.key}
                                         name={s.label}
-                                        stroke={SERIES[i]}
+                                        stroke={chartColour(i)}
                                         strokeWidth={2}
                                         fill={`url(#fill-${s.key})`}
                                         activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--card)' }}
@@ -312,7 +317,7 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
             <div className="text-muted-foreground mt-3 flex flex-wrap gap-4 text-xs">
                 {payload.series.map((s, i) => (
                     <span key={s.key} className="flex items-center gap-1.5">
-                        <span className="inline-block h-2 w-3.5 rounded-full" style={{ background: SERIES[i] }} />
+                        <span className="inline-block h-2 w-3.5 rounded-full" style={{ background: chartColour(i) }} />
                         {s.label}
                     </span>
                 ))}
@@ -326,8 +331,13 @@ function BreakdownBody({ payload, emptyText, byStatus }: { payload: BreakdownPay
     const { t } = useTranslation();
     const max = Math.max(1, ...payload.items.map((i) => Math.abs(i.value)));
     const total = payload.items.reduce((sum, i) => sum + i.value, 0);
+    const scaled = payload.items.some((item) => toneStatus(item.tone) !== null);
     const fill = (item: BreakdownPayload['items'][number], index: number) =>
-        byStatus ? STATUS[statusForText(item.label)] : toneFill(item.tone, index);
+        byStatus
+            ? STATUS[statusForText(item.label)]
+            : payload.chart === 'donut' && !scaled
+              ? shareColour(index, payload.items.length)
+              : toneFill(item.tone, scaled);
 
     return (
         <div>
@@ -400,7 +410,7 @@ function BreakdownBody({ payload, emptyText, byStatus }: { payload: BreakdownPay
                                         <span className="inline-block size-2 shrink-0 rounded-full" style={{ background: colour }} aria-hidden />
                                         <span className="text-muted-foreground truncate">{item.label}</span>
                                     </span>
-                                    <span className={cn('font-semibold tabular-nums', toneText(item.tone))}>
+                                    <span className={cn('font-semibold tabular-nums', item.value > 0 && toneText(item.tone))}>
                                         <AnimatedNumber value={item.value} unit={payload.unit} compact />
                                     </span>
                                 </div>
@@ -582,17 +592,15 @@ function SignalsBody({ payload }: { payload: SignalsPayload }) {
                             href={item.url}
                             className={cn(
                                 'flex h-full items-center gap-3 rounded-xl px-2.5 py-2 ring-1 transition-colors ring-inset',
-                                waiting
-                                    ? 'bg-amber-500/8 ring-amber-500/20 hover:bg-amber-500/15'
-                                    : 'bg-emerald-500/6 ring-emerald-500/15 hover:bg-emerald-500/12',
+                                'bg-muted/40 ring-border/60 hover:bg-muted dark:bg-white/[0.03] dark:hover:bg-white/[0.06]',
                             )}
                         >
                             <span
                                 className={cn(
                                     'flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-sm font-semibold tabular-nums',
                                     waiting
-                                        ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300'
-                                        : 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300',
+                                        ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300'
+                                        : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
                                 )}
                             >
                                 {waiting ? (
@@ -644,7 +652,7 @@ function ProgressBody({ payload, emptyText }: { payload: ProgressPayload; emptyT
                         aria-valuemax={100}
                     >
                         <motion.div
-                            className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[var(--acc)] to-[var(--acc-2)]"
+                            className="h-full w-full origin-left rounded-full bg-[var(--acc)]"
                             initial={reduce ? false : { scaleX: 0 }}
                             animate={{ scaleX: share }}
                             transition={reduce ? { duration: 0 } : { duration: 0.9, ease: EASE, delay: 0.2 }}

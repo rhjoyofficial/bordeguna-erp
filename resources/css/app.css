@@ -657,14 +657,15 @@
   on the lightest stop measures above 5:1, so every figure on it passes AA.
 */
 :root {
-    --dash-hero-from: hsl(140, 64%, 19%);
-    --dash-hero-via: hsl(170, 78%, 22%);
-    --dash-hero-to: hsl(208, 68%, 27%);
-    --dash-hero-glow-a: hsla(96, 85%, 58%, 0.3);
-    --dash-hero-glow-b: hsla(188, 95%, 55%, 0.22);
-    --dash-hero-tile: hsla(0, 0%, 100%, 0.1);
-    --dash-hero-tile-hover: hsla(0, 0%, 100%, 0.16);
-    --dash-hero-ring: hsla(0, 0%, 100%, 0.18);
+    --dash-hero-from: hsl(152, 48%, 14%);
+    --dash-hero-to: hsl(165, 30%, 5%);
+    --dash-hero-glow-a: hsla(130, 70%, 45%, 0.22);
+    --dash-hero-glow-b: hsla(170, 80%, 40%, 0.1);
+    --dash-hero-tile: hsla(0, 0%, 100%, 0.035);
+    --dash-hero-tile-hover: hsla(0, 0%, 100%, 0.06);
+    --dash-hero-ring: hsla(0, 0%, 100%, 0.1);
+    --dash-hero-ring-hover: hsla(0, 0%, 100%, 0.22);
+    --dash-hero-line: hsl(142, 77%, 73%);
 
     /* Chart series: the dataviz reference palette, validated on the card
        surface (scripts/validate_palette.js, 11 Oct 2026: all checks pass in
@@ -694,14 +695,15 @@
 }
 
 .dark {
-    --dash-hero-from: hsl(142, 58%, 12%);
-    --dash-hero-via: hsl(172, 66%, 15%);
-    --dash-hero-to: hsl(212, 58%, 19%);
-    --dash-hero-glow-a: hsla(96, 80%, 50%, 0.18);
-    --dash-hero-glow-b: hsla(188, 90%, 50%, 0.16);
-    --dash-hero-tile: hsla(0, 0%, 100%, 0.07);
-    --dash-hero-tile-hover: hsla(0, 0%, 100%, 0.12);
-    --dash-hero-ring: hsla(0, 0%, 100%, 0.12);
+    --dash-hero-from: hsl(152, 42%, 11%);
+    --dash-hero-to: hsl(165, 28%, 4%);
+    --dash-hero-glow-a: hsla(130, 70%, 45%, 0.16);
+    --dash-hero-glow-b: hsla(170, 80%, 40%, 0.08);
+    --dash-hero-tile: hsla(0, 0%, 100%, 0.03);
+    --dash-hero-tile-hover: hsla(0, 0%, 100%, 0.05);
+    --dash-hero-ring: hsla(0, 0%, 100%, 0.09);
+    --dash-hero-ring-hover: hsla(0, 0%, 100%, 0.2);
+    --dash-hero-line: hsl(142, 77%, 73%);
 
     --dash-series-1: #3987e5;
     --dash-series-2: #d95926;
@@ -723,143 +725,47 @@
 }
 
 /*
-  Accents, named by colour (palette.ts decides which widget wears which).
-  --acc / --acc-2: icon tile gradient, top stripe, bars (non-text, 3:1+).
-  --acc-ink: accent-coloured text (links), the 800 step in light and the 300
-    step in dark, AA on the card.
-  --acc-light: a pale step of the hue.
-  --acc-wash: a faint tint for hover rows and empty notes only, never a card
-    background (Joy, 11 Oct: tinted cards and tiles looked loud).
-  --acc-strong: the 700 step, set in light only so it holds in dark too: the
-    icon on the hero's white disc (AA on white in both modes).
+  The one accent a card carries: the ERP brand green, used for links and the
+  live-refresh pulse only (Joy, 11 Oct, fourth pass: one brand accent, neutral
+  structure). --acc-ink is AA text on the card in each mode.
 */
-.dash-acc-emerald {
-    --acc-strong: #047857;
-    --acc: #059669;
-    --acc-2: #0d9488;
-    --acc-ink: #065f46;
-    --acc-light: #a7f3d0;
-    --acc-wash: color-mix(in oklab, #059669 9%, transparent);
+.dash-acc-brand {
+    --acc: #15803d;
+    --acc-ink: #166534;
+    --acc-wash: color-mix(in oklab, #15803d 8%, transparent);
 }
-.dash-acc-teal {
-    --acc-strong: #0f766e;
-    --acc: #0d9488;
-    --acc-2: #0891b2;
-    --acc-ink: #115e59;
-    --acc-light: #99f6e4;
-    --acc-wash: color-mix(in oklab, #0d9488 9%, transparent);
-}
-.dash-acc-sky {
-    --acc-strong: #0369a1;
-    --acc: #0284c7;
-    --acc-2: #0ea5e9;
-    --acc-ink: #075985;
-    --acc-light: #bae6fd;
-    --acc-wash: color-mix(in oklab, #0284c7 9%, transparent);
-}
-.dash-acc-indigo {
-    --acc-strong: #4338ca;
-    --acc: #4f46e5;
-    --acc-2: #6366f1;
-    --acc-ink: #3730a3;
-    --acc-light: #c7d2fe;
-    --acc-wash: color-mix(in oklab, #4f46e5 9%, transparent);
-}
-.dash-acc-violet {
-    --acc-strong: #6d28d9;
-    --acc: #7c3aed;
-    --acc-2: #a855f7;
-    --acc-ink: #5b21b6;
-    --acc-light: #ddd6fe;
-    --acc-wash: color-mix(in oklab, #7c3aed 9%, transparent);
-}
-.dash-acc-amber {
-    --acc-strong: #b45309;
-    --acc: #d97706;
-    --acc-2: #ea580c;
-    --acc-ink: #92400e;
-    --acc-light: #fde68a;
-    --acc-wash: color-mix(in oklab, #d97706 9%, transparent);
-}
-.dash-acc-rose {
-    --acc-strong: #be123c;
-    --acc: #e11d48;
-    --acc-2: #db2777;
-    --acc-ink: #9f1239;
-    --acc-light: #fecdd3;
-    --acc-wash: color-mix(in oklab, #e11d48 9%, transparent);
-}
-.dash-acc-red {
-    --acc-strong: #b91c1c;
-    --acc: #dc2626;
-    --acc-2: #ea580c;
-    --acc-ink: #991b1b;
-    --acc-light: #fecaca;
-    --acc-wash: color-mix(in oklab, #dc2626 9%, transparent);
-}
-.dark .dash-acc-emerald {
-    --acc: #10b981;
-    --acc-2: #14b8a6;
-    --acc-ink: #6ee7b7;
-    --acc-light: #a7f3d0;
-    --acc-wash: color-mix(in oklab, #10b981 12%, transparent);
-}
-.dark .dash-acc-teal {
-    --acc: #14b8a6;
-    --acc-2: #06b6d4;
-    --acc-ink: #5eead4;
-    --acc-light: #99f6e4;
-    --acc-wash: color-mix(in oklab, #14b8a6 12%, transparent);
-}
-.dark .dash-acc-sky {
-    --acc: #0ea5e9;
-    --acc-2: #38bdf8;
-    --acc-ink: #7dd3fc;
-    --acc-light: #bae6fd;
-    --acc-wash: color-mix(in oklab, #0ea5e9 12%, transparent);
-}
-.dark .dash-acc-indigo {
-    --acc: #6366f1;
-    --acc-2: #818cf8;
-    --acc-ink: #a5b4fc;
-    --acc-light: #c7d2fe;
-    --acc-wash: color-mix(in oklab, #6366f1 12%, transparent);
-}
-.dark .dash-acc-violet {
-    --acc: #8b5cf6;
-    --acc-2: #a855f7;
-    --acc-ink: #c4b5fd;
-    --acc-light: #ddd6fe;
-    --acc-wash: color-mix(in oklab, #8b5cf6 12%, transparent);
-}
-.dark .dash-acc-amber {
-    --acc: #f59e0b;
-    --acc-2: #f97316;
-    --acc-ink: #fcd34d;
-    --acc-light: #fde68a;
-    --acc-wash: color-mix(in oklab, #f59e0b 12%, transparent);
-}
-.dark .dash-acc-rose {
-    --acc: #f43f5e;
-    --acc-2: #ec4899;
-    --acc-ink: #fda4af;
-    --acc-light: #fecdd3;
-    --acc-wash: color-mix(in oklab, #f43f5e 12%, transparent);
-}
-.dark .dash-acc-red {
-    --acc: #ef4444;
-    --acc-2: #f97316;
-    --acc-ink: #fca5a5;
-    --acc-light: #fecaca;
-    --acc-wash: color-mix(in oklab, #ef4444 12%, transparent);
+.dark .dash-acc-brand {
+    --acc: #4ade80;
+    --acc-ink: #86efac;
+    --acc-wash: color-mix(in oklab, #4ade80 10%, transparent);
 }
 
-/* The hero band's background: gradient plus two soft light pools. */
+/*
+  The hero: minimal and quiet (Joy, 11 Oct, fourth pass: "minimal and
+  futureistic"). Deep green falling to near black in both modes, one faint
+  light pool, and a hairline grid that fades out from the top right. The grid
+  sits on a pseudo layer behind the content, so it never repaints with it.
+*/
 .dash-hero {
     background:
-        radial-gradient(120% 90% at 100% 0%, var(--dash-hero-glow-a), transparent 55%),
-        radial-gradient(90% 80% at 0% 100%, var(--dash-hero-glow-b), transparent 60%),
-        linear-gradient(118deg, var(--dash-hero-from) 0%, var(--dash-hero-via) 48%, var(--dash-hero-to) 100%);
+        radial-gradient(70% 90% at 88% -10%, var(--dash-hero-glow-a), transparent 60%),
+        radial-gradient(60% 80% at -5% 110%, var(--dash-hero-glow-b), transparent 60%),
+        linear-gradient(135deg, var(--dash-hero-from) 0%, var(--dash-hero-to) 100%);
+    box-shadow:
+        inset 0 1px 0 hsla(0, 0%, 100%, 0.07),
+        0 1px 2px hsla(160, 40%, 5%, 0.25),
+        0 20px 44px -24px hsla(160, 50%, 6%, 0.6);
+}
+.dash-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+        linear-gradient(hsla(0, 0%, 100%, 0.045) 1px, transparent 1px), linear-gradient(90deg, hsla(0, 0%, 100%, 0.045) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(90% 120% at 85% 0%, black, transparent 72%);
 }
 
 /*
