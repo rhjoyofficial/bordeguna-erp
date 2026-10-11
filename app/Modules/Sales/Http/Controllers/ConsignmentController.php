@@ -53,7 +53,7 @@ class ConsignmentController extends Controller
         $awaitingPayout = fn ($query) => $query->where('status', '!=', ConsignmentStatus::Booked->value)->whereDoesntHave('statementLine');
 
         $consignments = Consignment::query()
-            ->with(['courier:id,name', 'delivery:id,delivery_number,delivered_at,customer_id', 'delivery.customer:id,name', 'delivery.lines.orderLine:id,sales_order_id', 'invoice:id,invoice_number', 'statementLine.statement:id,statement_reference', 'courierAccount.provider', 'shipmentEvents'])
+            ->with(['courier:id,name', 'delivery:id,delivery_number,delivered_at,customer_id', 'delivery.customer:id,name', 'delivery.lines.orderLine:id,sales_order_id', 'invoice:id,invoice_number', 'statementLine.statement:id,statement_reference', 'courierAccount.provider', 'shipmentEvents', 'lossClaim'])
             ->when($filters['status'] === 'awaiting_payout', $awaitingPayout)
             ->when(! in_array($filters['status'], ['all', 'awaiting_payout'], true), fn ($query) => $query->where('status', $filters['status']))
             ->when($filters['search'], fn ($query, $search) => $query->where(
@@ -87,6 +87,10 @@ class ConsignmentController extends Controller
                 // ⭐ Courier hub slice 4: what the courier says, when it was
                 // last asked, and the fees it quoted. Not money.
                 'courier_info' => ParcelPresenter::courier($consignment, withEvents: true),
+                // ⭐ Courier hub slice 8.
+                'cutoff_note' => $consignment->cutoff_note,
+                'door_resolution_label' => $consignment->door_resolution?->label(),
+                'claim_status_label' => $consignment->lossClaim?->statusLabel(),
             ]);
 
         return Inertia::render('sales/consignments/index', [

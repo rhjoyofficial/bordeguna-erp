@@ -26,6 +26,9 @@ interface Statement {
     bank_reference: string | null;
     deposit_difference_reason: string | null;
     payable_settled_amount: string | null;
+    // Courier hub slice 8 (risk 9): posted after a closed month.
+    posted_on: string | null;
+    cutoff_note: string | null;
     proof: { name: string; url: string } | null;
 }
 
@@ -88,6 +91,70 @@ interface JournalLine {
 
 type Tab = 'all' | 'matched' | 'differences' | 'unmatched';
 
+// Courier hub slice 8 (risk 4): collections less fees plus compensation and
+// adjustments, against what the payout column says.
+interface Equation {
+    collected: string;
+    net_fees: string;
+    cod_fees: string;
+    additional: string;
+    compensation: string;
+    adjustment: string;
+    expected: string;
+    payout: string;
+    difference: string;
+    balanced: boolean;
+}
+
+function EquationRow({ label, equation }: { label: string; equation: Equation }) {
+    return (
+        <tr className="border-t">
+            <td className="py-1 pr-3 font-medium">{label}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">{equation.collected}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">-{equation.net_fees}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">-{equation.cod_fees}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">-{equation.additional}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">+{equation.compensation}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">+{equation.adjustment}</td>
+            <td className="py-1 pr-3 text-right font-medium tabular-nums">{equation.expected}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">{equation.payout}</td>
+            <td className={`py-1 text-right tabular-nums ${equation.balanced ? 'text-muted-foreground' : 'text-destructive font-medium'}`}>
+                {equation.balanced ? 'adds up' : `differs by ${equation.difference}`}
+            </td>
+        </tr>
+    );
+}
+
+function EquationPanel({ equations }: { equations: { file: Equation; share: Equation } }) {
+    return (
+        <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-3 text-sm">
+            <p className="text-muted-foreground mb-2">
+                Does it add up: collections - net fees - COD fees - extra charges + compensation + adjustment = payout
+            </p>
+            <table className="w-full text-xs">
+                <thead>
+                    <tr className="text-muted-foreground text-left">
+                        <th className="py-1 pr-3" />
+                        <th className="py-1 pr-3 text-right">Collected</th>
+                        <th className="py-1 pr-3 text-right">Net fees</th>
+                        <th className="py-1 pr-3 text-right">COD fees</th>
+                        <th className="py-1 pr-3 text-right">Extra</th>
+                        <th className="py-1 pr-3 text-right">Compensation</th>
+                        <th className="py-1 pr-3 text-right">Adjustment</th>
+                        <th className="py-1 pr-3 text-right">Should pay</th>
+                        <th className="py-1 pr-3 text-right">Payout column</th>
+                        <th className="py-1 text-right" />
+                    </tr>
+                </thead>
+                <tbody>
+                    <EquationRow label="Whole file" equation={equations.file} />
+                    <EquationRow label="This business" equation={equations.share} />
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 const taka = (minor: number) => (minor / 100).toLocaleString('en-BD', { minimumFractionDigits: 2 });
 const minor = (value: string) => Math.round(parseFloat(value || '0') * 100);
 const nonZero = (value: string) => minor(value) !== 0;
@@ -114,6 +181,7 @@ export default function CourierStatementShow({
     can_download_source,
     moneyAccounts,
     journal,
+    equations,
 }: {
     statement: Statement;
     lines: Line[];
@@ -124,6 +192,7 @@ export default function CourierStatementShow({
     can_download_source: boolean;
     moneyAccounts: { id: number; name: string }[];
     journal: { journal_number: string; lines: JournalLine[] } | null;
+    equations: { file: Equation; share: Equation };
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Courier payouts', href: '/sales/courier-statements' },
@@ -284,6 +353,10 @@ export default function CourierStatementShow({
                         )}
                     </div>
                 </div>
+
+                <EquationPanel equations={equations} />
+
+                {statement.cutoff_note && <p className="text-sm text-amber-700 dark:text-amber-400">{statement.cutoff_note}</p>}
 
                 {isDraft && problems.length > 0 && (
                     <div className="border-destructive/50 bg-destructive/10 rounded-md border p-3 text-sm">

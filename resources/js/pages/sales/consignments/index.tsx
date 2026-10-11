@@ -19,8 +19,12 @@ interface Consignment {
     customer: string | null;
     order_id: number | null;
     cod_amount: string;
-    status: 'booked' | 'delivered' | 'partially_delivered' | 'returned';
+    status: 'booked' | 'delivered' | 'partially_delivered' | 'returned' | 'paid_return' | 'lost' | 'damaged';
     status_label: string;
+    // Courier hub slice 8.
+    cutoff_note: string | null;
+    door_resolution_label: string | null;
+    claim_status_label: string | null;
     outcome_on: string | null;
     collected_amount: string | null;
     invoice: { id: number; invoice_number: string } | null;
@@ -176,7 +180,7 @@ export default function ConsignmentsIndex({
                                             variant={
                                                 consignment.status === 'booked'
                                                     ? 'secondary'
-                                                    : consignment.status === 'returned'
+                                                    : ['returned', 'lost', 'damaged'].includes(consignment.status)
                                                       ? 'destructive'
                                                       : 'default'
                                             }
@@ -185,6 +189,15 @@ export default function ConsignmentsIndex({
                                         </Badge>
                                         {consignment.outcome_on && (
                                             <span className="text-muted-foreground block text-xs">{consignment.outcome_on}</span>
+                                        )}
+                                        {consignment.door_resolution_label && (
+                                            <span className="text-muted-foreground block text-xs">{consignment.door_resolution_label}</span>
+                                        )}
+                                        {consignment.claim_status_label && (
+                                            <span className="block text-xs">Claim: {consignment.claim_status_label}</span>
+                                        )}
+                                        {consignment.cutoff_note && (
+                                            <span className="block text-xs text-amber-700 dark:text-amber-400">{consignment.cutoff_note}</span>
                                         )}
                                     </td>
                                     <td className="p-3">

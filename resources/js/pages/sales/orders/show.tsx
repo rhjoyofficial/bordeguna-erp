@@ -9,6 +9,14 @@ import {
     type CourierInfo,
     type CourierPrompt,
 } from '@/components/couriers/courier-parcel';
+import {
+    ClosedPeriodHint,
+    DoorResolutionFields,
+    ParcelSettlementPanel,
+    ReportLossForm,
+    type DoorFields,
+    type ParcelSettlement,
+} from '@/components/couriers/parcel-settlement';
 import InputError from '@/components/input-error';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
@@ -203,9 +211,11 @@ interface Challan {
         cod_amount: string;
         declared_weight_grams: number | null;
         declared_weight_auto_grams: number | null;
-        status: 'booked' | 'delivered' | 'partially_delivered' | 'returned';
+        status: 'booked' | 'delivered' | 'partially_delivered' | 'returned' | 'paid_return' | 'lost' | 'damaged';
         status_label: string;
         outcome_on: string | null;
+        // Courier hub slice 8.
+        settlement: ParcelSettlement;
         collected_amount: string | null;
         invoice: { id: number; invoice_number: string } | null;
         sales_return: { id: number; return_number: string } | null;
@@ -294,34 +304,44 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
     // ⭐ Courier hub slice 4 (ruling 1): what the courier reported is offered,
     // never posted by itself. A person confirms it here.
     const startOutcome = prompt?.outcome ?? 'delivered';
-    const { data, setData, post, errors, processing } = useForm<{
-        outcome: 'delivered' | 'partially_delivered' | 'returned';
-        outcome_on: string;
-        collected_amount: string;
-        note: string;
-        lines: { delivery_line_id: number; taken: string; written_off: string }[];
-    }>({
+    // Nothing taken by the customer: a return, paid or not (slice 8).
+    const allBack = (outcome: string) => outcome === 'returned' || outcome === 'paid_return';
+    const { data, setData, post, errors, processing } = useForm<
+        {
+            outcome: 'delivered' | 'partially_delivered' | 'returned' | 'paid_return';
+            outcome_on: string;
+            collected_amount: string;
+            note: string;
+            lines: { delivery_line_id: number; taken: string; written_off: string }[];
+        } & DoorFields
+    >({
         outcome: startOutcome,
         outcome_on: today(),
         collected_amount: startOutcome === 'returned' ? '0' : (prompt?.collected ?? consignment.cod_amount),
         note: '',
         lines: challan.lines.map((line) => ({
             delivery_line_id: line.id,
-            taken: startOutcome === 'returned' ? '0' : line.quantity,
+            taken: allBack(startOutcome) ? '0' : line.quantity,
             written_off: '0',
         })),
+        resolution: '',
+        door_reason: '',
+        prices: [],
     });
 
     const setOutcome = (outcome: typeof data.outcome) => {
         setData((current) => ({
             ...current,
             outcome,
-            collected_amount: outcome === 'returned' ? '0' : consignment.cod_amount,
+            collected_amount: outcome === 'returned' ? '0' : outcome === 'paid_return' ? '' : consignment.cod_amount,
             lines: challan.lines.map((line) => ({
                 delivery_line_id: line.id,
-                taken: outcome === 'returned' ? '0' : line.quantity,
+                taken: allBack(outcome) ? '0' : line.quantity,
                 written_off: '0',
             })),
+            resolution: '',
+            door_reason: '',
+            prices: [],
         }));
     };
 
@@ -356,6 +376,7 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
                         <option value="delivered">Delivered</option>
                         <option value="partially_delivered">Partly delivered</option>
                         <option value="returned">Returned</option>
+                        <option value="paid_return">Paid return (refused, delivery charge paid)</option>
                     </select>
                     <InputError message={errors.outcome} />
                 </div>
@@ -375,6 +396,20 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
                 </div>
             </div>
             <InputError message={errors.collected_amount} />
+            <ClosedPeriodHint date={data.outcome_on} />
+            {data.outcome === 'paid_return' && (
+                <p className="text-muted-foreground text-xs">
+                    The goods come back and nothing is invoiced; what the customer paid the courier is delivery income the courier holds.
+                </p>
+            )}
+            {!allBack(data.outcome) && (
+                <DoorResolutionFields
+                    data={data}
+                    onChange={(patch) => setData((current) => ({ ...current, ...patch }))}
+                    lines={challan.lines}
+                    errors={lineErrors}
+                />
+            )}
 
             {data.outcome !== 'delivered' && (
                 <table className="w-full max-w-2xl text-sm">
@@ -509,8 +544,13 @@ function ChallanCard({
                 <CourierStatusPanel consignmentId={consignment.id} info={consignment.courier_info} canBook={canBookCourier} />
             )}
 
-            {consignment?.status === 'booked' && canRecordOutcome && (
-                <ParcelOutcomeForm challan={challan} prompt={consignment.courier_info?.prompt} />
+            {consignment && <ParcelSettlementPanel settlement={consignment.settlement} />}
+
+            {consignment?.status === 'booked' && canRecordOutcome && !consignment.settlement.waiting_discount && (
+                <>
+                    <ParcelOutcomeForm challan={challan} prompt={consignment.courier_info?.prompt} />
+                    <ReportLossForm consignmentId={consignment.id} codAmount={consignment.cod_amount} />
+                </>
             )}
 
             {booking && <SettleBookingPanel booking={booking} canBook={canBookCourier} />}
