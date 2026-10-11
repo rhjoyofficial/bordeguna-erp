@@ -641,3 +641,214 @@
         cursor: not-allowed;
     }
 }
+
+/*
+  ── The role dashboards in colour (Joy, 11 Oct 2026: "make sure dashboard
+  looks colorful, so the main area catch eyes") ─────────────────────────────
+
+  ⚠ SCOPED TO THE DASHBOARDS. Every token below starts with --dash- and is read
+  only by resources/js/components/dashboards/*. The rest of the ERP keeps its
+  calm tinted neutrals; colour is spent where a person decides something.
+
+  ⚠ Colour never carries meaning alone (colour-blind readers): every coloured
+  chip also has a word or an arrow, every chart has a legend or direct labels.
+
+  Hero: the brand leaf green running through teal into deep blue. White text
+  on the lightest stop measures above 5:1, so every figure on it passes AA.
+*/
+:root {
+    --dash-hero-from: hsl(140, 64%, 19%);
+    --dash-hero-via: hsl(170, 78%, 22%);
+    --dash-hero-to: hsl(208, 68%, 27%);
+    --dash-hero-glow-a: hsla(96, 85%, 58%, 0.3);
+    --dash-hero-glow-b: hsla(188, 95%, 55%, 0.22);
+    --dash-hero-tile: hsla(0, 0%, 100%, 0.1);
+    --dash-hero-tile-hover: hsla(0, 0%, 100%, 0.16);
+    --dash-hero-ring: hsla(0, 0%, 100%, 0.18);
+
+    /* Chart series: the dataviz reference palette, validated on the card
+       surface (scripts/validate_palette.js, 11 Oct 2026: all checks pass in
+       both modes; the three light steps under 3:1 always ship with direct
+       labels or a legend). Fixed order, never cycled past eight. */
+    --dash-series-1: #2a78d6;
+    --dash-series-2: #eb6834;
+    --dash-series-3: #1baf7a;
+    --dash-series-4: #eda100;
+    --dash-series-5: #e87ba4;
+    --dash-series-6: #008300;
+    --dash-series-7: #4a3aa7;
+    --dash-series-8: #e34948;
+
+    /* Status: reserved, never a series colour. */
+    --dash-good: #0ca30c;
+    --dash-info: #2a78d6;
+    --dash-warn: #e59a00;
+    --dash-serious: #ec835a;
+    --dash-bad: #d03b3b;
+    --dash-neutral: #64748b;
+
+    --dash-grid: hsl(106, 14%, 88%);
+    --dash-track: hsl(106, 20%, 92%);
+    --dash-zebra: hsla(106, 30%, 50%, 0.045);
+    --dash-avatar-l: 32%;
+}
+
+.dark {
+    --dash-hero-from: hsl(142, 58%, 12%);
+    --dash-hero-via: hsl(172, 66%, 15%);
+    --dash-hero-to: hsl(212, 58%, 19%);
+    --dash-hero-glow-a: hsla(96, 80%, 50%, 0.18);
+    --dash-hero-glow-b: hsla(188, 90%, 50%, 0.16);
+    --dash-hero-tile: hsla(0, 0%, 100%, 0.07);
+    --dash-hero-tile-hover: hsla(0, 0%, 100%, 0.12);
+    --dash-hero-ring: hsla(0, 0%, 100%, 0.12);
+
+    --dash-series-1: #3987e5;
+    --dash-series-2: #d95926;
+    --dash-series-3: #199e70;
+    --dash-series-4: #c98500;
+    --dash-series-5: #d55181;
+    --dash-series-6: #008300;
+    --dash-series-7: #9085e9;
+    --dash-series-8: #e66767;
+
+    --dash-info: #3987e5;
+    --dash-warn: #fab219;
+    --dash-neutral: #94a3b8;
+
+    --dash-grid: hsl(120, 10%, 18%);
+    --dash-track: hsl(120, 12%, 15%);
+    --dash-zebra: hsla(0, 0%, 100%, 0.025);
+    --dash-avatar-l: 78%;
+}
+
+/*
+  One accent per domain, so a glance tells money from stock from people.
+  --acc / --acc-2: the icon tile gradient and the top stripe (non-text, 3:1+).
+  --acc-ink: text in the accent colour, AA on the card in its mode.
+  --acc-wash: the soft tint washed down from the top of the card.
+*/
+.dash-acc-money {
+    --acc: #059669;
+    --acc-2: #0d9488;
+    --acc-ink: #047857;
+    --acc-wash: hsla(160, 84%, 39%, 0.1);
+}
+.dash-acc-sales {
+    --acc: #4f46e5;
+    --acc-2: #7c3aed;
+    --acc-ink: #4338ca;
+    --acc-wash: hsla(243, 75%, 59%, 0.09);
+}
+.dash-acc-couriers {
+    --acc: #d97706;
+    --acc-2: #ea580c;
+    --acc-ink: #b45309;
+    --acc-wash: hsla(32, 95%, 44%, 0.1);
+}
+.dash-acc-stock {
+    --acc: #0284c7;
+    --acc-2: #0891b2;
+    --acc-ink: #0369a1;
+    --acc-wash: hsla(199, 89%, 48%, 0.09);
+}
+.dash-acc-people {
+    --acc: #e11d48;
+    --acc-2: #db2777;
+    --acc-ink: #be123c;
+    --acc-wash: hsla(347, 77%, 50%, 0.08);
+}
+.dash-acc-attention {
+    --acc: #dc2626;
+    --acc-2: #ea580c;
+    --acc-ink: #b91c1c;
+    --acc-wash: hsla(10, 80%, 50%, 0.08);
+}
+.dash-acc-me {
+    --acc: #7c3aed;
+    --acc-2: #c026d3;
+    --acc-ink: #6d28d9;
+    --acc-wash: hsla(262, 83%, 58%, 0.08);
+}
+.dark .dash-acc-money {
+    --acc: #10b981;
+    --acc-2: #14b8a6;
+    --acc-ink: #34d399;
+    --acc-wash: hsla(160, 84%, 39%, 0.13);
+}
+.dark .dash-acc-sales {
+    --acc: #6366f1;
+    --acc-2: #8b5cf6;
+    --acc-ink: #a5b4fc;
+    --acc-wash: hsla(239, 84%, 67%, 0.13);
+}
+.dark .dash-acc-couriers {
+    --acc: #f59e0b;
+    --acc-2: #f97316;
+    --acc-ink: #fcd34d;
+    --acc-wash: hsla(38, 92%, 50%, 0.11);
+}
+.dark .dash-acc-stock {
+    --acc: #0ea5e9;
+    --acc-2: #06b6d4;
+    --acc-ink: #7dd3fc;
+    --acc-wash: hsla(199, 89%, 48%, 0.12);
+}
+.dark .dash-acc-people {
+    --acc: #f43f5e;
+    --acc-2: #ec4899;
+    --acc-ink: #fda4af;
+    --acc-wash: hsla(350, 89%, 60%, 0.11);
+}
+.dark .dash-acc-attention {
+    --acc: #ef4444;
+    --acc-2: #f97316;
+    --acc-ink: #fca5a5;
+    --acc-wash: hsla(0, 84%, 60%, 0.11);
+}
+.dark .dash-acc-me {
+    --acc: #8b5cf6;
+    --acc-2: #d946ef;
+    --acc-ink: #c4b5fd;
+    --acc-wash: hsla(258, 90%, 66%, 0.12);
+}
+
+/* The hero band's background: gradient plus two soft light pools. */
+.dash-hero {
+    background:
+        radial-gradient(120% 90% at 100% 0%, var(--dash-hero-glow-a), transparent 55%),
+        radial-gradient(90% 80% at 0% 100%, var(--dash-hero-glow-b), transparent 60%),
+        linear-gradient(118deg, var(--dash-hero-from) 0%, var(--dash-hero-via) 48%, var(--dash-hero-to) 100%);
+}
+
+/*
+  A card the live feed just changed glows once in its accent (ui-motion:
+  Value Change, feedback that something happened). Opacity on a pseudo layer,
+  so nothing reflows; under reduced motion the figure's own colour flash is
+  the only signal.
+*/
+@keyframes dash-pulse {
+    0% {
+        opacity: 0.9;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+.dash-pulse::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    pointer-events: none;
+    box-shadow:
+        0 0 0 2px var(--acc),
+        0 0 24px 2px var(--acc-wash);
+    animation: dash-pulse 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+    .dash-pulse::after {
+        animation: none;
+        opacity: 0;
+    }
+}
