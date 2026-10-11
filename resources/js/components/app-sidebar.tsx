@@ -80,12 +80,14 @@ import {
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
-export function AppSidebar() {
+/**
+ * Every destination this user may open, grouped exactly as the sidebar shows
+ * them. ONE definition, read by the sidebar and by the header search's "Menus"
+ * group (Joy, 11 Oct 2026: "can find any sidebar menu from the search bar"),
+ * so the two can never disagree about what a role may reach.
+ */
+export function useNavGroups(): NavGroup[] {
     const { t } = useTranslation();
-    // Clicking a link in the sidebar used to throw it back to the top,
-    // because this app has no persistent layout and the whole tree remounts
-    // on every visit. See the hook for why it is fixed there.
-    const sidebarScroll = useSidebarScrollMemory<HTMLDivElement>();
 
     const {
         pendingApprovalsCount,
@@ -630,6 +632,16 @@ export function AppSidebar() {
               ]
             : []),
     ];
+
+    return navGroups;
+}
+
+export function AppSidebar() {
+    // Clicking a link in the sidebar used to throw it back to the top,
+    // because this app has no persistent layout and the whole tree remounts
+    // on every visit. See the hook for why it is fixed there.
+    const sidebarScroll = useSidebarScrollMemory<HTMLDivElement>();
+    const navGroups = useNavGroups();
 
     return (
         <Sidebar collapsible="icon" variant="inset">

@@ -1,3 +1,4 @@
+import { useNavGroups } from '@/components/app-sidebar';
 import { router } from '@inertiajs/react';
 import {
     ArrowRight,
@@ -6,6 +7,7 @@ import {
     CornerDownLeft,
     FileCheck,
     FileText,
+    LayoutGrid,
     LifeBuoy,
     Loader2,
     Package,
@@ -72,6 +74,7 @@ interface Row {
  */
 
 const ICONS: Record<string, LucideIcon> = {
+    menu: LayoutGrid,
     product: Package,
     customer: Users,
     invoice: FileText,
@@ -87,10 +90,42 @@ const ICONS: Record<string, LucideIcon> = {
     ticket: LifeBuoy,
 };
 
+/**
+ * The "Menus" group (Joy, 11 Oct 2026: "can find any sidebar menu from the
+ * search bar, based on the roles"). Built in the browser from the sidebar's own
+ * list, so a person finds exactly the pages their role can open and nothing
+ * else, and the match is instant while the record search is still loading.
+ * Every word typed must appear in the page name or its section.
+ */
+function useMenuGroup(q: string): SearchGroup | null {
+    const navGroups = useNavGroups();
+
+    return useMemo(() => {
+        const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        if (words.length === 0 || q.trim().length < 2) {
+            return null;
+        }
+
+        const seen = new Set<string>();
+        const items: SearchItem[] = [];
+        navGroups.forEach((group) => {
+            group.items.forEach((item) => {
+                const haystack = `${item.title} ${group.label}`.toLowerCase();
+                if (!seen.has(item.url) && words.every((word) => haystack.includes(word))) {
+                    seen.add(item.url);
+                    items.push({ label: item.title, sub: group.label, url: item.url });
+                }
+            });
+        });
+
+        return items.length === 0 ? null : { title: 'Menus', icon: 'menu', items: items.slice(0, 8), total: items.length, more_url: null };
+    }, [q, navGroups]);
+}
+
 export default function HeaderSearch() {
     const [q, setQ] = useState('');
-    const [groups, setGroups] = useState<SearchGroup[]>([]);
-    const [total, setTotal] = useState(0);
+    const [recordGroups, setGroups] = useState<SearchGroup[]>([]);
+    const [recordTotal, setTotal] = useState(0);
     const [open, setOpen] = useState(false);
     const [busy, setBusy] = useState(false);
     const [active, setActive] = useState(0);
@@ -100,6 +135,12 @@ export default function HeaderSearch() {
     const phoneInputRef = useRef<HTMLInputElement>(null);
     const boxRef = useRef<HTMLDivElement>(null);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Pages first: someone typing "payroll" usually wants the screen, and the
+    // record matches follow underneath.
+    const menuGroup = useMenuGroup(q);
+    const groups = useMemo(() => (menuGroup ? [menuGroup, ...recordGroups] : recordGroups), [menuGroup, recordGroups]);
+    const total = recordTotal + (menuGroup?.total ?? 0);
 
     // Every landable row in render order, so the arrow keys and the mouse
     // agree about what "the next one" means.
@@ -160,6 +201,9 @@ export default function HeaderSearch() {
             setOpen(false);
             return;
         }
+
+        setActive(0);
+        setOpen(true);
 
         // Debounced so a fast typist costs one request, not one per key.
         timer.current = setTimeout(() => {
