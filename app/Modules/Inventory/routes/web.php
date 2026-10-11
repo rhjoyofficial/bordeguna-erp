@@ -15,6 +15,7 @@ use App\Modules\Inventory\Http\Controllers\OpeningStockCountSheetController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockImportController;
 use App\Modules\Inventory\Http\Controllers\ProductController;
 use App\Modules\Inventory\Http\Controllers\ProductImportController;
+use App\Modules\Inventory\Http\Controllers\ProductWeightController;
 use App\Modules\Inventory\Http\Controllers\ProductionRunController;
 use App\Modules\Inventory\Http\Controllers\ProductionYieldController;
 use App\Modules\Inventory\Http\Controllers\StockController;
@@ -84,6 +85,18 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     // stocked by the litre, and every receipt for it would have thrown.
     // Gated with catalogue management: a conversion is master data about how a
     // product is bought, and it changes what every future receipt costs.
+    // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the weights sheet, so every
+    // product gets a weight in one sitting. Gated with catalogue management,
+    // the permission that edits a weight on the product dialog. Page, routes
+    // and the Products button + sidebar line ship in one commit.
+    Route::middleware('can:inventory.catalog.manage')->group(function () {
+        Route::get('products/weights', [ProductWeightController::class, 'index'])->name('products.weights');
+        Route::get('products/weights/template', [ProductWeightController::class, 'template'])->name('products.weights.template');
+        Route::get('products/weights/preview', fn () => tap(redirect()->route('inventory.products.weights'), fn () => session()->reflash()))->name('products.weights.preview.back');
+        Route::post('products/weights/preview', [ProductWeightController::class, 'preview'])->name('products.weights.preview');
+        Route::post('products/weights', [ProductWeightController::class, 'store'])->name('products.weights.store');
+    });
+
     Route::middleware('can:inventory.catalog.manage')->group(function () {
         Route::get('unit-conversions', [UnitConversionController::class, 'index'])->name('unit-conversions.index');
         Route::post('unit-conversions', [UnitConversionController::class, 'store'])->name('unit-conversions.store');
