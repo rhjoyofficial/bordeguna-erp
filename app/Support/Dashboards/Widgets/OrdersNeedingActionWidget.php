@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Support\Dashboards\DashboardKey;
 use App\Support\Dashboards\Widget;
 use App\Support\Dashboards\WidgetContext;
@@ -89,9 +90,15 @@ class OrdersNeedingActionWidget extends Widget
             ['watch' => 'ready', 'sound' => 'success', 'message' => 'One of your orders was approved.']];
     }
 
+    /** ⭐ Follows the dashboard's Brand switcher (Joy, 11 Oct 2026). */
+    public function brandAware(): bool
+    {
+        return true;
+    }
+
     public function data(WidgetContext $context): array
     {
-        $orders = SalesOrder::query()
+        $orders = OrderBrand::onOrders(SalesOrder::query(), $context->brandId)
             ->where('created_by', $context->user->id)
             ->whereIn('status', [SalesOrderStatus::Open, SalesOrderStatus::PartiallyDelivered])
             ->with('customer:id,name')

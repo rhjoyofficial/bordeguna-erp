@@ -17,6 +17,7 @@ use App\Modules\Sales\Couriers\Models\CourierFeeEstimate;
 use App\Modules\Sales\Couriers\Models\CourierShipmentEvent;
 use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\Delivery;
+use App\Modules\Sales\Support\OrderBrand;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -30,36 +31,58 @@ class ParcelPresenter
 {
     /**
      * Active accounts linked to this business with a store and a usable courier
-     * money account: the only ones the booking form offers.
+     * money account on at least one link: the ones the booking form lists.
+     * Whether one serves a given order's brand is accountOptions' question.
      *
      * @return Collection<int, CourierAccount>
      */
     public static function bookableAccounts(int $businessId): Collection
     {
-        $ids = CourierAccountBusiness::query()->where('business_id', $businessId)->whereNotNull('provider_store_id')->pluck('courier_account_id');
+        $ids = CourierAccountBusiness::query()->where('business_id', $businessId)->whereNotNull('provider_store_id')->pluck('courier_account_id')->unique();
 
         return CourierAccount::query()->with('provider')->whereIn('id', $ids)->where('is_active', true)->orderBy('label')->get()
             ->filter(function (CourierAccount $account) use ($businessId) {
-                try {
-                    BookParcelThroughCourier::linkFor($account, $businessId);
-                } catch (ValidationException) {
-                    return false;
-                }
+                $usable = $account->linksFor($businessId)->contains(
+                    fn (CourierAccountBusiness $link) => ! blank($link->provider_store_id) && BookParcelThroughCourier::moneyFor($link, $businessId) !== null
+                );
 
-                return $account->definition()->capabilities()['book'] === true;
+                return $usable && $account->definition()->capabilities()['book'] === true;
             })->values();
     }
 
     /**
+     * The booking form's accounts for one order. ⭐ Joy, 11 Oct 2026: an account
+     * linked only to the other brand is listed DISABLED with the reason, never
+     * silently dropped, and the one that serves the order's brand is chosen
+     * first: that brand's default, then that brand's link, then the any-brand
+     * default, then any account that serves it.
+     *
      * @param  Collection<int, CourierAccount>  $accounts
      * @return list<array<string, mixed>>
      */
-    public static function accountOptions(Collection $accounts, int $businessId): array
+    public static function accountOptions(Collection $accounts, int $businessId, ?int $brandId = null): array
     {
-        return $accounts->map(function (CourierAccount $account) use ($businessId) {
+        $brandNames = OrderBrand::names($businessId);
+
+        $options = $accounts->map(function (CourierAccount $account) use ($businessId, $brandId, $brandNames) {
             $definition = $account->definition();
             $itemKey = $definition->itemTypeOptionKey();
-            $link = $account->linkFor($businessId);
+
+            try {
+                [$link] = BookParcelThroughCourier::linkFor($account, $businessId, $brandId);
+                $reason = null;
+            } catch (ValidationException $e) {
+                $link = null;
+                $reason = (string) collect($e->errors())->flatten()->first();
+            }
+
+            $rank = match (true) {
+                $link === null => 9,
+                $brandId !== null && $link->brand_id !== null && $link->is_default => 0,
+                $brandId !== null && $link->brand_id !== null => 1,
+                $link->brand_id === null && $link->is_default => 2,
+                default => 3,
+            };
 
             return [
                 'id' => $account->id,
@@ -68,13 +91,28 @@ class ParcelPresenter
                 'provider_name' => $definition->name(),
                 'environment' => $account->environment,
                 'store_name' => $link?->provider_store_name,
+                // ⭐ Which brand's parcels this account carries here (null = any).
+                'serves_brand' => $link?->brand_id === null ? null : ($brandNames[(int) $link->brand_id] ?? null),
+                'available' => $link !== null,
+                'unavailable_reason' => $reason,
+                'preselected' => false,
+                'rank' => $rank,
                 'delivery_types' => self::choices($definition->optionChoices('delivery_type')),
                 'item_types' => self::choices($definition->optionChoices($itemKey)),
                 'default_delivery_type' => (string) ($account->options['delivery_type'] ?? ''),
                 'default_item_type' => (string) ($account->options[$itemKey] ?? ''),
                 'max_weight_grams' => $definition->maxWeightGrams(),
             ];
-        })->values()->all();
+        })->values();
+
+        $best = $options->filter(fn (array $o) => $o['available'])->sortBy([['rank', 'asc'], ['label', 'asc']])->first();
+
+        return $options->map(function (array $o) use ($best) {
+            $o['preselected'] = $best !== null && $o['id'] === $best['id'];
+            unset($o['rank']);
+
+            return $o;
+        })->all();
     }
 
     /**

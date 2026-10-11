@@ -28,6 +28,7 @@ use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\AmountInWords;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
+use App\Modules\Sales\Support\OrderBrand;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -43,8 +44,14 @@ class SalesInvoiceController extends Controller
             'search' => $request->string('search')->toString(),
             'status' => $request->string('status')->toString(),
         ];
+        // ⭐ Joy, 11 Oct 2026: by the brand of the order it came from.
+        $businessId = (int) app(BusinessContext::class)->id();
+        $brand = OrderBrand::filter($request->query('brand'), $businessId);
+        $filters['brand'] = OrderBrand::filterValue($brand);
+        $brandNames = OrderBrand::names($businessId);
 
         $invoices = SalesInvoice::query()
+            ->tap(fn ($query) => OrderBrand::onInvoices($query, $brand))
             ->with('customer:id,name')
             ->when($filters['search'], fn ($query, $search) => $query->where(
                 fn ($q) => $q->where('invoice_number', 'like', "%{$search}%")
@@ -58,13 +65,19 @@ class SalesInvoiceController extends Controller
             ->orderByDesc('invoice_date')
             ->orderByDesc('id')
             ->paginate(20)
-            ->withQueryString()
+            ->withQueryString();
+
+        $brandOf = OrderBrand::forInvoices(collect($invoices->items())->pluck('id'));
+
+        $invoices = $invoices
             // ⚠ Outstanding is DERIVED per invoice from its allocations, never
             // stored. Computed here for display only. ⚠ The date as a Dhaka
             // date: handed over inside the model it serialises as a UTC
             // timestamp, and the list sliced that, showing every invoice a day
             // early (the lesson show() and print() had already learned).
             ->through(fn (SalesInvoice $invoice) => array_merge($invoice->toArray(), [
+                // Through its challan lines to the order (Joy, 11 Oct 2026).
+                'brand' => isset($brandOf[$invoice->id]) ? ($brandNames[$brandOf[$invoice->id]] ?? null) : null,
                 'invoice_date' => $invoice->invoice_date?->toDateString(),
                 'due_date' => $invoice->due_date?->toDateString(),
                 'outstanding' => $invoice->outstanding()->toTaka(),
@@ -76,6 +89,7 @@ class SalesInvoiceController extends Controller
         return Inertia::render('sales/invoices/index', [
             'invoices' => $invoices,
             'filters' => $filters,
+            'brands' => OrderBrand::options($businessId),
             'can_create' => $request->user()->can('sales.sell'),
         ]);
     }

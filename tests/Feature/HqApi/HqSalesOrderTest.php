@@ -10,6 +10,7 @@ use App\Modules\Foundation\Notifications\PendingApprovalNotification;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\SystemActor;
 use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
@@ -234,6 +235,19 @@ it('turns an approved draft into an order that waits in the ERP approval inbox, 
         ->toBe(['sales_order_id' => $order->id, 'idempotency_key' => ORDER_KEY, 'requested_by' => $this->hq->id])
         ->and(DB::table('stock_movements')->count())->toBe($movements)
         ->and(DB::table('journals')->count())->toBe($journals);
+});
+
+it('gives an HQ order the brand of the store it was placed for', function () {
+    // Joy, 11 Oct 2026: every order carries its brand; the LaLaDia store sells one.
+    $brand = Brand::withoutGlobalScopes()->create(['business_id' => $this->a->id, 'code' => 'LLD', 'name' => 'LaLaDia', 'slug' => 'laladia']);
+    $this->world[$this->a->id]['store']->forceFill(['brand_id' => $brand->id])->save();
+
+    ($this->writer)($this->a);
+    ($this->draft)();
+    $this->postJson(($this->url)(), ($this->order)(), ['Idempotency-Key' => ORDER_KEY])->assertCreated();
+
+    app(BusinessContext::class)->set($this->a->id);
+    expect(SalesOrder::query()->sole()->brand_id)->toBe($brand->id);
 });
 
 it('never approves the order, even when the HQ user itself holds the approval', function () {

@@ -1,6 +1,7 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { ReportHeading } from '@/components/report/report-shell';
+import { BrandFilter, type BrandOption } from '@/components/sales/brand';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,8 @@ interface Invoice {
     is_settled: boolean;
     is_part_paid: boolean;
     customer: { id: number; name: string } | null;
+    // Through its challans to the order (Joy, 11 Oct 2026).
+    brand: string | null;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -32,10 +35,12 @@ export default function InvoicesIndex({
     invoices,
     can_create,
     filters: initialFilters,
+    brands = [],
 }: {
     invoices: Paginated<Invoice>;
     can_create?: boolean;
-    filters: { search: string; status: string };
+    filters: { search: string; status: string; brand: string };
+    brands?: BrandOption[];
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/invoices', initialFilters);
 
@@ -74,6 +79,7 @@ export default function InvoicesIndex({
                         <option value="open">Unpaid</option>
                         <option value="settled">Paid</option>
                     </SearchSelect>
+                    <BrandFilter value={filters.brand ?? ''} onChange={(v) => setFilter('brand', v)} brands={brands} />
                 </FilterBar>
 
                 <div className="overflow-x-auto rounded-lg border">
@@ -97,7 +103,14 @@ export default function InvoicesIndex({
                                         </Link>
                                     </td>
                                     <td className="p-3">{invoice.invoice_date}</td>
-                                    <td className="p-3">{invoice.customer?.name ?? '-'}</td>
+                                    <td className="p-3">
+                                        {invoice.customer?.name ?? '-'}
+                                        {invoice.brand && (
+                                            <Badge variant="outline" className="ml-2">
+                                                {invoice.brand}
+                                            </Badge>
+                                        )}
+                                    </td>
                                     <td className="p-3 text-right tabular-nums">{formatMoney(invoice.total)}</td>
                                     <td className="p-3 text-right tabular-nums">{formatMoney(invoice.outstanding)}</td>
                                     <td className="p-3">

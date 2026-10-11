@@ -6,6 +6,7 @@ use App\Events\Dashboards\DashboardEventType;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Support\Dashboards\DashboardKey;
 use App\Support\Dashboards\Widget;
 use App\Support\Dashboards\WidgetContext;
@@ -86,9 +87,15 @@ class OrdersToDispatchWidget extends Widget
         return [['watch' => 'waiting', 'sound' => 'success', 'message' => 'An approved order is ready to dispatch.']];
     }
 
+    /** ⭐ Follows the dashboard's Brand switcher (Joy, 11 Oct 2026). */
+    public function brandAware(): bool
+    {
+        return true;
+    }
+
     public function data(WidgetContext $context): array
     {
-        $orders = SalesOrder::query()
+        $orders = OrderBrand::onOrders(SalesOrder::query(), $context->brandId)
             ->whereIn('status', [SalesOrderStatus::Open, SalesOrderStatus::PartiallyDelivered])
             ->whereHas('approvalRequest', fn ($q) => $q->where('status', ApprovalStatus::Approved))
             ->with('customer:id,name')

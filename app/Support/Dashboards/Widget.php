@@ -97,6 +97,16 @@ abstract class Widget
         return null;
     }
 
+    /**
+     * Whether the figure follows the dashboard's Brand switcher (Joy, 11 Oct
+     * 2026). Orders, parcels and what was sold do; the ledger, people and stock
+     * are the whole business, and their card says "All brands" instead.
+     */
+    public function brandAware(): bool
+    {
+        return false;
+    }
+
     /** The existing screen that explains the figure. */
     public function drillDown(WidgetContext $context): ?string
     {
@@ -149,6 +159,7 @@ abstract class Widget
             'refresh_seconds' => $this->refreshSeconds(),
             'cache_seconds' => $this->cacheSeconds(),
             'date_basis' => $this->dateBasis(),
+            'brand_aware' => $this->brandAware(),
             'drill_down' => $this->drillDown($context),
             'empty_text' => $this->emptyText(),
             'refresh_on' => $this->refreshOn(),
