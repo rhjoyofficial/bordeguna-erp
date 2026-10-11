@@ -5,6 +5,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import { route as routeFn } from 'ziggy-js';
 import { initializeTheme } from './hooks/use-appearance';
+import { inFlightMutations, markWriteFinished, setPageState, socketCoversPage } from './lib/live-reload';
 
 declare global {
     const route: typeof routeFn;
@@ -50,7 +51,7 @@ let pageBusinessId: number | null = null;
  * Inertia fires for a completed, failed OR cancelled visit, so a legitimate
  * retry after the first settles is always allowed.
  */
-const inFlightMutations = new Set<string>();
+// The set itself lives in lib/live-reload.ts: the live refresh reads it too.
 
 const mutationKey = (visit: { method: string; url: URL | string }): string | null => {
     const method = String(visit.method).toLowerCase();
@@ -86,6 +87,7 @@ router.on('finish', (event) => {
     const key = mutationKey(event.detail.visit);
     if (key !== null) {
         inFlightMutations.delete(key);
+        markWriteFinished();
     }
 });
 
@@ -112,6 +114,8 @@ router.on('success', (event) => {
         const landedOn = new URL(event.detail.page.url, window.location.origin).pathname;
         pageIsReloadable = lastVisit.method === 'get' || landedOn !== lastVisit.path;
     }
+
+    setPageState({ reloadable: pageIsReloadable, optsOut: pageOptsOut, live: event.detail.page.props.live as string[] | undefined });
 });
 
 /**
@@ -126,10 +130,9 @@ router.on('success', (event) => {
  * ever getting in the way: it does nothing while the tab is hidden (a background
  * tab has no reason to poll), and nothing while a write is in flight (never pull
  * the page out from under a submit - the inFlightMutations set the double-submit
- * guard already maintains tells us). This is polling, deliberately: it needs no
- * websocket server and no per-page wiring. A push channel (Laravel Reverb) would
- * make it instant rather than within-the-interval, and can layer on later without
- * changing any page.
+ * guard already maintains tells us). Since 11 Oct 2026 the push channel (Laravel
+ * Reverb, lib/live-reload.ts) makes a wired page instant, and this poll is only
+ * its fallback while the socket is down, plus the refresh for pages not wired.
  *
  * ⚠ 30s: brisk enough that a shared screen feels live, slow enough that it is not
  * a load on a two-core box shared with other stacks.
@@ -145,6 +148,14 @@ window.setInterval(() => {
         return;
     }
 
+    // Realtime everywhere (11 Oct 2026): a page that declared what it shows is
+    // refreshed by the socket the moment something changes (lib/live-reload),
+    // so this timer is only its fallback while the socket is down. A page that
+    // declared nothing keeps polling.
+    if (socketCoversPage()) {
+        return;
+    }
+
     router.reload();
 }, AUTO_REFRESH_MS);
 
@@ -157,6 +168,7 @@ createInertiaApp({
         // unstamped, and §13.6 fails those closed.
         pageBusinessId = (props.initialPage.props.current_business_id as number | null) ?? null;
         pageOptsOut = props.initialPage.props.auto_refresh === false;
+        setPageState({ optsOut: pageOptsOut, live: props.initialPage.props.live as string[] | undefined });
 
         const root = createRoot(el);
 

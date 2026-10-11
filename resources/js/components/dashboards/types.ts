@@ -157,7 +157,8 @@ export interface DashboardEvent {
     type: string;
     ids: Record<string, number | string>;
     widgets: string[];
-    sound: SoundClass;
+    /** 'none' = a routine move: refresh the widgets, play nothing. */
+    sound: SoundClass | 'none';
     actor_id: number | null;
     personal: boolean;
     at: string;
