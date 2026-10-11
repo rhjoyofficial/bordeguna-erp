@@ -29,6 +29,18 @@ COPY vite.config.js tsconfig.json components.json ./
 ARG VITE_APP_NAME="Bor de Guna ERP"
 ENV VITE_APP_NAME=${VITE_APP_NAME}
 
+# Live dashboards (Laravel Reverb, docs/REVERB-DEPLOY.md). Same rule: compiled
+# in at build time. Left empty, the bundle has no socket and every dashboard
+# refreshes itself on a timer instead, so a build without them still works.
+ARG VITE_REVERB_APP_KEY=""
+ARG VITE_REVERB_HOST=""
+ARG VITE_REVERB_PORT="443"
+ARG VITE_REVERB_SCHEME="https"
+ENV VITE_REVERB_APP_KEY=${VITE_REVERB_APP_KEY} \
+    VITE_REVERB_HOST=${VITE_REVERB_HOST} \
+    VITE_REVERB_PORT=${VITE_REVERB_PORT} \
+    VITE_REVERB_SCHEME=${VITE_REVERB_SCHEME}
+
 # Ziggy's generated routes file is committed, but Vite still needs the PHP-side
 # aliases resolved at build time; everything it reads is copied above.
 RUN npm run build
