@@ -57,6 +57,8 @@ class CourierStatement extends Model implements ControlsAttachmentAccess
         'created_by',
         'posted_by',
         'posted_at',
+        'posted_on',
+        'cutoff_note',
     ];
 
     protected function casts(): array
@@ -64,6 +66,7 @@ class CourierStatement extends Model implements ControlsAttachmentAccess
         return [
             'statement_date' => 'date:Y-m-d',
             'received_on' => 'date:Y-m-d',
+            'posted_on' => 'date:Y-m-d',
             'deposit_amount' => 'decimal:4',
             'share_amount' => 'decimal:4',
             'payable_settled_amount' => 'decimal:4',

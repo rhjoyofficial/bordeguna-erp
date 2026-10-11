@@ -214,7 +214,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
             ->whereNumber('delivery')->name('consignments.store');
         Route::post('consignments/{consignment}/outcome', [ConsignmentController::class, 'outcome'])
             ->whereNumber('consignment')->name('consignments.outcome');
+        // Courier hub slice 8: a parcel the courier lost or damaged.
+        Route::post('consignments/{consignment}/loss', [ConsignmentController::class, 'reportLoss'])
+            ->whereNumber('consignment')->name('consignments.loss');
     });
+
+    // Courier hub slice 8: the Owner's decision on a door discount above the
+    // cap. The workflow stage decides who may; the action checks it.
+    Route::post('courier-door-discounts/{discount}/{decision}', [ConsignmentController::class, 'decideDiscount'])
+        ->whereNumber('discount')->whereIn('decision', ['approve', 'reject'])->name('courier-door-discounts.decide');
 
     // ⭐ Courier hub slice 4: booking through the courier's API, and settling a
     // booking whose answer was lost. Technical authority (couriers.parcels.book)
@@ -265,6 +273,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     // recording a customer receipt.
     Route::middleware('can:sales.receipt.record')->group(function () {
         Route::post('courier-statements', [CourierStatementController::class, 'store'])->name('courier-statements.store');
+        // Courier hub slice 8: a loss claim's answer and money paid outside a statement.
+        Route::post('courier-claims/{claim}/decision', [ConsignmentController::class, 'decideClaim'])
+            ->whereNumber('claim')->name('courier-claims.decide');
+        Route::post('courier-claims/{claim}/compensation', [ConsignmentController::class, 'compensation'])
+            ->whereNumber('claim')->name('courier-claims.compensation');
         // ⚠ The courier's original file carries customer names and phones.
         Route::get('courier-statements/{courierStatement}/source', [CourierStatementController::class, 'source'])
             ->whereNumber('courierStatement')->name('courier-statements.source');

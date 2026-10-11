@@ -120,6 +120,31 @@ class AccountingPeriod extends Model
     }
 
     /**
+     * The first day on or after `$date` the books are open for (courier hub
+     * slice 8, ChatGPT risk 9): the date itself when it is open, otherwise the
+     * day after the closed boundary. A courier's answer or statement that
+     * arrives after its month was closed posts here, never into the locked
+     * month. Refused only when even that day has not happened yet.
+     */
+    public static function firstOpenOnOrAfter(Carbon $date): Carbon
+    {
+        $lock = static::current();
+        $date = $date->copy()->startOfDay();
+
+        if ($lock === null || $lock->is_unlocked || $date->gt($lock->closed_through->copy()->endOfDay())) {
+            return $date;
+        }
+
+        $open = $lock->closed_through->copy()->addDay()->startOfDay();
+
+        if ($open->isFuture()) {
+            throw PeriodClosedException::forDate($date, $lock->closed_through);
+        }
+
+        return $open;
+    }
+
+    /**
      * ⚠ Refuses rather than returns a boolean, because a caller that forgets to
      * check a boolean writes into a closed period and nothing notices. There is
      * one way to ask this question and it throws.

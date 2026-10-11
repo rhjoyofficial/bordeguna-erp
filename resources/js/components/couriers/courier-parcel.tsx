@@ -70,7 +70,7 @@ export interface CourierEvent {
 }
 
 export interface CourierPrompt {
-    outcome: 'delivered' | 'partially_delivered' | 'returned';
+    outcome: 'delivered' | 'partially_delivered' | 'returned' | 'paid_return';
     collected: string | null;
     message: string;
 }

@@ -58,6 +58,9 @@ use Illuminate\Validation\ValidationException;
  * courier's money account, so each courier company's balance is its own (Joy,
  * 11 Oct 2026). PostJournal refuses the two new heads without it.
  *
+ * ⭐ Slice 8: compensation on a line closes the loss claim on its parcel, and
+ * a statement dated into a closed month posts on the first open day.
+ *
  * ⚠⚠ Every parcel settled is CLAIMED in `courier_parcel_claims`, which no
  * business scope hides, so the other brand posting the same statement cannot
  * settle it again.
@@ -135,9 +138,14 @@ class PostCourierStatement
                 $on = Carbon::parse($statement->statement_date)->startOfDay();
             }
 
-            AccountingPeriod::assertOpenFor($on);
+            // ⭐ Risk 9 (slice 8): a statement or a deposit dated into a closed
+            // month posts on the first open day, saying so. The bank's own
+            // date stays in received_on for the bank match.
+            $postOn = AccountingPeriod::firstOpenOnOrAfter($on);
+            $cutoffNote = $postOn->equalTo($on) ? null
+                : "Dated {$on->toDateString()}, in a closed period; posted on {$postOn->toDateString()}.";
 
-            $this->post($statement, $review, $depositArrived ? $receivedInto : null, $settle, $difference, $on, $postedBy);
+            $this->post($statement, $review, $depositArrived ? $receivedInto : null, $settle, $difference, $postOn, $postedBy);
 
             foreach ($review->rows->where('included', true) as $row) {
                 $row['line']->forceFill([
@@ -156,6 +164,9 @@ class PostCourierStatement
                         'statement' => "Consignment {$row['line']->consignment_number} was paid out on another statement a moment ago. Nothing was posted.",
                     ]);
                 }
+
+                // ⭐ Slice 8: compensation for a parcel with a loss claim closes it.
+                CourierLossClaims::settleFromStatement($row['line'], $row['consignment'], $postedBy);
             }
 
             $statement->forceFill([
@@ -167,6 +178,8 @@ class PostCourierStatement
                 'deposit_difference_reason' => $difference->isZero() ? null : $differenceReason,
                 'payable_settled_amount' => $settle->isZero() ? null : $settle->toTaka(),
                 'share_amount' => $review->share->toTaka(),
+                'posted_on' => $postOn,
+                'cutoff_note' => $cutoffNote,
                 'posted_by' => $postedBy->id,
                 'posted_at' => now(),
             ])->save();
