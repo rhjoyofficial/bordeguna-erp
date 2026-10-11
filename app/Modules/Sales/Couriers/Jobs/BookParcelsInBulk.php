@@ -28,6 +28,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -114,7 +115,7 @@ class BookParcelsInBulk implements ShouldQueue
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, CourierAccount>  $accounts
+     * @param  Collection<int, CourierAccount>  $accounts
      * @return bool whether the courier was called
      */
     private function one(
