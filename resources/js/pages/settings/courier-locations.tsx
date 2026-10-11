@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
@@ -80,24 +81,7 @@ type PageProps = {
 type LocationOption = { id: string; name: string; home_delivery: boolean | null };
 type Suggestion = { city_id: string; city_name: string; zone_id: string; zone_name: string; area_id: string; area_name: string };
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Couriers', href: '/settings/couriers' },
-    { title: 'Locations', href: '/settings/couriers/locations' },
-];
-
-const FILTERS: { key: PageProps['filter']; label: string }[] = [
-    { key: 'review', label: 'Needs review' },
-    { key: 'unmapped', label: 'No match' },
-    { key: 'mapped', label: 'Mapped' },
-    { key: 'all', label: 'All' },
-];
-
-const SOURCE_LABELS: Record<MapRow['source'], string> = {
-    auto_exact: 'Same name',
-    auto_suggested: 'Suggested',
-    manual: 'Set by hand',
-    api_suggestion: 'Courier suggestion',
-};
+const FILTERS: PageProps['filter'][] = ['review', 'unmapped', 'mapped', 'all'];
 
 async function getJson<T>(url: string): Promise<T | null> {
     try {
@@ -158,6 +142,7 @@ function Stat({ label, value, hint, tone }: { label: string; value: string | num
 }
 
 function ConfidenceBadge({ row }: { row: MapRow }) {
+    const { t } = useTranslation();
     const applied = row.status === 'applied';
 
     return (
@@ -172,10 +157,14 @@ function ConfidenceBadge({ row }: { row: MapRow }) {
                           : 'bg-muted text-muted-foreground',
                 )}
             >
-                {applied ? 'In use' : row.zone_id || row.candidates.length > 0 ? 'Waiting for review' : 'No match'}
+                {applied
+                    ? t('courier_locations.in_use')
+                    : row.zone_id || row.candidates.length > 0
+                      ? t('courier_locations.waiting_review')
+                      : t('courier_locations.filter_unmapped')}
             </span>
             <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5">
-                {SOURCE_LABELS[row.source]}, {row.confidence}
+                {t(`courier_locations.source_${row.source}`)}, {t(`courier_locations.confidence_${row.confidence}`)}
             </span>
         </div>
     );
@@ -186,6 +175,7 @@ function ConfidenceBadge({ row }: { row: MapRow }) {
  * offered comes from the synced list; the server checks it again on save.
  */
 function MapEditor({ provider, row, cities, onDone }: { provider: string; row: MapRow; cities: Candidate[]; onDone: () => void }) {
+    const { t } = useTranslation();
     const { errors } = usePage<PageProps>().props;
     const [cityId, setCityId] = useState(row.city_id ?? '');
     const [zoneId, setZoneId] = useState(row.zone_id ?? '');
@@ -211,7 +201,7 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
         getJson<{ items: Suggestion[]; error: string | null }>(route('couriers.settings.locations.suggest', { q: placeArea || row.thana })).then(
             (data) => {
                 setSuggestions(data?.items ?? []);
-                setSuggestError(data === null ? 'CarryBee did not answer.' : data.error);
+                setSuggestError(data === null ? t('courier_locations.carrybee_no_answer') : data.error);
             },
         );
     };
@@ -247,7 +237,7 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
         <div className="bg-muted/30 space-y-3 rounded-md p-3">
             {row.candidates.length > 0 && (
                 <div className="space-y-1">
-                    <p className="text-xs font-medium">Zones whose name matches</p>
+                    <p className="text-xs font-medium">{t('courier_locations.zones_matching')}</p>
                     <div className="flex flex-wrap gap-1">
                         {row.candidates.map((c) => (
                             <Button
@@ -272,7 +262,7 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
             <div className="grid gap-3 md:grid-cols-4">
                 <div className="space-y-1">
                     <label className="text-xs font-medium" htmlFor={`place-area-${row.id}`}>
-                        Area of {row.thana} (optional)
+                        {t('courier_locations.area_of', { thana: row.thana })}
                     </label>
                     <SearchSelect
                         id={`place-area-${row.id}`}
@@ -280,7 +270,7 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
                         onChange={(e) => setPlaceArea(e.target.value)}
                         disabled={row.area !== null}
                     >
-                        <option value="">The whole thana</option>
+                        <option value="">{t('courier_locations.whole_thana')}</option>
                         {placeAreas.map((a) => (
                             <option key={a} value={a}>
                                 {a}
@@ -290,7 +280,7 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
                 </div>
                 <div className="space-y-1">
                     <label className="text-xs font-medium" htmlFor={`city-${row.id}`}>
-                        Courier city
+                        {t('courier_locations.courier_city')}
                     </label>
                     <SearchSelect
                         id={`city-${row.id}`}
@@ -302,7 +292,7 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
                             setAreaId('');
                         }}
                     >
-                        <option value="">Choose a city</option>
+                        <option value="">{t('courier_locations.choose_city')}</option>
                         {cities.map((c) => (
                             <option key={c.id} value={c.id}>
                                 {c.name}
@@ -313,20 +303,20 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
                 </div>
                 <div className="space-y-1">
                     <label className="text-xs font-medium" htmlFor={`zone-${row.id}`}>
-                        Courier zone
+                        {t('courier_locations.courier_zone')}
                     </label>
                     <SearchSelect
                         id={`zone-${row.id}`}
                         value={zoneId}
                         disabled={!cityId || zones.loading}
                         invalid={!!errors.zone_id}
-                        emptyText="No zone by that name"
+                        emptyText={t('courier_locations.no_zone_by_name')}
                         onChange={(e) => {
                             setZoneId(e.target.value);
                             setAreaId('');
                         }}
                     >
-                        <option value="">{zones.loading ? 'Loading...' : 'Choose a zone'}</option>
+                        <option value="">{zones.loading ? t('courier_locations.loading') : t('courier_locations.choose_zone')}</option>
                         {zones.items.map((z) => (
                             <option key={z.id} value={z.id}>
                                 {z.name}
@@ -337,7 +327,7 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
                 </div>
                 <div className="space-y-1">
                     <label className="text-xs font-medium" htmlFor={`area-${row.id}`}>
-                        Courier area (optional)
+                        {t('courier_locations.courier_area')}
                     </label>
                     <SearchSelect
                         id={`area-${row.id}`}
@@ -346,15 +336,19 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
                         invalid={!!errors.area_id}
                         onChange={(e) => setAreaId(e.target.value)}
                     >
-                        <option value="">{areas.loading ? 'Loading...' : 'No area'}</option>
+                        <option value="">{areas.loading ? t('courier_locations.loading') : t('courier_locations.no_area')}</option>
                         {areas.items.map((a) => (
-                            <option key={a.id} value={a.id} data-hint={a.home_delivery === false ? 'No home delivery here' : undefined}>
+                            <option
+                                key={a.id}
+                                value={a.id}
+                                data-hint={a.home_delivery === false ? t('courier_locations.no_home_delivery') : undefined}
+                            >
                                 {a.name}
                             </option>
                         ))}
                     </SearchSelect>
                     {selectedArea?.home_delivery === false && (
-                        <p className="text-destructive text-xs">The courier does not deliver to homes in this area; booking will refuse it.</p>
+                        <p className="text-destructive text-xs">{t('courier_locations.no_home_delivery_long')}</p>
                     )}
                     <InputError message={errors.area_id} />
                 </div>
@@ -363,15 +357,15 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
             {provider === 'carrybee' && (
                 <div className="space-y-1">
                     <Button type="button" size="sm" variant="outline" onClick={askCarryBee}>
-                        Ask CarryBee about "{placeArea || row.thana}"
+                        {t('courier_locations.ask_carrybee', { name: placeArea || row.thana })}
                     </Button>
                     {suggestError && <p className="text-muted-foreground text-xs">{suggestError}</p>}
                     {suggestions !== null && suggestions.length === 0 && !suggestError && (
-                        <p className="text-muted-foreground text-xs">CarryBee has no suggestion for that name.</p>
+                        <p className="text-muted-foreground text-xs">{t('courier_locations.carrybee_no_suggestion')}</p>
                     )}
                     {suggestions !== null && suggestions.length > 0 && (
                         <div className="space-y-1">
-                            <p className="text-muted-foreground text-xs">A hint from CarryBee, not an answer. Check the district before using one.</p>
+                            <p className="text-muted-foreground text-xs">{t('courier_locations.carrybee_hint')}</p>
                             <div className="flex flex-wrap gap-1">
                                 {suggestions.slice(0, 10).map((s) => (
                                     <Button
@@ -396,10 +390,10 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
 
             <div className="flex gap-2">
                 <Button type="button" size="sm" disabled={!cityId || !zoneId || saving} onClick={save}>
-                    {saving ? 'Saving...' : 'Save and use'}
+                    {saving ? t('courier_locations.saving') : t('courier_locations.save_and_use')}
                 </Button>
                 <Button type="button" size="sm" variant="ghost" onClick={onDone}>
-                    Cancel
+                    {t('courier_locations.cancel')}
                 </Button>
             </div>
         </div>
@@ -408,6 +402,7 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
 
 /** One courier band: its name and the districts and thanas it covers. */
 function BandEditor({ band, provider, districts }: { band: Band | null; provider: string; districts: string[] }) {
+    const { t } = useTranslation();
     const { errors } = usePage<PageProps>().props;
     const [name, setName] = useState(band?.name ?? '');
     const [chosenDistricts, setChosenDistricts] = useState<string[]>(band?.districts ?? []);
@@ -450,7 +445,12 @@ function BandEditor({ band, provider, districts }: { band: Band | null; provider
     const chip = (label: string, onRemove: () => void) => (
         <span key={label} className="bg-muted inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
             {label}
-            <button type="button" className="text-muted-foreground hover:text-foreground" aria-label={`Remove ${label}`} onClick={onRemove}>
+            <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground"
+                aria-label={t('courier_locations.remove_item', { name: label })}
+                onClick={onRemove}
+            >
                 x
             </button>
         </span>
@@ -461,24 +461,24 @@ function BandEditor({ band, provider, districts }: { band: Band | null; provider
             <div className="flex flex-wrap items-end gap-3">
                 <div className="min-w-48 flex-1 space-y-1">
                     <label className="text-xs font-medium" htmlFor={`band-name-${band?.id ?? 'new'}`}>
-                        {band ? 'Band name' : 'New band name'}
+                        {band ? t('courier_locations.band_name') : t('courier_locations.new_band_name')}
                     </label>
                     <Input id={`band-name-${band?.id ?? 'new'}`} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
                 </div>
-                {band?.is_default && <p className="text-muted-foreground text-xs">Everywhere no other band names. It keeps no rules of its own.</p>}
+                {band?.is_default && <p className="text-muted-foreground text-xs">{t('courier_locations.default_band_note')}</p>}
             </div>
 
             {!band?.is_default && (
                 <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2">
-                        <p className="text-xs font-medium">Whole districts</p>
+                        <p className="text-xs font-medium">{t('courier_locations.whole_districts')}</p>
                         <div className="flex flex-wrap gap-1">
-                            {chosenDistricts.length === 0 && <span className="text-muted-foreground text-xs">None</span>}
+                            {chosenDistricts.length === 0 && <span className="text-muted-foreground text-xs">{t('courier_locations.none')}</span>}
                             {chosenDistricts.map((d) => chip(d, () => setChosenDistricts(chosenDistricts.filter((x) => x !== d))))}
                         </div>
                         <div className="flex gap-2">
                             <SearchSelect value={pickDistrict} onChange={(e) => setPickDistrict(e.target.value)}>
-                                <option value="">Add a district</option>
+                                <option value="">{t('courier_locations.add_district')}</option>
                                 {districts.map((d) => (
                                     <option key={d} value={d}>
                                         {d}
@@ -495,15 +495,15 @@ function BandEditor({ band, provider, districts }: { band: Band | null; provider
                                     setPickDistrict('');
                                 }}
                             >
-                                Add
+                                {t('courier_locations.add')}
                             </Button>
                         </div>
                     </div>
                     <div className="space-y-2">
-                        <p className="text-xs font-medium">Single thanas (beat a district rule)</p>
+                        <p className="text-xs font-medium">{t('courier_locations.single_thanas')}</p>
                         <div className="flex flex-wrap gap-1">
-                            {chosenThanas.length === 0 && <span className="text-muted-foreground text-xs">None</span>}
-                            {chosenThanas.map((t) => chip(t, () => setChosenThanas(chosenThanas.filter((x) => x !== t))))}
+                            {chosenThanas.length === 0 && <span className="text-muted-foreground text-xs">{t('courier_locations.none')}</span>}
+                            {chosenThanas.map((th) => chip(th, () => setChosenThanas(chosenThanas.filter((x) => x !== th))))}
                         </div>
                         <div className="flex flex-wrap gap-2">
                             <SearchSelect
@@ -513,7 +513,7 @@ function BandEditor({ band, provider, districts }: { band: Band | null; provider
                                     setPickThana('');
                                 }}
                             >
-                                <option value="">District</option>
+                                <option value="">{t('courier_locations.district')}</option>
                                 {districts.map((d) => (
                                     <option key={d} value={d}>
                                         {d}
@@ -521,10 +521,10 @@ function BandEditor({ band, provider, districts }: { band: Band | null; provider
                                 ))}
                             </SearchSelect>
                             <SearchSelect value={pickThana} disabled={!thanaDistrict} onChange={(e) => setPickThana(e.target.value)}>
-                                <option value="">Thana</option>
-                                {thanaOptions.map((t) => (
-                                    <option key={t} value={t}>
-                                        {t}
+                                <option value="">{t('courier_locations.thana')}</option>
+                                {thanaOptions.map((th) => (
+                                    <option key={th} value={th}>
+                                        {th}
                                     </option>
                                 ))}
                             </SearchSelect>
@@ -539,7 +539,7 @@ function BandEditor({ band, provider, districts }: { band: Band | null; provider
                                     setPickThana('');
                                 }}
                             >
-                                Add
+                                {t('courier_locations.add')}
                             </Button>
                         </div>
                     </div>
@@ -552,7 +552,7 @@ function BandEditor({ band, provider, districts }: { band: Band | null; provider
 
             <div className="flex gap-2">
                 <Button type="button" size="sm" disabled={!name.trim() || saving} onClick={save}>
-                    {band ? 'Save band' : 'Add band'}
+                    {band ? t('courier_locations.save_band') : t('courier_locations.add_band')}
                 </Button>
                 {band && !band.is_default && (
                     <Button
@@ -560,11 +560,11 @@ function BandEditor({ band, provider, districts }: { band: Band | null; provider
                         size="sm"
                         variant="ghost"
                         onClick={() => {
-                            if (window.confirm(`Remove the band ${band.name}?`))
+                            if (window.confirm(t('courier_locations.confirm_remove_band', { name: band.name })))
                                 router.delete(route('couriers.settings.locations.bands.destroy', band.id), { preserveScroll: true });
                         }}
                     >
-                        Remove
+                        {t('courier_locations.remove')}
                     </Button>
                 )}
             </div>
@@ -573,7 +573,12 @@ function BandEditor({ band, provider, districts }: { band: Band | null; provider
 }
 
 export default function CourierLocations() {
+    const { t } = useTranslation();
     const { providers, provider, filter, search, stats, lastSync, maps, cities, bands, districts, errors } = usePage<PageProps>().props;
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: t('courier_locations.breadcrumb_couriers'), href: '/settings/couriers' },
+        { title: t('courier_locations.breadcrumb_locations'), href: '/settings/couriers/locations' },
+    ];
     const [editingId, setEditingId] = useState<number | null>(null);
     const [query, setQuery] = useState(search);
     const [busy, setBusy] = useState<string | null>(null);
@@ -605,9 +610,9 @@ export default function CourierLocations() {
     if (!current) {
         return (
             <AppLayout breadcrumbs={breadcrumbs}>
-                <Head title="Courier locations" />
+                <Head title={t('courier_locations.title')} />
                 <SettingsLayout>
-                    <HeadingSmall title="Courier locations" description="No connected courier can list its locations yet." />
+                    <HeadingSmall title={t('courier_locations.title')} description={t('courier_locations.no_provider')} />
                 </SettingsLayout>
             </AppLayout>
         );
@@ -615,16 +620,13 @@ export default function CourierLocations() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Courier locations" />
+            <Head title={t('courier_locations.title')} />
             <SettingsLayout>
                 <div className="space-y-6">
                     <div className="flex flex-wrap items-start justify-between gap-4">
-                        <HeadingSmall
-                            title="Courier locations"
-                            description="Which of each courier's zones every thana is. A parcel is only ever booked to a zone shown here as In use: an equal name, or one a person approved. Nothing is guessed from the address text."
-                        />
+                        <HeadingSmall title={t('courier_locations.title')} description={t('courier_locations.description')} />
                         <Link href={route('couriers.settings.index')} className="text-sm underline underline-offset-4">
-                            Courier accounts
+                            {t('courier_locations.courier_accounts')}
                         </Link>
                     </div>
 
@@ -643,44 +645,57 @@ export default function CourierLocations() {
 
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         <Stat
-                            label="Synced from the courier"
+                            label={t('courier_locations.stat_synced')}
                             value={stats.synced.zone}
-                            hint={`${stats.synced.city} cities, ${stats.synced.zone} zones, ${stats.synced.area} areas`}
+                            hint={t('courier_locations.stat_synced_hint', {
+                                cities: stats.synced.city,
+                                zones: stats.synced.zone,
+                                areas: stats.synced.area,
+                            })}
                         />
                         <Stat
-                            label="Thanas in use"
+                            label={t('courier_locations.stat_in_use')}
                             value={`${stats.mapped} / ${stats.thanas}`}
-                            hint={stats.area_maps > 0 ? `plus ${stats.area_maps} area maps` : undefined}
+                            hint={stats.area_maps > 0 ? t('courier_locations.stat_area_maps', { count: stats.area_maps }) : undefined}
                             tone="good"
                         />
-                        <Stat label="Waiting for review" value={stats.review} tone={stats.review > 0 ? 'warn' : undefined} />
-                        <Stat label="No match yet" value={stats.unmapped} tone={stats.unmapped > 0 ? 'bad' : undefined} hint="Pick these by hand" />
+                        <Stat label={t('courier_locations.waiting_review')} value={stats.review} tone={stats.review > 0 ? 'warn' : undefined} />
+                        <Stat
+                            label={t('courier_locations.stat_no_match')}
+                            value={stats.unmapped}
+                            tone={stats.unmapped > 0 ? 'bad' : undefined}
+                            hint={t('courier_locations.stat_pick_hand')}
+                        />
                     </div>
 
                     <div className="border-border flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
                         <div className="text-sm">
                             {lastSync === null ? (
-                                <p className="text-muted-foreground">
-                                    Never synced. Sync reads the courier's city, zone and area lists; it changes nothing at the courier.
-                                </p>
+                                <p className="text-muted-foreground">{t('courier_locations.never_synced')}</p>
                             ) : lastSync.status === 'running' ? (
                                 <p>
-                                    Syncing since {lastSync.started_at}: {lastSync.cities} cities, {lastSync.zones} zones, {lastSync.areas} areas so
-                                    far ({lastSync.calls} calls).
+                                    {t('courier_locations.syncing_since', {
+                                        at: lastSync.started_at ?? '',
+                                        cities: lastSync.cities,
+                                        zones: lastSync.zones,
+                                        areas: lastSync.areas,
+                                        calls: lastSync.calls,
+                                    })}
                                 </p>
                             ) : lastSync.status === 'failed' ? (
-                                <p className="text-destructive">
-                                    The last sync stopped: {lastSync.last_error} Press Sync now to carry on from where it stopped.
-                                </p>
+                                <p className="text-destructive">{t('courier_locations.sync_failed', { error: lastSync.last_error ?? '' })}</p>
                             ) : (
                                 <p className="text-muted-foreground">
-                                    Last synced {lastSync.finished_at}: {lastSync.cities} cities, {lastSync.zones} zones, {lastSync.areas} areas.
+                                    {t('courier_locations.last_synced', {
+                                        at: lastSync.finished_at ?? '',
+                                        cities: lastSync.cities,
+                                        zones: lastSync.zones,
+                                        areas: lastSync.areas,
+                                    })}
                                 </p>
                             )}
                             {current.accounts.length === 0 && (
-                                <p className="text-muted-foreground text-xs">
-                                    Needs an active {current.name} account. Add, test and activate one on Courier accounts.
-                                </p>
+                                <p className="text-muted-foreground text-xs">{t('courier_locations.needs_account', { name: current.name })}</p>
                             )}
                             <InputError message={errors.sync ?? errors.provider ?? errors.map} />
                         </div>
@@ -690,7 +705,11 @@ export default function CourierLocations() {
                                 disabled={current.accounts.length === 0 || running || busy !== null}
                                 onClick={() => post('couriers.settings.locations.sync', 'sync')}
                             >
-                                {busy === 'sync' ? 'Starting...' : running ? 'Syncing...' : 'Sync now'}
+                                {busy === 'sync'
+                                    ? t('courier_locations.starting')
+                                    : running
+                                      ? t('courier_locations.syncing')
+                                      : t('courier_locations.sync_now')}
                             </Button>
                             <Button
                                 size="sm"
@@ -698,16 +717,16 @@ export default function CourierLocations() {
                                 disabled={stats.synced.zone === 0 || busy !== null}
                                 onClick={() => post('couriers.settings.locations.match', 'match')}
                             >
-                                Match again
+                                {t('courier_locations.match_again')}
                             </Button>
                             <Button
                                 size="sm"
                                 variant="outline"
                                 disabled={stats.unreviewed_high === 0 || busy !== null}
-                                title="Records that a person agreed with every equal-name match nobody has looked at yet."
+                                title={t('courier_locations.approve_high_title')}
                                 onClick={() => post('couriers.settings.locations.approve-high', 'high')}
                             >
-                                Approve all high ({stats.unreviewed_high})
+                                {t('courier_locations.approve_high', { count: stats.unreviewed_high })}
                             </Button>
                         </div>
                     </div>
@@ -716,13 +735,8 @@ export default function CourierLocations() {
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex flex-wrap gap-1">
                                 {FILTERS.map((f) => (
-                                    <Button
-                                        key={f.key}
-                                        size="sm"
-                                        variant={f.key === filter ? 'secondary' : 'ghost'}
-                                        onClick={() => go({ filter: f.key })}
-                                    >
-                                        {f.label}
+                                    <Button key={f} size="sm" variant={f === filter ? 'secondary' : 'ghost'} onClick={() => go({ filter: f })}>
+                                        {t(`courier_locations.filter_${f}`)}
                                     </Button>
                                 ))}
                             </div>
@@ -735,13 +749,13 @@ export default function CourierLocations() {
                             >
                                 <Input
                                     value={query}
-                                    placeholder="District, thana or zone"
-                                    aria-label="Search places"
+                                    placeholder={t('courier_locations.search_placeholder')}
+                                    aria-label={t('courier_locations.search_label')}
                                     onChange={(e) => setQuery(e.target.value)}
                                     className="w-56"
                                 />
                                 <Button type="submit" size="sm" variant="outline">
-                                    Search
+                                    {t('courier_locations.search')}
                                 </Button>
                             </form>
                         </div>
@@ -749,11 +763,11 @@ export default function CourierLocations() {
                         {maps.data.length === 0 ? (
                             <div className="border-border flex flex-col items-start gap-2 rounded-md border border-dashed p-6">
                                 <MapPin className="text-muted-foreground size-6" />
-                                <p className="font-medium">{stats.synced.zone === 0 ? 'Nothing synced yet' : 'Nothing here'}</p>
+                                <p className="font-medium">
+                                    {stats.synced.zone === 0 ? t('courier_locations.nothing_synced') : t('courier_locations.nothing_here')}
+                                </p>
                                 <p className="text-muted-foreground text-sm">
-                                    {stats.synced.zone === 0
-                                        ? 'Press Sync now. When the lists arrive, every thana gets a proposed zone: equal names are put in use, everything else waits here for you.'
-                                        : 'No place matches this view.'}
+                                    {stats.synced.zone === 0 ? t('courier_locations.nothing_synced_help') : t('courier_locations.no_place_matches')}
                                 </p>
                             </div>
                         ) : (
@@ -761,10 +775,12 @@ export default function CourierLocations() {
                                 <table className="w-full text-sm">
                                     <thead className="text-muted-foreground text-left text-xs">
                                         <tr className="border-border border-b">
-                                            <th className="py-2 pr-3 font-medium">Place</th>
-                                            <th className="py-2 pr-3 font-medium">{current.name} city / zone / area</th>
-                                            <th className="py-2 pr-3 font-medium">State</th>
-                                            <th className="py-2 pr-3 font-medium">Why</th>
+                                            <th className="py-2 pr-3 font-medium">{t('courier_locations.col_place')}</th>
+                                            <th className="py-2 pr-3 font-medium">
+                                                {t('courier_locations.col_courier_place', { name: current.name })}
+                                            </th>
+                                            <th className="py-2 pr-3 font-medium">{t('courier_locations.col_state')}</th>
+                                            <th className="py-2 pr-3 font-medium">{t('courier_locations.col_why')}</th>
                                             <th className="py-2 font-medium" />
                                         </tr>
                                     </thead>
@@ -785,13 +801,19 @@ export default function CourierLocations() {
                                                                 <p>{row.zone_name}</p>
                                                                 <p className="text-muted-foreground text-xs">
                                                                     {row.city_name}
-                                                                    {row.area_name ? `, area ${row.area_name}` : ''}
+                                                                    {row.area_name
+                                                                        ? `, ${t('courier_locations.area_named', { name: row.area_name })}`
+                                                                        : ''}
                                                                 </p>
                                                             </>
                                                         ) : (
                                                             <p className="text-muted-foreground">
-                                                                {row.city_name ? `${row.city_name}, zone not picked` : 'No city'}
-                                                                {row.candidates.length > 0 ? ` (${row.candidates.length} possible)` : ''}
+                                                                {row.city_name
+                                                                    ? t('courier_locations.zone_not_picked', { city: row.city_name })
+                                                                    : t('courier_locations.no_city')}
+                                                                {row.candidates.length > 0
+                                                                    ? ` (${t('courier_locations.possible', { count: row.candidates.length })})`
+                                                                    : ''}
                                                             </p>
                                                         )}
                                                     </td>
@@ -819,7 +841,7 @@ export default function CourierLocations() {
                                                                         );
                                                                     }}
                                                                 >
-                                                                    Approve
+                                                                    {t('courier_locations.approve')}
                                                                 </Button>
                                                             )}
                                                             <Button
@@ -827,7 +849,11 @@ export default function CourierLocations() {
                                                                 variant="ghost"
                                                                 onClick={() => setEditingId(editingId === row.id ? null : row.id)}
                                                             >
-                                                                {editingId === row.id ? 'Close' : row.zone_id ? 'Change' : 'Pick'}
+                                                                {editingId === row.id
+                                                                    ? t('courier_locations.close')
+                                                                    : row.zone_id
+                                                                      ? t('courier_locations.change')
+                                                                      : t('courier_locations.pick')}
                                                             </Button>
                                                         </div>
                                                     </td>
@@ -854,7 +880,7 @@ export default function CourierLocations() {
                         {maps.last_page > 1 && (
                             <div className="flex items-center justify-between text-sm">
                                 <span className="text-muted-foreground">
-                                    Page {maps.current_page} of {maps.last_page}, {maps.total} places
+                                    {t('courier_locations.page_of', { page: maps.current_page, last: maps.last_page, total: maps.total })}
                                 </span>
                                 <div className="flex gap-2">
                                     <Button
@@ -863,7 +889,7 @@ export default function CourierLocations() {
                                         disabled={!maps.prev_page_url}
                                         onClick={() => maps.prev_page_url && router.get(maps.prev_page_url, {}, { preserveState: true })}
                                     >
-                                        Previous
+                                        {t('courier_locations.previous')}
                                     </Button>
                                     <Button
                                         size="sm"
@@ -871,7 +897,7 @@ export default function CourierLocations() {
                                         disabled={!maps.next_page_url}
                                         onClick={() => maps.next_page_url && router.get(maps.next_page_url, {}, { preserveState: true })}
                                     >
-                                        Next
+                                        {t('courier_locations.next')}
                                     </Button>
                                 </div>
                             </div>
@@ -880,8 +906,8 @@ export default function CourierLocations() {
 
                     <div className="space-y-3">
                         <HeadingSmall
-                            title={`${current.name} price bands`}
-                            description="The courier's own bands, used later to estimate its fee. A single thana listed on a band beats a whole-district rule; the last band covers everywhere else."
+                            title={t('courier_locations.bands_title', { name: current.name })}
+                            description={t('courier_locations.bands_description')}
                         />
                         <div className="space-y-3">
                             {bands.map((b) => (
