@@ -1,3 +1,4 @@
+import { SERIES } from '@/components/dashboards/palette';
 import { useTranslation } from '@/lib/i18n';
 import { useReducedMotion } from 'motion/react';
 import { useMemo } from 'react';
@@ -33,7 +34,9 @@ export interface Preview {
     chart: PreviewChart | null;
 }
 
-const SERIES_COLORS = ['var(--chart-1)', 'var(--chart-4)', 'var(--chart-3)', 'var(--chart-2)', 'var(--chart-5)'];
+// The dashboards' validated series palette (light and dark), so a report
+// chart and a dashboard chart read the same.
+const SERIES_COLORS = SERIES;
 
 const compact = new Intl.NumberFormat('en-IN', { notation: 'compact', maximumFractionDigits: 1 });
 const full = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
