@@ -56,6 +56,10 @@ type Account = {
     can_activate: boolean;
     stores: Store[];
     webhook_url: string;
+    // Courier hub slice 4: Pathao's echo value, set or not (never the value),
+    // and the automatic money switch, stored off.
+    integration_secret_set: boolean;
+    auto_post_outcomes: boolean;
     created_by: string | null;
     other_business_count: number;
     link: { provider_store_id: string | null; provider_store_name: string | null; money_account_id: number | null; is_default: boolean } | null;
@@ -93,6 +97,7 @@ type AccountFormData = {
     base_url: string;
     credentials: Record<string, string>;
     options: Record<string, string>;
+    integration_secret: string;
 };
 
 function initialData(provider: Provider, account?: Account): AccountFormData {
@@ -108,6 +113,8 @@ function initialData(provider: Provider, account?: Account): AccountFormData {
         // and blank on save means "keep what is saved".
         credentials: Object.fromEntries(provider.credential_fields.map((f) => [f.key, ''])),
         options: Object.fromEntries(provider.option_fields.map((f) => [f.key, String(account?.options?.[f.key] ?? f.default)])),
+        // ⚠ Always blank, like a credential: blank on save keeps what is saved.
+        integration_secret: '',
     };
 }
 
@@ -298,6 +305,30 @@ function AccountForm({ providers, account, onDone }: { providers: Provider[]; ac
                         })}
                     </FormRow>
                 </div>
+            )}
+
+            {provider.code === 'pathao' && (
+                <FormRow>
+                    <Field
+                        label="Webhook integration secret"
+                        htmlFor={`echo-${account?.id ?? 'new'}`}
+                        size="lg"
+                        error={errors.integration_secret}
+                        hint={
+                            account?.integration_secret_set
+                                ? 'Saved. Leave blank to keep it. Pathao shows this value on its webhook page; the ERP sends it back on every answer.'
+                                : 'Pathao shows this value on its webhook page; the ERP sends it back on every answer.'
+                        }
+                    >
+                        <Input
+                            id={`echo-${account?.id ?? 'new'}`}
+                            type="password"
+                            autoComplete="off"
+                            value={form.data.integration_secret}
+                            onChange={(e) => form.setData('integration_secret', e.target.value)}
+                        />
+                    </Field>
+                </FormRow>
             )}
 
             {account?.is_active && (
@@ -571,8 +602,8 @@ export default function CourierSettings() {
                                     <div className="space-y-2">
                                         <p className="text-sm font-medium">Webhook</p>
                                         <p className="text-muted-foreground text-xs">
-                                            The address to give the courier for status updates. The ERP does not listen on it yet; it arrives with
-                                            parcel tracking.
+                                            The address to give the courier for status updates, with the webhook secret. A status update never posts
+                                            money: a person confirms each parcel on its order.
                                         </p>
                                         <code className="bg-muted block rounded px-2 py-1 text-xs break-all">{a.webhook_url}</code>
                                         {revealedSecret?.account_id === a.id && (
@@ -592,6 +623,24 @@ export default function CourierSettings() {
                                             Rotate webhook secret
                                         </Button>
                                     </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <p className="text-sm font-medium">Post delivered parcels automatically</p>
+                                    <label className="text-muted-foreground flex items-center gap-2 text-xs">
+                                        <input type="checkbox" checked={a.auto_post_outcomes} disabled readOnly />
+                                        {a.auto_post_outcomes ? 'On' : 'Off'}: available after the evidence period. Until then a person confirms every
+                                        parcel.
+                                    </label>
+                                    {a.auto_post_outcomes && (
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => router.post(route('couriers.settings.auto-post', a.id), { on: false })}
+                                        >
+                                            Emergency off
+                                        </Button>
+                                    )}
                                 </div>
 
                                 <p className="text-muted-foreground text-xs">{a.created_by ? `Added by ${a.created_by}.` : ''}</p>
