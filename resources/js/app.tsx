@@ -99,10 +99,14 @@ router.on('finish', (event) => {
  * by a write that did not redirect elsewhere is therefore never auto-refreshed.
  */
 let pageIsReloadable = true;
+// A page that refreshes itself (the role dashboards: socket plus per-widget
+// polling) sends `auto_refresh: false` and the global reload stands down.
+let pageOptsOut = false;
 let lastVisit: { method: string; path: string } | null = null;
 
 router.on('success', (event) => {
     pageBusinessId = (event.detail.page.props.current_business_id as number | null) ?? null;
+    pageOptsOut = event.detail.page.props.auto_refresh === false;
 
     if (lastVisit !== null) {
         const landedOn = new URL(event.detail.page.url, window.location.origin).pathname;
@@ -137,7 +141,7 @@ window.setInterval(() => {
         return;
     }
 
-    if (inFlightMutations.size > 0 || !pageIsReloadable) {
+    if (inFlightMutations.size > 0 || !pageIsReloadable || pageOptsOut) {
         return;
     }
 
@@ -152,6 +156,7 @@ createInertiaApp({
         // for it. Without this the very first action in a fresh tab would be
         // unstamped, and §13.6 fails those closed.
         pageBusinessId = (props.initialPage.props.current_business_id as number | null) ?? null;
+        pageOptsOut = props.initialPage.props.auto_refresh === false;
 
         const root = createRoot(el);
 

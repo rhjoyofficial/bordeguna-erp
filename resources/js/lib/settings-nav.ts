@@ -1,5 +1,19 @@
 import { type NavItem } from '@/types';
-import { Bot, Building2, KeyRound, ListChecks, Network, Palette, Printer, Send, ShieldCheck, Truck, User, Users } from 'lucide-react';
+import {
+    Bot,
+    Building2,
+    KeyRound,
+    LayoutDashboard,
+    ListChecks,
+    Network,
+    Palette,
+    Printer,
+    Send,
+    ShieldCheck,
+    Truck,
+    User,
+    Users,
+} from 'lucide-react';
 
 /**
  * Every settings destination, in one list, gated one by one.
@@ -29,6 +43,8 @@ export interface SettingsAccess {
     canManageReasons?: boolean;
     /** couriers.settings.manage - CourierSettingsController. */
     canManageCourierSettings?: boolean;
+    /** dashboard.view_all - DashboardAssignmentController. */
+    canConfigureDashboards?: boolean;
 }
 
 export interface SettingsSection {
@@ -63,6 +79,11 @@ export function settingsSections(access: SettingsAccess): SettingsSection[] {
                       { title: 'Roles', url: '/settings/roles', icon: ShieldCheck },
                   ]
                 : [],
+        },
+        {
+            label: 'Dashboards',
+            description: 'Which dashboard each role lands on.',
+            items: access.canConfigureDashboards ? [{ title: 'Dashboards', url: '/settings/dashboards', icon: LayoutDashboard }] : [],
         },
         {
             label: 'Business',

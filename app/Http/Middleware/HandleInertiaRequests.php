@@ -255,6 +255,8 @@ class HandleInertiaRequests extends Middleware
             'canManageCrmSettings' => fn () => (bool) $request->user()?->can('crm.settings.manage'),
             // Settings > Couriers: courier credentials and webhooks (11 Oct 2026).
             'canManageCourierSettings' => fn () => (bool) $request->user()?->can('couriers.settings.manage'),
+            // Settings > Dashboards (11 Oct 2026): the Owner's see-all permission.
+            'canConfigureDashboards' => fn () => (bool) $request->user()?->can('dashboard.view_all'),
             // ⚠ The Assets module shipped loading MIGRATIONS ONLY - no routes, no
             // screens, no permissions - so nothing the business owns could be
             // recorded and depreciation had no caller at all. Reading the
