@@ -44,6 +44,7 @@ import {
     ListTree,
     LockKeyhole,
     Mail,
+    MapPin,
     Megaphone,
     MessageSquare,
     Network,
@@ -331,6 +332,8 @@ export function useNavGroups(): NavGroup[] {
                           ...(canManagePrices ? [{ title: 'Targets', url: '/sales/targets', icon: BadgeDollarSign }] : []),
                           // Courier accounts: credentials, pickup stores, webhooks (11 Oct 2026).
                           ...(canManageCourierSettings ? [{ title: 'Courier settings', url: '/settings/couriers', icon: Truck }] : []),
+                          // Courier zone for every thana, reviewed; courier price bands (11 Oct 2026).
+                          ...(canManageCourierSettings ? [{ title: 'Courier locations', url: '/settings/couriers/locations', icon: MapPin }] : []),
                           // Credit limits and days, by file, applied after approval (26 Sep 2026).
                           ...(canViewSales ? [{ title: 'Credit terms', url: '/sales/credit-terms', icon: Contact }] : []),
                           // Import prices is a button on Selling prices (29 Sep 2026).

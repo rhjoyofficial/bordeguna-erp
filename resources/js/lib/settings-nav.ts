@@ -1,5 +1,5 @@
 import { type NavItem } from '@/types';
-import { Bot, Building2, KeyRound, ListChecks, Network, Palette, Printer, Send, ShieldCheck, Truck, User, Users } from 'lucide-react';
+import { Bot, Building2, KeyRound, ListChecks, MapPin, Network, Palette, Printer, Send, ShieldCheck, Truck, User, Users } from 'lucide-react';
 
 /**
  * Every settings destination, in one list, gated one by one.
@@ -91,6 +91,8 @@ export function settingsSections(access: SettingsAccess): SettingsSection[] {
                 ...(access.canManageOrganization ? [{ title: 'AI providers', url: '/settings/ai-providers', icon: Bot }] : []),
                 // Courier accounts, their credentials and webhooks (11 Oct 2026).
                 ...(access.canManageCourierSettings ? [{ title: 'Couriers', url: '/settings/couriers', icon: Truck }] : []),
+                // Which courier zone each thana is, and the courier price bands (slice 2).
+                ...(access.canManageCourierSettings ? [{ title: 'Courier locations', url: '/settings/couriers/locations', icon: MapPin }] : []),
             ],
         },
     ];
