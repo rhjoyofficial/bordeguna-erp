@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
@@ -75,19 +76,10 @@ interface PageProps {
     can_approve: boolean;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Courier rate cards', href: '/settings/couriers/rate-cards' }];
-
 const statusTone: Record<Status, string> = {
     draft: 'border-amber-300 text-amber-800 dark:border-amber-700 dark:text-amber-300',
     approved: 'border-emerald-300 text-emerald-800 dark:border-emerald-700 dark:text-emerald-300',
     retired: 'text-muted-foreground',
-};
-
-const sourceLabel: Record<CardSummary['source'], string> = {
-    published: "Courier's published prices",
-    calibration: 'Proposed from statements',
-    manual: 'Typed',
-    import: 'From a CSV',
 };
 
 const blank = (v: unknown) => v === null || v === undefined || v === '';
@@ -100,7 +92,19 @@ function selectClass() {
 }
 
 export default function CourierRateCards({ providers, provider, cards, card, bands, services, min_samples, today, can_approve }: PageProps) {
+    const { t, tr } = useTranslation();
     const errors = usePage().props.errors as Record<string, string | undefined>;
+    const breadcrumbs: BreadcrumbItem[] = [{ title: t('rate_cards.title'), href: '/settings/couriers/rate-cards' }];
+    const serviceLabel = (service: string) => tr(`rate_cards.service_${service}`, service.replace('_', ' '));
+    const inputLabels: Record<string, string> = {
+        weight_from_g: t('rate_cards.col_above_g'),
+        weight_to_g: t('rate_cards.col_up_to_g'),
+        price: t('rate_cards.col_price'),
+        extra_per_kg_after_g: t('rate_cards.col_per_kg_after'),
+        extra_per_kg_price: t('rate_cards.col_per_kg'),
+        return_fee_percent: t('rate_cards.col_return_pct'),
+        expected_discount: t('rate_cards.col_expected_discount'),
+    };
     const bandName = (code: string) => bands.find((b) => b.code === code)?.name ?? code;
     const isDraft = card?.status === 'draft';
     const calibrated = card?.source === 'calibration';
@@ -182,17 +186,14 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Courier rate cards" />
+            <Head title={t('rate_cards.title')} />
             <SettingsLayout>
                 <div className="space-y-6">
                     <div className="flex flex-wrap items-start justify-between gap-4">
-                        <HeadingSmall
-                            title="Courier rate cards"
-                            description="What each courier charges us, by its own bands, service and weight. The approved card in force prices every estimate when the courier gives no live quote. A card never changes once approved: a new price is a new version with its own date."
-                        />
+                        <HeadingSmall title={t('rate_cards.title')} description={t('rate_cards.description')} />
                         <div className="flex flex-wrap gap-3 text-sm">
                             <Link href={route('sales.courier-fees.index')} className="underline underline-offset-4">
-                                Courier fees report
+                                {t('rate_cards.fees_report')}
                             </Link>
                         </div>
                     </div>
@@ -215,7 +216,7 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                             disabled={busy !== null}
                             onClick={() => act('propose', 'couriers.ratecards.propose', { provider })}
                         >
-                            {busy === 'propose' ? 'Proposing...' : 'Propose from statements'}
+                            {busy === 'propose' ? t('rate_cards.proposing') : t('rate_cards.propose')}
                         </Button>
                         <Button
                             size="sm"
@@ -223,7 +224,7 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                             disabled={busy !== null}
                             onClick={() => act('new', 'couriers.ratecards.store', { provider, based_on_id: card?.id ?? '' })}
                         >
-                            {card ? `New draft from ${card.version}` : 'New empty draft'}
+                            {card ? t('rate_cards.new_draft_from', { version: card.version }) : t('rate_cards.new_empty_draft')}
                         </Button>
                     </div>
                     <InputError message={errors.provider ?? errors.based_on_id ?? errors.card} />
@@ -232,19 +233,19 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                         <table className="w-full text-sm">
                             <thead className="text-muted-foreground text-left text-xs">
                                 <tr>
-                                    <th className="py-2 pr-3">Version</th>
-                                    <th className="py-2 pr-3">Status</th>
-                                    <th className="py-2 pr-3">Takes effect</th>
-                                    <th className="py-2 pr-3">Source</th>
-                                    <th className="py-2 pr-3 text-right">Prices</th>
-                                    <th className="py-2 pr-3">Approved</th>
+                                    <th className="py-2 pr-3">{t('rate_cards.col_version')}</th>
+                                    <th className="py-2 pr-3">{t('rate_cards.col_status')}</th>
+                                    <th className="py-2 pr-3">{t('rate_cards.col_takes_effect')}</th>
+                                    <th className="py-2 pr-3">{t('rate_cards.col_source')}</th>
+                                    <th className="py-2 pr-3 text-right">{t('rate_cards.col_prices')}</th>
+                                    <th className="py-2 pr-3">{t('rate_cards.col_approved')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {cards.length === 0 && (
                                     <tr>
                                         <td colSpan={6} className="text-muted-foreground py-4">
-                                            No cards for this courier yet.
+                                            {t('rate_cards.no_cards')}
                                         </td>
                                     </tr>
                                 )}
@@ -258,22 +259,24 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                             >
                                                 {c.version}
                                             </Link>
-                                            {c.in_force && <Badge className="ml-2">In force</Badge>}
-                                            {c.is_list_price && <span className="text-muted-foreground ml-2 text-xs">list price</span>}
+                                            {c.in_force && <Badge className="ml-2">{t('rate_cards.in_force')}</Badge>}
+                                            {c.is_list_price && (
+                                                <span className="text-muted-foreground ml-2 text-xs">{t('rate_cards.list_price')}</span>
+                                            )}
                                         </td>
                                         <td className="py-1.5 pr-3">
                                             <Badge variant="outline" className={statusTone[c.status]}>
-                                                {c.status}
+                                                {t(`rate_cards.status_${c.status}`)}
                                             </Badge>
                                         </td>
                                         <td className="py-1.5 pr-3 tabular-nums">{c.effective_from ?? '-'}</td>
                                         <td className="py-1.5 pr-3 text-xs">
-                                            {sourceLabel[c.source]}
-                                            {c.based_on && ` (from ${c.based_on})`}
+                                            {t(`rate_cards.source_${c.source}`)}
+                                            {c.based_on && ` ${t('rate_cards.from_version', { version: c.based_on })}`}
                                         </td>
                                         <td className="py-1.5 pr-3 text-right tabular-nums">{c.lines}</td>
                                         <td className="py-1.5 pr-3 text-xs">
-                                            {c.approved_at ? `${c.approved_by ?? 'seeded'}, ${c.approved_at}` : '-'}
+                                            {c.approved_at ? `${c.approved_by ?? t('rate_cards.seeded')}, ${c.approved_at}` : '-'}
                                         </td>
                                     </tr>
                                 ))}
@@ -285,7 +288,7 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                         <form onSubmit={save} className="border-sidebar-border/70 dark:border-sidebar-border space-y-4 rounded-md border p-4">
                             <div className="flex flex-wrap items-end gap-3">
                                 <div className="grid gap-1">
-                                    <Label htmlFor="card-version">Version</Label>
+                                    <Label htmlFor="card-version">{t('rate_cards.version')}</Label>
                                     <Input
                                         id="card-version"
                                         className="w-48"
@@ -303,15 +306,15 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                         checked={form.data.is_list_price}
                                         onChange={(e) => form.setData('is_list_price', e.target.checked)}
                                     />
-                                    List price (the courier usually charges less)
+                                    {t('rate_cards.list_price_long')}
                                 </label>
                                 <span className="grow" />
                                 <a href={route('couriers.ratecards.export', card.id)} className="pb-2 text-sm underline underline-offset-4">
-                                    Export CSV
+                                    {t('rate_cards.export_csv')}
                                 </a>
                             </div>
                             <div className="grid gap-1">
-                                <Label htmlFor="card-notes">Notes</Label>
+                                <Label htmlFor="card-notes">{t('rate_cards.notes')}</Label>
                                 <textarea
                                     id="card-notes"
                                     rows={2}
@@ -322,33 +325,27 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                 />
                             </div>
 
-                            {calibrated && (
-                                <p className="text-muted-foreground text-xs">
-                                    Proposed from what the statements charged. "Before" is the price in force, "After" this draft's price, "Parcels"
-                                    the clean parcels behind it. A line moves only with at least {min_samples} parcels; that is the least to consider,
-                                    not proof. Check returns, re-weighing and outliers on the Courier fees report before approving.
-                                </p>
-                            )}
+                            {calibrated && <p className="text-muted-foreground text-xs">{t('rate_cards.calibrated_help', { min: min_samples })}</p>}
 
                             <div className="overflow-x-auto">
                                 <table className="w-full text-xs">
                                     <thead className="text-muted-foreground text-left">
                                         <tr>
-                                            <th className="py-2 pr-2">From</th>
-                                            <th className="py-2 pr-2">To</th>
-                                            <th className="py-2 pr-2">Service</th>
-                                            <th className="py-2 pr-2 text-right">Above (g)</th>
-                                            <th className="py-2 pr-2 text-right">Up to (g)</th>
-                                            <th className="py-2 pr-2 text-right">Price</th>
-                                            <th className="py-2 pr-2 text-right">Per kg after (g)</th>
-                                            <th className="py-2 pr-2 text-right">Per kg</th>
-                                            <th className="py-2 pr-2 text-right">Return %</th>
-                                            <th className="py-2 pr-2 text-right">Expected discount</th>
+                                            <th className="py-2 pr-2">{t('rate_cards.col_from')}</th>
+                                            <th className="py-2 pr-2">{t('rate_cards.col_to')}</th>
+                                            <th className="py-2 pr-2">{t('rate_cards.col_service')}</th>
+                                            <th className="py-2 pr-2 text-right">{t('rate_cards.col_above_g')}</th>
+                                            <th className="py-2 pr-2 text-right">{t('rate_cards.col_up_to_g')}</th>
+                                            <th className="py-2 pr-2 text-right">{t('rate_cards.col_price')}</th>
+                                            <th className="py-2 pr-2 text-right">{t('rate_cards.col_per_kg_after')}</th>
+                                            <th className="py-2 pr-2 text-right">{t('rate_cards.col_per_kg')}</th>
+                                            <th className="py-2 pr-2 text-right">{t('rate_cards.col_return_pct')}</th>
+                                            <th className="py-2 pr-2 text-right">{t('rate_cards.col_expected_discount')}</th>
                                             {calibrated && (
                                                 <>
-                                                    <th className="py-2 pr-2 text-right">Before</th>
-                                                    <th className="py-2 pr-2 text-right">After</th>
-                                                    <th className="py-2 pr-2 text-right">Parcels</th>
+                                                    <th className="py-2 pr-2 text-right">{t('rate_cards.col_before')}</th>
+                                                    <th className="py-2 pr-2 text-right">{t('rate_cards.col_after')}</th>
+                                                    <th className="py-2 pr-2 text-right">{t('rate_cards.col_parcels')}</th>
                                                 </>
                                             )}
                                             {isDraft && <th className="py-2" />}
@@ -369,7 +366,7 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                                         <>
                                                             <td className="py-1 pr-2">
                                                                 <select
-                                                                    aria-label="From band"
+                                                                    aria-label={t('rate_cards.from_band')}
                                                                     className={selectClass()}
                                                                     value={line.from_band}
                                                                     onChange={(e) => setLine(i, 'from_band', e.target.value)}
@@ -383,7 +380,7 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                                             </td>
                                                             <td className="py-1 pr-2">
                                                                 <select
-                                                                    aria-label="To band"
+                                                                    aria-label={t('rate_cards.to_band')}
                                                                     className={selectClass()}
                                                                     value={line.to_band}
                                                                     onChange={(e) => setLine(i, 'to_band', e.target.value)}
@@ -397,14 +394,14 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                                             </td>
                                                             <td className="py-1 pr-2">
                                                                 <select
-                                                                    aria-label="Service"
+                                                                    aria-label={t('rate_cards.col_service')}
                                                                     className={selectClass()}
                                                                     value={line.service}
                                                                     onChange={(e) => setLine(i, 'service', e.target.value)}
                                                                 >
                                                                     {services.map((s) => (
                                                                         <option key={s} value={s}>
-                                                                            {s.replace('_', ' ')}
+                                                                            {serviceLabel(s)}
                                                                         </option>
                                                                     ))}
                                                                 </select>
@@ -422,7 +419,7 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                                             ).map((key) => (
                                                                 <td key={key} className="py-1 pr-2">
                                                                     <Input
-                                                                        aria-label={key.replaceAll('_', ' ')}
+                                                                        aria-label={inputLabels[key]}
                                                                         inputMode="decimal"
                                                                         className={cn(cellClass, 'w-20 text-right')}
                                                                         value={line[key] === null || line[key] === undefined ? '' : String(line[key])}
@@ -435,9 +432,11 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                                         <>
                                                             <td className="py-1.5 pr-2">{bandName(line.from_band)}</td>
                                                             <td className="py-1.5 pr-2">{bandName(line.to_band)}</td>
-                                                            <td className="py-1.5 pr-2">{line.service.replace('_', ' ')}</td>
+                                                            <td className="py-1.5 pr-2">{serviceLabel(line.service)}</td>
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">{line.weight_from_g}</td>
-                                                            <td className="py-1.5 pr-2 text-right tabular-nums">{line.weight_to_g ?? 'no top'}</td>
+                                                            <td className="py-1.5 pr-2 text-right tabular-nums">
+                                                                {line.weight_to_g ?? t('rate_cards.no_top')}
+                                                            </td>
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">{line.price}</td>
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">
                                                                 {line.extra_per_kg_after_g ?? '-'}
@@ -445,7 +444,7 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">{line.extra_per_kg_price ?? '-'}</td>
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">{line.return_fee_percent ?? '-'}</td>
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">
-                                                                {line.expected_discount ?? 'not known'}
+                                                                {line.expected_discount ?? t('rate_cards.not_known')}
                                                             </td>
                                                         </>
                                                     )}
@@ -474,7 +473,7 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                                                 className="h-7 px-2"
                                                                 onClick={() => removeLine(i)}
                                                             >
-                                                                Remove
+                                                                {t('rate_cards.remove')}
                                                             </Button>
                                                         </td>
                                                     )}
@@ -491,13 +490,13 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                             {isDraft ? (
                                 <div className="flex flex-wrap items-end gap-3">
                                     <Button type="button" size="sm" variant="outline" onClick={addLine}>
-                                        Add a price
+                                        {t('rate_cards.add_price')}
                                     </Button>
                                     <Button size="sm" disabled={form.processing}>
-                                        {form.processing ? 'Saving...' : 'Save draft'}
+                                        {form.processing ? t('rate_cards.saving') : t('rate_cards.save_draft')}
                                     </Button>
                                     <div className="grid gap-1">
-                                        <Label htmlFor="card-file">Replace prices from a CSV</Label>
+                                        <Label htmlFor="card-file">{t('rate_cards.replace_csv')}</Label>
                                         <Input
                                             id="card-file"
                                             type="file"
@@ -508,18 +507,18 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                         <InputError message={errors.file} />
                                     </div>
                                     <Button type="button" size="sm" variant="outline" disabled={!file || busy !== null} onClick={upload}>
-                                        {busy === 'import' ? 'Reading...' : 'Read CSV'}
+                                        {busy === 'import' ? t('rate_cards.reading') : t('rate_cards.read_csv')}
                                     </Button>
                                     <span className="grow" />
                                     <ConfirmDialog
                                         trigger={
                                             <Button type="button" size="sm" variant="ghost" className="text-red-600">
-                                                Discard draft
+                                                {t('rate_cards.discard_draft')}
                                             </Button>
                                         }
-                                        title={`Discard ${card.version}?`}
-                                        description="The draft and its prices are removed. Approved cards are not touched."
-                                        confirmLabel="Discard"
+                                        title={t('rate_cards.discard_title', { version: card.version })}
+                                        description={t('rate_cards.discard_description')}
+                                        confirmLabel={t('rate_cards.discard')}
                                         destructive
                                         onConfirm={() => router.delete(route('couriers.ratecards.destroy', card.id))}
                                     />
@@ -527,15 +526,15 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                             ) : (
                                 <p className="text-muted-foreground text-xs">
                                     {card.status === 'approved'
-                                        ? `Approved, in use from ${card.effective_from}. To change a price, make a new draft from it.`
-                                        : 'Retired. Estimates made with it keep it.'}
+                                        ? t('rate_cards.approved_in_use', { date: card.effective_from ?? '' })
+                                        : t('rate_cards.retired_note')}
                                 </p>
                             )}
 
                             {can_approve && isDraft && (
                                 <div className="flex flex-wrap items-end gap-3 border-t pt-4">
                                     <div className="grid gap-1">
-                                        <Label htmlFor="card-effective">Takes effect on</Label>
+                                        <Label htmlFor="card-effective">{t('rate_cards.takes_effect_on')}</Label>
                                         <Input
                                             id="card-effective"
                                             type="date"
@@ -549,17 +548,17 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                     <ConfirmDialog
                                         trigger={
                                             <Button type="button" size="sm" disabled={busy !== null || form.isDirty}>
-                                                Approve
+                                                {t('rate_cards.approve')}
                                             </Button>
                                         }
-                                        title={`Approve ${card.version}?`}
-                                        description={`From ${effectiveFrom} every estimate without a live quote uses these prices. Estimates already made keep their own version. It cannot be edited afterwards.`}
-                                        confirmLabel="Approve"
+                                        title={t('rate_cards.approve_title', { version: card.version })}
+                                        description={t('rate_cards.approve_description', { date: effectiveFrom })}
+                                        confirmLabel={t('rate_cards.approve')}
                                         onConfirm={() =>
                                             act('approve', 'couriers.ratecards.approve', { effective_from: effectiveFrom }, { rateCard: card.id })
                                         }
                                     />
-                                    {form.isDirty && <span className="text-muted-foreground pb-2 text-xs">Save the draft first.</span>}
+                                    {form.isDirty && <span className="text-muted-foreground pb-2 text-xs">{t('rate_cards.save_first')}</span>}
                                 </div>
                             )}
 
@@ -568,12 +567,12 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                     <ConfirmDialog
                                         trigger={
                                             <Button type="button" size="sm" variant="outline">
-                                                Retire
+                                                {t('rate_cards.retire')}
                                             </Button>
                                         }
-                                        title={`Retire ${card.version}?`}
-                                        description="It stops pricing new estimates. An older approved card, if any, takes over; estimates already made keep this version."
-                                        confirmLabel="Retire"
+                                        title={t('rate_cards.retire_title', { version: card.version })}
+                                        description={t('rate_cards.retire_description')}
+                                        confirmLabel={t('rate_cards.retire')}
                                         destructive
                                         onConfirm={() => act('retire', 'couriers.ratecards.retire', {}, { rateCard: card.id })}
                                     />

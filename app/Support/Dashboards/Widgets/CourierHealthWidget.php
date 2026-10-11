@@ -55,13 +55,25 @@ class CourierHealthWidget extends CourierWidget
         return '/settings/couriers';
     }
 
+    /** ⭐ Follows the dashboard's Brand switcher (Joy, 11 Oct 2026). */
+    public function brandAware(): bool
+    {
+        return true;
+    }
+
     public function data(WidgetContext $context): array
     {
         $links = CourierAccountBusiness::query()
             ->withoutGlobalScopes()
             ->with('account.provider')
             ->where('business_id', $context->businessId)
-            ->get();
+            // ⭐ With a brand chosen: the accounts that carry its parcels (its
+            // own links and the any-brand ones). One row per account either way.
+            ->when($context->brandId !== null, fn ($q) => $q->where(fn ($w) => $w->whereNull('brand_id')->orWhere('brand_id', $context->brandId)))
+            ->orderBy('id')
+            ->get()
+            ->unique('courier_account_id')
+            ->values();
 
         if ($links->isEmpty()) {
             return ['kind' => 'empty', 'message' => 'No courier account is connected to this business.'];

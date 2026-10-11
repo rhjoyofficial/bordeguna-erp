@@ -1,4 +1,4 @@
-import { LiveIndicator, RangeBar, sendJson, SoundSettingsPopover } from '@/components/dashboards/dashboard-toolbar';
+import { BrandBar, LiveIndicator, RangeBar, sendJson, SoundSettingsPopover } from '@/components/dashboards/dashboard-toolbar';
 import type { DashboardWidget, RangeState, SoundSettings } from '@/components/dashboards/types';
 import { useDashboardChannel } from '@/components/dashboards/use-dashboard-channel';
 import { useWidgetFeed } from '@/components/dashboards/use-widget-feed';
@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import AppLayout from '@/layouts/app-layout';
 import { dashboardSound } from '@/lib/dashboard-sound';
 import { realtimeAvailable } from '@/lib/echo';
+import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
@@ -32,6 +33,8 @@ interface Props {
     range: RangeState;
     range_presets: { value: string; label: string }[];
     range_error: string | null;
+    // Joy, 11 Oct 2026: the Brand switcher (null = all brands).
+    brand?: { selected: number | null; options: { id: number; name: string }[] };
     sound: SoundSettings;
     realtime: { enabled: boolean; business_channel: string; user_channel: string };
     can_configure: boolean;
@@ -48,7 +51,12 @@ interface Props {
  */
 export default function RoleDashboard(props: Props) {
     const { dashboard, switcher, offers_classic, widgets, hidden_widgets, range, range_presets, range_error, realtime, can_configure } = props;
+    const brand = props.brand ?? { selected: null, options: [] };
+    const brandName = brand.options.find((b) => b.id === brand.selected)?.name ?? null;
     const { auth } = usePage<SharedData>().props;
+    const { t, tr } = useTranslation();
+    const dashboardLabel = tr(`dash.name.${dashboard.key}`, dashboard.label);
+    const rangeLabel = range.preset === 'custom' ? range.label : tr(`dash.preset.${range.preset}`, range.label);
     const [sound, setSound] = useState(props.sound);
     const [now, setNow] = useState(() => Date.now());
     const path = switcher.find((s) => s.current)?.url ?? '/dashboard';
@@ -88,7 +96,7 @@ export default function RoleDashboard(props: Props) {
         });
     }, [status, refresh]);
 
-    const breadcrumbs: BreadcrumbItem[] = [{ title: 'Dashboard', href: '/dashboard' }];
+    const breadcrumbs: BreadcrumbItem[] = [{ title: t('dash.breadcrumb'), href: '/dashboard' }];
 
     const saveLayout = async (order: string[], hidden: string[]) => {
         const response = await sendJson('PUT', `/dashboard/${dashboard.key}/layout`, { order, hidden });
@@ -96,7 +104,7 @@ export default function RoleDashboard(props: Props) {
         if (response.ok) {
             router.reload({ only: ['widgets', 'hidden_widgets'] });
         } else {
-            toast.error('Your layout could not be saved.');
+            toast.error(t('dash.layout_not_saved'));
         }
     };
 
@@ -105,22 +113,22 @@ export default function RoleDashboard(props: Props) {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`${dashboard.label} dashboard`} />
+            <Head title={t('dash.head_title', { name: dashboardLabel })} />
             <div className="flex flex-1 flex-col gap-4 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                        <h1 className="text-xl font-semibold tracking-tight">{dashboard.label}</h1>
-                        <p className="text-muted-foreground text-sm">{dashboard.description}</p>
+                        <h1 className="text-xl font-semibold tracking-tight">{dashboardLabel}</h1>
+                        <p className="text-muted-foreground text-sm">{tr(`dash.description.${dashboard.key}`, dashboard.description)}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         <LiveIndicator status={status} />
                         <SoundSettingsPopover settings={sound} onChange={setSound} />
                         <CustomisePopover widgets={widgets} hidden={hidden_widgets} onSave={saveLayout} />
                         {can_configure && (
-                            <Button asChild size="sm" variant="ghost" className="h-8" title="Which dashboard each role gets">
+                            <Button asChild size="sm" variant="ghost" className="h-8" title={t('dash.settings_title')}>
                                 <Link href="/settings/dashboards">
                                     <Settings2 className="size-4" />
-                                    <span className="sr-only">Dashboard settings</span>
+                                    <span className="sr-only">{t('dash.settings')}</span>
                                 </Link>
                             </Button>
                         )}
@@ -128,7 +136,7 @@ export default function RoleDashboard(props: Props) {
                 </div>
 
                 {(switcher.length > 1 || offers_classic) && (
-                    <nav aria-label="Dashboards" className="flex flex-wrap gap-1 border-b pb-2">
+                    <nav aria-label={t('dash.switcher')} className="flex flex-wrap gap-1 border-b pb-2">
                         {switcher.map((entry) => (
                             <Link
                                 key={entry.key}
@@ -143,7 +151,7 @@ export default function RoleDashboard(props: Props) {
                                 )}
                                 aria-current={entry.current ? 'page' : undefined}
                             >
-                                {entry.label}
+                                {tr(`dash.name.${entry.key}`, entry.label)}
                             </Link>
                         ))}
                         {offers_classic && (
@@ -151,25 +159,32 @@ export default function RoleDashboard(props: Props) {
                                 href="/dashboard/classic"
                                 className="text-muted-foreground hover:bg-accent hover:text-foreground flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm"
                             >
-                                <LayoutGrid className="size-3.5" /> Classic
+                                <LayoutGrid className="size-3.5" /> {t('dash.classic')}
                             </Link>
                         )}
                     </nav>
                 )}
 
-                <RangeBar range={range} presets={range_presets} path={path} />
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <RangeBar
+                        range={range}
+                        presets={range_presets}
+                        path={path}
+                        keep={brand.selected === null ? {} : { brand: String(brand.selected) }}
+                    />
+                    <BrandBar brands={brand.options} selected={brand.selected} path={path} rangeQuery={range.query} />
+                </div>
 
                 {range_error && (
                     <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm">
-                        <AlertTriangle className="size-4 text-amber-600" /> {range_error} Showing {range.label.toLowerCase()} instead.
+                        <AlertTriangle className="size-4 text-amber-600" /> {range_error}{' '}
+                        {t('dash.range_error_instead', { range: rangeLabel.toLowerCase() })}
                     </div>
                 )}
 
                 {widgets.length === 0 ? (
                     <p className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-                        {hidden_widgets.length > 0
-                            ? 'Every widget is hidden. Use Customise to show them again.'
-                            : 'Nothing to show on this dashboard for your role yet.'}
+                        {hidden_widgets.length > 0 ? t('dash.all_hidden') : t('dash.nothing_for_role')}
                     </p>
                 ) : (
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -180,6 +195,7 @@ export default function RoleDashboard(props: Props) {
                                 entry={entries[widget.key] ?? { result: widget.result, fetchedAt: now, loading: false, stale: false }}
                                 index={index}
                                 now={now}
+                                brandName={brandName}
                                 onRefresh={() => refresh([widget.key])}
                                 onHide={() => saveLayout(allKeys, [...hiddenKeys, widget.key])}
                             />
@@ -201,7 +217,11 @@ function CustomisePopover({
     hidden: { key: string; title: string }[];
     onSave: (order: string[], hidden: string[]) => void;
 }) {
-    const initial = [...widgets.map((w) => ({ key: w.key, title: w.title, shown: true })), ...hidden.map((w) => ({ ...w, shown: false }))];
+    const { t, tr } = useTranslation();
+    const initial = [
+        ...widgets.map((w) => ({ key: w.key, title: tr(`widget.${w.key}.title`, w.title), shown: true })),
+        ...hidden.map((w) => ({ ...w, title: tr(`widget.${w.key}.title`, w.title), shown: false })),
+    ];
     const [rows, setRows] = useState(initial);
     const [open, setOpen] = useState(false);
 
@@ -225,11 +245,11 @@ function CustomisePopover({
         >
             <PopoverTrigger asChild>
                 <Button size="sm" variant="outline" className="h-8">
-                    Customise
+                    {t('dash.customise')}
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-80" align="end">
-                <p className="mb-2 text-sm font-medium">Your widgets</p>
+                <p className="mb-2 text-sm font-medium">{t('dash.your_widgets')}</p>
                 <ul className="max-h-80 space-y-1 overflow-y-auto">
                     {rows.map((row, index) => (
                         <li key={row.key} className="flex items-center gap-2 text-sm">
@@ -245,7 +265,7 @@ function CustomisePopover({
                                 type="button"
                                 className="hover:bg-accent rounded p-1"
                                 onClick={() => move(index, -1)}
-                                aria-label={`Move ${row.title} up`}
+                                aria-label={t('dash.move_up', { name: row.title })}
                             >
                                 <ArrowUp className="size-3.5" />
                             </button>
@@ -253,17 +273,17 @@ function CustomisePopover({
                                 type="button"
                                 className="hover:bg-accent rounded p-1"
                                 onClick={() => move(index, 1)}
-                                aria-label={`Move ${row.title} down`}
+                                aria-label={t('dash.move_down', { name: row.title })}
                             >
                                 <ArrowDown className="size-3.5" />
                             </button>
                         </li>
                     ))}
                 </ul>
-                <p className="text-muted-foreground mt-2 text-xs">Hiding a widget only tidies your page; it changes nobody's access.</p>
+                <p className="text-muted-foreground mt-2 text-xs">{t('dash.hiding_note')}</p>
                 <div className="mt-3 flex justify-end gap-2">
                     <Button size="sm" variant="ghost" onClick={() => onSave([], [])}>
-                        Reset
+                        {t('dash.reset')}
                     </Button>
                     <Button
                         size="sm"
@@ -275,7 +295,7 @@ function CustomisePopover({
                             setOpen(false);
                         }}
                     >
-                        Save
+                        {t('dash.save')}
                     </Button>
                 </div>
             </PopoverContent>

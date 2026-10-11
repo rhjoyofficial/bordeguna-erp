@@ -280,6 +280,52 @@ it('bills a corrected price with the price trail, for someone who may change pri
         ->and(PartyAdjustment::query()->count())->toBe(0);
 });
 
+it('holds a Manager price correction above the cap for the Owner, and bills the corrected price on approval', function () {
+    $consignment = ($this->parcel)();
+    $lineId = $consignment->delivery->lines()->first()->id;
+
+    // 850 -> 790 on two units is Tk 120 off 1,700 of goods: above a Manager's 3% (51).
+    ($this->report)($this->manager, $consignment, 'delivered', '1700', [
+        'resolution' => 'price_correction',
+        'door_reason' => 'Agreed 790 on the phone',
+        'prices' => [['delivery_line_id' => $lineId, 'unit_price' => '790']],
+    ])->assertSessionHasNoErrors();
+
+    $request = CourierDoorDiscountRequest::query()->sole();
+
+    expect($consignment->fresh()->status)->toBe(ConsignmentStatus::Booked)
+        ->and(SalesInvoice::query()->count())->toBe(0)
+        ->and((float) $request->discount_amount)->toBe(120.0)
+        ->and($request->payload['resolution'])->toBe('price_correction');
+
+    $this->actingAs($this->owner)->post("/sales/courier-door-discounts/{$request->id}/approve")->assertSessionHasNoErrors();
+
+    $invoice = SalesInvoice::query()->with('lines')->sole();
+    $goods = $invoice->lines->firstWhere('delivery_line_id', $lineId);
+
+    expect($consignment->fresh()->status)->toBe(ConsignmentStatus::Delivered)
+        ->and($consignment->fresh()->door_resolution)->toBe(DoorResolution::PriceCorrection)
+        ->and((float) $goods->unit_price)->toBe(790.0)
+        ->and((float) $goods->list_price)->toBe(850.0)
+        ->and((float) $invoice->total)->toBe(1700.0)
+        ->and($invoice->outstanding()->minor)->toBe(0)
+        ->and($request->fresh()->applied_at)->not->toBeNull();
+});
+
+it('lets the Owner correct a price beyond any cap directly', function () {
+    $consignment = ($this->parcel)();
+    $lineId = $consignment->delivery->lines()->first()->id;
+
+    ($this->report)($this->owner, $consignment, 'delivered', '1700', [
+        'resolution' => 'price_correction',
+        'door_reason' => 'Owner agreed 790',
+        'prices' => [['delivery_line_id' => $lineId, 'unit_price' => '790']],
+    ])->assertSessionHasNoErrors();
+
+    expect(CourierDoorDiscountRequest::query()->count())->toBe(0)
+        ->and($consignment->fresh()->status)->toBe(ConsignmentStatus::Delivered);
+});
+
 it('refuses a corrected price that still does not match what was collected', function () {
     $consignment = ($this->parcel)();
     $lineId = $consignment->delivery->lines()->first()->id;

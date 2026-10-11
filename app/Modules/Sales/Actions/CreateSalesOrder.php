@@ -7,6 +7,7 @@ use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Actions\NotifyApprovers;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\ProductWeight;
@@ -44,7 +45,13 @@ class CreateSalesOrder
     ) {}
 
     /**
-     * @param  array<int, array{product: Product, quantity: string, unit_price?: string|null, discount?: string|null, bundle_label?: string|null}>  $lines
+     * @param  array<int, array{product: Product, quantity: string, unit_price?: string|null, discount?: string|null, bundle_label?: string|null, price_note?: string|null}>  $lines
+     * @param  bool  $selfApprove  false = always left waiting for approval, even
+     *                             for a holder of `sales.orders.approve` (the
+     *                             shop order import approves afterwards, through
+     *                             ApproveSalesOrder, only when asked to)
+     * @param  bool  $notifyApprovers  false = the caller sends one notice for a
+     *                                 whole batch instead of one per order
      *
      * @throws ValidationException
      * @throws NoSellingPriceException
@@ -59,6 +66,9 @@ class CreateSalesOrder
         ?string $note = null,
         ?SalesOrderOrigin $origin = null,
         ?int $weightGrams = null,
+        ?int $brandId = null,
+        bool $selfApprove = true,
+        bool $notifyApprovers = true,
     ): SalesOrder {
         // ⚠ Deliberately NOT EffectiveDate::resolve - that helper asserts the
         // accounting period is open, which guards events that post. An order
@@ -82,6 +92,23 @@ class CreateSalesOrder
             throw ValidationException::withMessages([
                 'warehouse_id' => 'That warehouse is no longer active.',
             ]);
+        }
+
+        // ⭐ Joy, 11 Oct 2026: the order carries its brand. Typed on the form,
+        // else the shop's own. ⚠ A brand of this business and still in use,
+        // never one a browser named from somewhere else.
+        $brandId ??= $origin?->brandId;
+
+        if ($brandId !== null) {
+            $brand = Brand::query()->withoutGlobalScopes()->where('business_id', $customer->business_id)->whereKey($brandId)->first();
+
+            if ($brand === null) {
+                throw ValidationException::withMessages(['brand_id' => 'That brand belongs to a different business.']);
+            }
+
+            if (! $brand->is_active) {
+                throw ValidationException::withMessages(['brand_id' => "{$brand->name} is no longer in use."]);
+            }
         }
 
         $lines = array_values(array_filter($lines, fn (array $entry) => (float) $entry['quantity'] > 0));
@@ -119,7 +146,7 @@ class CreateSalesOrder
             ]);
         }
 
-        $order = DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $expectedDate, $note, $origin, $weightGrams) {
+        $order = DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $expectedDate, $note, $origin, $weightGrams, $brandId, $selfApprove) {
             $order = SalesOrder::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
@@ -129,6 +156,7 @@ class CreateSalesOrder
                 // columns. See SalesChannel and SalesOrderOrigin.
                 'store_id' => $origin?->storeId,
                 'channel' => $origin?->channel,
+                'brand_id' => $brandId,
                 'order_number' => $this->nextNumber($customer->business_id, $date),
                 'shop_reference' => $origin?->shopReference,
                 'ordered_at' => $date->toDateString(),
@@ -174,7 +202,8 @@ class CreateSalesOrder
 
                 if ($override !== null) {
                     $unitPrice = $override;
-                    $priceNote = 'Manual override';
+                    // ⚠ Still marked as an override; an importer says where it came from.
+                    $priceNote = ($entry['price_note'] ?? null) ?: 'Manual override';
                 } else {
                     // ⭐⭐ PRICED AS THE CHANNEL WHEN THE CHANNEL IS A PRICE
                     // GROUP, which is the whole content of ADR-005. A website
@@ -265,7 +294,7 @@ class CreateSalesOrder
                 // credit rules apply here too (21 Sep 2026): an order they refuse
                 // is saved but left pending, for an Owner to decide with a reason.
                 // Without this a manager's own order would skip the check.
-                if ($createdBy->can('sales.orders.approve') && app(CheckCustomerCredit::class)->refusalFor($order) === null) {
+                if ($selfApprove && $createdBy->can('sales.orders.approve') && app(CheckCustomerCredit::class)->refusalFor($order) === null) {
                     $order->approvalRequest->approve($createdBy);
                 }
             }
@@ -275,7 +304,7 @@ class CreateSalesOrder
 
         // Only notify when it actually needs review - a self-approved order
         // does not. Outside the transaction, same as CreatePurchaseOrder.
-        if ($order->approvalRequest?->isPending()) {
+        if ($notifyApprovers && $order->approvalRequest?->isPending()) {
             app(NotifyApprovers::class)->handle(
                 businessId: $order->business_id,
                 permission: 'sales.orders.approve',

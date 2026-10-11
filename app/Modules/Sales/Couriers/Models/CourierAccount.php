@@ -8,6 +8,7 @@ use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -282,11 +283,29 @@ class CourierAccount extends Model
         return is_string($value) && $value !== '' ? $value : null;
     }
 
-    /** The money accounts and stores this account serves, by business. */
-    public function linkFor(int $businessId): ?CourierAccountBusiness
+    /**
+     * Every link of this account in one business: one per brand it serves, and
+     * at most one for any brand (Joy, 11 Oct 2026).
+     *
+     * @return Collection<int, CourierAccountBusiness>
+     */
+    public function linksFor(int $businessId): Collection
     {
         return CourierAccountBusiness::query()->withoutGlobalScopes()
-            ->where('courier_account_id', $this->id)->where('business_id', $businessId)->first();
+            ->where('courier_account_id', $this->id)->where('business_id', $businessId)
+            ->orderByRaw('brand_id IS NULL')->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * The link that serves an order of this brand in this business: the
+     * brand's own link, else the any-brand one. With no brand given (an order
+     * from before brands were recorded): the any-brand link, else the only
+     * link there is. Null when none serves it.
+     */
+    public function linkFor(int $businessId, ?int $brandId = null): ?CourierAccountBusiness
+    {
+        return CourierAccountBusiness::serving($this->linksFor($businessId), $brandId);
     }
 
     public function webhookUrl(): string

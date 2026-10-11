@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Support\Dashboards\DashboardAccess;
+use App\Support\Dashboards\DashboardBrand;
 use App\Support\Dashboards\DashboardKey;
 use App\Support\Dashboards\DateRange;
 use App\Support\Dashboards\WidgetContext;
@@ -41,7 +42,8 @@ class DashboardWidgetController extends Controller
         );
 
         $range = DateRange::fromQuery($request->query());
-        $widgetContext = new WidgetContext($user, (int) $context->id(), $range, $key);
+        $businessId = (int) $context->id();
+        $widgetContext = new WidgetContext($user, $businessId, $range, $key, DashboardBrand::fromQuery($request->query('brand'), $businessId));
 
         return response()->json($registry->resolve($found, $widgetContext))
             ->header('Cache-Control', 'private, no-store');

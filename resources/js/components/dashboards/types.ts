@@ -1,3 +1,4 @@
+import type { AttentionItemData } from '@/components/attention/attention-list';
 /**
  * The role dashboards' payload shapes. Mirrors App\Support\Dashboards\Widget:
  * every widget returns one of these kinds. Money is taka as a number (computed
@@ -100,7 +101,24 @@ export interface EmptyPayload extends Common {
     message: string;
 }
 
-export type WidgetPayload = StatPayload | SeriesPayload | BreakdownPayload | ListPayload | SignalsPayload | ProgressPayload | EmptyPayload;
+/** Needs attention's top items (NeedsAttentionWidget), shown with the page's own rows. */
+export interface AttentionPayload extends Common {
+    kind: 'attention';
+    items: AttentionItemData[];
+    total_count: number;
+    counts: Record<'critical' | 'high' | 'normal', number>;
+    failed: { key: string; area: string }[];
+}
+
+export type WidgetPayload =
+    | StatPayload
+    | SeriesPayload
+    | BreakdownPayload
+    | ListPayload
+    | SignalsPayload
+    | ProgressPayload
+    | AttentionPayload
+    | EmptyPayload;
 
 export interface WidgetResult {
     key: string;
@@ -126,6 +144,8 @@ export interface WidgetMeta {
     refresh_seconds: number;
     cache_seconds: number;
     date_basis: string | null;
+    // Joy, 11 Oct 2026: whether the figure follows the Brand switcher.
+    brand_aware?: boolean;
     drill_down: string | null;
     empty_text: string;
     refresh_on: string[];

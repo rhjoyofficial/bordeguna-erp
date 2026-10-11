@@ -11,6 +11,7 @@ import {
     Palette,
     Printer,
     Send,
+    ServerCrash,
     ShieldCheck,
     Truck,
     User,
@@ -49,6 +50,8 @@ export interface SettingsAccess {
     canProposeRateCards?: boolean;
     /** dashboard.view_all - DashboardAssignmentController. */
     canConfigureDashboards?: boolean;
+    /** system.jobs.manage - FailedJobController (route middleware). */
+    canManageJobs?: boolean;
 }
 
 export interface SettingsSection {
@@ -120,6 +123,8 @@ export function settingsSections(access: SettingsAccess): SettingsSection[] {
                 ...(access.canManageCourierSettings ? [{ title: 'Courier locations', url: '/settings/couriers/locations', icon: MapPin }] : []),
                 // What each courier charges, by version (slice 5). Managers propose, the Owner approves.
                 ...(access.canProposeRateCards ? [{ title: 'Courier rate cards', url: '/settings/couriers/rate-cards', icon: Calculator }] : []),
+                // Background jobs that failed (11 Oct 2026). System-wide, Owner only.
+                ...(access.canManageJobs ? [{ title: 'Failed jobs', url: '/settings/failed-jobs', icon: ServerCrash }] : []),
             ],
         },
     ];

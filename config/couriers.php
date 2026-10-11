@@ -66,4 +66,11 @@ return [
     // a minimum candidate threshold, not proof).
     'min_samples' => 10,
 
+    // Bulk booking (Joy, 11 Oct 2026): the pause between two booking calls,
+    // so a hundred parcels never arrive at a courier as one burst.
+    'bulk_pace_ms' => (int) env('COURIER_BULK_PACE_MS', 300),
+
+    // How many orders one press of "Create challans and book" may carry.
+    'bulk_max_orders' => 200,
+
 ];

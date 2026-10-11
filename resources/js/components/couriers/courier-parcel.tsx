@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useTranslation } from '@/lib/i18n';
 import { Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useState } from 'react';
 
@@ -24,6 +25,12 @@ export interface CourierAccountOption {
     provider_name: string;
     environment: string;
     store_name: string | null;
+    // ⭐ Joy, 11 Oct 2026: which brand's parcels the account carries here (null =
+    // any), whether it serves THIS order's brand, and why not when it does not.
+    serves_brand: string | null;
+    available: boolean;
+    unavailable_reason: string | null;
+    preselected: boolean;
     delivery_types: CourierChoice[];
     item_types: CourierChoice[];
     default_delivery_type: string;
@@ -136,6 +143,7 @@ function LiveFeeEstimate({
     cod: string;
     deliveryType: string;
 }) {
+    const { t, tr } = useTranslation();
     const [estimate, setEstimate] = useState<FeeEstimatePayload | null>(null);
     const [loading, setLoading] = useState(false);
     const [failed, setFailed] = useState(false);
@@ -184,42 +192,41 @@ function LiveFeeEstimate({
     }, [challanId, accountId, weight, cod, deliveryType]);
 
     if (failed) {
-        return <p className="text-muted-foreground text-xs">The courier charge could not be worked out just now.</p>;
+        return <p className="text-muted-foreground text-xs">{t('parcel.estimate_failed')}</p>;
     }
 
     if (estimate === null) {
-        return loading ? <p className="text-muted-foreground text-xs">Working out the courier charge...</p> : null;
+        return loading ? <p className="text-muted-foreground text-xs">{t('parcel.estimate_working')}</p> : null;
     }
 
     return (
         <div className={`rounded-md border p-2 text-xs ${confidenceClass[estimate.confidence]}`} aria-live="polite">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span className="font-medium">
-                    {estimate.sufficient && estimate.total !== null ? `Courier charge about Tk ${taka(estimate.total)}` : 'Insufficient data'}
+                    {estimate.sufficient && estimate.total !== null
+                        ? t('parcel.estimate_about', { amount: taka(estimate.total) })
+                        : t('parcel.estimate_insufficient')}
                 </span>
                 {estimate.sufficient && (
                     <span className="text-muted-foreground">
-                        delivery {taka(estimate.delivery_fee ?? 0)}, COD fee {taka(estimate.cod_fee ?? 0)}
+                        {t('parcel.estimate_parts', {
+                            delivery: taka(estimate.delivery_fee ?? 0),
+                            cod: taka(estimate.cod_fee ?? 0),
+                        })}
                     </span>
                 )}
-                <Badge variant="outline">Confidence: {estimate.confidence_label}</Badge>
-                {loading && <span className="text-muted-foreground">updating...</span>}
+                <Badge variant="outline">
+                    {t('parcel.estimate_confidence', { label: tr(`parcel.confidence.${estimate.confidence}`, estimate.confidence_label) })}
+                </Badge>
+                {loading && <span className="text-muted-foreground">{t('parcel.estimate_updating')}</span>}
             </div>
             <p className="text-muted-foreground mt-1">{estimate.basis}</p>
             {estimate.return_fee_scenario !== null && (
-                <p className="text-muted-foreground mt-1">
-                    If it comes back, a return fee of about Tk {taka(estimate.return_fee_scenario)} may apply (not included).
-                </p>
+                <p className="text-muted-foreground mt-1">{t('parcel.estimate_return_fee', { amount: taka(estimate.return_fee_scenario) })}</p>
             )}
         </div>
     );
 }
-
-const sourceLabel: Record<CourierEvent['source'], string> = {
-    webhook: 'courier',
-    poll: 'asked',
-    booking: 'ERP',
-};
 
 function selectClass() {
     return 'border-input bg-background h-9 rounded-md border px-2 text-sm';
@@ -239,7 +246,11 @@ export function ApiBookParcelForm({
     weightSuggested: number | null;
     missingWeight: number;
 }) {
-    const first = accounts[0];
+    const { t } = useTranslation();
+    // The server ranks them: the brand's own default, its own link, the any-brand
+    // default. An account kept for another brand is never chosen for the person.
+    const first = accounts.find((a) => a.preselected) ?? accounts.find((a) => a.available);
+    const refused = accounts.filter((a) => !a.available);
     const { data, setData, post, errors, processing } = useForm({
         courier_account_id: first ? String(first.id) : '',
         cod_amount: draft.cod_whole === null ? '' : String(draft.cod_whole),
@@ -275,7 +286,7 @@ export function ApiBookParcelForm({
             <div className="flex flex-wrap items-end gap-3">
                 <div className="grid gap-1">
                     <Label htmlFor={`api-account-${challanId}`} required>
-                        Courier account
+                        {t('parcel.courier_account')}
                     </Label>
                     <select
                         id={`api-account-${challanId}`}
@@ -284,17 +295,24 @@ export function ApiBookParcelForm({
                         onChange={(e) => pickAccount(e.target.value)}
                     >
                         {accounts.map((a) => (
-                            <option key={a.id} value={a.id}>
+                            <option key={a.id} value={a.id} disabled={!a.available}>
                                 {a.provider_name}: {a.label}
-                                {a.environment === 'sandbox' ? ' (sandbox)' : ''}
+                                {a.serves_brand ? ` (${a.serves_brand})` : ''}
+                                {a.environment === 'sandbox' ? t('parcel.sandbox') : ''}
+                                {a.available ? '' : t('parcel.not_for_this_order')}
                             </option>
                         ))}
                     </select>
                     <InputError message={errors.courier_account_id} />
+                    {refused.map((a) => (
+                        <p key={a.id} className="text-muted-foreground max-w-80 text-xs">
+                            {a.unavailable_reason}
+                        </p>
+                    ))}
                 </div>
                 <div className="grid gap-1">
                     <Label htmlFor={`api-cod-${challanId}`} required>
-                        Amount to collect (whole taka)
+                        {t('parcel.amount_to_collect')}
                     </Label>
                     <Input
                         id={`api-cod-${challanId}`}
@@ -302,12 +320,12 @@ export function ApiBookParcelForm({
                         inputMode="numeric"
                         value={data.cod_amount}
                         onChange={(e) => setData('cod_amount', e.target.value)}
-                        placeholder="0 if already paid"
+                        placeholder={t('parcel.zero_if_paid')}
                     />
                     <InputError message={errors.cod_amount} />
                 </div>
                 <div className="grid gap-1">
-                    <Label htmlFor={`api-weight-${challanId}`}>Weight (g)</Label>
+                    <Label htmlFor={`api-weight-${challanId}`}>{t('parcel.weight_g')}</Label>
                     <Input
                         id={`api-weight-${challanId}`}
                         type="number"
@@ -323,7 +341,7 @@ export function ApiBookParcelForm({
                 </div>
                 {account && account.delivery_types.length > 0 && (
                     <div className="grid gap-1">
-                        <Label htmlFor={`api-delivery-${challanId}`}>Delivery type</Label>
+                        <Label htmlFor={`api-delivery-${challanId}`}>{t('parcel.delivery_type')}</Label>
                         <select
                             id={`api-delivery-${challanId}`}
                             className={selectClass()}
@@ -341,7 +359,7 @@ export function ApiBookParcelForm({
                 )}
                 {account && account.item_types.length > 0 && (
                     <div className="grid gap-1">
-                        <Label htmlFor={`api-item-${challanId}`}>Item type</Label>
+                        <Label htmlFor={`api-item-${challanId}`}>{t('parcel.item_type')}</Label>
                         <select
                             id={`api-item-${challanId}`}
                             className={selectClass()}
@@ -360,7 +378,7 @@ export function ApiBookParcelForm({
             </div>
             <div className="flex flex-wrap items-end gap-3">
                 <div className="grid min-w-64 flex-1 gap-1">
-                    <Label htmlFor={`api-desc-${challanId}`}>What is inside</Label>
+                    <Label htmlFor={`api-desc-${challanId}`}>{t('parcel.what_inside')}</Label>
                     <Input
                         id={`api-desc-${challanId}`}
                         maxLength={250}
@@ -370,11 +388,11 @@ export function ApiBookParcelForm({
                     <InputError message={errors.description} />
                 </div>
                 <div className="grid min-w-64 flex-1 gap-1">
-                    <Label htmlFor={`api-note-${challanId}`}>Note for the rider</Label>
+                    <Label htmlFor={`api-note-${challanId}`}>{t('parcel.rider_note')}</Label>
                     <Input
                         id={`api-note-${challanId}`}
                         maxLength={250}
-                        placeholder="Optional"
+                        placeholder={t('parcel.optional')}
                         value={data.special_instruction}
                         onChange={(e) => setData('special_instruction', e.target.value)}
                     />
@@ -383,13 +401,13 @@ export function ApiBookParcelForm({
             </div>
 
             <div className="text-xs">
-                {account?.store_name && <p className="text-muted-foreground">Picked up from {account.store_name}.</p>}
-                {destination?.resolved && <p className="text-muted-foreground">Goes to {destination.where} on the courier&apos;s list.</p>}
+                {account?.store_name && <p className="text-muted-foreground">{t('parcel.picked_up_from', { store: account.store_name })}</p>}
+                {destination?.resolved && <p className="text-muted-foreground">{t('parcel.goes_to', { where: destination.where ?? '' })}</p>}
                 {destination && !destination.resolved && destination.message && (
                     <p className="text-amber-700 dark:text-amber-400">
                         {destination.message}{' '}
                         <Link href={route('couriers.settings.locations.index')} className="underline">
-                            Open Locations
+                            {t('parcel.open_locations')}
                         </Link>
                     </p>
                 )}
@@ -400,10 +418,10 @@ export function ApiBookParcelForm({
                 ))}
                 {draft.due_has_paisa && (
                     <p className="text-amber-700 dark:text-amber-400">
-                        This challan bills {draft.due}. Couriers collect whole taka, so {draft.cod_whole} is offered (rounded up, never down).
+                        {t('parcel.paisa_rounded', { due: draft.due ?? '', whole: draft.cod_whole ?? '' })}
                     </p>
                 )}
-                {missingWeight > 0 && <p className="text-amber-700 dark:text-amber-400">Some items have no weight. Weigh the parcel and type it.</p>}
+                {missingWeight > 0 && <p className="text-amber-700 dark:text-amber-400">{t('parcel.missing_weight')}</p>}
                 {['destination', 'recipient_phone', 'recipient_name', 'address', 'order'].map((key) =>
                     allErrors[key] ? <InputError key={key} message={allErrors[key]} /> : null,
                 )}
@@ -419,7 +437,7 @@ export function ApiBookParcelForm({
 
             <div>
                 <Button size="sm" disabled={processing || blocked}>
-                    {processing ? 'Booking...' : `Book with ${account?.provider_name ?? 'the courier'}`}
+                    {processing ? t('parcel.booking') : t('parcel.book_with', { courier: account?.provider_name ?? t('parcel.the_courier') })}
                 </Button>
             </div>
         </form>
@@ -431,6 +449,7 @@ export function ApiBookParcelForm({
  * courier for our reference (CarryBee), or a person says what the panel shows.
  */
 export function SettleBookingPanel({ booking, canBook }: { booking: CourierBooking; canBook: boolean }) {
+    const { t } = useTranslation();
     const [number, setNumber] = useState('');
     const [busy, setBusy] = useState(false);
     const post = (name: string, payload: Record<string, string> = {}) => {
@@ -441,34 +460,36 @@ export function SettleBookingPanel({ booking, canBook }: { booking: CourierBooki
     if (booking.status === 'failed') {
         return (
             <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
-                Last booking with {booking.provider_name} was refused: {booking.error}
+                {t('parcel.booking_refused', { courier: booking.provider_name, error: booking.error ?? '' })}
             </p>
         );
     }
 
     if (!booking.needs_decision) {
-        return <p className="text-muted-foreground mt-2 text-xs">A booking with {booking.provider_name} is on its way. Reload in a moment.</p>;
+        return <p className="text-muted-foreground mt-2 text-xs">{t('parcel.booking_on_way', { courier: booking.provider_name })}</p>;
     }
 
     return (
         <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs dark:border-amber-800 dark:bg-amber-950/40">
             <p className="font-medium">
-                {booking.provider_name} gave no clear answer to the booking of {booking.merchant_order_id} ({booking.at}).
+                {t('parcel.no_clear_answer', { courier: booking.provider_name, order: booking.merchant_order_id, at: booking.at ?? '' })}
             </p>
             <p className="text-muted-foreground mt-1">
-                The parcel may or may not exist there, so the ERP will not send it again by itself.
+                {t('parcel.may_not_exist')}
                 {booking.error ? ` ${booking.error}` : ''}
             </p>
             {canBook && (
                 <div className="mt-2 flex flex-wrap items-end gap-2">
                     {booking.can_look_up ? (
                         <Button size="sm" variant="outline" disabled={busy} onClick={() => post('sales.courier-bookings.look-up')}>
-                            Check at {booking.provider_name}
+                            {t('parcel.check_at', { courier: booking.provider_name })}
                         </Button>
                     ) : (
                         <>
                             <div className="grid gap-1">
-                                <Label htmlFor={`settle-number-${booking.id}`}>Number in the {booking.provider_name} panel</Label>
+                                <Label htmlFor={`settle-number-${booking.id}`}>
+                                    {t('parcel.number_in_panel', { courier: booking.provider_name })}
+                                </Label>
                                 <Input
                                     id={`settle-number-${booking.id}`}
                                     className="w-48"
@@ -481,18 +502,21 @@ export function SettleBookingPanel({ booking, canBook }: { booking: CourierBooki
                                 disabled={busy || number.trim() === ''}
                                 onClick={() => post('sales.courier-bookings.booked', { consignment_number: number })}
                             >
-                                It was booked
+                                {t('parcel.it_was_booked')}
                             </Button>
                             {booking.provider_consignment_id === null && (
                                 <ConfirmDialog
                                     trigger={
                                         <Button size="sm" variant="outline" disabled={busy}>
-                                            It was not booked
+                                            {t('parcel.it_was_not_booked')}
                                         </Button>
                                     }
-                                    title="Not booked?"
-                                    description={`Only if ${booking.merchant_order_id} is NOT in the ${booking.provider_name} panel. The challan can then be booked again.`}
-                                    confirmLabel="It was not booked"
+                                    title={t('parcel.not_booked_title')}
+                                    description={t('parcel.not_booked_description', {
+                                        order: booking.merchant_order_id,
+                                        courier: booking.provider_name,
+                                    })}
+                                    confirmLabel={t('parcel.it_was_not_booked')}
                                     onConfirm={() => post('sales.courier-bookings.not-booked')}
                                 />
                             )}
@@ -506,6 +530,7 @@ export function SettleBookingPanel({ booking, canBook }: { booking: CourierBooki
 
 /** What the courier says about a parcel, its fees, and its timeline. */
 export function CourierStatusPanel({ consignmentId, info, canBook }: { consignmentId: number; info: CourierInfo; canBook: boolean }) {
+    const { t, tr } = useTranslation();
     const [busy, setBusy] = useState(false);
     const [open, setOpen] = useState(false);
 
@@ -523,53 +548,57 @@ export function CourierStatusPanel({ consignmentId, info, canBook }: { consignme
     return (
         <div className="mt-2 text-xs">
             <div className="flex flex-wrap items-center gap-2">
-                <span className="text-muted-foreground">Courier says:</span>
-                <Badge variant="outline">{info.courier_status_label ?? 'No word yet'}</Badge>
+                <span className="text-muted-foreground">{t('parcel.courier_says')}</span>
+                <Badge variant="outline">
+                    {info.courier_status_label !== null
+                        ? tr(`courier_status.${info.courier_status ?? ''}`, info.courier_status_label)
+                        : t('parcel.no_word_yet')}
+                </Badge>
                 {info.courier_status_raw && <span className="text-muted-foreground">({info.courier_status_raw})</span>}
                 <span className="text-muted-foreground">
-                    {info.status_synced_at ? `last heard ${info.status_synced_at}` : 'not asked yet'}
-                    {info.provider_fee_quoted !== null && `, delivery fee ${info.provider_fee_quoted}`}
-                    {info.provider_cod_fee_quoted !== null && `, COD fee ${info.provider_cod_fee_quoted}`}
-                    {info.hub_weight_grams !== null && `, hub weight ${info.hub_weight_grams.toLocaleString('en-IN')} g`}
-                    {info.courier_invoice_ref && `, courier invoice ${info.courier_invoice_ref}`}
+                    {info.status_synced_at ? t('parcel.last_heard', { at: info.status_synced_at }) : t('parcel.not_asked_yet')}
+                    {info.provider_fee_quoted !== null && t('parcel.delivery_fee_part', { amount: info.provider_fee_quoted })}
+                    {info.provider_cod_fee_quoted !== null && t('parcel.cod_fee_part', { amount: info.provider_cod_fee_quoted })}
+                    {info.hub_weight_grams !== null && t('parcel.hub_weight_part', { grams: info.hub_weight_grams.toLocaleString('en-IN') })}
+                    {info.courier_invoice_ref && t('parcel.courier_invoice_part', { ref: info.courier_invoice_ref })}
                 </span>
                 {info.can_refresh && (
                     <Button size="sm" variant="ghost" className="h-7 px-2" disabled={busy} onClick={refresh}>
-                        {busy ? 'Asking...' : 'Refresh status'}
+                        {busy ? t('parcel.asking') : t('parcel.refresh_status')}
                     </Button>
                 )}
                 {info.can_cancel && canBook && (
                     <ConfirmDialog
                         trigger={
                             <Button size="sm" variant="ghost" className="h-7 px-2 text-red-600">
-                                Cancel at the courier
+                                {t('parcel.cancel_at_courier')}
                             </Button>
                         }
-                        title="Cancel this parcel at the courier?"
-                        description="Only before pickup. Afterwards record it as returned so the goods go back to stock."
-                        confirmLabel="Cancel parcel"
+                        title={t('parcel.cancel_title')}
+                        description={t('parcel.cancel_description')}
+                        confirmLabel={t('parcel.cancel_parcel')}
                         destructive
                         withNote
                         noteRequired
-                        noteLabel="Why"
+                        noteLabel={t('parcel.why')}
                         onConfirm={cancel}
                     />
                 )}
                 {info.events.length > 0 && (
                     <button type="button" className="text-muted-foreground underline" onClick={() => setOpen((v) => !v)}>
-                        {open ? 'Hide timeline' : `Timeline (${info.events.length})`}
+                        {open ? t('parcel.hide_timeline') : t('parcel.timeline', { count: info.events.length })}
                     </button>
                 )}
             </div>
-            {info.fee_estimate && <p className="text-muted-foreground mt-1">ERP estimate kept at booking: {info.fee_estimate.basis}</p>}
+            {info.fee_estimate && <p className="text-muted-foreground mt-1">{t('parcel.estimate_kept', { basis: info.fee_estimate.basis })}</p>}
             {open && (
                 <ol className="border-sidebar-border/70 mt-2 ml-1 flex flex-col gap-1 border-l pl-3">
                     {info.events.map((event) => (
                         <li key={event.id} className={event.applied ? '' : 'text-muted-foreground'}>
                             <span className="tabular-nums">{event.occurred_at}</span> {event.status_label ?? event.raw_status ?? event.event}
-                            <span className="text-muted-foreground"> ({sourceLabel[event.source]}</span>
-                            {!event.applied && event.status_label && <span className="text-muted-foreground">, late, did not change the status</span>}
-                            {!event.status_label && <span className="text-muted-foreground">, no status change</span>}
+                            <span className="text-muted-foreground"> ({tr(`parcel.source.${event.source}`, event.source)}</span>
+                            {!event.applied && event.status_label && <span className="text-muted-foreground">{t('parcel.event_late')}</span>}
+                            {!event.status_label && <span className="text-muted-foreground">{t('parcel.event_no_change')}</span>}
                             <span className="text-muted-foreground">)</span>
                         </li>
                     ))}

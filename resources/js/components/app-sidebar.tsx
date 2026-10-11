@@ -60,6 +60,7 @@ import {
     Scale,
     ShieldCheck,
     ShoppingCart,
+    Siren,
     SlidersHorizontal,
     Store,
     Tag,
@@ -122,7 +123,10 @@ export function useNavGroups(): NavGroup[] {
         canManageCrmSettings,
         canManageCourierSettings,
         canProposeRateCards,
+        canBookParcels,
         canConfigureDashboards,
+        canManageJobs,
+        attentionCount,
         canViewAssets,
         canViewAssetItems,
         hasEmployeeProfile,
@@ -145,6 +149,7 @@ export function useNavGroups(): NavGroup[] {
         canManageCourierSettings,
         canProposeRateCards,
         canConfigureDashboards,
+        canManageJobs,
     });
 
     const navGroups: NavGroup[] = [
@@ -155,6 +160,8 @@ export function useNavGroups(): NavGroup[] {
                 // Module 1, Slice 3: the day on one page.
                 { title: 'My work', url: '/work', icon: ListChecks },
                 ...(canReviewApprovals ? [{ title: 'Approvals', url: '/approvals', icon: CheckSquare, badge: pendingApprovalsCount }] : []),
+                // Plan C.4: one ranked list of what is waiting on somebody.
+                { title: t('attention.title'), url: '/attention', icon: Siren, badge: attentionCount },
                 { title: 'Business health', url: '/health', icon: Activity },
             ],
         },
@@ -300,6 +307,9 @@ export function useNavGroups(): NavGroup[] {
                           ...(canViewSales ? [{ title: t('menu.deliveries'), url: '/sales/deliveries', icon: PackageCheck }] : []),
                           // Parcels out with couriers: where their answers are entered.
                           ...(canViewSales ? [{ title: 'Parcels', url: '/sales/consignments', icon: Truck }] : []),
+                          // Approved orders waiting for a courier, booked in one click (11 Oct 2026).
+                          // Route, screen and this line ship in one commit - the reachability rule.
+                          ...(canBookParcels ? [{ title: 'Parcels to book', url: '/sales/parcels-to-book', icon: PackageCheck }] : []),
                           ...(canViewSales ? [{ title: 'Invoices', url: '/sales/invoices', icon: FileText }] : []),
                           // ⭐ Money in, and the list of it (21 Sep 2026): before this a receipt
                           // could only be taken from one invoice's page, and never listed.

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\FailedJobController;
 use App\Http\Controllers\Settings\AiCredentialController;
 use App\Http\Controllers\Settings\DashboardAssignmentController;
 use App\Http\Controllers\Settings\PasswordController;
@@ -46,6 +47,15 @@ Route::middleware(['auth', 'business'])->group(function () {
     // dashboard.view_all, checked in the controller.
     Route::get('settings/dashboards', [DashboardAssignmentController::class, 'index'])->name('dashboard-assignments.index');
     Route::put('settings/dashboards', [DashboardAssignmentController::class, 'update'])->name('dashboard-assignments.update');
+
+    // Background jobs that failed (Owner, system.jobs.manage): read, retry,
+    // forget. System-wide: failed_jobs has no business.
+    Route::middleware('can:system.jobs.manage')->group(function () {
+        Route::get('settings/failed-jobs', [FailedJobController::class, 'index'])->name('failed-jobs.index');
+        Route::post('settings/failed-jobs/retry-all', [FailedJobController::class, 'retryAll'])->name('failed-jobs.retry-all');
+        Route::post('settings/failed-jobs/{uuid}/retry', [FailedJobController::class, 'retry'])->name('failed-jobs.retry');
+        Route::delete('settings/failed-jobs/{uuid}', [FailedJobController::class, 'forget'])->name('failed-jobs.forget');
+    });
 
     Route::get('settings/reasons', [ReasonController::class, 'index'])->name('reasons.index');
     Route::post('settings/reasons', [ReasonController::class, 'store'])->name('reasons.store');

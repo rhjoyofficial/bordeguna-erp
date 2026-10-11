@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { type TranslationKey, useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler, useMemo, useState } from 'react';
@@ -119,6 +120,8 @@ function signed(sign: '-' | '+', value: string): string {
 }
 
 function EquationRow({ label, equation }: { label: string; equation: Equation }) {
+    const { t } = useTranslation();
+
     return (
         <tr className="border-t">
             <td className="py-1 pr-3 font-medium">{label}</td>
@@ -131,36 +134,36 @@ function EquationRow({ label, equation }: { label: string; equation: Equation })
             <td className="py-1 pr-3 text-right font-medium tabular-nums">{equation.expected}</td>
             <td className="py-1 pr-3 text-right tabular-nums">{equation.payout}</td>
             <td className={`py-1 text-right tabular-nums ${equation.balanced ? 'text-muted-foreground' : 'text-destructive font-medium'}`}>
-                {equation.balanced ? 'adds up' : `differs by ${equation.difference}`}
+                {equation.balanced ? t('payouts.adds_up') : t('payouts.differs_by', { amount: equation.difference })}
             </td>
         </tr>
     );
 }
 
 function EquationPanel({ equations }: { equations: { file: Equation; share: Equation } }) {
+    const { t } = useTranslation();
+
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-3 text-sm">
-            <p className="text-muted-foreground mb-2">
-                Does it add up: collections - net fees - COD fees - extra charges + compensation + adjustment = payout
-            </p>
+            <p className="text-muted-foreground mb-2">{t('payouts.equation_intro')}</p>
             <table className="w-full text-xs">
                 <thead>
                     <tr className="text-muted-foreground text-left">
                         <th className="py-1 pr-3" />
-                        <th className="py-1 pr-3 text-right">Collected</th>
-                        <th className="py-1 pr-3 text-right">Net fees</th>
-                        <th className="py-1 pr-3 text-right">COD fees</th>
-                        <th className="py-1 pr-3 text-right">Extra</th>
-                        <th className="py-1 pr-3 text-right">Compensation</th>
-                        <th className="py-1 pr-3 text-right">Adjustment</th>
-                        <th className="py-1 pr-3 text-right">Should pay</th>
-                        <th className="py-1 pr-3 text-right">Payout column</th>
+                        <th className="py-1 pr-3 text-right">{t('payouts.col_collected')}</th>
+                        <th className="py-1 pr-3 text-right">{t('payouts.col_net_fees')}</th>
+                        <th className="py-1 pr-3 text-right">{t('payouts.col_cod_fees')}</th>
+                        <th className="py-1 pr-3 text-right">{t('payouts.col_extra')}</th>
+                        <th className="py-1 pr-3 text-right">{t('payouts.col_compensation')}</th>
+                        <th className="py-1 pr-3 text-right">{t('payouts.col_adjustment')}</th>
+                        <th className="py-1 pr-3 text-right">{t('payouts.col_should_pay')}</th>
+                        <th className="py-1 pr-3 text-right">{t('payouts.col_payout_column')}</th>
                         <th className="py-1 text-right" />
                     </tr>
                 </thead>
                 <tbody>
-                    <EquationRow label="Whole file" equation={equations.file} />
-                    <EquationRow label="This business" equation={equations.share} />
+                    <EquationRow label={t('payouts.whole_file')} equation={equations.file} />
+                    <EquationRow label={t('payouts.this_business')} equation={equations.share} />
                 </tbody>
             </table>
         </div>
@@ -171,14 +174,18 @@ const taka = (minor: number) => (minor / 100).toLocaleString('en-BD', { minimumF
 const minor = (value: string) => Math.round(parseFloat(value || '0') * 100);
 const nonZero = (value: string) => minor(value) !== 0;
 
-const stateLabel = (line: Line) => {
+const stateLabel = (line: Line, t: (key: TranslationKey) => string) => {
     if (line.state === 'ours') {
-        return `Ours${line.consignment_status ? `, ${line.consignment_status.toLowerCase()}` : ''}`;
+        return `${t('payouts.ours')}${line.consignment_status ? `, ${line.consignment_status.toLowerCase()}` : ''}`;
     }
     if (line.state === 'elsewhere') {
-        return 'Another business';
+        return t('payouts.another_business');
     }
-    return line.resolution === 'mine' ? 'Booked by hand, ours' : line.resolution === 'not_mine' ? 'Not ours' : 'Not in the ERP';
+    return line.resolution === 'mine'
+        ? t('payouts.booked_by_hand_ours')
+        : line.resolution === 'not_mine'
+          ? t('payouts.not_ours')
+          : t('payouts.not_in_erp');
 };
 
 const isDifference = (line: Line) => line.state === 'ours' && (line.problem !== null || line.note !== null);
@@ -206,8 +213,9 @@ export default function CourierStatementShow({
     journal: { journal_number: string; lines: JournalLine[] } | null;
     equations: { file: Equation; share: Equation };
 }) {
+    const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Courier payouts', href: '/sales/courier-statements' },
+        { title: t('payouts.title'), href: '/sales/courier-statements' },
         { title: statement.statement_reference, href: `/sales/courier-statements/${statement.id}` },
     ];
     const isDraft = statement.status === 'draft';
@@ -273,98 +281,102 @@ export default function CourierStatementShow({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Statement ${statement.statement_reference}`} />
+            <Head title={t('payouts.statement_title', { reference: statement.statement_reference })} />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <h2 className="text-lg font-medium">
-                            {statement.courier} statement {statement.statement_reference}
+                            {t('payouts.statement_heading', { courier: statement.courier ?? '', reference: statement.statement_reference })}
                         </h2>
                         <p className="text-muted-foreground text-sm">
-                            Dated {statement.statement_date}
-                            {statement.source_filename ? `, read from ${statement.source_filename}` : ''}
+                            {t('payouts.dated', { date: statement.statement_date })}
+                            {statement.source_filename ? t('payouts.read_from', { file: statement.source_filename }) : ''}
                             {statement.format ? ` (${statement.format})` : ''}
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         <Button variant="outline" size="sm" asChild>
-                            <a href={route('sales.courier-statements.workbook', statement.id)}>Exception workbook</a>
+                            <a href={route('sales.courier-statements.workbook', statement.id)}>{t('payouts.exception_workbook')}</a>
                         </Button>
                         {can_download_source && (
                             <Button variant="ghost" size="sm" asChild>
-                                <a href={route('sales.courier-statements.source', statement.id)}>Original file</a>
+                                <a href={route('sales.courier-statements.source', statement.id)}>{t('payouts.original_file')}</a>
                             </Button>
                         )}
-                        <Badge variant={isDraft ? 'secondary' : 'default'}>{isDraft ? 'Draft' : 'Posted'}</Badge>
+                        <Badge variant={isDraft ? 'secondary' : 'default'}>{isDraft ? t('payouts.draft') : t('payouts.posted')}</Badge>
                     </div>
                 </div>
 
                 <div className="grid gap-3 text-sm sm:grid-cols-3">
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3">
-                        <p className="text-muted-foreground">The whole payout</p>
+                        <p className="text-muted-foreground">{t('payouts.whole_payout')}</p>
                         <p className="text-lg font-medium tabular-nums">{summary.file_total}</p>
                         <p className="text-muted-foreground text-xs">
-                            {lines.length} parcels read
-                            {rowErrors.length > 0 ? `, ${rowErrors.length} ${rowErrors.length === 1 ? 'row' : 'rows'} could not be read` : ''}
+                            {t('payouts.parcels_read', { count: lines.length })}
+                            {rowErrors.length > 0
+                                ? t(rowErrors.length === 1 ? 'payouts.row_not_read' : 'payouts.rows_not_read', { count: rowErrors.length })
+                                : ''}
                         </p>
                     </div>
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3">
-                        <p className="text-muted-foreground">This business&apos;s share</p>
+                        <p className="text-muted-foreground">{t('payouts.col_share')}</p>
                         <p className="text-lg font-medium tabular-nums">{summary.share}</p>
                         <p className="text-muted-foreground text-xs">
-                            Collected {summary.collected}, less delivery {summary.delivery_fees} and returns {summary.return_fees} (net of the
-                            courier&apos;s discount), extra charges {summary.additional_charges} and COD fee {summary.cod_fees}
-                            {nonZero(summary.compensation) ? `, plus compensation ${summary.compensation}` : ''}
-                            {nonZero(summary.adjustment) ? `, adjustments ${summary.adjustment}` : ''}.
+                            {t('payouts.share_breakdown', {
+                                collected: summary.collected,
+                                delivery: summary.delivery_fees,
+                                returns: summary.return_fees,
+                                extra: summary.additional_charges,
+                                cod: summary.cod_fees,
+                            })}
+                            {nonZero(summary.compensation) ? t('payouts.plus_compensation', { amount: summary.compensation }) : ''}
+                            {nonZero(summary.adjustment) ? t('payouts.plus_adjustments', { amount: summary.adjustment }) : ''}.
                         </p>
                     </div>
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3">
-                        <p className="text-muted-foreground">Money</p>
+                        <p className="text-muted-foreground">{t('payouts.money')}</p>
                         {isDraft ? (
                             <>
-                                {summary.deposit_expected && (
-                                    <p className="text-xs">Nothing is in the books yet: record the payout below when it arrives.</p>
-                                )}
+                                {summary.deposit_expected && <p className="text-xs">{t('payouts.not_in_books_yet')}</p>}
                                 {!summary.deposit_expected && (
                                     <p className="text-xs">
-                                        This statement pays nothing out.{' '}
-                                        {shareMinor < 0
-                                            ? 'The shortfall is recorded as owed to the courier (Payable to Couriers).'
-                                            : 'The share stays with the courier.'}
+                                        {t('payouts.pays_nothing')} {shareMinor < 0 ? t('payouts.shortfall_recorded') : t('payouts.share_stays')}
                                     </p>
                                 )}
                                 {openPayable > 0 && (
                                     <p className="text-xs">
-                                        The books show {summary.open_payable} owed to {statement.courier} from earlier statements.
+                                        {t('payouts.books_show_owed', { amount: summary.open_payable, courier: statement.courier ?? '' })}
                                     </p>
                                 )}
                             </>
                         ) : statement.received_into ? (
                             <div className="text-sm">
                                 <p>
-                                    {statement.deposit_amount} arrived in {statement.received_into} on {statement.received_on}
-                                    {statement.bank_reference ? `, reference ${statement.bank_reference}` : ''}
+                                    {t('payouts.arrived_in', {
+                                        amount: statement.deposit_amount ?? '',
+                                        account: statement.received_into,
+                                        date: statement.received_on ?? '',
+                                    })}
+                                    {statement.bank_reference ? t('payouts.reference', { reference: statement.bank_reference }) : ''}
                                 </p>
                                 {statement.payable_settled_amount && (
                                     <p className="text-muted-foreground text-xs">
-                                        {statement.payable_settled_amount} of an earlier shortfall was netted off by the courier.
+                                        {t('payouts.netted_off', { amount: statement.payable_settled_amount })}
                                     </p>
                                 )}
                                 {statement.deposit_difference_reason && (
-                                    <p className="text-muted-foreground text-xs">Differed from the file: {statement.deposit_difference_reason}</p>
+                                    <p className="text-muted-foreground text-xs">
+                                        {t('payouts.differed_from_file')} {statement.deposit_difference_reason}
+                                    </p>
                                 )}
                                 {statement.proof && (
                                     <a href={statement.proof.url} className="text-xs underline underline-offset-4" target="_blank" rel="noreferrer">
-                                        Proof: {statement.proof.name}
+                                        {t('payouts.proof')} {statement.proof.name}
                                     </a>
                                 )}
                             </div>
                         ) : (
-                            <p className="text-sm">
-                                {shareMinor < 0
-                                    ? 'Nothing arrived; the shortfall is owed to the courier.'
-                                    : 'Nothing arrived; the share stays with the courier.'}
-                            </p>
+                            <p className="text-sm">{shareMinor < 0 ? t('payouts.nothing_arrived_shortfall') : t('payouts.nothing_arrived_share')}</p>
                         )}
                     </div>
                 </div>
@@ -375,7 +387,7 @@ export default function CourierStatementShow({
 
                 {isDraft && problems.length > 0 && (
                     <div className="border-destructive/50 bg-destructive/10 rounded-md border p-3 text-sm">
-                        <p className="font-medium">Before this can be posted</p>
+                        <p className="font-medium">{t('payouts.before_post')}</p>
                         <ul className="mt-1 list-disc pl-5">
                             {problems.map((problem) => (
                                 <li key={problem}>{problem}</li>
@@ -388,17 +400,17 @@ export default function CourierStatementShow({
                 {rowErrors.length > 0 && (
                     <div className="overflow-x-auto rounded-lg border">
                         <div className="flex flex-wrap items-center justify-between gap-2 p-3">
-                            <p className="font-medium">Rows the file could not be read on</p>
+                            <p className="font-medium">{t('payouts.unreadable_rows')}</p>
                             <Button variant="outline" size="sm" asChild>
-                                <a href={route('sales.courier-statements.errors', statement.id)}>Download error report</a>
+                                <a href={route('sales.courier-statements.errors', statement.id)}>{t('payouts.download_errors')}</a>
                             </Button>
                         </div>
                         <table className="w-full text-sm">
                             <thead className="bg-muted/50 text-left">
                                 <tr>
-                                    <th className="p-3">Row</th>
-                                    <th className="p-3">Consignment</th>
-                                    <th className="p-3">Problem</th>
+                                    <th className="p-3">{t('payouts.col_row')}</th>
+                                    <th className="p-3">{t('parcels.col_consignment')}</th>
+                                    <th className="p-3">{t('payouts.col_problem')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -417,10 +429,10 @@ export default function CourierStatementShow({
                 <div className="flex flex-wrap gap-2" role="tablist">
                     {(
                         [
-                            ['all', 'All'],
-                            ['matched', 'Matched'],
-                            ['differences', 'Differences'],
-                            ['unmatched', 'Not matched'],
+                            ['all', t('payouts.tab_all')],
+                            ['matched', t('payouts.tab_matched')],
+                            ['differences', t('payouts.tab_differences')],
+                            ['unmatched', t('payouts.tab_unmatched')],
                         ] as [Tab, string][]
                     ).map(([key, label]) => (
                         <Button
@@ -441,14 +453,14 @@ export default function CourierStatementShow({
                     <table className="w-full text-sm">
                         <thead className="bg-muted/50 text-left">
                             <tr>
-                                <th className="p-3">Consignment</th>
-                                <th className="p-3">Whose</th>
-                                <th className="p-3 text-right">Collected</th>
-                                <th className="p-3 text-right">Fee</th>
-                                <th className="p-3 text-right">Net fee</th>
-                                <th className="p-3 text-right">COD fee</th>
-                                <th className="p-3 text-right">Other</th>
-                                <th className="p-3 text-right">Payout</th>
+                                <th className="p-3">{t('parcels.col_consignment')}</th>
+                                <th className="p-3">{t('payouts.col_whose')}</th>
+                                <th className="p-3 text-right">{t('payouts.col_collected')}</th>
+                                <th className="p-3 text-right">{t('payouts.col_fee')}</th>
+                                <th className="p-3 text-right">{t('payouts.col_net_fee')}</th>
+                                <th className="p-3 text-right">{t('payouts.col_cod_fee')}</th>
+                                <th className="p-3 text-right">{t('payouts.col_other')}</th>
+                                <th className="p-3 text-right">{t('payouts.col_payout')}</th>
                                 {isDraft && <th className="p-3"></th>}
                             </tr>
                         </thead>
@@ -464,7 +476,7 @@ export default function CourierStatementShow({
                                             <span className="text-muted-foreground block text-xs">
                                                 {line.courier_status ?? ''}
                                                 {line.courier_status && line.hub_weight_grams !== null ? ', ' : ''}
-                                                {line.hub_weight_grams !== null ? `hub weight ${line.hub_weight_grams} g` : ''}
+                                                {line.hub_weight_grams !== null ? t('payouts.hub_weight', { grams: line.hub_weight_grams }) : ''}
                                             </span>
                                         )}
                                         {line.problem && <span className="text-destructive block text-xs">{line.problem}</span>}
@@ -472,27 +484,45 @@ export default function CourierStatementShow({
                                         {line.suggestion && <span className="text-muted-foreground block text-xs italic">{line.suggestion}</span>}
                                     </td>
                                     <td className="p-3">
-                                        {stateLabel(line)}
+                                        {stateLabel(line, t)}
                                         {line.match_method === 'merchant_reference' && (
-                                            <span className="text-muted-foreground block text-xs">matched on order reference</span>
+                                            <span className="text-muted-foreground block text-xs">{t('payouts.matched_on_reference')}</span>
                                         )}
                                     </td>
                                     <td className="p-3 text-right tabular-nums">
                                         {line.collected}
                                         {line.erp_collected !== null && line.erp_collected !== line.collected && (
-                                            <span className="text-destructive block text-xs">ERP {line.erp_collected}</span>
+                                            <span className="text-destructive block text-xs">
+                                                {t('payouts.erp')} {line.erp_collected}
+                                            </span>
                                         )}
                                     </td>
                                     <td className="p-3 text-right tabular-nums">
                                         {line.delivery_fee}
-                                        {nonZero(line.discount) && <span className="text-muted-foreground block text-xs">less {line.discount}</span>}
+                                        {nonZero(line.discount) && (
+                                            <span className="text-muted-foreground block text-xs">
+                                                {t('payouts.less')} {line.discount}
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="p-3 text-right tabular-nums">{line.charge}</td>
                                     <td className="p-3 text-right tabular-nums">{line.cod_fee}</td>
                                     <td className="p-3 text-right text-xs tabular-nums">
-                                        {nonZero(line.additional) && <span className="block">extra {line.additional}</span>}
-                                        {nonZero(line.compensation) && <span className="block">compensation {line.compensation}</span>}
-                                        {nonZero(line.adjustment) && <span className="block">adjustment {line.adjustment}</span>}
+                                        {nonZero(line.additional) && (
+                                            <span className="block">
+                                                {t('payouts.extra')} {line.additional}
+                                            </span>
+                                        )}
+                                        {nonZero(line.compensation) && (
+                                            <span className="block">
+                                                {t('payouts.compensation')} {line.compensation}
+                                            </span>
+                                        )}
+                                        {nonZero(line.adjustment) && (
+                                            <span className="block">
+                                                {t('payouts.adjustment')} {line.adjustment}
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="p-3 text-right tabular-nums">{line.payout}</td>
                                     {isDraft && (
@@ -504,14 +534,14 @@ export default function CourierStatementShow({
                                                         variant={line.resolution === 'mine' ? 'default' : 'ghost'}
                                                         onClick={() => resolve(line, 'mine')}
                                                     >
-                                                        Ours
+                                                        {t('payouts.ours')}
                                                     </Button>
                                                     <Button
                                                         size="sm"
                                                         variant={line.resolution === 'not_mine' ? 'default' : 'ghost'}
                                                         onClick={() => resolve(line, 'not_mine')}
                                                     >
-                                                        Not ours
+                                                        {t('payouts.not_ours')}
                                                     </Button>
                                                 </>
                                             )}
@@ -522,7 +552,7 @@ export default function CourierStatementShow({
                             {shown.length === 0 && (
                                 <tr>
                                     <td colSpan={isDraft ? 9 : 8} className="text-muted-foreground p-6 text-center">
-                                        Nothing here.
+                                        {t('payouts.nothing_here')}
                                     </td>
                                 </tr>
                             )}
@@ -535,7 +565,7 @@ export default function CourierStatementShow({
                         {openPayable > 0 && shareMinor > 0 && (
                             <div className="flex flex-wrap items-end gap-3">
                                 <div className="grid gap-1">
-                                    <Label>Settle against what we owe the courier</Label>
+                                    <Label>{t('payouts.settle_against')}</Label>
                                     <Input
                                         className="w-36"
                                         value={data.settle_payable}
@@ -543,12 +573,12 @@ export default function CourierStatementShow({
                                         onChange={(e) => setData('settle_payable', e.target.value)}
                                     />
                                     <span className="text-muted-foreground text-xs">
-                                        Up to {taka(Math.min(openPayable, shareMinor))}, when the courier took it out of this payout.
+                                        {t('payouts.settle_up_to', { amount: taka(Math.min(openPayable, shareMinor)) })}
                                     </span>
                                     <InputError message={errors.settle_payable} />
                                 </div>
                                 <Button type="button" variant="outline" size="sm" onClick={settleAll}>
-                                    Settle in full
+                                    {t('payouts.settle_in_full')}
                                 </Button>
                             </div>
                         )}
@@ -556,24 +586,24 @@ export default function CourierStatementShow({
                         {depositExpected && (
                             <div className="flex flex-wrap items-end gap-3">
                                 <div className="grid gap-1">
-                                    <Label required>Arrived in</Label>
+                                    <Label required>{t('payouts.arrived_in_label')}</Label>
                                     <SearchableSelect
                                         value={data.received_money_account_id}
                                         onChange={(v) => setData('received_money_account_id', v)}
                                         options={moneyAccounts.map((a) => ({ value: String(a.id), label: a.name }))}
-                                        placeholder="Select account"
-                                        searchPlaceholder="Search accounts…"
+                                        placeholder={t('payouts.select_account')}
+                                        searchPlaceholder={t('payouts.search_accounts')}
                                     />
                                     <InputError message={errors.received_money_account_id} />
                                 </div>
                                 <div className="grid gap-1">
-                                    <Label required>Amount that arrived</Label>
+                                    <Label required>{t('payouts.amount_arrived')}</Label>
                                     <Input className="w-36" value={data.deposit_amount} onChange={(e) => setData('deposit_amount', e.target.value)} />
-                                    <span className="text-muted-foreground text-xs">Expected {taka(expectedMinor)}</span>
+                                    <span className="text-muted-foreground text-xs">{t('payouts.expected', { amount: taka(expectedMinor) })}</span>
                                     <InputError message={errors.deposit_amount} />
                                 </div>
                                 <div className="grid gap-1">
-                                    <Label required>On</Label>
+                                    <Label required>{t('payouts.on')}</Label>
                                     <Input
                                         type="date"
                                         className="w-40"
@@ -583,12 +613,12 @@ export default function CourierStatementShow({
                                     <InputError message={errors.received_on} />
                                 </div>
                                 <div className="grid gap-1">
-                                    <Label>Bank reference</Label>
+                                    <Label>{t('payouts.bank_reference')}</Label>
                                     <Input className="w-44" value={data.bank_reference} onChange={(e) => setData('bank_reference', e.target.value)} />
                                     <InputError message={errors.bank_reference} />
                                 </div>
                                 <div className="grid gap-1">
-                                    <Label>Proof (optional)</Label>
+                                    <Label>{t('payouts.proof_optional')}</Label>
                                     <Input
                                         type="file"
                                         accept=".pdf,.jpg,.jpeg,.png,.webp"
@@ -601,30 +631,28 @@ export default function CourierStatementShow({
 
                         {differs && (
                             <div className="grid max-w-xl gap-1">
-                                <Label required>Why the amount differs from the file</Label>
+                                <Label required>{t('payouts.why_differs')}</Label>
                                 <Input
                                     value={data.deposit_difference_reason}
-                                    placeholder="e.g. courier held back 340 for an earlier invoice"
+                                    placeholder={t('payouts.why_differs_example')}
                                     onChange={(e) => setData('deposit_difference_reason', e.target.value)}
                                 />
-                                <span className="text-muted-foreground text-xs">
-                                    Less than expected stays as owed by the courier; more is recorded as owed back to it.
-                                </span>
+                                <span className="text-muted-foreground text-xs">{t('payouts.differs_help')}</span>
                                 <InputError message={errors.deposit_difference_reason} />
                             </div>
                         )}
 
                         <div className="flex flex-wrap items-center gap-3">
-                            <Button disabled={processing || !can_post}>Post statement</Button>
+                            <Button disabled={processing || !can_post}>{t('payouts.post_statement')}</Button>
                             <ConfirmDialog
                                 trigger={
                                     <Button type="button" variant="ghost">
-                                        Discard draft
+                                        {t('payouts.discard_draft')}
                                     </Button>
                                 }
-                                title={`Discard ${statement.statement_reference}`}
-                                description="The draft, its file and its decisions are removed. Nothing had been posted, so nothing else changes."
-                                confirmLabel="Discard"
+                                title={t('payouts.discard_title', { reference: statement.statement_reference })}
+                                description={t('payouts.discard_description')}
+                                confirmLabel={t('payouts.discard')}
                                 destructive
                                 onConfirm={() => router.delete(route('sales.courier-statements.destroy', statement.id))}
                             />
@@ -634,15 +662,15 @@ export default function CourierStatementShow({
 
                 {journal && (
                     <div className="overflow-x-auto rounded-lg border">
-                        <p className="p-3 font-medium">What this did to the books ({journal.journal_number})</p>
+                        <p className="p-3 font-medium">{t('payouts.books_effect', { journal: journal.journal_number })}</p>
                         <table className="w-full text-sm">
                             <thead className="bg-muted/50 text-left">
                                 <tr>
-                                    <th className="p-3">Account</th>
-                                    <th className="p-3">Courier or bank</th>
-                                    <th className="p-3">Memo</th>
-                                    <th className="p-3 text-right">Debit</th>
-                                    <th className="p-3 text-right">Credit</th>
+                                    <th className="p-3">{t('payouts.col_account')}</th>
+                                    <th className="p-3">{t('payouts.col_courier_or_bank')}</th>
+                                    <th className="p-3">{t('payouts.col_memo')}</th>
+                                    <th className="p-3 text-right">{t('payouts.col_debit')}</th>
+                                    <th className="p-3 text-right">{t('payouts.col_credit')}</th>
                                 </tr>
                             </thead>
                             <tbody>

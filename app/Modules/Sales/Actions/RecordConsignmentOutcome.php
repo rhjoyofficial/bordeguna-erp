@@ -211,6 +211,7 @@ class RecordConsignmentOutcome
 
             if ($resolution === DoorResolution::PriceCorrection) {
                 $billing = $this->corrected($billing, $prices, (string) $reason, $recordedBy);
+                $this->assertCorrectionWithinCap($billing, $consignment->business_id, $recordedBy, $discountApprovedBy, $collected);
             }
 
             $invoice = $this->invoices->handle(
@@ -437,6 +438,46 @@ class RecordConsignmentOutcome
      * @param  array<int, string>  $prices
      * @return array<int, array<string, mixed>>
      */
+    /**
+     * Joy, 11 Oct 2026: a price corrected at the door is a concession like a
+     * discount, so it answers to the same per-bill cap (DiscountCap: Owner none,
+     * Manager or person in charge 3%, other staff 1% or Tk 300). Above the cap
+     * nothing is posted and the whole answer waits for the Owner, exactly like a
+     * door discount; the Owner's approval replays these prices.
+     *
+     * @param  list<array<string, mixed>>  $billing
+     *
+     * @throws DoorDiscountNeedsApproval
+     */
+    private function assertCorrectionWithinCap(array $billing, int $businessId, User $recordedBy, ?User $approvedBy, Money $collected): void
+    {
+        if ($approvedBy !== null && ($approvedBy->hasRole('Owner') || $approvedBy->is_super_admin)) {
+            return;
+        }
+
+        $lines = array_map(fn (array $line) => [
+            'quantity' => (string) $line['quantity'],
+            'unitPrice' => (string) $line['unitPrice'],
+            'discount' => '0',
+            'listPrice' => (string) ($line['listPrice'] ?? $line['unitPrice']),
+        ], $billing);
+
+        $why = DiscountCap::refusal($recordedBy, $businessId, $lines, '0');
+
+        if ($why === null) {
+            return;
+        }
+
+        $cut = 0;
+        $due = 0;
+        foreach ($lines as $line) {
+            $cut += max(0, Money::ofProduct($line['quantity'], bcsub($line['listPrice'], $line['unitPrice'], 4))->minor);
+            $due += Money::ofProduct($line['quantity'], $line['listPrice'])->minor;
+        }
+
+        throw new DoorDiscountNeedsApproval(Money::ofMinor($due), $collected, Money::ofMinor($cut), 'A price correction is a concession too. '.$why);
+    }
+
     private function corrected(array $billing, array $prices, string $reason, User $by): array
     {
         $changed = false;

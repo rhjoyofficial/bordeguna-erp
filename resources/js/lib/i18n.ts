@@ -1,4 +1,11 @@
 import { usePage } from '@inertiajs/react';
+import { attention } from './i18n/attention';
+import { courierLocations } from './i18n/courier-locations';
+import { courierParcel } from './i18n/courier-parcel';
+import { courierSales } from './i18n/courier-sales';
+import { courierSettings } from './i18n/courier-settings';
+import { dashboards } from './i18n/dashboards';
+import type { Entry } from './i18n/entry';
 
 /**
  * Bangla UI phase 1 (C-I18N-2/3).
@@ -11,7 +18,10 @@ import { usePage } from '@inertiajs/react';
  * amounts must match bank statements and invoices, so only words go through
  * here. Bangla text is written in NFC per the standing normalisation rule.
  */
-type Entry = { en: string; bn: string };
+//
+// ⚠ The dictionary grows by area in lib/i18n/*.ts (courier and dashboard
+// screens, 11 Oct 2026), spread in below so every key is still one typed
+// union. BanglaDictionaryTest reads every one of those files too.
 
 const dictionary = {
     // ── Shared ──────────────────────────────────────────────────────────
@@ -330,6 +340,11 @@ const dictionary = {
     },
     'orders.search': { en: 'Search', bn: 'খুঁজুন' },
     'orders.search_placeholder': { en: 'Order number, website reference or customer…', bn: 'অর্ডার নম্বর, ওয়েবসাইট রেফারেন্স বা ক্রেতা…' },
+    'orders.brand': { en: 'Brand', bn: 'ব্র্যান্ড' },
+    'orders.all_brands': { en: 'All brands', bn: 'সব ব্র্যান্ড' },
+    'orders.no_brand': { en: 'No brand', bn: 'ব্র্যান্ড নেই' },
+    'orders.choose_brand': { en: 'Choose a brand', bn: 'ব্র্যান্ড বেছে নিন' },
+    'orders.col_brand': { en: 'Brand', bn: 'ব্র্যান্ড' },
     'orders.status': { en: 'Status', bn: 'অবস্থা' },
     'orders.all_statuses': { en: 'All statuses', bn: 'সব অবস্থা' },
     'orders.status_open': { en: 'Open', bn: 'চালু' },
@@ -442,6 +457,12 @@ const dictionary = {
         en: 'The language this account sees the ERP in, on every device. Numbers and dates stay in English digits.',
         bn: 'সব ডিভাইসে এই অ্যাকাউন্ট যে ভাষায় ইআরপি দেখবে। সংখ্যা ও তারিখ ইংরেজি অঙ্কেই থাকবে।',
     },
+    ...courierSettings,
+    ...courierLocations,
+    ...courierSales,
+    ...courierParcel,
+    ...dashboards,
+    ...attention,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;
@@ -469,5 +490,13 @@ export function useTranslation() {
         return text;
     };
 
-    return { t, locale };
+    /**
+     * For a key that arrives from the server (a widget key, a courier status
+     * value): the Bangla when the dictionary has it, else the server's own
+     * English. Never a blank, never the raw key.
+     */
+    const tr = (key: string, fallback: string, replacements?: Record<string, string | number>): string =>
+        key in dictionary ? t(key as TranslationKey, replacements) : fallback;
+
+    return { t, tr, locale };
 }
