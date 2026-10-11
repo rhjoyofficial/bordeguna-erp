@@ -133,6 +133,11 @@ class ChartOfAccountsSeeder extends Seeder
         ['2147', 'Staff Fines Held', AccountType::Liability, '2100', true, 'staff_fines_held'],
         ['2150', 'Advances from Customers', AccountType::Liability, '2100', true, 'customer_advances'],
         ['2160', 'Accrued Expenses', AccountType::Liability, '2100', true, null],
+        // Courier statements v2 (11 Oct 2026, owner approved): what a courier's
+        // statement says we owe it once its fees outweighed the cash it collected.
+        // Every line names the courier's money account, so each courier's balance
+        // is its own (ChatGPT ruling 6: never a credit left in 1145).
+        ['2165', 'Payable to Couriers', AccountType::Liability, '2100', true, 'courier_payable'],
         // ⚠⚠ C-VAT-6. VAT charged to customers and owed onward to the
         // government. It is never the business's money, which is exactly why it
         // is a liability and not revenue - and why a VAT-inclusive price
@@ -203,6 +208,10 @@ class ChartOfAccountsSeeder extends Seeder
         ['4940', 'Supplier Rebates and Refunds', AccountType::Income, '4900', true, null],
         // Party adjustments (29 Sep 2026): a discount a supplier took off a bill.
         ['4950', 'Discounts Received', AccountType::Income, '4900', true, 'discounts_received'],
+        // Courier statements v2 (11 Oct 2026, owner approved): what a courier pays
+        // for a parcel it lost or damaged. Other income, never a credit to the
+        // courier's own charges (ChatGPT ruling 5).
+        ['4960', 'Courier Compensation Income', AccountType::Income, '4900', true, 'courier_compensation_income'],
         ['4990', 'Miscellaneous Income', AccountType::Income, '4900', true, null],
 
         // ─── 5000 Cost of Sales ─────────────────────────────────────────────

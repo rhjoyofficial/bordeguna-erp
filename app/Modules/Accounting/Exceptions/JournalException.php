@@ -44,6 +44,11 @@ class JournalException extends RuntimeException
         return new self("Line {$lineNo}: {$account->label()} keeps one ledger per {$noun}, so every posting there names the {$noun}. This one names nobody.");
     }
 
+    public static function courierRequired(Account $account, int $lineNo): self
+    {
+        return new self("Line {$lineNo}: {$account->label()} keeps one balance per courier, so every posting there names the courier's money account. This one names none.");
+    }
+
     public static function inactiveAccount(Account $account): self
     {
         return new self("{$account->label()} has been deactivated and cannot be posted to.");

@@ -35,6 +35,7 @@ use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Support\CourierStatements\CourierStatementReview;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -45,6 +46,9 @@ use Spatie\Permission\PermissionRegistrar;
  * the payout. One Pathao account serves both brands (Joy, 13 September).
  */
 beforeEach(function () {
+    // The courier's original file is kept on the private disk (v2).
+    Storage::fake('local');
+
     $this->business = Business::create(['name' => 'Payout Co', 'slug' => 'payout-co']);
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
@@ -229,15 +233,17 @@ it('refuses a deposit that does not match the statement', function () {
     expect($statement->fresh()->status)->toBe(CourierStatement::DRAFT);
 });
 
-it('leaves the share with the courier when a statement pays nothing out', function () {
+it('owes the courier when a statement pays nothing out and its fees outweigh the cash', function () {
     ($this->parcel)('DBRETURNED1', ConsignmentStatus::Returned);
     $statement = ($this->import)([['number' => 'DBRETURNED1', 'fee' => 90]]);
 
     ($this->post)($statement);
 
     // No money arrived: the return fee is a cost, and the courier is owed it.
+    // v2 (ChatGPT ruling 6): owed on Payable to Couriers, never a credit in 1145.
     expect(($this->posted)('customer_return_delivery'))->toBe(9000)
-        ->and(($this->posted)('courier_receivable'))->toBe(-9000)
+        ->and(($this->posted)('courier_receivable'))->toBe(0)
+        ->and(($this->posted)('courier_payable'))->toBe(-9000)
         ->and(($this->posted)('cash_at_bank'))->toBe(0)
         ->and($statement->fresh()->deposit_amount)->toBeNull();
 });
@@ -295,24 +301,34 @@ it('books only its own share when two brands share one courier account, and sett
 
     expect((int) JournalLine::withoutGlobalScopes()->where('account_id', Account::bySlug('cash_at_bank')->id)->sum('amount_minor'))->toBe(187000);
 
-    // And A cannot settle its parcel a second time under another reference.
+    // The same file again is refused outright (v2: one file, one statement).
     app(BusinessContext::class)->set($this->business->id);
-    $again = ($this->import)($rows, 'SAME-PAYOUT-AGAIN');
+    expect(fn () => ($this->import)($rows, 'SAME-PAYOUT-AGAIN'))->toThrow(ValidationException::class, 'already imported');
+
+    // And A cannot settle its parcel a second time on another file either.
+    $again = ($this->import)([...$rows, ['number' => 'DBSOMETHINGNEW', 'fee' => 60]], 'SAME-PAYOUT-AGAIN');
 
     expect(CourierStatementReview::of($again)->problems[0])->toContain('already been paid out');
 });
 
-it('refuses a file that does not add up, lacks a column, or carries what is not handled yet', function () {
-    expect(fn () => ($this->import)([['number' => 'DB1', 'collected' => 850, 'fee' => 70, 'payout' => 790]]))
-        ->toThrow(ValidationException::class, 'does not add up');
-
-    expect(fn () => ($this->import)([['number' => 'DB1', 'collected' => 850, 'fee' => 70, 'promo' => 10, 'payout' => 780]]))
-        ->toThrow(ValidationException::class, 'not handled yet');
-
+it('keeps a row that does not add up as a row error, and refuses a file that lacks a column', function () {
     expect(fn () => app(ImportCourierStatement::class)->handle($this->courier, 'X1', '2026-09-14', "Consignment_ID,Payout\nDB1,10\n", 'x.csv', $this->owner))
         ->toThrow(ValidationException::class, 'not a Pathao invoice CSV');
 
     expect(CourierStatement::query()->count())->toBe(0);
+
+    // v2: the bad row is kept as an error, the good one is read, and the draft
+    // cannot be posted until the file is fixed.
+    $statement = ($this->import)([
+        ['number' => 'DB1', 'collected' => 850, 'fee' => 70, 'payout' => 790],
+        ['number' => 'DB2', 'fee' => 70],
+    ]);
+
+    expect($statement->lines->pluck('consignment_number')->all())->toBe(['DB2'])
+        ->and($statement->rowErrors())->toHaveCount(1)
+        ->and($statement->rowErrors()[0]['row'])->toBe(2)
+        ->and($statement->rowErrors()[0]['message'])->toContain('does not add up')
+        ->and(CourierStatementReview::of($statement)->problems[0])->toContain('could not be read');
 });
 
 it('lists what a courier has not paid out yet, and what the books say it holds', function () {

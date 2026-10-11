@@ -5,6 +5,8 @@ namespace App\Modules\Sales\Models;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Models\MoneyAccount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,9 +21,15 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * ⚠ A DRAFT until posted, and immutable after. The draft is where the lines the
  * ERP cannot place are decided by a person; posting is where the books move.
  */
-class CourierStatement extends Model
+class CourierStatement extends Model implements ControlsAttachmentAccess
 {
-    use BelongsToBusiness, LogsActivity;
+    use BelongsToBusiness, HasAttachments, LogsActivity;
+
+    /** The bank's or wallet's proof that the payout arrived. */
+    public const PAYOUT_PROOF = 'payout_proof';
+
+    /** Where the courier's original files are kept, on the private `local` disk. */
+    public const SOURCE_DISK = 'local';
 
     public const DRAFT = 'draft';
 
@@ -30,14 +38,21 @@ class CourierStatement extends Model
     protected $fillable = [
         'business_id',
         'money_account_id',
+        'provider_code',
+        'format',
         'statement_reference',
         'statement_date',
         'status',
         'source_filename',
         'source_sha256',
+        'source_path',
+        'row_errors',
         'received_money_account_id',
         'deposit_amount',
         'received_on',
+        'bank_reference',
+        'deposit_difference_reason',
+        'payable_settled_amount',
         'share_amount',
         'created_by',
         'posted_by',
@@ -51,6 +66,8 @@ class CourierStatement extends Model
             'received_on' => 'date:Y-m-d',
             'deposit_amount' => 'decimal:4',
             'share_amount' => 'decimal:4',
+            'payable_settled_amount' => 'decimal:4',
+            'row_errors' => 'array',
             'posted_at' => 'datetime',
         ];
     }
@@ -81,6 +98,19 @@ class CourierStatement extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function canAccessAttachments(User $user): bool
+    {
+        return $user->can('sales.reports.view');
+    }
+
+    /**
+     * @return list<array{row: int, consignment: ?string, message: string}>
+     */
+    public function rowErrors(): array
+    {
+        return array_values($this->row_errors ?? []);
     }
 
     public function isDraft(): bool

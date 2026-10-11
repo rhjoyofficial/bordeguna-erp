@@ -21,6 +21,12 @@ class CourierStatementLine extends Model
     /** A parcel the ERP does not know, which a person says belongs elsewhere. */
     public const NOT_MINE = 'not_mine';
 
+    /** Matched on the courier's consignment id. */
+    public const BY_CONSIGNMENT = 'consignment';
+
+    /** Matched on the merchant order id: our challan, order or shop reference. */
+    public const BY_MERCHANT_REFERENCE = 'merchant_reference';
+
     protected $fillable = [
         'business_id',
         'courier_statement_id',
@@ -32,11 +38,19 @@ class CourierStatementLine extends Model
         'collected_amount',
         'delivery_fee',
         'discount',
+        'net_fee',
+        'promo_discount',
         'cod_fee',
         'additional_charge',
         'final_fee',
+        'compensation',
+        'adjustment',
         'payout',
+        'hub_weight_grams',
+        'delivery_status',
+        'delivered_on',
         'consignment_id',
+        'match_method',
         'resolution',
     ];
 
@@ -47,10 +61,15 @@ class CourierStatementLine extends Model
             'collected_amount' => 'decimal:4',
             'delivery_fee' => 'decimal:4',
             'discount' => 'decimal:4',
+            'net_fee' => 'decimal:4',
+            'promo_discount' => 'decimal:4',
             'cod_fee' => 'decimal:4',
             'additional_charge' => 'decimal:4',
             'final_fee' => 'decimal:4',
             'payout' => 'decimal:4',
+            'compensation' => 'decimal:4',
+            'adjustment' => 'decimal:4',
+            'hub_weight_grams' => 'integer',
         ];
     }
 
@@ -90,6 +109,29 @@ class CourierStatementLine extends Model
     public function codFee(): Money
     {
         return Money::ofTaka((string) $this->cod_fee);
+    }
+
+    /** The fee net of the courier's discount, before COD and extra charges. */
+    public function netFee(): Money
+    {
+        return Money::ofMinor(Money::ofTaka((string) $this->delivery_fee)->minor - Money::ofTaka((string) $this->discount)->minor);
+    }
+
+    public function additionalCharge(): Money
+    {
+        return Money::ofTaka((string) $this->additional_charge);
+    }
+
+    /** What the courier paid for a parcel it lost or damaged. */
+    public function compensationAmount(): Money
+    {
+        return Money::ofTaka((string) ($this->compensation ?? '0'));
+    }
+
+    /** The courier's own correction, signed: positive is money to us. */
+    public function adjustmentAmount(): Money
+    {
+        return Money::ofTaka((string) ($this->adjustment ?? '0'));
     }
 
     public function payoutAmount(): Money

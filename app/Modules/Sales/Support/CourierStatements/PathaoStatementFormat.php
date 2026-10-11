@@ -3,8 +3,6 @@
 namespace App\Modules\Sales\Support\CourierStatements;
 
 use App\Modules\Accounting\Support\Money;
-use Illuminate\Validation\ValidationException;
-use InvalidArgumentException;
 
 /**
  * Pathao's invoice CSV, as downloaded from its merchant panel (one real file read
@@ -12,115 +10,89 @@ use InvalidArgumentException;
  *
  * ⭐ The arithmetic every row must satisfy, checked against the real file and the
  * panel's totals: Final_Fee = Delivery_Fee - Discount + COD_fee + Additional_Charge,
- * and Payout = Collected_Amount - Final_Fee. A row that breaks either is a file
- * that has been edited or misread, and the whole file is refused naming it.
+ * and Payout = Collected_Amount - Final_Fee.
  *
- * ⚠ Promo_Discount and Compensation_Cost were zero on every row seen, so which
- * way they move the money is unknown. A row carrying either is refused rather
- * than booked on a guess.
+ * ⭐ Promo_Discount and Compensation_Cost (v2, 11 Oct 2026). Zero on every row
+ * seen so far, so which way they move the money is not proven. A row is read
+ * when it adds up EITHER with them (the promo comes off the fee, the
+ * compensation is paid on top of the payout) OR without them (the columns are
+ * only information). Whichever equation holds is what is stored; a row that adds
+ * up neither way is a row error. Never a guess that leaves money unexplained.
  *
- * ⚠ Recipient_Name and Recipient_Phone are read past and never kept.
+ * ⚠ Recipient_Name and Recipient_Phone are never read.
  */
-final class PathaoStatementFormat implements CourierStatementFormat
+final class PathaoStatementFormat extends CsvStatementFormat
 {
-    private const REQUIRED = [
-        'Consignment_ID', 'Created_Date', 'Collected_Amount', 'Collectable_Amount', 'COD_fee',
-        'Delivery_Fee', 'Final_Fee', 'Discount', 'Additional_Charge', 'Compensation_Cost',
-        'Promo_Discount', 'Payout', 'Merchant_Order_ID',
-    ];
-
     public function name(): string
     {
         return 'Pathao invoice CSV';
     }
 
-    public function parse(string $contents): array
+    public function code(): string
     {
-        $contents = preg_replace('/^\xEF\xBB\xBF/', '', $contents) ?? '';
-        $rows = array_values(array_filter(
-            array_map('str_getcsv', preg_split('/\r\n|\n|\r/', $contents) ?: []),
-            fn (array $row) => ! (count($row) === 1 && trim((string) $row[0]) === ''),
-        ));
+        return 'pathao_invoice_csv_v2';
+    }
 
-        if ($rows === []) {
-            throw ValidationException::withMessages(['file' => 'The file is empty.']);
+    protected function required(): array
+    {
+        return [
+            'Consignment_ID', 'Created_Date', 'Collected_Amount', 'Collectable_Amount', 'COD_fee',
+            'Delivery_Fee', 'Final_Fee', 'Discount', 'Additional_Charge', 'Compensation_Cost',
+            'Promo_Discount', 'Payout', 'Merchant_Order_ID',
+        ];
+    }
+
+    protected function consignmentColumn(): string
+    {
+        return 'Consignment_ID';
+    }
+
+    protected function line(int $rowNumber, string $consignment, callable $cell): ParsedStatementLine
+    {
+        $collected = self::money($cell, 'Collected_Amount');
+        $fee = self::money($cell, 'Delivery_Fee');
+        $discount = self::money($cell, 'Discount');
+        $promo = self::money($cell, 'Promo_Discount');
+        $cod = self::money($cell, 'COD_fee');
+        $additional = self::money($cell, 'Additional_Charge');
+        $final = self::money($cell, 'Final_Fee');
+        $compensation = self::money($cell, 'Compensation_Cost');
+        $payout = self::money($cell, 'Payout');
+
+        $finalWithout = $fee->minor - $discount->minor + $cod->minor + $additional->minor;
+        $promoApplied = match (true) {
+            $final->minor === $finalWithout => false,
+            $final->minor === $finalWithout - $promo->minor => true,
+            default => null,
+        };
+
+        $payoutWithout = $collected->minor - $final->minor;
+        $compensationApplied = match (true) {
+            $payout->minor === $payoutWithout => false,
+            $payout->minor === $payoutWithout + $compensation->minor => true,
+            default => null,
+        };
+
+        if ($promoApplied === null || $compensationApplied === null) {
+            throw new StatementRowException("Consignment {$consignment} does not add up: its fees or payout disagree with its own columns.");
         }
 
-        $header = array_map(fn ($cell) => trim((string) $cell), array_shift($rows));
-        $missing = array_diff(self::REQUIRED, $header);
-
-        if ($missing !== []) {
-            throw ValidationException::withMessages([
-                'file' => 'This is not a Pathao invoice CSV: it has no '.implode(', ', $missing).' column.',
-            ]);
-        }
-
-        $index = array_flip($header);
-        $lines = [];
-        $seen = [];
-
-        foreach ($rows as $offset => $row) {
-            $rowNumber = $offset + 2;
-            $cell = fn (string $column) => trim((string) ($row[$index[$column]] ?? ''));
-
-            $number = $cell('Consignment_ID');
-
-            if ($number === '') {
-                throw ValidationException::withMessages(['file' => "Row {$rowNumber} has no consignment id."]);
-            }
-
-            if (isset($seen[strtoupper($number)])) {
-                throw ValidationException::withMessages(['file' => "Consignment {$number} appears twice in the file (rows {$seen[strtoupper($number)]} and {$rowNumber})."]);
-            }
-
-            $seen[strtoupper($number)] = $rowNumber;
-
-            try {
-                $money = fn (string $column) => Money::ofTaka($cell($column));
-
-                $line = new ParsedStatementLine(
-                    rowNumber: $rowNumber,
-                    consignmentNumber: $number,
-                    merchantReference: in_array(strtoupper($cell('Merchant_Order_ID')), ['', 'N/A'], true) ? null : $cell('Merchant_Order_ID'),
-                    bookedAt: $cell('Created_Date') ?: null,
-                    collectable: $money('Collectable_Amount'),
-                    collected: $money('Collected_Amount'),
-                    deliveryFee: $money('Delivery_Fee'),
-                    discount: $money('Discount'),
-                    codFee: $money('COD_fee'),
-                    additionalCharge: $money('Additional_Charge'),
-                    finalFee: $money('Final_Fee'),
-                    payout: $money('Payout'),
-                );
-
-                $promo = $money('Promo_Discount');
-                $compensation = $money('Compensation_Cost');
-            } catch (InvalidArgumentException $e) {
-                throw ValidationException::withMessages(['file' => "Row {$rowNumber} (consignment {$number}): {$e->getMessage()}"]);
-            }
-
-            if (! $promo->isZero() || ! $compensation->isZero()) {
-                throw ValidationException::withMessages([
-                    'file' => "Row {$rowNumber} (consignment {$number}) carries a promo discount or compensation, which is not handled yet. Nothing was imported.",
-                ]);
-            }
-
-            $expectedFinal = $line->deliveryFee->minor - $line->discount->minor + $line->codFee->minor + $line->additionalCharge->minor;
-            $expectedPayout = $line->collected->minor - $line->finalFee->minor;
-
-            if ($expectedFinal !== $line->finalFee->minor || $expectedPayout !== $line->payout->minor) {
-                throw ValidationException::withMessages([
-                    'file' => "Row {$rowNumber} (consignment {$number}) does not add up: its fees or payout disagree with its own columns. Nothing was imported.",
-                ]);
-            }
-
-            $lines[] = $line;
-        }
-
-        if ($lines === []) {
-            throw ValidationException::withMessages(['file' => 'The file has a header and no parcels.']);
-        }
-
-        return $lines;
+        return new ParsedStatementLine(
+            rowNumber: $rowNumber,
+            consignmentNumber: $consignment,
+            merchantReference: self::nullable($cell('Merchant_Order_ID')),
+            bookedAt: self::nullable($cell('Created_Date')),
+            collectable: self::money($cell, 'Collectable_Amount'),
+            collected: $collected,
+            deliveryFee: $fee,
+            discount: $promoApplied ? Money::ofMinor($discount->minor + $promo->minor) : $discount,
+            codFee: $cod,
+            additionalCharge: $additional,
+            finalFee: $final,
+            payout: $payout,
+            promoDiscount: $promo,
+            compensation: $compensationApplied ? $compensation : Money::zero(),
+            adjustment: Money::zero(),
+        );
     }
 }

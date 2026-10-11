@@ -2,6 +2,7 @@
 
 namespace App\Modules\Sales\Models;
 
+use App\Modules\Sales\Support\CourierStatements\CourierStatementFormats;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -18,7 +19,9 @@ class CourierParcelClaim extends Model
 
     public static function keyFor(string $provider, string $consignmentNumber): string
     {
-        return strtolower(trim($provider)).'|'.strtoupper(trim($consignmentNumber));
+        // ⚠ Normalised, so "Pathao Courier" and "pathao" can never hold two
+        // claims on one parcel (courier statements v2).
+        return CourierStatementFormats::normalise($provider).'|'.strtoupper(trim($consignmentNumber));
     }
 
     public function line(): BelongsTo
