@@ -5,6 +5,7 @@ namespace App\Support\Dashboards\Widgets;
 use App\Modules\Sales\Couriers\Enums\CourierStatus;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Models\Consignment;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Support\Dashboards\DashboardKey;
 use App\Support\Dashboards\WidgetContext;
 
@@ -51,10 +52,16 @@ class CourierParcelsByStatusWidget extends CourierWidget
         return 'courier status date';
     }
 
+    /** ⭐ Follows the dashboard's Brand switcher (Joy, 11 Oct 2026). */
+    public function brandAware(): bool
+    {
+        return true;
+    }
+
     public function data(WidgetContext $context): array
     {
         $final = CourierStatus::finalValues();
-        $base = fn () => Consignment::query()->where('business_id', $context->businessId);
+        $base = fn () => OrderBrand::onConsignments(Consignment::query()->where('business_id', $context->businessId), $context->brandId);
 
         $open = $base()
             ->whereNotNull('courier_status')

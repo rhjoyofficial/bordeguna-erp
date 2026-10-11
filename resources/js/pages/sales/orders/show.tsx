@@ -66,6 +66,8 @@ interface Order {
     delivery_promise_max_hours: number | null;
     payment_method: string | null;
     store: { id: number; name: string } | null;
+    // Joy, 11 Oct 2026: the brand the order is sold under. Null on older orders.
+    brand: { id: number; code: string; name: string } | null;
     address: {
         recipient_name: string;
         recipient_phone: string;
@@ -452,7 +454,8 @@ function ChallanCard({
     const booking = challan.courier_booking;
     // A booking with no clear answer blocks both ways in: settle it first.
     const bookingOpen = booking !== null && booking.status !== 'failed';
-    const apiReady = canBookCourier && courierAccounts.length > 0 && challan.courier_draft !== null;
+    // ⭐ Only accounts that serve this order's brand can book (Joy, 11 Oct 2026).
+    const apiReady = canBookCourier && courierAccounts.some((a) => a.available) && challan.courier_draft !== null;
     const [mode, setMode] = useState<'api' | 'manual'>(apiReady ? 'api' : 'manual');
 
     return (
@@ -1169,7 +1172,14 @@ export default function SalesOrderShow({
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                        <h2 className="text-lg font-medium">{order.order_number}</h2>
+                        <h2 className="flex items-center gap-2 text-lg font-medium">
+                            {order.order_number}
+                            {order.brand && (
+                                <Badge variant="outline" title="Brand">
+                                    {order.brand.name}
+                                </Badge>
+                            )}
+                        </h2>
                         <p className="text-muted-foreground text-sm">
                             {order.customer.name}
                             {order.warehouse ? ` - preferred warehouse ${order.warehouse.name}` : ''} - ordered {order.ordered_at}

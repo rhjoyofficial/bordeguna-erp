@@ -8,6 +8,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Sales\Actions\BookConsignment;
 use App\Modules\Sales\Actions\RecordConsignmentOutcome;
@@ -17,6 +18,7 @@ use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Support\CourierStatements\CourierBalances;
+use App\Modules\Sales\Support\OrderBrand;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -40,6 +42,11 @@ class ConsignmentController extends Controller
             'search' => $request->string('search')->toString(),
             'status' => $request->string('status')->toString() ?: ConsignmentStatus::Booked->value,
         ];
+        // ⭐ Joy, 11 Oct 2026: by the brand of the order it came from.
+        $businessId = (int) app(BusinessContext::class)->id();
+        $brand = OrderBrand::filter($request->query('brand'), $businessId);
+        $filters['brand'] = OrderBrand::filterValue($brand);
+        $brandNames = OrderBrand::names($businessId);
 
         // ⭐ Courier slice C3: answered by the courier, and not yet on a posted
         // payout statement. What the courier still owes, parcel by parcel.
@@ -47,6 +54,7 @@ class ConsignmentController extends Controller
 
         $consignments = Consignment::query()
             ->with(['courier:id,name', 'delivery:id,delivery_number,delivered_at,customer_id', 'delivery.customer:id,name', 'delivery.lines.orderLine:id,sales_order_id', 'invoice:id,invoice_number', 'statementLine.statement:id,statement_reference', 'courierAccount.provider', 'shipmentEvents'])
+            ->tap(fn ($query) => OrderBrand::onConsignments($query, $brand))
             ->when($filters['status'] === 'awaiting_payout', $awaitingPayout)
             ->when(! in_array($filters['status'], ['all', 'awaiting_payout'], true), fn ($query) => $query->where('status', $filters['status']))
             ->when($filters['search'], fn ($query, $search) => $query->where(
@@ -58,9 +66,14 @@ class ConsignmentController extends Controller
             ->orderBy('created_at')
             ->orderBy('id')
             ->paginate(25)
-            ->withQueryString()
+            ->withQueryString();
+
+        $brandOf = OrderBrand::forDeliveries(collect($consignments->items())->pluck('delivery_id'));
+
+        $consignments = $consignments
             ->through(fn (Consignment $consignment) => [
                 'id' => $consignment->id,
+                'brand' => isset($brandOf[$consignment->delivery_id]) ? ($brandNames[$brandOf[$consignment->delivery_id]] ?? null) : null,
                 'courier' => $consignment->courier?->name,
                 'consignment_number' => $consignment->consignment_number,
                 'delivery_number' => $consignment->delivery->delivery_number,
@@ -85,6 +98,7 @@ class ConsignmentController extends Controller
         return Inertia::render('sales/consignments/index', [
             'consignments' => $consignments,
             'filters' => $filters,
+            'brands' => OrderBrand::options($businessId),
             'statuses' => collect(ConsignmentStatus::cases())->map(fn (ConsignmentStatus $status) => [
                 'value' => $status->value,
                 'label' => $status->label(),

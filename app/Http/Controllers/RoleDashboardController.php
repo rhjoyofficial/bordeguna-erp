@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Support\Dashboards\DashboardAccess;
+use App\Support\Dashboards\DashboardBrand;
 use App\Support\Dashboards\DashboardKey;
 use App\Support\Dashboards\DashboardPage;
 use App\Support\Dashboards\DateRange;
@@ -68,7 +69,10 @@ class RoleDashboardController extends Controller
             $rangeError = collect($exception->errors())->flatten()->first();
         }
 
-        $context = new WidgetContext($user, $businessId, $range, $key);
+        $brandId = DashboardBrand::fromQuery($request->query('brand'), $businessId);
+        $context = new WidgetContext($user, $businessId, $range, $key, $brandId);
+        // The range and the brand travel together in every link and refresh.
+        $query = $range->toQuery() + ($brandId === null ? [] : ['brand' => (string) $brandId]);
         ['visible' => $visible, 'hidden' => $hidden] = $this->page->arrange($key, $user, $businessId);
         $landing = $this->access->landingKey($user);
         $viewAll = $this->access->canViewAll($user);
@@ -84,7 +88,9 @@ class RoleDashboardController extends Controller
             'offers_classic' => $this->access->offersClassic($user),
             'widgets' => $this->page->payload($visible, $context),
             'hidden_widgets' => $hidden->map(fn (Widget $w) => ['key' => $w->key(), 'title' => $w->title()])->values()->all(),
-            'range' => $range->toArray() + ['query' => $range->toQuery()],
+            'range' => $range->toArray() + ['query' => $query],
+            // ⭐ The Brand switcher beside the range (Joy, 11 Oct 2026).
+            'brand' => ['selected' => $brandId, 'options' => DashboardBrand::options($businessId)],
             'range_presets' => collect(DateRange::PRESETS)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values()->all(),
             'range_error' => $rangeError,
             'sound' => SoundPreferences::for($user, $viewAll),

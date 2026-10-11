@@ -2,6 +2,7 @@ import { type CourierInfo } from '@/components/couriers/courier-parcel';
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { ReportHeading } from '@/components/report/report-shell';
+import { BrandFilter, type BrandOption } from '@/components/sales/brand';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -17,6 +18,8 @@ interface Consignment {
     delivery_number: string;
     sent_on: string;
     customer: string | null;
+    // The order's brand, through the challan (Joy, 11 Oct 2026).
+    brand: string | null;
     order_id: number | null;
     cod_amount: string;
     status: 'booked' | 'delivered' | 'partially_delivered' | 'returned';
@@ -86,9 +89,11 @@ export default function ConsignmentsIndex({
     filters: initialFilters,
     statuses,
     couriers,
+    brands = [],
 }: {
     consignments: Paginated<Consignment>;
-    filters: { search: string; status: string };
+    filters: { search: string; status: string; brand: string };
+    brands?: BrandOption[];
     statuses: { value: string; label: string }[];
     couriers: CourierHolding[];
 }) {
@@ -134,6 +139,7 @@ export default function ConsignmentsIndex({
                         <option value="awaiting_payout">Awaiting payout</option>
                         <option value="all">All</option>
                     </SearchSelect>
+                    <BrandFilter value={filters.brand ?? ''} onChange={(v) => setFilter('brand', v)} brands={brands} />
                 </FilterBar>
 
                 <div className="overflow-x-auto rounded-lg border">
@@ -169,7 +175,14 @@ export default function ConsignmentsIndex({
                                         )}
                                     </td>
                                     <td className="p-3">{consignment.sent_on}</td>
-                                    <td className="p-3">{consignment.customer ?? '-'}</td>
+                                    <td className="p-3">
+                                        {consignment.customer ?? '-'}
+                                        {consignment.brand && (
+                                            <Badge variant="outline" className="ml-2">
+                                                {consignment.brand}
+                                            </Badge>
+                                        )}
+                                    </td>
                                     <td className="p-3 text-right tabular-nums">{consignment.cod_amount}</td>
                                     <td className="p-3">
                                         <Badge

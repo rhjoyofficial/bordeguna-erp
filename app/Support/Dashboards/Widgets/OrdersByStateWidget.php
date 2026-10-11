@@ -6,6 +6,7 @@ use App\Events\Dashboards\DashboardEventType;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Support\Dashboards\DashboardKey;
 use App\Support\Dashboards\Widget;
 use App\Support\Dashboards\WidgetContext;
@@ -83,18 +84,24 @@ class OrdersByStateWidget extends Widget
         return [['watch' => 'orders_today', 'sound' => 'success', 'message' => 'A new sales order came in.']];
     }
 
+    /** ⭐ Follows the dashboard's Brand switcher (Joy, 11 Oct 2026). */
+    public function brandAware(): bool
+    {
+        return true;
+    }
+
     public function data(WidgetContext $context): array
     {
         $open = [SalesOrderStatus::Open, SalesOrderStatus::PartiallyDelivered];
         $approval = fn (ApprovalStatus $status) => fn (Builder $q) => $q->where('status', $status);
         $inRange = fn (Builder $q) => $q->whereBetween('ordered_at', [$context->range->fromDate(), $context->range->toDate()]);
 
-        $awaiting = SalesOrder::query()->whereIn('status', $open)->whereHas('approvalRequest', $approval(ApprovalStatus::Pending))->count();
-        $sentBack = SalesOrder::query()->whereIn('status', $open)->whereHas('approvalRequest', $approval(ApprovalStatus::Returned))->count();
-        $toDeliver = SalesOrder::query()->where('status', SalesOrderStatus::Open)->whereHas('approvalRequest', $approval(ApprovalStatus::Approved))->count();
-        $partial = SalesOrder::query()->where('status', SalesOrderStatus::PartiallyDelivered)->count();
-        $delivered = $inRange(SalesOrder::query()->whereIn('status', [SalesOrderStatus::Delivered, SalesOrderStatus::Closed]))->count();
-        $cancelled = $inRange(SalesOrder::query()->where('status', SalesOrderStatus::Cancelled))->count();
+        $awaiting = OrderBrand::onOrders(SalesOrder::query(), $context->brandId)->whereIn('status', $open)->whereHas('approvalRequest', $approval(ApprovalStatus::Pending))->count();
+        $sentBack = OrderBrand::onOrders(SalesOrder::query(), $context->brandId)->whereIn('status', $open)->whereHas('approvalRequest', $approval(ApprovalStatus::Returned))->count();
+        $toDeliver = OrderBrand::onOrders(SalesOrder::query(), $context->brandId)->where('status', SalesOrderStatus::Open)->whereHas('approvalRequest', $approval(ApprovalStatus::Approved))->count();
+        $partial = OrderBrand::onOrders(SalesOrder::query(), $context->brandId)->where('status', SalesOrderStatus::PartiallyDelivered)->count();
+        $delivered = $inRange(OrderBrand::onOrders(SalesOrder::query(), $context->brandId)->whereIn('status', [SalesOrderStatus::Delivered, SalesOrderStatus::Closed]))->count();
+        $cancelled = $inRange(OrderBrand::onOrders(SalesOrder::query(), $context->brandId)->where('status', SalesOrderStatus::Cancelled))->count();
 
         return [
             'kind' => 'breakdown',
@@ -109,7 +116,7 @@ class OrdersByStateWidget extends Widget
                 ['label' => 'Cancelled (range)', 'value' => $cancelled, 'tone' => $cancelled > 0 ? 'bad' : null],
             ],
             'basis' => 'operational',
-            'watch' => ['orders_today' => SalesOrder::query()->whereDate('ordered_at', today())->count()],
+            'watch' => ['orders_today' => OrderBrand::onOrders(SalesOrder::query(), $context->brandId)->whereDate('ordered_at', today())->count()],
         ];
     }
 }

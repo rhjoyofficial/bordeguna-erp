@@ -34,11 +34,14 @@ export function WidgetCard({
     now,
     onHide,
     onRefresh,
+    brandName = null,
 }: {
     widget: DashboardWidget;
     entry: FeedEntry;
     index: number;
     now: number;
+    /** The brand chosen on the dashboard, or null for all brands. */
+    brandName?: string | null;
     onHide: () => void;
     onRefresh: () => void;
 }) {
@@ -63,6 +66,7 @@ export function WidgetCard({
                     <p className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px]">
                         {result.data?.basis && <span>{BASIS[result.data.basis] ?? result.data.basis}</span>}
                         {widget.date_basis && <span>by {widget.date_basis}</span>}
+                        {brandName && <span>{widget.brand_aware ? brandName : 'All brands'}</span>}
                         <span
                             className={cn('flex items-center gap-1', (entry.stale || tooOld) && 'text-amber-600 dark:text-amber-400')}
                             aria-live="polite"

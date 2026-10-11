@@ -44,6 +44,7 @@ use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Support\DeliveryBilling;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OrderNextSteps;
 use App\Modules\Sales\Support\ParcelWeight;
 use DomainException;
@@ -73,6 +74,11 @@ class SalesOrderController extends Controller
             'search' => $request->string('search')->toString(),
             'status' => $request->string('status')->toString(),
         ];
+        $businessId = (int) app(BusinessContext::class)->id();
+        // ⭐ Joy, 11 Oct 2026: orders by brand ("none" = taken before brands
+        // were recorded). A brand of another business reads as all brands.
+        $brand = OrderBrand::filter($request->query('brand'), $businessId);
+        $filters['brand'] = OrderBrand::filterValue($brand);
 
         // ⭐ 26 Sep 2026 (Q21): a field officer (sales.orders.record without
         // sales.reports.view) sees the orders he took and nobody else's.
@@ -80,7 +86,8 @@ class SalesOrderController extends Controller
 
         $orders = SalesOrder::query()
             ->when($ownOnly, fn ($query) => $query->where('created_by', $request->user()->id))
-            ->with(['customer:id,name', 'warehouse:id,name', 'approvalRequest'])
+            ->with(['customer:id,name', 'warehouse:id,name', 'approvalRequest', 'brand:id,code,name'])
+            ->tap(fn ($query) => OrderBrand::onOrders($query, $brand))
             ->withSum('lines as total_ordered', 'quantity_ordered')
             ->withSum('lines as total_delivered', 'quantity_delivered')
             // ⚠ THE SHOP REFERENCE IS SEARCHABLE TOO, and it has to be: a
@@ -104,6 +111,10 @@ class SalesOrderController extends Controller
             'own_only' => $ownOnly,
             // A CRM lead's "New order" link names the customer (26 Sep 2026).
             'preselect_customer' => $request->integer('customer') ?: null,
+            // ⭐ The brand picker (required when the business has brands), and
+            // the brand this person last took an order for, pre-chosen.
+            'brands' => OrderBrand::options($businessId),
+            'last_brand_id' => $this->lastBrandId($request, $businessId),
             // ⚠ C-SO-2 (Joy): NO reservation. This report is the honest
             // substitute - what is promised against what is on the shelf, per
             // product, for a human deciding whether to take the next order.
@@ -266,6 +277,7 @@ class SalesOrderController extends Controller
 
         $order->load([
             'customer',
+            'brand:id,code,name',
             'warehouse:id,name',
             // ⚠ Website Phase 2, slice 2.4. A website order lands in this
             // screen's approval queue, and the person confirming it needs the
@@ -302,6 +314,9 @@ class SalesOrderController extends Controller
         $canBook = $user->can('sales.sell') && $user->can('couriers.parcels.book');
         $canViewParcels = $user->can('couriers.parcels.view');
         $courierAccounts = $canBook ? ParcelPresenter::bookableAccounts((int) $order->business_id) : collect();
+        // ⭐ Joy, 11 Oct 2026: a parcel goes through the courier account that
+        // serves the order's brand. Shown for every challan of this order.
+        $brandId = $order->brand_id === null ? null : (int) $order->brand_id;
 
         $challans = $deliveries
             ->map(function (Delivery $delivery) use ($resolver, $canBook, $canViewParcels, $courierAccounts) {
@@ -372,7 +387,7 @@ class SalesOrderController extends Controller
             'next_steps' => OrderNextSteps::for($order, $deliveries, $user),
             'couriers' => MoneyAccount::query()->active()->where('type', MoneyAccountType::Courier->value)
                 ->orderBy('name')->get(['id', 'name']),
-            'courier_accounts' => ParcelPresenter::accountOptions($courierAccounts, (int) $order->business_id),
+            'courier_accounts' => ParcelPresenter::accountOptions($courierAccounts, (int) $order->business_id, $brandId),
             'can_book_courier' => $canBook,
             'can_view_parcels' => $canViewParcels,
             'can_record_outcome' => $user->can('sales.sell') && $user->can('sales.receipt.record') && $user->can('sales.returns.record'),
@@ -624,7 +639,17 @@ class SalesOrderController extends Controller
             // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the parcel weight typed
             // over the worked-out one. Blank = the worked-out weight. No reason.
             'weight_grams' => ['nullable', 'integer', 'min:1', 'max:'.ProductWeight::MAX_GRAMS],
+            'brand_id' => ['nullable', 'integer'],
         ]);
+
+        // ⭐ Joy, 11 Oct 2026: every order carries its brand, so one is required
+        // wherever the business sells under brands. The action checks it is
+        // this business's own and still in use.
+        $businessId = (int) app(BusinessContext::class)->id();
+
+        if (! isset($data['brand_id']) && OrderBrand::options($businessId, activeOnly: true)->isNotEmpty()) {
+            throw ValidationException::withMessages(['brand_id' => 'Choose the brand this order is sold under.']);
+        }
 
         // ⚠⚠ A typed price is a margin decision (21 Sep 2026): whoever may take an
         // order had it for any figure, with nothing to say who chose it. Only a
@@ -658,6 +683,7 @@ class SalesOrderController extends Controller
                 expectedDate: $data['expected_date'] ?? null,
                 note: $data['note'] ?? null,
                 weightGrams: isset($data['weight_grams']) ? (int) $data['weight_grams'] : null,
+                brandId: isset($data['brand_id']) ? (int) $data['brand_id'] : null,
             );
         } catch (NoSellingPriceException $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
@@ -671,6 +697,23 @@ class SalesOrderController extends Controller
 
         return redirect()->route('sales.orders.show', $order)
             ->with('success', "Sales order {$order->order_number} recorded.".($held ? " It is waiting for approval: {$held}" : ''));
+    }
+
+    /**
+     * The brand of this person's own latest order that had one, still a brand
+     * in use here: what the order form offers first. Derived, never stored.
+     */
+    private function lastBrandId(Request $request, int $businessId): ?int
+    {
+        $id = SalesOrder::query()
+            ->where('business_id', $businessId)
+            ->where('created_by', $request->user()->id)
+            ->whereNotNull('brand_id')
+            ->whereHas('brand', fn ($q) => $q->where('is_active', true))
+            ->orderByDesc('id')
+            ->value('brand_id');
+
+        return $id === null ? null : (int) $id;
     }
 
     /**

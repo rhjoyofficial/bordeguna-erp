@@ -9,6 +9,7 @@ use App\Modules\Commerce\Models\Store;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Enums\SalesChannel;
 use App\Modules\Sales\Enums\SalesOrderStatus;
@@ -49,6 +50,8 @@ class SalesOrder extends Model
         'customer_id',
         'warehouse_id',
         'store_id',
+        // Owner decision 11 Oct 2026: which brand the order is sold under.
+        'brand_id',
         'channel',
         'order_number',
         'shop_reference',
@@ -154,6 +157,15 @@ class SalesOrder extends Model
     public function store(): BelongsTo
     {
         return $this->belongsTo(Store::class);
+    }
+
+    /**
+     * The brand the order is sold under (Joy, 11 Oct 2026): LaLaDia, Bionic-Garden.
+     * Null on an order taken before brands were recorded, or from a multi-brand store.
+     */
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Couriers\Booking;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Inventory\Models\Brand;
 use App\Modules\Sales\Actions\BookConsignment;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Couriers\Drivers\BooksParcels;
@@ -19,6 +20,8 @@ use App\Modules\Sales\Couriers\Tracking\RecordShipmentEvent;
 use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\DeliveryLine;
+use App\Modules\Sales\Support\OrderBrand;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -59,7 +62,10 @@ class BookParcelThroughCourier
      */
     public function handle(Delivery $delivery, CourierAccount $account, array $input, User $by): CourierBookingRequest
     {
-        [$link, $money] = self::linkFor($account, (int) $delivery->business_id);
+        // ⭐ Joy, 11 Oct 2026: through the link that serves the ORDER's brand,
+        // never an account kept for the other brand.
+        $brandId = OrderBrand::forDeliveries([$delivery->id])[$delivery->id] ?? null;
+        [$link, $money] = self::linkFor($account, (int) $delivery->business_id, $brandId);
         $definition = $account->definition();
         $driver = app((string) $definition->driverClass());
 
@@ -238,14 +244,18 @@ class BookParcelThroughCourier
     }
 
     /**
-     * The account's link to this business: active, a pickup store, and the
-     * business's own courier money account (1145) with a ledger head.
+     * The account's link that serves this business, and this order's brand:
+     * active, a pickup store, and the business's own courier money account
+     * (1145) with a ledger head.
+     *
+     * ⚠ An account linked only to another brand is refused here, on the server,
+     * whatever the form offered (Joy, 11 Oct 2026).
      *
      * @return array{0: CourierAccountBusiness, 1: MoneyAccount}
      *
      * @throws ValidationException
      */
-    public static function linkFor(CourierAccount $account, int $businessId): array
+    public static function linkFor(CourierAccount $account, int $businessId, ?int $brandId = null): array
     {
         $fail = fn (string $message) => throw ValidationException::withMessages(['courier_account_id' => $message]);
 
@@ -253,19 +263,60 @@ class BookParcelThroughCourier
             $fail("{$account->label} is switched off. An Owner can test and activate it in Settings > Couriers.");
         }
 
-        $link = $account->linkFor($businessId);
+        $links = $account->linksFor($businessId)->filter(fn (CourierAccountBusiness $link) => ! blank($link->provider_store_id))->values();
 
-        if ($link === null || blank($link->provider_store_id)) {
+        if ($links->isEmpty()) {
             $fail("{$account->label} does not serve this business yet. Link it with a pickup store in Settings > Couriers.");
         }
 
-        $money = $link->money_account_id === null ? null : MoneyAccount::query()->withoutGlobalScopes()->find($link->money_account_id);
+        $link = CourierAccountBusiness::serving($links, $brandId);
 
-        if ($money === null || (int) $money->business_id !== $businessId || ! $money->isCourier() || ! $money->is_active || $money->account_id === null) {
+        if ($link === null) {
+            $fail(self::brandRefusal($account, $links, $brandId));
+        }
+
+        $money = self::moneyFor($link, $businessId);
+
+        if ($money === null) {
             $fail("{$account->label} has no active courier money account (1145) for this business. Set it in Settings > Couriers.");
         }
 
         return [$link, $money];
+    }
+
+    /**
+     * The link's courier money account when it is usable: this business's own,
+     * a courier one, switched on and with a ledger head. Null otherwise.
+     */
+    public static function moneyFor(CourierAccountBusiness $link, int $businessId): ?MoneyAccount
+    {
+        $money = $link->money_account_id === null ? null : MoneyAccount::query()->withoutGlobalScopes()->find($link->money_account_id);
+
+        if ($money === null || (int) $money->business_id !== $businessId || ! $money->isCourier() || ! $money->is_active || $money->account_id === null) {
+            return null;
+        }
+
+        return $money;
+    }
+
+    /**
+     * Why an account with links here does not serve this order's brand.
+     *
+     * @param  Collection<int, CourierAccountBusiness>  $links
+     */
+    public static function brandRefusal(CourierAccount $account, Collection $links, ?int $brandId): string
+    {
+        $names = Brand::query()->withoutGlobalScopes()
+            ->whereIn('id', $links->pluck('brand_id')->filter()->map(fn ($id) => (int) $id)->unique()->values()->all())
+            ->orderBy('name')->pluck('name')->implode(' and ');
+
+        if ($brandId === null) {
+            return "{$account->label} carries {$names} parcels only, and this order has no brand. Choose another account.";
+        }
+
+        $brand = Brand::query()->withoutGlobalScopes()->whereKey($brandId)->value('name') ?? 'this brand';
+
+        return "{$account->label} carries {$names} parcels only, not {$brand}.";
     }
 
     /**

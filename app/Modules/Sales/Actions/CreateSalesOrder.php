@@ -7,6 +7,7 @@ use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Actions\NotifyApprovers;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\ProductWeight;
@@ -59,6 +60,7 @@ class CreateSalesOrder
         ?string $note = null,
         ?SalesOrderOrigin $origin = null,
         ?int $weightGrams = null,
+        ?int $brandId = null,
     ): SalesOrder {
         // ⚠ Deliberately NOT EffectiveDate::resolve - that helper asserts the
         // accounting period is open, which guards events that post. An order
@@ -82,6 +84,23 @@ class CreateSalesOrder
             throw ValidationException::withMessages([
                 'warehouse_id' => 'That warehouse is no longer active.',
             ]);
+        }
+
+        // ⭐ Joy, 11 Oct 2026: the order carries its brand. Typed on the form,
+        // else the shop's own. ⚠ A brand of this business and still in use,
+        // never one a browser named from somewhere else.
+        $brandId ??= $origin?->brandId;
+
+        if ($brandId !== null) {
+            $brand = Brand::query()->withoutGlobalScopes()->where('business_id', $customer->business_id)->whereKey($brandId)->first();
+
+            if ($brand === null) {
+                throw ValidationException::withMessages(['brand_id' => 'That brand belongs to a different business.']);
+            }
+
+            if (! $brand->is_active) {
+                throw ValidationException::withMessages(['brand_id' => "{$brand->name} is no longer in use."]);
+            }
         }
 
         $lines = array_values(array_filter($lines, fn (array $entry) => (float) $entry['quantity'] > 0));
@@ -119,7 +138,7 @@ class CreateSalesOrder
             ]);
         }
 
-        $order = DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $expectedDate, $note, $origin, $weightGrams) {
+        $order = DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $expectedDate, $note, $origin, $weightGrams, $brandId) {
             $order = SalesOrder::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
@@ -129,6 +148,7 @@ class CreateSalesOrder
                 // columns. See SalesChannel and SalesOrderOrigin.
                 'store_id' => $origin?->storeId,
                 'channel' => $origin?->channel,
+                'brand_id' => $brandId,
                 'order_number' => $this->nextNumber($customer->business_id, $date),
                 'shop_reference' => $origin?->shopReference,
                 'ordered_at' => $date->toDateString(),
