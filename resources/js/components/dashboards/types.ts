@@ -74,6 +74,8 @@ export interface Row {
     id: number | string;
     url?: string;
     tone?: Tone;
+    /** A cell that speaks louder than its row, by column key. */
+    cell_tones?: Record<string, Tone>;
     cells: Record<string, string | number | null>;
 }
 

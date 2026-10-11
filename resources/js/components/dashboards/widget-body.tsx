@@ -363,7 +363,7 @@ function BreakdownBody({
     widgetKey?: string;
 }) {
     const reduce = useReducedMotion();
-    const { t } = useTranslation();
+    const { t, tr } = useTranslation();
     const max = Math.max(1, ...payload.items.map((i) => Math.abs(i.value)));
     const total = payload.items.reduce((sum, i) => sum + i.value, 0);
     const scaled = payload.items.some((item) => toneStatus(item.tone) !== null);
@@ -373,6 +373,19 @@ function BreakdownBody({
             : payload.chart === 'donut' && !scaled
               ? shareColour(index, payload.items.length)
               : toneFill(item.tone, scaled);
+
+    // Every bucket at zero (Joy, 11 Oct 2026): one calm line instead of five
+    // empty bars. Any figure above zero brings the full view straight back,
+    // and a live refresh re-decides on every answer.
+    if (isAllZero(payload)) {
+        return (
+            <div>
+                <EmptyNote text={tr(`dash.zero.${widgetKey ?? ''}`, t('dash.zero.default'))} calm />
+                {/* A ledger caption is a warning (does not tie) and stays; an operational one only explains the bars. */}
+                {payload.caption && payload.basis === 'ledger' && <p className="text-muted-foreground mt-3 text-xs">{payload.caption}</p>}
+            </div>
+        );
+    }
 
     return (
         <div>
@@ -492,6 +505,17 @@ function BreakdownBody({
     );
 }
 
+/** A bucket breakdown with nothing in any bucket, its total or its side figures. */
+function isAllZero(payload: BreakdownPayload): boolean {
+    return (
+        payload.chart === 'bar' &&
+        payload.items.length > 1 &&
+        payload.items.every((item) => item.value === 0) &&
+        (payload.total ?? 0) === 0 &&
+        (payload.parts ?? []).every((part) => typeof part.value !== 'number' || part.value === 0)
+    );
+}
+
 function ListBody({ payload, emptyText }: { payload: ListPayload; emptyText: string }) {
     const reduce = useReducedMotion();
     const { t } = useTranslation();
@@ -578,6 +602,9 @@ function ListBody({ payload, emptyText }: { payload: ListPayload; emptyText: str
                                                 content = <StatusPill text={text} />;
                                             } else if (PERSON_COLUMNS.has(column.key) && text !== '-') {
                                                 content = <Person name={text} />;
+                                            } else if (row.cell_tones?.[column.key]) {
+                                                // One cell louder than its row (a webhook whose reply value is missing).
+                                                content = <span className={cn('font-medium', toneText(row.cell_tones[column.key]))}>{text}</span>;
                                             } else {
                                                 content = <span className={index === 0 ? 'font-medium' : 'text-muted-foreground'}>{text}</span>;
                                             }

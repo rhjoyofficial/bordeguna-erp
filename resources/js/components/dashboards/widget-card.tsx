@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowUpRight, EyeOff, Loader2, RefreshCw } from 'lucide-
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { secondsAgo } from './format';
+import { widgetAnchor } from './layout';
 import { iconFor } from './palette';
 import type { DashboardWidget } from './types';
 import type { FeedEntry } from './use-widget-feed';
@@ -52,6 +53,7 @@ export function WidgetCard({
     onHide,
     onRefresh,
     brandName = null,
+    spanClass,
 }: {
     widget: DashboardWidget;
     entry: FeedEntry;
@@ -61,6 +63,8 @@ export function WidgetCard({
     brandName?: string | null;
     onHide: () => void;
     onRefresh: () => void;
+    /** Grid spans worked out for the whole page (layout.ts), so rows end without holes. */
+    spanClass?: string;
 }) {
     const reduce = useReducedMotion();
     const { t, tr } = useTranslation();
@@ -115,15 +119,17 @@ export function WidgetCard({
 
     return (
         <motion.section
+            id={widgetAnchor(widget.key)}
+            data-dash-group={widget.category}
             aria-labelledby={`widget-${widget.key}`}
             initial={reduce ? false : { opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: reduce ? 0 : Math.min(index, 12) * 0.045 }}
             className={cn(
                 'dash-acc-brand',
-                'bg-card text-card-foreground @container relative isolate flex flex-col overflow-hidden rounded-2xl border p-4 sm:p-5',
+                'bg-card text-card-foreground @container relative isolate flex scroll-mt-16 flex-col overflow-hidden rounded-2xl border p-4 sm:p-5',
                 'shadow-[0_1px_2px_rgba(20,40,25,0.04)] dark:shadow-none',
-                SPAN[widget.size],
+                spanClass ?? SPAN[widget.size],
             )}
         >
             {pulse > 0 && <span key={pulse} aria-hidden className="dash-pulse pointer-events-none absolute inset-0 rounded-[inherit]" />}

@@ -1,5 +1,8 @@
 import { BrandBar, LiveIndicator, RangeBar, sendJson, SoundSettingsPopover } from '@/components/dashboards/dashboard-toolbar';
+import { GettingStartedCard, type GettingStartedData } from '@/components/dashboards/getting-started';
 import { HeroBand } from '@/components/dashboards/hero-band';
+import { spanClasses } from '@/components/dashboards/layout';
+import { SectionChips } from '@/components/dashboards/section-chips';
 import type { DashboardWidget, RangeState, SoundSettings } from '@/components/dashboards/types';
 import { useDashboardChannel } from '@/components/dashboards/use-dashboard-channel';
 import { useWidgetFeed } from '@/components/dashboards/use-widget-feed';
@@ -39,6 +42,8 @@ interface Props {
     sound: SoundSettings;
     realtime: { enabled: boolean; business_channel: string; user_channel: string };
     can_configure: boolean;
+    /** What is still missing before the figures mean anything (Owner, see-all only); null = nothing to show. */
+    getting_started?: GettingStartedData | null;
 }
 
 /**
@@ -71,6 +76,7 @@ export default function RoleDashboard(props: Props) {
     }, []);
 
     const keys = useMemo(() => widgets.map((w) => w.key), [widgets]);
+    const spans = useMemo(() => spanClasses(widgets), [widgets]);
     const socketWanted = realtime.enabled && realtimeAvailable();
     const [connected, setConnected] = useState(false);
     const { entries, refresh } = useWidgetFeed({ widgets, dashboard: dashboard.key, rangeQuery: range.query, live: connected });
@@ -192,6 +198,10 @@ export default function RoleDashboard(props: Props) {
                     </div>
                 )}
 
+                {props.getting_started && <GettingStartedCard data={props.getting_started} />}
+
+                <SectionChips widgets={widgets} />
+
                 {widgets.length === 0 ? (
                     <p className="text-muted-foreground rounded-2xl border border-dashed bg-gradient-to-br from-emerald-500/6 via-sky-500/6 to-violet-500/6 p-8 text-center text-sm">
                         {hidden_widgets.length > 0 ? t('dash.all_hidden') : t('dash.nothing_for_role')}
@@ -204,6 +214,7 @@ export default function RoleDashboard(props: Props) {
                                 widget={widget}
                                 entry={entries[widget.key] ?? { result: widget.result, fetchedAt: now, loading: false, stale: false }}
                                 index={index}
+                                spanClass={spans[widget.key]}
                                 now={now}
                                 brandName={brandName}
                                 onRefresh={() => refresh([widget.key])}

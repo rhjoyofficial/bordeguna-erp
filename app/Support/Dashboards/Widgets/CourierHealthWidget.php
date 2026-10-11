@@ -2,6 +2,7 @@
 
 namespace App\Support\Dashboards\Widgets;
 
+use App\Modules\Sales\Couriers\Models\CourierAccount;
 use App\Modules\Sales\Couriers\Models\CourierAccountBusiness;
 use App\Modules\Sales\Couriers\Models\CourierApiCall;
 use App\Support\Dashboards\DashboardKey;
@@ -32,7 +33,7 @@ class CourierHealthWidget extends CourierWidget
 
     public function description(): ?string
     {
-        return 'Per courier account: switched on or not, the last call that worked, the last error, and the last update the courier pushed to us. As at now.';
+        return 'Per courier account: switched on or not, the last call that worked, the last error, whether its webhook is paired, and the last update the courier pushed to us. As at now.';
     }
 
     public function dashboards(): array
@@ -106,17 +107,29 @@ class CourierHealthWidget extends CourierWidget
             $okAt = $lastOk[$id] ?? null;
             $failing = $error !== null && ($okAt === null || Carbon::parse($error->created_at)->gt(Carbon::parse($okAt)));
 
+            // The newest authentic update: stamped on the account by the webhook
+            // (pairing guard), or the newest webhook event on one of our parcels.
+            $pushed = collect([$account?->webhook_last_event_at, $lastWebhook[$id] ?? null])
+                ->filter()
+                ->map(fn ($at) => Carbon::parse($at))
+                ->sortDesc()
+                ->first();
+            [$webhook, $webhookTone] = self::webhookState($account);
+
             return [
                 'id' => $id,
                 'url' => '/settings/couriers',
                 'tone' => ! $account?->is_active ? 'warn' : ($failing ? 'bad' : 'good'),
+                // One cell may speak louder than its row: a missing reply value is red.
+                'cell_tones' => array_filter(['webhook' => $webhookTone]),
                 'cells' => [
                     // Named as Settings > Couriers names it: "Pathao: <label>".
                     'account' => implode(': ', array_filter([$account?->provider?->name, $account?->label])),
                     'state' => ! $account?->is_active ? 'Off' : ($failing ? 'Failing' : 'Working'),
                     'last_ok' => $ago($okAt),
                     'last_error' => $error === null ? 'None' : $ago($error->created_at).': '.mb_strimwidth((string) $error->error, 0, 80, '...'),
-                    'last_webhook' => $ago($lastWebhook[$id] ?? null),
+                    'webhook' => $webhook,
+                    'last_webhook' => $ago($pushed),
                 ],
             ];
         })->values()->all();
@@ -128,6 +141,7 @@ class CourierHealthWidget extends CourierWidget
                 ['key' => 'state', 'label' => 'State'],
                 ['key' => 'last_ok', 'label' => 'Last good call'],
                 ['key' => 'last_error', 'label' => 'Last error'],
+                ['key' => 'webhook', 'label' => 'Webhook'],
                 ['key' => 'last_webhook', 'label' => 'Last update pushed'],
             ],
             'rows' => $rows,
@@ -135,5 +149,32 @@ class CourierHealthWidget extends CourierWidget
             'basis' => 'operational',
             'watch' => ['failing' => count(array_filter($rows, fn ($r) => $r['tone'] === 'bad'))],
         ];
+    }
+
+    /**
+     * Whether the courier's webhook is paired with us, from what the pairing
+     * guard records on the account: paired (with the day), the courier's
+     * reply value missing, the secret not matching, or never tried. An
+     * authentic update after a failed attempt means it paired after all.
+     *
+     * @return array{0: string, 1: 'bad'|null}
+     */
+    private static function webhookState(?CourierAccount $account): array
+    {
+        $tried = $account?->webhook_last_handshake_at;
+        $heard = $account?->webhook_last_event_at;
+        $day = fn (Carbon $at) => $at->copy()->timezone('Asia/Dhaka')->format('j M');
+
+        if ($account === null || ($tried === null && $heard === null)) {
+            return ['Never tried', null];
+        }
+
+        if ($account->webhook_last_handshake_ok === false && ($heard === null || $heard->lt($tried))) {
+            return $account->webhook_last_handshake_problem === CourierAccount::PAIRING_BAD_SIGNATURE
+                ? ['Secret does not match', 'bad']
+                : ['Reply value missing', 'bad'];
+        }
+
+        return ['Paired '.$day($account->webhook_last_handshake_ok ? $tried : ($heard ?? $tried)), null];
     }
 }

@@ -57,6 +57,37 @@ function writeOffset(offset: number): void {
     }
 }
 
+/**
+ * The page you are on is always visible in the menu (11 Oct 2026: the
+ * Dashboard opened with the menu still scrolled down at Settings, from the
+ * last visit). The remembered offset is kept when the active item is already
+ * in view; otherwise the menu moves just enough to show it ("nearest"), and
+ * only the menu: the page itself never scrolls.
+ */
+function revealActive(container: HTMLElement): void {
+    const active = container.querySelector<HTMLElement>(
+        '[data-sidebar="menu-button"][data-active="true"], [data-sidebar="menu-sub-button"][data-active="true"]',
+    );
+
+    if (active === null) {
+        return;
+    }
+
+    const box = container.getBoundingClientRect();
+    const item = active.getBoundingClientRect();
+    const margin = 8;
+
+    if (item.top < box.top + margin) {
+        container.scrollTop -= box.top + margin - item.top;
+    } else if (item.bottom > box.bottom - margin) {
+        container.scrollTop += item.bottom - (box.bottom - margin);
+    } else {
+        return;
+    }
+
+    writeOffset(container.scrollTop);
+}
+
 export function useSidebarScrollMemory<T extends HTMLElement>() {
     const ref = useRef<T | null>(null);
 
@@ -64,11 +95,15 @@ export function useSidebarScrollMemory<T extends HTMLElement>() {
         const element = ref.current;
         const offset = readOffset();
 
-        if (element === null || offset <= 0) {
+        if (element === null) {
             return;
         }
 
-        element.scrollTop = offset;
+        if (offset > 0) {
+            element.scrollTop = offset;
+        }
+
+        revealActive(element);
 
         // ⚠ One retry on the next frame, and it earns its place: icons and the
         // web font can still be resolving on the first layout pass, so the
@@ -77,9 +112,15 @@ export function useSidebarScrollMemory<T extends HTMLElement>() {
         // lands near the right place on a warm load and near the top on a cold
         // one, which reads as an intermittent bug.
         const frame = requestAnimationFrame(() => {
-            if (ref.current !== null && ref.current.scrollTop !== offset) {
+            if (ref.current === null) {
+                return;
+            }
+
+            if (offset > 0 && ref.current.scrollTop !== offset) {
                 ref.current.scrollTop = offset;
             }
+
+            revealActive(ref.current);
         });
 
         return () => cancelAnimationFrame(frame);
