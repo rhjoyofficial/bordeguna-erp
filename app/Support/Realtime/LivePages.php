@@ -48,6 +48,11 @@ final class LivePages
         'approvals.history' => ['approval_request'],
         'work' => ['approval_request', 'leave_request', 'expense_claim', 'sales_order', 'notification'],
         'notifications.index' => ['notification'],
+        // Needs attention: anything whose change can add or clear an item.
+        'attention' => [
+            'consignment', 'courier_statement', 'approval_request', 'stock', 'delivery',
+            'sales_invoice', 'customer_receipt', 'supplier_bill', 'voucher', 'journal',
+        ],
         // People
         'hrm.attendance.daily.index' => ['attendance_day'],
         'hrm.leave.index' => ['leave_request', 'approval_request'],

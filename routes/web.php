@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ApprovalInboxController;
 use App\Http\Controllers\AssistantController;
+use App\Http\Controllers\AttentionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardPreferenceController;
 use App\Http\Controllers\DashboardWidgetController;
@@ -78,6 +79,9 @@ Route::middleware(['auth', 'business'])->group(function () {
 
     // Module 7: the morning walk around the shop, done by the system.
     Route::get('health', [BusinessHealthController::class, 'index'])->name('health');
+    // Needs attention (plan C.4): one ranked list of what is waiting on
+    // somebody. Open to every member; each source gates itself.
+    Route::get('attention', [AttentionController::class, 'index'])->name('attention');
     Route::get('approvals', [ApprovalInboxController::class, 'index'])->name('approvals.index');
     // The read-only record of settled approvals, so an authority can see where a
     // request went after it left the inbox (28 Sep 2026).

@@ -11,6 +11,7 @@ use App\Modules\Foundation\Support\DocumentPdf;
 use App\Modules\Foundation\Support\ErpAssistant;
 use App\Modules\Hrm\Models\Employee;
 use App\Support\ApprovalInbox;
+use App\Support\Attention\NeedsAttention;
 use App\Support\Realtime\LivePages;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
@@ -109,6 +110,9 @@ class HandleInertiaRequests extends Middleware
             'live' => fn () => LivePages::forRequest($request),
             'pendingApprovalsCount' => fn () => $this->actionableApprovalsCount($request),
             'canReviewApprovals' => fn () => $this->canReviewApprovals($request),
+            // Needs attention's sidebar badge (plan C.4): at most a minute old
+            // (NeedsAttention::BADGE_SECONDS), refreshed whenever the page is read.
+            'attentionCount' => fn () => $this->attentionCount($request),
             // The bell's own feed. In-app since 2026-08-23, when approval
             // emails were switched off on Joy's instruction, so this is now the
             // ONLY way an approver learns something is waiting.
@@ -266,6 +270,8 @@ class HandleInertiaRequests extends Middleware
             'canProposeRateCards' => fn () => (bool) $request->user()?->can('couriers.ratecards.propose'),
             // Settings > Dashboards (11 Oct 2026): the Owner's see-all permission.
             'canConfigureDashboards' => fn () => (bool) $request->user()?->can('dashboard.view_all'),
+            // Settings > Failed jobs (11 Oct 2026): the queue's failures, Owner only.
+            'canManageJobs' => fn () => (bool) $request->user()?->can('system.jobs.manage'),
             // ⚠ The Assets module shipped loading MIGRATIONS ONLY - no routes, no
             // screens, no permissions - so nothing the business owns could be
             // recorded and depreciation had no caller at all. Reading the
@@ -297,6 +303,28 @@ class HandleInertiaRequests extends Middleware
         return $user->can('inventory.stock.approve')
             || $user->can('purchasing.po.approve')
             || $this->actionableApprovalsCount($request) > 0;
+    }
+
+    /**
+     * ⚠ A badge never breaks a page: if counting fails it shows nothing, and
+     * the page itself says which source could not be read.
+     */
+    private function attentionCount(Request $request): int
+    {
+        $user = $request->user();
+        $businessId = app(BusinessContext::class)->id();
+
+        if (! $user || $businessId === null) {
+            return 0;
+        }
+
+        try {
+            return app(NeedsAttention::class)->count($user, (int) $businessId);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return 0;
+        }
     }
 
     /**

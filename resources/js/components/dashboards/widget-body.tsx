@@ -1,12 +1,26 @@
+import { AttentionList } from '@/components/attention/attention-list';
 import { Input } from '@/components/ui/input';
+import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { Link } from '@inertiajs/react';
+import { type SharedData } from '@/types';
+import { Link, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useMemo, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AnimatedNumber } from './animated-number';
 import { changeAgainst, formatValue } from './format';
-import type { BreakdownPayload, ListPayload, Part, ProgressPayload, SeriesPayload, SignalsPayload, StatPayload, Tone, WidgetPayload } from './types';
+import type {
+    AttentionPayload,
+    BreakdownPayload,
+    ListPayload,
+    Part,
+    ProgressPayload,
+    SeriesPayload,
+    SignalsPayload,
+    StatPayload,
+    Tone,
+    WidgetPayload,
+} from './types';
 
 const SERIES_COLORS = ['var(--chart-1)', 'var(--chart-4)', 'var(--chart-3)', 'var(--chart-2)', 'var(--chart-5)'];
 
@@ -43,6 +57,8 @@ export function WidgetBody({ payload, emptyText }: { payload: WidgetPayload; emp
             return <SignalsBody payload={payload} />;
         case 'progress':
             return <ProgressBody payload={payload} emptyText={emptyText} />;
+        case 'attention':
+            return <AttentionBody payload={payload} emptyText={emptyText} />;
         default:
             return <p className="text-muted-foreground text-sm">{payload.message}</p>;
     }
@@ -82,6 +98,7 @@ function Parts({ parts }: { parts?: Part[] }) {
 }
 
 function StatBody({ payload }: { payload: StatPayload }) {
+    const { t } = useTranslation();
     const change = typeof payload.value === 'number' ? changeAgainst(payload.value, payload.previous) : null;
 
     return (
@@ -96,7 +113,7 @@ function StatBody({ payload }: { payload: StatPayload }) {
                             'text-xs font-medium',
                             change.up ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
                         )}
-                        title="Against the previous period"
+                        title={t('dash.vs_previous')}
                     >
                         {change.text}
                     </span>
@@ -139,6 +156,7 @@ function ChartTooltip({
 
 function SeriesBody({ payload }: { payload: SeriesPayload }) {
     const reduce = useReducedMotion();
+    const { t } = useTranslation();
     const change = payload.total !== undefined ? changeAgainst(payload.total, payload.previous_total) : null;
     const hasData = payload.points.some((p) => payload.series.some((s) => Number(p[s.key]) !== 0));
     const summary = payload.series
@@ -155,22 +173,19 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
         <div>
             {payload.total !== undefined && (
                 <div className="mb-2 flex items-baseline gap-2">
-                    <span className="text-muted-foreground text-xs">{payload.total_label ?? 'Total'}</span>
+                    <span className="text-muted-foreground text-xs">{payload.total_label ?? t('dash.total')}</span>
                     <span className="text-xl font-semibold">
                         <AnimatedNumber value={payload.total} unit={payload.unit} />
                     </span>
                     {change && (
-                        <span
-                            className={cn('text-xs font-medium', change.up ? 'text-emerald-600' : 'text-amber-600')}
-                            title="Against the previous period"
-                        >
+                        <span className={cn('text-xs font-medium', change.up ? 'text-emerald-600' : 'text-amber-600')} title={t('dash.vs_previous')}>
                             {change.text}
                         </span>
                     )}
                 </div>
             )}
             {!hasData ? (
-                <p className="text-muted-foreground py-10 text-center text-sm">Nothing posted in this range.</p>
+                <p className="text-muted-foreground py-10 text-center text-sm">{t('dash.nothing_posted')}</p>
             ) : (
                 <div className="h-56 w-full" role="img" aria-label={summary}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -250,6 +265,7 @@ function SeriesBody({ payload }: { payload: SeriesPayload }) {
 
 function BreakdownBody({ payload, emptyText }: { payload: BreakdownPayload; emptyText: string }) {
     const reduce = useReducedMotion();
+    const { t } = useTranslation();
     const max = Math.max(1, ...payload.items.map((i) => Math.abs(i.value)));
     const total = payload.items.reduce((sum, i) => sum + i.value, 0);
 
@@ -340,7 +356,11 @@ function BreakdownBody({ payload, emptyText }: { payload: BreakdownPayload; empt
                 </ul>
             )}
             {payload.caption && <p className="text-muted-foreground mt-2 text-xs">{payload.caption}</p>}
-            {payload.chart === 'donut' && payload.total === undefined && <p className="sr-only">Total {formatValue(total, payload.unit)}</p>}
+            {payload.chart === 'donut' && payload.total === undefined && (
+                <p className="sr-only">
+                    {t('dash.total')} {formatValue(total, payload.unit)}
+                </p>
+            )}
             <Parts parts={payload.parts} />
         </div>
     );
@@ -348,6 +368,7 @@ function BreakdownBody({ payload, emptyText }: { payload: BreakdownPayload; empt
 
 function ListBody({ payload, emptyText }: { payload: ListPayload; emptyText: string }) {
     const reduce = useReducedMotion();
+    const { t } = useTranslation();
     const [query, setQuery] = useState('');
     const rows = useMemo(() => {
         if (payload.kind !== 'lookup' || query.trim() === '') {
@@ -374,13 +395,13 @@ function ListBody({ payload, emptyText }: { payload: ListPayload; emptyText: str
                 <Input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search a product or SKU"
+                    placeholder={t('dash.search_stock')}
                     className="mt-1 mb-2 h-8 text-sm"
-                    aria-label="Search stock"
+                    aria-label={t('dash.search_stock_label')}
                 />
             )}
             {rows.length === 0 ? (
-                <p className="text-muted-foreground mt-2 text-sm">{query ? 'Nothing matches.' : emptyText}</p>
+                <p className="text-muted-foreground mt-2 text-sm">{query ? t('dash.nothing_matches') : emptyText}</p>
             ) : (
                 <div className="mt-2 overflow-x-auto">
                     <table className="w-full text-sm">
@@ -441,7 +462,7 @@ function ListBody({ payload, emptyText }: { payload: ListPayload; emptyText: str
                     </table>
                     {payload.total_count > rows.length && payload.kind === 'list' && (
                         <p className="text-muted-foreground mt-1.5 text-xs">
-                            {rows.length} of {payload.total_count} shown
+                            {t('dash.shown_of', { shown: rows.length, total: payload.total_count })}
                         </p>
                     )}
                 </div>
@@ -451,8 +472,10 @@ function ListBody({ payload, emptyText }: { payload: ListPayload; emptyText: str
 }
 
 function SignalsBody({ payload }: { payload: SignalsPayload }) {
+    const { t } = useTranslation();
+
     if (payload.items.length === 0) {
-        return <p className="text-muted-foreground text-sm">No signals for your role.</p>;
+        return <p className="text-muted-foreground text-sm">{t('dash.no_signals')}</p>;
     }
 
     return (
@@ -483,6 +506,7 @@ function SignalsBody({ payload }: { payload: SignalsPayload }) {
 
 function ProgressBody({ payload, emptyText }: { payload: ProgressPayload; emptyText: string }) {
     const reduce = useReducedMotion();
+    const { t } = useTranslation();
     const share = payload.target ? Math.min(1, Math.max(0, payload.value / payload.target)) : 0;
 
     return (
@@ -493,7 +517,7 @@ function ProgressBody({ payload, emptyText }: { payload: ProgressPayload; emptyT
             {payload.target ? (
                 <>
                     <p className="text-muted-foreground text-xs">
-                        of {formatValue(payload.target, payload.unit)} target ({Math.round(share * 100)}%)
+                        {t('dash.of_target', { target: formatValue(payload.target, payload.unit), percent: Math.round(share * 100) })}
                     </p>
                     <div
                         className="bg-muted mt-2 h-3 overflow-hidden rounded-full"
@@ -515,6 +539,40 @@ function ProgressBody({ payload, emptyText }: { payload: ProgressPayload; emptyT
                 <p className="text-muted-foreground text-xs">{emptyText}</p>
             )}
             <Parts parts={payload.parts} />
+        </div>
+    );
+}
+
+/** Needs attention's top rows, the same component as /attention, with the counts above. */
+function AttentionBody({ payload, emptyText }: { payload: AttentionPayload; emptyText: string }) {
+    const { t } = useTranslation();
+    const { auth } = usePage<SharedData>().props;
+    const userId = (auth?.user?.id as number | undefined) ?? null;
+
+    return (
+        <div className="space-y-3">
+            <div className="flex flex-wrap gap-3 text-xs">
+                {(['critical', 'high', 'normal'] as const).map((severity) => (
+                    <span key={severity} className={cn('tabular-nums', severity === 'critical' && payload.counts.critical > 0 && toneText('bad'))}>
+                        <span className="text-base font-semibold">{payload.counts[severity]}</span> {t(`attention.severity.${severity}`)}
+                    </span>
+                ))}
+            </div>
+            {payload.failed.length > 0 && (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                    {t('attention.failed_note', { areas: payload.failed.map((f) => f.area).join(', ') })}
+                </p>
+            )}
+            {payload.items.length === 0 ? (
+                <p className="text-muted-foreground text-sm">{emptyText}</p>
+            ) : (
+                <AttentionList items={payload.items} userId={userId} compact />
+            )}
+            {payload.total_count > payload.items.length && (
+                <Link href="/attention" className="text-primary text-xs font-medium hover:underline">
+                    {t('attention.more', { count: payload.total_count })}
+                </Link>
+            )}
         </div>
     );
 }
