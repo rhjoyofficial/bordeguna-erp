@@ -149,3 +149,24 @@ colors, also first part can but minimal and futureistic".
 
 Screenshots: `round4-owner-light-1440.png`, `round4-owner-dark-1440.png`,
 `round4-finance-light-1440.png`, `round4-owner-light-390.png`.
+
+## Fifth pass: colour in the text (11 Oct 2026)
+
+Joy, on the fourth pass: "just add colors on the font where can give good
+vibe". Every surface rule from the fourth pass holds; colour is added to
+words and figures only, by meaning (`figureClass`, `labelClass`,
+`legendClass` in `palette.ts`):
+
+- Money in (income, sales, gross profit, a positive net) in brand green;
+  money out (claims, payables) in the chart orange; a negative figure, an
+  overdue amount or a critical count in red; something waiting above zero in
+  amber. A zero is muted grey; a balance with no direction keeps the normal
+  text colour. A server tone still wins.
+- Mini tile captions take a tint of their figure's meaning only when the
+  figure is not zero; chart legend words are in their series colour.
+- Hero: white figures, small labels in a soft mint, the green or red chip.
+- Large figures use the 600 steps (AA large text), small text the 700 or 800
+  steps in light and 300 in dark (AA body text).
+
+Screenshots: `round5-owner-light-1440.png`, `round5-owner-dark-1440.png`,
+`round5-finance-light-1440.png`, `round5-owner-light-390.png`.
