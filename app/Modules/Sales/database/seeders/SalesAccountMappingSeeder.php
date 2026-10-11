@@ -61,6 +61,10 @@ class SalesAccountMappingSeeder extends Seeder
         'courier.return_fees' => 'customer_return_delivery',
         'courier.additional_charges' => 'courier_adjustment',
         'courier.cod_fees' => 'cod_handling_charge',
+        // Courier statements v2 (11 Oct 2026): compensation for a lost or damaged
+        // parcel, and what a statement leaves owed to the courier.
+        'courier.compensation' => 'courier_compensation_income',
+        'courier.payable' => 'courier_payable',
 
         // What an online payment gateway keeps from each payment (14 September):
         // the gross the customer paid less the `store_amount` it settles.

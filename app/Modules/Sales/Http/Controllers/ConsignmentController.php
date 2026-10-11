@@ -4,7 +4,6 @@ namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
-use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
@@ -16,6 +15,7 @@ use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\Delivery;
+use App\Modules\Sales\Support\CourierStatements\CourierBalances;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -93,7 +93,10 @@ class ConsignmentController extends Controller
                 ->map(fn (MoneyAccount $courier) => [
                     'id' => $courier->id,
                     'name' => $courier->name,
-                    'held_in_books' => Money::ofMinor((int) JournalLine::query()->where('money_account_id', $courier->id)->sum('amount_minor'))->toTaka(),
+                    // ⚠ The courier's own 1145 lines only: its 2165 payable and 4960
+                    // compensation lines name the same money account (v2).
+                    'held_in_books' => CourierBalances::receivable($courier)->toTaka(),
+                    'owed_to_courier' => CourierBalances::payable($courier)->toTaka(),
                     'awaiting_payout' => Money::sum(
                         $awaitingPayout(Consignment::query()->where('money_account_id', $courier->id))
                             ->get(['collected_amount'])

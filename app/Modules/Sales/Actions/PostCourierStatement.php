@@ -10,13 +10,15 @@ use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Sales\Models\CourierParcelClaim;
 use App\Modules\Sales\Models\CourierStatement;
-use App\Modules\Sales\Support\CourierStatements\CourierStatementFormats;
+use App\Modules\Sales\Support\CourierStatements\CourierBalances;
 use App\Modules\Sales\Support\CourierStatements\CourierStatementReview;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -26,20 +28,35 @@ use Illuminate\Validation\ValidationException;
  * cash on delivery the courier was holding is cleared, and its fees are costs.
  *
  *   Cr 1145 Receivable from Couriers    what the courier collected for this business
- *   Dr 6371 Courier Charge              carrying delivered parcels, net of its discount
- *   Dr 6374 Customer Return Delivery    carrying parcels that came back
- *   Dr 6377 Courier Adjustment          its extra charges
- *   Dr 6378 COD Handling Charge         its cash-on-delivery fee
+ *   Dr courier.delivery_fees (6371)     carrying delivered parcels, NET of its discount
+ *   Dr courier.return_fees (6374)       carrying parcels that came back, net
+ *   Dr courier.additional_charges (6377) its extra charges; its adjustments by sign
+ *   Dr courier.cod_fees (6378)          its cash-on-delivery fee
+ *   Cr courier.compensation (4960)      what it paid for a lost or damaged parcel
+ *   Dr courier.payable (2165)           an earlier shortfall it netted off this payout
  *   Dr the bank the payout landed in    this business's share (a credit if negative)
  *
  * ⭐⭐ ONE PAYOUT, TWO BRANDS (Joy, 13 September: one shared Pathao account). The
- * deposit is the whole payout as the bank saw it and must equal the file's total;
- * each business books only its own share into its own row for that bank account,
- * so the shares add up to the deposit. A brand whose fees outweighed its
- * collections books a negative share: its fees were paid out of the other's cash.
+ * deposit is the whole payout as the bank saw it; each business books only its
+ * own share into its own row for that bank account, so the shares add up to the
+ * deposit. A brand whose fees outweighed its collections books a negative share.
  *
- * ⚠ NO DEPOSIT when the statement pays out nothing or less (a courier's "due
- * amount"): the share stays in 1145, whose balance then says the courier is owed.
+ * ⭐ v2 (11 Oct 2026, ChatGPT rulings 4-6, Joy's approved accounts):
+ * - NOTHING PAID OUT and this business's net is below zero: the shortfall is
+ *   owed to the courier, Cr courier.payable, never a credit left in 1145.
+ *   Nothing paid out and the net is above zero: the courier still holds it, Dr
+ *   1145.
+ * - SETTLE AGAINST PAYABLE: a later payout the courier netted an earlier
+ *   shortfall from. Up to the open payable for this courier; the deposit
+ *   expected falls by the same amount.
+ * - A DEPOSIT THAT DIFFERS from what is expected is accepted only with a
+ *   written reason, and the difference is booked in this business's books: less
+ *   arrived = still held by the courier (Dr 1145); more arrived = owed back to
+ *   it (Cr courier.payable). The bank reference and a proof file are kept.
+ *
+ * ⚠⚠ Every line on 1145, courier.payable and courier.compensation names the
+ * courier's money account, so each courier company's balance is its own (Joy,
+ * 11 Oct 2026). PostJournal refuses the two new heads without it.
  *
  * ⚠⚠ Every parcel settled is CLAIMED in `courier_parcel_claims`, which no
  * business scope hides, so the other brand posting the same statement cannot
@@ -47,7 +64,10 @@ use Illuminate\Validation\ValidationException;
  */
 class PostCourierStatement
 {
-    public function __construct(private readonly PostJournal $postJournal) {}
+    public function __construct(
+        private readonly PostJournal $postJournal,
+        private readonly StoreAttachment $storeAttachment,
+    ) {}
 
     /**
      * @throws ValidationException
@@ -58,8 +78,12 @@ class PostCourierStatement
         ?string $depositAmount,
         mixed $receivedOn,
         User $postedBy,
+        ?string $settlePayable = null,
+        ?string $differenceReason = null,
+        ?string $bankReference = null,
+        ?UploadedFile $proof = null,
     ): CourierStatement {
-        return DB::transaction(function () use ($statement, $receivedInto, $depositAmount, $receivedOn, $postedBy) {
+        return DB::transaction(function () use ($statement, $receivedInto, $depositAmount, $receivedOn, $postedBy, $settlePayable, $differenceReason, $bankReference, $proof) {
             /** @var CourierStatement $statement */
             $statement = CourierStatement::query()->whereKey($statement->id)->lockForUpdate()->with('lines', 'courier')->firstOrFail();
 
@@ -73,7 +97,11 @@ class PostCourierStatement
                 throw ValidationException::withMessages(['statement' => $review->problems[0]]);
             }
 
-            $depositArrived = $review->fileTotal->minor > 0;
+            $settle = $this->settlement($statement, $review, $settlePayable);
+            $expected = Money::ofMinor($review->fileTotal->minor - $settle->minor);
+            $depositArrived = $expected->minor > 0;
+            $difference = Money::zero();
+            $differenceReason = trim((string) $differenceReason) ?: null;
 
             if ($depositArrived) {
                 if ($receivedInto === null || $receivedInto->isCourier() || $receivedInto->isGateway() || ! $receivedInto->is_active || $receivedInto->business_id !== $statement->business_id) {
@@ -86,9 +114,15 @@ class PostCourierStatement
 
                 $deposit = Money::ofTaka((string) $depositAmount);
 
-                if ($deposit->minor !== $review->fileTotal->minor) {
+                if ($deposit->minor <= 0) {
+                    throw ValidationException::withMessages(['deposit_amount' => 'Enter the amount that arrived.']);
+                }
+
+                $difference = Money::ofMinor($deposit->minor - $expected->minor);
+
+                if (! $difference->isZero() && ($differenceReason === null || mb_strlen($differenceReason) < 5)) {
                     throw ValidationException::withMessages([
-                        'deposit_amount' => "The statement pays out {$review->fileTotal->format()}, but {$deposit->format()} arrived. Check the file is this payout's, and that nothing was held back.",
+                        'deposit_amount' => "The statement pays out {$expected->format()}, but {$deposit->format()} arrived. Check the file is this payout's, or say why they differ.",
                     ]);
                 }
 
@@ -103,14 +137,17 @@ class PostCourierStatement
 
             AccountingPeriod::assertOpenFor($on);
 
-            $this->post($statement, $review, $depositArrived ? $receivedInto : null, $on, $postedBy);
+            $this->post($statement, $review, $depositArrived ? $receivedInto : null, $settle, $difference, $on, $postedBy);
 
             foreach ($review->rows->where('included', true) as $row) {
-                $row['line']->forceFill(['consignment_id' => $row['consignment']?->id])->save();
+                $row['line']->forceFill([
+                    'consignment_id' => $row['consignment']?->id,
+                    'match_method' => $row['match_method'],
+                ])->save();
 
                 try {
                     CourierParcelClaim::create([
-                        'claim_key' => CourierParcelClaim::keyFor(CourierStatementFormats::provider($statement->courier), $row['line']->consignment_number),
+                        'claim_key' => CourierParcelClaim::keyFor($review->provider, $row['line']->consignment_number),
                         'business_id' => $statement->business_id,
                         'courier_statement_line_id' => $row['line']->id,
                     ]);
@@ -124,22 +161,62 @@ class PostCourierStatement
             $statement->forceFill([
                 'status' => CourierStatement::POSTED,
                 'received_money_account_id' => $depositArrived ? $receivedInto->id : null,
-                'deposit_amount' => $depositArrived ? $review->fileTotal->toTaka() : null,
+                'deposit_amount' => $depositArrived ? Money::ofMinor($expected->minor + $difference->minor)->toTaka() : null,
                 'received_on' => $depositArrived ? $on : null,
+                'bank_reference' => trim((string) $bankReference) ?: null,
+                'deposit_difference_reason' => $difference->isZero() ? null : $differenceReason,
+                'payable_settled_amount' => $settle->isZero() ? null : $settle->toTaka(),
                 'share_amount' => $review->share->toTaka(),
                 'posted_by' => $postedBy->id,
                 'posted_at' => now(),
             ])->save();
 
+            if ($proof !== null) {
+                $this->storeAttachment->handle($statement, $proof, CourierStatement::PAYOUT_PROOF, $postedBy);
+            }
+
             return $statement->fresh(['lines', 'courier', 'receivedInto']);
         });
     }
 
-    private function post(CourierStatement $statement, CourierStatementReview $review, ?MoneyAccount $receivedInto, Carbon $on, User $postedBy): void
+    /**
+     * How much of the courier's open payable this payout nets off.
+     */
+    private function settlement(CourierStatement $statement, CourierStatementReview $review, ?string $settlePayable): Money
+    {
+        if ($settlePayable === null || trim($settlePayable) === '') {
+            return Money::zero();
+        }
+
+        $settle = Money::ofTaka($settlePayable);
+
+        if ($settle->isZero()) {
+            return $settle;
+        }
+
+        $open = CourierBalances::payable($statement->courier);
+
+        if ($settle->minor < 0 || $settle->minor > $open->minor) {
+            throw ValidationException::withMessages([
+                'settle_payable' => "The ERP shows {$open->format()} owed to {$statement->courier->name}; settle at most that.",
+            ]);
+        }
+
+        if ($settle->minor > max($review->share->minor, 0)) {
+            throw ValidationException::withMessages([
+                'settle_payable' => "This statement's share is {$review->share->format()}; it cannot net off more than that.",
+            ]);
+        }
+
+        return $settle;
+    }
+
+    private function post(CourierStatement $statement, CourierStatementReview $review, ?MoneyAccount $receivedInto, Money $settle, Money $difference, Carbon $on, User $postedBy): void
     {
         $courier = $statement->courier;
         $courierLedger = Account::findOrFail($courier->account_id);
         $memo = "{$courier->name} statement {$statement->statement_reference}";
+        $payable = fn () => AccountMapping::resolve('courier.payable', $on)->id;
 
         $lines = [];
 
@@ -148,20 +225,48 @@ class PostCourierStatement
         }
 
         foreach ([
-            'courier.delivery_fees' => [$review->deliveryFees, 'Delivery'],
-            'courier.return_fees' => [$review->returnFees, 'Returns'],
+            'courier.delivery_fees' => [$review->deliveryFees, 'Delivery, net of discount'],
+            'courier.return_fees' => [$review->returnFees, 'Returns, net of discount'],
             'courier.additional_charges' => [$review->additionalCharges, 'Extra charges'],
             'courier.cod_fees' => [$review->codFees, 'COD fee'],
         ] as $key => [$amount, $label]) {
             if (! $amount->isZero()) {
-                $lines[] = JournalLineDraft::debit(AccountMapping::resolve($key, $on)->id, $amount, "{$label}, {$memo}");
+                $lines[] = JournalLineDraft::signed(AccountMapping::resolve($key, $on)->id, $amount, "{$label}, {$memo}");
             }
         }
 
-        if (! $review->share->isZero()) {
-            $lines[] = $receivedInto !== null
-                ? JournalLineDraft::signed((int) Account::findOrFail($receivedInto->account_id)->id, $review->share, "Payout, {$memo}", null, $receivedInto)
-                : JournalLineDraft::signed($courierLedger->id, $review->share, "Held by the courier, {$memo}", null, $courier);
+        // A positive adjustment is money to us: it reduces the courier's charges.
+        if (! $review->adjustment->isZero()) {
+            $lines[] = JournalLineDraft::signed(AccountMapping::resolve('courier.additional_charges', $on)->id, $review->adjustment->negated(), "Courier adjustment, {$memo}");
+        }
+
+        if (! $review->compensation->isZero()) {
+            $lines[] = JournalLineDraft::signed(AccountMapping::resolve('courier.compensation', $on)->id, $review->compensation->negated(), "Compensation, {$memo}", null, $courier);
+        }
+
+        if (! $settle->isZero()) {
+            $lines[] = JournalLineDraft::debit($payable(), $settle, "Earlier shortfall netted off, {$memo}", null, $courier);
+        }
+
+        // What this business is left with once the courier netted its payable.
+        $remainder = Money::ofMinor($review->share->minor - $settle->minor);
+
+        if ($receivedInto !== null) {
+            $bank = Money::ofMinor($remainder->minor + $difference->minor);
+
+            if (! $bank->isZero()) {
+                $lines[] = JournalLineDraft::signed((int) Account::findOrFail($receivedInto->account_id)->id, $bank, "Payout, {$memo}", null, $receivedInto);
+            }
+
+            if ($difference->isCredit()) {
+                $lines[] = JournalLineDraft::debit($courierLedger->id, $difference, "Held back by the courier, {$memo}", null, $courier);
+            } elseif ($difference->isDebit()) {
+                $lines[] = JournalLineDraft::credit($payable(), $difference, "Paid in excess by the courier, {$memo}", null, $courier);
+            }
+        } elseif ($remainder->isDebit()) {
+            $lines[] = JournalLineDraft::debit($courierLedger->id, $remainder, "Held by the courier, {$memo}", null, $courier);
+        } elseif ($remainder->isCredit()) {
+            $lines[] = JournalLineDraft::credit($payable(), $remainder, "Owed to the courier, {$memo}", null, $courier);
         }
 
         if ($lines === []) {

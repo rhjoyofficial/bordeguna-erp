@@ -60,6 +60,7 @@ class PostJournal
         $this->assertBalanced($draft);
         $this->assertMoneyAccountsBelongHere($draft, $businessId);
         $this->assertPartyLedgersNameTheirParty($draft);
+        $this->assertCourierLedgersNameTheirCourier($draft);
 
         // ⚠ A reversal posts back exactly what the original posted, money
         // account and all, so it is never re-stamped or refused here.
@@ -185,6 +186,31 @@ class PostJournal
 
             if (! $line->party instanceof $class) {
                 throw JournalException::partyRequired($account, PartyLedgers::noun($class), $index + 1);
+            }
+        }
+    }
+
+    /**
+     * ⚠⚠ A line on Payable to Couriers or Courier Compensation Income ALWAYS
+     * names the courier's money account, whichever module posts it (Joy, 11 Oct
+     * 2026: "make sure each courier company can be identified correctly"). One
+     * head serves every courier; the money account on the line is what makes
+     * Pathao's balance Pathao's. 1145 follows the same rule by its writers and
+     * is not hard-checked here, because older writers predate the rule.
+     */
+    private function assertCourierLedgersNameTheirCourier(JournalDraft $draft): void
+    {
+        $courierHeads = Account::query()
+            ->whereIn('id', collect($draft->lines)->pluck('accountId')->unique())
+            ->whereIn('system_slug', ['courier_payable', 'courier_compensation_income'])
+            ->get()
+            ->keyBy('id');
+
+        foreach ($draft->lines as $index => $line) {
+            $account = $courierHeads->get($line->accountId);
+
+            if ($account !== null && ($line->moneyAccount === null || ! $line->moneyAccount->isCourier())) {
+                throw JournalException::courierRequired($account, $index + 1);
             }
         }
     }

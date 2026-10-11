@@ -217,12 +217,21 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::get('courier-statements', [CourierStatementController::class, 'index'])->name('courier-statements.index');
         Route::get('courier-statements/{courierStatement}', [CourierStatementController::class, 'show'])
             ->whereNumber('courierStatement')->name('courier-statements.show');
+        // v2: the rows the file could not be read on, and the exception workbook.
+        // Neither carries a customer's name or phone.
+        Route::get('courier-statements/{courierStatement}/errors', [CourierStatementController::class, 'errors'])
+            ->whereNumber('courierStatement')->name('courier-statements.errors');
+        Route::get('courier-statements/{courierStatement}/workbook', [CourierStatementController::class, 'workbook'])
+            ->whereNumber('courierStatement')->name('courier-statements.workbook');
     });
 
     // A courier's payout: money arriving and its fees, the trust level of
     // recording a customer receipt.
     Route::middleware('can:sales.receipt.record')->group(function () {
         Route::post('courier-statements', [CourierStatementController::class, 'store'])->name('courier-statements.store');
+        // ⚠ The courier's original file carries customer names and phones.
+        Route::get('courier-statements/{courierStatement}/source', [CourierStatementController::class, 'source'])
+            ->whereNumber('courierStatement')->name('courier-statements.source');
         Route::post('courier-statements/{courierStatement}/lines/{line}/resolution', [CourierStatementController::class, 'resolve'])
             ->whereNumber(['courierStatement', 'line'])->name('courier-statements.resolve');
         Route::post('courier-statements/{courierStatement}/post', [CourierStatementController::class, 'post'])
