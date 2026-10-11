@@ -106,16 +106,28 @@ interface Equation {
     balanced: boolean;
 }
 
+// A term with its sign, without a "-0.00" or a "+-5.00" (QA walk, 11 Oct 2026).
+function signed(sign: '-' | '+', value: string): string {
+    const amount = Number(value.replace(/[^0-9.-]/g, ''));
+    const bare = value.replace(/^-/, '');
+
+    if (!amount) {
+        return bare;
+    }
+
+    return (sign === '-') !== amount < 0 ? `-${bare}` : `+${bare}`;
+}
+
 function EquationRow({ label, equation }: { label: string; equation: Equation }) {
     return (
         <tr className="border-t">
             <td className="py-1 pr-3 font-medium">{label}</td>
             <td className="py-1 pr-3 text-right tabular-nums">{equation.collected}</td>
-            <td className="py-1 pr-3 text-right tabular-nums">-{equation.net_fees}</td>
-            <td className="py-1 pr-3 text-right tabular-nums">-{equation.cod_fees}</td>
-            <td className="py-1 pr-3 text-right tabular-nums">-{equation.additional}</td>
-            <td className="py-1 pr-3 text-right tabular-nums">+{equation.compensation}</td>
-            <td className="py-1 pr-3 text-right tabular-nums">+{equation.adjustment}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">{signed('-', equation.net_fees)}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">{signed('-', equation.cod_fees)}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">{signed('-', equation.additional)}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">{signed('+', equation.compensation)}</td>
+            <td className="py-1 pr-3 text-right tabular-nums">{signed('+', equation.adjustment)}</td>
             <td className="py-1 pr-3 text-right font-medium tabular-nums">{equation.expected}</td>
             <td className="py-1 pr-3 text-right tabular-nums">{equation.payout}</td>
             <td className={`py-1 text-right tabular-nums ${equation.balanced ? 'text-muted-foreground' : 'text-destructive font-medium'}`}>
@@ -310,6 +322,9 @@ export default function CourierStatementShow({
                         <p className="text-muted-foreground">Money</p>
                         {isDraft ? (
                             <>
+                                {summary.deposit_expected && (
+                                    <p className="text-xs">Nothing is in the books yet: record the payout below when it arrives.</p>
+                                )}
                                 {!summary.deposit_expected && (
                                     <p className="text-xs">
                                         This statement pays nothing out.{' '}
