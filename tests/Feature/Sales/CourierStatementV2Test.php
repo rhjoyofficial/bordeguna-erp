@@ -5,6 +5,7 @@ use App\Modules\Accounting\Actions\PostJournal;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Exceptions\JournalException;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
@@ -434,16 +435,27 @@ it('keeps each courier company\'s balances separate on the shared heads', functi
         ->and($couriers['CarryBee']['held_in_books'])->toBe('0.00');
 });
 
-it('respects a closed period', function () {
+it('posts a statement dated into a closed period on the first open day, with a note, never into the locked month', function () {
     ($this->parcel)('FLOCK1', $this->carrybee, '1000');
+    ($this->parcel)('FLOCK2', $this->carrybee, '1000');
     $statement = ($this->importCarryBee)([['number' => 'FLOCK1', 'collected' => 1000, 'fee' => 100]]);
+    $second = ($this->importCarryBee)([['number' => 'FLOCK2', 'collected' => 1000, 'fee' => 100]], 'ITEST0002');
 
     AccountingPeriod::closeThrough(Carbon::parse('2026-10-10'), $this->owner);
 
-    expect(fn () => ($this->post)($statement, '900'))->toThrow(PeriodClosedException::class);
+    $posted = ($this->post)($statement, '900');
+    $journal = Journal::query()->where('source_type', $posted->getMorphClass())->where('source_id', $posted->id)->sole();
 
-    expect($statement->fresh()->status)->toBe(CourierStatement::DRAFT)
-        ->and(CourierParcelClaim::query()->count())->toBe(0);
+    expect($posted->status)->toBe(CourierStatement::POSTED)
+        ->and($posted->received_on->toDateString())->toBe('2026-10-06')
+        ->and($posted->posted_on->toDateString())->toBe('2026-10-11')
+        ->and($posted->cutoff_note)->toContain('closed period')
+        ->and($journal->journal_date->toDateString())->toBe('2026-10-11');
+
+    // Closed through today: there is no open day yet, so it is refused.
+    AccountingPeriod::closeThrough(Carbon::parse('2026-10-11'), $this->owner);
+
+    expect(fn () => ($this->post)($second, '900'))->toThrow(PeriodClosedException::class);
 });
 
 it('refuses a line on Payable to Couriers or Courier Compensation Income that names no courier', function () {

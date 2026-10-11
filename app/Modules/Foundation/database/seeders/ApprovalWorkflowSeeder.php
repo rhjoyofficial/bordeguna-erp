@@ -59,6 +59,14 @@ class ApprovalWorkflowSeeder extends Seeder
                 ['name' => 'Approval', 'roles' => [], 'permissions' => ['sales.credit.approve']],
             ],
         ],
+        // ⭐ Courier hub slice 8 (ruling 3): a discount at the door above the
+        // confirming person's cap. The Owner alone; also made on first use.
+        'courier_door_discount' => [
+            'name' => 'Courier door discount approval',
+            'stages' => [
+                ['name' => 'Owner approval', 'roles' => ['Owner'], 'permissions' => []],
+            ],
+        ],
     ];
 
     public function run(): void

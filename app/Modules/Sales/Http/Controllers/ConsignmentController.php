@@ -291,12 +291,15 @@ class ConsignmentController extends Controller
     /**
      * ⭐ Slice 8: the Owner's decision on a door discount above the cap.
      */
-    public function decideDiscount(Request $request, CourierDoorDiscountRequest $discount, CourierDoorDiscounts $discounts): RedirectResponse
+    public function decideDiscount(Request $request, CourierDoorDiscountRequest $discount, string $decision, CourierDoorDiscounts $discounts): RedirectResponse
     {
-        $data = $request->validate([
-            'decision' => ['required', Rule::in(['approve', 'reject'])],
+        $request->validate([
             'note' => ['nullable', 'string', 'max:1000'],
+            'review_note' => ['nullable', 'string', 'max:1000'],
         ]);
+
+        // The approvals inbox sends `review_note` with a rejection.
+        $data = ['decision' => $decision, 'note' => $request->input('note') ?? $request->input('review_note')];
 
         try {
             if ($data['decision'] === 'approve') {

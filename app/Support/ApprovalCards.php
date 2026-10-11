@@ -22,6 +22,7 @@ use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Sales\Models\CourierDoorDiscountRequest;
 use App\Modules\Sales\Models\CreditTermsRequest;
 use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Support\Carbon;
@@ -506,6 +507,29 @@ class ApprovalCards
                 viewUrl: route('sales.credit-terms.show', $approvable),
                 approveUrl: route('sales.credit-terms.approve', $approvable),
                 rejectUrl: route('sales.credit-terms.reject', $approvable),
+            );
+        }
+
+        // ⭐ Courier hub slice 8: a door discount above the confirming
+        // person's cap. Approving records the courier's whole answer.
+        if ($approvable instanceof CourierDoorDiscountRequest) {
+            $consignment = $approvable->consignment;
+
+            return $this->card(
+                $approvalRequest,
+                type: 'Door discount',
+                summary: "{$this->money($approvable->discount_amount)} off at the door on {$consignment?->consignment_number}",
+                details: [
+                    ['label' => 'Courier', 'value' => $consignment?->courier?->name],
+                    ['label' => 'Customer', 'value' => $consignment?->delivery?->customer?->name],
+                    ['label' => 'Owed', 'value' => $this->money($approvable->amount_due)],
+                    ['label' => 'Collected', 'value' => $this->money($approvable->collected_amount)],
+                    ['label' => 'Discount', 'value' => $this->money($approvable->discount_amount)],
+                ],
+                reason: $approvable->reason,
+                viewUrl: null,
+                approveUrl: route('sales.courier-door-discounts.decide', [$approvable, 'approve']),
+                rejectUrl: route('sales.courier-door-discounts.decide', [$approvable, 'reject']),
             );
         }
 

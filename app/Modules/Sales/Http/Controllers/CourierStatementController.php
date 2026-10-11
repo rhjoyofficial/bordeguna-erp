@@ -132,8 +132,14 @@ class CourierStatementController extends Controller
                 'bank_reference' => $courierStatement->bank_reference,
                 'deposit_difference_reason' => $courierStatement->deposit_difference_reason,
                 'payable_settled_amount' => $money($courierStatement->payable_settled_amount),
+                // Courier hub slice 8 (risk 9): posted after a closed month.
+                'posted_on' => $courierStatement->posted_on?->toDateString(),
+                'cutoff_note' => $courierStatement->cutoff_note,
                 'proof' => $proof === null ? null : ['name' => $proof->original_name, 'url' => $proof->url()],
             ],
+            // ⭐ Courier hub slice 8 (risk 4): collections less fees plus
+            // compensation and adjustments, against the payout column.
+            'equations' => $review->equations(),
             'lines' => $review->rows->map(fn (array $row) => [
                 'id' => $row['line']->id,
                 'row_number' => $row['line']->row_number,

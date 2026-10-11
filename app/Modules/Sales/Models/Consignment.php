@@ -3,13 +3,13 @@
 namespace App\Modules\Sales\Models;
 
 use App\Models\User;
+use App\Modules\Accounting\Models\PartyAdjustment;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Sales\Couriers\Enums\CourierStatus;
 use App\Modules\Sales\Couriers\Models\CourierAccount;
 use App\Modules\Sales\Couriers\Models\CourierShipmentEvent;
-use App\Modules\Accounting\Models\PartyAdjustment;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Enums\DoorResolution;
 use Illuminate\Database\Eloquent\Model;

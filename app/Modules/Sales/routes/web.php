@@ -219,8 +219,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
 
     // Courier hub slice 8: the Owner's decision on a door discount above the
     // cap. The workflow stage decides who may; the action checks it.
-    Route::post('courier-door-discounts/{discount}/decision', [ConsignmentController::class, 'decideDiscount'])
-        ->whereNumber('discount')->name('courier-door-discounts.decide');
+    Route::post('courier-door-discounts/{discount}/{decision}', [ConsignmentController::class, 'decideDiscount'])
+        ->whereNumber('discount')->whereIn('decision', ['approve', 'reject'])->name('courier-door-discounts.decide');
 
     // ⭐ Courier hub slice 4: booking through the courier's API, and settling a
     // booking whose answer was lost. Technical authority (couriers.parcels.book)
