@@ -44,7 +44,13 @@ class CreateSalesOrder
     ) {}
 
     /**
-     * @param  array<int, array{product: Product, quantity: string, unit_price?: string|null, discount?: string|null, bundle_label?: string|null}>  $lines
+     * @param  array<int, array{product: Product, quantity: string, unit_price?: string|null, discount?: string|null, bundle_label?: string|null, price_note?: string|null}>  $lines
+     * @param  bool  $selfApprove  false = always left waiting for approval, even
+     *                             for a holder of `sales.orders.approve` (the
+     *                             shop order import approves afterwards, through
+     *                             ApproveSalesOrder, only when asked to)
+     * @param  bool  $notifyApprovers  false = the caller sends one notice for a
+     *                                 whole batch instead of one per order
      *
      * @throws ValidationException
      * @throws NoSellingPriceException
@@ -59,6 +65,8 @@ class CreateSalesOrder
         ?string $note = null,
         ?SalesOrderOrigin $origin = null,
         ?int $weightGrams = null,
+        bool $selfApprove = true,
+        bool $notifyApprovers = true,
     ): SalesOrder {
         // ⚠ Deliberately NOT EffectiveDate::resolve - that helper asserts the
         // accounting period is open, which guards events that post. An order
@@ -119,7 +127,7 @@ class CreateSalesOrder
             ]);
         }
 
-        $order = DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $expectedDate, $note, $origin, $weightGrams) {
+        $order = DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $expectedDate, $note, $origin, $weightGrams, $selfApprove) {
             $order = SalesOrder::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
@@ -174,7 +182,8 @@ class CreateSalesOrder
 
                 if ($override !== null) {
                     $unitPrice = $override;
-                    $priceNote = 'Manual override';
+                    // ⚠ Still marked as an override; an importer says where it came from.
+                    $priceNote = ($entry['price_note'] ?? null) ?: 'Manual override';
                 } else {
                     // ⭐⭐ PRICED AS THE CHANNEL WHEN THE CHANNEL IS A PRICE
                     // GROUP, which is the whole content of ADR-005. A website
@@ -265,7 +274,7 @@ class CreateSalesOrder
                 // credit rules apply here too (21 Sep 2026): an order they refuse
                 // is saved but left pending, for an Owner to decide with a reason.
                 // Without this a manager's own order would skip the check.
-                if ($createdBy->can('sales.orders.approve') && app(CheckCustomerCredit::class)->refusalFor($order) === null) {
+                if ($selfApprove && $createdBy->can('sales.orders.approve') && app(CheckCustomerCredit::class)->refusalFor($order) === null) {
                     $order->approvalRequest->approve($createdBy);
                 }
             }
@@ -275,7 +284,7 @@ class CreateSalesOrder
 
         // Only notify when it actually needs review - a self-approved order
         // does not. Outside the transaction, same as CreatePurchaseOrder.
-        if ($order->approvalRequest?->isPending()) {
+        if ($notifyApprovers && $order->approvalRequest?->isPending()) {
             app(NotifyApprovers::class)->handle(
                 businessId: $order->business_id,
                 permission: 'sales.orders.approve',

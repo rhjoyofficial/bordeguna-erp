@@ -30,6 +30,8 @@ final class LivePages
         'sales.orders.show' => [...self::SALES_ORDER, 'consignment', 'customer_receipt', 'stock'],
         'sales.deliveries.index' => ['delivery', 'consignment', 'sales_order', 'sales_invoice'],
         'sales.consignments.index' => ['consignment', 'delivery', 'courier_statement'],
+        'sales.parcels-to-book.index' => ['sales_order', 'approval_request', 'delivery', 'consignment', 'courier_bulk_run'],
+        'sales.parcels-to-book.runs.show' => ['courier_bulk_run', 'consignment'],
         'sales.invoices.index' => ['sales_invoice', 'customer_receipt', 'consignment'],
         'sales.invoices.show' => ['sales_invoice', 'customer_receipt', 'consignment', 'delivery'],
         'sales.receipts.index' => ['customer_receipt'],
