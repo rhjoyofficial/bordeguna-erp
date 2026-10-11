@@ -33,7 +33,7 @@ return new class extends Migration
                 continue;
             }
 
-            DB::table('accounts')->where('code', $code)->whereNull('system_slug')
+            DB::table('accounts')->where('code', (string) $code)->whereNull('system_slug')
                 ->update(['system_slug' => $slug, 'updated_at' => now()]);
         }
     }
@@ -41,7 +41,7 @@ return new class extends Migration
     public function down(): void
     {
         foreach (self::SLUGS as $code => $slug) {
-            DB::table('accounts')->where('code', $code)->where('system_slug', $slug)
+            DB::table('accounts')->where('code', (string) $code)->where('system_slug', $slug)
                 ->update(['system_slug' => null, 'updated_at' => now()]);
         }
     }
