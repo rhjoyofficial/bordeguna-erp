@@ -63,3 +63,8 @@ my to-dos/approvals. (No announcements table exists: skipped.)
 Resolution per business, switcher cannot bypass, view_all logged, endpoint refuses unknown /
 unauthorised keys and other employees' data, cache isolation, Dhaka range boundaries, layout
 save, sound defaults, each role renders.
+
+## Change of plan (Joy, 11 Oct 2026, mid-slice)
+WebSockets now (Laravel Reverb), polling only as the automatic fallback while the socket is down.
+Private channels `business.{id}` (members) and `user.{id}` (self); events carry type, ids, widget
+keys and a sound class, never figures. Deploy steps: docs/REVERB-DEPLOY.md.
