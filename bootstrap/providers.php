@@ -11,10 +11,12 @@ use App\Modules\Purchasing\Providers\PurchasingServiceProvider;
 use App\Modules\Sales\Providers\SalesServiceProvider;
 use App\Providers\AppServiceProvider;
 use App\Providers\DashboardServiceProvider;
+use App\Providers\RealtimeServiceProvider;
 
 return [
     AppServiceProvider::class,
     DashboardServiceProvider::class,
+    RealtimeServiceProvider::class,
     AccountingServiceProvider::class,
     AssetsServiceProvider::class,
     CommerceServiceProvider::class,
