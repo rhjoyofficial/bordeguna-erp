@@ -57,6 +57,11 @@ class SalesPermissionsSeeder extends Seeder
             // or bKash a person sends the money and the ERP records it; through
             // SSLCommerz the ERP itself moves the money.
             'sales.gateway.refund',
+            // Courier hub slice 1 (11 Oct 2026): courier credentials and
+            // webhooks. Technical, never accounting authority (ChatGPT risk 11).
+            'couriers.settings.manage',
+            'couriers.parcels.view',
+            'couriers.parcels.book',
         ],
         'Manager' => [
             'sales.customers.manage',
@@ -74,6 +79,8 @@ class SalesPermissionsSeeder extends Seeder
             // ⚠ Staff sell at the list price only: a changed price or a
             // discount is a margin decision, like setting the price itself.
             'sales.price.override',
+            'couriers.parcels.view',
+            'couriers.parcels.book',
         ],
         // ⭐ 26 Sep 2026 (Joy, Q18): the accountant READS the sales side, and
         // records a customer's payment, because the money that arrives at the
@@ -98,6 +105,7 @@ class SalesPermissionsSeeder extends Seeder
             'sales.reports.view',
             'sales.orders.record',
             'sales.returns.record',
+            'couriers.parcels.view',
         ],
     ];
 
