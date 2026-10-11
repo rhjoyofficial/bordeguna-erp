@@ -3,16 +3,20 @@
 use App\Http\Controllers\ApprovalInboxController;
 use App\Http\Controllers\AssistantController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DashboardPreferenceController;
+use App\Http\Controllers\DashboardWidgetController;
 use App\Http\Controllers\GeoLookupController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\MyWorkController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\RoleDashboardController;
 use App\Modules\Commerce\Http\Controllers\StorefrontController;
 use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
 use App\Modules\Foundation\Http\Controllers\BusinessHealthController;
 use App\Modules\Foundation\Http\Controllers\GroupCockpitController;
 use App\Modules\Foundation\Http\Controllers\GroupPartnerController;
 use App\Modules\Foundation\Http\Controllers\GroupProductController;
+use App\Support\Dashboards\DashboardKey;
 use App\Support\LandingPages;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -46,7 +50,17 @@ Route::middleware(['auth', 'business'])->group(function () {
         return redirect(LandingPages::resolveFor(request()->user()));
     })->name('landing');
 
-    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    // Role dashboards (11 Oct 2026): /dashboard is the highest dashboard the
+    // person's roles give them in this business; the others by key. The old
+    // dashboard lives on, unchanged, as "Classic".
+    Route::get('dashboard', [RoleDashboardController::class, 'index'])->name('dashboard');
+    Route::get('dashboard/classic', [DashboardController::class, 'index'])->name('dashboard.classic');
+    Route::get('dashboard/widgets/{widget}', [DashboardWidgetController::class, 'show'])->name('dashboard.widgets.show');
+    Route::put('dashboard/sound', [DashboardPreferenceController::class, 'sound'])->name('dashboard.sound');
+    Route::put('dashboard/{dashboard}/layout', [DashboardPreferenceController::class, 'layout'])
+        ->whereIn('dashboard', DashboardKey::values())->name('dashboard.layout');
+    Route::get('dashboard/{dashboard}', [RoleDashboardController::class, 'show'])
+        ->whereIn('dashboard', DashboardKey::values())->name('dashboard.show');
 
     // MY WORK (Module 1, Slice 3): the personal queue - approvals, follow-ups,
     // to-dos, waiting-on-others, and the role-gated warning sections.

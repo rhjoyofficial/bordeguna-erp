@@ -75,28 +75,12 @@ class LandingPages
             }
         }
 
-        // The capability defaults: Joy's concept, as a chain.
-        if ($user->can('foundation.organization.manage') || $user->can('accounting.view')) {
-            return '/dashboard';
-        }
-
-        if ($user->can('hrm.employees.manage') || $user->can('hrm.attendance.manage')) {
-            return '/hrm/dashboard';
-        }
-
-        if ($user->can('sales.sell')) {
-            return '/sales/counter';
-        }
-
-        if ($user->can('sales.reports.view')) {
-            return '/sales/orders';
-        }
-
-        if ($user->can('inventory.reports.view')) {
-            return '/inventory';
-        }
-
-        // The personal corner: open to every member, so the chain cannot miss.
-        return '/hrm/my-profile';
+        // ⭐ 11 Oct 2026 (Joy): "every person lands on the dashboard of their
+        // highest role". The old capability chain (HR dashboard, counter,
+        // orders, stock, my profile) is replaced by the role dashboards, which
+        // resolve the highest dashboard per business themselves (DashboardAccess)
+        // and always have the personal one to fall back on, so this cannot miss.
+        // An explicit role landing page above still wins.
+        return '/dashboard';
     }
 }

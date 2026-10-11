@@ -74,6 +74,8 @@ class User extends Authenticatable
             'is_super_admin' => 'boolean',
             'is_active' => 'boolean',
             'receives_hr_notifications' => 'boolean',
+            // Personal settings that follow the person (dashboard sound first).
+            'preferences' => 'array',
         ];
     }
 

@@ -44,19 +44,13 @@ beforeEach(function () {
         ->get('/landing');
 });
 
-it('sends each capability to its own first screen', function () {
-    // The personal corner for somebody with nothing else (Joy: "normal user
-    // like the Munna or others see the personal dashboard").
-    ($this->landingFor)(($this->userWith)([]))->assertRedirect('/hrm/my-profile');
-
-    // The powerful see the current dashboard.
-    ($this->landingFor)(($this->userWith)(['foundation.organization.manage']))->assertRedirect('/dashboard');
-
-    // HR sees the HR dashboard.
-    ($this->landingFor)(($this->userWith)(['hrm.attendance.manage']))->assertRedirect('/hrm/dashboard');
-
-    // A seller lands on the counter.
-    ($this->landingFor)(($this->userWith)(['sales.sell']))->assertRedirect('/sales/counter');
+it('sends everybody without a role landing page to their role dashboard', function () {
+    // ⭐ 11 Oct 2026 (Joy): "every person lands on the dashboard of their
+    // highest role". /dashboard itself resolves which one (DashboardAccess),
+    // so the landing decision no longer walks capabilities.
+    foreach ([[], ['foundation.organization.manage'], ['hrm.attendance.manage'], ['sales.sell']] as $permissions) {
+        ($this->landingFor)(($this->userWith)($permissions))->assertRedirect('/dashboard');
+    }
 });
 
 it('honours a role landing assignment the holder can actually open', function () {
@@ -76,7 +70,7 @@ it('skips an assignment its holder cannot open, instead of landing on a 403', fu
     $user = ($this->userWith)(['hrm.attendance.manage']);
     $user->assignRole($role);
 
-    ($this->landingFor)($user)->assertRedirect('/hrm/dashboard');
+    ($this->landingFor)($user)->assertRedirect('/dashboard');
 });
 
 it('saves a landing choice on the roles screen and refuses an unknown key', function () {

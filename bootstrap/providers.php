@@ -10,9 +10,11 @@ use App\Modules\Inventory\Providers\InventoryServiceProvider;
 use App\Modules\Purchasing\Providers\PurchasingServiceProvider;
 use App\Modules\Sales\Providers\SalesServiceProvider;
 use App\Providers\AppServiceProvider;
+use App\Providers\DashboardServiceProvider;
 
 return [
     AppServiceProvider::class,
+    DashboardServiceProvider::class,
     AccountingServiceProvider::class,
     AssetsServiceProvider::class,
     CommerceServiceProvider::class,

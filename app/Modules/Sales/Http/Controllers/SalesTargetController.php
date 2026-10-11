@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Sales\Support\SalesTargetProgress;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -39,24 +40,11 @@ class SalesTargetController extends Controller
                 // orders, not promises - invoiced revenue, WITHOUT the VAT
                 // (it is the government's money, not a sale) and LESS what
                 // customers returned this month off this person's invoices.
-                $invoiced = (float) DB::table('sales_invoices')
-                    ->where('business_id', $businessId)
-                    ->where('created_by', $target->user_id)
-                    ->where('is_opening', false)
-                    ->whereBetween('invoice_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
-                    ->sum(DB::raw('total - tax_total'));
-
-                $returned = (float) DB::table('sales_return_invoice_lines as returned')
-                    ->join('sales_return_lines', 'sales_return_lines.id', '=', 'returned.sales_return_line_id')
-                    ->join('sales_returns', 'sales_returns.id', '=', 'sales_return_lines.sales_return_id')
-                    ->join('sales_invoice_lines', 'sales_invoice_lines.id', '=', 'returned.sales_invoice_line_id')
-                    ->join('sales_invoices', 'sales_invoices.id', '=', 'sales_invoice_lines.sales_invoice_id')
-                    ->where('returned.business_id', $businessId)
-                    ->where('sales_invoices.created_by', $target->user_id)
-                    ->whereBetween('sales_returns.returned_at', [$monthStart->toDateString(), $monthEnd->toDateString()])
-                    ->sum('returned.net');
-
-                $actual = $invoiced - $returned;
+                // The sum lives in SalesTargetProgress (11 Oct 2026), shared
+                // with the sales dashboard so the two never disagree.
+                $actual = SalesTargetProgress::actualFor(
+                    $businessId, (int) $target->user_id, $monthStart->toDateString(), $monthEnd->toDateString(),
+                );
 
                 return [
                     'id' => $target->id,
