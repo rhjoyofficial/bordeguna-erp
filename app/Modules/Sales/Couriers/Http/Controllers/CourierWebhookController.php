@@ -166,7 +166,7 @@ class CourierWebhookController extends Controller
     {
         $body = $request->json()->all();
 
-        Log::notice('Courier webhook shape', [
+        Log::warning('Courier webhook shape', [
             'courier_account_id' => $account->id,
             'why' => $why,
             'headers' => array_keys($request->headers->all()),
