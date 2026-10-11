@@ -43,7 +43,7 @@ Basis: invoiced. One row per brand x channel x customer type.
   (counter sale, challan without an order) = channel Counter. No brand = "No brand".
 - Filters: invoiced between, brand (incl. No brand), channel.
 
-### 2. Product and brand margin (`sales_margin`, sales.reports.view)
+### 2. Product and brand margin (`sales_margin`, sales.reports.costs)
 Basis: invoiced. Group by product or by brand (order brand, as report 1).
 Revenue = net revenue as report 1. COGS = `cost_released` less return
 `cogs_relief`, the derivation CostOfGoodsSold and the reconciliation use (ties
@@ -51,7 +51,7 @@ to 5100 movement). Margin and margin %. Quantity = invoiced less the invoiced
 part returned. Flag "Cost known": Yes / Partly / No (goods lines sold at zero
 released cost).
 
-### 3. Delivery economics (`delivery_economics`, sales.reports.view)
+### 3. Delivery economics (`delivery_economics`, sales.reports.costs)
 Basis: parcels whose challan is dated in the period. Per parcel, or totals by
 courier, brand or band.
 - Charge billed = invoice lines with `billed_delivery_for_order_id` for the
@@ -90,3 +90,11 @@ permission (registry hides the report, the run 404s); no double counting
 (invoice total vs revenue, VAT and delivery out of revenue, GDNI excluded,
 advances not revenue, courier money not cash). Then EveryModuleIsReachableTest,
 NoEmDashTest, BanglaDictionaryTest, tsc, prettier on changed files.
+
+## Cost reports are not for Staff
+The seeded Staff role holds `sales.reports.view`. Margin and delivery economics
+show cost (COGS, courier charges), so they need `sales.reports.costs`, granted
+to Owner, Manager and Finance by the seeder and, for roles that already exist,
+by migration `2026_10_11_800001`. The registry hides them, and the screen,
+preview and every export 404 without it; the sidebar links follow
+`canViewCostReports`.

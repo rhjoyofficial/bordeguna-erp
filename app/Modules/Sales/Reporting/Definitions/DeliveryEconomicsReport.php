@@ -82,7 +82,7 @@ class DeliveryEconomicsReport implements ChartsOnScreen, ReportDefinition
 
     public function permission(): string
     {
-        return 'sales.reports.view';
+        return 'sales.reports.costs';
     }
 
     public function parameters(): array

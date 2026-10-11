@@ -325,9 +325,9 @@ it('registers both under Sales behind sales.reports.view, hidden and 404 for a r
     $clerk = rpUser($this->business, 'Clerk');
     $registry = app(ReportRegistry::class);
 
-    foreach (['sales_by_channel', 'sales_margin'] as $key) {
+    foreach (['sales_by_channel' => 'sales.reports.view', 'sales_margin' => 'sales.reports.costs'] as $key => $permission) {
         expect($registry->find($key)->group())->toBe('Sales')
-            ->and($registry->find($key)->permission())->toBe('sales.reports.view')
+            ->and($registry->find($key)->permission())->toBe($permission)
             ->and($registry->availableTo($this->owner)->has($key))->toBeTrue()
             ->and($registry->availableTo($clerk)->has($key))->toBeFalse();
 
@@ -432,4 +432,59 @@ it('opens the report screen from the sidebar with the chart slot, for whoever re
     $this->actingAs(rpUser($this->business, 'Clerk'))
         ->get(route('hrm.reports.show', 'sales_by_channel'))
         ->assertNotFound();
+});
+
+it('keeps the two cost reports from Staff on every path, while Staff still read sales and ageing', function () {
+    $staff = rpUser($this->business, 'Staff');
+    $registry = app(ReportRegistry::class);
+
+    foreach (['sales_margin', 'delivery_economics'] as $key) {
+        expect($registry->find($key)->permission())->toBe('sales.reports.costs')
+            ->and($registry->availableTo($staff)->has($key))->toBeFalse()
+            ->and($registry->availableTo($this->owner)->has($key))->toBeTrue();
+
+        $this->actingAs($staff)->get(route('hrm.reports.show', $key))->assertNotFound();
+        $this->actingAs($staff)->get(route('hrm.reports.preview', $key))->assertNotFound();
+
+        foreach (['csv', 'xlsx', 'pdf', 'print'] as $format) {
+            $this->actingAs($staff)->get(route('hrm.reports.run', $key).'?format='.$format)->assertNotFound();
+        }
+    }
+
+    foreach (['sales_by_channel', 'courier_settlement_ageing'] as $key) {
+        expect($registry->availableTo($staff)->has($key))->toBeTrue();
+    }
+
+    $this->actingAs($staff)->get(route('hrm.reports.show', 'sales_by_channel'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('canViewSalesReports', true)->where('canViewCostReports', false));
+
+    foreach (['Manager', 'Finance'] as $role) {
+        Role::firstOrCreate(['name' => $role, 'guard_name' => 'web', 'business_id' => $this->business->id]);
+        (new SalesPermissionsSeeder)->run();
+        app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
+        expect(rpUser($this->business, $role)->can('sales.reports.costs'))->toBeTrue();
+    }
+});
+
+it('grants the cost permission to the Owner, Manager and Finance roles that already exist, by migration', function () {
+    $permission = DB::table('permissions')->where('name', 'sales.reports.costs')->value('id');
+    DB::table('role_has_permissions')->where('permission_id', $permission)->delete();
+    DB::table('permissions')->where('id', $permission)->delete();
+    Role::firstOrCreate(['name' => 'Finance', 'guard_name' => 'web', 'business_id' => $this->business->id]);
+
+    $migration = require base_path('app/Modules/Sales/database/migrations/2026_10_11_800001_cost_reports_permission_is_granted_to_existing_roles.php');
+    $migration->up();
+
+    $granted = DB::table('role_has_permissions')
+        ->join('roles', 'roles.id', '=', 'role_has_permissions.role_id')
+        ->join('permissions', 'permissions.id', '=', 'role_has_permissions.permission_id')
+        ->where('permissions.name', 'sales.reports.costs')
+        ->where('roles.business_id', $this->business->id)
+        ->pluck('roles.name')->sort()->values()->all();
+
+    expect($granted)->toBe(['Finance', 'Manager', 'Owner']);
+
+    $migration->up();
+    expect(DB::table('permissions')->where('name', 'sales.reports.costs')->count())->toBe(1);
 });

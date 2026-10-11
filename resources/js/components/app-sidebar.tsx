@@ -105,6 +105,7 @@ export function useNavGroups(): NavGroup[] {
         canViewGroupCockpit,
         canViewOperatingReports,
         canViewSalesReports,
+        canViewCostReports,
         canViewInventory,
         canViewPurchasing,
         canViewSales,
@@ -345,8 +346,13 @@ export function useNavGroups(): NavGroup[] {
                                 defaultOpen: false,
                                 items: [
                                     { title: t('menu.report_sales_by_channel'), url: '/hrm/reports/sales_by_channel', icon: ChartColumn },
-                                    { title: t('menu.report_margin'), url: '/hrm/reports/sales_margin', icon: TrendingUp },
-                                    { title: t('menu.report_delivery_economics'), url: '/hrm/reports/delivery_economics', icon: Truck },
+                                    // Cost is shown on these two: sales.reports.costs, not Staff.
+                                    ...(canViewCostReports
+                                        ? [
+                                              { title: t('menu.report_margin'), url: '/hrm/reports/sales_margin', icon: TrendingUp },
+                                              { title: t('menu.report_delivery_economics'), url: '/hrm/reports/delivery_economics', icon: Truck },
+                                          ]
+                                        : []),
                                     { title: t('menu.report_courier_ageing'), url: '/hrm/reports/courier_settlement_ageing', icon: CalendarClock },
                                     { title: t('menu.all_reports'), url: '/hrm/reports', icon: FileBarChart },
                                 ],

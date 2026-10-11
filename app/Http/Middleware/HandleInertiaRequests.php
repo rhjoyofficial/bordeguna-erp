@@ -208,6 +208,8 @@ class HandleInertiaRequests extends Middleware
             // Reports pack (11 Oct 2026): the sales report links (sales by brand
             // and channel, margin, delivery economics, courier ageing).
             'canViewSalesReports' => fn () => (bool) $request->user()?->can('sales.reports.view'),
+            // The two that show cost (margin, delivery economics): not Staff.
+            'canViewCostReports' => fn () => (bool) $request->user()?->can('sales.reports.costs'),
             'canManageChartOfAccounts' => fn () => (bool) $request->user()?->canAny(['accounting.chart.head.create', 'accounting.chart.head.update', 'accounting.chart.head.delete']),
             'canCreateLedgerHeads' => fn () => (bool) $request->user()?->can('accounting.chart.head.create'),
             'canUpdateLedgerHeads' => fn () => (bool) $request->user()?->can('accounting.chart.head.update'),

@@ -310,12 +310,12 @@ it('filters by brand and keeps another business out', function () {
         ->and(crRows(DeliveryEconomicsReport::class, [])->pluck('consignment')->all())->not->toContain('X1');
 });
 
-it('registers both under Sales behind sales.reports.view, 404 for a role without it, and serves the screen', function () {
+it('registers both under Sales (delivery economics behind the cost permission), 404 for a role without it, and serves the screen', function () {
     $clerk = crUser($this->business, 'Clerk');
     $registry = app(ReportRegistry::class);
 
-    foreach (['delivery_economics', 'courier_settlement_ageing'] as $key) {
-        expect($registry->find($key)->permission())->toBe('sales.reports.view')
+    foreach (['delivery_economics' => 'sales.reports.costs', 'courier_settlement_ageing' => 'sales.reports.view'] as $key => $permission) {
+        expect($registry->find($key)->permission())->toBe($permission)
             ->and($registry->availableTo($clerk)->has($key))->toBeFalse();
 
         $this->actingAs($clerk)->get(route('hrm.reports.preview', $key))->assertNotFound();
