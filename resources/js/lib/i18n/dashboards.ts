@@ -311,8 +311,8 @@ export const dashboards = {
     'widget.courier_statements_pending.empty': { en: 'Every imported statement is posted.', bn: 'আনা সব স্টেটমেন্ট পোস্ট হয়ে গেছে।' },
     'widget.courier_integration_health.title': { en: 'Courier connections', bn: 'কুরিয়ার সংযোগ' },
     'widget.courier_integration_health.description': {
-        en: 'Per courier account: switched on or not, the last call that worked, the last error, and the last update the courier pushed to us. As at now.',
-        bn: 'প্রতি কুরিয়ার অ্যাকাউন্ট: চালু কি না, শেষ যে কল কাজ করেছে, শেষ ত্রুটি, আর কুরিয়ারের পাঠানো শেষ হালনাগাদ। এখন পর্যন্ত।',
+        en: 'Per courier account: switched on or not, the last call that worked, the last error, whether its webhook is paired, and the last update the courier pushed to us. As at now.',
+        bn: 'প্রতি কুরিয়ার অ্যাকাউন্ট: চালু কি না, শেষ যে কল কাজ করেছে, শেষ ত্রুটি, ওয়েবহুক জোড়া লেগেছে কি না, আর কুরিয়ারের পাঠানো শেষ হালনাগাদ। এখন পর্যন্ত।',
     },
     'widget.attendance_today.title': { en: 'Attendance today', bn: 'আজকের হাজিরা' },
     'widget.attendance_today.description': {
@@ -407,4 +407,61 @@ export const dashboards = {
     'dash.colour.of_target': { en: 'of {target} target', bn: '{target} লক্ষ্যের মধ্যে' },
     'dash.colour.in_all': { en: 'in all', bn: 'সব মিলিয়ে' },
     'dash.colour.none': { en: 'None', bn: 'নেই' },
+    // ── Getting started (Owner, see-all only) ───────────────────────────
+    'dash.start.title': { en: 'Getting started', bn: 'শুরু করার ধাপ' },
+    'dash.start.progress': { en: '{done} of {total} done', bn: '{total}টির মধ্যে {done}টি হয়েছে' },
+    'dash.start.why': {
+        en: 'The figures below stay at Tk 0 until the opening numbers are in.',
+        bn: 'শুরুর হিসাব না ওঠা পর্যন্ত নিচের সংখ্যাগুলো ৳0 থাকবে।',
+    },
+    'dash.start.why_rest': {
+        en: 'A few things are still missing before every figure is complete.',
+        bn: 'সব সংখ্যা পূর্ণ হতে এখনও কয়েকটি জিনিস বাকি।',
+    },
+    'dash.start.dismiss': { en: 'Hide this', bn: 'এটি লুকান' },
+    'dash.start.dismiss_label': { en: 'Hide the Getting started card for me', bn: 'আমার জন্য শুরু করার ধাপ কার্ডটি লুকান' },
+    'dash.start.not_saved': { en: 'Could not hide the card. Try again.', bn: 'কার্ডটি লুকানো যায়নি। আবার চেষ্টা করুন।' },
+    'dash.start.done': { en: 'Done', bn: 'হয়েছে' },
+    'dash.start.to_do': { en: 'Still to do', bn: 'এখনও বাকি' },
+    'dash.start.opening_balances.title': { en: 'Opening balances journal', bn: 'শুরুর ব্যালান্সের জার্নাল' },
+    'dash.start.opening_balances.why': {
+        en: 'Cash, bank, receivables and payables on the day the books start.',
+        bn: 'হিসাব শুরুর দিনের নগদ, ব্যাংক, পাওনা আর দেনা।',
+    },
+    'dash.start.product_costs.title': { en: 'Products with a cost', bn: 'খরচসহ পণ্য' },
+    'dash.start.product_costs.why': {
+        en: 'Without a cost, gross profit and stock value cannot be worked out.',
+        bn: 'খরচ ছাড়া মোট লাভ আর স্টকের মূল্য হিসাব করা যায় না।',
+    },
+    'dash.start.product_costs.count': { en: '{count} of {of} products', bn: '{of}টি পণ্যের মধ্যে {count}টি' },
+    'dash.start.opening_stock.title': { en: 'Opening stock', bn: 'শুরুর স্টক' },
+    'dash.start.opening_stock.why': { en: 'What the warehouse held on the first day, with its cost.', bn: 'প্রথম দিনে গুদামে যা ছিল, খরচসহ।' },
+    'dash.start.customers.title': { en: 'Customers', bn: 'গ্রাহক' },
+    'dash.start.customers.why': { en: 'Needed to sell on account and to track who owes you.', bn: 'বাকিতে বিক্রি আর কে কত দেবে তা দেখতে লাগবে।' },
+    'dash.start.suppliers.title': { en: 'Suppliers', bn: 'সরবরাহকারী' },
+    'dash.start.suppliers.why': { en: 'Needed for purchases and to track what you owe.', bn: 'কেনাকাটা আর আপনার দেনা দেখতে লাগবে।' },
+    'dash.start.count': { en: '{count} added', bn: '{count}টি যোগ হয়েছে' },
+    'dash.start.courier.title': { en: 'Courier connected and webhook paired', bn: 'কুরিয়ার যুক্ত ও ওয়েবহুক জোড়া' },
+    'dash.start.courier.why': {
+        en: 'Parcel updates and cash on delivery arrive on their own once paired.',
+        bn: 'জোড়া লাগলে পার্সেলের খবর আর ক্যাশ অন ডেলিভারি নিজে থেকেই আসে।',
+    },
+    'dash.start.courier.count': { en: '{count} of {of} connected accounts paired', bn: '{of}টি যুক্ত অ্যাকাউন্টের মধ্যে {count}টি জোড়া' },
+
+    // ── All-zero buckets: one calm line instead of empty bars ────────────
+    'dash.zero.receivables_ageing': { en: 'Nothing owed to you right now.', bn: 'এই মুহূর্তে আপনার কোনো পাওনা নেই।' },
+    'dash.zero.payables_ageing': { en: 'Nothing you owe right now.', bn: 'এই মুহূর্তে আপনার কোনো দেনা নেই।' },
+    'dash.zero.courier_cod_chain': { en: 'No cash on delivery in the chain.', bn: 'চেইনে কোনো ক্যাশ অন ডেলিভারি নেই।' },
+    'dash.zero.orders_by_state': { en: 'No orders in this range.', bn: 'এই সময়ে কোনো অর্ডার নেই।' },
+    'dash.zero.default': { en: 'Nothing here right now.', bn: 'এই মুহূর্তে এখানে কিছু নেই।' },
+
+    // ── Section chips ────────────────────────────────────────────────────
+    'dash.jump.label': { en: 'Jump to a section', bn: 'একটি অংশে যান' },
+    'dash.jump.Money': { en: 'Money', bn: 'টাকা' },
+    'dash.jump.Sales': { en: 'Sales', bn: 'বিক্রি' },
+    'dash.jump.Couriers': { en: 'Couriers', bn: 'কুরিয়ার' },
+    'dash.jump.People': { en: 'People', bn: 'লোকজন' },
+    'dash.jump.Stock': { en: 'Stock', bn: 'স্টক' },
+    'dash.jump.Work': { en: 'Work', bn: 'কাজ' },
+    'dash.jump.Me': { en: 'Me', bn: 'আমি' },
 } satisfies Record<string, Entry>;
