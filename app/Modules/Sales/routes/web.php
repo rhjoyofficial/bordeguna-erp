@@ -1,8 +1,10 @@
 <?php
 
 use App\Modules\Commerce\Http\Controllers\GatewayRefundController;
+use App\Modules\Sales\Couriers\Http\Controllers\CourierFeesController;
 use App\Modules\Sales\Couriers\Http\Controllers\CourierLocationsController;
 use App\Modules\Sales\Couriers\Http\Controllers\CourierParcelController;
+use App\Modules\Sales\Couriers\Http\Controllers\CourierRateCardController;
 use App\Modules\Sales\Couriers\Http\Controllers\CourierSettingsController;
 use App\Modules\Sales\Couriers\Http\Controllers\CourierWebhookController;
 use App\Modules\Sales\Http\Controllers\ConsignmentController;
@@ -230,6 +232,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
             ->whereNumber('consignment')->name('consignments.cancel');
     });
 
+    // ⭐ Slice 5: what a challan would cost at the courier, live on the
+    // booking form. JSON, read-only (a Pathao price quote books nothing).
+    Route::get('deliveries/{delivery}/courier-estimate', [CourierParcelController::class, 'estimate'])
+        ->middleware('can:couriers.parcels.view')->whereNumber('delivery')->name('consignments.estimate');
+
+    // ⭐ Slice 5: estimate vs the courier's quote vs the statement, per parcel.
+    Route::get('courier-fees', [CourierFeesController::class, 'index'])
+        ->middleware('can:couriers.ratecards.propose')->name('courier-fees.index');
+
     // Asking the courier where a parcel is: read-only at the courier.
     Route::post('consignments/{consignment}/refresh', [CourierParcelController::class, 'refresh'])
         ->middleware('can:couriers.parcels.view')->whereNumber('consignment')->name('consignments.refresh');
@@ -368,6 +379,25 @@ Route::middleware(['web', 'auth', 'business', 'can:couriers.settings.manage'])
         Route::post('{courierAccount}/rotate-webhook-secret', [CourierSettingsController::class, 'rotateSecret'])->whereNumber('courierAccount')->name('rotate-secret');
         Route::put('{courierAccount}/business', [CourierSettingsController::class, 'linkBusiness'])->whereNumber('courierAccount')->name('link');
         Route::delete('{courierAccount}/business', [CourierSettingsController::class, 'unlinkBusiness'])->whereNumber('courierAccount')->name('unlink');
+    });
+
+// ⭐ Settings > Couriers > Rate cards (courier hub slice 5). Not under the
+// Owner-only settings group: a Manager proposes and edits drafts; making a
+// card the price the ERP estimates with is the Owner's (approve).
+Route::middleware(['web', 'auth', 'business', 'can:couriers.ratecards.propose'])
+    ->prefix('settings/couriers/rate-cards')->name('couriers.ratecards.')->group(function () {
+        Route::get('/', [CourierRateCardController::class, 'index'])->name('index');
+        Route::post('/', [CourierRateCardController::class, 'store'])->name('store');
+        Route::post('propose', [CourierRateCardController::class, 'propose'])->name('propose');
+        Route::put('{rateCard}', [CourierRateCardController::class, 'update'])->whereNumber('rateCard')->name('update');
+        Route::post('{rateCard}/import', [CourierRateCardController::class, 'import'])->whereNumber('rateCard')->name('import');
+        Route::get('{rateCard}/export', [CourierRateCardController::class, 'export'])->whereNumber('rateCard')->name('export');
+        Route::delete('{rateCard}', [CourierRateCardController::class, 'destroy'])->whereNumber('rateCard')->name('destroy');
+
+        Route::middleware('can:couriers.ratecards.approve')->group(function () {
+            Route::post('{rateCard}/approve', [CourierRateCardController::class, 'approve'])->whereNumber('rateCard')->name('approve');
+            Route::post('{rateCard}/retire', [CourierRateCardController::class, 'retire'])->whereNumber('rateCard')->name('retire');
+        });
     });
 
 // ⭐ Courier webhooks (courier hub slice 4). OUTSIDE the web group on purpose:

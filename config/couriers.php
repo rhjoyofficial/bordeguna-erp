@@ -40,4 +40,30 @@ return [
     // Pathao panel; switch off to always send people to the panel.
     'pathao_api_cancel' => (bool) env('COURIER_PATHAO_API_CANCEL', true),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Fee estimates (courier hub slice 5)
+    |--------------------------------------------------------------------------
+    |
+    | Where parcels are picked up, for the "from" band of a rate card. Both
+    | pickup stores (CarryBee Adabor 2 and Bionic, Pathao BIONIC) are in Dhaka.
+    | Pathao's live price quote is cached per account, city, zone, weight
+    | bracket and service for this many seconds.
+    |
+    */
+
+    'pickup_district' => env('COURIER_PICKUP_DISTRICT', 'Dhaka'),
+
+    'pickup_thana' => env('COURIER_PICKUP_THANA', 'Adabor'),
+
+    'quote_cache_seconds' => (int) env('COURIER_QUOTE_CACHE_SECONDS', 6 * 3600),
+
+    // A parcel whose hub weight is further than this from the weight we
+    // declared is left out of what the ERP learns from (plan E.4).
+    'reweigh_tolerance_percent' => 20,
+
+    // Fewer clean parcels than this and the history says nothing (ruling 9:
+    // a minimum candidate threshold, not proof).
+    'min_samples' => 10,
+
 ];

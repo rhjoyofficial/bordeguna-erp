@@ -12,6 +12,7 @@ use App\Modules\Sales\Couriers\Locations\Unresolved;
 use App\Modules\Sales\Couriers\Models\CourierAccount;
 use App\Modules\Sales\Couriers\Models\CourierAccountBusiness;
 use App\Modules\Sales\Couriers\Models\CourierBookingRequest;
+use App\Modules\Sales\Couriers\Models\CourierFeeEstimate;
 use App\Modules\Sales\Couriers\Models\CourierShipmentEvent;
 use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\Delivery;
@@ -162,6 +163,9 @@ class ParcelPresenter
             'courier_invoice_ref' => $consignment->courier_invoice_ref,
             'can_cancel' => $consignment->isBooked() && $consignment->courier_account_id !== null && ($status === null || $status->cancellable()),
             'can_refresh' => $consignment->courier_account_id !== null,
+            // ⭐ Slice 5: what the ERP expected, kept at booking (one of three
+            // facts beside the quote above and the statement's charge).
+            'fee_estimate' => self::feeEstimate($consignment),
             'prompt' => self::prompt($consignment, $status, $collected),
             'events' => $withEvents ? $consignment->shipmentEvents->take(20)->map(fn (CourierShipmentEvent $e) => [
                 'id' => $e->id,
@@ -172,6 +176,20 @@ class ParcelPresenter
                 'applied' => $e->applied,
                 'occurred_at' => $e->occurred_at?->format('Y-m-d H:i'),
             ])->values()->all() : [],
+        ];
+    }
+
+    /**
+     * @return array{total: string|null, basis: string, confidence: string}|null
+     */
+    private static function feeEstimate(Consignment $consignment): ?array
+    {
+        $estimate = CourierFeeEstimate::query()->where('consignment_id', $consignment->id)->latest('id')->first();
+
+        return $estimate === null ? null : [
+            'total' => $estimate->total === null ? null : (string) $estimate->total,
+            'basis' => $estimate->basis,
+            'confidence' => $estimate->confidence,
         ];
     }
 
