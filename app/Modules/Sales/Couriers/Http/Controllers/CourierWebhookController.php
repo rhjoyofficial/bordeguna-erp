@@ -66,6 +66,8 @@ class CourierWebhookController extends Controller
         // then accepted when they carry either that value or our own secret.
         if ($account->provider->code === 'carrybee' && $handshake) {
             if (! is_string($given) || trim($given) === '') {
+                $this->logShape($request, $account, 'carrybee handshake without the integration header');
+
                 return response('', 401);
             }
 
@@ -78,6 +80,7 @@ class CourierWebhookController extends Controller
 
         if ($header === null || ! is_string($given) || ! $this->authentic($account, $given, $secret)) {
             Log::notice('Courier webhook refused: secret missing or wrong', ['courier_account_id' => $account->id]);
+            $this->logShape($request, $account, 'refused');
 
             return response('', 401);
         }
@@ -154,6 +157,26 @@ class CourierWebhookController extends Controller
     /**
      * @return array<string, string>
      */
+    /**
+     * What a refused courier request LOOKED like: header names, content type,
+     * body keys and length. Never header values or body values, so no secret or
+     * customer detail reaches the log.
+     */
+    private function logShape(Request $request, CourierAccount $account, string $why): void
+    {
+        $body = $request->json()->all();
+
+        Log::notice('Courier webhook shape', [
+            'courier_account_id' => $account->id,
+            'why' => $why,
+            'headers' => array_keys($request->headers->all()),
+            'content_type' => $request->header('Content-Type'),
+            'body_keys' => array_keys(is_array($body) ? $body : []),
+            'form_keys' => array_keys($request->request->all()),
+            'body_length' => strlen((string) $request->getContent()),
+        ]);
+    }
+
     private function authentic(CourierAccount $account, string $given, ?string $secret): bool
     {
         if ($secret !== null && hash_equals($secret, $given)) {
