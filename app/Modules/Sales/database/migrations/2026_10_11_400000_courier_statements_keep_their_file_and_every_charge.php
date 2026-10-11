@@ -107,14 +107,14 @@ return new class extends Migration
         });
 
         foreach (self::ACCOUNTS as [$code, $name, $type, $parentCode, $slug]) {
-            $parent = DB::table('accounts')->where('code', $parentCode)->value('id');
+            $parent = DB::table('accounts')->where('code', (string) $parentCode)->value('id');
 
-            if ($parent === null || DB::table('accounts')->where('code', $code)->exists()) {
+            if ($parent === null || DB::table('accounts')->where('code', (string) $code)->exists()) {
                 continue;
             }
 
             DB::table('accounts')->insert([
-                'code' => $code,
+                'code' => (string) $code,
                 'name' => $name,
                 'type' => $type,
                 'parent_id' => $parent,
@@ -130,7 +130,7 @@ return new class extends Migration
 
         foreach ($businesses as $businessId) {
             foreach (self::MAPPINGS as $key => $code) {
-                $account = DB::table('accounts')->where('code', $code)->value('id');
+                $account = DB::table('accounts')->where('code', (string) $code)->value('id');
 
                 if ($account === null || DB::table('account_mappings')->where('business_id', $businessId)->where('key', $key)->exists()) {
                     continue;
@@ -154,7 +154,7 @@ return new class extends Migration
         DB::table('account_mappings')->whereIn('key', array_keys(self::MAPPINGS))->delete();
 
         foreach (self::ACCOUNTS as [$code]) {
-            $account = DB::table('accounts')->where('code', $code)->value('id');
+            $account = DB::table('accounts')->where('code', (string) $code)->value('id');
 
             if ($account !== null && ! DB::table('journal_lines')->where('account_id', $account)->exists()) {
                 DB::table('accounts')->where('id', $account)->delete();
