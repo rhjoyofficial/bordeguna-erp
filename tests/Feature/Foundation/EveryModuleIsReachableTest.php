@@ -76,6 +76,7 @@ it('offers a way into every module that has user-facing pages', function (string
     'sales prices' => ['/sales/prices'],
     'sales invoices' => ['/sales/invoices'],
     'sales deliveries' => ['/sales/deliveries'],
+    'courier settings' => ['/settings/couriers'],
     'crm leads' => ['/crm/leads'],
     'crm follow-up queue' => ['/crm/queue'],
     'crm reports' => ['/crm/reports'],
