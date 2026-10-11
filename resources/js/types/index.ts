@@ -49,6 +49,10 @@ export interface SharedData {
     flash: { success?: string | null; error?: string | null; warning?: string | null };
     pendingApprovalsCount: number;
     canReviewApprovals: boolean;
+    /** The channels this tab listens on (realtime everywhere, 11 Oct 2026). */
+    realtime?: { enabled: boolean; business_channel: string | null; user_channel: string | null };
+    /** The record kinds this page shows; a `record.changed` of one of them refreshes it. */
+    live?: string[];
     /** Stored, addressed to this user, and unread. In-app only since 23 Aug. */
     unreadNotificationsCount: number;
     recentNotifications: {

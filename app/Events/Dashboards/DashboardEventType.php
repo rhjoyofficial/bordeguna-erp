@@ -36,6 +36,22 @@ final class DashboardEventType
 
     public const STATEMENT_IMPORTED = 'courier.statement_imported';
 
+    public const BOOKING_UNKNOWN = 'courier.booking_unknown';
+
+    public const STATEMENT_POSTED = 'courier.statement_posted';
+
+    /**
+     * A routine refresh: the widgets re-read and nothing plays (a parcel picked
+     * up or in transit is not worth a bell on the owner's desk).
+     */
+    public const QUIET = 'none';
+
+    /** Every courier event the courier widgets refresh on. */
+    public const COURIER = [
+        self::PARCEL_STATUS, self::BOOKING_FAILED, self::BOOKING_UNKNOWN,
+        self::SYNC_ERROR, self::STATEMENT_IMPORTED, self::STATEMENT_POSTED,
+    ];
+
     /** The sound class each event plays unless it says otherwise. */
     public const SOUNDS = [
         self::ORDER_CREATED => 'success',
@@ -51,6 +67,8 @@ final class DashboardEventType
         self::BOOKING_FAILED => 'error',
         self::SYNC_ERROR => 'error',
         self::STATEMENT_IMPORTED => 'success',
+        self::BOOKING_UNKNOWN => 'attention',
+        self::STATEMENT_POSTED => 'success',
     ];
 
     public static function soundFor(string $type): string

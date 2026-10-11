@@ -11,6 +11,7 @@ use App\Modules\Foundation\Support\DocumentPdf;
 use App\Modules\Foundation\Support\ErpAssistant;
 use App\Modules\Hrm\Models\Employee;
 use App\Support\ApprovalInbox;
+use App\Support\Realtime\LivePages;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -100,6 +101,12 @@ class HandleInertiaRequests extends Middleware
             // request and EnsurePageBusinessMatches refuses a mismatch, the same
             // way a CSRF token makes a page assert the context it came from.
             'current_business_id' => fn () => app(BusinessContext::class)->id(),
+            // Realtime everywhere (11 Oct 2026): the channels this tab listens
+            // on, and the record kinds this page shows (LivePages, derived from
+            // the route; a controller's own `live` prop wins). Channel names
+            // only, never data: every event is kind + id and the page re-reads.
+            'realtime' => fn () => $this->realtime($request),
+            'live' => fn () => LivePages::forRequest($request),
             'pendingApprovalsCount' => fn () => $this->actionableApprovalsCount($request),
             'canReviewApprovals' => fn () => $this->canReviewApprovals($request),
             // The bell's own feed. In-app since 2026-08-23, when approval
@@ -288,6 +295,21 @@ class HandleInertiaRequests extends Middleware
         return $user->can('inventory.stock.approve')
             || $user->can('purchasing.po.approve')
             || $this->actionableApprovalsCount($request) > 0;
+    }
+
+    /**
+     * @return array{enabled: bool, business_channel: ?string, user_channel: ?string}
+     */
+    private function realtime(Request $request): array
+    {
+        $user = $request->user();
+        $businessId = app(BusinessContext::class)->id();
+
+        return [
+            'enabled' => $user !== null && config('broadcasting.default') === 'reverb',
+            'business_channel' => $businessId === null ? null : "business.{$businessId}",
+            'user_channel' => $user === null ? null : "user.{$user->id}",
+        ];
     }
 
     private function actionableApprovalsCount(Request $request): int

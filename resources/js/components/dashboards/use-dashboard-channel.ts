@@ -21,6 +21,8 @@ const MESSAGES: Record<string, string> = {
     'courier.booking_failed': 'A courier booking failed.',
     'integration.sync_error': 'A sync with an outside service failed.',
     'courier.statement_imported': 'A courier statement was imported.',
+    'courier.statement_posted': 'A courier statement was posted.',
+    'courier.booking_unknown': 'A courier booking answer was lost. Check the parcel.',
 };
 
 /**
@@ -74,7 +76,8 @@ export function useDashboardChannel({
 
             const mine = event.actor_id !== null && event.actor_id === userId;
 
-            if (!mine && (keys.length > 0 || event.personal)) {
+            // 'none' = a routine move (a parcel picked up): refresh, stay quiet.
+            if (!mine && event.sound !== 'none' && (keys.length > 0 || event.personal)) {
                 const message = MESSAGES[event.type];
                 dashboardSound.notify(event.sound, `${event.type}:${JSON.stringify(event.ids)}`);
 
@@ -91,12 +94,12 @@ export function useDashboardChannel({
 
         const stop = watchConnection(setStatus);
 
+        // ⚠ Remove only this listener and never leave(): the app shell's live
+        // refresh (useLiveReload) listens on the same two channels.
         return () => {
             stop();
-            business.stopListening(EVENT);
-            personal.stopListening(EVENT);
-            echo().leave(businessChannel);
-            echo().leave(userChannel);
+            business.stopListening(EVENT, handle);
+            personal.stopListening(EVENT, handle);
         };
     }, [enabled, businessChannel, userChannel, userId]);
 

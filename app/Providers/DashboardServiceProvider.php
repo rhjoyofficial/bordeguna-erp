@@ -36,6 +36,13 @@ class DashboardServiceProvider extends ServiceProvider
         Widgets\OrdersByStateWidget::class,
         Widgets\OrdersToDispatchWidget::class,
         Widgets\TopProductsWidget::class,
+        // Couriers
+        Widgets\CourierParcelsByStatusWidget::class,
+        Widgets\CourierParcelsAttentionWidget::class,
+        Widgets\CourierCodChainWidget::class,
+        Widgets\CourierBalancesWidget::class,
+        Widgets\CourierStatementsPendingWidget::class,
+        Widgets\CourierHealthWidget::class,
         // People and work
         Widgets\AttendanceTodayWidget::class,
         Widgets\TeamAttendanceWidget::class,
