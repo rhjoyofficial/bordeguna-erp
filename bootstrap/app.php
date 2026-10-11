@@ -32,6 +32,10 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    // Live dashboards (11 Oct 2026): private business.{id} and user.{id}
+    // channels, authorised in routes/channels.php. The auth endpoint is a
+    // signed-in web request like any other.
+    ->withBroadcasting(__DIR__.'/../routes/channels.php', ['middleware' => ['web', 'auth']])
     ->withMiddleware(function (Middleware $middleware) {
         // ⚠⚠ WITHOUT THIS, EVERY PAGE IS BLANK IN PRODUCTION.
         //
