@@ -1,4 +1,5 @@
 import { BrandBar, LiveIndicator, RangeBar, sendJson, SoundSettingsPopover } from '@/components/dashboards/dashboard-toolbar';
+import { HeroBand } from '@/components/dashboards/hero-band';
 import type { DashboardWidget, RangeState, SoundSettings } from '@/components/dashboards/types';
 import { useDashboardChannel } from '@/components/dashboards/use-dashboard-channel';
 import { useWidgetFeed } from '@/components/dashboards/use-widget-feed';
@@ -110,12 +111,42 @@ export default function RoleDashboard(props: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${dashboard.label} dashboard`} />
-            <div className="flex flex-1 flex-col gap-4 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                        <h1 className="text-xl font-semibold tracking-tight">{dashboard.label}</h1>
-                        <p className="text-muted-foreground text-sm">{dashboard.description}</p>
-                    </div>
+            <div className="flex flex-1 flex-col gap-4 p-4 sm:gap-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    {switcher.length > 1 || offers_classic ? (
+                        <nav
+                            aria-label="Dashboards"
+                            className="bg-muted/70 ring-border/60 flex max-w-full flex-wrap gap-1 rounded-2xl p-1 ring-1 sm:rounded-full"
+                        >
+                            {switcher.map((entry) => (
+                                <Link
+                                    key={entry.key}
+                                    href={entry.url}
+                                    preserveScroll
+                                    data={range.query}
+                                    className={cn(
+                                        'rounded-full px-3 py-1 text-sm transition-colors',
+                                        entry.current
+                                            ? 'bg-primary text-primary-foreground font-medium shadow-sm'
+                                            : 'text-muted-foreground hover:bg-background hover:text-foreground',
+                                    )}
+                                    aria-current={entry.current ? 'page' : undefined}
+                                >
+                                    {entry.label}
+                                </Link>
+                            ))}
+                            {offers_classic && (
+                                <Link
+                                    href="/dashboard/classic"
+                                    className="text-muted-foreground hover:bg-background hover:text-foreground flex items-center gap-1.5 rounded-full px-3 py-1 text-sm"
+                                >
+                                    <LayoutGrid className="size-3.5" /> Classic
+                                </Link>
+                            )}
+                        </nav>
+                    ) : (
+                        <span />
+                    )}
                     <div className="flex flex-wrap items-center gap-2">
                         <LiveIndicator status={status} />
                         <SoundSettingsPopover settings={sound} onChange={setSound} />
@@ -131,36 +162,6 @@ export default function RoleDashboard(props: Props) {
                     </div>
                 </div>
 
-                {(switcher.length > 1 || offers_classic) && (
-                    <nav aria-label="Dashboards" className="flex flex-wrap gap-1 border-b pb-2">
-                        {switcher.map((entry) => (
-                            <Link
-                                key={entry.key}
-                                href={entry.url}
-                                preserveScroll
-                                data={range.query}
-                                className={cn(
-                                    'rounded-md px-3 py-1.5 text-sm transition-colors',
-                                    entry.current
-                                        ? 'bg-primary text-primary-foreground font-medium'
-                                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                                )}
-                                aria-current={entry.current ? 'page' : undefined}
-                            >
-                                {entry.label}
-                            </Link>
-                        ))}
-                        {offers_classic && (
-                            <Link
-                                href="/dashboard/classic"
-                                className="text-muted-foreground hover:bg-accent hover:text-foreground flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm"
-                            >
-                                <LayoutGrid className="size-3.5" /> Classic
-                            </Link>
-                        )}
-                    </nav>
-                )}
-
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                     <RangeBar
                         range={range}
@@ -171,14 +172,24 @@ export default function RoleDashboard(props: Props) {
                     <BrandBar brands={brand.options} selected={brand.selected} path={path} rangeQuery={range.query} />
                 </div>
 
+                <HeroBand
+                    dashboardKey={dashboard.key}
+                    title={dashboard.label}
+                    description={dashboard.description}
+                    context={`${range.label}, ${brandName ?? 'all brands'}`}
+                    widgets={widgets}
+                    entries={entries}
+                />
+
                 {range_error && (
-                    <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm">
-                        <AlertTriangle className="size-4 text-amber-600" /> {range_error} Showing {range.label.toLowerCase()} instead.
+                    <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm">
+                        <AlertTriangle className="size-4 text-amber-700 dark:text-amber-400" /> {range_error} Showing {range.label.toLowerCase()}{' '}
+                        instead.
                     </div>
                 )}
 
                 {widgets.length === 0 ? (
-                    <p className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
+                    <p className="text-muted-foreground rounded-2xl border border-dashed bg-gradient-to-br from-emerald-500/6 via-sky-500/6 to-violet-500/6 p-8 text-center text-sm">
                         {hidden_widgets.length > 0
                             ? 'Every widget is hidden. Use Customise to show them again.'
                             : 'Nothing to show on this dashboard for your role yet.'}
