@@ -98,6 +98,7 @@ export function AppSidebar() {
         canAccessSalary,
         canManagePayroll,
         canViewAccounting,
+        canViewGroupCockpit,
         canViewOperatingReports,
         canViewInventory,
         canViewPurchasing,
@@ -173,7 +174,9 @@ export function AppSidebar() {
             label: 'Group',
             defaultOpen: false,
             items: [
-                { title: 'Group cockpit', url: '/group/cockpit', icon: LayoutGrid },
+                // Slice 0, D3: the cockpit is every business's books side by side,
+                // so it follows accounting.view held in at least one of them.
+                ...(canViewGroupCockpit ? [{ title: 'Group cockpit', url: '/group/cockpit', icon: LayoutGrid }] : []),
                 { title: 'Group partners', url: '/group/partners', icon: Network },
                 { title: 'Group products', url: '/group/products', icon: Network },
             ],

@@ -4,6 +4,7 @@ namespace App\Modules\Foundation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\MoneyLedgers;
+use App\Modules\Foundation\Support\BusinessesWithPermission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,12 +22,23 @@ use Inertia\Response;
  * `intercompany` column shows each business's net position; across the group
  * it must be zero, and the screen says so - a non-zero total means one side
  * of a transfer is missing.
+ *
+ * ⚠ Gated per business on `accounting.view`: a company's row is shown only to
+ * somebody who may read that company's books, and the sidebar link follows
+ * the same rule (`canViewGroupCockpit`).
  */
 class GroupCockpitController extends Controller
 {
     public function index(Request $request): Response
     {
-        $businessIds = $request->user()->businesses()->pluck('businesses.id');
+        // ⚠ Only the businesses whose books this user may read (Slice 0, D3). The
+        // screen had no gate at all, so a self-service login saw every one of
+        // its businesses' cash, debts and month. Roles are per business, so the
+        // question is asked once per business; none at all is a 403, the same
+        // answer the finance dashboard gives.
+        $businessIds = BusinessesWithPermission::of($request->user(), 'accounting.view');
+        abort_if($businessIds->isEmpty(), 403);
+
         $monthStart = Carbon::now()->startOfMonth()->toDateString();
         $today = Carbon::now()->toDateString();
 

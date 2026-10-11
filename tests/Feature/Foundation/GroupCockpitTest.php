@@ -5,6 +5,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -24,14 +25,34 @@ beforeEach(function () {
 
     app(BusinessContext::class)->set($this->bdg->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->bdg->id);
+
+    // ⚠ Roles are per business (spatie teams). The cockpit shows a business
+    // only to somebody holding accounting.view IN that business (Slice 0, D3),
+    // so each role is created, and each user assigned, inside its own team.
+    Permission::findOrCreate('accounting.view', 'web');
+    $this->roles = [];
     foreach ([$this->bdg, $this->lld] as $business) {
-        Role::create(['name' => 'Owner', 'guard_name' => 'web', 'business_id' => $business->id]);
+        $this->roles[$business->id] = [
+            'Owner' => Role::create(['name' => 'Owner', 'guard_name' => 'web', 'business_id' => $business->id])->givePermissionTo('accounting.view'),
+            'Staff' => Role::create(['name' => 'Staff', 'guard_name' => 'web', 'business_id' => $business->id]),
+        ];
     }
+
+    $this->grant = function (User $user, Business $business, string $role) {
+        $registrar = app(PermissionRegistrar::class);
+        $previous = $registrar->getPermissionsTeamId();
+        $registrar->setPermissionsTeamId($business->id);
+        $user->unsetRelation('roles')->assignRole($this->roles[$business->id][$role]);
+        $registrar->setPermissionsTeamId($previous);
+        $user->unsetRelation('roles')->unsetRelation('permissions');
+    };
 
     Carbon::setTestNow('2026-09-15 10:00:00');
 
     $this->owner = User::factory()->create();
     $this->owner->businesses()->attach([$this->bdg->id, $this->lld->id]);
+    ($this->grant)($this->owner, $this->bdg, 'Owner');
+    ($this->grant)($this->owner, $this->lld, 'Owner');
 
     // ⚠ The chart of accounts is CENTRAL (no business_id) - one chart,
     // every company posts to it; journal_lines carry the business. Books
@@ -94,6 +115,7 @@ it('shows each company breathing, and honest group totals', function () {
 it('shows a limited viewer only their own company', function () {
     $limited = User::factory()->create();
     $limited->businesses()->attach($this->bdg->id);
+    ($this->grant)($limited, $this->bdg, 'Owner');
 
     $this->actingAs($limited)->withSession(['current_business_id' => $this->bdg->id])
         ->get(route('group.cockpit'))
@@ -131,4 +153,64 @@ it('shows money between our businesses on its own, cancelling across the group',
             ->where('companies.1.intercompany', fn ($value) => (float) $value === -3000.0)
             ->where('totals.intercompany', fn ($value) => (float) $value === 0.0)
             ->where('totals.receivables', fn ($value) => (float) $value === 0.0));
+});
+
+// ─── Slice 0, D3: who may see which business ───────────────────────────────
+
+it('shows a business only to somebody who reads its books', function () {
+    // A member of both businesses, but only staff at LaLaDia.
+    $manager = User::factory()->create();
+    $manager->businesses()->attach([$this->bdg->id, $this->lld->id]);
+    ($this->grant)($manager, $this->bdg, 'Owner');
+    ($this->grant)($manager, $this->lld, 'Staff');
+
+    $this->actingAs($manager)->withSession(['current_business_id' => $this->bdg->id])
+        ->get(route('group.cockpit'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('companies', 1)
+            ->where('companies.0.name', 'Bor de Guna')
+            ->where('totals.cash', fn ($value) => (float) $value === 10000.0));
+});
+
+it('follows the permission held in another business, not only the current one', function () {
+    // Staff at Bor de Guna (where they are working), Owner at LaLaDia.
+    $user = User::factory()->create();
+    $user->businesses()->attach([$this->bdg->id, $this->lld->id]);
+    ($this->grant)($user, $this->bdg, 'Staff');
+    ($this->grant)($user, $this->lld, 'Owner');
+
+    $this->actingAs($user)->withSession(['current_business_id' => $this->bdg->id])
+        ->get(route('group.cockpit'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('canViewGroupCockpit', true)
+            // ⚠ The team id is put back: the rest of the request still answers
+            // for Bor de Guna, where this user cannot read the books.
+            ->where('canViewAccounting', false)
+            ->has('companies', 1)
+            ->where('companies.0.name', 'LaLaDia'));
+});
+
+it('refuses somebody who reads the books of none of their businesses', function () {
+    $staff = User::factory()->create();
+    $staff->businesses()->attach([$this->bdg->id, $this->lld->id]);
+    ($this->grant)($staff, $this->bdg, 'Staff');
+    ($this->grant)($staff, $this->lld, 'Staff');
+
+    $this->actingAs($staff)->withSession(['current_business_id' => $this->bdg->id])
+        ->get(route('group.cockpit'))
+        ->assertForbidden();
+
+    // And the sidebar does not offer the link.
+    $this->actingAs($staff)->withSession(['current_business_id' => $this->bdg->id])
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('canViewGroupCockpit', false));
+});
+
+it('offers the link to somebody who reads the books', function () {
+    ($this->asOwner)()->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('canViewGroupCockpit', true));
 });

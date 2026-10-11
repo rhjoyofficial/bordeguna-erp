@@ -24,7 +24,15 @@ interface CompanyRow {
 
 interface CockpitProps {
     companies: CompanyRow[];
-    totals: { cash: number; in_transit: number; receivables: number; payables: number; month_income: number; month_expense: number; intercompany: number };
+    totals: {
+        cash: number;
+        in_transit: number;
+        receivables: number;
+        payables: number;
+        month_income: number;
+        month_expense: number;
+        intercompany: number;
+    };
     month: string;
 }
 

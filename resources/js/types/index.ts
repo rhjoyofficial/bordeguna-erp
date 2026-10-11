@@ -69,6 +69,7 @@ export interface SharedData {
     canAccessSalary: boolean;
     canManagePayroll: boolean;
     canViewAccounting: boolean;
+    canViewGroupCockpit: boolean;
     canViewOperatingReports: boolean;
     canViewInventory: boolean;
     canViewPurchasing: boolean;

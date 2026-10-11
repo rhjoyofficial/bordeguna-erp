@@ -6,6 +6,7 @@ use App\Modules\Foundation\Support\Ai\AssistantIdentity;
 use App\Modules\Foundation\Support\Ai\AssistantLanguages;
 use App\Modules\Foundation\Support\AssistantAvailability;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\BusinessesWithPermission;
 use App\Modules\Foundation\Support\DocumentPdf;
 use App\Modules\Foundation\Support\ErpAssistant;
 use App\Modules\Hrm\Models\Employee;
@@ -184,6 +185,11 @@ class HandleInertiaRequests extends Middleware
             // once salary journals exist, so it follows the same ACL-02 shape:
             // Owner, Finance and Payroll, nobody else by default.
             'canViewAccounting' => fn () => (bool) $request->user()?->can('accounting.view'),
+            // Slice 0, D3: the group cockpit shows a business only to somebody who
+            // reads ITS books, so the link shows when that is true of any one of
+            // the user's businesses (roles are per business, hence the walk).
+            'canViewGroupCockpit' => fn () => $request->user() !== null
+                && BusinessesWithPermission::any($request->user(), 'accounting.view'),
             // ⭐ 26 Sep 2026 (Q19): the three operating reports (receivables ageing,
             // customer statement, stock value) for the Manager, who does not
             // read the ledger. The gate is composed, so accounting readers pass too.
