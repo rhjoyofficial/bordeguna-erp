@@ -8,6 +8,7 @@ use App\Support\Dashboards\DashboardBrand;
 use App\Support\Dashboards\DashboardKey;
 use App\Support\Dashboards\DashboardPage;
 use App\Support\Dashboards\DateRange;
+use App\Support\Dashboards\GettingStarted;
 use App\Support\Dashboards\SoundPreferences;
 use App\Support\Dashboards\Widget;
 use App\Support\Dashboards\WidgetContext;
@@ -100,6 +101,8 @@ class RoleDashboardController extends Controller
                 'user_channel' => "user.{$user->id}",
             ],
             'can_configure' => $viewAll,
+            // ⭐ What is still missing before the books mean anything (Owner, see-all only).
+            'getting_started' => GettingStarted::forPage($user, $businessId, $key, $viewAll),
             // The page refreshes itself widget by widget (socket first, polling as
             // the fallback); the global 30 s Inertia reload stands down here.
             'auto_refresh' => false,

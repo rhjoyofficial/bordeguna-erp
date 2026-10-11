@@ -6,6 +6,7 @@ use App\Modules\Foundation\Models\DashboardLayout;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Support\Dashboards\DashboardAccess;
 use App\Support\Dashboards\DashboardKey;
+use App\Support\Dashboards\GettingStarted;
 use App\Support\Dashboards\SoundPreferences;
 use App\Support\Dashboards\WidgetRegistry;
 use Illuminate\Http\JsonResponse;
@@ -54,5 +55,13 @@ class DashboardPreferenceController extends Controller
             'saved' => true,
             'sound' => SoundPreferences::for($request->user()->fresh(), $access->canViewAll($request->user())),
         ]);
+    }
+
+    /** Hide the Getting started card for this person in this business. Nobody else is affected. */
+    public function dismissGettingStarted(Request $request, BusinessContext $context): JsonResponse
+    {
+        GettingStarted::dismiss($request->user(), (int) $context->id());
+
+        return response()->json(['saved' => true]);
     }
 }

@@ -58,6 +58,7 @@ Route::middleware(['auth', 'business'])->group(function () {
     Route::get('dashboard/classic', [DashboardController::class, 'index'])->name('dashboard.classic');
     Route::get('dashboard/widgets/{widget}', [DashboardWidgetController::class, 'show'])->name('dashboard.widgets.show');
     Route::put('dashboard/sound', [DashboardPreferenceController::class, 'sound'])->name('dashboard.sound');
+    Route::put('dashboard/getting-started/dismiss', [DashboardPreferenceController::class, 'dismissGettingStarted'])->name('dashboard.getting-started.dismiss');
     Route::put('dashboard/{dashboard}/layout', [DashboardPreferenceController::class, 'layout'])
         ->whereIn('dashboard', DashboardKey::values())->name('dashboard.layout');
     Route::get('dashboard/{dashboard}', [RoleDashboardController::class, 'show'])
