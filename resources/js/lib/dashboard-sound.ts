@@ -1,11 +1,21 @@
 import type { SoundClass, SoundSettings } from '@/components/dashboards/types';
 
 /**
- * Dashboard sounds, synthesised with the browser's own Web Audio (no library,
- * no files to fetch). Three classes (ChatGPT ruling 7):
- *   success    two rising soft notes   (an order, a payment)
- *   attention  two even pulses          (something waits for you)
- *   error      a low falling pair       (a failure)
+ * Dashboard sounds through the browser's own Web Audio (no library). Three
+ * classes (ChatGPT ruling 7): success (an order, a payment), attention
+ * (something waits for you), error (a failure).
+ *
+ * Each class plays a short recorded notification (public/sounds, Joy, 11 Oct
+ * 2026), fetched and decoded ONCE, lazily, after the first click or key press.
+ * If a file cannot be fetched or decoded, or has not finished loading when a
+ * sound is due, the class falls back to its synthesised tones below, so a
+ * sound is never lost to a missing file.
+ *
+ * SOURCES (originals in Joy's downloads; licence assumed to be the Pixabay
+ * Content License, free to use without attribution: confirm before relying on it):
+ *   success.mp3    36505577-system-notification-alert-toast-warn-274740.mp3
+ *   attention.mp3  universfield-warning-notification-199277.mp3
+ *   error.mp3      universfield-error-notification-352286.mp3
  *
  * Rules (Owner override, 11 Oct 2026):
  * - never on page load, never for the person's own action (callers decide);
@@ -20,6 +30,16 @@ const SEVERITY: Record<SoundClass, number> = { success: 1, attention: 2, error: 
 
 type Note = { freq: number; at: number; length: number; type: OscillatorType };
 
+const SAMPLE_URL: Record<SoundClass, string> = {
+    success: '/sounds/success.mp3',
+    attention: '/sounds/attention.mp3',
+    error: '/sounds/error.mp3',
+};
+
+/** The recordings are mastered loud; this keeps them level with the tones at one volume. */
+const SAMPLE_GAIN = 0.55;
+
+/** The synthesised fallback: two rising soft notes, two even pulses, a low falling pair. */
 const PATTERNS: Record<SoundClass, Note[]> = {
     success: [
         { freq: 880, at: 0, length: 0.14, type: 'sine' },
@@ -42,6 +62,9 @@ class DashboardSound {
     private pending: SoundClass | null = null;
     private timer: number | null = null;
     private recent = new Map<string, number>();
+    /** A decoded recording per class; null when it failed (use the tones). */
+    private samples: Partial<Record<SoundClass, AudioBuffer | null>> = {};
+    private loading: Promise<void> | null = null;
     settings: SoundSettings | null = null;
 
     constructor() {
@@ -54,6 +77,7 @@ class DashboardSound {
             this.ensureContext()
                 ?.resume()
                 .catch(() => {});
+            void this.loadSamples();
             window.removeEventListener('pointerdown', unlock);
             window.removeEventListener('keydown', unlock);
         };
@@ -76,6 +100,39 @@ class DashboardSound {
         this.context = new Ctor();
 
         return this.context;
+    }
+
+    /** Fetch and decode the three recordings once; a failure leaves that class on its tones. */
+    private loadSamples(): Promise<void> {
+        if (this.loading !== null) {
+            return this.loading;
+        }
+
+        const context = this.ensureContext();
+
+        if (context === null || typeof fetch === 'undefined') {
+            this.loading = Promise.resolve();
+
+            return this.loading;
+        }
+
+        this.loading = Promise.all(
+            (Object.keys(SAMPLE_URL) as SoundClass[]).map(async (kind) => {
+                try {
+                    const response = await fetch(SAMPLE_URL[kind]);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    this.samples[kind] = await context.decodeAudioData(await response.arrayBuffer());
+                } catch {
+                    this.samples[kind] = null;
+                }
+            }),
+        ).then(() => undefined);
+
+        return this.loading;
     }
 
     get isUnlocked(): boolean {
@@ -161,7 +218,8 @@ class DashboardSound {
     /** Play immediately, ignoring the rate limit: the settings popover's "Test" button. */
     preview(kind: SoundClass, volume?: number): void {
         this.unlocked = true;
-        this.play(kind, volume);
+        // A click asked for it, so waiting for the first load is fine; the tones cover a failure.
+        void this.loadSamples().then(() => this.play(kind, volume));
     }
 
     private play(kind: SoundClass, volumeOverride?: number): void {
@@ -173,7 +231,22 @@ class DashboardSound {
 
         context.resume().catch(() => {});
 
-        const volume = Math.min(1, Math.max(0, volumeOverride ?? this.settings?.volume ?? 0.6)) * 0.25;
+        const level = Math.min(1, Math.max(0, volumeOverride ?? this.settings?.volume ?? 0.6));
+        const sample = this.samples[kind];
+
+        if (sample) {
+            const source = context.createBufferSource();
+            const gain = context.createGain();
+
+            source.buffer = sample;
+            gain.gain.value = level * SAMPLE_GAIN;
+            source.connect(gain).connect(context.destination);
+            source.start(context.currentTime + 0.01);
+
+            return;
+        }
+
+        const volume = level * 0.25;
         const start = context.currentTime + 0.02;
 
         for (const note of PATTERNS[kind]) {
