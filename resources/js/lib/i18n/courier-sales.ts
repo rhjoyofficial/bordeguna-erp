@@ -61,6 +61,7 @@ export const courierSales = {
     'parcels.fee': { en: 'fee', bn: 'চার্জ' },
     'parcels.cod': { en: 'COD', bn: 'সিওডি' },
     // The ERP's own parcel states (ConsignmentStatus)
+    'parcels.waiting_owner': { en: 'Waiting for the Owner', bn: 'মালিকের সিদ্ধান্তের অপেক্ষায়' },
     'parcels.erp_status.booked': { en: 'With the courier', bn: 'কুরিয়ারের কাছে' },
     'parcels.erp_status.delivered': { en: 'Delivered', bn: 'ডেলিভারি হয়েছে' },
     'parcels.erp_status.partially_delivered': { en: 'Partly delivered', bn: 'আংশিক ডেলিভারি' },

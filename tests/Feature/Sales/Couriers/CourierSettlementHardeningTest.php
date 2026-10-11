@@ -241,6 +241,20 @@ it('tells the order page a parcel waits for the Owner on a door discount, not fo
         ->and($manager[0]['can'])->toBeFalse();
 });
 
+it('lists a parcel waiting on the Owner for a door discount as waiting for the Owner', function () {
+    $waiting = ($this->parcel)();
+    $other = ($this->parcel)(number: 'CB1002');
+
+    ($this->report)($this->manager, $waiting, 'delivered', '1700', ['resolution' => 'discount', 'door_reason' => 'Jar lid dented, customer asked'])
+        ->assertSessionHasNoErrors();
+
+    $rows = collect($this->actingAs($this->owner)->get(route('sales.consignments.index'))
+        ->original->getData()['page']['props']['consignments']['data'])->keyBy('consignment_number');
+
+    expect($rows['CB1001']['waiting_owner'])->toBeTrue()
+        ->and($rows['CB1002']['waiting_owner'])->toBeFalse();
+});
+
 it('leaves the parcel open when the Owner rejects the door discount', function () {
     $consignment = ($this->parcel)();
     ($this->report)($this->manager, $consignment, 'delivered', '1700', ['resolution' => 'discount', 'door_reason' => 'Asked for less']);

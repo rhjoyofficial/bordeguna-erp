@@ -25,6 +25,7 @@ interface Consignment {
     cod_amount: string;
     status: 'booked' | 'delivered' | 'partially_delivered' | 'returned' | 'paid_return' | 'lost' | 'damaged';
     status_label: string;
+    waiting_owner: boolean;
     // Courier hub slice 8.
     cutoff_note: string | null;
     door_resolution_label: string | null;
@@ -208,7 +209,9 @@ export default function ConsignmentsIndex({
                                                       : 'default'
                                             }
                                         >
-                                            {tr('parcels.erp_status.' + consignment.status, consignment.status_label)}
+                                            {consignment.waiting_owner
+                                                ? t('parcels.waiting_owner')
+                                                : tr('parcels.erp_status.' + consignment.status, consignment.status_label)}
                                         </Badge>
                                         {consignment.outcome_on && (
                                             <span className="text-muted-foreground block text-xs">{consignment.outcome_on}</span>
