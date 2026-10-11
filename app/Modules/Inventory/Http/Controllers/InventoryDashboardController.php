@@ -10,6 +10,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\ExpiryWindow;
 use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use Illuminate\Support\Carbon;
@@ -259,17 +260,14 @@ class InventoryDashboardController extends Controller
      */
     private function expiryStrip(Carbon $today): array
     {
-        $held = StockBatch::query()
-            ->where('status', StockBatchStatus::Active)
-            ->where('current_quantity', '>', 0)
-            ->whereNotNull('expiry_date');
+        // ⚠ The expiry screen's own rule, each product's warning window, so the
+        // strip's count and the screen's list cannot disagree (Slice 0, D7).
+        [$expired, $expiring] = ExpiryWindow::batches($today)
+            ->partition(fn (StockBatch $batch) => ExpiryWindow::isExpired($batch, $today));
 
         return [
-            'expired' => (clone $held)->whereDate('expiry_date', '<', $today)->count(),
-            'expiring' => (clone $held)
-                ->whereDate('expiry_date', '>=', $today)
-                ->whereDate('expiry_date', '<=', $today->copy()->addDays(ExpiryController::SOON_DAYS))
-                ->count(),
+            'expired' => $expired->count(),
+            'expiring' => $expiring->count(),
         ];
     }
 }

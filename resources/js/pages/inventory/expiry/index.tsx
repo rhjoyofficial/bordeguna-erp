@@ -12,6 +12,8 @@ interface Row {
     quantity: number;
     expiry_date: string;
     days: number;
+    /** This product's own warning window, in days. */
+    warning_days: number;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -24,8 +26,11 @@ const qty = (value: number) => value.toLocaleString('en-BD', { maximumFractionDi
 /**
  * Per BATCH, not per product: two receipts of the same product expire on two
  * different days, and this screen names the exact batch that is going.
+ *
+ * ⚠ "Expiring soon" is each product's own warning window (set on the product,
+ * the default when blank), not one number for the whole shop.
  */
-export default function ExpiryIndex({ expired, expiring, soon_days }: { expired: Row[]; expiring: Row[]; soon_days: number }) {
+export default function ExpiryIndex({ expired, expiring, default_warning_days }: { expired: Row[]; expiring: Row[]; default_warning_days: number }) {
     const [tab, setTab] = useState<'expired' | 'expiring'>(expired.length > 0 ? 'expired' : 'expiring');
 
     const rows = tab === 'expired' ? expired : expiring;
@@ -42,7 +47,7 @@ export default function ExpiryIndex({ expired, expiring, soon_days }: { expired:
                     <div className="border-border flex gap-1 border-b px-3 pt-2">
                         {[
                             { key: 'expired' as const, label: `Expired (${expired.length})` },
-                            { key: 'expiring' as const, label: `Expiring within ${soon_days} days (${expiring.length})` },
+                            { key: 'expiring' as const, label: `Expiring soon (${expiring.length})` },
                         ].map((t) => (
                             <button
                                 key={t.key}
@@ -64,7 +69,7 @@ export default function ExpiryIndex({ expired, expiring, soon_days }: { expired:
                             <p className="text-muted-foreground p-2 text-sm">
                                 {tab === 'expired'
                                     ? 'No expired stock is being held. Batches with no expiry date never appear here.'
-                                    : `Nothing expires in the next ${soon_days} days. Batches with no expiry date never appear here.`}
+                                    : `Nothing is inside its product's warning window (${default_warning_days} days unless the product sets its own). Batches with no expiry date never appear here.`}
                             </p>
                         ) : (
                             <table className="w-full min-w-[52rem] text-sm">
@@ -76,6 +81,7 @@ export default function ExpiryIndex({ expired, expiring, soon_days }: { expired:
                                         <th className="py-1.5 text-right">Quantity held</th>
                                         <th className="py-1.5">Expiry date</th>
                                         <th className="py-1.5 text-right">{tab === 'expired' ? 'Days overdue' : 'Days left'}</th>
+                                        <th className="py-1.5 text-right">Warns at</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -96,6 +102,7 @@ export default function ExpiryIndex({ expired, expiring, soon_days }: { expired:
                                             >
                                                 {row.days}
                                             </td>
+                                            <td className="text-muted-foreground py-1.5 text-right tabular-nums">{row.warning_days} days</td>
                                         </tr>
                                     ))}
                                 </tbody>

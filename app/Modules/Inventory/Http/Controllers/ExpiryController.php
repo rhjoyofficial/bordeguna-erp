@@ -3,8 +3,9 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Inventory\Enums\StockBatchStatus;
+use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
+use App\Modules\Inventory\Support\ExpiryWindow;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -19,30 +20,26 @@ use Inertia\Response;
  * `inventory:propose-expired-write-offs` already proposes the write-off
  * adjustments; this screen is where a human sees it coming instead of finding
  * out from a refusal.
+ *
+ * ⚠ "Expiring soon" is each product's own warning window (90 days unless the
+ * product says otherwise), the same rule the goods receipt warns by. It was a
+ * flat 30 days until Slice 0 (D7).
  */
 class ExpiryController extends Controller
 {
-    /** How far ahead "expiring soon" looks, in days. */
-    public const SOON_DAYS = 30;
-
     public function index(): Response
     {
         $this->authorize('inventory.reports.view');
 
         $today = Carbon::today();
 
-        $batches = StockBatch::query()
-            ->where('status', StockBatchStatus::Active)
-            ->where('current_quantity', '>', 0)
-            ->whereNotNull('expiry_date')
-            ->whereDate('expiry_date', '<=', $today->copy()->addDays(self::SOON_DAYS))
-            ->with(['product:id,name,sku', 'warehouse:id,name'])
-            ->orderBy('expiry_date')
-            ->get()
+        // ⚠ "Soon" is each product's own warning window, not one number for the
+        // whole shop (Slice 0, D7): see ExpiryWindow.
+        $batches = ExpiryWindow::batches($today)
             ->map(function (StockBatch $batch) use ($today) {
                 // ⚠ A batch is good THROUGH its expiry date (the consumable
                 // scope's own rule) - expired starts the day AFTER.
-                $expired = $batch->expiry_date->lt($today);
+                $expired = ExpiryWindow::isExpired($batch, $today);
 
                 return [
                     'id' => $batch->id,
@@ -55,13 +52,14 @@ class ExpiryController extends Controller
                     'expired' => $expired,
                     // ⚠ Carbon diffInDays returns a float; cast where produced.
                     'days' => (int) abs($today->diffInDays($batch->expiry_date, false)),
+                    'warning_days' => ExpiryWindow::warningDays($batch),
                 ];
             });
 
         return Inertia::render('inventory/expiry/index', [
             'expired' => $batches->filter(fn (array $row) => $row['expired'])->values(),
             'expiring' => $batches->reject(fn (array $row) => $row['expired'])->values(),
-            'soon_days' => self::SOON_DAYS,
+            'default_warning_days' => Product::DEFAULT_SHELF_LIFE_WARNING_DAYS,
         ]);
     }
 }
