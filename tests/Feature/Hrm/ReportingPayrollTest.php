@@ -567,7 +567,15 @@ it('registers fourteen of the fifteen reports, with only the bank advice missing
         // 23: sales by brand (3 Sep 2026) - the calculation Joy asked for when
         // the interview revealed the "companies" are brands of Bor de Guna.
         ->and($keys)->toContain('sales_by_brand')
-        ->and($keys)->toHaveCount(23);
+        // 24-28: the reports pack (11 Oct 2026) - sales by brand, channel and
+        // customer type; margin; delivery economics; courier settlement
+        // ageing; and Accounting's cash position.
+        ->and($keys)->toContain('sales_by_channel')
+        ->and($keys)->toContain('sales_margin')
+        ->and($keys)->toContain('delivery_economics')
+        ->and($keys)->toContain('courier_settlement_ageing')
+        ->and($keys)->toContain('cash_position')
+        ->and($keys)->toHaveCount(28);
 });
 
 /*

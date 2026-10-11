@@ -6,6 +6,7 @@ import { courierSales } from './i18n/courier-sales';
 import { courierSettings } from './i18n/courier-settings';
 import { dashboards } from './i18n/dashboards';
 import type { Entry } from './i18n/entry';
+import { reports } from './i18n/reports';
 
 /**
  * Bangla UI phase 1 (C-I18N-2/3).
@@ -463,6 +464,7 @@ const dictionary = {
     ...courierParcel,
     ...dashboards,
     ...attention,
+    ...reports,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

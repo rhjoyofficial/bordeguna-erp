@@ -418,3 +418,18 @@ it('takes the VAT out of inclusive prices and their discount, still tying to the
         ->and($ledger + $vatPosted)->toBe((1150 + 333 - 100) * 100)
         ->and((int) round(rpRows(SalesMarginReport::class, $this->period->all())->sum('revenue') * 100))->toBe($ledger);
 });
+
+it('opens the report screen from the sidebar with the chart slot, for whoever reads sales reports', function () {
+    $this->actingAs($this->owner)
+        ->get(route('hrm.reports.show', 'sales_by_channel'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('hrm/reports/show')
+            ->where('has_chart', true)
+            ->where('report.group', 'Sales')
+            ->where('canViewSalesReports', true)
+            ->where('parameters.1.options.0.value', OrderBrand::NONE));
+
+    $this->actingAs(rpUser($this->business, 'Clerk'))
+        ->get(route('hrm.reports.show', 'sales_by_channel'))
+        ->assertNotFound();
+});

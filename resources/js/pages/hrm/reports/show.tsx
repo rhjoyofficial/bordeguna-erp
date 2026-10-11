@@ -1,8 +1,10 @@
+import { type Preview, ReportPreview } from '@/components/reports/report-preview';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
@@ -43,7 +45,19 @@ interface Props {
     columns: Column[];
     formats: Format[];
     queue_threshold: number;
+    /** Whether the on-screen view draws a chart above its table. */
+    has_chart?: boolean;
 }
+
+/**
+ * Where a report sits in the menus, for the breadcrumb: a sales report is not
+ * an HR page because the one screen that runs every report lives under /hrm.
+ */
+const GROUP_CRUMB: Record<string, BreadcrumbItem> = {
+    Sales: { title: 'Sales', href: '/sales/invoices' },
+    Accounting: { title: 'Accounts', href: '/accounting/overview' },
+    Purchasing: { title: 'Purchases', href: '/purchasing/expenses' },
+};
 
 /**
  * The generic parameter screen. It knows nothing about any particular report -
@@ -55,7 +69,10 @@ interface Props {
  * the download.
  */
 export default function ReportShow({ report, parameters, columns, formats, queue_threshold }: Props) {
+    const { t } = useTranslation();
     const [withSignatures, setWithSignatures] = useState(false);
+    const [preview, setPreview] = useState<Preview | null>(null);
+    const [previewState, setPreviewState] = useState<'idle' | 'loading' | 'failed'>('idle');
     const initial = useMemo(() => {
         const values: Record<string, string> = {};
 
@@ -89,7 +106,7 @@ export default function ReportShow({ report, parameters, columns, formats, queue
     const [errors, setErrors] = useState<string[]>([]);
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'HRM', href: '/hrm/employees' },
+        GROUP_CRUMB[report.group] ?? { title: 'HRM', href: '/hrm/employees' },
         { title: 'Reports', href: '/hrm/reports' },
         { title: report.name, href: `/hrm/reports/${report.key}` },
     ];
@@ -109,12 +126,12 @@ export default function ReportShow({ report, parameters, columns, formats, queue
             })
             .map((parameter) => parameter.label);
 
-    const run = (format: Format) => {
+    const filterQuery = (): URLSearchParams | null => {
         const absent = missing();
 
         if (absent.length > 0) {
             setErrors(absent);
-            return;
+            return null;
         }
 
         setErrors([]);
@@ -123,6 +140,39 @@ export default function ReportShow({ report, parameters, columns, formats, queue
         Object.entries(values).forEach(([key, value]) => {
             if (value !== '') query.append(key, value);
         });
+
+        return query;
+    };
+
+    // The same filters, answered as JSON and drawn here: a fetch rather than
+    // an Inertia visit, because the answer is data for this page, not a page.
+    const showOnScreen = async () => {
+        const query = filterQuery();
+
+        if (query === null) return;
+
+        setPreviewState('loading');
+
+        try {
+            const response = await fetch(`/hrm/reports/${report.key}/preview?${query.toString()}`, {
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) throw new Error(String(response.status));
+
+            setPreview((await response.json()) as Preview);
+            setPreviewState('idle');
+        } catch {
+            setPreviewState('failed');
+        }
+    };
+
+    const run = (format: Format) => {
+        const query = filterQuery();
+
+        if (query === null) return;
+
         query.append('format', format.key);
         if (withSignatures) query.append('with_signatures', '1');
 
@@ -232,8 +282,12 @@ export default function ReportShow({ report, parameters, columns, formats, queue
                         </label>
 
                         <div className="flex flex-wrap items-center gap-2">
+                            <Button onClick={showOnScreen} disabled={previewState === 'loading'}>
+                                {previewState === 'loading' ? t('reports.loading') : preview ? t('reports.refresh') : t('reports.show_on_screen')}
+                            </Button>
+                            <span className="text-muted-foreground text-xs">{t('reports.download_hint')}</span>
                             {formats.map((format) => (
-                                <Button key={format.key} variant={format.key === 'xlsx' ? 'default' : 'outline'} onClick={() => run(format)}>
+                                <Button key={format.key} variant="outline" onClick={() => run(format)}>
                                     {format.label}
                                 </Button>
                             ))}
@@ -257,6 +311,14 @@ export default function ReportShow({ report, parameters, columns, formats, queue
                         </ul>
                     </div>
                 </div>
+
+                {previewState === 'failed' && <p className="text-destructive text-sm">{t('reports.failed')}</p>}
+
+                {preview && (
+                    <section className="rounded-lg border p-4" aria-label={t('reports.on_screen')}>
+                        <ReportPreview preview={preview} />
+                    </section>
+                )}
             </div>
         </AppLayout>
     );
