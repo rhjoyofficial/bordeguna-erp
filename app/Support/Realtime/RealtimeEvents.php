@@ -15,6 +15,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Sales\Couriers\Events\CourierParcelChanged;
+use App\Modules\Sales\Couriers\Models\CourierBulkRun;
 use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\CourierStatement;
 use App\Modules\Sales\Models\CustomerReceipt;
@@ -51,6 +52,8 @@ final class RealtimeEvents
         'sales_invoice' => SalesInvoice::class,
         'customer_receipt' => CustomerReceipt::class,
         'courier_statement' => CourierStatement::class,
+        // Bulk booking (11 Oct 2026): the run's counters move as each order is answered.
+        'courier_bulk_run' => CourierBulkRun::class,
         'purchase_order' => PurchaseOrder::class,
         'supplier_bill' => SupplierBill::class,
         'approval_request' => ApprovalRequest::class,
