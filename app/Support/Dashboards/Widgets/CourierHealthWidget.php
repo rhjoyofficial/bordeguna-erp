@@ -99,7 +99,8 @@ class CourierHealthWidget extends CourierWidget
                 'url' => '/settings/couriers',
                 'tone' => ! $account?->is_active ? 'warn' : ($failing ? 'bad' : 'good'),
                 'cells' => [
-                    'account' => trim(($account?->provider?->name ?? '').' '.($account?->label ?? '')),
+                    // Named as Settings > Couriers names it: "Pathao: <label>".
+                    'account' => implode(': ', array_filter([$account?->provider?->name, $account?->label])),
                     'state' => ! $account?->is_active ? 'Off' : ($failing ? 'Failing' : 'Working'),
                     'last_ok' => $ago($okAt),
                     'last_error' => $error === null ? 'None' : $ago($error->created_at).': '.mb_strimwidth((string) $error->error, 0, 80, '...'),

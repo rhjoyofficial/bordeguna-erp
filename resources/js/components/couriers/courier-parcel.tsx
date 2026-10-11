@@ -118,6 +118,11 @@ const confidenceClass: Record<FeeEstimatePayload['confidence'], string> = {
  * the account, weight, amount to collect or delivery type changes. Our COST:
  * never the customer's delivery charge.
  */
+// Money in an estimate always has two decimals: Tk 117.70, never Tk 117.7 (QA walk, 11 Oct 2026).
+function taka(amount: number): string {
+    return amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function LiveFeeEstimate({
     challanId,
     accountId,
@@ -191,12 +196,12 @@ function LiveFeeEstimate({
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span className="font-medium">
                     {estimate.sufficient && estimate.total !== null
-                        ? `Courier charge about Tk ${estimate.total.toLocaleString('en-IN')}`
+                        ? `Courier charge about Tk ${taka(estimate.total)}`
                         : 'Insufficient data'}
                 </span>
                 {estimate.sufficient && (
                     <span className="text-muted-foreground">
-                        delivery {estimate.delivery_fee?.toLocaleString('en-IN')}, COD fee {(estimate.cod_fee ?? 0).toLocaleString('en-IN')}
+                        delivery {taka(estimate.delivery_fee ?? 0)}, COD fee {taka(estimate.cod_fee ?? 0)}
                     </span>
                 )}
                 <Badge variant="outline">Confidence: {estimate.confidence_label}</Badge>
@@ -205,7 +210,7 @@ function LiveFeeEstimate({
             <p className="text-muted-foreground mt-1">{estimate.basis}</p>
             {estimate.return_fee_scenario !== null && (
                 <p className="text-muted-foreground mt-1">
-                    If it comes back, a return fee of about Tk {estimate.return_fee_scenario.toLocaleString('en-IN')} may apply (not included).
+                    If it comes back, a return fee of about Tk {taka(estimate.return_fee_scenario)} may apply (not included).
                 </p>
             )}
         </div>
