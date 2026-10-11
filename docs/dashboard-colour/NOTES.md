@@ -69,3 +69,24 @@ states (which is also how the empty states were checked).
 - `owner-light-1440.png`, `finance-dark-1440.png`, `employee-dark-1440.png`,
   `owner-light-390.png` (first screen of each).
 - No horizontal scroll at 390 px on any of the five dashboards, light or dark.
+
+## Second pass: more colour (11 Oct 2026, after review)
+
+- Hero tiles each wear their own colour on the brand band: cash emerald,
+  sales indigo, couriers amber, attention rose (emerald when nothing is
+  waiting), stock sky, people and approvals violet or rose. Tinted glass,
+  a lit top edge, a solid icon tile, and the sparkline and split bar in the
+  tile's own pale accent. The change chip keeps green for good and red for
+  bad, so its meaning is not lost to the tile colour.
+- Accents are now named by colour (emerald, teal, sky, indigo, violet, amber,
+  rose, red) and chosen per widget in `palette.ts`: money in transit amber,
+  gross profit violet, receivables teal, payables rose, bank lines sky,
+  sales indigo, stock sky, people rose. A Needs attention card with nothing
+  waiting turns emerald.
+- Stronger card tint, a coloured border, and mini stat tiles filled in the
+  accent with the label in the accent's 800 step (light) or 300 step (dark),
+  so they stay AA.
+- Merged master: every new string goes through `t()` with a Bangla entry
+  (`dash.hero.*`, `dash.colour.*` in `lib/i18n/dashboards.ts`); the new Needs
+  attention widget feeds the hero's attention tile and shows its severity
+  counts as coloured pills.
