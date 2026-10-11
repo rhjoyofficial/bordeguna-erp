@@ -121,6 +121,7 @@ export function useNavGroups(): NavGroup[] {
         canUseChat,
         canManageCrmSettings,
         canManageCourierSettings,
+        canProposeRateCards,
         canConfigureDashboards,
         canViewAssets,
         canViewAssetItems,
@@ -142,6 +143,7 @@ export function useNavGroups(): NavGroup[] {
         canManageCrmSettings,
         canManageReasons,
         canManageCourierSettings,
+        canProposeRateCards,
         canConfigureDashboards,
     });
 
@@ -303,6 +305,9 @@ export function useNavGroups(): NavGroup[] {
                           // could only be taken from one invoice's page, and never listed.
                           ...(canViewSales ? [{ title: 'Receipts', url: '/sales/receipts', icon: HandCoins }] : []),
                           ...(canViewSales ? [{ title: 'Courier payouts', url: '/sales/courier-statements', icon: Wallet }] : []),
+                          // What parcels were expected to cost, what the courier quoted and
+                          // what it charged (courier hub slice 5).
+                          ...(canProposeRateCards ? [{ title: 'Courier fees', url: '/sales/courier-fees', icon: Scale }] : []),
                           // Goods coming back - shipped WITH its screens in one
                           // commit, same reachability rule as the order book.
                           ...(canViewSales ? [{ title: 'Returns', url: '/sales/returns', icon: Undo2 }] : []),
@@ -336,6 +341,8 @@ export function useNavGroups(): NavGroup[] {
                           ...(canManageCourierSettings ? [{ title: 'Courier settings', url: '/settings/couriers', icon: Truck }] : []),
                           // Courier zone for every thana, reviewed; courier price bands (11 Oct 2026).
                           ...(canManageCourierSettings ? [{ title: 'Courier locations', url: '/settings/couriers/locations', icon: MapPin }] : []),
+                          // Courier price versions: Managers propose, the Owner approves (slice 5).
+                          ...(canProposeRateCards ? [{ title: 'Courier rate cards', url: '/settings/couriers/rate-cards', icon: Scale }] : []),
                           // Credit limits and days, by file, applied after approval (26 Sep 2026).
                           ...(canViewSales ? [{ title: 'Credit terms', url: '/sales/credit-terms', icon: Contact }] : []),
                           // Import prices is a button on Selling prices (29 Sep 2026).

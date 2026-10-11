@@ -262,6 +262,8 @@ class HandleInertiaRequests extends Middleware
             'canManageCrmSettings' => fn () => (bool) $request->user()?->can('crm.settings.manage'),
             // Settings > Couriers: courier credentials and webhooks (11 Oct 2026).
             'canManageCourierSettings' => fn () => (bool) $request->user()?->can('couriers.settings.manage'),
+            // Courier hub slice 5: rate cards and the courier fee report.
+            'canProposeRateCards' => fn () => (bool) $request->user()?->can('couriers.ratecards.propose'),
             // Settings > Dashboards (11 Oct 2026): the Owner's see-all permission.
             'canConfigureDashboards' => fn () => (bool) $request->user()?->can('dashboard.view_all'),
             // ⚠ The Assets module shipped loading MIGRATIONS ONLY - no routes, no

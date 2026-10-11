@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Link, router, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { FormEventHandler, useEffect, useState } from 'react';
 
 // Courier hub slice 4: booking a challan through the courier's API, settling a
 // booking whose answer was lost, and the courier's own timeline. None of this
@@ -89,8 +89,127 @@ export interface CourierInfo {
     courier_invoice_ref: string | null;
     can_cancel: boolean;
     can_refresh: boolean;
+    fee_estimate: { total: string | null; basis: string; confidence: string } | null;
     prompt: CourierPrompt | null;
     events: CourierEvent[];
+}
+
+export interface FeeEstimatePayload {
+    sufficient: boolean;
+    method: 'provider_quote' | 'rate_card' | 'historical' | 'insufficient';
+    total: number | null;
+    delivery_fee: number | null;
+    cod_fee: number | null;
+    confidence: 'high' | 'medium' | 'low' | 'none';
+    confidence_label: string;
+    basis: string;
+    return_fee_scenario: number | null;
+}
+
+const confidenceClass: Record<FeeEstimatePayload['confidence'], string> = {
+    high: 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40',
+    medium: 'border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40',
+    low: 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40',
+    none: 'border-border bg-muted/40',
+};
+
+/**
+ * What the courier will charge us for this parcel, worked out again whenever
+ * the account, weight, amount to collect or delivery type changes. Our COST:
+ * never the customer's delivery charge.
+ */
+function LiveFeeEstimate({
+    challanId,
+    accountId,
+    weight,
+    cod,
+    deliveryType,
+}: {
+    challanId: number;
+    accountId: string;
+    weight: string;
+    cod: string;
+    deliveryType: string;
+}) {
+    const [estimate, setEstimate] = useState<FeeEstimatePayload | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [failed, setFailed] = useState(false);
+
+    useEffect(() => {
+        if (accountId === '') {
+            return;
+        }
+
+        const controller = new AbortController();
+        const timer = window.setTimeout(async () => {
+            setLoading(true);
+            setFailed(false);
+
+            const params: Record<string, string> = { courier_account_id: accountId };
+            if (/^\d+$/.test(weight.trim())) params.weight_grams = weight.trim();
+            if (/^\d+(\.\d+)?$/.test(cod.trim())) params.cod_amount = cod.trim();
+            if (deliveryType !== '') params.delivery_type = deliveryType;
+
+            try {
+                const response = await fetch(route('sales.consignments.estimate', { delivery: challanId, ...params }), {
+                    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    signal: controller.signal,
+                });
+
+                if (!response.ok) {
+                    throw new Error(String(response.status));
+                }
+
+                setEstimate((await response.json()) as FeeEstimatePayload);
+            } catch {
+                if (!controller.signal.aborted) {
+                    setFailed(true);
+                }
+            } finally {
+                if (!controller.signal.aborted) {
+                    setLoading(false);
+                }
+            }
+        }, 400);
+
+        return () => {
+            controller.abort();
+            window.clearTimeout(timer);
+        };
+    }, [challanId, accountId, weight, cod, deliveryType]);
+
+    if (failed) {
+        return <p className="text-muted-foreground text-xs">The courier charge could not be worked out just now.</p>;
+    }
+
+    if (estimate === null) {
+        return loading ? <p className="text-muted-foreground text-xs">Working out the courier charge...</p> : null;
+    }
+
+    return (
+        <div className={`rounded-md border p-2 text-xs ${confidenceClass[estimate.confidence]}`} aria-live="polite">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="font-medium">
+                    {estimate.sufficient && estimate.total !== null
+                        ? `Courier charge about Tk ${estimate.total.toLocaleString('en-IN')}`
+                        : 'Insufficient data'}
+                </span>
+                {estimate.sufficient && (
+                    <span className="text-muted-foreground">
+                        delivery {estimate.delivery_fee?.toLocaleString('en-IN')}, COD fee {(estimate.cod_fee ?? 0).toLocaleString('en-IN')}
+                    </span>
+                )}
+                <Badge variant="outline">Confidence: {estimate.confidence_label}</Badge>
+                {loading && <span className="text-muted-foreground">updating...</span>}
+            </div>
+            <p className="text-muted-foreground mt-1">{estimate.basis}</p>
+            {estimate.return_fee_scenario !== null && (
+                <p className="text-muted-foreground mt-1">
+                    If it comes back, a return fee of about Tk {estimate.return_fee_scenario.toLocaleString('en-IN')} may apply (not included).
+                </p>
+            )}
+        </div>
+    );
 }
 
 const sourceLabel: Record<CourierEvent['source'], string> = {
@@ -287,6 +406,14 @@ export function ApiBookParcelForm({
                 )}
             </div>
 
+            <LiveFeeEstimate
+                challanId={challanId}
+                accountId={data.courier_account_id}
+                weight={data.declared_weight_grams}
+                cod={data.cod_amount}
+                deliveryType={data.delivery_type}
+            />
+
             <div>
                 <Button size="sm" disabled={processing || blocked}>
                     {processing ? 'Booking...' : `Book with ${account?.provider_name ?? 'the courier'}`}
@@ -431,6 +558,7 @@ export function CourierStatusPanel({ consignmentId, info, canBook }: { consignme
                     </button>
                 )}
             </div>
+            {info.fee_estimate && <p className="text-muted-foreground mt-1">ERP estimate kept at booking: {info.fee_estimate.basis}</p>}
             {open && (
                 <ol className="border-sidebar-border/70 mt-2 ml-1 flex flex-col gap-1 border-l pl-3">
                     {info.events.map((event) => (

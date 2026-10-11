@@ -10,6 +10,8 @@ use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Couriers\Drivers\BooksParcels;
 use App\Modules\Sales\Couriers\Enums\CourierStatus;
 use App\Modules\Sales\Couriers\Events\CourierParcelChanged;
+use App\Modules\Sales\Couriers\Fees\CourierFeeEstimator;
+use App\Modules\Sales\Couriers\Fees\FeeEstimate;
 use App\Modules\Sales\Couriers\Locations\Unresolved;
 use App\Modules\Sales\Couriers\Models\CourierAccount;
 use App\Modules\Sales\Couriers\Models\CourierAccountBusiness;
@@ -19,11 +21,13 @@ use App\Modules\Sales\Couriers\Tracking\RecordShipmentEvent;
 use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\DeliveryLine;
+use App\Modules\Sales\Support\ParcelWeight;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
+use Throwable;
 
 /**
  * Books a challan with a courier through its API (courier hub slice 4).
@@ -50,6 +54,7 @@ class BookParcelThroughCourier
         private readonly BookConsignment $book,
         private readonly ResolveSellingPrice $resolver,
         private readonly RecordShipmentEvent $events,
+        private readonly CourierFeeEstimator $estimator,
     ) {}
 
     /**
@@ -143,9 +148,24 @@ class BookParcelThroughCourier
                 ]);
             });
 
-            $result = $driver->book($account, $parcel);
+            // ⭐ Slice 5: what the ERP expected this parcel to cost, worked out
+            // before the request leaves (a cached quote only, never a new call)
+            // and kept once the courier has taken it.
+            $estimate = $this->estimateFor($delivery, $account, $draft, $grams, $input['declared_weight_grams'] ?? null, $cod, $deliveryType);
 
-            return $this->settle($intent, $result, $by);
+            $result = $driver->book($account, $parcel);
+            $intent = $this->settle($intent, $result, $by);
+
+            if ($estimate !== null && $intent->status === CourierBookingRequest::SUCCEEDED && $intent->consignment_id !== null) {
+                try {
+                    $estimate->record((int) $delivery->business_id, (int) $delivery->id, (int) $intent->consignment_id, $by->id);
+                } catch (Throwable $e) {
+                    // ⚠ The parcel is booked; a lost estimate must not undo that.
+                    report($e);
+                }
+            }
+
+            return $intent;
         } finally {
             $lock->release();
         }
@@ -235,6 +255,33 @@ class BookParcelThroughCourier
         $this->events->handle($consignment, CourierShipmentEvent::BOOKING, 'booked', $result->rawStatus ?? 'created', now());
 
         return $consignment->fresh();
+    }
+
+    /**
+     * The estimate for what is about to be sent. Never throws: the booking
+     * matters more than its estimate.
+     */
+    private function estimateFor(Delivery $delivery, CourierAccount $account, ParcelDraft $draft, int $grams, mixed $typed, int $cod, int $deliveryType): ?FeeEstimate
+    {
+        try {
+            $weight = ParcelWeight::forDelivery($delivery);
+            $wasTyped = $typed !== null && $typed !== '' && (int) $typed !== $draft->weightSuggested;
+
+            return $this->estimator->estimate(
+                account: $account,
+                businessId: (int) $delivery->business_id,
+                destination: ['district' => $draft->address?->district, 'thana' => $draft->address?->thana, 'area' => $draft->address?->area],
+                weightGrams: $grams,
+                codAmount: $cod,
+                service: CourierFeeEstimator::serviceFor($account->definition()->code(), $deliveryType),
+                weightInfo: $wasTyped ? ['typed' => true] : ['items_weighed' => $weight->lines - count($weight->missing), 'items_total' => $weight->lines],
+                quote: CourierFeeEstimator::QUOTE_CACHED,
+            );
+        } catch (Throwable $e) {
+            report($e);
+
+            return null;
+        }
     }
 
     /**

@@ -2,6 +2,7 @@ import { type NavItem } from '@/types';
 import {
     Bot,
     Building2,
+    Calculator,
     KeyRound,
     LayoutDashboard,
     ListChecks,
@@ -44,6 +45,8 @@ export interface SettingsAccess {
     canManageReasons?: boolean;
     /** couriers.settings.manage - CourierSettingsController. */
     canManageCourierSettings?: boolean;
+    /** couriers.ratecards.propose - CourierRateCardController. */
+    canProposeRateCards?: boolean;
     /** dashboard.view_all - DashboardAssignmentController. */
     canConfigureDashboards?: boolean;
 }
@@ -115,6 +118,8 @@ export function settingsSections(access: SettingsAccess): SettingsSection[] {
                 ...(access.canManageCourierSettings ? [{ title: 'Couriers', url: '/settings/couriers', icon: Truck }] : []),
                 // Which courier zone each thana is, and the courier price bands (slice 2).
                 ...(access.canManageCourierSettings ? [{ title: 'Courier locations', url: '/settings/couriers/locations', icon: MapPin }] : []),
+                // What each courier charges, by version (slice 5). Managers propose, the Owner approves.
+                ...(access.canProposeRateCards ? [{ title: 'Courier rate cards', url: '/settings/couriers/rate-cards', icon: Calculator }] : []),
             ],
         },
     ];

@@ -298,6 +298,58 @@ class PathaoDriver implements BooksParcels, CourierDriver, ListsLocations
             : new CancelResult(false, 'Pathao did not accept the cancel through the API ('.$call->error.'). '.$panel);
     }
 
+    /**
+     * Pathao's own price for a parcel (POST merchant/price-plan, documented on
+     * the Developer API page, 11 Oct 2026), courier hub slice 5. Read-only at
+     * Pathao: nothing is booked.
+     *
+     * @return array{0: ?array{delivery_fee: float, cod_percent: ?float, plan_id: mixed, price: mixed, discount: mixed, promo_discount: mixed, additional_charge: mixed}, 1: ?string}
+     */
+    public function pricePlan(CourierAccount $account, string $storeId, int $itemType, int $deliveryType, int $weightGrams, string $cityId, string $zoneId): array
+    {
+        $payload = [
+            'store_id' => (int) $storeId,
+            'item_type' => $itemType,
+            'delivery_type' => $deliveryType,
+            'item_weight' => self::kilograms($weightGrams),
+            'recipient_city' => (int) $cityId,
+            'recipient_zone' => (int) $zoneId,
+        ];
+
+        $path = '/aladdin/api/v1/merchant/price-plan';
+        $call = $this->authorised($account, 'POST', $path, fn (PendingRequest $http, string $url) => $http->asJson()->post($url, $payload));
+
+        if (! $call->ok()) {
+            return [null, (string) $call->error];
+        }
+
+        $data = (array) data_get($call->json(), 'data', []);
+        $final = $data['final_price'] ?? null;
+
+        if (! is_numeric($final)) {
+            $price = $data['price'] ?? null;
+
+            if (! is_numeric($price)) {
+                return [null, 'Pathao answered the price plan without a price.'];
+            }
+
+            $final = (float) $price - (float) ($data['discount'] ?? 0) - (float) ($data['promo_discount'] ?? 0) + (float) ($data['additional_charge'] ?? 0);
+        }
+
+        $codPercent = $data['cod_percentage'] ?? null;
+
+        return [[
+            'delivery_fee' => round((float) $final, 2),
+            // Pathao writes 0.01 for 1%.
+            'cod_percent' => is_numeric($codPercent) && ($data['cod_enabled'] ?? true) ? round((float) $codPercent * 100, 4) : null,
+            'plan_id' => $data['plan_id'] ?? null,
+            'price' => $data['price'] ?? null,
+            'discount' => $data['discount'] ?? null,
+            'promo_discount' => $data['promo_discount'] ?? null,
+            'additional_charge' => $data['additional_charge'] ?? null,
+        ], null];
+    }
+
     /** Grams to Pathao's kilograms: up to the next 0.1, at least 0.5. */
     public static function kilograms(int $grams): float
     {

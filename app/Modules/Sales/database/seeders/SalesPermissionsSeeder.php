@@ -62,6 +62,10 @@ class SalesPermissionsSeeder extends Seeder
             'couriers.settings.manage',
             'couriers.parcels.view',
             'couriers.parcels.book',
+            // Courier hub slice 5: propose a rate card, and make one the price
+            // the ERP estimates with (Owner only).
+            'couriers.ratecards.propose',
+            'couriers.ratecards.approve',
         ],
         'Manager' => [
             'sales.customers.manage',
@@ -81,6 +85,7 @@ class SalesPermissionsSeeder extends Seeder
             'sales.price.override',
             'couriers.parcels.view',
             'couriers.parcels.book',
+            'couriers.ratecards.propose',
         ],
         // ⭐ 26 Sep 2026 (Joy, Q18): the accountant READS the sales side, and
         // records a customer's payment, because the money that arrives at the
