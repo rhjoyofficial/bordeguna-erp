@@ -7,7 +7,11 @@ use App\Modules\Sales\Console\Commands\ImportPriceList;
 use App\Modules\Sales\Couriers\Console\ImportCourierCredentials;
 use App\Modules\Sales\Couriers\Console\SyncCourierLocationsCommand;
 use App\Modules\Sales\Couriers\Console\SyncCourierParcelsCommand;
+use App\Modules\Sales\Reporting\Definitions\CourierSettlementAgeingReport;
+use App\Modules\Sales\Reporting\Definitions\DeliveryEconomicsReport;
 use App\Modules\Sales\Reporting\Definitions\SalesByBrandReport;
+use App\Modules\Sales\Reporting\Definitions\SalesByChannelReport;
+use App\Modules\Sales\Reporting\Definitions\SalesMarginReport;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -30,6 +34,12 @@ class SalesServiceProvider extends ServiceProvider
         // singleton and the other modules already registered into it.
         $registry = $this->app->make(ReportRegistry::class);
         $registry->register($this->app->make(SalesByBrandReport::class));
+        // Reports pack (11 Oct 2026): revenue by brand, channel and customer
+        // type, margin, delivery economics, courier settlement ageing.
+        $registry->register($this->app->make(SalesByChannelReport::class));
+        $registry->register($this->app->make(SalesMarginReport::class));
+        $registry->register($this->app->make(DeliveryEconomicsReport::class));
+        $registry->register($this->app->make(CourierSettlementAgeingReport::class));
 
         if ($this->app->runningInConsole()) {
             $this->commands([ImportPriceList::class, ImportCourierCredentials::class, SyncCourierLocationsCommand::class, SyncCourierParcelsCommand::class]);

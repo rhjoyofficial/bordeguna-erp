@@ -10,7 +10,9 @@ use App\Modules\Hrm\Jobs\RenderReportJob;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
+use App\Modules\Hrm\Reporting\Contracts\ChartsOnScreen;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
+use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportDataset;
 use App\Modules\Hrm\Reporting\ReportParameter;
 use App\Modules\Hrm\Reporting\ReportParameters;
@@ -18,8 +20,10 @@ use App\Modules\Hrm\Reporting\ReportParameterType;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Hrm\Reporting\ReportRunner;
 use App\Modules\Hrm\Reporting\ReportScope;
+use App\Modules\Hrm\Reporting\ReportValue;
 use App\Modules\Hrm\Reporting\SignatureImages;
 use App\Modules\Hrm\Reporting\WriterRegistry;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -90,7 +94,105 @@ class ReportController extends Controller
             'columns' => array_map(fn ($c) => $c->toArray(), $definition->columns()),
             'formats' => $this->writers->options(),
             'queue_threshold' => $this->runner->threshold(),
+            // Whether "Show on screen" draws a chart above the table.
+            'has_chart' => $definition instanceof ChartsOnScreen,
         ]);
+    }
+
+    /**
+     * The report on screen: the same dataset a file would carry, as JSON.
+     *
+     * ⚠ Same registry check, same validation, same activity log as `run()` -
+     * reading a report on screen is reading it. The table is capped at
+     * PREVIEW_ROWS; the totals are still taken over EVERY row (the runner
+     * accumulates them as the rows are read, so the rest are read and
+     * dropped), which is what lets the screen show "first 500 of 2,140" with a
+     * total that is the whole report's and not the page's.
+     *
+     * The chart, when the definition declares one, is drawn from these same
+     * rows: a picture that ran its own query could disagree with the table.
+     */
+    public function preview(Request $request, string $report): JsonResponse
+    {
+        $definition = $this->reports->findOrFail($report, $request->user());
+
+        $validated = $request->validate($this->rules($definition));
+        $parameters = $this->parameters(
+            $definition,
+            ReportScope::for($request->user())->apply($validated),
+        );
+
+        activity('hrm.report')
+            ->causedBy($request->user())
+            ->withProperties([
+                'report' => $definition->key(),
+                'format' => 'screen',
+                'parameters' => $parameters->all(),
+            ])
+            ->log('Viewed report: '.$definition->name());
+
+        $dataset = $this->runner->run($definition, $parameters, $request->user());
+
+        $rows = [];
+        $count = 0;
+
+        foreach ($dataset->rows as $row) {
+            $count++;
+
+            if ($count <= self::PREVIEW_ROWS) {
+                $rows[] = $this->presentRow($row, $dataset->columns);
+            }
+        }
+
+        $totals = null;
+
+        if ($dataset->hasTotals()) {
+            $totals = [];
+
+            foreach ($dataset->columns as $column) {
+                $value = $dataset->totals->get($column->key);
+                $totals[$column->key] = $value === null ? null : [
+                    'value' => round($value, 2),
+                    'display' => ReportValue::forDisplay($value, $column->type),
+                ];
+            }
+        }
+
+        return response()->json([
+            'columns' => array_map(fn (ReportColumn $c) => $c->toArray(), $dataset->columns),
+            'rows' => $rows,
+            'row_count' => $count,
+            'shown' => min($count, self::PREVIEW_ROWS),
+            'totals' => $totals,
+            'meta' => $dataset->meta->toArray(),
+            'chart' => $definition instanceof ChartsOnScreen ? $definition->chart($parameters) : null,
+        ]);
+    }
+
+    /** How many rows the on-screen table carries; a file has no such limit. */
+    public const PREVIEW_ROWS = 500;
+
+    /**
+     * Each cell as its raw value (for the chart and sorting) and as the text a
+     * file would print (so the screen and the PDF format a number the same way).
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<int, ReportColumn>  $columns
+     * @return array<string, array{value: mixed, display: string}>
+     */
+    private function presentRow(array $row, array $columns): array
+    {
+        $presented = [];
+
+        foreach ($columns as $column) {
+            $value = $row[$column->key] ?? null;
+            $presented[$column->key] = [
+                'value' => $value,
+                'display' => ReportValue::forDisplay($value, $column->type),
+            ];
+        }
+
+        return $presented;
     }
 
     /**
@@ -278,6 +380,10 @@ class ReportController extends Controller
             ReportParameterType::Period => PayrollPeriod::find($value)?->label(),
             ReportParameterType::Boolean => $value ? 'Yes' : 'No',
             ReportParameterType::Month => Carbon::createFromFormat('Y-m-d', $value.'-01')->format('F Y'),
+            // A choice reads as its label ("Brand: LaLaDia"), never the id
+            // or code behind it: the header says what produced the report.
+            ReportParameterType::Select => collect($parameter->options)
+                ->first(fn ($option) => (string) ($option['value'] ?? '') === (string) $value)['label'] ?? (string) $value,
             default => (string) $value,
         };
     }
