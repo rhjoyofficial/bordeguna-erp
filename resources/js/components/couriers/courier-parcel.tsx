@@ -195,9 +195,7 @@ function LiveFeeEstimate({
         <div className={`rounded-md border p-2 text-xs ${confidenceClass[estimate.confidence]}`} aria-live="polite">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span className="font-medium">
-                    {estimate.sufficient && estimate.total !== null
-                        ? `Courier charge about Tk ${taka(estimate.total)}`
-                        : 'Insufficient data'}
+                    {estimate.sufficient && estimate.total !== null ? `Courier charge about Tk ${taka(estimate.total)}` : 'Insufficient data'}
                 </span>
                 {estimate.sufficient && (
                     <span className="text-muted-foreground">
