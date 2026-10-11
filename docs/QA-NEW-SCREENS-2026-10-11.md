@@ -76,11 +76,23 @@ Full suite not run (memory limit on this machine).
   failure path (booking refused, shown on the challan, form kept) was seen.
 - **WebSockets live**: only the fallback (Reverb not configured) was seen; a pushed update needs a
   running Reverb.
-- **Not fixed, judgement calls**:
-  - At 390 px the locations review table and the payout lines table scroll sideways inside their
-    box; the action buttons are reached by scrolling the table.
-  - Parcels list shows a parcel waiting on a door discount as plain "With the courier".
-  - Settings > Couriers shows the last test time raw ("2026-10-11 15:31:58").
-  - Sales Officer gets 403 on sales orders and parcels (role permissions, not a screen defect).
-  - "Approve all high (1)" counts an in-use manual map nobody reviewed; by design (it records
-    agreement), but the count can read oddly.
+- Sales Officer gets 403 on sales orders and parcels (role permissions, left as they are).
+
+## Second pass (after merging master 5b857a07)
+
+Merged master (i18n split into `resources/js/lib/i18n/*.ts`); the fixes above now go through `t()`,
+with new keys `payouts.not_in_books_yet` and `parcels.waiting_owner` (both languages). Then:
+
+11. **Parcels list**: a parcel whose door discount waits for the Owner reads "Waiting for the
+    Owner" (one query a page). Test added.
+12. **Settings > Couriers**: tested and switched-on times read "11 Oct 2026, 3:31 pm", Dhaka time.
+    Test added.
+13. **Phones (below sm)**: the locations review rows and the payout lines stack as cards; each
+    figure on a payout line carries its label, and Approve / Change / Ours / Not ours sit under the
+    row, reached without sideways scrolling. Seen at 390 px.
+14. **Approve all high (n)** counts exactly what the button confirms: machine matches with a zone
+    that nobody reviewed, never a map a person typed. Test added.
+
+Tests: Couriers, Dashboards, Attention, BanglaDictionaryTest, EveryModuleIsReachableTest,
+NoEmDashTest, next steps, order delivery and discount, consignment and statement v2: 293 passed.
+tsc, Prettier and ESLint clean.
