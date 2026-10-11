@@ -153,6 +153,22 @@ interface MoneyAccountOption {
     type: string;
 }
 
+interface ParcelWeightInfo {
+    known_grams: number;
+    auto_grams: number | null;
+    missing_count: number;
+    missing: { product_id: number; sku: string; name: string; quantity: string }[];
+}
+
+interface OrderWeight {
+    auto_grams: number | null;
+    typed_grams: number | null;
+    effective_grams: number | null;
+    now: ParcelWeightInfo;
+}
+
+const grams = (value: number) => `${value.toLocaleString('en-IN')} g`;
+
 // A challan served this order, with what a courier needs: its lines, its parcel,
 // and what an invoice for all of it would come to today.
 interface Challan {
@@ -161,12 +177,17 @@ interface Challan {
     delivered_at: string;
     can_consign: boolean;
     cod_preview: string | null;
+    // Courier hub slice 3: what the challan weighs and the weight to offer.
+    weight: ParcelWeightInfo;
+    weight_suggested: number | null;
     lines: { id: number; product: string | null; sku: string | null; quantity: string }[];
     consignment: {
         id: number;
         courier: string | null;
         consignment_number: string;
         cod_amount: string;
+        declared_weight_grams: number | null;
+        declared_weight_auto_grams: number | null;
         status: 'booked' | 'delivered' | 'partially_delivered' | 'returned';
         status_label: string;
         outcome_on: string | null;
@@ -183,6 +204,8 @@ function BookParcelForm({ challan, couriers }: { challan: Challan; couriers: { i
         money_account_id: couriers.length === 1 ? String(couriers[0].id) : '',
         consignment_number: '',
         cod_amount: challan.cod_preview ?? '',
+        // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): prefilled, changed freely.
+        declared_weight_grams: challan.weight_suggested === null ? '' : String(challan.weight_suggested),
     });
 
     const submit: FormEventHandler = (e) => {
@@ -218,12 +241,33 @@ function BookParcelForm({ challan, couriers }: { challan: Challan; couriers: { i
                 />
                 <InputError message={errors.cod_amount} />
             </div>
+            <div className="grid gap-1">
+                <Label htmlFor={`parcel-weight-${challan.id}`}>Weight (g)</Label>
+                <Input
+                    id={`parcel-weight-${challan.id}`}
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    step={1}
+                    className="w-32"
+                    value={data.declared_weight_grams}
+                    onChange={(e) => setData('declared_weight_grams', e.target.value)}
+                    placeholder={challan.weight.missing_count > 0 ? `at least ${challan.weight.known_grams}` : ''}
+                />
+                <InputError message={errors.declared_weight_grams} />
+            </div>
             <Button size="sm" disabled={processing}>
                 Hand to courier
             </Button>
             {challan.cod_preview === null && (
                 <p className="text-muted-foreground w-full text-xs">
                     A line on this challan has no price to bill at, so the amount could not be worked out.
+                </p>
+            )}
+            {challan.weight.missing_count > 0 && (
+                <p className="w-full text-xs text-amber-700 dark:text-amber-400">
+                    {challan.weight.missing_count} item(s) without weight ({challan.weight.missing.map((line) => line.sku || line.name).join(', ')}), so
+                    the weight could not be worked out in full. Weigh the parcel and type it.
                 </p>
             )}
         </form>
@@ -403,6 +447,7 @@ function ChallanCard({
                 <p className="text-muted-foreground mt-1">
                     {consignment.courier} consignment <span className="text-foreground font-medium">{consignment.consignment_number}</span>, to
                     collect {consignment.cod_amount}
+                    {consignment.declared_weight_grams !== null && `, ${grams(consignment.declared_weight_grams)}`}
                     {consignment.outcome_on && ` - reported ${consignment.outcome_on}`}
                     {consignment.collected_amount !== null && consignment.status !== 'booked' && `, collected ${consignment.collected_amount}`}
                     {consignment.invoice && (
@@ -999,6 +1044,7 @@ export default function SalesOrderShow({
     warehouses,
     credit_refusal,
     can_override_credit,
+    weight,
 }: {
     order: Order;
     challans: Challan[];
@@ -1017,6 +1063,7 @@ export default function SalesOrderShow({
     warehouses: { id: number; name: string; is_default?: boolean }[];
     credit_refusal: string | null;
     can_override_credit: boolean;
+    weight: OrderWeight;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Sales orders', href: '/sales/orders' },
@@ -1048,6 +1095,20 @@ export default function SalesOrderShow({
                             {order.customer.name}
                             {order.warehouse ? ` - preferred warehouse ${order.warehouse.name}` : ''} - ordered {order.ordered_at}
                             {order.expected_date ? `, expected ${order.expected_date}` : ''}
+                        </p>
+                        {/* ⭐ Courier hub slice 3: the parcel weight kept on the order. */}
+                        <p className="text-muted-foreground text-sm">
+                            Parcel weight:{' '}
+                            {weight.effective_grams !== null ? (
+                                <span className="text-foreground tabular-nums">{grams(weight.effective_grams)}</span>
+                            ) : (
+                                'not known'
+                            )}
+                            {weight.typed_grams !== null && weight.auto_grams !== null && ` (typed; from the lines ${grams(weight.auto_grams)})`}
+                            {weight.typed_grams !== null && weight.auto_grams === null && ' (typed)'}
+                            {weight.now.missing_count > 0 && (
+                                <span className="ml-2 text-amber-700 dark:text-amber-400">{weight.now.missing_count} item(s) without weight</span>
+                            )}
                         </p>
                     </div>
                     <div className="flex gap-2">

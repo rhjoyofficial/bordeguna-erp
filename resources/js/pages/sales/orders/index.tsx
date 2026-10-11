@@ -25,6 +25,7 @@ interface Option {
     type?: string;
     is_default?: boolean;
     credit_limit?: string | null;
+    weight_grams?: number | null;
 }
 
 interface OrderRow {
@@ -463,6 +464,7 @@ function CreateOrderForm({
         warehouse_id: string;
         expected_date: string;
         note: string;
+        weight_grams: string;
         lines: LineDraft[];
     }>({
         customer_id: initialCustomerId ? String(initialCustomerId) : '',
@@ -470,6 +472,7 @@ function CreateOrderForm({
         warehouse_id: String(warehouses.find((w) => w.is_default)?.id ?? ''),
         expected_date: '',
         note: '',
+        weight_grams: '',
         lines: [newLine()],
     });
     const [prices, setPrices] = useState<Record<number, LinePrice | undefined>>({});
@@ -511,6 +514,21 @@ function CreateOrderForm({
         return unit && line.quantity ? sum + parseFloat(unit) * parseFloat(line.quantity) : sum;
     }, 0);
     const unpriced = data.lines.some((line) => line.product_id && prices[line.uid]?.refusal && line.unit_price === '');
+
+    // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the parcel weight from the lines,
+    // live. The server works it out again on save; this is the same sum shown
+    // early. ⚠ A product with no weight is counted as missing, never as zero.
+    const weight = data.lines.reduce(
+        (acc, line) => {
+            const product = products.find((p) => String(p.id) === line.product_id);
+            const quantity = parseFloat(line.quantity);
+            if (!product || !Number.isFinite(quantity) || quantity <= 0) return acc;
+            if (product.weight_grams === null || product.weight_grams === undefined) return { ...acc, missing: acc.missing + 1 };
+            return { ...acc, grams: acc.grams + quantity * product.weight_grams };
+        },
+        { grams: 0, missing: 0 },
+    );
+    const weightGrams = Math.round(weight.grams);
 
     // ⚠ The dialog is a SIBLING of the form, not inside it: React bubbles a
     // portal's submit up the component tree, so adding a customer from inside
@@ -622,6 +640,35 @@ function CreateOrderForm({
                 </div>
 
                 <InputError message={errors.lines} />
+
+                <div className="grid gap-2 sm:max-w-md">
+                    <Label htmlFor="order-weight">{t('orders.parcel_weight')}</Label>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Input
+                            id="order-weight"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            step={1}
+                            className="w-36"
+                            value={data.weight_grams}
+                            onChange={(e) => setData('weight_grams', e.target.value)}
+                            placeholder={weight.missing === 0 && weightGrams > 0 ? String(weightGrams) : ''}
+                        />
+                        <span className="text-muted-foreground text-sm tabular-nums">
+                            {weight.missing === 0
+                                ? t('orders.weight_from_lines', { grams: weightGrams.toLocaleString('en-IN') })
+                                : t('orders.weight_at_least', { grams: weightGrams.toLocaleString('en-IN') })}
+                        </span>
+                        {weight.missing > 0 && (
+                            <Badge variant="outline" className="text-amber-700 dark:text-amber-400">
+                                {t('orders.weight_missing_items', { count: weight.missing })}
+                            </Badge>
+                        )}
+                    </div>
+                    <p className="text-muted-foreground text-xs">{t('orders.weight_hint')}</p>
+                    <InputError message={errors.weight_grams} />
+                </div>
 
                 <div className="grid gap-2">
                     <Label>{t('orders.note_optional')}</Label>

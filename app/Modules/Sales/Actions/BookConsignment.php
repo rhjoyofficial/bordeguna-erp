@@ -5,10 +5,12 @@ namespace App\Modules\Sales\Actions;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\DeliveryLine;
+use App\Modules\Sales\Support\ParcelWeight;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -30,6 +32,7 @@ class BookConsignment
         string $consignmentNumber,
         string $codAmount,
         User $createdBy,
+        ?int $declaredWeightGrams = null,
     ): Consignment {
         $consignmentNumber = trim($consignmentNumber);
 
@@ -61,7 +64,13 @@ class BookConsignment
             ]);
         }
 
-        return DB::transaction(function () use ($delivery, $courier, $consignmentNumber, $cod, $createdBy) {
+        if ($declaredWeightGrams !== null && ($declaredWeightGrams < 1 || $declaredWeightGrams > ProductWeight::MAX_GRAMS)) {
+            throw ValidationException::withMessages([
+                'declared_weight_grams' => 'The parcel weight must be whole grams between 1 and '.ProductWeight::MAX_GRAMS.'.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($delivery, $courier, $consignmentNumber, $cod, $createdBy, $declaredWeightGrams) {
             // ⚠ Read under a lock, so a clerk invoicing the challan by hand at
             // the same moment cannot slip a bill in between the check and the
             // booking.
@@ -85,6 +94,12 @@ class BookConsignment
                 ]);
             }
 
+            // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the weight the courier
+            // is told, typed freely with no reason, and beside it what the
+            // challan's lines weigh - worked out HERE, never taken from the form.
+            // A blank box declares what the form offered.
+            $auto = ParcelWeight::forDelivery($delivery)->autoGrams();
+
             return Consignment::create([
                 'business_id' => $delivery->business_id,
                 'delivery_id' => $delivery->id,
@@ -93,6 +108,8 @@ class BookConsignment
                 'cod_amount' => $cod->toTaka(),
                 'status' => ConsignmentStatus::Booked,
                 'created_by' => $createdBy->id,
+                'declared_weight_auto_grams' => $auto,
+                'declared_weight_grams' => $declaredWeightGrams ?? ParcelWeight::suggestedForDelivery($delivery),
             ]);
         });
     }

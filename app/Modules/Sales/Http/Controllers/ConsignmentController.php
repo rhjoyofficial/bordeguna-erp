@@ -9,6 +9,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Sales\Actions\BookConsignment;
 use App\Modules\Sales\Actions\RecordConsignmentOutcome;
 use App\Modules\Sales\Enums\ConsignmentStatus;
@@ -110,6 +111,8 @@ class ConsignmentController extends Controller
             'money_account_id' => ['required', 'integer', 'exists:money_accounts,id'],
             'consignment_number' => ['required', 'string', 'max:100'],
             'cod_amount' => ['required', 'numeric', 'min:0'],
+            // ⭐ Courier hub slice 3: typed freely, no reason asked.
+            'declared_weight_grams' => ['nullable', 'integer', 'min:1', 'max:'.ProductWeight::MAX_GRAMS],
         ]);
 
         $consignment = $action->handle(
@@ -118,6 +121,7 @@ class ConsignmentController extends Controller
             consignmentNumber: $data['consignment_number'],
             codAmount: (string) $data['cod_amount'],
             createdBy: $request->user(),
+            declaredWeightGrams: isset($data['declared_weight_grams']) ? (int) $data['declared_weight_grams'] : null,
         );
 
         return back()->with('success', "Challan {$delivery->delivery_number} handed to {$consignment->courier->name} as {$consignment->consignment_number}.");
