@@ -91,9 +91,10 @@ export function SectionFields({
 
                 return (
                     <div key={key} className="grid gap-2">
-                        <Label htmlFor={key}>
+                        {/* Required to PUBLISH: a draft save tolerates it missing
+                            (SectionPayloadValidator), so no HTML `required`. */}
+                        <Label htmlFor={key} required={field.required}>
                             {humanise(field.name)}
-                            {field.required && <span className="text-destructive ml-1">*</span>}
                         </Label>
 
                         {field.help && <p className="text-muted-foreground -mt-1 text-xs">{field.help}</p>}
@@ -150,7 +151,7 @@ function FieldControl({
                 value={value === undefined || value === null ? '' : String(value)}
                 onValueChange={(next) => onChange(next === '' ? null : Number(next))}
             >
-                <SelectTrigger id={id}>
+                <SelectTrigger id={id} aria-required={field.required}>
                     <SelectValue placeholder={references.length ? 'Choose one' : 'Nothing to choose from yet'} />
                 </SelectTrigger>
                 <SelectContent>
@@ -172,6 +173,7 @@ function FieldControl({
             return (
                 <textarea
                     id={id}
+                    aria-required={field.required}
                     className="border-input bg-background min-h-32 w-full rounded-md border px-3 py-2 text-sm"
                     value={typeof value === 'string' ? value : ''}
                     onChange={(e) => onChange(e.target.value)}
@@ -185,19 +187,27 @@ function FieldControl({
             return (field.max ?? 0) > 120 ? (
                 <textarea
                     id={id}
+                    aria-required={field.required}
                     maxLength={field.max}
                     className="border-input bg-background min-h-20 w-full rounded-md border px-3 py-2 text-sm"
                     value={typeof value === 'string' ? value : ''}
                     onChange={(e) => onChange(e.target.value)}
                 />
             ) : (
-                <Input id={id} maxLength={field.max} value={typeof value === 'string' ? value : ''} onChange={(e) => onChange(e.target.value)} />
+                <Input
+                    id={id}
+                    aria-required={field.required}
+                    maxLength={field.max}
+                    value={typeof value === 'string' ? value : ''}
+                    onChange={(e) => onChange(e.target.value)}
+                />
             );
 
         case 'link':
             return (
                 <Input
                     id={id}
+                    aria-required={field.required}
                     placeholder="/products or https://example.com"
                     value={typeof value === 'string' ? value : ''}
                     onChange={(e) => onChange(e.target.value)}
@@ -207,7 +217,7 @@ function FieldControl({
         case 'enum':
             return (
                 <Select value={typeof value === 'string' ? value : ''} onValueChange={(next) => onChange(next === '' ? null : next)}>
-                    <SelectTrigger id={id}>
+                    <SelectTrigger id={id} aria-required={field.required}>
                         <SelectValue placeholder="Choose one" />
                     </SelectTrigger>
                     <SelectContent>
@@ -235,6 +245,7 @@ function FieldControl({
             return (
                 <Input
                     id={id}
+                    aria-required={field.required}
                     type="number"
                     min={field.min}
                     max={field.max}

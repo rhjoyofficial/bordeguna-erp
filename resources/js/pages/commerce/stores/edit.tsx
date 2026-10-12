@@ -230,7 +230,13 @@ export default function StoreEdit({
                             <Label htmlFor="name" required>
                                 Name
                             </Label>
-                            <Input id="name" value={settings.data.name} onChange={(e) => settings.setData('name', e.target.value)} />
+                            <Input
+                                id="name"
+                                required
+                                aria-required
+                                value={settings.data.name}
+                                onChange={(e) => settings.setData('name', e.target.value)}
+                            />
                             <InputError message={settings.errors.name} />
                         </div>
 
@@ -282,7 +288,7 @@ export default function StoreEdit({
                                 Availability
                             </Label>
                             <Select value={settings.data.availability_policy} onValueChange={(v) => settings.setData('availability_policy', v)}>
-                                <SelectTrigger id="availability_policy">
+                                <SelectTrigger id="availability_policy" aria-required>
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -299,7 +305,7 @@ export default function StoreEdit({
                         {/* ⭐ D24: one shop-wide promise, counted from confirmation, with no
                             product exceptions. Shown on the shop and written on each order. */}
                         <div className="grid gap-2">
-                            <Label>Delivery promise (hours after confirmation)</Label>
+                            <Label required>Delivery promise (hours after confirmation)</Label>
                             <div className="flex items-center gap-2">
                                 <Input
                                     className="w-24"
@@ -307,6 +313,8 @@ export default function StoreEdit({
                                     min={1}
                                     max={720}
                                     aria-label="Fastest"
+                                    required
+                                    aria-required
                                     value={settings.data.delivery_promise_min_hours}
                                     onChange={(e) => settings.setData('delivery_promise_min_hours', e.target.value)}
                                 />
@@ -317,6 +325,8 @@ export default function StoreEdit({
                                     min={1}
                                     max={720}
                                     aria-label="Slowest"
+                                    required
+                                    aria-required
                                     value={settings.data.delivery_promise_max_hours}
                                     onChange={(e) => settings.setData('delivery_promise_max_hours', e.target.value)}
                                 />
@@ -441,9 +451,13 @@ export default function StoreEdit({
 
                         <form onSubmit={addDomain} className="flex flex-col gap-3">
                             <div className="grid gap-2">
-                                <Label htmlFor="hostname">Hostname</Label>
+                                <Label htmlFor="hostname" required>
+                                    Hostname
+                                </Label>
                                 <Input
                                     id="hostname"
+                                    required
+                                    aria-required
                                     value={domain.data.hostname}
                                     onChange={(e) => domain.setData('hostname', e.target.value)}
                                     placeholder="bionic.garden"

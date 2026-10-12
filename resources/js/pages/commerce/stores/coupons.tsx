@@ -137,14 +137,25 @@ function CouponEditor({
         <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4">
             <div className="grid gap-4 md:grid-cols-3">
                 <div className="grid gap-2">
-                    <Label htmlFor="coupon-code">Code</Label>
-                    <Input id="coupon-code" value={data.code} onChange={(e) => setData('code', e.target.value.toUpperCase())} />
+                    <Label htmlFor="coupon-code" required>
+                        Code
+                    </Label>
+                    <Input
+                        id="coupon-code"
+                        required
+                        aria-required
+                        value={data.code}
+                        onChange={(e) => setData('code', e.target.value.toUpperCase())}
+                    />
                     <InputError message={errors.code} />
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="coupon-type">Takes off</Label>
+                    <Label htmlFor="coupon-type" required>
+                        Takes off
+                    </Label>
                     <select
                         id="coupon-type"
+                        aria-required
                         className={selectClass}
                         value={data.type}
                         onChange={(e) => setData('type', e.target.value as CouponForm['type'])}
@@ -154,8 +165,10 @@ function CouponEditor({
                     </select>
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="coupon-value">{data.type === 'percent' ? 'Percent' : 'Amount (BDT)'}</Label>
-                    <Input id="coupon-value" value={data.value} onChange={(e) => setData('value', e.target.value)} />
+                    <Label htmlFor="coupon-value" required>
+                        {data.type === 'percent' ? 'Percent' : 'Amount (BDT)'}
+                    </Label>
+                    <Input id="coupon-value" required aria-required value={data.value} onChange={(e) => setData('value', e.target.value)} />
                     <InputError message={errors.value} />
                 </div>
             </div>
@@ -205,9 +218,12 @@ function CouponEditor({
             </div>
 
             <div className="grid gap-2">
-                <Label htmlFor="coupon-applies">Applies to</Label>
+                <Label htmlFor="coupon-applies" required>
+                    Applies to
+                </Label>
                 <select
                     id="coupon-applies"
+                    aria-required
                     className={`${selectClass} max-w-xs`}
                     value={data.applies_to}
                     onChange={(e) => setData('applies_to', e.target.value as CouponForm['applies_to'])}
@@ -367,8 +383,10 @@ function BulkForm({ storeId, onDone }: { storeId: number; onDone: () => void }) 
                     <InputError message={errors.prefix} />
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="bulk-count">How many</Label>
-                    <Input id="bulk-count" value={data.count} onChange={(e) => setData('count', e.target.value)} />
+                    <Label htmlFor="bulk-count" required>
+                        How many
+                    </Label>
+                    <Input id="bulk-count" required aria-required value={data.count} onChange={(e) => setData('count', e.target.value)} />
                     <InputError message={errors.count} />
                 </div>
                 <div className="grid gap-2">
@@ -379,15 +397,19 @@ function BulkForm({ storeId, onDone }: { storeId: number; onDone: () => void }) 
             </div>
             <div className="grid gap-4 md:grid-cols-3">
                 <div className="grid gap-2">
-                    <Label htmlFor="bulk-type">Takes off</Label>
-                    <select id="bulk-type" className={selectClass} value={data.type} onChange={(e) => setData('type', e.target.value)}>
+                    <Label htmlFor="bulk-type" required>
+                        Takes off
+                    </Label>
+                    <select id="bulk-type" aria-required className={selectClass} value={data.type} onChange={(e) => setData('type', e.target.value)}>
                         <option value="percent">A percentage</option>
                         <option value="fixed">An amount (BDT)</option>
                     </select>
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="bulk-value">{data.type === 'percent' ? 'Percent' : 'Amount (BDT)'}</Label>
-                    <Input id="bulk-value" value={data.value} onChange={(e) => setData('value', e.target.value)} />
+                    <Label htmlFor="bulk-value" required>
+                        {data.type === 'percent' ? 'Percent' : 'Amount (BDT)'}
+                    </Label>
+                    <Input id="bulk-value" required aria-required value={data.value} onChange={(e) => setData('value', e.target.value)} />
                     <InputError message={errors.value} />
                 </div>
                 <div className="grid gap-2">

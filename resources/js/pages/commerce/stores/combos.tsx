@@ -95,7 +95,7 @@ function ItemsEditor({
 
     return (
         <div className="grid gap-2">
-            <Label>In this bundle</Label>
+            <Label required>In this bundle</Label>
             {items.map((item, index) => (
                 <div key={index} className="flex flex-wrap items-start gap-2">
                     <div className="grid w-80 gap-1">
@@ -114,6 +114,7 @@ function ItemsEditor({
                             min={1}
                             max={99}
                             aria-label="Quantity"
+                            aria-required
                             value={item.quantity}
                             onChange={(e) => onChange(items.map((row, i) => (i === index ? { ...row, quantity: e.target.value } : row)))}
                         />
@@ -175,14 +176,18 @@ function ComboEditor({
         <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4">
             <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
-                    <Label htmlFor={`title-${combo?.id ?? 'new'}`}>Name</Label>
-                    <Input id={`title-${combo?.id ?? 'new'}`} value={data.title} onChange={(e) => setData('title', e.target.value)} />
+                    <Label htmlFor={`title-${combo?.id ?? 'new'}`} required>
+                        Name
+                    </Label>
+                    <Input id={`title-${combo?.id ?? 'new'}`} aria-required value={data.title} onChange={(e) => setData('title', e.target.value)} />
                     <InputError message={errors.title} />
                 </div>
                 {combo && (
                     <div className="grid gap-2">
-                        <Label htmlFor={`slug-${combo.id}`}>Web address</Label>
-                        <Input id={`slug-${combo.id}`} value={data.slug} onChange={(e) => setData('slug', e.target.value)} />
+                        <Label htmlFor={`slug-${combo.id}`} required>
+                            Web address
+                        </Label>
+                        <Input id={`slug-${combo.id}`} aria-required value={data.slug} onChange={(e) => setData('slug', e.target.value)} />
                         <p className="text-muted-foreground text-xs">/combos/{data.slug || '…'}</p>
                         <InputError message={errors.slug} />
                     </div>
