@@ -206,7 +206,7 @@ export default function ChartOfAccounts({
                 {canManageChartOfAccounts && (
                     <form
                         onSubmit={submit}
-                        className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
+                        className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-x-3 gap-y-6 rounded-md border px-4 pt-4 pb-7"
                     >
                         <div className="grid gap-2">
                             <Label htmlFor="type" required>
@@ -247,7 +247,9 @@ export default function ChartOfAccounts({
                             </SearchSelect>
                             <InputError message={errors.parent_id} />
                         </div>
-                        <div className="grid gap-2">
+                        {/* relative: the suggestion note hangs under the box without making this
+                            column taller than its neighbours, so every label stays on one line. */}
+                        <div className="relative grid gap-2">
                             <Label htmlFor="code" required>
                                 Code
                             </Label>
@@ -263,7 +265,9 @@ export default function ChartOfAccounts({
                                 placeholder="6320"
                             />
                             {!editing && data.code !== '' && data.code === suggestedCode && (
-                                <p className="text-muted-foreground max-w-40 text-xs">Suggested automatically, you can change it</p>
+                                <p className="text-muted-foreground absolute top-full left-0 mt-1 text-xs whitespace-nowrap">
+                                    Suggested automatically, you can change it
+                                </p>
                             )}
                             <InputError message={errors.code} />
                         </div>
