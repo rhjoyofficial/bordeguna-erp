@@ -117,6 +117,8 @@ export default function WithholdingRates({ rates, kinds, supplierTypes, today }:
                             </Label>
                             <Input
                                 id="name"
+                                required
+                                aria-required
                                 className="w-64"
                                 placeholder="e.g. Supply of goods"
                                 value={form.data.name}
@@ -130,6 +132,8 @@ export default function WithholdingRates({ rates, kinds, supplierTypes, today }:
                             </Label>
                             <Input
                                 id="rate"
+                                required
+                                aria-required
                                 type="number"
                                 min="0"
                                 max="100"
@@ -146,6 +150,8 @@ export default function WithholdingRates({ rates, kinds, supplierTypes, today }:
                             </Label>
                             <Input
                                 id="effective_from"
+                                required
+                                aria-required
                                 type="date"
                                 className="w-auto"
                                 value={form.data.effective_from}

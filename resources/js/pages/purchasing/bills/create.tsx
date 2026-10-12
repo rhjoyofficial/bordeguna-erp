@@ -97,14 +97,27 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                         <Label htmlFor="bill_number" required>
                             Supplier's invoice number
                         </Label>
-                        <Input id="bill_number" value={data.bill_number} onChange={(e) => setData('bill_number', e.target.value)} />
+                        <Input
+                            id="bill_number"
+                            required
+                            aria-required
+                            value={data.bill_number}
+                            onChange={(e) => setData('bill_number', e.target.value)}
+                        />
                         <InputError message={errors.bill_number} />
                     </div>
                     <div>
                         <Label htmlFor="bill_date" required>
                             Bill date
                         </Label>
-                        <Input id="bill_date" type="date" value={data.bill_date} onChange={(e) => setData('bill_date', e.target.value)} />
+                        <Input
+                            id="bill_date"
+                            type="date"
+                            required
+                            aria-required
+                            value={data.bill_date}
+                            onChange={(e) => setData('bill_date', e.target.value)}
+                        />
                         <InputError message={errors.bill_date} />
                     </div>
                     <div>
@@ -204,6 +217,7 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                                         <td className="p-3">
                                             <Input
                                                 className="w-28 text-right"
+                                                aria-required
                                                 value={entry?.quantity ?? ''}
                                                 onChange={(e) => setLine(index, { quantity: e.target.value })}
                                             />
@@ -212,6 +226,7 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                                         <td className="p-3">
                                             <Input
                                                 className="w-28 text-right"
+                                                aria-required
                                                 value={entry?.unit_cost ?? ''}
                                                 onChange={(e) => setLine(index, { unit_cost: e.target.value })}
                                             />

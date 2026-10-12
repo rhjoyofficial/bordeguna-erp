@@ -264,6 +264,7 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                 <Field label={t('grn.backdate_reason')} htmlFor="backdate_reason" size="grow" required error={errors.backdate_reason}>
                     <Input
                         id="backdate_reason"
+                        aria-required
                         value={data.backdate_reason}
                         placeholder={t('grn.backdate_reason_placeholder')}
                         onChange={(e) => setData('backdate_reason', e.target.value)}
@@ -276,6 +277,9 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                 const unit = purchaseUnitOf(line);
                 // A service has no stock, so it has no batch and no label.
                 const stocked = line.product.type !== 'service';
+                // Batch and expiry are refused only on a product that tracks expiry
+                // and only on a line actually received (PurchaseOrderController@receive).
+                const expiryRequired = Boolean(line.product.tracks_expiry) && Number(entry.quantity) > 0;
 
                 return (
                     <div key={line.id} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-2 border-t pt-3">
@@ -300,6 +304,7 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                                         id={`receive-qty-${line.id}`}
                                         inputMode="decimal"
                                         required
+                                        aria-required
                                         value={entry.quantity}
                                         onChange={(e) => updateLine(line, { quantity: e.target.value })}
                                     />
@@ -312,11 +317,12 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                                         label={t('grn.batch_no')}
                                         htmlFor={`receive-batch-${line.id}`}
                                         size="sm"
-                                        required={Boolean(line.product.tracks_expiry)}
+                                        required={expiryRequired}
                                         error={lineError(index, 'batch_number')}
                                     >
                                         <Input
                                             id={`receive-batch-${line.id}`}
+                                            aria-required={expiryRequired}
                                             value={entry.batch_number}
                                             placeholder={t('grn.batch_placeholder')}
                                             onChange={(e) => updateLine(line, { batch_number: e.target.value })}
@@ -336,11 +342,12 @@ function ReceiveGoodsForm({ order, today }: { order: Order; today: string }) {
                                     <Field
                                         label={t('grn.expires_on')}
                                         htmlFor={`receive-exp-${line.id}`}
-                                        required={Boolean(line.product.tracks_expiry)}
+                                        required={expiryRequired}
                                         error={lineError(index, 'expiry_date')}
                                     >
                                         <Input
                                             id={`receive-exp-${line.id}`}
+                                            aria-required={expiryRequired}
                                             type="date"
                                             min={today}
                                             value={entry.expiry_date}
@@ -423,7 +430,7 @@ function ReturnGoodsForm({ order }: { order: Order }) {
                             </span>
                         </span>
                         <div className="flex items-center gap-2">
-                            <Input value={entry?.quantity ?? '0'} onChange={(e) => updateQuantity(line.id, e.target.value)} />
+                            <Input aria-required value={entry?.quantity ?? '0'} onChange={(e) => updateQuantity(line.id, e.target.value)} />
                             {purchaseUnitOf(line) && <span className="text-muted-foreground w-10 shrink-0 text-sm">{purchaseUnitOf(line)}</span>}
                         </div>
                     </div>

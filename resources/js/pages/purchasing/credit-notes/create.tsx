@@ -116,6 +116,8 @@ export default function CreditNoteCreate({
                         </Label>
                         <Input
                             id="credit_note_number"
+                            required
+                            aria-required
                             value={data.credit_note_number}
                             onChange={(e) => setData('credit_note_number', e.target.value)}
                             placeholder="CN-2026-014"
@@ -126,7 +128,14 @@ export default function CreditNoteCreate({
                         <Label htmlFor="credit_date" required>
                             Credit date
                         </Label>
-                        <Input id="credit_date" type="date" value={data.credit_date} onChange={(e) => setData('credit_date', e.target.value)} />
+                        <Input
+                            id="credit_date"
+                            type="date"
+                            required
+                            aria-required
+                            value={data.credit_date}
+                            onChange={(e) => setData('credit_date', e.target.value)}
+                        />
                         <InputError message={errors.credit_date} />
                     </div>
                     {vatApplies && (
@@ -177,6 +186,7 @@ export default function CreditNoteCreate({
                                     <td className="p-3 text-right">
                                         <Input
                                             className="ml-auto w-36 text-right"
+                                            aria-required
                                             value={data.allocations[index]?.amount ?? '0'}
                                             onChange={(e) => setAmount(index, e.target.value)}
                                         />

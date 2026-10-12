@@ -200,6 +200,8 @@ export default function PaymentCreate({
                         <Input
                             id="paid_on"
                             type="date"
+                            required
+                            aria-required
                             className="w-auto"
                             value={data.paid_on}
                             onChange={(e) => setData('paid_on', e.target.value)}
