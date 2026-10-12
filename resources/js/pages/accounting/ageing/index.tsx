@@ -1,3 +1,4 @@
+import { Amount, DateCell, DocNo, PartyText } from '@/components/ledger-text';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -129,14 +130,18 @@ export default function AgeingIndex({
                                         onClick={() => setOpen(open === row.party_id ? null : row.party_id)}
                                         className="border-sidebar-border/70 hover:bg-muted/40 dark:border-sidebar-border cursor-pointer border-b"
                                     >
-                                        <td className="py-2 font-medium">{row.party_name}</td>
+                                        <td className="py-2">
+                                            <PartyText className="font-semibold">{row.party_name}</PartyText>
+                                        </td>
                                         {buckets.map((bucket) => (
-                                            <td key={bucket.key} className="py-2 text-right tabular-nums">
-                                                {row.buckets[bucket.key]}
+                                            <td key={bucket.key} className="py-2 text-right">
+                                                <Amount value={row.buckets[bucket.key]} />
                                             </td>
                                         ))}
                                         <td className="text-muted-foreground py-2 text-right tabular-nums">{row.on_account}</td>
-                                        <td className="py-2 text-right font-medium tabular-nums">{row.total}</td>
+                                        <td className="py-2 text-right">
+                                            <Amount value={row.total} tone="balance" />
+                                        </td>
                                     </tr>
                                     {open === row.party_id && (
                                         <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b">
@@ -160,19 +165,29 @@ export default function AgeingIndex({
                                                         <tbody>
                                                             {row.documents.map((document) => (
                                                                 <tr key={document.number}>
-                                                                    <td className="py-1 font-mono">{document.number}</td>
-                                                                    <td className="py-1">{document.date}</td>
                                                                     <td className="py-1">
-                                                                        {document.basis_date}
+                                                                        <DocNo>{document.number}</DocNo>
+                                                                    </td>
+                                                                    <td className="py-1">
+                                                                        <DateCell>{document.date}</DateCell>
+                                                                    </td>
+                                                                    <td className="py-1">
+                                                                        <DateCell>{document.basis_date}</DateCell>
                                                                         {document.uses_fallback_date && (
                                                                             <span className="text-muted-foreground ml-1">(no terms)</span>
                                                                         )}
                                                                     </td>
-                                                                    <td className="py-1 text-right tabular-nums">{document.days_overdue}</td>
+                                                                    <td
+                                                                        className={`py-1 text-right tabular-nums ${document.days_overdue > 0 ? 'font-semibold text-red-700 dark:text-red-400' : ''}`}
+                                                                    >
+                                                                        {document.days_overdue}
+                                                                    </td>
                                                                     <td className="text-muted-foreground py-1 text-right tabular-nums">
                                                                         {document.total}
                                                                     </td>
-                                                                    <td className="py-1 text-right tabular-nums">{document.outstanding}</td>
+                                                                    <td className="py-1 text-right">
+                                                                        <Amount value={document.outstanding} tone="balance" />
+                                                                    </td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
@@ -193,15 +208,17 @@ export default function AgeingIndex({
                         </tbody>
                         {rows.length > 0 && (
                             <tfoot>
-                                <tr className="font-medium">
+                                <tr className="font-bold">
                                     <td className="py-2">Total</td>
                                     {buckets.map((bucket) => (
-                                        <td key={bucket.key} className="py-2 text-right tabular-nums">
-                                            {totals.buckets[bucket.key]}
+                                        <td key={bucket.key} className="py-2 text-right">
+                                            <Amount value={totals.buckets[bucket.key]} tone="total" />
                                         </td>
                                     ))}
                                     <td className="py-2 text-right tabular-nums">{totals.on_account}</td>
-                                    <td className="py-2 text-right tabular-nums">{totals.total}</td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={totals.total} tone="total" />
+                                    </td>
                                 </tr>
                             </tfoot>
                         )}

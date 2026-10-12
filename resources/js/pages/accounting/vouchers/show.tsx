@@ -1,4 +1,5 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { Amount, DateCell, DocNo, LedgerHead, PartyText } from '@/components/ledger-text';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type SharedData } from '@/types';
@@ -67,11 +68,11 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <div className="flex flex-wrap items-center gap-3">
-                            <h1 className="font-mono text-lg font-semibold">{voucher.title}</h1>
+                            <h1 className="text-primary font-mono text-lg font-semibold">{voucher.title}</h1>
                             <StatusBadge status={voucher.status} />
                         </div>
                         <p className="text-muted-foreground text-sm">
-                            {type.label} · {voucher.date}
+                            {type.label} · <DateCell>{voucher.date}</DateCell>
                             {voucher.prepared_by ? ` · prepared by ${voucher.prepared_by}` : ''}
                             {voucher.posted_by ? ` · posted by ${voucher.posted_by}, ${voucher.posted_at}` : ''}
                         </p>
@@ -172,10 +173,8 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
 
                 {voucher.reversal && (
                     <div className="rounded-md border border-red-500/40 bg-red-500/5 px-4 py-3 text-sm">
-                        Reversed on {voucher.reversal.date} by{' '}
-                        <Link href={route('accounting.journals.show', voucher.reversal.id)} className="font-mono underline">
-                            {voucher.reversal.number}
-                        </Link>
+                        Reversed on <DateCell>{voucher.reversal.date}</DateCell> by{' '}
+                        <DocNo href={route('accounting.journals.show', voucher.reversal.id)}>{voucher.reversal.number}</DocNo>
                         {voucher.reversal.by ? ` (${voucher.reversal.by})` : ''}. Reason: {voucher.reversal.reason}
                     </div>
                 )}
@@ -212,19 +211,23 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                     {type.uses_money_account && (
                         <div>
                             <dt className="text-muted-foreground">{moneyLabelFor(type.value)}</dt>
-                            <dd>{voucher.money_account ?? '-'}</dd>
+                            <dd>
+                                <LedgerHead name={voucher.money_account ?? '-'} />
+                            </dd>
                         </div>
                     )}
                     {type.value === 'contra' && (
                         <div>
                             <dt className="text-muted-foreground">Moved to</dt>
-                            <dd>{voucher.to_money_account ?? '-'}</dd>
+                            <dd>
+                                <LedgerHead name={voucher.to_money_account ?? '-'} />
+                            </dd>
                         </div>
                     )}
                     {type.counterparty_label && (
                         <div>
                             <dt className="text-muted-foreground">{type.counterparty_label}</dt>
-                            <dd>{voucher.counterparty ?? '-'}</dd>
+                            <dd>{voucher.counterparty ? <PartyText>{voucher.counterparty}</PartyText> : '-'}</dd>
                         </div>
                     )}
                     {voucher.instrument.type && (
@@ -242,9 +245,7 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                         <div>
                             <dt className="text-muted-foreground">Ledger entry</dt>
                             <dd>
-                                <Link href={route('accounting.journals.show', voucher.journal.id)} className="font-mono underline">
-                                    {voucher.journal.number}
-                                </Link>
+                                <DocNo href={route('accounting.journals.show', voucher.journal.id)}>{voucher.journal.number}</DocNo>
                             </dd>
                         </div>
                     )}
@@ -265,12 +266,21 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                                 {voucher.lines.map((line, index) => (
                                     <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b align-top">
                                         <td className="py-2 pr-3">
-                                            {line.account}
-                                            {line.party && <span className="text-muted-foreground"> · {line.party}</span>}
+                                            <LedgerHead label={line.account} />
+                                            {line.party && (
+                                                <>
+                                                    <span className="text-muted-foreground"> · </span>
+                                                    <PartyText>{line.party}</PartyText>
+                                                </>
+                                            )}
                                         </td>
                                         <td className="text-muted-foreground py-2 pr-3">{line.narration}</td>
-                                        <td className="py-2 pr-3 text-right tabular-nums">{line.debit}</td>
-                                        <td className="py-2 text-right tabular-nums">{line.credit}</td>
+                                        <td className="py-2 pr-3 text-right">
+                                            <Amount value={line.debit} tone="debit" />
+                                        </td>
+                                        <td className="py-2 text-right">
+                                            <Amount value={line.credit} tone="credit" />
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -284,7 +294,7 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                         <ul className="flex flex-col gap-1">
                             {voucher.settles.map((settle, index) => (
                                 <li key={index}>
-                                    {settle.party}: {settle.amount}
+                                    <PartyText>{settle.party}</PartyText>: <Amount value={settle.amount} />
                                     <span className="text-muted-foreground"> ({settle.against.join(', ')})</span>
                                 </li>
                             ))}
@@ -293,7 +303,9 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                 )}
 
                 <div className="text-sm">
-                    <div className="text-base font-semibold tabular-nums">Total {voucher.total}</div>
+                    <div className="text-base font-bold">
+                        Total <Amount value={voucher.total} tone="total" className="text-base" />
+                    </div>
                     <div className="text-muted-foreground">{voucher.total_in_words}</div>
                     {voucher.narration && <p className="mt-2">Narration: {voucher.narration}</p>}
                 </div>

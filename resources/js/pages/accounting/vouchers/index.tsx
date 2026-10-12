@@ -1,5 +1,5 @@
+import { Amount, DateCell, DocNo, LedgerHead, PartyText, StatusPill } from '@/components/ledger-text';
 import { SearchableSelect } from '@/components/searchable-select';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
@@ -29,24 +29,16 @@ interface Paginated<T> {
     total: number;
 }
 
+const STATUS_LABEL: Record<Row['status'], string> = {
+    draft: 'Draft',
+    pending_approval: 'Awaiting approval',
+    posted: 'Posted',
+    reversed: 'Reversed',
+};
+
+/** A voucher's state in the registers' shared colours: posted green, draft grey, awaiting amber, reversed red. */
 export function StatusBadge({ status }: { status: Row['status'] }) {
-    if (status === 'draft') {
-        return <Badge variant="secondary">Draft</Badge>;
-    }
-
-    if (status === 'reversed') {
-        return <Badge variant="destructive">Reversed</Badge>;
-    }
-
-    if (status === 'pending_approval') {
-        return (
-            <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400">
-                Awaiting approval
-            </Badge>
-        );
-    }
-
-    return <Badge>Posted</Badge>;
+    return <StatusPill status={status} label={STATUS_LABEL[status]} />;
 }
 
 const TYPES: { value: VoucherTypeProps['value']; label: string }[] = [
@@ -173,35 +165,46 @@ export default function VouchersIndex({
                             {vouchers.data.map((voucher) => (
                                 <tr key={voucher.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b align-top">
                                     <td className="py-2 pr-3">
-                                        <Link
-                                            href={route('accounting.vouchers.show', voucher.id)}
-                                            className="font-mono underline-offset-4 hover:underline"
-                                        >
-                                            {voucher.number ?? 'Draft'}
-                                        </Link>
+                                        <DocNo href={route('accounting.vouchers.show', voucher.id)}>{voucher.number ?? 'Draft'}</DocNo>
                                         <div className="mt-1">
                                             <StatusBadge status={voucher.status} />
                                         </div>
                                     </td>
-                                    <td className="py-2 pr-3 whitespace-nowrap tabular-nums">{voucher.date}</td>
+                                    <td className="py-2 pr-3">
+                                        <DateCell>{voucher.date}</DateCell>
+                                    </td>
                                     <td className="py-2 pr-3">
                                         {type.value === 'contra' ? (
                                             <>
-                                                {voucher.money_account ?? '-'} → {voucher.to_money_account ?? '-'}
+                                                <LedgerHead name={voucher.money_account ?? '-'} />
+                                                <span className="text-muted-foreground"> → </span>
+                                                <LedgerHead name={voucher.to_money_account ?? '-'} />
                                             </>
                                         ) : (
                                             <>
-                                                <div>{voucher.counterparty ?? voucher.particulars}</div>
-                                                <div className="text-muted-foreground text-xs">
-                                                    {[voucher.counterparty ? voucher.particulars : null, voucher.money_account]
-                                                        .filter(Boolean)
-                                                        .join(' · ')}
+                                                <div>
+                                                    {voucher.counterparty ? (
+                                                        <PartyText>{voucher.counterparty}</PartyText>
+                                                    ) : (
+                                                        <LedgerHead label={voucher.particulars} />
+                                                    )}
+                                                </div>
+                                                <div className="text-xs">
+                                                    {voucher.counterparty && voucher.particulars ? <LedgerHead label={voucher.particulars} /> : null}
+                                                    {voucher.counterparty && voucher.particulars && voucher.money_account ? (
+                                                        <span className="text-muted-foreground"> · </span>
+                                                    ) : null}
+                                                    {voucher.money_account ? (
+                                                        <span className="text-muted-foreground">{voucher.money_account}</span>
+                                                    ) : null}
                                                 </div>
                                             </>
                                         )}
                                     </td>
                                     <td className="text-muted-foreground py-2 pr-3">{voucher.narration}</td>
-                                    <td className="py-2 text-right font-medium tabular-nums">{voucher.total}</td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={voucher.total} />
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

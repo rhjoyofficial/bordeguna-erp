@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { Amount, DateCell, DocNo } from '@/components/ledger-text';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -41,6 +42,9 @@ interface BankStatementsProps {
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Bank statements', href: '/accounting/bank-statements' }];
 
 const money = (value: number | string) => Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2 });
+
+/** Money into the bank reads as a debit to it, money out as a credit: the registers' shared colours. */
+const flow = (value: number | string) => (Number(value) < 0 ? 'credit' : 'debit');
 
 export default function BankStatements({ accounts, money_account_id, statement_lines, unmatched_book_lines, can_act }: BankStatementsProps) {
     const importForm = useForm<{ money_account_id: number; file: File | null }>({ money_account_id, file: null });
@@ -109,10 +113,9 @@ export default function BankStatements({ accounts, money_account_id, statement_l
                                     <li key={line.id} className="py-2 text-sm">
                                         <div className="flex items-baseline justify-between gap-3">
                                             <span>
-                                                <span className="text-muted-foreground">{line.txn_date}</span>{' '}
-                                                {line.description ?? line.reference ?? 'No description'}
+                                                <DateCell>{line.txn_date}</DateCell> {line.description ?? line.reference ?? 'No description'}
                                             </span>
-                                            <span className="font-semibold tabular-nums">{money(line.amount)}</span>
+                                            <Amount value={money(line.amount)} tone={flow(line.amount)} />
                                         </div>
                                         <div className="flex items-center justify-between gap-2">
                                             <span className={'text-xs ' + statusBadge(line.match_status)}>{line.match_status}</span>
@@ -177,10 +180,10 @@ export default function BankStatements({ accounts, money_account_id, statement_l
                                 {unmatched_book_lines.map((book) => (
                                     <li key={book.id} className="flex items-baseline justify-between gap-3 py-2 text-sm">
                                         <span>
-                                            <span className="text-muted-foreground">{book.date}</span> {book.journal}
+                                            <DateCell>{book.date}</DateCell> <DocNo>{book.journal}</DocNo>
                                             {book.memo && <span className="text-muted-foreground"> · {book.memo}</span>}
                                         </span>
-                                        <span className="font-semibold tabular-nums">{money(book.amount)}</span>
+                                        <Amount value={money(book.amount)} tone={flow(book.amount)} />
                                     </li>
                                 ))}
                             </ul>

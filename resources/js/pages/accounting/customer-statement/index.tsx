@@ -1,3 +1,4 @@
+import { Amount, DateCell, DocNo, LedgerHead } from '@/components/ledger-text';
 import { EmptyRow, FilterBar, ReportHeading, ReportPage, ReportTable, StatRow, StatTile, Verdict } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Input } from '@/components/ui/input';
@@ -143,31 +144,51 @@ export default function CustomerStatementIndex({
                                 </>
                             }
                             foot={
-                                <tr className="font-medium">
+                                <tr className="font-bold">
                                     <td className="py-2" colSpan={3}>
                                         Closing balance
                                     </td>
-                                    <td className="py-2 text-right tabular-nums">{summary.charges}</td>
-                                    <td className="py-2 text-right tabular-nums">{summary.settlements}</td>
-                                    <td className="py-2 text-right tabular-nums">{side(summary.closing, summary.closing_side)}</td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={summary.charges} tone="debit" className="font-bold" />
+                                    </td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={summary.settlements} tone="credit" className="font-bold" />
+                                    </td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={side(summary.closing, summary.closing_side)} tone="total" />
+                                    </td>
                                 </tr>
                             }
                         >
                             <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                <td className="text-muted-foreground py-2">{from}</td>
-                                <td className="py-2 font-medium" colSpan={4}>
+                                <td className="py-2">
+                                    <DateCell>{from}</DateCell>
+                                </td>
+                                <td className="py-2 font-semibold" colSpan={4}>
                                     Opening balance
                                 </td>
-                                <td className="py-2 text-right font-medium tabular-nums">{side(summary.opening, summary.opening_side)}</td>
+                                <td className="py-2 text-right">
+                                    <Amount value={side(summary.opening, summary.opening_side)} tone="balance" />
+                                </td>
                             </tr>
                             {lines.map((line, index) => (
                                 <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                    <td className="text-muted-foreground py-2">{line.date}</td>
-                                    <td className="py-2">{line.label}</td>
-                                    <td className="text-muted-foreground py-2">{line.reference}</td>
-                                    <td className="py-2 text-right tabular-nums">{line.charge}</td>
-                                    <td className="py-2 text-right tabular-nums">{line.settlement}</td>
-                                    <td className="py-2 text-right tabular-nums">{side(line.balance, line.balance_side)}</td>
+                                    <td className="py-2">
+                                        <DateCell>{line.date}</DateCell>
+                                    </td>
+                                    <td className="py-2">
+                                        <LedgerHead name={line.label} />
+                                    </td>
+                                    <td className="py-2">{line.reference ? <DocNo>{line.reference}</DocNo> : null}</td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={line.charge} tone="debit" />
+                                    </td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={line.settlement} tone="credit" />
+                                    </td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={side(line.balance, line.balance_side)} tone="balance" />
+                                    </td>
                                 </tr>
                             ))}
                             {lines.length === 0 && <EmptyRow colSpan={6}>No transactions in this period.</EmptyRow>}

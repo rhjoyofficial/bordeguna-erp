@@ -1,3 +1,4 @@
+import { Amount, LedgerHead } from '@/components/ledger-text';
 import { DateRangeBar, EmptyRow, ReportHeading, ReportPage, ReportTable, StatRow, StatTile, Verdict } from '@/components/report/report-shell';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -107,17 +108,21 @@ export default function TrialBalanceIndex({
                     foot={
                         rows.length > 0 ? (
                             <>
-                                <tr className="font-medium">
+                                <tr className="font-bold">
                                     <td className="py-2" colSpan={5}>
                                         Total debits
                                     </td>
-                                    <td className="py-2 text-right tabular-nums">{totals.debit}</td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={totals.debit} tone="debit" className="font-bold" />
+                                    </td>
                                 </tr>
-                                <tr className="font-medium">
+                                <tr className="font-bold">
                                     <td className="py-2" colSpan={5}>
                                         Total credits
                                     </td>
-                                    <td className="py-2 text-right tabular-nums">{totals.credit}</td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={totals.credit} tone="credit" className="font-bold" />
+                                    </td>
                                 </tr>
                             </>
                         ) : undefined
@@ -125,15 +130,21 @@ export default function TrialBalanceIndex({
                 >
                     {rows.map((row) => (
                         <tr key={row.code} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                            <td className="text-muted-foreground py-2 font-mono">{row.code}</td>
-                            <td className="py-2">{row.name}</td>
+                            <td className="text-muted-foreground py-2 font-mono text-xs">{row.code}</td>
+                            <td className="py-2">
+                                <LedgerHead name={row.name} />
+                            </td>
                             <td className="text-muted-foreground py-2 text-right tabular-nums">
                                 {row.opening && `${row.opening} ${row.opening_side === 'credit' ? 'Cr' : 'Dr'}`}
                             </td>
-                            <td className="py-2 text-right tabular-nums">{row.debit}</td>
-                            <td className="py-2 text-right tabular-nums">{row.credit}</td>
-                            <td className="py-2 text-right font-medium tabular-nums">
-                                {row.closing} {row.closing_side === 'credit' ? 'Cr' : 'Dr'}
+                            <td className="py-2 text-right">
+                                <Amount value={row.debit} tone="debit" />
+                            </td>
+                            <td className="py-2 text-right">
+                                <Amount value={row.credit} tone="credit" />
+                            </td>
+                            <td className="py-2 text-right">
+                                <Amount value={row.closing} tone="balance" suffix={row.closing_side === 'credit' ? 'Cr' : 'Dr'} />
                             </td>
                         </tr>
                     ))}

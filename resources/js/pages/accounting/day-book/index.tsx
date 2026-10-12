@@ -1,3 +1,4 @@
+import { Amount, DateCell, DocNo, LedgerHead, PartyText, StatusPill } from '@/components/ledger-text';
 import { DateRangeBar, ReportHeading } from '@/components/report/report-shell';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
@@ -176,17 +177,14 @@ export default function DayBook({
                             {journals.data.map((journal) => (
                                 <Fragment key={journal.id}>
                                     <tr className="border-sidebar-border/70 dark:border-sidebar-border border-t align-top">
-                                        <td className="py-2 pr-3 whitespace-nowrap tabular-nums" rowSpan={journal.lines.length + 1}>
-                                            {journal.date}
+                                        <td className="py-2 pr-3" rowSpan={journal.lines.length + 1}>
+                                            <DateCell>{journal.date}</DateCell>
                                         </td>
                                         <td className="py-2 pr-3" rowSpan={journal.lines.length + 1}>
                                             <div className="font-medium">{journal.kind}</div>
-                                            <Link
-                                                href={route('accounting.journals.show', journal.id)}
-                                                className="font-mono text-xs underline-offset-4 hover:underline"
-                                            >
+                                            <DocNo href={route('accounting.journals.show', journal.id)} className="text-xs">
                                                 {journal.number}
-                                            </Link>
+                                            </DocNo>
                                             {journal.document_number && (
                                                 <div className="text-muted-foreground font-mono text-xs">{journal.document_number}</div>
                                             )}
@@ -195,11 +193,7 @@ export default function DayBook({
                                                     Reversal
                                                 </Badge>
                                             )}
-                                            {journal.reversed && (
-                                                <Badge variant="destructive" className="mt-1">
-                                                    Reversed
-                                                </Badge>
-                                            )}
+                                            {journal.reversed && <StatusPill status="reversed" label="Reversed" className="mt-1" />}
                                         </td>
                                         <td className="text-muted-foreground pt-2 pr-3 text-xs" colSpan={3}>
                                             {journal.memo}
@@ -209,14 +203,23 @@ export default function DayBook({
                                     {journal.lines.map((line, index) => (
                                         <tr key={index} className="align-top">
                                             <td className={`py-0.5 pr-3 ${line.credit !== '' ? 'pl-6' : ''}`}>
-                                                <span className="text-muted-foreground font-mono text-xs">{line.code}</span> {line.account}
-                                                {line.party ? <span className="text-muted-foreground"> · {line.party}</span> : null}
+                                                <LedgerHead code={line.code} name={line.account} />
+                                                {line.party ? (
+                                                    <>
+                                                        <span className="text-muted-foreground"> · </span>
+                                                        <PartyText>{line.party}</PartyText>
+                                                    </>
+                                                ) : null}
                                                 {line.memo && line.memo !== journal.memo ? (
                                                     <div className="text-muted-foreground text-xs">{line.memo}</div>
                                                 ) : null}
                                             </td>
-                                            <td className="py-0.5 pr-3 text-right tabular-nums">{line.debit}</td>
-                                            <td className="py-0.5 text-right tabular-nums">{line.credit}</td>
+                                            <td className="py-0.5 pr-3 text-right">
+                                                <Amount value={line.debit} tone="debit" />
+                                            </td>
+                                            <td className="py-0.5 text-right">
+                                                <Amount value={line.credit} tone="credit" />
+                                            </td>
                                         </tr>
                                     ))}
                                 </Fragment>
@@ -224,12 +227,16 @@ export default function DayBook({
                         </tbody>
                         {count > 0 && (
                             <tfoot>
-                                <tr className="border-sidebar-border dark:border-sidebar-border border-t-2 font-semibold">
+                                <tr className="border-sidebar-border dark:border-sidebar-border border-t-2 font-bold">
                                     <td className="py-2" colSpan={3}>
                                         Total for the period
                                     </td>
-                                    <td className="py-2 pr-3 text-right tabular-nums">{total}</td>
-                                    <td className="py-2 text-right tabular-nums">{total}</td>
+                                    <td className="py-2 pr-3 text-right">
+                                        <Amount value={total} tone="debit" className="font-bold" />
+                                    </td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={total} tone="credit" className="font-bold" />
+                                    </td>
                                 </tr>
                             </tfoot>
                         )}

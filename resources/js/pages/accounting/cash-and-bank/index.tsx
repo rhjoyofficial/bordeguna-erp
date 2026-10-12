@@ -1,3 +1,4 @@
+import { Amount, LedgerHead } from '@/components/ledger-text';
 import { DateRangeBar, ReportHeading } from '@/components/report/report-shell';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -115,15 +116,13 @@ export default function CashAndBankIndex({
                         <tbody>
                             {rows.map((row) => (
                                 <tr key={row.account_id} className="border-sidebar-border/70 dark:border-sidebar-border border-b align-top">
-                                    <td className="text-muted-foreground py-2 font-mono">{row.code}</td>
+                                    <td className="text-muted-foreground py-2 font-mono text-xs">{row.code}</td>
                                     <td className="py-2">
                                         {/* C-CBB-5: the drill-down is the existing General Ledger, window preserved. */}
-                                        <Link
+                                        <LedgerHead
+                                            name={row.name}
                                             href={`/accounting/general-ledger?account=${row.account_id}&from=${from}&to=${to}`}
-                                            className="underline-offset-2 hover:underline"
-                                        >
-                                            {row.name}
-                                        </Link>
+                                        />
                                         {/* C-CBB-1: which tills and banks the figure spans - labels, not filters. */}
                                         <div className="text-muted-foreground text-xs">
                                             {row.money_accounts.map((a) => `${a.label}${a.is_active ? '' : ' (deactivated)'}`).join(' · ')}
@@ -132,9 +131,15 @@ export default function CashAndBankIndex({
                                     <td className="text-muted-foreground py-2 text-right tabular-nums">
                                         {row.opening && side(row.opening, row.opening_side)}
                                     </td>
-                                    <td className="py-2 text-right tabular-nums">{row.in}</td>
-                                    <td className="py-2 text-right tabular-nums">{row.out}</td>
-                                    <td className="py-2 text-right font-medium tabular-nums">{side(row.closing, row.closing_side)}</td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={row.in} tone="debit" />
+                                    </td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={row.out} tone="credit" />
+                                    </td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={side(row.closing, row.closing_side)} tone="balance" negative={row.closing_side === 'credit'} />
+                                    </td>
                                 </tr>
                             ))}
                             {rows.length === 0 && (
@@ -159,16 +164,26 @@ export default function CashAndBankIndex({
                         </tbody>
                         {rows.length > 0 && (
                             <tfoot>
-                                <tr className="font-medium">
+                                <tr className="font-bold">
                                     <td className="py-2" colSpan={2}>
                                         Total
                                     </td>
                                     <td className="text-muted-foreground py-2 text-right tabular-nums">
                                         {side(totals.opening, totals.opening_side)}
                                     </td>
-                                    <td className="py-2 text-right tabular-nums">{totals.in}</td>
-                                    <td className="py-2 text-right tabular-nums">{totals.out}</td>
-                                    <td className="py-2 text-right tabular-nums">{side(totals.closing, totals.closing_side)}</td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={totals.in} tone="debit" className="font-bold" />
+                                    </td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={totals.out} tone="credit" className="font-bold" />
+                                    </td>
+                                    <td className="py-2 text-right">
+                                        <Amount
+                                            value={side(totals.closing, totals.closing_side)}
+                                            tone="total"
+                                            negative={totals.closing_side === 'credit' ? true : undefined}
+                                        />
+                                    </td>
                                 </tr>
                             </tfoot>
                         )}

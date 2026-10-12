@@ -1,3 +1,4 @@
+import { Amount, DateCell } from '@/components/ledger-text';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -612,9 +613,15 @@ function PayslipRowView({
                     ) : null}
                 </td>
                 <td className="py-2">{payslip.method}</td>
-                <td className="py-2 text-right">{money(payslip.net)}</td>
-                <td className="py-2 text-right">{money(payslip.paid_total)}</td>
-                <td className="py-2 pr-4 text-right">{money(payslip.outstanding)}</td>
+                <td className="py-2 text-right">
+                    <Amount value={money(payslip.net)} />
+                </td>
+                <td className="py-2 text-right">
+                    <Amount value={money(payslip.paid_total)} />
+                </td>
+                <td className="py-2 pr-4 text-right">
+                    <Amount value={money(payslip.outstanding)} tone="balance" />
+                </td>
                 <td className="py-2">
                     <Badge variant={statusVariant(payslip.payment_status)}>{payslip.payment_status_label}</Badge>
                     {payslip.failure_reason && <span className="text-destructive ml-2 text-xs">{payslip.failure_reason}</span>}
@@ -642,14 +649,18 @@ function PayslipRowView({
                             <tbody>
                                 {payslip.payments.map((p) => (
                                     <tr key={p.id} className={rowClass}>
-                                        <td className="py-1 whitespace-nowrap">{p.paid_on}</td>
+                                        <td className="py-1">
+                                            <DateCell>{p.paid_on}</DateCell>
+                                        </td>
                                         <td className="py-1">
                                             {p.type_label}
                                             {p.failure_reason ? ` - ${p.failure_reason}` : ''}
                                         </td>
                                         <td className="py-1">{p.method}</td>
                                         <td className="py-1">{p.reference ?? '-'}</td>
-                                        <td className="py-1 text-right">{money(p.amount)}</td>
+                                        <td className="py-1 text-right">
+                                            <Amount value={money(p.amount)} />
+                                        </td>
                                         <td className="py-1 text-right">
                                             {canCorrect && p.can_correct_date && (
                                                 <CorrectDateDialog

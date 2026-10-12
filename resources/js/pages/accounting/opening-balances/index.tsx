@@ -1,5 +1,6 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
+import { Amount, DateCell, DocNo, PartyText } from '@/components/ledger-text';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,7 +41,9 @@ function Table({ title, total, rows, kind }: { title: string; total: string; row
         <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card overflow-x-auto rounded-xl border p-4">
             <div className="mb-2 flex items-baseline justify-between gap-4">
                 <h2 className="font-semibold">{title}</h2>
-                <span className="text-sm tabular-nums">Total {total}</span>
+                <span className="text-sm font-bold">
+                    Total <Amount value={total} tone="total" />
+                </span>
             </div>
             {rows.length === 0 ? (
                 <p className="text-muted-foreground text-sm">None entered.</p>
@@ -60,12 +63,20 @@ function Table({ title, total, rows, kind }: { title: string; total: string; row
                     <tbody>
                         {rows.map((row) => (
                             <tr key={row.id} className="border-b">
-                                <td className="py-2 pr-3">{row.party}</td>
-                                <td className="py-2 pr-3">{row.number}</td>
-                                <td className="py-2 pr-3">{row.date}</td>
-                                <td className="py-2 pr-3">{row.due}</td>
-                                <td className="py-2 pr-3 text-right tabular-nums">{row.amount}</td>
-                                <td className="py-2 pr-3 text-right tabular-nums">{row.outstanding}</td>
+                                <td className="py-2 pr-3">
+                                    <PartyText>{row.party}</PartyText>
+                                </td>
+                                <td className="py-2 pr-3">
+                                    <DocNo>{row.number}</DocNo>
+                                </td>
+                                <td className="py-2 pr-3">{row.date ? <DateCell>{row.date}</DateCell> : null}</td>
+                                <td className="py-2 pr-3">{row.due ? <DateCell>{row.due}</DateCell> : null}</td>
+                                <td className="py-2 pr-3 text-right">
+                                    <Amount value={row.amount} tone={kind === 'receivable' ? 'debit' : 'credit'} />
+                                </td>
+                                <td className="py-2 pr-3 text-right">
+                                    <Amount value={row.outstanding} tone="balance" />
+                                </td>
                                 <td className="py-2 text-right">
                                     {row.removable && (
                                         <ConfirmDialog
@@ -144,14 +155,25 @@ export default function OpeningBalances({ invoices, bills, totals, customers, su
                             <Label htmlFor="reference" required>
                                 {form.data.kind === 'receivable' ? 'Old invoice no.' : 'Bill no.'}
                             </Label>
-                            <Input id="reference" className="w-40" value={form.data.reference} onChange={(e) => form.setData('reference', e.target.value)} />
+                            <Input
+                                id="reference"
+                                className="w-40"
+                                value={form.data.reference}
+                                onChange={(e) => form.setData('reference', e.target.value)}
+                            />
                             <InputError message={form.errors.reference} />
                         </div>
                         <div className="flex flex-col gap-1">
                             <Label htmlFor="date" required>
                                 Date
                             </Label>
-                            <Input id="date" type="date" className="w-auto" value={form.data.date} onChange={(e) => form.setData('date', e.target.value)} />
+                            <Input
+                                id="date"
+                                type="date"
+                                className="w-auto"
+                                value={form.data.date}
+                                onChange={(e) => form.setData('date', e.target.value)}
+                            />
                             <InputError message={form.errors.date} />
                         </div>
                         <div className="flex flex-col gap-1">

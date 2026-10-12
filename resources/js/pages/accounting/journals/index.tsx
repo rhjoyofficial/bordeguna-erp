@@ -1,3 +1,4 @@
+import { Amount, DateCell, DocNo, StatusPill } from '@/components/ledger-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -73,31 +74,26 @@ export default function JournalsIndex({ journals }: { journals: Paginated<Journa
                             {journals.data.map((journal) => (
                                 <tr key={journal.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                     <td className="py-2">
-                                        <Link
-                                            href={route('accounting.journals.show', journal.id)}
-                                            className="font-mono underline-offset-4 hover:underline"
-                                        >
-                                            {journal.number}
-                                        </Link>
+                                        <DocNo href={route('accounting.journals.show', journal.id)}>{journal.number}</DocNo>
                                         {journal.is_reversal && (
                                             <Badge variant="secondary" className="ml-2">
                                                 Reversal
                                             </Badge>
                                         )}
-                                        {journal.reversed && (
-                                            <Badge variant="destructive" className="ml-2">
-                                                Reversed
-                                            </Badge>
-                                        )}
+                                        {journal.reversed && <StatusPill status="reversed" label="Reversed" className="ml-2" />}
                                         {journal.type === 'opening_balance' && (
                                             <Badge variant="outline" className="ml-2">
                                                 Opening
                                             </Badge>
                                         )}
                                     </td>
-                                    <td className="text-muted-foreground py-2 tabular-nums">{journal.date}</td>
-                                    <td className="py-2">{journal.memo ?? <span className="text-muted-foreground">{journal.type_label}</span>}</td>
-                                    <td className="py-2 text-right tabular-nums">{journal.total}</td>
+                                    <td className="py-2">
+                                        <DateCell>{journal.date}</DateCell>
+                                    </td>
+                                    <td className="text-muted-foreground py-2">{journal.memo ?? journal.type_label}</td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={journal.total} />
+                                    </td>
                                     <td className="text-muted-foreground py-2 text-right tabular-nums">{journal.lines}</td>
                                 </tr>
                             ))}

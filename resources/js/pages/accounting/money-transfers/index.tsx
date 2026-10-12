@@ -1,4 +1,5 @@
 import { Pagination } from '@/components/data-table/pagination';
+import { Amount, DateCell, DocNo, LedgerHead } from '@/components/ledger-text';
 import { ReportHeading } from '@/components/report/report-shell';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -81,17 +82,27 @@ export default function MoneyTransfersIndex({ transfers }: { transfers: Paginate
                             )}
                             {transfers.data.map((t) => (
                                 <tr key={t.id} className="border-t">
-                                    <td className="p-3 font-medium">{t.transfer_number}</td>
-                                    <td className="p-3">{t.transferred_on ?? '-'}</td>
-                                    <td className="p-3">{t.from ?? '-'}</td>
-                                    <td className="p-3">{t.to ?? '-'}</td>
-                                    <td className="p-3 text-right tabular-nums">{t.amount}</td>
+                                    <td className="p-3">
+                                        <DocNo>{t.transfer_number}</DocNo>
+                                    </td>
+                                    <td className="p-3">{t.transferred_on ? <DateCell>{t.transferred_on}</DateCell> : '-'}</td>
+                                    <td className="p-3">
+                                        <LedgerHead name={t.from ?? '-'} />
+                                    </td>
+                                    <td className="p-3">
+                                        <LedgerHead name={t.to ?? '-'} />
+                                    </td>
+                                    <td className="p-3 text-right">
+                                        <Amount value={t.amount} tone="debit" />
+                                    </td>
                                     <td className="p-3 text-right tabular-nums">
                                         {Number(t.fee) > 0 ? t.fee : '-'}
                                         {t.fee_account && <div className="text-muted-foreground text-xs">{t.fee_account}</div>}
                                     </td>
-                                    <td className="p-3 text-right tabular-nums">{t.total_withdrawn}</td>
-                                    <td className="p-3">{t.reference ?? '-'}</td>
+                                    <td className="p-3 text-right">
+                                        <Amount value={t.total_withdrawn} tone="credit" />
+                                    </td>
+                                    <td className="text-muted-foreground p-3">{t.reference ?? '-'}</td>
                                 </tr>
                             ))}
                         </tbody>

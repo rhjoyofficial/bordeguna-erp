@@ -1,10 +1,11 @@
+import { Amount, DateCell, DocNo, LedgerHead, PartyText } from '@/components/ledger-text';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface AccountOption {
@@ -193,18 +194,20 @@ export default function GeneralLedgerIndex({
                                             className={`border-sidebar-border/70 dark:border-sidebar-border border-b ${row.moved ? '' : 'text-muted-foreground'}`}
                                         >
                                             <td className="py-2">
-                                                <button
-                                                    type="button"
-                                                    className="underline-offset-2 hover:underline"
-                                                    onClick={() => show({ account: row.id, party: '' })}
-                                                >
-                                                    {row.label}
-                                                </button>
+                                                <LedgerHead name={row.label} onClick={() => show({ account: row.id, party: '' })} />
                                             </td>
-                                            <td className="py-2 text-right tabular-nums">{row.opening}</td>
-                                            <td className="py-2 text-right tabular-nums">{row.debits}</td>
-                                            <td className="py-2 text-right tabular-nums">{row.credits}</td>
-                                            <td className="py-2 text-right tabular-nums">{row.closing}</td>
+                                            <td className="py-2 text-right">
+                                                <Amount value={row.opening} tone="balance" />
+                                            </td>
+                                            <td className="py-2 text-right">
+                                                <Amount value={row.debits} tone="debit" />
+                                            </td>
+                                            <td className="py-2 text-right">
+                                                <Amount value={row.credits} tone="credit" />
+                                            </td>
+                                            <td className="py-2 text-right">
+                                                <Amount value={row.closing} tone="balance" />
+                                            </td>
                                         </tr>
                                     ))}
                                     {rollup.rows.length === 0 && (
@@ -216,12 +219,20 @@ export default function GeneralLedgerIndex({
                                     )}
                                 </tbody>
                                 <tfoot>
-                                    <tr className="font-medium">
+                                    <tr className="font-bold">
                                         <td className="py-2">Total for {account.label}</td>
-                                        <td className="py-2 text-right tabular-nums">{rollup.total.opening}</td>
-                                        <td className="py-2 text-right tabular-nums">{rollup.total.debits}</td>
-                                        <td className="py-2 text-right tabular-nums">{rollup.total.credits}</td>
-                                        <td className="py-2 text-right tabular-nums">{rollup.total.closing}</td>
+                                        <td className="py-2 text-right">
+                                            <Amount value={rollup.total.opening} tone="total" />
+                                        </td>
+                                        <td className="py-2 text-right">
+                                            <Amount value={rollup.total.debits} tone="debit" className="font-bold" />
+                                        </td>
+                                        <td className="py-2 text-right">
+                                            <Amount value={rollup.total.credits} tone="credit" className="font-bold" />
+                                        </td>
+                                        <td className="py-2 text-right">
+                                            <Amount value={rollup.total.closing} tone="total" />
+                                        </td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -250,23 +261,19 @@ export default function GeneralLedgerIndex({
                         <div className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap gap-x-10 gap-y-2 rounded-md border px-4 py-3 text-sm">
                             <div>
                                 <div className="text-muted-foreground">Opening balance</div>
-                                <div className="font-medium tabular-nums">
-                                    {summary.opening} {summary.opening_side === 'credit' ? 'Cr' : 'Dr'}
-                                </div>
+                                <Amount value={summary.opening} tone="balance" suffix={summary.opening_side === 'credit' ? 'Cr' : 'Dr'} />
                             </div>
                             <div>
                                 <div className="text-muted-foreground">Debits in period</div>
-                                <div className="font-medium tabular-nums">{summary.debits}</div>
+                                <Amount value={summary.debits} tone="debit" />
                             </div>
                             <div>
                                 <div className="text-muted-foreground">Credits in period</div>
-                                <div className="font-medium tabular-nums">{summary.credits}</div>
+                                <Amount value={summary.credits} tone="credit" />
                             </div>
                             <div>
                                 <div className="text-muted-foreground">Closing balance</div>
-                                <div className="font-medium tabular-nums">
-                                    {summary.closing} {summary.closing_side === 'credit' ? 'Cr' : 'Dr'}
-                                </div>
+                                <Amount value={summary.closing} tone="total" suffix={summary.closing_side === 'credit' ? 'Cr' : 'Dr'} />
                             </div>
                         </div>
 
@@ -286,21 +293,24 @@ export default function GeneralLedgerIndex({
                                 <tbody>
                                     {entries.map((entry) => (
                                         <tr key={entry.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                            <td className="py-2 whitespace-nowrap">{entry.date}</td>
                                             <td className="py-2">
-                                                <Link
-                                                    href={route('accounting.journals.show', entry.journal_id)}
-                                                    className="text-primary font-mono underline-offset-4 hover:underline"
-                                                >
-                                                    {entry.journal_number}
-                                                </Link>
+                                                <DateCell>{entry.date}</DateCell>
+                                            </td>
+                                            <td className="py-2">
+                                                <DocNo href={route('accounting.journals.show', entry.journal_id)}>{entry.journal_number}</DocNo>
                                             </td>
                                             <td className="text-muted-foreground py-2">{entry.memo}</td>
-                                            <td className="py-2">{entry.party}</td>
-                                            <td className="py-2 text-right tabular-nums">{entry.debit}</td>
-                                            <td className="py-2 text-right tabular-nums">{entry.credit}</td>
-                                            <td className="py-2 text-right font-medium tabular-nums">
-                                                {entry.balance} {entry.balance_side === 'credit' ? 'Cr' : 'Dr'}
+                                            <td className="py-2">
+                                                <PartyText>{entry.party}</PartyText>
+                                            </td>
+                                            <td className="py-2 text-right">
+                                                <Amount value={entry.debit} tone="debit" />
+                                            </td>
+                                            <td className="py-2 text-right">
+                                                <Amount value={entry.credit} tone="credit" />
+                                            </td>
+                                            <td className="py-2 text-right">
+                                                <Amount value={entry.balance} tone="balance" suffix={entry.balance_side === 'credit' ? 'Cr' : 'Dr'} />
                                             </td>
                                         </tr>
                                     ))}

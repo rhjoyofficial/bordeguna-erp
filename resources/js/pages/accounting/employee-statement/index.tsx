@@ -1,10 +1,11 @@
+import { Amount, DateCell, DocNo, LedgerHead } from '@/components/ledger-text';
 import { EmptyRow, FilterBar, ReportHeading, ReportPage, ReportTable, StatRow, StatTile } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface EmployeeOption {
@@ -135,8 +136,8 @@ export default function EmployeeStatementIndex({
 
                             return (
                                 <section key={head.slug} className="grid gap-2">
-                                    <h2 className="text-base font-semibold">
-                                        {head.account}
+                                    <h2 className="text-base">
+                                        <LedgerHead label={head.account} />
                                         <span className="text-muted-foreground ml-2 text-sm font-normal">
                                             {employee.name}
                                             {head.closing !== '0.00' && meaning
@@ -158,39 +159,54 @@ export default function EmployeeStatementIndex({
                                             </>
                                         }
                                         foot={
-                                            <tr className="font-medium">
+                                            <tr className="font-bold">
                                                 <td className="py-2" colSpan={4}>
                                                     Closing balance
                                                 </td>
-                                                <td className="py-2 text-right tabular-nums">{head.debits}</td>
-                                                <td className="py-2 text-right tabular-nums">{head.credits}</td>
-                                                <td className="py-2 text-right tabular-nums">{side(head.closing, head.closing_side)}</td>
+                                                <td className="py-2 text-right">
+                                                    <Amount value={head.debits} tone="debit" className="font-bold" />
+                                                </td>
+                                                <td className="py-2 text-right">
+                                                    <Amount value={head.credits} tone="credit" className="font-bold" />
+                                                </td>
+                                                <td className="py-2 text-right">
+                                                    <Amount value={side(head.closing, head.closing_side)} tone="total" />
+                                                </td>
                                             </tr>
                                         }
                                     >
                                         <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                            <td className="text-muted-foreground py-2">{from}</td>
-                                            <td className="py-2 font-medium" colSpan={5}>
+                                            <td className="py-2">
+                                                <DateCell>{from}</DateCell>
+                                            </td>
+                                            <td className="py-2 font-semibold" colSpan={5}>
                                                 Opening balance
                                             </td>
-                                            <td className="py-2 text-right font-medium tabular-nums">{side(head.opening, head.opening_side)}</td>
+                                            <td className="py-2 text-right">
+                                                <Amount value={side(head.opening, head.opening_side)} tone="balance" />
+                                            </td>
                                         </tr>
                                         {head.lines.map((line, index) => (
                                             <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                                <td className="text-muted-foreground py-2">{line.date}</td>
-                                                <td className="py-2 font-mono text-xs">
-                                                    <Link
-                                                        href={`/accounting/journals/${line.journal_id}`}
-                                                        className="underline-offset-2 hover:underline"
-                                                    >
-                                                        {line.journal_number}
-                                                    </Link>
+                                                <td className="py-2">
+                                                    <DateCell>{line.date}</DateCell>
                                                 </td>
-                                                <td className="py-2">{line.memo}</td>
+                                                <td className="py-2">
+                                                    <DocNo href={`/accounting/journals/${line.journal_id}`} className="text-xs">
+                                                        {line.journal_number}
+                                                    </DocNo>
+                                                </td>
+                                                <td className="text-muted-foreground py-2">{line.memo}</td>
                                                 <td className="text-muted-foreground py-2">{line.source}</td>
-                                                <td className="py-2 text-right tabular-nums">{line.debit}</td>
-                                                <td className="py-2 text-right tabular-nums">{line.credit}</td>
-                                                <td className="py-2 text-right tabular-nums">{side(line.balance, line.balance_side)}</td>
+                                                <td className="py-2 text-right">
+                                                    <Amount value={line.debit} tone="debit" />
+                                                </td>
+                                                <td className="py-2 text-right">
+                                                    <Amount value={line.credit} tone="credit" />
+                                                </td>
+                                                <td className="py-2 text-right">
+                                                    <Amount value={side(line.balance, line.balance_side)} tone="balance" />
+                                                </td>
                                             </tr>
                                         ))}
                                         {head.lines.length === 0 && <EmptyRow colSpan={7}>No entries in this period.</EmptyRow>}
