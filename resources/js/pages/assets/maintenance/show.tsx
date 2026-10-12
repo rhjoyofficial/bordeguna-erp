@@ -93,6 +93,7 @@ function Cancel({ record }: { record: MaintenanceRecord }) {
                 <Input
                     value={data.cancel_reason}
                     onChange={(e) => setData('cancel_reason', e.target.value)}
+                    aria-required
                     placeholder="Why"
                     className="w-full sm:w-80"
                 />
@@ -172,6 +173,8 @@ function Photos({ record, canManage }: { record: MaintenanceRecord; canManage: b
                         type="file"
                         accept="image/jpeg,image/png,image/webp"
                         multiple
+                        required
+                        aria-required
                         className="w-full min-w-0 text-sm sm:w-auto"
                         onChange={(e) => setData('photos', Array.from(e.target.files ?? []).slice(0, 6))}
                     />

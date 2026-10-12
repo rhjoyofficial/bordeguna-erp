@@ -117,6 +117,7 @@ export default function AssetMaintenanceCreate({
                         </Label>
                         <Input
                             id="reported_on"
+                            aria-required
                             type="date"
                             max={today}
                             value={data.reported_on}
@@ -139,7 +140,13 @@ export default function AssetMaintenanceCreate({
                         <Label htmlFor="problem" required>
                             What is wrong, or what is to be done
                         </Label>
-                        <textarea id="problem" className={textareaClass} value={data.problem} onChange={(e) => setData('problem', e.target.value)} />
+                        <textarea
+                            id="problem"
+                            aria-required
+                            className={textareaClass}
+                            value={data.problem}
+                            onChange={(e) => setData('problem', e.target.value)}
+                        />
                         <InputError message={errors.problem} />
                     </div>
                 </section>

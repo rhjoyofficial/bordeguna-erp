@@ -155,7 +155,7 @@ export default function AssetMovementCreate({
                         <Label htmlFor="moved_on" required>
                             On
                         </Label>
-                        <Input id="moved_on" type="date" value={data.moved_on} onChange={(e) => setData('moved_on', e.target.value)} />
+                        <Input id="moved_on" type="date" aria-required value={data.moved_on} onChange={(e) => setData('moved_on', e.target.value)} />
                         <InputError message={errors.moved_on} />
                     </div>
 
@@ -268,6 +268,7 @@ export default function AssetMovementCreate({
                                                 onChange={(e) => setLine(item.id, 'quantity', e.target.value)}
                                                 className="w-20"
                                                 aria-label="How many"
+                                                aria-required
                                             />
                                         )}
                                         {line && (

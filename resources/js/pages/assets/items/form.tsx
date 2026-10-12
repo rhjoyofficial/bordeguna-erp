@@ -205,6 +205,7 @@ export default function AssetItemForm({
                         </Label>
                         <Input
                             id="name"
+                            aria-required
                             value={data.name}
                             onChange={(e) => setData('name', e.target.value)}
                             placeholder="Desk chair, ThinkPad T470s"
@@ -235,6 +236,7 @@ export default function AssetItemForm({
                             </Label>
                             <Input
                                 id="quantity"
+                                aria-required
                                 type="number"
                                 min={1}
                                 value={data.quantity}

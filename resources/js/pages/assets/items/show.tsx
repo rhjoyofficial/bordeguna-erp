@@ -101,6 +101,8 @@ function PhotoUpload({ item, kind }: { item: Item; kind: string }) {
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 multiple
+                required
+                aria-required
                 className="w-full min-w-0 text-sm sm:w-auto"
                 onChange={(e) => setData('photos', Array.from(e.target.files ?? []).slice(0, 6))}
             />

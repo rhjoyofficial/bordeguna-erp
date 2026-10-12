@@ -68,6 +68,8 @@ export default function AssetsIndex({
         cost_in_opening_balances: false as boolean,
     });
 
+    const lifeRequired = !categories.find((c) => String(c.id) === data.asset_category_id)?.default_useful_life_months;
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         post(route('assets.store'), { onSuccess: () => reset(), preserveScroll: true });
@@ -92,6 +94,7 @@ export default function AssetsIndex({
                             </Label>
                             <Input
                                 id="asset_code"
+                                aria-required
                                 value={data.asset_code}
                                 onChange={(e) => setData('asset_code', e.target.value)}
                                 className="w-32"
@@ -106,6 +109,7 @@ export default function AssetsIndex({
                             </Label>
                             <Input
                                 id="name"
+                                aria-required
                                 value={data.name}
                                 onChange={(e) => setData('name', e.target.value)}
                                 className="w-56"
@@ -145,7 +149,13 @@ export default function AssetsIndex({
                             <Label htmlFor="acquired_on" required>
                                 Acquired
                             </Label>
-                            <Input id="acquired_on" type="date" value={data.acquired_on} onChange={(e) => setData('acquired_on', e.target.value)} />
+                            <Input
+                                id="acquired_on"
+                                type="date"
+                                aria-required
+                                value={data.acquired_on}
+                                onChange={(e) => setData('acquired_on', e.target.value)}
+                            />
                             <InputError message={errors.acquired_on} />
                         </div>
 
@@ -155,6 +165,7 @@ export default function AssetsIndex({
                             </Label>
                             <Input
                                 id="cost"
+                                aria-required
                                 value={data.cost}
                                 onChange={(e) => setData('cost', e.target.value)}
                                 className="w-32 text-right"
@@ -208,11 +219,13 @@ export default function AssetsIndex({
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="useful_life_months" required>
+                            {/* Required unless the chosen class carries a default life (the server falls back to it). */}
+                            <Label htmlFor="useful_life_months" required={lifeRequired}>
                                 Useful life (months)
                             </Label>
                             <Input
                                 id="useful_life_months"
+                                aria-required={lifeRequired}
                                 value={data.useful_life_months}
                                 onChange={(e) => setData('useful_life_months', e.target.value)}
                                 className="w-24 text-right"

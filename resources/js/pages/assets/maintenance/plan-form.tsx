@@ -91,7 +91,13 @@ export default function AssetMaintenancePlanForm({
                         <Label htmlFor="title" required>
                             What should be done
                         </Label>
-                        <Input id="title" value={data.title} onChange={(e) => setData('title', e.target.value)} placeholder="Clean the print head" />
+                        <Input
+                            id="title"
+                            aria-required
+                            value={data.title}
+                            onChange={(e) => setData('title', e.target.value)}
+                            placeholder="Clean the print head"
+                        />
                         <InputError message={errors.title} />
                     </div>
                     <div className="grid gap-2">
@@ -101,6 +107,7 @@ export default function AssetMaintenancePlanForm({
                         <div className="flex gap-2">
                             <Input
                                 id="every_count"
+                                aria-required
                                 type="number"
                                 min={1}
                                 max={366}
@@ -116,7 +123,13 @@ export default function AssetMaintenancePlanForm({
                         <Label htmlFor="next_due_on" required>
                             Next due on
                         </Label>
-                        <Input id="next_due_on" type="date" value={data.next_due_on} onChange={(e) => setData('next_due_on', e.target.value)} />
+                        <Input
+                            id="next_due_on"
+                            type="date"
+                            aria-required
+                            value={data.next_due_on}
+                            onChange={(e) => setData('next_due_on', e.target.value)}
+                        />
                         <InputError message={errors.next_due_on} />
                     </div>
                     <div className="grid gap-2">
@@ -125,6 +138,7 @@ export default function AssetMaintenancePlanForm({
                         </Label>
                         <Input
                             id="remind_days"
+                            aria-required
                             type="number"
                             min={0}
                             max={90}

@@ -100,6 +100,7 @@ export default function Depreciation({
                             </Label>
                             <Input
                                 id="year"
+                                aria-required
                                 value={data.year}
                                 onChange={(e) => setData('year', e.target.value)}
                                 className="w-24 text-right"

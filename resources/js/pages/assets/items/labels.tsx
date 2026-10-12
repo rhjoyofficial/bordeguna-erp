@@ -84,7 +84,7 @@ export default function AssetLabels({
 
                 <div className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-1">
-                        <Label>Sticker size</Label>
+                        <Label required>Sticker size</Label>
                         <SearchableSelect fit value={size} onChange={setSize} options={sizes} />
                     </div>
                     <div className="grid gap-1">

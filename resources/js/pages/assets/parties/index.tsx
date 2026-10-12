@@ -69,7 +69,7 @@ function PartyForm({
         <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
             <div className="grid gap-1">
                 <Label required>Name</Label>
-                <Input value={data.name} onChange={(e) => setData('name', e.target.value)} className="w-48" placeholder="Rahim" />
+                <Input value={data.name} onChange={(e) => setData('name', e.target.value)} className="w-48" aria-required placeholder="Rahim" />
                 <InputError message={errors.name} />
             </div>
             <div className="grid gap-1">
