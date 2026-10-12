@@ -269,6 +269,7 @@ export default function VoucherFormPage({
                             </Label>
                             <SearchSelect
                                 id="money_account_id"
+                                required
                                 value={data.money_account_id}
                                 onChange={(e) => setData('money_account_id', e.target.value)}
                             >
@@ -295,6 +296,7 @@ export default function VoucherFormPage({
                             </Label>
                             <SearchSelect
                                 id="to_money_account_id"
+                                required
                                 value={data.to_money_account_id}
                                 onChange={(e) => setData('to_money_account_id', e.target.value)}
                             >
@@ -374,6 +376,7 @@ export default function VoucherFormPage({
                                             <tr key={index} className="border-b align-top last:border-b-0">
                                                 <td className="px-3 py-2">
                                                     <SearchSelect
+                                                        required
                                                         newLedger={{
                                                             types: ['expense', 'asset', 'liability', 'equity', 'income'],
                                                             reload: ['accounts'],

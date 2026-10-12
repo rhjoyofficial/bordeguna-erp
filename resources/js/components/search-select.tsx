@@ -108,6 +108,7 @@ export function SearchSelect({
     fit,
     newLedger,
     quickCreate,
+    required,
 }: {
     children: ReactNode;
     value: string | number;
@@ -137,6 +138,8 @@ export function SearchSelect({
      * clear message rather than a silently missing row.
      */
     quickCreate?: { kind: QuickCreateKind; reload: string[]; createLabel?: string };
+    /** Announced to screen readers; pair it with <Label required>. */
+    required?: boolean;
 }) {
     const canManageChart = usePage<SharedData>().props.canManageChart;
     const [creating, setCreating] = useState(false);
@@ -165,6 +168,7 @@ export function SearchSelect({
                 invalid={invalid}
                 searchThreshold={searchThreshold}
                 fit={fit}
+                required={required}
                 onCreate={
                     offersCreate
                         ? (typed) => {

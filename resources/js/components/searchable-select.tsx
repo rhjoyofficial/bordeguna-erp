@@ -52,6 +52,7 @@ export function SearchableSelect({
     fit,
     onCreate,
     createLabel = 'Add new',
+    required = false,
 }: {
     value: string;
     onChange: (value: string) => void;
@@ -87,6 +88,8 @@ export function SearchableSelect({
      */
     onCreate?: (typed: string) => void;
     createLabel?: string;
+    /** Announced to screen readers; the red star itself lives on the field's Label. */
+    required?: boolean;
 }) {
     const [open, setOpen] = useState(false);
     const [inDialog, setInDialog] = useState(false);
@@ -156,6 +159,7 @@ export function SearchableSelect({
                         disabled={disabled}
                         aria-expanded={open}
                         aria-invalid={invalid || undefined}
+                        aria-required={required || undefined}
                         className={cn(
                             'bg-background h-10 justify-between font-normal',
                             // ⚠ min-w-0: a long label is truncated, but a button still asks
