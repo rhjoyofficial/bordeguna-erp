@@ -224,6 +224,7 @@ function MemberRow({ member, assignableRoles, linkLifetime }: { member: Member; 
             </div>
             {editing && (
                 <div className="bg-muted/40 flex flex-col gap-3 rounded-lg p-3">
+                    <Label required>Roles</Label>
                     <RolePicker available={assignableRoles} selected={roles} onToggle={toggleRole} idPrefix={`edit-${member.id}`} />
                     <div className="flex gap-2">
                         <Button size="sm" onClick={save} disabled={roles.length === 0}>

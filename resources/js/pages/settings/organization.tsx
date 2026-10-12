@@ -155,7 +155,14 @@ function AddForm({
     return (
         <form onSubmit={submit} className={`flex flex-wrap items-start gap-2 ${className}`}>
             <div className="grid gap-1">
-                <Input value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder={placeholder} className="h-9" />
+                <Input
+                    aria-label={placeholder}
+                    required
+                    value={data.name}
+                    onChange={(e) => setData('name', e.target.value)}
+                    placeholder={placeholder}
+                    className="h-9"
+                />
                 <InputError message={errors.name} />
             </div>
             {withCode && (
@@ -231,7 +238,14 @@ function UnitRow({
                     )}
                     {editing ? (
                         <div className="flex items-center gap-2">
-                            <Input value={value} onChange={(e) => setValue(e.target.value)} className="h-8 w-48" autoFocus />
+                            <Input
+                                aria-label="Name"
+                                aria-required="true"
+                                value={value}
+                                onChange={(e) => setValue(e.target.value)}
+                                className="h-8 w-48"
+                                autoFocus
+                            />
                             {withCode && (
                                 <Input value={codeValue} onChange={(e) => setCodeValue(e.target.value)} placeholder="Code" className="h-8 w-28" />
                             )}

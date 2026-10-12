@@ -130,9 +130,7 @@ export default function AiProviders() {
                 <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border p-4">
                     <div>
                         <p className="font-medium">Assistant panel</p>
-                        <p className="text-muted-foreground max-w-xl text-sm">
-                            {assistantEnabled ? 'On' : 'Off'}
-                        </p>
+                        <p className="text-muted-foreground max-w-xl text-sm">{assistantEnabled ? 'On' : 'Off'}</p>
                     </div>
                     <Button
                         variant={assistantEnabled ? 'outline' : 'default'}
@@ -160,10 +158,13 @@ export default function AiProviders() {
                         className="border-border space-y-4 rounded-md border p-4"
                     >
                         <div>
-                            <p className="font-medium">Chat languages</p>
-                            <p className="text-muted-foreground max-w-2xl text-sm">
-                                Choose exactly {requiredLanguages}.
+                            <p className="font-medium">
+                                Chat languages
+                                <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                    *
+                                </span>
                             </p>
+                            <p className="text-muted-foreground max-w-2xl text-sm">Choose exactly {requiredLanguages}.</p>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
@@ -301,7 +302,6 @@ export default function AiProviders() {
                                 Save identity
                             </Button>
                         </div>
-
                     </form>
 
                     <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
@@ -316,12 +316,7 @@ export default function AiProviders() {
                                 </SearchSelect>
                             </Field>
 
-                            <Field
-                                label="Model (optional)"
-                                htmlFor="model"
-                                size="grow"
-                                error={form.errors.model}
-                            >
+                            <Field label="Model (optional)" htmlFor="model" size="grow" error={form.errors.model}>
                                 {Object.keys(choices).length > 0 ? (
                                     <SearchSelect
                                         id="model"
