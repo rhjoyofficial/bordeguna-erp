@@ -11,6 +11,7 @@ use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\PartyLedgers;
+use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Models\PayrollRun;
 use Illuminate\Support\Carbon;
 
@@ -79,6 +80,43 @@ class PostPayrollAccrual
     private function isConfigured(Carbon $on): bool
     {
         return AccountMapping::forKeyOn('payroll.net_payable', $on) !== null;
+    }
+
+    /**
+     * Whether accounting is switched on for the date this run would post on.
+     */
+    public function isConfiguredFor(PayrollRun $run): bool
+    {
+        return $this->isConfigured($this->accountingDate($run));
+    }
+
+    /**
+     * ⚠⚠ A RUN THAT WAS APPROVED BEFORE ACCOUNTING WAS SWITCHED ON. The
+     * approval is the only thing that posts the accrual, and it posted nothing
+     * because there was nothing to post to. Paying that run later clears a
+     * payable nobody accrued: Wages Payable turns into a debit and the month's
+     * salary cost reads zero. September 2026's run 10 is the live case (12 Oct
+     * 2026). This says whether a run is in that state, so the payment path and
+     * the payroll screen can post the missing entry through `handle()`.
+     *
+     * ⚠ A run whose accrual was posted and later REVERSED (reopened, cancelled)
+     * is not "missing": its replacement is a different run, and re-posting the
+     * old one would double the wage bill.
+     */
+    public function isMissingFor(PayrollRun $run): bool
+    {
+        if (! in_array($run->status, [PayrollStatus::Approved, PayrollStatus::Disbursed, PayrollStatus::Locked], true)) {
+            return false;
+        }
+
+        if (! $this->isConfiguredFor($run)) {
+            return false;
+        }
+
+        return ! Journal::query()
+            ->where('source_type', $run->getMorphClass())
+            ->where('source_id', $run->getKey())
+            ->exists();
     }
 
     public function handle(PayrollRun $run, User $postedBy): ?Journal

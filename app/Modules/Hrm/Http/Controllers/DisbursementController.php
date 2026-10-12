@@ -3,13 +3,17 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Actions\StoreAttachment;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ConfirmDisbursementBatch;
+use App\Modules\Hrm\Actions\CorrectPayslipPaidDate;
 use App\Modules\Hrm\Actions\CreateDisbursementBatches;
 use App\Modules\Hrm\Actions\RecordPayslipPayment;
+use App\Modules\Hrm\Enums\PaymentEventType;
 use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Models\DisbursementBatch;
@@ -49,6 +53,10 @@ class DisbursementController extends Controller
 
         $run->load(['period', 'payslips.employee', 'payslips.payments', 'payslips.batches']);
 
+        // Payments that came back (a later Reversed event points at them) have
+        // no paid date left to correct.
+        $returned = $run->payslips->flatMap->payments->pluck('reverses_id')->filter()->all();
+
         return Inertia::render('hrm/payroll/disbursement', [
             'run' => [
                 'id' => $run->id,
@@ -76,6 +84,13 @@ class DisbursementController extends Controller
                     'advice_file' => $batch->advice()?->original_name,
                     'confirmed_at' => $batch->confirmed_at?->format('d M Y, H:i'),
                     'confirmed_by' => $batch->confirmer?->name,
+                    // ⚠ The batch has no date of its own: each payment carries
+                    // one. Shown so a wrong date is visible where it was made.
+                    'paid_dates' => $batch->payments()
+                        ->where('event_type', PaymentEventType::Paid)
+                        ->pluck('paid_on')
+                        ->map(fn ($date) => Carbon::parse($date)->toDateString())
+                        ->unique()->sort()->values(),
                 ]),
             'payslips' => $run->payslips
                 ->sortBy(fn (Payslip $p) => $p->employee?->employee_code ?? '')
@@ -113,9 +128,11 @@ class DisbursementController extends Controller
                         'reference' => $p->reference,
                         'failure_reason' => $p->failure_reason,
                         'is_reversed' => $p->reverses_id !== null,
+                        'can_correct_date' => $p->event_type === PaymentEventType::Paid && ! in_array($p->id, $returned, true),
                     ]),
                 ]),
             'methods' => SalaryPaymentMethod::options(),
+            'can_correct_paid_date' => self::isOwner($request->user()),
             // ⚠⚠ Recording a payment means saying which account it left, and
             // this screen never had the list to ask with. Both routes out -
             // confirming a batch and recording one payslip - died on that: the
@@ -158,7 +175,11 @@ class DisbursementController extends Controller
         $this->authorize('hrm.payroll.manage');
 
         $data = $request->validate([
-            'paid_on' => ['nullable', 'date'],
+            // ⚠⚠ REQUIRED, and never "today" by default (12 Oct 2026). The
+            // screen used to send today's date without asking; September's
+            // salaries, paid by the bank on 30 Sep and confirmed on 12 Oct,
+            // posted nine journals on the wrong day. The date is the bank's.
+            'paid_on' => ['required', 'date', 'before_or_equal:today'],
             'advice_reference' => ['nullable', 'string', 'max:255'],
             // ⚠ Required here, not nullable. Confirming means the money has gone
             // and a payment that cannot say which account it left is the record
@@ -166,13 +187,21 @@ class DisbursementController extends Controller
             'money_account_id' => ['required', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id())],
         ]);
 
-        $paid = $action->handle(
-            $batch,
-            $request->user(),
-            isset($data['paid_on']) ? Carbon::parse($data['paid_on']) : null,
-            $data['advice_reference'] ?? null,
-            MoneyAccount::findOrFail($data['money_account_id']),
-        );
+        try {
+            $paid = $action->handle(
+                $batch,
+                $request->user(),
+                Carbon::parse($data['paid_on']),
+                $data['advice_reference'] ?? null,
+                MoneyAccount::findOrFail($data['money_account_id']),
+            );
+        } catch (PeriodClosedException $exception) {
+            throw ValidationException::withMessages(['paid_on' => $exception->getMessage()]);
+        } catch (MappingNotFound $exception) {
+            throw ValidationException::withMessages([
+                'money_account_id' => 'Say which account this salary was paid from. '.$exception->getMessage(),
+            ]);
+        }
 
         return back()->with('success', sprintf('%d payslip(s) marked paid in %s.', $paid, $batch->reference));
     }
@@ -236,7 +265,7 @@ class DisbursementController extends Controller
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
             'method' => ['nullable', new EnumRule(SalaryPaymentMethod::class)],
-            'paid_on' => ['nullable', 'date'],
+            'paid_on' => ['nullable', 'date', 'before_or_equal:today'],
             'reference' => ['nullable', 'string', 'max:255'],
             // ⚠ The individual payment now asks the same question the batch
             // confirmation does. Money leaving without a named account is the
@@ -262,6 +291,8 @@ class DisbursementController extends Controller
                 $payslip->batch(),
                 isset($data['money_account_id']) ? MoneyAccount::find($data['money_account_id']) : null,
             );
+        } catch (PeriodClosedException $exception) {
+            throw ValidationException::withMessages(['paid_on' => $exception->getMessage()]);
         } catch (MappingNotFound $exception) {
             throw ValidationException::withMessages([
                 'money_account_id' => 'Say which account this salary was paid from. '.$exception->getMessage(),
@@ -269,6 +300,69 @@ class DisbursementController extends Controller
         }
 
         return back()->with('success', 'Payment recorded.');
+    }
+
+    /**
+     * Moves every payment in a confirmed batch to the day the bank actually
+     * paid: the wrongly dated journals are reversed on their own date and
+     * re-posted on the right one (CorrectPayslipPaidDate). Owner only.
+     */
+    public function correctBatchPaidDate(Request $request, DisbursementBatch $batch, CorrectPayslipPaidDate $action): RedirectResponse
+    {
+        abort_unless(self::isOwner($request->user()), 403);
+
+        $data = $this->validateCorrection($request);
+
+        $moved = $this->runCorrection(fn () => $action->forBatch($batch, Carbon::parse($data['paid_on']), $data['reason'], $request->user()));
+
+        return back()->with('success', $moved === 0
+            ? sprintf('Every payment in %s is already dated %s. Nothing changed.', $batch->reference, $data['paid_on'])
+            : sprintf('%d payment(s) in %s moved to %s.', $moved, $batch->reference, $data['paid_on']));
+    }
+
+    /**
+     * The same correction for one payslip payment. Owner only.
+     */
+    public function correctPaymentPaidDate(Request $request, PayslipPayment $payment, CorrectPayslipPaidDate $action): RedirectResponse
+    {
+        abort_unless(self::isOwner($request->user()), 403);
+
+        $data = $this->validateCorrection($request);
+
+        $moved = $this->runCorrection(fn () => $action->forPayment($payment, Carbon::parse($data['paid_on']), $data['reason'], $request->user()));
+
+        return back()->with('success', $moved === 0
+            ? sprintf('This payment is already dated %s. Nothing changed.', $data['paid_on'])
+            : sprintf('Payment moved to %s.', $data['paid_on']));
+    }
+
+    /**
+     * ⚠ Owner only, like the other finance decisions that rewrite what the
+     * books say about a day (DiscountCap, consignment write-offs).
+     */
+    private static function isOwner(?User $user): bool
+    {
+        return $user !== null && ($user->is_super_admin || $user->hasRole('Owner'));
+    }
+
+    /**
+     * @return array{paid_on: string, reason: string}
+     */
+    private function validateCorrection(Request $request): array
+    {
+        return $request->validate([
+            'paid_on' => ['required', 'date', 'before_or_equal:today'],
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+    }
+
+    private function runCorrection(callable $correction): int
+    {
+        try {
+            return $correction();
+        } catch (PeriodClosedException|MappingNotFound $exception) {
+            throw ValidationException::withMessages(['paid_on' => $exception->getMessage()]);
+        }
     }
 
     /**

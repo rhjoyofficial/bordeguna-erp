@@ -41,7 +41,11 @@ class PostPayrollPayment
 {
     public function __construct(private readonly PostJournal $postJournal) {}
 
-    public function handle(PayslipPayment $payment, ?MoneyAccount $moneyAccount, User $postedBy): ?Journal
+    /**
+     * @param  string|null  $note  appended to the memo, so a re-posted payment
+     *                             (CorrectPayslipPaidDate) says why it exists
+     */
+    public function handle(PayslipPayment $payment, ?MoneyAccount $moneyAccount, User $postedBy, ?string $note = null): ?Journal
     {
         if ($this->existingJournal($payment) !== null) {
             return null;
@@ -86,7 +90,8 @@ class PostPayrollPayment
                 JournalLineDraft::debit($payable->id, $amount, $payment->employee?->employee_code, $payment->employee),
                 JournalLineDraft::credit($bank->id, $amount, $moneyAccount->label(), null, $moneyAccount),
             ],
-            memo: 'Salary paid to '.($payment->employee?->employee_code ?? 'employee').' from '.$moneyAccount->label(),
+            memo: 'Salary paid to '.($payment->employee?->employee_code ?? 'employee').' from '.$moneyAccount->label()
+                .($note !== null ? ' ('.$note.')' : ''),
             source: $payment,
         ), $postedBy);
     }
@@ -97,8 +102,11 @@ class PostPayrollPayment
      * ⚠ Through ReverseJournal like everything else, so the correction faces
      * every guard the original faced - including the period lock. A bounced
      * transfer reversed after the month closed cannot silently reopen it.
+     *
+     * $on and $memo are for CorrectPayslipPaidDate, which takes a wrongly dated
+     * entry out ON THE DATE IT WAS WRONGLY PUT IN, so that day nets to nothing.
      */
-    public function reverse(PayslipPayment $payment, User $reversedBy): ?Journal
+    public function reverse(PayslipPayment $payment, User $reversedBy, ?Carbon $on = null, ?string $memo = null): ?Journal
     {
         $journal = $this->existingJournal($payment);
 
@@ -106,15 +114,27 @@ class PostPayrollPayment
             return null;
         }
 
-        return app(ReverseJournal::class)->handle($journal, $reversedBy);
+        return app(ReverseJournal::class)->handle($journal, $reversedBy, $on, $memo);
     }
 
+    /**
+     * The payment's LIVE journal: posted for it, not itself a reversal, and
+     * not reversed since.
+     *
+     * ⚠⚠ "Not reversed since" matters from the day a paid date can be
+     * corrected (12 Oct 2026). A corrected payment carries two posted journals,
+     * the wrongly dated one (reversed) and its replacement; reading the first
+     * one found would hand back the dead entry, and `handle()` would then
+     * refuse to post the replacement at all.
+     */
     public function existingJournal(PayslipPayment $payment): ?Journal
     {
         return Journal::query()
             ->where('source_type', $payment->getMorphClass())
             ->where('source_id', $payment->getKey())
             ->whereNull('reverses_journal_id')
+            ->whereDoesntHave('reversal')
+            ->orderByDesc('id')
             ->first();
     }
 }

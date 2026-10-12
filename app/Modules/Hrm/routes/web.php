@@ -349,6 +349,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('payroll/{run}/lock', [PayrollController::class, 'lock'])->name('payroll.lock');
     Route::post('payroll/{run}/reopen', [PayrollController::class, 'reopen'])->name('payroll.reopen');
     Route::post('payroll/{run}/cancel', [PayrollController::class, 'cancel'])->name('payroll.cancel');
+    // A run approved before accounting was switched on never posted its
+    // salary cost. This posts it, through the same accrual the approval uses.
+    Route::post('payroll/{run}/post-accrual', [PayrollController::class, 'postAccrual'])->name('payroll.post-accrual');
 
     // Payslips (DIS-03/04). Read is self-scope OR hrm.payroll.manage, decided in
     // the controller — Department Managers hold neither, per Correction C5.
@@ -367,6 +370,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
 
     Route::post('disbursement-batches/{batch}/confirm', [DisbursementController::class, 'confirmBatch'])->name('batches.confirm');
     Route::post('disbursement-batches/{batch}/fail', [DisbursementController::class, 'failBatch'])->name('batches.fail');
+    // 12 Oct 2026: move a confirmed batch, or one payment, to the day the bank
+    // actually paid. Owner only; reverses and re-posts, never edits a journal.
+    Route::post('disbursement-batches/{batch}/correct-paid-date', [DisbursementController::class, 'correctBatchPaidDate'])->name('batches.correct-paid-date');
+    Route::post('payslip-payments/{payment}/correct-paid-date', [DisbursementController::class, 'correctPaymentPaidDate'])->name('payslips.payments.correct-paid-date');
     Route::post('disbursement-batches/{batch}/advice', [DisbursementController::class, 'uploadAdvice'])->name('batches.advice');
     Route::get('disbursement-batches/{batch}/register', [DisbursementController::class, 'exportRegister'])->name('batches.register');
 

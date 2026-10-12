@@ -3,6 +3,9 @@
 namespace App\Modules\Hrm\Actions;
 
 use App\Models\User;
+use App\Modules\Accounting\Exceptions\JournalException;
+use App\Modules\Accounting\Exceptions\MappingNotFound;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Enums\PaymentEventType;
 use App\Modules\Hrm\Enums\PayrollStatus;
@@ -32,6 +35,7 @@ class RecordPayslipPayment
     public function __construct(
         private readonly ReconcilePayslipLedgers $reconcile,
         private readonly PostPayrollPayment $posting,
+        private readonly PostPayrollAccrual $accrual,
     ) {}
 
     /**
@@ -71,7 +75,52 @@ class RecordPayslipPayment
             ]);
         }
 
+        // ⚠ A payment can never be dated after today: the bank has not paid
+        // tomorrow yet, and PostJournal would refuse the entry anyway, later
+        // and less clearly.
+        if ($paidOn !== null && $paidOn->copy()->startOfDay()->isAfter(Carbon::today())) {
+            throw ValidationException::withMessages([
+                'paid_on' => 'The paid date cannot be in the future. Use the date on the bank statement.',
+            ]);
+        }
+
+        $this->ensureAccrual($payslip, $user);
+
         return $this->record($payslip, $user, PaymentEventType::Paid, $amount, $method, $paidOn, $reference, null, $batch, null, $moneyAccount);
+    }
+
+    /**
+     * ⚠⚠ The salary cost goes into the books BEFORE the payment that clears it.
+     *
+     * A run approved while accounting was still switched off posted no accrual,
+     * so paying it debits Wages Payable with nothing to clear: the payable turns
+     * into a debit balance and the month's salary cost reads zero. That is what
+     * September 2026's run did on 12 Oct 2026. `PostPayrollAccrual::handle()`
+     * is idempotent and dates itself at the end of the payroll period, so
+     * calling it here costs one query when the entry is already there.
+     *
+     * ⚠ When it cannot post (the period is closed, a component is unmapped) the
+     * payment is refused with the reason, rather than recorded against a
+     * payable that was never accrued.
+     *
+     * @throws ValidationException
+     */
+    private function ensureAccrual(Payslip $payslip, User $user): void
+    {
+        $run = $payslip->run;
+
+        if ($run === null || ! $this->accrual->isMissingFor($run)) {
+            return;
+        }
+
+        try {
+            $this->accrual->handle($run, $user);
+        } catch (PeriodClosedException|MappingNotFound|JournalException $exception) {
+            throw ValidationException::withMessages([
+                'accrual' => 'The salary cost of this payroll is not in the books yet and could not be entered first, so the payment was not recorded. '
+                    .$exception->getMessage(),
+            ]);
+        }
     }
 
     /**

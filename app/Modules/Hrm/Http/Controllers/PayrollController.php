@@ -3,8 +3,12 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Exceptions\JournalException;
+use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Actions\PostPayrollAccrual;
 use App\Modules\Hrm\Actions\RequestPayrollUnlock;
 use App\Modules\Hrm\Actions\TransitionPayrollRun;
 use App\Modules\Hrm\Jobs\CalculatePayrollRunJob;
@@ -17,6 +21,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -75,6 +80,9 @@ class PayrollController extends Controller
                 'is_rerunnable' => $run->isRerunnable(),
                 'is_reopenable' => $run->status->isReopenable(),
                 'closed_reason' => $run->closed_reason,
+                // Approved before accounting was switched on: the salary cost
+                // never reached the books (run 10, September 2026).
+                'accrual_missing' => app(PostPayrollAccrual::class)->isMissingFor($run),
                 'queue_state' => $run->queue_state,
                 'failure_message' => $run->failure_message,
                 'validation_report' => $run->validation_report,
@@ -273,6 +281,30 @@ class PayrollController extends Controller
         $transition->cancel($run, $request->user(), $reason);
 
         return back()->with('success', 'Payroll cancelled.');
+    }
+
+    /**
+     * Posts the salary cost of a run that was approved before accounting was
+     * switched on. Same action, same date (the period end) as the approval
+     * would have used; idempotent, so a second press posts nothing.
+     */
+    public function postAccrual(Request $request, PayrollRun $run, PostPayrollAccrual $accrual): RedirectResponse
+    {
+        $this->authorize('hrm.payroll.manage');
+
+        if (! $accrual->isMissingFor($run)) {
+            return back()->with('success', 'Nothing to post: the salary cost of this payroll is already in the books, or accounting is not switched on for it.');
+        }
+
+        try {
+            $journal = $accrual->handle($run, $request->user());
+        } catch (PeriodClosedException|MappingNotFound|JournalException $exception) {
+            throw ValidationException::withMessages(['accrual' => $exception->getMessage()]);
+        }
+
+        return back()->with('success', $journal === null
+            ? 'Nothing to post for this payroll.'
+            : sprintf('Salary cost posted to the books as %s, dated %s.', $journal->journal_number, $journal->journal_date->toDateString()));
     }
 
     /**
