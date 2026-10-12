@@ -38,6 +38,8 @@ class GeneralLedgerController extends Controller
         $business = Business::withoutGlobalScopes()->find(app(BusinessContext::class)->id());
 
         [$from, $to] = $this->window($request, $business);
+        // Off by default: the ledger shows every posted entry (12 Oct 2026).
+        $hideReversed = $request->boolean('hide_reversed');
 
         $account = $request->filled('account')
             ? Account::query()->find($request->integer('account'))
@@ -66,6 +68,7 @@ class GeneralLedgerController extends Controller
                 'summary' => null,
                 'pagination' => null,
                 'ledger_empty' => Journal::count() === 0,
+                'hide_reversed' => $hideReversed,
             ]);
         }
 
@@ -93,6 +96,7 @@ class GeneralLedgerController extends Controller
                 'pagination' => null,
                 'rollup' => $this->rollup($account, $from, $to),
                 'ledger_empty' => Journal::count() === 0,
+                'hide_reversed' => $hideReversed,
             ]);
         }
 
@@ -107,6 +111,7 @@ class GeneralLedgerController extends Controller
             partyId: $resolved[1] ?? null,
             perPage: self::PER_PAGE,
             page: max(1, $request->integer('page', 1)),
+            hideReversedPairs: $hideReversed,
         );
 
         return Inertia::render('accounting/general-ledger/index', [
@@ -133,6 +138,16 @@ class GeneralLedgerController extends Controller
                 'voucher' => ($voucher = $entry->voucher()) === null ? null : [
                     'id' => $voucher->id,
                     'number' => $voucher->voucher_number,
+                    'status' => $voucher->status?->value,
+                ],
+                // ⭐ The audit trail, marked rather than hidden (12 Oct 2026).
+                'reversed_by' => ($by = $entry->line->journal->reversal->first()) === null ? null : [
+                    'id' => $by->id,
+                    'number' => $by->journal_number,
+                ],
+                'reversal_of' => ($of = $entry->line->journal->reverses) === null ? null : [
+                    'id' => $of->id,
+                    'number' => $of->journal_number,
                 ],
                 'party' => $entry->partyName(),
                 // ⚠ Every figure formatted explicitly. `19200.00000000` has
@@ -165,6 +180,8 @@ class GeneralLedgerController extends Controller
                 'total' => $ledger->total,
             ],
             'ledger_empty' => Journal::count() === 0,
+            'hide_reversed' => $hideReversed,
+            'hidden_journals' => $ledger->hiddenJournals,
         ]);
     }
 

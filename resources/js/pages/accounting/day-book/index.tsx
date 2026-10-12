@@ -159,11 +159,11 @@ export default function DayBook({
                     <table className="w-full min-w-[56rem] text-sm">
                         <thead>
                             <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
-                                <th className="py-2 pr-3">Date</th>
-                                <th className="py-2 pr-3">Voucher</th>
+                                <th className="w-px py-2 pr-3 whitespace-nowrap">Date</th>
+                                <th className="w-px py-2 pr-3 whitespace-nowrap">Voucher</th>
                                 <th className="py-2 pr-3">Particulars</th>
-                                <th className="py-2 pr-3 text-right">Debit</th>
-                                <th className="py-2 text-right">Credit</th>
+                                <th className="w-px py-2 pr-3 text-right whitespace-nowrap">Debit</th>
+                                <th className="w-px py-2 text-right whitespace-nowrap">Credit</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -177,10 +177,10 @@ export default function DayBook({
                             {journals.data.map((journal) => (
                                 <Fragment key={journal.id}>
                                     <tr className="border-sidebar-border/70 dark:border-sidebar-border border-t align-top">
-                                        <td className="py-2 pr-3" rowSpan={journal.lines.length + 1}>
+                                        <td className="py-2 pr-3 whitespace-nowrap" rowSpan={journal.lines.length + 1}>
                                             <DateCell>{journal.date}</DateCell>
                                         </td>
-                                        <td className="py-2 pr-3" rowSpan={journal.lines.length + 1}>
+                                        <td className="py-2 pr-3 whitespace-nowrap" rowSpan={journal.lines.length + 1}>
                                             <div className="font-medium">{journal.kind}</div>
                                             <DocNo href={route('accounting.journals.show', journal.id)} className="text-xs">
                                                 {journal.number}
@@ -214,10 +214,10 @@ export default function DayBook({
                                                     <div className="text-muted-foreground text-xs">{line.memo}</div>
                                                 ) : null}
                                             </td>
-                                            <td className="py-0.5 pr-3 text-right">
+                                            <td className="py-0.5 pr-3 text-right whitespace-nowrap">
                                                 <Amount value={line.debit} tone="debit" />
                                             </td>
-                                            <td className="py-0.5 text-right">
+                                            <td className="py-0.5 text-right whitespace-nowrap">
                                                 <Amount value={line.credit} tone="credit" />
                                             </td>
                                         </tr>

@@ -48,7 +48,7 @@ final class VoucherNarrations
         $vouchers = Voucher::query()
             ->where(fn ($query) => $query->whereIn('journal_id', $ids)->orWhereIn('reversal_journal_id', $ids))
             ->with(['lines' => fn ($query) => $query->orderBy('line_no')])
-            ->get(['id', 'voucher_number', 'counterparty', 'narration', 'journal_id', 'reversal_journal_id']);
+            ->get(['id', 'voucher_number', 'status', 'counterparty', 'narration', 'journal_id', 'reversal_journal_id']);
 
         $byJournal = [];
         foreach ($vouchers as $voucher) {

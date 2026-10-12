@@ -1,4 +1,4 @@
-import { Amount, DateCell, DocNo, StatusPill } from '@/components/ledger-text';
+import { Amount, DateCell, DocNo, MUTED_ROW, StatusPill, TruncatedText } from '@/components/ledger-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -63,17 +63,20 @@ export default function JournalsIndex({ journals }: { journals: Paginated<Journa
                     <table className="w-full min-w-[42rem] text-sm">
                         <thead>
                             <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
-                                <th className="py-2">Number</th>
-                                <th className="py-2">Date</th>
+                                <th className="w-px py-2 whitespace-nowrap">Number</th>
+                                <th className="w-px py-2 whitespace-nowrap">Date</th>
                                 <th className="py-2">For</th>
-                                <th className="py-2 text-right">Amount</th>
-                                <th className="py-2 text-right">Lines</th>
+                                <th className="w-px py-2 text-right whitespace-nowrap">Amount</th>
+                                <th className="w-px py-2 text-right whitespace-nowrap">Lines</th>
                             </tr>
                         </thead>
                         <tbody>
                             {journals.data.map((journal) => (
-                                <tr key={journal.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                    <td className="py-2">
+                                <tr
+                                    key={journal.id}
+                                    className={`border-sidebar-border/70 dark:border-sidebar-border border-b ${journal.reversed || journal.is_reversal ? MUTED_ROW : ''}`}
+                                >
+                                    <td className="py-2 whitespace-nowrap">
                                         <DocNo href={route('accounting.journals.show', journal.id)}>{journal.number}</DocNo>
                                         {journal.is_reversal && (
                                             <Badge variant="secondary" className="ml-2">
@@ -87,11 +90,13 @@ export default function JournalsIndex({ journals }: { journals: Paginated<Journa
                                             </Badge>
                                         )}
                                     </td>
-                                    <td className="py-2">
+                                    <td className="py-2 whitespace-nowrap">
                                         <DateCell>{journal.date}</DateCell>
                                     </td>
-                                    <td className="text-muted-foreground py-2">{journal.memo ?? journal.type_label}</td>
-                                    <td className="py-2 text-right">
+                                    <td className="text-muted-foreground max-w-0 py-2">
+                                        <TruncatedText text={journal.memo ?? journal.type_label} />
+                                    </td>
+                                    <td className="py-2 text-right whitespace-nowrap">
                                         <Amount value={journal.total} />
                                     </td>
                                     <td className="text-muted-foreground py-2 text-right tabular-nums">{journal.lines}</td>

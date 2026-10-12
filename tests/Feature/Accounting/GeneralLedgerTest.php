@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Modules\Accounting\Actions\PostJournal;
+use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\AccountLedger;
@@ -333,4 +334,92 @@ it('rolls a heading up into one row per head beneath it, with the total the stat
 
     expect($root['rollup']['total']['closing'])->toBe('1,325.00 Dr')
         ->and(collect($root['rollup']['rows'])->where('moved', true)->count())->toBe(2);
+});
+
+// ─── REVERSALS: KEPT, MARKED, OPTIONALLY HIDDEN IN PAIRS (12 Oct 2026) ──────
+
+/*
+ * D (200) is posted before the window and reversed inside it: a half pair.
+ * B (500) and its reversal both fall inside the window: a whole pair.
+ */
+function reversalScenario(object $test): array
+{
+    $reverse = fn ($journal, string $on) => app(ReverseJournal::class)->handle($journal, $test->reader, Carbon::parse($on));
+
+    $d = ($test->post)('200', '2026-06-20');
+    $a = ($test->post)('1000', '2026-07-05');
+    $b = ($test->post)('500', '2026-07-06');
+    $reversalOfB = $reverse($b, '2026-07-10');
+    $reversalOfD = $reverse($d, '2026-07-15');
+    $c = ($test->post)('300', '2026-07-20');
+
+    return compact('a', 'b', 'c', 'd', 'reversalOfB', 'reversalOfD');
+}
+
+it('keeps reversed entries and their reversals on the ledger by default', function () {
+    reversalScenario($this);
+
+    $ledger = ($this->ledger)();
+
+    expect($ledger->entries->map(fn (LedgerEntry $entry) => $entry->balance->minor)->all())
+        ->toBe([120000, 170000, 120000, 100000, 130000])
+        ->and($ledger->hiddenJournals)->toBe(0);
+});
+
+it('hides a reversed pair only when both halves are in the window, and the balances still run true', function () {
+    $journals = reversalScenario($this);
+
+    $ledger = AccountLedger::for(
+        account: $this->bank,
+        from: Carbon::parse('2026-07-01')->startOfDay(),
+        to: Carbon::parse('2026-08-31')->endOfDay(),
+        hideReversedPairs: true,
+    );
+
+    // B and its reversal are gone; D's reversal stays, its original being before the window.
+    expect($ledger->entries->map(fn (LedgerEntry $entry) => (int) $entry->line->journal_id)->all())
+        ->toBe([$journals['a']->id, $journals['reversalOfD']->id, $journals['c']->id])
+        ->and($ledger->entries->map(fn (LedgerEntry $entry) => $entry->balance->minor)->all())
+        ->toBe([120000, 100000, 130000])
+        ->and($ledger->hiddenJournals)->toBe(2)
+        ->and($ledger->closing()->minor)->toBe(130000)
+        ->and($ledger->isConsistent())->toBeTrue();
+
+    // The page seed leaves the hidden pair out too.
+    $third = AccountLedger::for(
+        account: $this->bank,
+        from: Carbon::parse('2026-07-01')->startOfDay(),
+        to: Carbon::parse('2026-08-31')->endOfDay(),
+        perPage: 1,
+        page: 3,
+        hideReversedPairs: true,
+    );
+
+    expect($third->entries->first()->balance->minor)->toBe(130000)
+        ->and($third->total)->toBe(3);
+});
+
+it('labels a reversed entry and its reversal, and hides the pair from the URL toggle', function () {
+    $journals = reversalScenario($this);
+    $url = '/accounting/general-ledger?account='.$this->bank->id.'&from=2026-07-01&to=2026-08-31';
+
+    $this->actingAs($this->reader)->get($url)
+        ->assertInertia(fn ($page) => $page
+            ->has('entries', 5)
+            ->where('hide_reversed', false)
+            ->where('entries.1.reversed_by.number', $journals['reversalOfB']->journal_number)
+            ->where('entries.2.reversal_of.number', $journals['b']->journal_number)
+            ->where('entries.3.reversal_of.number', $journals['d']->journal_number)
+            ->where('entries.0.reversed_by', null)
+            ->where('entries.0.reversal_of', null));
+
+    $this->actingAs($this->reader)->get($url.'&hide_reversed=1')
+        ->assertInertia(fn ($page) => $page
+            ->has('entries', 3)
+            ->where('hide_reversed', true)
+            ->where('hidden_journals', 2)
+            ->where('entries.1.reversal_of.number', $journals['d']->journal_number)
+            ->where('entries.2.balance', '1,300.00')
+            ->where('summary.closing', '1,300.00')
+            ->where('summary.consistent', true));
 });

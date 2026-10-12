@@ -1,6 +1,7 @@
-import { Amount, DateCell, DocNo, LedgerHead, PartyText } from '@/components/ledger-text';
+import { Amount, DateCell, DocNo, LedgerHead, MUTED_ROW, PartyText, ReversalPill, TruncatedText } from '@/components/ledger-text';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -27,7 +28,9 @@ interface Entry {
     journal_number: string;
     date: string;
     memo: string | null;
-    voucher: { id: number; number: string | null } | null;
+    voucher: { id: number; number: string | null; status: string | null } | null;
+    reversed_by: { id: number; number: string } | null;
+    reversal_of: { id: number; number: string } | null;
     party: string | null;
     debit: string | null;
     credit: string | null;
@@ -86,6 +89,8 @@ export default function GeneralLedgerIndex({
     pagination,
     rollup = null,
     ledger_empty,
+    hide_reversed = false,
+    hidden_journals = 0,
 }: {
     from: string;
     to: string;
@@ -98,12 +103,15 @@ export default function GeneralLedgerIndex({
     pagination: Pagination | null;
     rollup?: Rollup | null;
     ledger_empty: boolean;
+    hide_reversed?: boolean;
+    hidden_journals?: number;
 }) {
     const [filters, setFilters] = useState({
         account: account ? String(account.id) : '',
         from,
         to,
         party: party ?? '',
+        hide_reversed: hide_reversed ? '1' : '',
     });
 
     const show = (overrides: Record<string, string | number> = {}) => {
@@ -278,26 +286,49 @@ export default function GeneralLedgerIndex({
                             </div>
                         </div>
 
+                        {/* A ledger keeps every posted entry; hiding reversed pairs is a view choice, off by default (12 Oct 2026). */}
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                            <label className="flex cursor-pointer items-center gap-2">
+                                <Checkbox
+                                    checked={hide_reversed}
+                                    onCheckedChange={(checked) => {
+                                        const next = checked === true ? '1' : '';
+                                        setFilters({ ...filters, hide_reversed: next });
+                                        show({ hide_reversed: next, page: 1 });
+                                    }}
+                                />
+                                Hide reversed entries
+                            </label>
+                            {hide_reversed && hidden_journals > 0 && (
+                                <span className="text-muted-foreground">
+                                    {hidden_journals} journals hidden: entries reversed in this period, with their reversals. Balances are unchanged.
+                                </span>
+                            )}
+                        </div>
+
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[60rem] text-sm">
+                            <table className="w-full min-w-[48rem] text-sm">
                                 <thead>
                                     <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
-                                        <th className="py-2">Date</th>
-                                        <th className="py-2">Journal</th>
-                                        <th className="py-2">Description</th>
-                                        <th className="py-2">Party</th>
-                                        <th className="py-2 text-right">Debit</th>
-                                        <th className="py-2 text-right">Credit</th>
-                                        <th className="py-2 text-right">Balance</th>
+                                        <th className="w-px py-2 whitespace-nowrap">Date</th>
+                                        <th className="w-px py-2 whitespace-nowrap">Journal</th>
+                                        <th className="w-2/3 py-2">Description</th>
+                                        <th className="w-1/3 py-2">Party</th>
+                                        <th className="w-px py-2 text-right whitespace-nowrap">Debit</th>
+                                        <th className="w-px py-2 text-right whitespace-nowrap">Credit</th>
+                                        <th className="w-px py-2 text-right whitespace-nowrap">Balance</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {entries.map((entry) => (
-                                        <tr key={entry.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                            <td className="py-2">
+                                        <tr
+                                            key={entry.id}
+                                            className={`border-sidebar-border/70 dark:border-sidebar-border border-b ${entry.reversed_by || entry.reversal_of ? MUTED_ROW : ''}`}
+                                        >
+                                            <td className="py-2 whitespace-nowrap">
                                                 <DateCell>{entry.date}</DateCell>
                                             </td>
-                                            <td className="py-2">
+                                            <td className="py-2 whitespace-nowrap">
                                                 <DocNo href={route('accounting.journals.show', entry.journal_id)}>{entry.journal_number}</DocNo>
                                                 {entry.voucher?.number ? (
                                                     <div>
@@ -307,17 +338,42 @@ export default function GeneralLedgerIndex({
                                                     </div>
                                                 ) : null}
                                             </td>
-                                            <td className="text-muted-foreground py-2">{entry.memo}</td>
-                                            <td className="py-2">
-                                                <PartyText>{entry.party}</PartyText>
+                                            <td className="text-muted-foreground max-w-0 py-2">
+                                                <div className="flex min-w-0 items-center gap-2">
+                                                    <TruncatedText text={entry.memo} className="min-w-0 flex-1" />
+                                                    {entry.reversed_by && (
+                                                        <ReversalPill
+                                                            kind="reversed-by"
+                                                            number={entry.reversed_by.number}
+                                                            href={route('accounting.journals.show', entry.reversed_by.id)}
+                                                        />
+                                                    )}
+                                                    {entry.reversal_of && (
+                                                        <ReversalPill
+                                                            kind="reversal-of"
+                                                            number={entry.reversal_of.number}
+                                                            href={route('accounting.journals.show', entry.reversal_of.id)}
+                                                        />
+                                                    )}
+                                                    {!entry.reversed_by && !entry.reversal_of && entry.voucher?.status === 'reversed' && (
+                                                        <ReversalPill kind="voucher-reversed" />
+                                                    )}
+                                                </div>
                                             </td>
-                                            <td className="py-2 text-right">
+                                            <td className="max-w-0 py-2">
+                                                {entry.party ? (
+                                                    <PartyText className="block">
+                                                        <TruncatedText text={entry.party} />
+                                                    </PartyText>
+                                                ) : null}
+                                            </td>
+                                            <td className="py-2 text-right whitespace-nowrap">
                                                 <Amount value={entry.debit} tone="debit" />
                                             </td>
-                                            <td className="py-2 text-right">
+                                            <td className="py-2 text-right whitespace-nowrap">
                                                 <Amount value={entry.credit} tone="credit" />
                                             </td>
-                                            <td className="py-2 text-right">
+                                            <td className="py-2 text-right whitespace-nowrap">
                                                 <Amount value={entry.balance} tone="balance" suffix={entry.balance_side === 'credit' ? 'Cr' : 'Dr'} />
                                             </td>
                                         </tr>

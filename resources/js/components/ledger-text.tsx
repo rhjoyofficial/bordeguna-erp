@@ -1,6 +1,7 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 /**
  * Register emphasis (Joy, 12 Oct 2026): "on each register / journal page, the
@@ -37,7 +38,11 @@ export const LEDGER_TONE = {
 
 /** A row's date, shown exactly as the page already formats it. */
 export function DateCell({ children, className }: { children: ReactNode; className?: string }) {
-    return <span className={cn(LEDGER_TONE.date, className)}>{children}</span>;
+    return (
+        <span data-figure className={cn(LEDGER_TONE.date, className)}>
+            {children}
+        </span>
+    );
 }
 
 /** A voucher, journal or document number. A link when it has somewhere to go. */
@@ -94,7 +99,9 @@ export function LedgerHead({
     const body = (
         <>
             {code ? <span className={cn(LEDGER_TONE.headCode, 'mr-1.5')}>{code}</span> : null}
-            <span className={LEDGER_TONE.headName}>{name}</span>
+            <span data-figure className={LEDGER_TONE.headName}>
+                {name}
+            </span>
         </>
     );
 
@@ -123,7 +130,11 @@ export function PartyText({ children, className }: { children: ReactNode; classN
         return null;
     }
 
-    return <span className={cn(LEDGER_TONE.party, className)}>{children}</span>;
+    return (
+        <span data-figure className={cn(LEDGER_TONE.party, className)}>
+            {children}
+        </span>
+    );
 }
 
 export type AmountTone = 'debit' | 'credit' | 'balance' | 'total' | 'amount';
@@ -164,7 +175,7 @@ export function Amount({
     const negative = forceNegative ?? ((tone === 'balance' || tone === 'amount') && isNegativeFigure(value));
 
     return (
-        <span className={cn(negative ? LEDGER_TONE.negative : LEDGER_TONE[tone], 'whitespace-nowrap', className)}>
+        <span data-figure className={cn(negative ? LEDGER_TONE.negative : LEDGER_TONE[tone], 'whitespace-nowrap', className)}>
             {value}
             {suffix ? <> {suffix}</> : null}
         </span>
@@ -223,6 +234,98 @@ export function StatusPill({ status, label, className }: { status: string; label
             )}
         >
             {text}
+        </span>
+    );
+}
+
+/**
+ * A row that stays on the ledger but no longer counts: a reversed entry or
+ * the reversal itself. Its emphasised figures (date, head, party, amounts)
+ * fall back to muted text, so the live rows stand out; links and pills keep
+ * their colour so the row still says what happened to it.
+ */
+export const MUTED_ROW = '[&_[data-figure]]:!text-muted-foreground [&_[data-figure]]:!font-normal';
+
+/**
+ * One line of text that ends in an ellipsis when its cell is too narrow. Only
+ * when it is actually cut does it become focusable and show the full text in a
+ * tooltip, on hover or keyboard focus, so a page of rows does not become a
+ * page of tab stops.
+ */
+export function TruncatedText({ text, className }: { text: string | null | undefined; className?: string }) {
+    const ref = useRef<HTMLSpanElement>(null);
+    const [cut, setCut] = useState(false);
+    const [open, setOpen] = useState(false);
+
+    useLayoutEffect(() => {
+        const element = ref.current;
+
+        if (!element) {
+            return;
+        }
+
+        const check = () => setCut(element.scrollWidth > element.clientWidth + 1);
+        check();
+
+        if (typeof ResizeObserver === 'undefined') {
+            return;
+        }
+
+        const observer = new ResizeObserver(check);
+        observer.observe(element);
+
+        return () => observer.disconnect();
+    }, [text]);
+
+    if (!text) {
+        return null;
+    }
+
+    return (
+        <Tooltip delayDuration={300} open={open && cut} onOpenChange={setOpen}>
+            <TooltipTrigger asChild>
+                <span
+                    ref={ref}
+                    tabIndex={cut ? 0 : undefined}
+                    className={cn('focus-visible:ring-ring block truncate rounded-sm focus-visible:ring-2 focus-visible:outline-none', className)}
+                >
+                    {text}
+                </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-md break-words whitespace-normal">{text}</TooltipContent>
+        </Tooltip>
+    );
+}
+
+/**
+ * The audit trail on a ledger row: "Reversed by JV-..." on an entry that was
+ * later undone, "Reversal of JV-..." on the entry that undid it. Small and
+ * muted; the number opens the other journal.
+ */
+export function ReversalPill({
+    kind,
+    href,
+    number,
+}: {
+    kind: 'reversed-by' | 'reversal-of' | 'voucher-reversed';
+    href?: string;
+    number?: string | null;
+}) {
+    const label = kind === 'reversed-by' ? 'Reversed by' : kind === 'reversal-of' ? 'Reversal of' : 'Voucher reversed';
+
+    return (
+        <span
+            className={cn(
+                'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap',
+                kind === 'reversal-of' ? 'bg-muted text-muted-foreground' : 'bg-red-50 text-red-800 dark:bg-red-500/10 dark:text-red-300',
+            )}
+        >
+            {label}
+            {number && href ? (
+                <Link href={href} className="font-mono font-semibold underline-offset-2 hover:underline">
+                    {number}
+                </Link>
+            ) : null}
         </span>
     );
 }

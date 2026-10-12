@@ -3,6 +3,7 @@
 namespace App\Modules\Accounting\Support;
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -55,6 +56,8 @@ final class AccountLedger
          * one party's share of an account.
          */
         private readonly ?Money $trialBalanceClosing,
+        /** Journals left out because they and their reversal both fall in the window. */
+        public readonly int $hiddenJournals = 0,
     ) {}
 
     /**
@@ -69,8 +72,16 @@ final class AccountLedger
         ?int $partyId = null,
         int $perPage = 100,
         int $page = 1,
+        bool $hideReversedPairs = false,
     ): self {
         $filtered = $partyType !== null && $partyId !== null;
+
+        // ⭐ 12 Oct 2026 (Joy): a ledger keeps every posted entry, mistakes and
+        // their reversals included, and marks them. Hiding is opt-in and takes a
+        // PAIR out only when both halves sit in the window: the two cancel
+        // exactly on every account, so the running balance and the closing stay
+        // right. A half whose partner is outside the window stays, marked.
+        $hidden = $hideReversedPairs ? self::reversedPairsWithin($from, $to) : [];
 
         // ⚠ C-GLA-7. A party-filtered view CANNOT take its opening from the
         // trial balance: that is the whole account's opening, and presenting it
@@ -89,9 +100,12 @@ final class AccountLedger
             $trialBalanceClosing = $row?->closing() ?? Money::zero();
         }
 
-        $inWindow = fn (Builder $query) => self::scoped($query, $account, $partyType, $partyId)
-            ->whereDate('journals.journal_date', '>=', $from->toDateString())
-            ->whereDate('journals.journal_date', '<=', $to->toDateString());
+        $inWindow = fn (Builder $query) => self::withoutJournals(
+            self::scoped($query, $account, $partyType, $partyId)
+                ->whereDate('journals.journal_date', '>=', $from->toDateString())
+                ->whereDate('journals.journal_date', '<=', $to->toDateString()),
+            $hidden,
+        );
 
         $debits = self::sumOf(fn (Builder $query) => $inWindow($query)->where('journal_lines.amount_minor', '>', 0));
         $credits = self::sumOf(fn (Builder $query) => $inWindow($query)->where('journal_lines.amount_minor', '<', 0));
@@ -106,12 +120,17 @@ final class AccountLedger
         // computed as one aggregate. Restarting the running balance from the
         // opening on page two is the classic defect here, and every figure on
         // that page would be wrong by a page's worth of postings.
-        $balance = $opening->plus(self::sumBefore($account, $from, $to, $partyType, $partyId, $offset));
+        $balance = $opening->plus(self::sumBefore($account, $from, $to, $partyType, $partyId, $offset, $hidden));
 
         $lines = self::ordered($inWindow(
             JournalLine::query()->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
         ))
-            ->with(['journal', 'party'])
+            ->with([
+                'journal',
+                'journal.reverses:id,journal_number',
+                'journal.reversal:id,journal_number,reverses_journal_id',
+                'party',
+            ])
             ->select('journal_lines.*')
             ->offset($offset)
             ->limit($perPage)
@@ -141,7 +160,39 @@ final class AccountLedger
             partyType: $partyType,
             partyId: $partyId,
             trialBalanceClosing: $trialBalanceClosing,
+            hiddenJournals: count($hidden),
         );
+    }
+
+    /**
+     * Every journal that was reversed inside the window by a reversal also
+     * inside the window, with that reversal: both ids of each pair.
+     *
+     * @return list<int>
+     */
+    public static function reversedPairsWithin(Carbon $from, Carbon $to): array
+    {
+        $inRange = fn ($query) => $query
+            ->whereDate('journal_date', '>=', $from->toDateString())
+            ->whereDate('journal_date', '<=', $to->toDateString());
+
+        return Journal::query()
+            ->whereNotNull('reverses_journal_id')
+            ->where($inRange)
+            ->whereHas('reverses', $inRange)
+            ->get(['id', 'reverses_journal_id'])
+            ->flatMap(fn (Journal $reversal) => [(int) $reversal->id, (int) $reversal->reverses_journal_id])
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  list<int>  $journalIds
+     */
+    private static function withoutJournals(Builder $query, array $journalIds): Builder
+    {
+        return $journalIds === [] ? $query : $query->whereNotIn('journals.id', $journalIds);
     }
 
     /**
@@ -314,6 +365,8 @@ final class AccountLedger
      * ⚠ A derived table with a LIMIT rather than loading the earlier pages. The
      * seed for page 40 must not cost thirty-nine pages of hydrated models, and a
      * SUM over a LIMIT is the same arithmetic without the objects.
+     *
+     * @param  list<int>  $hidden  journals the report leaves out (reversed pairs)
      */
     private static function sumBefore(
         Account $account,
@@ -322,6 +375,7 @@ final class AccountLedger
         ?string $partyType,
         ?int $partyId,
         int $offset,
+        array $hidden = [],
     ): Money {
         if ($offset <= 0) {
             return Money::zero();
@@ -336,6 +390,7 @@ final class AccountLedger
             )
                 ->whereDate('journals.journal_date', '>=', $from->toDateString())
                 ->whereDate('journals.journal_date', '<=', $to->toDateString())
+                ->when($hidden !== [], fn (Builder $query) => $query->whereNotIn('journals.id', $hidden))
         )
             ->select('journal_lines.amount_minor')
             ->limit($offset);
